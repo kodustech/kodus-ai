@@ -75,7 +75,7 @@ Deploy Kodus on your own infrastructure with full control:
 | Productivity and Quality Metrics           | ❌             | ✅        | ✅             |
 | Premium Support                            | ❌             | ❌        | ✅             |
 | Custom Integrations                        | ❌             | ❌        | ✅             |
-| Andvance compliance and code audit support | ❌             | ❌        | ✅             |
+| Advance compliance and code audit support  | ❌             | ❌        | ✅             |
 | Review mode                                | 💡 Light       | 🚀 Heavy  | 🚀 Heavy       |
 | Kody Rules                                 | Up to 10 rules | Unlimited | Unlimited      |
 
