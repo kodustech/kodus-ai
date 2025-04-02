@@ -14,7 +14,7 @@
 
 <p align="center">
    <a href='http://makeapullrequest.com'><img alt='PRs Welcome' src='https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=shields'/></a>
-   <a href="https://github.com/" target="_blank"><img src="https://img.shields.io/github/stars//kodustech/kodus-ai" alt="Github Stars"></a>
+   <a href="https://github.com/" target="_blank"><img src="https://img.shields.io/github/stars/kodustech/kodus-ai" alt="Github Stars"></a>
    <a href="https://github.com/briefercloud/briefer/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPLv3-red" alt="License"></a>
 </p>
 
