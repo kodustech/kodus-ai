@@ -1,0 +1,50 @@
+[
+    {
+        "id": "10004",
+        "name": "Story",
+        "subtask": false,
+        "description": "Funcionalidade ou recurso expressado como um objetivo do usuário."
+    },
+    {
+        "id": "10005",
+        "name": "Task",
+        "subtask": false,
+        "description": "Uma parte pequena e distinta do trabalho."
+    },
+    {
+        "id": "10014",
+        "name": "Big Bets",
+        "subtask": false,
+        "description": ""
+    },
+    {
+        "id": "10015",
+        "name": "Small Wins",
+        "subtask": false,
+        "description": ""
+    },
+    {
+        "id": "10018",
+        "name": "Engineering Task",
+        "subtask": false,
+        "description": ""
+    },
+    {
+        "id": "10007",
+        "name": "Bug",
+        "subtask": false,
+        "description": "Um problema ou erro."
+    },
+    {
+        "id": "10012",
+        "name": "Critical Bug",
+        "subtask": false,
+        "description": "A critical problem"
+    },
+    {
+        "id": "10000",
+        "name": "Epic",
+        "subtask": false,
+        "description": "Uma coleção de bugs, histórias e tarefas."
+    }
+]

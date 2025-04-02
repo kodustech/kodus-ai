@@ -1,0 +1,115 @@
+import { BaseParser } from '../base/parser-base';
+import { AnalysisResult } from '../base/types';
+
+/**
+ * Parser para arquivos JavaScript
+ */
+export class JavaScriptParser extends BaseParser {
+  /**
+   * Configura o parser para JavaScript
+   */
+  protected setupParser(): any {
+    const treeSitter = require('tree-sitter');
+    const parser = new treeSitter();
+    parser.setLanguage(require('tree-sitter-javascript'));
+    return parser;
+  }
+  
+  /**
+   * Processa a u00e1rvore sintu00e1tica de um arquivo JavaScript
+   */
+  protected processTree(
+    tree: any, 
+    content: string, 
+    filePath: string, 
+    normalizedPath: string
+  ): AnalysisResult {
+    // Implementau00e7u00e3o especu00edfica para JavaScript
+    // Semelhante ao TypeScript, mas com ajustes para diferenu00e7as na linguagem
+    
+    // Contexto para anu00e1lise
+    const context = {
+      fileDefines: new Set<string>(),
+      fileImports: new Set<string>(),
+      fileClassNames: new Set<string>(),
+      fileCalls: new Set<string>(),
+    };
+    
+    // Processamento da u00e1rvore
+    const rootNode = tree.rootNode;
+    
+    // Verificar por importau00e7u00f5es
+    const importNodes = this.findNodesByType(rootNode, ['import_statement']);
+    for (const node of importNodes) {
+      const importText = node.text;
+      if (importText) {
+        context.fileImports.add(importText.trim());
+      }
+    }
+    
+    // Verificar por classes
+    const classNodes = this.findNodesByType(rootNode, ['class_declaration']);
+    for (const node of classNodes) {
+      const nameNode = node.childForFieldName('name');
+      if (nameNode) {
+        const className = nameNode.text;
+        context.fileDefines.add(className);
+        context.fileClassNames.add(className);
+      }
+    }
+    
+    // Verificar por funu00e7u00f5es
+    const functionNodes = this.findNodesByType(rootNode, [
+      'function_declaration',
+      'function',
+      'method_definition',
+      'arrow_function'
+    ]);
+    
+    for (const node of functionNodes) {
+      const nameNode = node.childForFieldName('name');
+      if (nameNode) {
+        context.fileDefines.add(nameNode.text);
+      }
+    }
+    
+    // Retorno dos resultados
+    return {
+      fileAnalysis: {
+        defines: Array.from(context.fileDefines),
+        calls: Array.from(context.fileCalls),
+        imports: Array.from(context.fileImports)
+      },
+      functions: new Map(),
+      types: new Map()
+    };
+  }
+  
+  /**
+   * Encontra nu00f3s pelo tipo
+   * @param rootNode Nu00f3 raiz
+   * @param nodeTypes Tipos de nu00f3 a serem encontrados
+   * @returns Lista de nu00f3s encontrados
+   */
+  private findNodesByType(rootNode: any, nodeTypes: string[]): any[] {
+    const result: any[] = [];
+    const cursor = rootNode.walk();
+    
+    const visitNode = () => {
+      const node = cursor.currentNode();
+      if (nodeTypes.includes(node.type)) {
+        result.push(node);
+      }
+      
+      if (cursor.gotoFirstChild()) {
+        do {
+          visitNode();
+        } while (cursor.gotoNextSibling());
+        cursor.gotoParent();
+      }
+    };
+    
+    visitNode();
+    return result;
+  }
+}

@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Kody ile @kody'yi mention ederek konuşun",
+        "feedback": "Bu öneri yararlı oldu mu? Kody'nin bu etkileşimden öğrenmesine yardımcı olmak için 👍 veya 👎 ile tepki verin."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## Kod İncelemesi Tamamlandı! 🔥\n\nKod incelemesi, mevcut yapılandırmalarınıza göre başarıyla tamamlandı.\n\n",
+        "withoutComments": "# Kody İncelemesi Tamamlandı\n**Harika haberler!** 🎉\nMevcut inceleme yapılandırmalarınıza uygun herhangi bir sorun bulunamadı.\n\nMükemmel çalışmaya devam edin! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "PR Özeti (Yorum [Kody](https://kodus.io) tarafından oluşturuldu 🤖)",
+        "codeReviewStarted": "Kod İncelemesi Başladı! 🚀",
+        "description": "✋ Merhaba, ekip! Değiştirilen dosyalara zaten bakıyorum ve her şeyin yolunda olduğundan emin olmak için incelemeye başlıyorum. Daha fazla detaya ihtiyacınız varsa, buradayım! [Kody](https://kodus.io)",
+        "changedFiles": "📂 Değiştirilen Dosyalar",
+        "filesTable": [
+            "Dosya",
+            "Durum",
+            "➕ Eklemeler",
+            "➖ Silmeler",
+            "🔄 Değişiklikler"
+        ],
+        "summary": "📊 Değişikliklerin Özeti",
+        "totalFiles": "Toplam Dosya",
+        "totalAdditions": "Eklenen Toplam Satır",
+        "totalDeletions": "Silinen Toplam Satır",
+        "totalChanges": "Toplam Değişiklik"
+    },
+    "configReviewMarkdown": {
+        "title": "Kody Rehberi: Kullanım ve Yapılandırma",
+        "interactingTitle": "Kody ile Etkileşim",
+        "requestReview": "İnceleme Talep Et",
+        "requestReviewDesc": "PR'nizin köküne `@kody start-review` komutuyla bir yorum ekleyerek Kody'den PR'nizi manuel olarak incelemesini isteyin.",
+        "provideFeedback": "Geri Bildirim Sağlayın",
+        "provideFeedbackDesc": "Yararlı öneriler için yorumlarına 👍 veya iyileştirmeler gerekiyorsa 👎 ile yanıt vererek Kody'nin öğrenmesine ve gelişmesine yardımcı olun.",
+        "configurationTitle": "Mevcut Kody Yapılandırması",
+        "reviewOptionsTitle": "İnceleme Seçenekleri",
+        "reviewOptionsDesc": "Aşağıdaki inceleme seçenekleri etkinleştirilmiş veya devre dışı bırakılmıştır:",
+        "tableOptions": "Seçenekler",
+        "tableEnabled": "Etkin",
+        "configurationLink": "Yapılandırma ayarlarınıza buradan erişin.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 Mühendislik Metrikleri",
+        "legend": {
+            "title": "Sonuçların Efsanesi",
+            "same": "Sonucun __aynı__ kaldığı anlamına gelir",
+            "improved": "Sonucun __iyileştiği__ anlamına gelir",
+            "worsened": "Sonucun __kötüleştiği__ anlamına gelir"
+        },
+        "flowMetrics": {
+            "title": "Akış Metrikleri",
+            "leadTime": {
+                "title": "Öncü Süre",
+                "description": "Bir aktivitenin ${todo} durumundan ${done} durumuna geçmesi için geçen süre."
+            },
+            "leadTimeInWip": {
+                "title": "WIP'te Öncü Süre",
+                "description": "Bir aktivitenin ${wip} durumundan ${done} durumuna geçmesi için geçen süre."
+            },
+            "throughput": {
+                "title": "Verim",
+                "description": "Son 7 gün içinde ${done} durumuna ulaşan öğe sayısı.",
+                "items": "öğeler"
+            },
+            "bugRatio": {
+                "title": "Hata Oranı",
+                "description": "Son 7 gün içinde WIP'teki toplam aktivitelere göre WIP'teki hata sayısı."
+            },
+            "leadTimeByColumn": {
+                "title": "Kolona Göre Öncü Süre",
+                "description": "Bir öğenin panonuzdaki her durumda *P75*'te geçirdiği süre."
+            }
+        },
+        "doraMetrics": {
+            "title": "Dora Metrikleri",
+            "deployFrequency": {
+                "title": "Dağıtım Sıklığı",
+                "description": "Haftalık dağıtım sıklığı.",
+                "value": "Haftada ${value} dağıtım"
+            },
+            "leadTimeForChange": {
+                "title": "Değişiklik İçin Öncü Süre",
+                "description": "İlk commit'ten PR birleşimine kadar geçen ortalama süre.",
+                "value": "${value} gün"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (İyimser)",
+            "p75": "P75 (Kendinden Emin)",
+            "p95": "P95 (Kötümser)"
+        }
+    }
+}

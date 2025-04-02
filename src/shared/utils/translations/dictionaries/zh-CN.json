@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "通过提及 @kody 与 Kody 交谈",
+        "feedback": "这个建议有帮助吗？通过对其做出 👍 或 👎 反应来帮助 Kody 从这次互动中学习。"
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## 代码审查完成！ 🔥\n\n代码审查已根据您当前的配置成功完成。\n\n",
+        "withoutComments": "# Kody 审查完成\n**好消息！** 🎉\n未发现与您当前审查配置匹配的问题。\n\n继续保持出色的工作! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "PR 摘要(评论由 [Kody](https://kodus.io) 创建 🤖)",
+        "codeReviewStarted": "代码审查开始！ 🚀",
+        "description": "✋ 你好，团队！我已经在查看更改的文件并开始审查，以确保一切正常。如果您需要更多详细信息，我在这里！ [Kody](https://kodus.io)",
+        "changedFiles": "📂 更改的文件",
+        "filesTable": [
+            "文件",
+            "状态",
+            "➕ 添加",
+            "➖ 删除",
+            "🔄 更改"
+        ],
+        "summary": "📊 更改摘要",
+        "totalFiles": "总文件数",
+        "totalAdditions": "添加的总行数",
+        "totalDeletions": "删除的总行数",
+        "totalChanges": "总更改数"
+    },
+    "configReviewMarkdown": {
+        "title": "Kody 指南：使用和配置",
+        "interactingTitle": "与 Kody 互动",
+        "requestReview": "请求审查",
+        "requestReviewDesc": "通过在 PR 根目录添加带有 `@kody start-review` 命令的评论，请求 Kody 手动审查您的 PR。",
+        "provideFeedback": "提供反馈",
+        "provideFeedbackDesc": "通过对其评论做出反应，帮助 Kody 学习和改进，👍 表示有用的建议，👎 表示需要改进。",
+        "configurationTitle": "当前 Kody 配置",
+        "reviewOptionsTitle": "审查选项",
+        "reviewOptionsDesc": "以下审查选项已启用或禁用：",
+        "tableOptions": "选项",
+        "tableEnabled": "已启用",
+        "configurationLink": "在此处访问您的配置设置。",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 工程指标",
+        "legend": {
+            "title": "结果图例",
+            "same": "表示结果保持__相同__",
+            "improved": "表示结果__改善__",
+            "worsened": "表示结果__恶化__"
+        },
+        "flowMetrics": {
+            "title": "流量指标",
+            "leadTime": {
+                "title": "交付时间",
+                "description": "活动从 ${todo} 状态移动到 ${done} 状态所需的时间。"
+            },
+            "leadTimeInWip": {
+                "title": "WIP 中的交付时间",
+                "description": "活动从 ${wip} 状态移动到 ${done} 状态所需的时间。"
+            },
+            "throughput": {
+                "title": "吞吐量",
+                "description": "在过去 7 天内达到 ${done} 状态的项目数量。",
+                "items": "项目"
+            },
+            "bugRatio": {
+                "title": "错误比例",
+                "description": "过去 7 天内 WIP 中的错误数量与 WIP 中的总活动数量的比率。"
+            },
+            "leadTimeByColumn": {
+                "title": "按列交付时间",
+                "description": "项目在您的看板中每个状态下的 *P75* 所花费的时间。"
+            }
+        },
+        "doraMetrics": {
+            "title": "Dora 指标",
+            "deployFrequency": {
+                "title": "部署频率",
+                "description": "每周的部署频率。",
+                "value": "每周 ${value} 次部署"
+            },
+            "leadTimeForChange": {
+                "title": "变更交付时间",
+                "description": "从第一次提交到 PR 合并的平均时间。",
+                "value": "${value} 天"
+            }
+        },
+        "percentiles": {
+            "p50": "P50(乐观)",
+            "p75": "P75(自信)",
+            "p95": "P95(悲观)"
+        }
+    }
+}

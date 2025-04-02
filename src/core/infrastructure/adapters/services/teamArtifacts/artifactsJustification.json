@@ -1,0 +1,390 @@
+{
+    "teamArtifactJustifications": [
+        {
+            "name": "WithoutWaitingColumns",
+            "relatedMetrics": [
+                {
+                    "name": "",
+                    "relationshipWithTheIndicator": {
+                        "description": ""
+                    }
+                }
+            ],
+            "relatedArtifacts": [
+                {
+                    "name": "",
+                    "relationshipWithTheIndicator": {
+                        "description": ""
+                    }
+                }
+            ]
+        },
+        {
+            "name": "WorkItemSkippingWIPColumns",
+            "relatedMetrics": [
+                {
+                    "name": "",
+                    "relationshipWithTheIndicator": {
+                        "description": ""
+                    }
+                }
+            ],
+            "relatedArtifacts": [
+                {
+                    "name": "",
+                    "relationshipWithTheIndicator": {
+                        "description": ""
+                    }
+                }
+            ]
+        },
+        {
+            "name": "WIPLimit",
+            "relatedMetrics": [
+                {
+                    "name": "BugRatio",
+                    "relationshipWithTheIndicator": {
+                        "description": "When the Bug Ratio is very high, or increasing week by week (result is worsening), it can cause the team to work on more items at the same time (new demands and bug fixes). This can cause the team to exceed the WIP Limit."
+                    }
+                },
+                {
+                    "name": "LeadTimeByColumn",
+                    "relationshipWithTheIndicator": {
+                        "description": "If there are columns with very high Lead Time (representing 25% or more of the total Lead Time in WIP), it indicates that some stages of the flow are bottlenecked. When we have very large bottlenecks in some stages, or many bottlenecks in various stages (board columns), items tend to be stuck for a long time in a certain phase of the flow. As a result, the team ends up working on several items in parallel, which exceeds the WIP limit."
+                    }
+                }
+            ],
+            "relatedArtifacts": [
+                {
+                    "name": "BlockedTime",
+                    "relationshipWithTheIndicator": {
+                        "description": "Blocked items remain in the same column of the board until the impediment is resolved. This behavior can cause the WIP Limit to be exceeded."
+                    }
+                },
+                {
+                    "name": "PostStartSprintInclusions",
+                    "relationshipWithTheIndicator": {
+                        "description": "If the team works with scrum and starts adding many new items after the sprint has already started, it may be necessary to parallelize more work to try to deliver everything by the end of the sprint. This can cause the team to exceed the WIP Limit."
+                    }
+                },
+                {
+                    "name": "LeadTimeInWaitingColumns",
+                    "relationshipWithTheIndicator": {
+                        "description": "When the Lead Time in waiting columns of the board is very high, it may indicate that the team has bottlenecks in the process, such as high wait times for item approval, high wait times for code review, or waiting for items to be published in production. This can leave many items stuck in the flow and increase the WIP, exceeding the recommended limit."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "WorkItemWithClearDescription",
+            "relatedMetrics": [
+                {
+                    "name": "",
+                    "relationshipWithTheIndicator": {
+                        "description": ""
+                    }
+                }
+            ],
+            "relatedArtifacts": [
+                {
+                    "name": "",
+                    "relationshipWithTheIndicator": {
+                        "description": ""
+                    }
+                }
+            ]
+        },
+        {
+            "name": "LeadTimeInWaitingColumns",
+            "relatedMetrics": [
+                {
+                    "name": "BugRatio",
+                    "relationshipWithTheIndicator": {
+                        "description": "When the bug ratio is very high, or increasing week by week (result is worsening), the team's focus may be on fixing these errors, leaving new items stuck in waiting columns."
+                    }
+                },
+                {
+                    "name": "LeadTimeByColumn",
+                    "relationshipWithTheIndicator": {
+                        "description": "If the Lead Time of the waiting columns is very high compared to the total Lead Time in WIP, it may indicate that the team has bottlenecks in these phases. By looking at the waiting columns with the highest Lead Time, we can identify where to focus efforts to reduce the Lead Time spent in waiting columns."
+                    }
+                }
+            ],
+            "relatedArtifacts": [
+                {
+                    "name": "WIPLimit",
+                    "relationshipWithTheIndicator": {
+                        "description": "When the team does not respect the WIP limit, they end up working on many things in parallel. When this happens, it is normal for the team to focus too much on working on action stages/columns, taking more items to develop instead of finishing what is already in progress and closer to the end of the board. This results in neglecting items in the waiting columns, increasing the Lead Time of these phases."
+                    }
+                },
+                {
+                    "name": "WorkItemWithClearDescription",
+                    "relationshipWithTheIndicator": {
+                        "description": "Poorly described items can cause doubts in the team, making the item stay in waiting columns, whether waiting to be developed, tested, or approved - because people have doubts about what was really expected with the delivery of that item. As a result, the item stays idle until the doubts are resolved, increasing the Lead Time of these columns."
+                    }
+                },
+                {
+                    "name": "BugRatio",
+                    "relationshipWithTheIndicator": {
+                        "description": "Many bugs in WIP make the team focus on these corrections and pay less attention to new items. As a result, new items stay idle in waiting columns, increasing the Lead Time of these phases."
+                    }
+                },
+                {
+                    "name": "PullRequestWithSizeGreaterThanLimit",
+                    "relationshipWithTheIndicator": {
+                        "description": "Very large Pull Requests can be difficult to validate, causing some developers to avoid doing code reviews on these items. If the team has a waiting column to map this phase of the process, there may be delays in it, increasing the Lead Time of the waiting columns."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "BugRatio",
+            "relatedMetrics": [
+                {
+                    "name": "BugRatio",
+                    "relationshipWithTheIndicator": {
+                        "description": "The bug ratio metric has a history of how the proportion of bugs in WIP vs new items on the board is. Looking at this behavior can help understand how the team is dealing with the quality of what is being delivered."
+                    }
+                }
+            ],
+            "relatedArtifacts": [
+                {
+                    "name": "WIPLimit",
+                    "relationshipWithTheIndicator": {
+                        "description": "When the team does not respect the WIP limit and works on many items in parallel, it can end up affecting the quality of what is being developed and generate many bugs."
+                    }
+                },
+                {
+                    "name": "HighWorkloadPerPerson",
+                    "relationshipWithTheIndicator": {
+                        "description": "Overloaded team members can generate more bugs because they cannot focus on developing with quality. As a result, the team may have an increase in the Bug Ratio."
+                    }
+                },
+                {
+                    "name": "PostStartSprintInclusions",
+                    "relationshipWithTheIndicator": {
+                        "description": "Items being added after the sprint has already started can force the team to give less priority to the quality of development and focus on delivering what was requested. As a result, the team may have an increase in the Bug Ratio."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "WorkItemWithAssignedOwner",
+            "relatedMetrics": [
+                {
+                    "name": "",
+                    "relationshipWithTheIndicator": {
+                        "description": ""
+                    }
+                }
+            ],
+            "relatedArtifacts": [
+                {
+                    "name": "",
+                    "relationshipWithTheIndicator": {
+                        "description": ""
+                    }
+                }
+            ]
+        },
+        {
+            "name": "BlockedTime",
+            "relatedMetrics": [
+                {
+                    "name": "BugRatio",
+                    "relationshipWithTheIndicator": {
+                        "description": ""
+                    }
+                }
+            ],
+            "relatedArtifacts": [
+                {
+                    "name": "WIPLimit",
+                    "relationshipWithTheIndicator": {
+                        "description": ""
+                    }
+                },
+                {
+                    "name": "WorkItemWithClearDescription",
+                    "relationshipWithTheIndicator": {
+                        "description": ""
+                    }
+                }
+            ]
+        },
+        {
+            "name": "PostStartSprintInclusions",
+            "relatedMetrics": [
+                {
+                    "name": "",
+                    "relationshipWithTheIndicator": {
+                        "description": ""
+                    }
+                }
+            ],
+            "relatedArtifacts": [
+                {
+                    "name": "",
+                    "relationshipWithTheIndicator": {
+                        "description": ""
+                    }
+                }
+            ]
+        },
+        {
+            "name": "SprintSpillover",
+            "relatedMetrics": [
+                {
+                    "name": "BugRatio",
+                    "relationshipWithTheIndicator": {
+                        "description": "A high bug ratio during a sprint can prevent the team from completing all planned items, as they had to deal with many unforeseen issues. This can leave some items unfinished, which will need to be moved to the next sprint."
+                    }
+                }
+            ],
+            "relatedArtifacts": [
+                {
+                    "name": "WIPLimit",
+                    "relationshipWithTheIndicator": {
+                        "description": "When the team does not respect the WIP limit, many bottlenecks can occur in the process, making it difficult for the team to complete all the planned items for the sprint. As a result, some items may be moved to the next sprint."
+                    }
+                },
+                {
+                    "name": "BugRatio",
+                    "relationshipWithTheIndicator": {
+                        "description": "A high bug ratio during a sprint can prevent the team from completing all planned items, as they had to deal with many unforeseen issues. This can leave some items unfinished, which will need to be moved to the next sprint."
+                    }
+                },
+                {
+                    "name": "BlockedTime",
+                    "relationshipWithTheIndicator": {
+                        "description": "Items blocked for a long time (while no one resolves the related impediment) can be delayed, taking more time than estimated. This makes it difficult for the team to complete all the planned items for the sprint, and some items may need to be moved to the next sprint."
+                    }
+                },
+                {
+                    "name": "HighWorkloadPerPerson",
+                    "relationshipWithTheIndicator": {
+                        "description": "When one or more team members are overloaded, there may be delays in delivering the planned items for the sprint. As a result, some items may be moved to the next sprint."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "HighLeadTimeInWipDeviation",
+            "relatedMetrics": [
+                {
+                    "name": "BugRatio",
+                    "relationshipWithTheIndicator": {
+                        "description": "When the bug ratio is very high, or increasing week by week (result is worsening), there can be significant changes in Lead Time. This can happen because small bugs are fixed very quickly, lowering the lead time, or because the team pauses current demands to prioritize bug fixes, significantly increasing the Lead Time. This behavior, repeated over a period of time, can cause significant variations in the current Lead Time compared to the team's historical average."
+                    }
+                }
+            ],
+            "relatedArtifacts": [
+                {
+                    "name": "WithoutWaitingColumns",
+                    "relationshipWithTheIndicator": {
+                        "description": "When the team's board does not have waiting columns, it becomes difficult to identify bottlenecks related to poorly defined process stages. For example: approval, code review, production deployment. As a result, the team may have significant variations in Lead Time in WIP and may not be able to identify the source of the problem - since the action and waiting stages are not separated."
+                    }
+                },
+                {
+                    "name": "WorkItemSkippingWIPColumns",
+                    "relationshipWithTheIndicator": {
+                        "description": "If it is identified that the team is skipping WIP columns, i.e., moving cards on the board directly from TO DO to DONE without going through the WIP phases. This behavior can cause significant variations in Lead Time in WIP, as the team is not following the defined workflow."
+                    }
+                },
+                {
+                    "name": "BlockedTime",
+                    "relationshipWithTheIndicator": {
+                        "description": "When there are work items that remain blocked for a long time, the team may have significant variations in Lead Time in WIP. This happens because the time the item is blocked is not counted in the Lead Time in WIP, and when the impediment is resolved, the item is completed very quickly, lowering the Lead Time in WIP."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "PullRequestWithSizeGreaterThanLimit",
+            "relatedMetrics": [
+                {
+                    "name": "LeadTimeForChange",
+                    "relationshipWithTheIndicator": {
+                        "description": "If the Lead Time for change is very high (the time from the first commit to the PR being closed), it may indicate that the work items are very large and require a lot of code changes. This is not a direct cause of the large Pull Request, but it may indicate that the team is working on very large items."
+                    }
+                }
+            ],
+            "relatedArtifacts": [
+                {
+                    "name": "HighWorkloadPerPerson",
+                    "relationshipWithTheIndicator": {
+                        "description": "When there are overloaded team members, Pull Requests can become large, as the developer does not have time to divide the work into smaller parts and ends up doing more things in the PR. As a result, the team may have very large Pull Requests."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "CodeReviewTimeToMerge",
+            "relatedMetrics": [
+                {
+                    "name": "",
+                    "relationshipWithTheIndicator": {
+                        "description": ""
+                    }
+                }
+            ],
+            "relatedArtifacts": [
+                {
+                    "name": "PullRequestWithSizeGreaterThanLimit",
+                    "relationshipWithTheIndicator": {
+                        "description": "When the team opens very large PRs, it can cause a cascading effect on code review time. This happens because developers need more time to review the code, and it may also be that developers avoid reviewing these large PRs. As a result, the time for the PR to be closed also increases."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "HighWorkloadPerPerson",
+            "relatedMetrics": [
+                {
+                    "name": "BugRatio",
+                    "relationshipWithTheIndicator": {
+                        "description": "A high bug ratio can cause team members to work outside conventional hours or on weekends to fix errors. This can lead to a workload overload for team members."
+                    }
+                },
+                {
+                    "name": "Throughput",
+                    "relationshipWithTheIndicator": {
+                        "description": "A sharp drop in team throughput from one week to the next, or a constant decline over time (worsening), can put pressure on the team to deliver delayed and planned items. As a result, people may work longer hours to try to deliver what was planned and become overloaded."
+                    }
+                },
+                {
+                    "name": "DeployFrequency",
+                    "relationshipWithTheIndicator": {
+                        "description": "A sharp drop in the team's deployment frequency from one week to the next, or a constant decline over time (worsening), can put pressure on the team to deliver delayed and planned items. As a result, people may work longer hours to try to deliver what was planned and become overloaded."
+                    }
+                }
+            ],
+            "relatedArtifacts": [
+                {
+                    "name": "WIPLimit",
+                    "relationshipWithTheIndicator": {
+                        "description": "When the team does not respect the WIP limit and works on many items in parallel, it can end up generating a workload overload for team members. This happens because the team needs to focus on many things at the same time and cannot finish what is already in progress in a timely manner."
+                    }
+                },
+                {
+                    "name": "BugRatio",
+                    "relationshipWithTheIndicator": {
+                        "description": "A high bug ratio can cause team members to work outside conventional hours or on weekends to fix errors. This can lead to a workload overload for team members."
+                    }
+                },
+                {
+                    "name": "PostStartSprintInclusions",
+                    "relationshipWithTheIndicator": {
+                        "description": "When many unplanned items are added after the sprint has started, the team may need to work more hours and on weekends to meet the extra demands. This can lead to a workload overload for team members."
+                    }
+                },
+                {
+                    "name": "SprintSpillover",
+                    "relationshipWithTheIndicator": {
+                        "description": "If the team is having problems with items spilling over from one sprint to another, there may be a need to work outside conventional hours and on weekends. This can lead to a workload overload for team members."
+                    }
+                }
+            ]
+        }
+    ]
+}

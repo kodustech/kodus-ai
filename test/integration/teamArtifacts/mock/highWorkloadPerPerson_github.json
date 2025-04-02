@@ -1,0 +1,456 @@
+[
+    {
+      "id": 17408306,
+      "name": "Junior Sartori",
+      "codeManagementName": "sartorijr92",
+      "commits": [
+        {
+          "id": "326081ec9d5a8adf5b9da9952939aae6e06a357b",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-29T00:30:00Z",
+          "message": "Merge pull request #573 from kodustech/feat-create-artifact-time-code-review\\n\\nFeat create artifact time code review",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "0e9804af8aafd81e432143f00ba29067fe165389",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-29T00:30:00Z",
+          "message": "Merge pull request #572 from kodustech/feat-create-artifact-pull-request\\n\\nFeat create artifact pull request",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "e492697b3c347fd208d2752f1f9150533a8c0e7d",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-29T00:30:00Z",
+          "message": "Update epics filter",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "ada78c03c1868d667eb1c83a7d11f0135d309afb",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-29T00:30:00Z",
+          "message": "Fix flowQualityDecline and Merge fix-epics-and-organization-artifacts",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "1908de9712b9584ee462592d5dc07033602e0f68",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-29T00:30:00Z",
+          "message": "fix filter",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "ad00fc4fee4cc757a919e30a3fd108680cbd8549",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-29T00:30:00Z",
+          "message": "Implements filter in get epics",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "337053bcf5d5ab84c035a0f6425e138576125f98",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-29T00:30:00Z",
+          "message": "Fixing format of work item",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "01ab45ac8d443c66c6c0b0dde499b9ff87c7b3d6",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-29T00:30:00Z",
+          "message": "Fixing get by organization Id",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "98db337a4d40c8fbd2304e3d0a8bf9b0865acf55",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-29T00:30:00Z",
+          "message": "Fix group logic",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "064b2b12016f73c4c97dac287623974d4cb2a1e3",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-29T00:30:00Z",
+          "message": "Fix return value",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "9b667a8056fa1bef3ecce7974542cbc44134e286",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-28T00:30:00Z",
+          "message": "Fix name of property in Json",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "248dfc8da5e52098edd182b9a79044e5bd82929e",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-28T00:30:00Z",
+          "message": "Fix migration",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "1673b4bee14b3305e34adbb641030f8ac46358dd",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-28T00:30:00Z",
+          "message": "Fix utcDate",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "895c6d104cec3aa624f19d71e8292b3cdabf9249",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-28T00:30:00Z",
+          "message": "Fix get by teamId",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "e3f2c0b18a6ee6ab1973666b9791529f72ea0a78",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-28T00:30:00Z",
+          "message": "Get effor team by organizationId",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "cbf26edebdcddb0d9a3722bbe3d3ba59d3972a64",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-28T00:30:00Z",
+          "message": "Fix modules and finish effort by team id",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "edbc3f0a0664705043e61dbcbb263daa0b135afc",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-28T00:30:00Z",
+          "message": "Merge branch 'main' into feat-effortByItemType",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "1a1b7e46e1a93ab59a931b7e7809e3828f3fa562",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-28T00:30:00Z",
+          "message": "Create use-case and method by team",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "be86331e11f96debf45341e535c7c0a24cbcbeea",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-28T00:30:00Z",
+          "message": "Get workitemsTypes by organization",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "6802117fb67bbce41f0672be49755bb5ad34da30",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-28T00:30:00Z",
+          "message": "Fix references and module imports"
+        },
+        {
+          "id": "39f56466173a2652d844296d6d4d98f87f68ab27",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-20T12:51:26Z",
+          "message": "Fix createdAt format",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "ae1c38c25c73b7654319b673d3fccee72a1af03e",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-20T12:45:44Z",
+          "message": "Fix sql flow metrics and add sql for dora metrics",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "637bed7e0570d5be335449f2dfefa0707935af47",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-19T19:03:48Z",
+          "message": "Merge pull request #560 from kodustech/feat-lead-time-for-change\\n\\nFeat lead time for change",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "8c7fbbf9ccd64a12c2ac0c4506fa77318d49571d",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-19T18:04:50Z",
+          "message": "Initial Insert and team metrics in SQL",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "4509b1641917b98f014c6987db103a730896b9eb",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-18T19:49:21Z",
+          "message": "Add migration",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "22e8f92a8fc7b2fbb3d40543797ebb3964d601f5",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-18T19:13:52Z",
+          "message": "Create OrganizationParameters structure",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "a1aa6b13ae8a855e1d852a8b6ec1a7222bea852d",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-18T13:05:32Z",
+          "message": "Merge pull request #557 from kodustech/fix-dora-metrics-calculate\\n\\nFix dora metrics calculate",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "d0a0c4902f32011f29fc66924b183eab89366441",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-17T13:07:49Z",
+          "message": "Merge pull request #556 from kodustech/hotfix-saveDoraMetrics\\n\\nHotfix save dora metrics",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "f436ca55c16d8e227ef4508dd2a6d20d5992d032",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-17T13:04:21Z",
+          "message": "Merge branch 'main' into hotfix-saveDoraMetrics",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "8a198d2fba528741e6d6458ebfe34218e0db4e65",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-14T11:47:34Z",
+          "message": "Fix method return value",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "1c45da5f452a2501e2a7bec97f567674476ef43f",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-13T20:05:53Z",
+          "message": "Fixing get dora metrics",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "edab8ec6172b3a94cb54bb606b604718fcb65744",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-13T17:43:48Z",
+          "message": "Fixing save parameters before calculate metrics",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "b76614570d4bf5c8d9e403a8216b656fb81292d8",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-12T20:28:00Z",
+          "message": "Fixing deploy frequency metric in organization level",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "7906c1d5c79b0415708c154df711136866b1da25",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-12T13:51:33Z",
+          "message": "Fixing module reference",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "6e730e59630edacb03c832c863cbe869602d451c",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-12T13:11:45Z",
+          "message": "Save dora metrics after setup already finished",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "68181f88f7e4eec7025fb0d90849b17a7e5ce2bf",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-11T20:12:20Z",
+          "message": "Fixing Dora metrics",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "abb5c5922ad9ccc64c7792287dfebdd9784bd7a5",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-11T19:13:45Z",
+          "message": "Fixing date for cockpit and dashboard",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "b7b2ec3081ba2541553da0666abe2dd78f56b4b8",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-11T14:11:13Z",
+          "message": "Fixing cockpit metrics",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "a79ca79b11c58398bdeba67aca4b1a8e0e42a39d",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-11T02:39:58Z",
+          "message": "Fixing date format in metrics",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "2281beb95a729ac55c4acac0d5a2fd7d07b409ff",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-10T21:29:02Z",
+          "message": "Fixing date of metrics",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "0f60e2e736d229972afcf6a79a905502f7cc3faf",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-10T20:31:57Z",
+          "message": "Merge pull request #550 from kodustech/feat-add-cache-cookipt-indicators\\n\\nadd methods cached",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "899ef1f6b7dec43ded65d5d5794054837b9b12b5",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-10T18:30:15Z",
+          "message": "Fixing creation of variables",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "9fca12e066619b2ef5c6566eaf27936900385bcd",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-10T14:35:45Z",
+          "message": "Merge pull request #549 from kodustech/fix-cockpitMetrics\\n\\nFix cockpit metrics",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "f3c9e97b409e239288806923ed647c3f195c4910",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-10T14:30:20Z",
+          "message": "Fix set configuration in throughput calculator call",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "424f4a9c50a857daaa9eb0774c088c3da1395ffc",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-07T17:36:50Z",
+          "message": "Fix difference compare",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "5a64d1077625633f6daa3a33c9f1a3d3ca051363",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-07T15:09:23Z",
+          "message": "Fix Lead Time in WIP",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "cd8ec5ce735eb339820e59b92172e2b902c189a8",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-23T00:30:00Z",
+          "message": "Fix metrics in cockpit",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "74dbb9ba712fc0c1bf3d7094de92f6002656cadc",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-23T00:30:00Z",
+          "message": "Fix throughput metrics in cockpit",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "1770f8b74f2092f06f891aad256ac8a88666cc9a",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-23T00:30:00Z",
+          "message": "Fix flagged filed in format work item",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "18c8ac478427a093d20e71e2adb3001e7e78dffb",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-23T00:30:00Z",
+          "message": "Fix as per comments in PR",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "ed1a7faff9cb7a586ece21aacfa2814b9db82a7f",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-23T00:30:00Z",
+          "message": "Fix get work items types",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "5f8c3325466fe0615f89798a3a58b7f1f11c5106",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-23T00:30:00Z",
+          "message": "Merge pull request #545 from kodustech/fix-jira-update-integration-configs\\n\\nfix-jira-update-integration-configs",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "87e672d7eb7bb372658694a53227b2f113c4b557",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-23T00:30:00Z",
+          "message": "Merge branch 'main' into feat-improveCheckins",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "01629ac3001036ddd58e2bd16b5126f53f71440d",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-23T00:30:00Z",
+          "message": "Show button control",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "5eb0279fc1be57d2af5f277fa9dc15058dad48c1",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-23T00:30:00Z",
+          "message": "Implements weekly checkin insights",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        },
+        {
+          "id": "a0648b32fb33ada0aa23037e7c2a852ce7053053",
+          "authorId": 17408306,
+          "authorName": "Junior Sartori",
+          "createdAt": "2024-06-23T00:30:00Z",
+          "message": "Fix prompt return",
+          "url": "https://github.com/kodustech/kodus-orchestrator/commit/69bc8bb6f556928296d9a2b16c9c2656342015db"
+        }
+      ]
+    }
+  ]

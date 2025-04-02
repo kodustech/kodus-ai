@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Bercakap dengan Kody dengan menyebut @kody",
+        "feedback": "Adakah cadangan ini berguna? Reaksi dengan 👍 atau 👎 untuk membantu Kody belajar dari interaksi ini."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## Semakan Kod Selesai! 🔥\n\nSemakan kod berjaya diselesaikan berdasarkan konfigurasi semasa anda.\n\n",
+        "withoutComments": "# Semakan Kody Selesai\n**Berita baik!** 🎉\nTiada isu ditemui yang sepadan dengan konfigurasi semakan semasa anda.\n\nTeruskan kerja yang cemerlang! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "Ringkasan PR (Komen dibuat oleh [Kody](https://kodus.io) 🤖)",
+        "codeReviewStarted": "Semakan Kod Dimulakan! 🚀",
+        "description": "✋ Hai, pasukan! Saya sudah melihat fail yang diubah dan memulakan semakan untuk memastikan semuanya dalam keadaan baik. Jika anda memerlukan lebih banyak butiran, saya di sini! [Kody](https://kodus.io)",
+        "changedFiles": "📂 Fail yang Diubah",
+        "filesTable": [
+            "Fail",
+            "Status",
+            "➕ Penambahan",
+            "➖ Penghapusan",
+            "🔄 Perubahan"
+        ],
+        "summary": "📊 Ringkasan Perubahan",
+        "totalFiles": "Jumlah Fail",
+        "totalAdditions": "Jumlah Baris Ditambah",
+        "totalDeletions": "Jumlah Baris Dihapus",
+        "totalChanges": "Jumlah Perubahan"
+    },
+    "configReviewMarkdown": {
+        "title": "Panduan Kody: Penggunaan dan Konfigurasi",
+        "interactingTitle": "Berinteraksi dengan Kody",
+        "requestReview": "Meminta Semakan",
+        "requestReviewDesc": "Minta Kody untuk menyemak PR anda secara manual dengan menambah komen dengan arahan `@kody start-review` di root PR anda.",
+        "provideFeedback": "Memberi Maklum Balas",
+        "provideFeedbackDesc": "Bantu Kody belajar dan meningkatkan dengan memberi reaksi kepada komennya dengan 👍 untuk cadangan yang berguna atau 👎 jika perlu penambahbaikan.",
+        "configurationTitle": "Konfigurasi Kody Semasa",
+        "reviewOptionsTitle": "Pilihan Semakan",
+        "reviewOptionsDesc": "Pilihan semakan berikut diaktifkan atau dinyahaktifkan:",
+        "tableOptions": "Pilihan",
+        "tableEnabled": "Diaktifkan",
+        "configurationLink": "Akses tetapan konfigurasi anda di sini.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 Metrik Kejuruteraan",
+        "legend": {
+            "title": "Legenda hasil",
+            "same": "Bermaksud hasil kekal __sama__",
+            "improved": "Bermaksud hasil __meningkat__",
+            "worsened": "Bermaksud hasil __merosot__"
+        },
+        "flowMetrics": {
+            "title": "Metrik Aliran",
+            "leadTime": {
+                "title": "Masa Utama",
+                "description": "Masa yang diambil untuk aktiviti bergerak dari status ${todo} ke status ${done}."
+            },
+            "leadTimeInWip": {
+                "title": "Masa Utama dalam WIP",
+                "description": "Masa yang diambil untuk aktiviti bergerak dari status ${wip} ke status ${done}."
+            },
+            "throughput": {
+                "title": "Keluaran",
+                "description": "Bilangan item yang mencapai status ${done} dalam 7 hari terakhir.",
+                "items": "item"
+            },
+            "bugRatio": {
+                "title": "Nisbah Pepijat",
+                "description": "Bilangan pepijat dalam WIP berbanding jumlah aktiviti dalam WIP, dalam 7 hari terakhir."
+            },
+            "leadTimeByColumn": {
+                "title": "Masa Utama Mengikut Lajur",
+                "description": "Masa yang dihabiskan oleh item dalam *P75* dalam setiap status papan anda."
+            }
+        },
+        "doraMetrics": {
+            "title": "Metrik Dora",
+            "deployFrequency": {
+                "title": "Kekerapan Penyebaran",
+                "description": "Kekerapan penyebaran dalam seminggu.",
+                "value": "${value} penyebaran setiap minggu"
+            },
+            "leadTimeForChange": {
+                "title": "Masa Utama untuk Perubahan",
+                "description": "Masa purata dari komit pertama hingga penggabungan PR.",
+                "value": "${value} hari"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (Optimistik)",
+            "p75": "P75 (Yakin)",
+            "p95": "P95 (Pesimistik)"
+        }
+    }
+}

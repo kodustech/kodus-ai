@@ -1,0 +1,177 @@
+{
+    "organizationArtifacts": [
+        {
+            "name": "TeamDeliveryAtRisk",
+            "title": "Sprint with High Risk of Delay",
+            "category": "Delivery Monitoring",
+            "relatedItems": "",
+            "impactLevel": "High",
+            "impactArea": "Flow Quality",
+            "whyIsImportant": "Helps predict delivery delays and mitigate impacts on the project schedule.",
+            "status": true,
+            "frequenceTypes": [
+                "daily"
+            ],
+            "teamMethodology": [
+                "scrum"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "description": "The team has {0}% of items delayed, which will likely compromise deliveries.",
+                    "howIsIdentified": "We look for items that are delayed relative to the sprint end date.",
+                    "additionalInfoFormated": "Below are the items that are delayed: \n {0}"
+                }
+            ]
+        },
+        {
+            "name": "DuplicateEffortWarning",
+            "title": "Team working on possible duplicate tasks",
+            "category": "Operational Efficiency",
+            "relatedItems": "",
+            "impactLevel": "High",
+            "impactArea": "Flow Quality",
+            "whyIsImportant": "To ensure that the team is not working on the same items, which can lead to rework.",
+            "status": true,
+            "frequenceTypes": [
+                "daily"
+            ],
+            "teamMethodology": [
+                "kanban",
+                "scrum"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "description": "The team {0} is working on tasks that may be duplicated by teams {1}.",
+                    "howIsIdentified": "We take all tasks in WIP and check for duplicate items.",
+                    "additionalInfoFormated": "Below are the items possibly duplicated between the teams: \n {0}"
+                }
+            ]
+        },
+        {
+            "name": "FlowQualityDecline",
+            "title": "Decline in Team's Flow Quality and Best Practices",
+            "category": "Flow Quality",
+            "relatedItems": "",
+            "impactLevel": "Medium",
+            "impactArea": "Flow Quality",
+            "whyIsImportant": "Fundamental to maintain process integrity and prevent operational bottlenecks.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "scrum",
+                "kanban"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "description": "The team showed a {0}% decline in adherence to best practices compared to the last three weeks.",
+                    "howIsIdentified": "We look at the flow of each team.",
+                    "additionalInfoFormated": "Below are the latest negative artifacts recorded for the team: \n {0}"
+                }
+            ]
+        },
+        {
+            "name": "SpeedDropAlert",
+            "title": "Drop in Team Productivity",
+            "category": "Delivery Monitoring",
+            "relatedItems": "",
+            "impactLevel": "Medium",
+            "impactArea": "Flow Quality",
+            "whyIsImportant": "Allows quick interventions to resolve issues that are slowing down the team.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "kanban"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "description": "The team showed a productivity drop in {0}% of the items worked on, which may cause unforeseen issues and delays in deliveries.",
+                    "howIsIdentified": "We look at the lead time of each team.",
+                    "additionalInfoFormated": "Below is the list of items that are delayed, according to the 75th percentile of Lead Time in WIP: \n {0}"
+                }
+            ]
+        },
+        {
+            "name": "QualityDropSignal",
+            "title": "Significant Increase in Bugs in Deliveries",
+            "category": "Delivery Quality",
+            "relatedItems": "",
+            "impactLevel": "High",
+            "impactArea": "Flow Quality",
+            "whyIsImportant": "Ensures that quality is not compromised by deadline pressure and workload.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "scrum",
+                "kanban"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "description": "The team is spending {0}% of the total effort on bug fixing, which may impact the quality of deliveries.",
+                    "howIsIdentified": "We look at the bug ratio of each team.",
+                    "additionalInfoFormated": "Below is the list of bugs the team is working on: \n {0}"
+                }
+            ]
+        },
+        {
+            "name": "ThroughputVariabilityAlert",
+            "title": "High Throughput Variability in the Team",
+            "category": "Predictability",
+            "relatedItems": "",
+            "impactLevel": "Medium",
+            "impactArea": "Flow Quality",
+            "whyIsImportant": "Essential to maintain consistency and predictability of deliveries.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "scrum",
+                "kanban"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "description": "The team showed a throughput variation greater than {0}% in the past weeks.",
+                    "howIsIdentified": "We look at the throughput of each team.",
+                    "additionalInfoFormated": "Below is the team's throughput history: \n {0}"
+                }
+            ]
+        },
+        {
+            "name": "HighWorkloadPerTeam",
+            "title": "High Workload for the Team",
+            "category": "Operational Efficiency",
+            "relatedItems": "",
+            "impactLevel": "Medium",
+            "impactArea": "Flow Quality",
+            "whyIsImportant": "Essential to maintain the balance between the number of new items in the workflow and the team's delivery capacity.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "scrum",
+                "kanban"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "description": "Possible workload overload identified in the team: {0}",
+                    "howIsIdentified": "We compare the number of new items entering the team's board in the week with the 75th percentile of throughput from the last month. If the number of new items is greater than or equal to 25% of the historical delivery capacity, the team may be overloaded.",
+                    "additionalInfoFormated": "This week the number of new items added to the board ({0}) exceeded the team's historical delivery capacity by {1}%. \n * Throughput (based on the average deliveries of the last month): {2} \n * Items added to the board this week: {0}"
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,43 @@
+{
+    "allColumns": [
+        {
+            "id": "10010",
+            "name": "Ready To Do",
+            "order": null,
+            "column": "todo"
+        },
+        {
+            "id": "3",
+            "name": "In Progress",
+            "order": 1,
+            "column": "wip"
+        },
+        {
+            "id": "10007",
+            "name": "Waiting For Homolog",
+            "order": 2,
+            "column": "wip"
+        },
+        {
+            "id": "10008",
+            "name": "In Homolog",
+            "order": 3,
+            "column": "wip"
+        },
+        {
+            "id": "10009",
+            "name": "Ready To Deploy",
+            "order": 4,
+            "column": "wip"
+        },
+        {
+            "id": "10005",
+            "name": "Done",
+            "order": null,
+            "column": "done"
+        }
+    ],
+    "wipColumns": ["3", "10007", "10008", "10009"],
+    "doneColumns": ["10005"],
+    "todoColumns": ["10010"]
+}

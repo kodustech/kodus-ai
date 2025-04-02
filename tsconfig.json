@@ -1,0 +1,36 @@
+{
+    "compilerOptions": {
+        "declaration": true,
+        "removeComments": true,
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "allowSyntheticDefaultImports": true,
+        "lib": ["ES2022"],
+        "module": "commonjs",
+        "target": "ES2022",
+        "sourceMap": true,
+        "outDir": "./dist",
+        "baseUrl": ".",
+        "incremental": true,
+        "skipLibCheck": true,
+        "strictNullChecks": false,
+        "noImplicitAny": false,
+        "strictBindCallApply": false,
+        "forceConsistentCasingInFileNames": false,
+        "noFallthroughCasesInSwitch": false,
+        "resolveJsonModule": true,
+        "noEmitHelpers": true,
+        "importHelpers": true,
+        "inlineSources": true,
+
+        "paths": {
+            "@/*": ["src/*"]
+        }
+    },
+    "watchOptions": {
+        // Avoid looping in "npm run start:dev"
+        "watchFile": "useFsEventsOnParentDirectory"
+    },
+    "include": ["src", "test/**/*.ts", "tsconfig-paths-bootstrap.js"],
+    "exclude": ["node_modules", "dist", "ormlogs.log"]
+}

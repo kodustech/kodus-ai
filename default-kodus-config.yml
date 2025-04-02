@@ -1,0 +1,31 @@
+version: '1.3'
+summary:
+    generatePRSummary: true
+    customInstructions: ''
+    behaviourForExistingDescription: 'concatenate'
+ignorePaths:
+    - 'yarn.lock'
+    - 'package-lock.json'
+    - 'package.json'
+    - '.env'
+baseBranches: []
+reviewOptions:
+    security: true
+    code_style: true
+    kody_rules: true
+    refactoring: true
+    error_handling: true
+    maintainability: true
+    potential_issues: true
+    documentation_and_comments: true
+    performance_and_optimization: true
+    breaking_changes: true
+suggestionControl:
+    groupingMode: 'full'
+    limitationType: 'pr'
+    maxSuggestions: 9
+    severityLevelFilter: 'medium'
+ignoredTitleKeywords: []
+automatedReviewActive: true
+pullRequestApprovalActive: false
+isRequestChangesActive: false

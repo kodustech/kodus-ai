@@ -1,0 +1,15 @@
+export enum LLMModelProvider {
+    CHATGPT_3_5_TURBO = 'gpt-3.5-turbo',
+    CHATGPT_3_5_TURBO_16K = 'gpt-3.5-turbo-16k',
+    CHATGPT_4 = 'gpt-4-1106-preview',
+    CHATGPT_4_TURBO = 'gpt-4-turbo',
+    CHATGPT_4_ALL = 'gpt-4o',
+    CHATGPT_4_ALL_MINI = 'gpt-4o-mini',
+    CLAUDE_3_5_SONNET = 'claude-3-5-sonnet-20241022',
+    GEMINI_1_5_PRO = 'gemini-1.5-pro',
+    GEMINI_1_5_PRO_EXP = 'gemini-1.5-pro-exp-0801',
+    GEMINI_1_5_FLASH = 'gemini-1.5-flash',
+    GEMINI_2_0_FLASH = 'gemini-2.0-flash',
+    DEEPSEEK_V3 = 'deepseek-v3',
+    VERTEX_CLAUDE_3_5_SONNET = 'claude-3-5-sonnet-v2@20241022',
+}

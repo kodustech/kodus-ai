@@ -1,0 +1,9 @@
+{
+    "extends": "./tsconfig.json",
+    "include": [
+        "src/**/*.ts",
+        "test/**/*.ts",
+        "tsconfig-paths-bootstrap.js",
+        "prebuild.ts"
+    ]
+}

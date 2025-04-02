@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Talk to Kody by mentioning @kody",
+        "feedback": "Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## Code Review Completed! 🔥\n\nThe code review was successfully completed based on your current configurations.\n\n",
+        "withoutComments": "# Kody Review Complete\n**Great news!** 🎉\nNo issues were found that match your current review configurations.\n\nKeep up the excellent work! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "PR Summary (Comment created by [Kody](https://kodus.io) 🤖)",
+        "codeReviewStarted": "Code Review Started! 🚀",
+        "description": "✋ Hi, team! I'm already looking at the changed files and starting the review to ensure everything is in order. If you need more details, I'm here! [Kody](https://kodus.io)",
+        "changedFiles": "📂 Changed Files",
+        "filesTable": [
+            "File",
+            "Status",
+            "➕ Additions",
+            "➖ Deletions",
+            "🔄 Changes"
+        ],
+        "summary": "📊 Summary of Changes",
+        "totalFiles": "Total Files",
+        "totalAdditions": "Total Lines Added",
+        "totalDeletions": "Total Lines Removed",
+        "totalChanges": "Total Changes"
+    },
+    "configReviewMarkdown": {
+        "title": "Kody Guide: Usage and Configuration",
+        "interactingTitle": "Interacting with Kody",
+        "requestReview": "Request a Review",
+        "requestReviewDesc": "Ask Kody to review your PR manually by adding a comment with the `@kody start-review` command at the root of your PR.",
+        "provideFeedback": "Provide Feedback",
+        "provideFeedbackDesc": "Help Kody learn and improve by reacting to its comments with a 👍 for helpful suggestions or a 👎 if improvements are needed.",
+        "configurationTitle": "Current Kody Configuration",
+        "reviewOptionsTitle": "Review Options",
+        "reviewOptionsDesc": "The following review options are enabled or disabled:",
+        "tableOptions": "Options",
+        "tableEnabled": "Enabled",
+        "configurationLink": "Access your configuration settings here.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 Engineering Metrics",
+        "legend": {
+            "title": "Legend of results",
+            "same": "Means the result remained the __same__",
+            "improved": "Means the result __improved__",
+            "worsened": "Means the result __worsened__"
+        },
+        "flowMetrics": {
+            "title": "Flow Metrics",
+            "leadTime": {
+                "title": "Lead Time",
+                "description": "The time it takes for an activity to move from the ${todo} status to the ${done} status."
+            },
+            "leadTimeInWip": {
+                "title": "Lead Time in WIP",
+                "description": "The time it takes for an activity to move from the ${wip} status to the ${done} status."
+            },
+            "throughput": {
+                "title": "Throughput",
+                "description": "Number of items that reached the ${done} status in the last 7 days.",
+                "items": "items"
+            },
+            "bugRatio": {
+                "title": "Bug Ratio",
+                "description": "Number of bugs in WIP relative to the total activities in WIP, in the last 7 days."
+            },
+            "leadTimeByColumn": {
+                "title": "Lead Time By Column",
+                "description": "Time an item spends in *P75* in each status of your board."
+            }
+        },
+        "doraMetrics": {
+            "title": "Dora Metrics",
+            "deployFrequency": {
+                "title": "Deploy Frequency",
+                "description": "Deploy frequency in the week.",
+                "value": "${value} deploys per week"
+            },
+            "leadTimeForChange": {
+                "title": "Lead Time for Change",
+                "description": "Average time from the first commit to the PR merge.",
+                "value": "${value} days"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (Optimistic)",
+            "p75": "P75 (Confident)",
+            "p95": "P95 (Pessimistic)"
+        }
+    }
+}

@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Nói chuyện với Kody bằng cách đề cập @kody",
+        "feedback": "Đề xuất này có hữu ích không? Phản hồi với 👍 hoặc 👎 để giúp Kody học hỏi từ tương tác này."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## Đánh giá mã hoàn tất! 🔥\n\nĐánh giá mã đã được hoàn tất thành công dựa trên cấu hình hiện tại của bạn.\n\n",
+        "withoutComments": "# Đánh giá Kody hoàn tất\n**Tin tuyệt vời!** 🎉\nKhông có vấn đề nào được tìm thấy phù hợp với cấu hình đánh giá hiện tại của bạn.\n\nTiếp tục công việc tuyệt vời! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "Tóm tắt PR (Bình luận được tạo bởi [Kody](https://kodus.io) 🤖)",
+        "codeReviewStarted": "Bắt đầu đánh giá mã! 🚀",
+        "description": "✋ Xin chào, đội! Tôi đã xem các tệp đã thay đổi và bắt đầu đánh giá để đảm bảo mọi thứ đều ổn. Nếu bạn cần thêm chi tiết, tôi ở đây! [Kody](https://kodus.io)",
+        "changedFiles": "📂 Các tệp đã thay đổi",
+        "filesTable": [
+            "Tệp",
+            "Trạng thái",
+            "➕ Thêm vào",
+            "➖ Xóa",
+            "🔄 Thay đổi"
+        ],
+        "summary": "📊 Tóm tắt các thay đổi",
+        "totalFiles": "Tổng số tệp",
+        "totalAdditions": "Tổng số dòng đã thêm",
+        "totalDeletions": "Tổng số dòng đã xóa",
+        "totalChanges": "Tổng số thay đổi"
+    },
+    "configReviewMarkdown": {
+        "title": "Hướng dẫn Kody: Sử dụng và Cấu hình",
+        "interactingTitle": "Tương tác với Kody",
+        "requestReview": "Yêu cầu đánh giá",
+        "requestReviewDesc": "Yêu cầu Kody đánh giá PR của bạn thủ công bằng cách thêm một bình luận với lệnh `@kody start-review` tại gốc của PR của bạn.",
+        "provideFeedback": "Cung cấp phản hồi",
+        "provideFeedbackDesc": "Giúp Kody học hỏi và cải thiện bằng cách phản hồi các bình luận của nó với một 👍 cho các đề xuất hữu ích hoặc một 👎 nếu cần cải thiện.",
+        "configurationTitle": "Cấu hình Kody hiện tại",
+        "reviewOptionsTitle": "Tùy chọn đánh giá",
+        "reviewOptionsDesc": "Các tùy chọn đánh giá sau đây được bật hoặc tắt:",
+        "tableOptions": "Tùy chọn",
+        "tableEnabled": "Đã bật",
+        "configurationLink": "Truy cập cài đặt cấu hình của bạn tại đây.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 Các chỉ số kỹ thuật",
+        "legend": {
+            "title": "Chú giải kết quả",
+            "same": "Có nghĩa là kết quả vẫn __giữ nguyên__",
+            "improved": "Có nghĩa là kết quả đã __cải thiện__",
+            "worsened": "Có nghĩa là kết quả đã __xấu đi__"
+        },
+        "flowMetrics": {
+            "title": "Các chỉ số luồng",
+            "leadTime": {
+                "title": "Thời gian dẫn đầu",
+                "description": "Thời gian cần thiết để một hoạt động chuyển từ trạng thái ${todo} sang trạng thái ${done}."
+            },
+            "leadTimeInWip": {
+                "title": "Thời gian dẫn đầu trong WIP",
+                "description": "Thời gian cần thiết để một hoạt động chuyển từ trạng thái ${wip} sang trạng thái ${done}."
+            },
+            "throughput": {
+                "title": "Thông lượng",
+                "description": "Số lượng mục đã đạt trạng thái ${done} trong 7 ngày qua.",
+                "items": "mục"
+            },
+            "bugRatio": {
+                "title": "Tỷ lệ lỗi",
+                "description": "Số lượng lỗi trong WIP so với tổng số hoạt động trong WIP trong 7 ngày qua."
+            },
+            "leadTimeByColumn": {
+                "title": "Thời gian dẫn đầu theo cột",
+                "description": "Thời gian một mục dành trong *P75* ở mỗi trạng thái của bảng của bạn."
+            }
+        },
+        "doraMetrics": {
+            "title": "Các chỉ số Dora",
+            "deployFrequency": {
+                "title": "Tần suất triển khai",
+                "description": "Tần suất triển khai trong tuần.",
+                "value": "${value} lần triển khai mỗi tuần"
+            },
+            "leadTimeForChange": {
+                "title": "Thời gian dẫn đầu cho thay đổi",
+                "description": "Thời gian trung bình từ lần commit đầu tiên đến khi hợp nhất PR.",
+                "value": "${value} ngày"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (Lạc quan)",
+            "p75": "P75 (Tự tin)",
+            "p95": "P95 (Bi quan)"
+        }
+    }
+}

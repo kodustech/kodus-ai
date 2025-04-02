@@ -1,0 +1,1963 @@
+[
+    {
+        "id": "10249",
+        "key": "KC-207",
+        "name": "Automated tests for daily summarization",
+        "description": "",
+        "changelog": [
+            {
+                "id": "12302",
+                "created": "2024-02-07T19:30:49.646-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10003",
+                        "fromColumnName": "Backlog",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            }
+        ],
+        "workItemCreatedAt": "2024-02-07T19:30:49.337-0300",
+        "columnName": "In Progress",
+        "assignee": {
+            "accountId": "5acd171e01a2012a6c3208fd",
+            "userEmail": "gabriel.malinosqui@kodus.io",
+            "userName": "Gabriel Malinosqui"
+        },
+        "workItemType": {
+            "name": "Task",
+            "id": "10005",
+            "description": "A small and distinct piece of work.",
+            "subtask": false
+        },
+        "status": {
+            "name": "In Progress",
+            "id": "3",
+            "statusCategory": {
+                "name": "In Progress",
+                "id": 4
+            }
+        }
+    },
+    {
+        "id": "10248",
+        "key": "KC-206",
+        "name": "Weekly summarization: error in item count",
+        "description": "",
+        "changelog": [
+            {
+                "id": "12295",
+                "created": "2024-02-07T17:04:39.058-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12294",
+                "created": "2024-02-07T17:04:38.800-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10010",
+                        "fromColumnName": "Ready To Do",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            },
+            {
+                "id": "12293",
+                "created": "2024-02-07T17:04:33.051-0300",
+                "movements": [
+                    {
+                        "field": "assignee",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "628b7a0f1e4f4b00681b47d3",
+                        "toColumnName": "Danilo Gomes Pereira"
+                    }
+                ]
+            },
+            {
+                "id": "12286",
+                "created": "2024-02-06T22:55:41.971-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10003",
+                        "fromColumnName": "Backlog",
+                        "toColumnId": "10010",
+                        "toColumnName": "Ready To Do"
+                    }
+                ]
+            }
+        ],
+        "workItemCreatedAt": "2024-02-06T22:55:41.014-0300",
+        "columnName": "In Progress",
+        "assignee": {
+            "accountId": "628b7a0f1e4f4b00681b47d3",
+            "userEmail": "danilo.gomes@ezdevs.tech",
+            "userName": "Danilo Gomes Pereira"
+        },
+        "workItemType": {
+            "name": "Bug",
+            "id": "10007",
+            "description": "A problem or error.",
+            "subtask": false
+        },
+        "status": {
+            "name": "In Progress",
+            "id": "3",
+            "statusCategory": {
+                "name": "In Progress",
+                "id": 4
+            }
+        }
+    },
+    {
+        "id": "10247",
+        "key": "KC-205",
+        "name": "Weekly summarization: Adjustments and fixes",
+        "description": "",
+        "changelog": [
+            {
+                "id": "12292",
+                "created": "2024-02-07T15:51:48.857-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12291",
+                "created": "2024-02-07T15:51:48.620-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10010",
+                        "fromColumnName": "Ready To Do",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            },
+            {
+                "id": "12290",
+                "created": "2024-02-07T15:51:40.084-0300",
+                "movements": [
+                    {
+                        "field": "assignee",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "628b7a0f1e4f4b00681b47d3",
+                        "toColumnName": "Danilo Gomes Pereira"
+                    }
+                ]
+            },
+            {
+                "id": "12283",
+                "created": "2024-02-06T22:40:23.828-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10003",
+                        "fromColumnName": "Backlog",
+                        "toColumnId": "10010",
+                        "toColumnName": "Ready To Do"
+                    }
+                ]
+            }
+        ],
+        "workItemCreatedAt": "2024-02-06T22:40:23.458-0300",
+        "columnName": "In Progress",
+        "assignee": {
+            "accountId": "628b7a0f1e4f4b00681b47d3",
+            "userEmail": "danilo.gomes@ezdevs.tech",
+            "userName": "Danilo Gomes Pereira"
+        },
+        "workItemType": {
+            "name": "Small Wins",
+            "id": "10015",
+            "description": "",
+            "subtask": false
+        },
+        "status": {
+            "name": "In Progress",
+            "id": "3",
+            "statusCategory": {
+                "name": "In Progress",
+                "id": 4
+            }
+        }
+    },
+    {
+        "id": "10245",
+        "key": "KC-203",
+        "name": "Insights: adjustment needed in Throughput calculation",
+        "description": "",
+        "changelog": [
+            {
+                "id": "12242",
+                "created": "2024-02-06T08:40:03.207-0300",
+                "movements": [
+                    {
+                        "field": "assignee",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "5aea4ab19cfeaf198aeeaf78",
+                        "toColumnName": "Wellington Santana"
+                    }
+                ]
+            },
+            {
+                "id": "12241",
+                "created": "2024-02-06T08:40:00.913-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12240",
+                "created": "2024-02-06T08:40:00.664-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10010",
+                        "fromColumnName": "Ready To Do",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            },
+            {
+                "id": "12239",
+                "created": "2024-02-06T08:38:50.878-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10003",
+                        "fromColumnName": "Backlog",
+                        "toColumnId": "10010",
+                        "toColumnName": "Ready To Do"
+                    }
+                ]
+            }
+        ],
+        "workItemCreatedAt": "2024-02-06T08:38:50.548-0300",
+        "columnName": "In Progress",
+        "assignee": {
+            "accountId": "5aea4ab19cfeaf198aeeaf78",
+            "userEmail": null,
+            "userName": "Wellington Santana"
+        },
+        "workItemType": {
+            "name": "Bug",
+            "id": "10007",
+            "description": "A problem or error.",
+            "subtask": false
+        },
+        "status": {
+            "name": "In Progress",
+            "id": "3",
+            "statusCategory": {
+                "name": "In Progress",
+                "id": 4
+            }
+        }
+    },
+    {
+        "id": "10244",
+        "key": "KC-202",
+        "name": "Setup - Member configuration (Discord and Azure) does not display tool icons",
+        "description": "",
+        "changelog": [
+            {
+                "id": "12288",
+                "created": "2024-02-07T14:41:32.068-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10008",
+                        "fromColumnName": "In Homolog",
+                        "toColumnId": "10009",
+                        "toColumnName": "Ready To Deploy"
+                    }
+                ]
+            },
+            {
+                "id": "12265",
+                "created": "2024-02-06T18:08:34.367-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12264",
+                "created": "2024-02-06T18:08:34.048-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10007",
+                        "fromColumnName": "Waiting For Homolog",
+                        "toColumnId": "10008",
+                        "toColumnName": "In Homolog"
+                    }
+                ]
+            },
+            {
+                "id": "12263",
+                "created": "2024-02-06T17:35:36.768-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "3",
+                        "fromColumnName": "In Progress",
+                        "toColumnId": "10007",
+                        "toColumnName": "Waiting For Homolog"
+                    }
+                ]
+            },
+            {
+                "id": "12249",
+                "created": "2024-02-06T09:45:20.638-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12248",
+                "created": "2024-02-06T09:45:20.393-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10010",
+                        "fromColumnName": "Ready To Do",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            },
+            {
+                "id": "12247",
+                "created": "2024-02-06T09:45:13.531-0300",
+                "movements": [
+                    {
+                        "field": "assignee",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "628b7a0f1c97b5006f0a7ffe",
+                        "toColumnName": "Lucas Vanni"
+                    }
+                ]
+            },
+            {
+                "id": "12227",
+                "created": "2024-02-05T19:23:42.488-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10003",
+                        "fromColumnName": "Backlog",
+                        "toColumnId": "10010",
+                        "toColumnName": "Ready To Do"
+                    }
+                ]
+            }
+        ],
+        "workItemCreatedAt": "2024-02-05T19:23:41.634-0300",
+        "columnName": "Ready To Deploy",
+        "assignee": {
+            "accountId": "628b7a0f1c97b5006f0a7ffe",
+            "userEmail": "lucas.vanni@ezdevs.tech",
+            "userName": "Lucas Vanni"
+        },
+        "workItemType": {
+            "name": "Bug",
+            "id": "10007",
+            "description": "A problem or error.",
+            "subtask": false
+        },
+        "status": {
+            "name": "Ready To Deploy",
+            "id": "10009",
+            "statusCategory": {
+                "name": "In Progress",
+                "id": 4
+            }
+        }
+    },
+    {
+        "id": "10240",
+        "key": "KC-198",
+        "name": "Insights: WIP limit considering the wrong period for analysis",
+        "description": "",
+        "changelog": [
+            {
+                "id": "12298",
+                "created": "2024-02-07T17:12:40.411-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12297",
+                "created": "2024-02-07T17:12:40.128-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10010",
+                        "fromColumnName": "Ready To Do",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            },
+            {
+                "id": "12296",
+                "created": "2024-02-07T17:12:29.299-0300",
+                "movements": [
+                    {
+                        "field": "assignee",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "628b7a0f1c97b5006f0a7ffe",
+                        "toColumnName": "Lucas Vanni"
+                    }
+                ]
+            },
+            {
+                "id": "12287",
+                "created": "2024-02-07T10:06:45.317-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked lower"
+                    }
+                ]
+            },
+            {
+                "id": "12284",
+                "created": "2024-02-06T22:51:28.783-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked lower"
+                    }
+                ]
+            },
+            {
+                "id": "12221",
+                "created": "2024-02-05T19:16:04.662-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked lower"
+                    }
+                ]
+            },
+            {
+                "id": "12220",
+                "created": "2024-02-05T19:16:04.367-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10011",
+                        "fromColumnName": "In Refinement",
+                        "toColumnId": "10010",
+                        "toColumnName": "Ready To Do"
+                    }
+                ]
+            },
+            {
+                "id": "12187",
+                "created": "2024-02-05T15:14:33.600-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10003",
+                        "fromColumnName": "Backlog",
+                        "toColumnId": "10011",
+                        "toColumnName": "In Refinement"
+                    }
+                ]
+            }
+        ],
+        "workItemCreatedAt": "2024-02-05T15:14:33.122-0300",
+        "columnName": "In Progress",
+        "assignee": {
+            "accountId": "628b7a0f1c97b5006f0a7ffe",
+            "userEmail": "lucas.vanni@ezdevs.tech",
+            "userName": "Lucas Vanni"
+        },
+        "workItemType": {
+            "name": "Bug",
+            "id": "10007",
+            "description": "A problem or error.",
+            "subtask": false
+        },
+        "status": {
+            "name": "In Progress",
+            "id": "3",
+            "statusCategory": {
+                "name": "In Progress",
+                "id": 4
+            }
+        }
+    },
+    {
+        "id": "10239",
+        "key": "KC-197",
+        "name": "Notification of new summarization not arriving in MS Teams",
+        "description": "",
+        "changelog": [
+            {
+                "id": "12246",
+                "created": "2024-02-06T09:45:01.296-0300",
+                "movements": [
+                    {
+                        "field": "Flagged",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "[10019]",
+                        "toColumnName": "Impediment"
+                    }
+                ]
+            },
+            {
+                "id": "12233",
+                "created": "2024-02-06T08:24:13.506-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12232",
+                "created": "2024-02-06T08:24:13.208-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10007",
+                        "fromColumnName": "Waiting For Homolog",
+                        "toColumnId": "10008",
+                        "toColumnName": "In Homolog"
+                    }
+                ]
+            },
+            {
+                "id": "12229",
+                "created": "2024-02-05T21:46:47.969-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "3",
+                        "fromColumnName": "In Progress",
+                        "toColumnId": "10007",
+                        "toColumnName": "Waiting For Homolog"
+                    }
+                ]
+            },
+            {
+                "id": "12182",
+                "created": "2024-02-05T11:23:10.442-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12181",
+                "created": "2024-02-05T11:23:10.156-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10010",
+                        "fromColumnName": "Ready To Do",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            },
+            {
+                "id": "12180",
+                "created": "2024-02-05T11:07:45.949-0300",
+                "movements": [
+                    {
+                        "field": "assignee",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "628b7a0f1c97b5006f0a7ffe",
+                        "toColumnName": "Lucas Vanni"
+                    }
+                ]
+            },
+            {
+                "id": "12179",
+                "created": "2024-02-05T11:06:14.205-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10003",
+                        "fromColumnName": "Backlog",
+                        "toColumnId": "10010",
+                        "toColumnName": "Ready To Do"
+                    }
+                ]
+            }
+        ],
+        "workItemCreatedAt": "2024-02-05T11:06:13.743-0300",
+        "columnName": "In Homolog",
+        "assignee": {
+            "accountId": "628b7a0f1c97b5006f0a7ffe",
+            "userEmail": "lucas.vanni@ezdevs.tech",
+            "userName": "Lucas Vanni"
+        },
+        "workItemType": {
+            "name": "Critical Bug",
+            "id": "10012",
+            "description": "A critical problem",
+            "subtask": false
+        },
+        "status": {
+            "name": "In Homolog",
+            "id": "10008",
+            "statusCategory": {
+                "name": "In Progress",
+                "id": 4
+            }
+        }
+    },
+    {
+        "id": "10237",
+        "key": "KC-195",
+        "name": "Implementation of tests in diagnostics",
+        "description": "",
+        "changelog": [
+            {
+                "id": "12211",
+                "created": "2024-02-05T18:16:48.430-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12210",
+                "created": "2024-02-05T18:16:48.191-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10010",
+                        "fromColumnName": "Ready To Do",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            },
+            {
+                "id": "12209",
+                "created": "2024-02-05T18:01:36.691-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked lower"
+                    }
+                ]
+            },
+            {
+                "id": "12208",
+                "created": "2024-02-05T18:01:36.474-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10011",
+                        "fromColumnName": "In Refinement",
+                        "toColumnId": "10010",
+                        "toColumnName": "Ready To Do"
+                    }
+                ]
+            },
+            {
+                "id": "12207",
+                "created": "2024-02-05T18:01:34.242-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12206",
+                "created": "2024-02-05T18:01:33.988-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10006",
+                        "fromColumnName": "Ready To Refinement",
+                        "toColumnId": "10011",
+                        "toColumnName": "In Refinement"
+                    }
+                ]
+            },
+            {
+                "id": "12205",
+                "created": "2024-02-05T18:01:26.863-0300",
+                "movements": [
+                    {
+                        "field": "assignee",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "5aea4ab19cfeaf198aeeaf78",
+                        "toColumnName": "Wellington Santana"
+                    }
+                ]
+            },
+            {
+                "id": "12202",
+                "created": "2024-02-05T17:56:15.678-0300",
+                "movements": []
+            },
+            {
+                "id": "12175",
+                "created": "2024-02-05T10:59:52.397-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10003",
+                        "fromColumnName": "Backlog",
+                        "toColumnId": "10006",
+                        "toColumnName": "Ready To Refinement"
+                    }
+                ]
+            }
+        ],
+        "workItemCreatedAt": "2024-02-05T10:59:52.127-0300",
+        "columnName": "In Progress",
+        "assignee": {
+            "accountId": "5aea4ab19cfeaf198aeeaf78",
+            "userEmail": null,
+            "userName": "Wellington Santana"
+        },
+        "workItemType": {
+            "name": "Task",
+            "id": "10005",
+            "description": "A small and distinct piece of work.",
+            "subtask": false
+        },
+        "status": {
+            "name": "In Progress",
+            "id": "3",
+            "statusCategory": {
+                "name": "In Progress",
+                "id": 4
+            }
+        }
+    },
+    {
+        "id": "10235",
+        "key": "KC-193",
+        "name": "Azure Boards: Change board selection control",
+        "description": "",
+        "changelog": [
+            {
+                "id": "12289",
+                "created": "2024-02-07T15:51:20.993-0300",
+                "movements": [
+                    {
+                        "field": "Flagged",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "[10019]",
+                        "toColumnName": "Impediment"
+                    }
+                ]
+            },
+            {
+                "id": "12259",
+                "created": "2024-02-06T16:13:35.337-0300",
+                "movements": [
+                    {
+                        "field": "Flagged",
+                        "fromColumnId": "[10019]",
+                        "fromColumnName": "Impediment",
+                        "toColumnId": "",
+                        "toColumnName": ""
+                    }
+                ]
+            },
+            {
+                "id": "12222",
+                "created": "2024-02-05T19:18:01.866-0300",
+                "movements": [
+                    {
+                        "field": "Flagged",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "[10019]",
+                        "toColumnName": "Impediment"
+                    }
+                ]
+            },
+            {
+                "id": "12197",
+                "created": "2024-02-05T17:41:07.168-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12196",
+                "created": "2024-02-05T17:41:06.927-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10010",
+                        "fromColumnName": "Ready To Do",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            },
+            {
+                "id": "12195",
+                "created": "2024-02-05T17:41:00.850-0300",
+                "movements": [
+                    {
+                        "field": "assignee",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "628b7a0f1e4f4b00681b47d3",
+                        "toColumnName": "Danilo Gomes Pereira"
+                    }
+                ]
+            },
+            {
+                "id": "12164",
+                "created": "2024-02-05T07:58:39.042-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10003",
+                        "fromColumnName": "Backlog",
+                        "toColumnId": "10010",
+                        "toColumnName": "Ready To Do"
+                    }
+                ]
+            }
+        ],
+        "workItemCreatedAt": "2024-02-05T07:58:37.813-0300",
+        "columnName": "In Progress",
+        "assignee": {
+            "accountId": "628b7a0f1e4f4b00681b47d3",
+            "userEmail": "danilo.gomes@ezdevs.tech",
+            "userName": "Danilo Gomes Pereira"
+        },
+        "workItemType": {
+            "name": "Task",
+            "id": "10005",
+            "description": "A small and distinct piece of work.",
+            "subtask": false
+        },
+        "status": {
+            "name": "In Progress",
+            "id": "3",
+            "statusCategory": {
+                "name": "In Progress",
+                "id": 4
+            }
+        }
+    },
+    {
+        "id": "10219",
+        "key": "KC-178",
+        "name": "Daily Summarization - Data Retrieval + Processing",
+        "description": "",
+        "changelog": [
+            {
+                "id": "12306",
+                "created": "2024-02-07T21:03:58.632-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12305",
+                "created": "2024-02-07T21:03:58.390-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10007",
+                        "fromColumnName": "Waiting For Homolog",
+                        "toColumnId": "10008",
+                        "toColumnName": "In Homolog"
+                    }
+                ]
+            },
+            {
+                "id": "12300",
+                "created": "2024-02-07T19:30:08.485-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "3",
+                        "fromColumnName": "In Progress",
+                        "toColumnId": "10007",
+                        "toColumnName": "Waiting For Homolog"
+                    }
+                ]
+            },
+            {
+                "id": "12151",
+                "created": "2024-02-02T16:36:15.261-0300",
+                "movements": [
+                    {
+                        "field": "assignee",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "5acd171e01a2012a6c3208fd",
+                        "toColumnName": "Gabriel Malinosqui"
+                    }
+                ]
+            },
+            {
+                "id": "12150",
+                "created": "2024-02-02T16:36:13.497-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12149",
+                "created": "2024-02-02T16:36:13.183-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10010",
+                        "fromColumnName": "Ready To Do",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            },
+            {
+                "id": "12012",
+                "created": "2024-01-29T14:48:30.895-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10003",
+                        "fromColumnName": "Backlog",
+                        "toColumnId": "10010",
+                        "toColumnName": "Ready To Do"
+                    }
+                ]
+            },
+            {
+                "id": "12010",
+                "created": "2024-01-29T14:47:38.385-0300",
+                "movements": []
+            },
+            {
+                "id": "12007",
+                "created": "2024-01-29T13:41:53.908-0300",
+                "movements": []
+            },
+            {
+                "id": "12002",
+                "created": "2024-01-29T13:12:33.034-0300",
+                "movements": [
+                    {
+                        "field": "Link",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "KCD-42",
+                        "toColumnName": "This issue implements KCD-42"
+                    }
+                ]
+            }
+        ],
+        "workItemCreatedAt": "2024-01-29T13:12:32.414-0300",
+        "columnName": "In Homolog",
+        "assignee": {
+            "accountId": "5acd171e01a2012a6c3208fd",
+            "userEmail": "gabriel.malinosqui@kodus.io",
+            "userName": "Gabriel Malinosqui"
+        },
+        "workItemType": {
+            "name": "Big Bets",
+            "id": "10014",
+            "description": "",
+            "subtask": false
+        },
+        "status": {
+            "name": "In Homolog",
+            "id": "10008",
+            "statusCategory": {
+                "name": "In Progress",
+                "id": 4
+            }
+        }
+    },
+    {
+        "id": "10218",
+        "key": "KC-177",
+        "name": "Daily Summarization - Prompt",
+        "description": "",
+        "changelog": [
+            {
+                "id": "12304",
+                "created": "2024-02-07T21:03:57.190-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12303",
+                "created": "2024-02-07T21:03:56.889-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10007",
+                        "fromColumnName": "Waiting For Homolog",
+                        "toColumnId": "10008",
+                        "toColumnName": "In Homolog"
+                    }
+                ]
+            },
+            {
+                "id": "12299",
+                "created": "2024-02-07T19:30:07.261-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "3",
+                        "fromColumnName": "In Progress",
+                        "toColumnId": "10007",
+                        "toColumnName": "Waiting For Homolog"
+                    }
+                ]
+            },
+            {
+                "id": "12122",
+                "created": "2024-02-02T13:49:06.795-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12121",
+                "created": "2024-02-02T13:49:06.537-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10010",
+                        "fromColumnName": "Ready To Do",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            },
+            {
+                "id": "12120",
+                "created": "2024-02-02T13:49:02.438-0300",
+                "movements": [
+                    {
+                        "field": "assignee",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "5acd171e01a2012a6c3208fd",
+                        "toColumnName": "Gabriel Malinosqui"
+                    }
+                ]
+            },
+            {
+                "id": "12011",
+                "created": "2024-01-29T14:48:28.148-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10003",
+                        "fromColumnName": "Backlog",
+                        "toColumnId": "10010",
+                        "toColumnName": "Ready To Do"
+                    }
+                ]
+            },
+            {
+                "id": "12006",
+                "created": "2024-01-29T13:41:13.325-0300",
+                "movements": []
+            },
+            {
+                "id": "12005",
+                "created": "2024-01-29T13:40:53.756-0300",
+                "movements": []
+            },
+            {
+                "id": "12004",
+                "created": "2024-01-29T13:23:09.408-0300",
+                "movements": []
+            },
+            {
+                "id": "11999",
+                "created": "2024-01-29T12:20:32.965-0300",
+                "movements": []
+            },
+            {
+                "id": "11998",
+                "created": "2024-01-29T12:10:06.249-0300",
+                "movements": []
+            },
+            {
+                "id": "11997",
+                "created": "2024-01-29T11:25:22.995-0300",
+                "movements": []
+            },
+            {
+                "id": "11995",
+                "created": "2024-01-29T11:03:28.393-0300",
+                "movements": [
+                    {
+                        "field": "summary",
+                        "fromColumnId": null,
+                        "fromColumnName": "Daily Summarization",
+                        "toColumnId": null,
+                        "toColumnName": "Daily Summarization - Prompt"
+                    }
+                ]
+            },
+            {
+                "id": "11993",
+                "created": "2024-01-29T11:00:07.659-0300",
+                "movements": [
+                    {
+                        "field": "Link",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "KCD-42",
+                        "toColumnName": "This issue implements KCD-42"
+                    }
+                ]
+            }
+        ],
+        "workItemCreatedAt": "2024-01-29T11:00:07.026-0300",
+        "columnName": "In Homolog",
+        "assignee": {
+            "accountId": "5acd171e01a2012a6c3208fd",
+            "userEmail": "gabriel.malinosqui@kodus.io",
+            "userName": "Gabriel Malinosqui"
+        },
+        "workItemType": {
+            "name": "Big Bets",
+            "id": "10014",
+            "description": "",
+            "subtask": false
+        },
+        "status": {
+            "name": "In Homolog",
+            "id": "10008",
+            "statusCategory": {
+                "name": "In Progress",
+                "id": 4
+            }
+        }
+    },
+    {
+        "id": "10141",
+        "key": "KC-142",
+        "name": "Adjustments for MS Teams app approval",
+        "description": "",
+        "changelog": [
+            {
+                "id": "11432",
+                "created": "2024-01-22T10:08:53.658-0300",
+                "movements": [
+                    {
+                        "field": "Flagged",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "[10019]",
+                        "toColumnName": "Impediment"
+                    }
+                ]
+            },
+            {
+                "id": "11297",
+                "created": "2024-01-17T08:50:52.262-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "11296",
+                "created": "2024-01-17T08:50:52.022-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10007",
+                        "fromColumnName": "Waiting For Homolog",
+                        "toColumnId": "10008",
+                        "toColumnName": "In Homolog"
+                    }
+                ]
+            },
+            {
+                "id": "11295",
+                "created": "2024-01-17T08:50:47.728-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "3",
+                        "fromColumnName": "In Progress",
+                        "toColumnId": "10007",
+                        "toColumnName": "Waiting For Homolog"
+                    }
+                ]
+            },
+            {
+                "id": "11281",
+                "created": "2024-01-16T09:02:59.599-0300",
+                "movements": [
+                    {
+                        "field": "assignee",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "5aea4ab19cfeaf198aeeaf78",
+                        "toColumnName": "Wellington Santana"
+                    }
+                ]
+            },
+            {
+                "id": "11280",
+                "created": "2024-01-16T09:02:51.029-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "11279",
+                "created": "2024-01-16T09:02:50.720-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10010",
+                        "fromColumnName": "Ready To Do",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            },
+            {
+                "id": "11277",
+                "created": "2024-01-15T22:24:40.238-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10003",
+                        "fromColumnName": "Backlog",
+                        "toColumnId": "10010",
+                        "toColumnName": "Ready To Do"
+                    }
+                ]
+            }
+        ],
+        "workItemCreatedAt": "2024-01-15T22:24:39.863-0300",
+        "columnName": "In Homolog",
+        "assignee": {
+            "accountId": "5aea4ab19cfeaf198aeeaf78",
+            "userEmail": null,
+            "userName": "Wellington Santana"
+        },
+        "workItemType": {
+            "name": "Task",
+            "id": "10005",
+            "description": "A small and distinct piece of work.",
+            "subtask": false
+        },
+        "status": {
+            "name": "In Homolog",
+            "id": "10008",
+            "statusCategory": {
+                "name": "In Progress",
+                "id": 4
+            }
+        }
+    },
+    {
+        "id": "10126",
+        "key": "KC-127",
+        "name": "New Summarization",
+        "description": "",
+        "changelog": [
+            {
+                "id": "12148",
+                "created": "2024-02-02T16:31:50.378-0300",
+                "movements": [
+                    {
+                        "field": "Flagged",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "[10019]",
+                        "toColumnName": "Impediment"
+                    }
+                ]
+            },
+            {
+                "id": "12131",
+                "created": "2024-02-02T14:58:57.948-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12106",
+                "created": "2024-02-02T10:12:40.113-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12105",
+                "created": "2024-02-02T10:12:39.696-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10007",
+                        "fromColumnName": "Waiting For Homolog",
+                        "toColumnId": "10008",
+                        "toColumnName": "In Homolog"
+                    }
+                ]
+            },
+            {
+                "id": "12103",
+                "created": "2024-02-02T10:09:35.461-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "3",
+                        "fromColumnName": "In Progress",
+                        "toColumnId": "10007",
+                        "toColumnName": "Waiting For Homolog"
+                    }
+                ]
+            },
+            {
+                "id": "11491",
+                "created": "2024-01-24T10:13:39.741-0300",
+                "movements": []
+            },
+            {
+                "id": "11400",
+                "created": "2024-01-19T14:41:54.332-0300",
+                "movements": []
+            },
+            {
+                "id": "11328",
+                "created": "2024-01-17T14:56:12.562-0300",
+                "movements": []
+            },
+            {
+                "id": "11302",
+                "created": "2024-01-17T10:07:30.856-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked lower"
+                    }
+                ]
+            },
+            {
+                "id": "11301",
+                "created": "2024-01-17T10:07:30.486-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10010",
+                        "fromColumnName": "Ready To Do",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            },
+            {
+                "id": "11283",
+                "created": "2024-01-16T13:22:57.358-0300",
+                "movements": [
+                    {
+                        "field": "assignee",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "628b7a0f1c97b5006f0a7ffe",
+                        "toColumnName": "Lucas Vanni"
+                    }
+                ]
+            },
+            {
+                "id": "11082",
+                "created": "2024-01-05T16:06:43.117-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10011",
+                        "fromColumnName": "In Refinement",
+                        "toColumnId": "10010",
+                        "toColumnName": "Ready To Do"
+                    }
+                ]
+            },
+            {
+                "id": "11081",
+                "created": "2024-01-05T16:06:38.837-0300",
+                "movements": []
+            },
+            {
+                "id": "11080",
+                "created": "2024-01-05T15:57:42.203-0300",
+                "movements": []
+            },
+            {
+                "id": "11079",
+                "created": "2024-01-05T15:23:11.133-0300",
+                "movements": []
+            },
+            {
+                "id": "11078",
+                "created": "2024-01-05T15:05:05.836-0300",
+                "movements": []
+            },
+            {
+                "id": "11052",
+                "created": "2024-01-05T08:53:20.923-0300",
+                "movements": []
+            },
+            {
+                "id": "11051",
+                "created": "2024-01-05T08:26:25.677-0300",
+                "movements": []
+            },
+            {
+                "id": "11050",
+                "created": "2024-01-05T08:21:26.867-0300",
+                "movements": []
+            },
+            {
+                "id": "11047",
+                "created": "2024-01-04T17:46:28.564-0300",
+                "movements": []
+            },
+            {
+                "id": "11046",
+                "created": "2024-01-04T17:12:17.408-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10003",
+                        "fromColumnName": "Backlog",
+                        "toColumnId": "10011",
+                        "toColumnName": "In Refinement"
+                    }
+                ]
+            }
+        ],
+        "workItemCreatedAt": "2024-01-04T17:12:17.066-0300",
+        "columnName": "In Homolog",
+        "assignee": {
+            "accountId": "628b7a0f1c97b5006f0a7ffe",
+            "userEmail": "lucas.vanni@ezdevs.tech",
+            "userName": "Lucas Vanni"
+        },
+        "workItemType": {
+            "name": "Story",
+            "id": "10004",
+            "description": "Functionality or feature expressed as a user goal.",
+            "subtask": false
+        },
+        "status": {
+            "name": "In Homolog",
+            "id": "10008",
+            "statusCategory": {
+                "name": "In Progress",
+                "id": 4
+            }
+        }
+    },
+    {
+        "id": "10072",
+        "key": "KC-73",
+        "name": "[Integration] Azure Boards",
+        "description": "",
+        "changelog": [
+            {
+                "id": "12050",
+                "created": "2024-02-01T09:21:47.610-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "12049",
+                "created": "2024-02-01T09:21:47.346-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10007",
+                        "fromColumnName": "Waiting For Homolog",
+                        "toColumnId": "10008",
+                        "toColumnName": "In Homolog"
+                    }
+                ]
+            },
+            {
+                "id": "11968",
+                "created": "2024-01-28T19:49:38.735-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked lower"
+                    }
+                ]
+            },
+            {
+                "id": "11967",
+                "created": "2024-01-28T19:49:38.278-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "3",
+                        "fromColumnName": "In Progress",
+                        "toColumnId": "10007",
+                        "toColumnName": "Waiting For Homolog"
+                    }
+                ]
+            },
+            {
+                "id": "11512",
+                "created": "2024-01-24T21:27:04.334-0300",
+                "movements": [
+                    {
+                        "field": "assignee",
+                        "fromColumnId": "5aea4ab19cfeaf198aeeaf78",
+                        "fromColumnName": "Wellington Santana",
+                        "toColumnId": "557058:2ac36970-d39d-480c-b365-436157689eed",
+                        "toColumnName": "Italo Peruchi"
+                    }
+                ]
+            },
+            {
+                "id": "11511",
+                "created": "2024-01-24T21:26:51.481-0300",
+                "movements": [
+                    {
+                        "field": "assignee",
+                        "fromColumnId": "557058:2ac36970-d39d-480c-b365-436157689eed",
+                        "fromColumnName": "Italo Peruchi",
+                        "toColumnId": "5aea4ab19cfeaf198aeeaf78",
+                        "toColumnName": "Wellington Santana"
+                    }
+                ]
+            },
+            {
+                "id": "10882",
+                "created": "2023-12-26T10:05:45.635-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked lower"
+                    }
+                ]
+            },
+            {
+                "id": "10700",
+                "created": "2023-12-15T11:32:30.529-0300",
+                "movements": [
+                    {
+                        "field": "assignee",
+                        "fromColumnId": null,
+                        "fromColumnName": null,
+                        "toColumnId": "557058:2ac36970-d39d-480c-b365-436157689eed",
+                        "toColumnName": "Italo Peruchi"
+                    }
+                ]
+            },
+            {
+                "id": "10699",
+                "created": "2023-12-15T11:32:19.854-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "10698",
+                "created": "2023-12-15T11:32:19.481-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10010",
+                        "fromColumnName": "Ready To Do",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            },
+            {
+                "id": "10611",
+                "created": "2023-12-11T14:12:13.104-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked lower"
+                    }
+                ]
+            },
+            {
+                "id": "10610",
+                "created": "2023-12-11T14:12:12.813-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "3",
+                        "fromColumnName": "In Progress",
+                        "toColumnId": "10010",
+                        "toColumnName": "Ready To Do"
+                    }
+                ]
+            },
+            {
+                "id": "10609",
+                "created": "2023-12-11T14:12:08.944-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked lower"
+                    }
+                ]
+            },
+            {
+                "id": "10608",
+                "created": "2023-12-11T14:12:08.653-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10010",
+                        "fromColumnName": "Ready To Do",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            },
+            {
+                "id": "10585",
+                "created": "2023-12-11T08:39:06.200-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10006",
+                        "fromColumnName": "Ready To Refinement",
+                        "toColumnId": "10010",
+                        "toColumnName": "Ready To Do"
+                    }
+                ]
+            },
+            {
+                "id": "10584",
+                "created": "2023-12-11T08:38:59.521-0300",
+                "movements": []
+            },
+            {
+                "id": "10583",
+                "created": "2023-12-11T08:14:29.689-0300",
+                "movements": []
+            },
+            {
+                "id": "10582",
+                "created": "2023-12-11T07:33:39.099-0300",
+                "movements": []
+            },
+            {
+                "id": "10548",
+                "created": "2023-12-08T11:02:54.554-0300",
+                "movements": []
+            },
+            {
+                "id": "10521",
+                "created": "2023-12-08T09:14:40.041-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "10520",
+                "created": "2023-12-08T09:14:39.789-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10023",
+                        "fromColumnName": "Discovery",
+                        "toColumnId": "10006",
+                        "toColumnName": "Ready To Refinement"
+                    }
+                ]
+            },
+            {
+                "id": "10497",
+                "created": "2023-12-08T08:58:43.700-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "10490",
+                "created": "2023-12-08T08:57:50.108-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "10465",
+                "created": "2023-12-08T08:40:57.370-0300",
+                "movements": [
+                    {
+                        "field": "Rank",
+                        "fromColumnId": "",
+                        "fromColumnName": "",
+                        "toColumnId": "",
+                        "toColumnName": "Ranked higher"
+                    }
+                ]
+            },
+            {
+                "id": "10464",
+                "created": "2023-12-08T08:40:57.069-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10025",
+                        "fromColumnName": "IDEA",
+                        "toColumnId": "10023",
+                        "toColumnName": "Discovery"
+                    }
+                ]
+            },
+            {
+                "id": "10450",
+                "created": "2023-12-08T08:32:10.795-0300",
+                "movements": [
+                    {
+                        "field": "summary",
+                        "fromColumnId": null,
+                        "fromColumnName": "Integration - Azure Boards",
+                        "toColumnId": null,
+                        "toColumnName": "[Integration] Azure Boards"
+                    }
+                ]
+            },
+            {
+                "id": "10395",
+                "created": "2023-12-07T22:49:29.581-0300",
+                "movements": []
+            },
+            {
+                "id": "10394",
+                "created": "2023-12-07T22:47:59.563-0300",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "10003",
+                        "fromColumnName": "Backlog",
+                        "toColumnId": "10025",
+                        "toColumnName": "IDEA"
+                    }
+                ]
+            }
+        ],
+        "workItemCreatedAt": "2023-12-07T22:47:59.175-0300",
+        "columnName": "In Homolog",
+        "assignee": {
+            "accountId": "557058:2ac36970-d39d-480c-b365-436157689eed",
+            "userEmail": null,
+            "userName": "Italo Peruchi"
+        },
+        "workItemType": {
+            "name": "Story",
+            "id": "10004",
+            "description": "Functionality or feature expressed as a user goal.",
+            "subtask": false
+        },
+        "status": {
+            "name": "In Homolog",
+            "id": "10008",
+            "statusCategory": {
+                "name": "In Progress",
+                "id": 4
+            }
+        }
+    }
+]

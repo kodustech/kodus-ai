@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Tal med Kody ved at nævne @kody",
+        "feedback": "Var dette forslag nyttigt? Reager med 👍 eller 👎 for at hjælpe Kody med at lære af denne interaktion."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## Kodegennemgang fuldført! 🔥\n\nKodegennemgangen blev succesfuldt fuldført baseret på dine nuværende konfigurationer.\n\n",
+        "withoutComments": "# Kody-gennemgang fuldført\n**Fantastiske nyheder!** 🎉\nIngen problemer blev fundet, der matcher dine nuværende gennemgangskonfigurationer.\n\nFortsæt det fremragende arbejde! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "PR-oversigt (Kommentar oprettet af [Kody](https://kodus.io) 🤖)",
+        "codeReviewStarted": "Kodegennemgang startet! 🚀",
+        "description": "✋ Hej, team! Jeg kigger allerede på de ændrede filer og starter gennemgangen for at sikre, at alt er i orden. Hvis du har brug for flere detaljer, er jeg her! [Kody](https://kodus.io)",
+        "changedFiles": "📂 Ændrede filer",
+        "filesTable": [
+            "Fil",
+            "Status",
+            "➕ Tilføjelser",
+            "➖ Sletninger",
+            "🔄 Ændringer"
+        ],
+        "summary": "📊 Oversigt over ændringer",
+        "totalFiles": "Samlede filer",
+        "totalAdditions": "Samlede tilføjede linjer",
+        "totalDeletions": "Samlede slettede linjer",
+        "totalChanges": "Samlede ændringer"
+    },
+    "configReviewMarkdown": {
+        "title": "Kody-guide: Brug og konfiguration",
+        "interactingTitle": "Interaktion med Kody",
+        "requestReview": "Anmod om en gennemgang",
+        "requestReviewDesc": "Bed Kody om at gennemgå din PR manuelt ved at tilføje en kommentar med kommandoen `@kody start-review` i roden af din PR.",
+        "provideFeedback": "Giv feedback",
+        "provideFeedbackDesc": "Hjælp Kody med at lære og forbedre ved at reagere på dens kommentarer med en 👍 for nyttige forslag eller en 👎 hvis der er behov for forbedringer.",
+        "configurationTitle": "Nuværende Kody-konfiguration",
+        "reviewOptionsTitle": "Gennemgangsindstillinger",
+        "reviewOptionsDesc": "Følgende gennemgangsindstillinger er aktiveret eller deaktiveret:",
+        "tableOptions": "Indstillinger",
+        "tableEnabled": "Aktiveret",
+        "configurationLink": "Få adgang til dine konfigurationsindstillinger her.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 Ingeniørmetrikker",
+        "legend": {
+            "title": "Resultatforklaring",
+            "same": "Betyder, at resultatet forblev __det samme__",
+            "improved": "Betyder, at resultatet __forbedredes__",
+            "worsened": "Betyder, at resultatet __forværredes__"
+        },
+        "flowMetrics": {
+            "title": "Flow-metrikker",
+            "leadTime": {
+                "title": "Lead Time",
+                "description": "Den tid det tager for en aktivitet at gå fra status ${todo} til status ${done}."
+            },
+            "leadTimeInWip": {
+                "title": "Lead Time i WIP",
+                "description": "Den tid det tager for en aktivitet at gå fra status ${wip} til status ${done}."
+            },
+            "throughput": {
+                "title": "Gennemstrømning",
+                "description": "Antal elementer, der nåede status ${done} i de sidste 7 dage.",
+                "items": "elementer"
+            },
+            "bugRatio": {
+                "title": "Fejlforhold",
+                "description": "Antal fejl i WIP i forhold til det samlede antal aktiviteter i WIP i de sidste 7 dage."
+            },
+            "leadTimeByColumn": {
+                "title": "Lead Time efter kolonne",
+                "description": "Tid et element bruger i *P75* i hver status på din tavle."
+            }
+        },
+        "doraMetrics": {
+            "title": "Dora-metrikker",
+            "deployFrequency": {
+                "title": "Udrulningsfrekvens",
+                "description": "Udrulningsfrekvens i ugen.",
+                "value": "${value} udrulninger pr. uge"
+            },
+            "leadTimeForChange": {
+                "title": "Lead Time for ændringer",
+                "description": "Gennemsnitlig tid fra første commit til PR-sammenfletning.",
+                "value": "${value} dage"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (Optimistisk)",
+            "p75": "P75 (Selvsikker)",
+            "p95": "P95 (Pessimistisk)"
+        }
+    }
+}

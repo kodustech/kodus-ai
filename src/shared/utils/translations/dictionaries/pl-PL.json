@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Porozmawiaj z Kody, wspominając @kody",
+        "feedback": "Czy ta sugestia była pomocna? Zareaguj 👍 lub 👎, aby pomóc Kody uczyć się na podstawie tej interakcji."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## Przegląd kodu zakończony! 🔥\n\nPrzegląd kodu został pomyślnie zakończony na podstawie twoich bieżących konfiguracji.\n\n",
+        "withoutComments": "# Przegląd Kody zakończony\n**Świetne wieści!** 🎉\nNie znaleziono żadnych problemów, które pasują do twoich bieżących konfiguracji przeglądu.\n\nKontynuuj świetną pracę! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "Podsumowanie PR (Komentarz utworzony przez [Kody](https://kodus.io) 🤖)",
+        "codeReviewStarted": "Rozpoczęto przegląd kodu! 🚀",
+        "description": "✋ Cześć, zespole! Już przeglądam zmienione pliki i rozpoczynam przegląd, aby upewnić się, że wszystko jest w porządku. Jeśli potrzebujesz więcej szczegółów, jestem tutaj! [Kody](https://kodus.io)",
+        "changedFiles": "📂 Zmienione pliki",
+        "filesTable": [
+            "Plik",
+            "Status",
+            "➕ Dodatki",
+            "➖ Usunięcia",
+            "🔄 Zmiany"
+        ],
+        "summary": "📊 Podsumowanie zmian",
+        "totalFiles": "Łączna liczba plików",
+        "totalAdditions": "Łączna liczba dodanych linii",
+        "totalDeletions": "Łączna liczba usuniętych linii",
+        "totalChanges": "Łączna liczba zmian"
+    },
+    "configReviewMarkdown": {
+        "title": "Przewodnik Kody: Użycie i konfiguracja",
+        "interactingTitle": "Interakcja z Kody",
+        "requestReview": "Poproś o przegląd",
+        "requestReviewDesc": "Poproś Kody o ręczny przegląd twojego PR, dodając komentarz z poleceniem `@kody start-review` w głównym katalogu twojego PR.",
+        "provideFeedback": "Przekaż opinię",
+        "provideFeedbackDesc": "Pomóż Kody uczyć się i poprawiać, reagując na jego komentarze za pomocą 👍 dla pomocnych sugestii lub 👎 jeśli potrzebne są ulepszenia.",
+        "configurationTitle": "Bieżąca konfiguracja Kody",
+        "reviewOptionsTitle": "Opcje przeglądu",
+        "reviewOptionsDesc": "Następujące opcje przeglądu są włączone lub wyłączone:",
+        "tableOptions": "Opcje",
+        "tableEnabled": "Włączone",
+        "configurationLink": "Uzyskaj dostęp do swoich ustawień konfiguracji tutaj.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 Metryki inżynierskie",
+        "legend": {
+            "title": "Legenda wyników",
+            "same": "Oznacza, że wynik pozostał __taki sam__",
+            "improved": "Oznacza, że wynik się __poprawił__",
+            "worsened": "Oznacza, że wynik się __pogorszył__"
+        },
+        "flowMetrics": {
+            "title": "Metryki przepływu",
+            "leadTime": {
+                "title": "Czas realizacji",
+                "description": "Czas potrzebny na przejście aktywności ze statusu ${todo} do statusu ${done}."
+            },
+            "leadTimeInWip": {
+                "title": "Czas realizacji w WIP",
+                "description": "Czas potrzebny na przejście aktywności ze statusu ${wip} do statusu ${done}."
+            },
+            "throughput": {
+                "title": "Przepustowość",
+                "description": "Liczba elementów, które osiągnęły status ${done} w ciągu ostatnich 7 dni.",
+                "items": "elementy"
+            },
+            "bugRatio": {
+                "title": "Wskaźnik błędów",
+                "description": "Liczba błędów w WIP w stosunku do całkowitej liczby aktywności w WIP w ciągu ostatnich 7 dni."
+            },
+            "leadTimeByColumn": {
+                "title": "Czas realizacji według kolumny",
+                "description": "Czas, jaki element spędza w *P75* w każdym statusie twojej tablicy."
+            }
+        },
+        "doraMetrics": {
+            "title": "Metryki Dora",
+            "deployFrequency": {
+                "title": "Częstotliwość wdrożeń",
+                "description": "Częstotliwość wdrożeń w tygodniu.",
+                "value": "${value} wdrożeń na tydzień"
+            },
+            "leadTimeForChange": {
+                "title": "Czas realizacji dla zmian",
+                "description": "Średni czas od pierwszego commit do scalania PR.",
+                "value": "${value} dni"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (Optymistyczny)",
+            "p75": "P75 (Pewny siebie)",
+            "p95": "P95 (Pesymistyczny)"
+        }
+    }
+}

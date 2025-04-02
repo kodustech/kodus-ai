@@ -1,0 +1,733 @@
+{
+    "artifacts": [
+        {
+            "name": "WithoutWaitingColumns",
+            "category": "Process Failure",
+            "relatedItems": "Waiting Columns, Lead Time by Column",
+            "impactLevel": 3,
+            "impactArea": "Flow Quality",
+            "impactDataRelationship": {
+                "impactedBy": [
+                    {
+                        "name": "WithoutWaitingColumns",
+                        "category": "teamArtifact",
+                        "howItRelates": "This artifact can be impacted by itself when it occurred in the previous week, indicating that the team is not able to identify bottlenecks in the process. The team needs to be informed that this is a recurring problem."
+                    }
+                ]
+            },
+            "whyIsImportant": "Waiting columns help to better understand the gaps in the team's board flow.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "kanban",
+                "scrum"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "description": "No waiting columns were identified on your board, which can make it difficult to identify gaps in the process. Analyze your board and identify unmapped waiting stages.",
+                    "howIsIdentified": "We analyze the board columns, if we do not identify any waiting columns, we notify the user.",
+                    "title": "Waiting columns not identified"
+                }
+            ]
+        },
+        {
+            "name": "WorkItemSkippingWIPColumns",
+            "category": "Flow Monitoring",
+            "relatedItems": "Delivery forecast, Flow efficiency, Lead Time, WIP Limit",
+            "impactLevel": 2,
+            "impactArea": "Flow Quality",
+            "impactDataRelationship": {
+                "impactedBy": [
+                    {
+                        "name": "WorkItemSkippingWIPColumns",
+                        "category": "teamArtifact",
+                        "howItRelates": "This artifact can be impacted by itself when it occurred in the previous week, indicating that the team is not respecting the defined workflow. The team needs to be informed that this is a recurring problem."
+                    }
+                ]
+            },
+            "whyIsImportant": "To ensure the integrity of the team's metrics and generate more accurate delivery projections.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "kanban",
+                "scrum"
+            ],
+            "results": [
+                {
+                    "resultType": "Positive",
+                    "title": "Items respecting WIP columns",
+                    "description": "{0} of the board items that were completed passed through the WIP columns. This indicates that the team is respecting the board's flow.",
+                    "howIsIdentified": "We analyze the changelog of the completed board items and check if they passed through at least one WIP column. If less than 30% of these completed items did NOT pass through the WIP columns, we notify the team."
+                },
+                {
+                    "resultType": "Negative",
+                    "title": "Items not passing through WIP columns",
+                    "description": "{0} of the board items that were completed did not pass through any WIP column. This indicates that the team is not respecting the flow, which affects metrics like Lead Time, WIP, and complicates delivery projections.",
+                    "howIsIdentified": "We analyze the changelog of the completed board items and check if they passed through at least one WIP column. If 30% or more of these completed items did NOT pass through WIP, we notify the team."
+                }
+            ]
+        },
+        {
+            "name": "WIPLimit",
+            "category": "Flow Monitoring",
+            "relatedItems": "Lead Time in WIP, Throughput, WIP Limit",
+            "impactLevel": 3,
+            "impactArea": "Delivery Speed, Delivery Quality",
+            "impactDataRelationship": {
+                "impactedBy": [
+                    {
+                        "name": "BugRatio",
+                        "category": "teamMetric",
+                        "howItRelates": "When the Bug Ratio is very high or increasing week by week (result is worsening), it can cause the team to work on more items simultaneously (new demands and bug fixes). This can cause the team to exceed the WIP Limit."
+                    },
+                    {
+                        "name": "LeadTimeByColumn",
+                        "category": "teamMetric",
+                        "howItRelates": "If there are columns with very high Lead Time (representing 25% or more of the total Lead Time in WIP), it indicates that some stages of the flow are bottlenecked. When we have very large bottlenecks in one stage, or many bottlenecks in several stages (board columns), items tend to stay stuck in a certain phase of the flow for a long time. As a result, the team ends up working on several items in parallel, which exceeds the WIP limit."
+                    },
+                    {
+                        "name": "BlockedTime",
+                        "category": "teamArtifact",
+                        "howItRelates": "Blocked items remain in the same board column until the impediment is resolved. This behavior can cause the WIP Limit to be exceeded."
+                    },
+                    {
+                        "name": "PostStartSprintInclusions",
+                        "category": "teamArtifact",
+                        "howItRelates": "If the team works with scrum and starts adding many new items after the sprint has already started, it may be necessary to parallelize the work more to try to deliver everything by the end of the sprint. This can cause the team to exceed the WIP Limit."
+                    },
+                    {
+                        "name": "LeadTimeInWaitingColumns",
+                        "category": "teamArtifact",
+                        "howItRelates": "When the Lead Time in waiting columns of the board is very high, it may indicate that the team has bottlenecks in the process, such as high wait times for item approval, high wait times for code review, or waiting for items to be published in production. This can leave many items stuck in the flow, increasing the WIP and exceeding the recommended limit."
+                    },
+                    {
+                        "name": "WorkItemWithClearDescription",
+                        "category": "teamArtifact",
+                        "howItRelates": "Poorly described items can create doubts in the team, causing the item to remain in waiting columns, either waiting to be developed, tested, or approved - because people are unsure of what was really expected with the delivery of that item. As a result, the item remains stuck until the doubts are resolved, increasing the WIP."
+                    },
+                    {
+                        "name": "WIPLimit",
+                        "category": "teamArtifact",
+                        "howItRelates": "This artifact can be impacted by itself when it occurred in the previous week, indicating that the team is not respecting the defined workflow. The team needs to be informed that this is a recurring problem."
+                    }
+                ]
+            },
+            "whyIsImportant": "When the team exceeds the WIP limit, working on many items simultaneously, deliveries tend to take longer and have lower quality.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly",
+                "daily"
+            ],
+            "teamMethodology": [
+                "xp"
+            ],
+            "results": [
+                {
+                    "resultType": "Positive",
+                    "title": "WIP Limit Respected",
+                    "description": "The team respected the recommended WIP limit, as the number of items worked on in WIP was {0}, which is less than {1} - double the number of team members. This avoids bottlenecks, overload, and maintains focus and development quality.",
+                    "howIsIdentified": "We check if the number of items worked on by the team is within the recommended WIP limit (number of items <= double the number of team members). If the team respected the WIP Limit, they receive the notification."
+                },
+                {
+                    "resultType": "Negative",
+                    "title": "WIP Limit Exceeded",
+                    "description": "The team did not respect the recommended WIP limit, as the number of items worked on in WIP was {0}, which is greater than {1} - double the number of team members. This can cause risks of delay, lower delivery quality, and more stress on the team, impacting satisfaction and costs.",
+                    "howIsIdentified": "We check if the number of items worked on by the team is within the recommended WIP limit (number of items <= double the number of team members). If the team did not respect the WIP limit, they receive the notification."
+                }
+            ]
+        },
+        {
+            "name": "WorkItemWithClearDescription",
+            "category": "Flow Monitoring",
+            "relatedItems": "Flow Efficiency, Work Items with clear descriptions",
+            "impactLevel": 2,
+            "impactArea": "Delivery Quality, Delivery Speed",
+            "impactDataRelationship": {
+                "impactedBy": [
+                    {
+                        "name": "WorkItemWithClearDescription",
+                        "category": "teamArtifact",
+                        "howItRelates": "This artifact can be impacted by itself when it occurred in the previous week, indicating that the team is not able to describe the board items well. The team needs to be informed that this is a recurring problem."
+                    }
+                ]
+            },
+            "whyIsImportant": "Items described clearly are easier to understand, which generally means that development will be faster and the delivered result will be in line with what is expected.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "xp"
+            ],
+            "results": [
+                {
+                    "resultType": "Positive",
+                    "title": "Clear descriptions in items",
+                    "description": "{0} board items ({1} of the total new items) have clear descriptions. This speeds up understanding and execution, increasing productivity and accuracy in development.",
+                    "howIsIdentified": "We analyze the description of the board items to understand if they are clear and understandable. If 60% or more of these items are well described, we notify the user."
+                },
+                {
+                    "resultType": "Negative",
+                    "title": "Unclear descriptions in items",
+                    "description": "{0} board items ({1} of the total new items) do not have clear descriptions. Poorly described items can cause confusion, rework, and delays.",
+                    "howIsIdentified": "We analyze the description of the board items to understand if they are clear and understandable. If less than 60% of these items are well described, we notify the user."
+                }
+            ]
+        },
+        {
+            "name": "LeadTimeInWaitingColumns",
+            "category": "Flow Monitoring",
+            "relatedItems": "WIP Limit, Throughput, Lead Time, Lead Time By Column",
+            "impactLevel": 2,
+            "impactArea": "Delivery Speed",
+            "impactDataRelationship": {
+                "impactedBy": [
+                    {
+                        "name": "BugRatio",
+                        "category": "teamMetric",
+                        "howItRelates": "When the bug ratio is very high or increasing week by week (result worsening), the team's focus may be on fixing these errors, leaving new items stuck in waiting columns."
+                    },
+                    {
+                        "name": "LeadTimeByColumn",
+                        "category": "teamMetric",
+                        "howItRelates": "If the lead time of the waiting columns is very high compared to the total lead time in WIP, it may indicate that the team has bottlenecks in these phases. We can look at the waiting columns with the highest lead time spent and know where to focus to reduce the lead time spent in waiting columns."
+                    },
+                    {
+                        "name": "WIPLimit",
+                        "category": "teamArtifact",
+                        "howItRelates": "When the team does not respect the WIP limit, they end up working on many things in parallel. When this happens, it is normal for the team to focus too much on working on action columns, taking more items to develop instead of finishing what is already in progress and closer to the end of the board. This leads to abandonment of items in waiting columns, increasing the lead time of these phases."
+                    },
+                    {
+                        "name": "WorkItemWithClearDescription",
+                        "category": "teamArtifact",
+                        "howItRelates": "Poorly described items can create doubts in the team, causing the item to remain stuck in waiting columns, either waiting to be developed, tested, or approved - because people are unsure of what was really expected with the delivery of that item. As a result, the item remains stuck until the doubts are resolved, increasing the lead time of these columns."
+                    },
+                    {
+                        "name": "BugRatio",
+                        "category": "teamArtifact",
+                        "howItRelates": "Many bugs in WIP make the team focus on these corrections and pay less attention to new items. As a result, new items remain stuck in waiting columns, increasing the lead time of these phases."
+                    },
+                    {
+                        "name": "PullRequestWithSizeGreaterThanLimit",
+                        "category": "teamArtifact",
+                        "howItRelates": "Very large pull requests can be difficult to validate, causing some developers to avoid doing code reviews on these items. If the team has a waiting column to map this phase of the process, there may be delays in it, increasing the lead time of the waiting columns."
+                    },
+                    {
+                        "name": "LeadTimeInWaitingColumns",
+                        "category": "teamArtifact",
+                        "howItRelates": "This artifact can be impacted by itself when it occurred in the previous week, indicating that the team is not able to reduce the lead time in waiting columns. The team needs to be informed that this is a recurring problem."
+                    }
+                ]
+            },
+            "whyIsImportant": "When the time spent in waiting columns is very high, it means that the team has an inefficiency in the flow and that the items are aging a lot on the board. Besides affecting the delivery capacity, this can make bug fixing more difficult, as the responsible developer may have changed context several times until a bug is reported for the item they developed.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "kanban",
+                "scrum"
+            ],
+            "results": [
+                {
+                    "resultType": "Positive",
+                    "title": "Waiting time within the limit",
+                    "description": "{0} of the lead time was spent in waiting stages, you are maximizing efficiency and avoiding unnecessary delays in the process.",
+                    "howIsIdentified": "We calculate the total lead time and the lead time of the waiting columns. Then we compare the two, if the total time spent in waiting columns of the flow is less than or equal to 30%, the notification is sent."
+                },
+                {
+                    "resultType": "Negative",
+                    "title": "Excessive waiting time",
+                    "description": "{0} of the lead time was spent in waiting stages, you are minimizing efficiency and causing unnecessary delays in the process.",
+                    "howIsIdentified": "We calculate the total lead time and the lead time of the waiting columns. Then we compare the two, if the total time spent in waiting columns of the flow is greater than 30%, the notification is sent."
+                }
+            ]
+        },
+        {
+            "name": "BugRatio",
+            "category": "Delivery Quality",
+            "relatedItems": "Bug Ratio",
+            "impactLevel": 3,
+            "impactArea": "Delivery Quality",
+            "impactDataRelationship": {
+                "impactedBy": [
+                    {
+                        "name": "BugRatio",
+                        "category": "teamMetric",
+                        "howItRelates": "The bug ratio metric has a history of how the proportion of bugs in WIP vs new board items is. Observing this behavior can help understand how the team is dealing with the quality of what is being delivered."
+                    },
+                    {
+                        "name": "WIPLimit",
+                        "category": "teamArtifact",
+                        "howItRelates": "When the team does not respect the WIP limit and works on many items in parallel, it can end up affecting the quality of what is being developed and generate many bugs."
+                    },
+                    {
+                        "name": "HighWorkloadPerPerson",
+                        "category": "teamArtifact",
+                        "howItRelates": "Overloaded team members can generate more bugs because they cannot focus on developing with quality. As a result, the team may have an increase in the Bug Ratio."
+                    },
+                    {
+                        "name": "PostStartSprintInclusions",
+                        "category": "teamArtifact",
+                        "howItRelates": "Items being added after the sprint has already started can force the team to give less priority to development quality and focus on delivering what was requested. As a result, the team may have an increase in the Bug Ratio."
+                    },
+                    {
+                        "name": "BugRatio",
+                        "category": "teamArtifact",
+                        "howItRelates": "This artifact can be impacted by itself when it occurred in the previous week, indicating that the team is not able to reduce the Bug Ratio. The team needs to be informed that this is a recurring problem."
+                    }
+                ]
+            },
+            "whyIsImportant": "A high bug ratio can be an alert that the team needs to review the quality of their deliveries and also the quality of the workflow. Additionally, when the team spends a lot of energy fixing bugs, they are not developing new features for the application, which can affect the customer's perception of value regarding this application.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "kanban",
+                "scrum"
+            ],
+            "results": [
+                {
+                    "resultType": "Positive",
+                    "title": "Low incidence of bugs",
+                    "description": "{0} of the items in WIP are bugs. This shows that the team is delivering with higher quality and increasing the perceived value for the user.",
+                    "howIsIdentified": "We compare the number of bugs in WIP with the total number of items in WIP. If the proportion of bugs in relation to all the team's work items is less than or equal to 40%, the team is notified."
+                },
+                {
+                    "resultType": "Negative",
+                    "title": "High incidence of bugs",
+                    "description": "{0} of the items in WIP are bugs. This shows that the team is delivering with lower quality and decreasing the perceived value for the user.",
+                    "howIsIdentified": "We compare the number of bugs in WIP with the total number of items in WIP. If the proportion of bugs in relation to all the team's work items is greater than 40%, the team is notified."
+                }
+            ]
+        },
+        {
+            "name": "WorkItemWithAssignedOwner",
+            "category": "Flow Monitoring",
+            "relatedItems": "Flow Efficiency, Assigned Work Items",
+            "impactLevel": 1,
+            "impactArea": "Flow Quality",
+            "impactDataRelationship": {
+                "impactedBy": [
+                    {
+                        "name": "WorkItemWithAssignedOwner",
+                        "category": "teamArtifact",
+                        "howItRelates": "This artifact, when it occurs for several weeks, may indicate that the team is not able to maintain responsibility for the board items. The team needs to be informed that this is a recurring problem."
+                    }
+                ]
+            },
+            "whyIsImportant": "Assigning board items as soon as they start being developed (enter WIP) is important to maintain the integrity of team metrics, such as resource allocation, and to facilitate team communication.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly",
+                "daily"
+            ],
+            "teamMethodology": [
+                "kanban",
+                "scrum"
+            ],
+            "results": [
+                {
+                    "resultType": "Positive",
+                    "title": "Items with assigned owner",
+                    "description": "{0} of the items that started being developed by the team have a responsible person linked to the corresponding board card, facilitating management and tracking of progress.",
+                    "howIsIdentified": "We analyze all the board items that are in WIP and count how many of them are assigned. If the percentage of unassigned items is less than or equal to 30%, the notification is sent."
+                },
+                {
+                    "resultType": "Negative",
+                    "title": "Items without assigned owner",
+                    "description": "{0} of the items that started being developed by the team do not have a responsible person linked to the corresponding board card, making it difficult to manage and track progress.",
+                    "howIsIdentified": "We analyze all the board items that are in WIP and count how many of them are assigned. If the percentage of unassigned items is greater than 30%, the notification is sent."
+                }
+            ]
+        },
+        {
+            "name": "WorkItemsStoppedInWaitingColumns",
+            "category": "Flow Monitoring",
+            "relatedItems": "WIP Limit, Throughput, Lead Time, Lead Time By Column",
+            "impactLevel": 2,
+            "impactArea": "Delivery Speed",
+            "impactDataRelationship": {
+                "impactedBy": [
+                    {
+                        "name": "WIPLimit",
+                        "category": "teamArtifact",
+                        "howItRelates": "When the team does not respect the WIP limit, they end up working on many items in parallel and some members may be responsible for more than one activity at the same time. If something is reprioritized, it may be necessary to leave some activity blocked until the developer can return to it."
+                    },
+                    {
+                        "name": "WorkItemWithClearDescription",
+                        "category": "teamArtifact",
+                        "howItRelates": "If the items do not have a clear description, there may be doubts from the team at the time of developing the activity, which can cause the developer to be impeded and the item blocked until the doubts are resolved."
+                    },
+                    {
+                        "name": "LeadTimeInWaitingColumns",
+                        "category": "teamArtifact",
+                        "howItRelates": "When the Lead Time in waiting columns of the board is very high, it may indicate that the team has bottlenecks in the process, such as high wait times for item approval, high wait times for code review, or waiting for items to be published in production. This can leave many items stuck in the flow, causing the alert of WorkItems stopped in waiting columns."
+                    }
+                ]
+            },
+            "whyIsImportant": "When items are stopped for a long time in waiting columns, it means that the team has an inefficiency in the flow and that the items are aging a lot on the board. This affects the delivery capacity and increases the team's Lead Time.",
+            "status": true,
+            "frequenceTypes": [
+                "daily"
+            ],
+            "teamMethodology": [
+                "kanban",
+                "scrum"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "title": "Items stopped in waiting columns",
+                    "description": "{0} board items are stopped in a waiting column, this indicates that the team needs to pay more attention to items in the waiting phase to improve flow efficiency.",
+                    "howIsIdentified": "We check the board items that are in waiting columns, if there is one or more items for more than 48 hours in a waiting column, we notify the team."
+                }
+            ]
+        },
+        {
+            "name": "BlockedTime",
+            "category": "Flow Monitoring",
+            "relatedItems": "Lead Time in WIP, Throughput, Lead Time By Column",
+            "impactLevel": 3,
+            "impactArea": "Delivery Speed",
+            "impactDataRelationship": {
+                "impactedBy": [
+                    {
+                        "name": "WIPLimit",
+                        "category": "teamArtifact",
+                        "howItRelates": "When the team does not respect the WIP limit, they end up working on many items in parallel and some members may be responsible for more than one activity at the same time. If something is reprioritized, it may be necessary to leave some activity blocked until the developer can return to it."
+                    },
+                    {
+                        "name": "WorkItemWithClearDescription",
+                        "category": "teamArtifact",
+                        "howItRelates": "If the items do not have a clear description, there may be doubts from the team at the time of developing the activity, which can cause the developer to be impeded and the item blocked until the doubts are resolved."
+                    },
+                    {
+                        "name": "BlockedTime",
+                        "category": "teamArtifact",
+                        "howItRelates": "This artifact can be impacted by itself when it occurred in the previous week, indicating that the team is not able to resolve impediments quickly. The team needs to be informed that this is a recurring problem."
+                    }
+                ]
+            },
+            "whyIsImportant": "Identifying and resolving impediments quickly is crucial to maintaining an efficient workflow and avoiding unnecessary project delays. Unresolved impediments can significantly increase Lead Time and affect team morale.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "kanban",
+                "scrum"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "title": "High blocking time",
+                    "description": "A total of {0} hours was spent on impediments last week, representing {1}% of the total project time. This level of inactivity indicates the need for investigation and corrective action to reduce blocking times and improve work efficiency.",
+                    "howIsIdentified": "We calculate the total hours during which project items were marked as impeded and compare this with the P75 of lead time. If the time spent on impediments represents more than 30%, we notify."
+                }
+            ]
+        },
+        {
+            "name": "PostStartSprintInclusions",
+            "category": "Flow Efficiency",
+            "relatedItems": "Throughput, Lead Time, Sprint Spillover",
+            "impactLevel": 2,
+            "impactArea": "Flow Quality",
+            "impactDataRelationship": {
+                "impactedBy": [
+                    {
+                        "name": "PostStartSprintInclusions",
+                        "category": "teamArtifact",
+                        "howItRelates": "This artifact can be impacted by itself when it occurred in the previous week, indicating that the team is having difficulty planning sprints. The team needs to be informed that this is a recurring problem."
+                    }
+                ]
+            },
+            "whyIsImportant": "Monitoring items added after the start of the sprint helps to understand scope changes and possible planning deviations that can affect the final delivery.",
+            "status": true,
+            "frequenceTypes": [
+                "daily",
+                "weekly"
+            ],
+            "teamMethodology": [
+                "scrum"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "title": "Items added after sprint start",
+                    "description": "{0} items were identified as added after the start of the sprint. This can complicate meeting sprint goals due to possible overload or focus deviation.",
+                    "howIsIdentified": "We analyze the creation dates of board items (except bugs) and compare them with the sprint start date. Items created after this date are considered post-start inclusions."
+                }
+            ]
+        },
+        {
+            "name": "SprintSpillover",
+            "category": "Flow Monitoring",
+            "relatedItems": "Sprint Review, Sprint Retrospective",
+            "impactLevel": 3,
+            "impactArea": "Deadline Compliance, Flow Quality",
+            "impactDataRelationship": {
+                "impactedBy": [
+                    {
+                        "name": "BugRatio",
+                        "category": "teamMetric",
+                        "howItRelates": "A high bug ratio during a sprint can prevent the team from completing all planned items, as they had to deal with many unforeseen issues. This can leave some items unfinished, which will need to be carried over to the next sprint."
+                    },
+                    {
+                        "name": "WIPLimit",
+                        "category": "teamArtifact",
+                        "howItRelates": "When the team does not respect the WIP limit, many bottlenecks can occur in the process, preventing the team from completing all planned items for the sprint. As a result, some items may be carried over to the next sprint."
+                    },
+                    {
+                        "name": "BugRatio",
+                        "category": "teamArtifact",
+                        "howItRelates": "A high bug ratio during a sprint can prevent the team from completing all planned items, as they had to deal with many unforeseen issues. This can leave some items unfinished, which will need to be carried over to the next sprint."
+                    },
+                    {
+                        "name": "BlockedTime",
+                        "category": "teamArtifact",
+                        "howItRelates": "Items blocked for a long time (while no one resolves the related impediment) can be delayed, taking more time than estimated. This prevents the team from completing all planned items for the sprint and may require some items to be carried over to the next sprint."
+                    },
+                    {
+                        "name": "HighWorkloadPerPerson",
+                        "category": "teamArtifact",
+                        "howItRelates": "When one or more team members are overloaded, there may be delays in delivering the planned items for the sprint. As a result, some items may be carried over to the next sprint."
+                    },
+                    {
+                        "name": "SprintSpillover",
+                        "category": "teamArtifact",
+                        "howItRelates": "This artifact can be impacted by itself when it occurred in previous weeks, indicating that the team is not able to complete all planned items for the sprint and may be struggling with the scope of deliveries. The team needs to be informed that this is a recurring problem."
+                    }
+                ]
+            },
+            "whyIsImportant": "Task spillover can indicate problems in sprint planning or execution. Monitoring these spillovers helps to understand and mitigate risks to time and quality, allowing adjustments to improve future sprints.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "scrum"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "title": "Tasks carried over to the next sprint",
+                    "description": "{0} tasks were carried over to the next sprint, which may indicate an overestimation of the team's capacity or underestimation of the tasks. It is crucial to review sprint planning to avoid recurrences.",
+                    "howIsIdentified": "We compare the planned tasks with the completed tasks at the end of the sprint. Unfinished tasks are considered spillovers."
+                }
+            ]
+        },
+        {
+            "name": "HighLeadTimeInWipDeviation",
+            "category": "Flow Monitoring",
+            "relatedItems": "Lead Time, Throughput, Flow Efficiency",
+            "impactLevel": 3,
+            "impactArea": "Flow Quality",
+            "impactDataRelationship": {
+                "impactedBy": [
+                    {
+                        "name": "BugRatio",
+                        "category": "teamMetric",
+                        "howItRelates": "When the bug ratio is very high or increasing week by week (result worsening), there can be significant changes in Lead Time. Either because small bugs are fixed very quickly and greatly lower the lead time, or because the team pauses current demands to prioritize bug fixes and the Lead Time increases significantly. This behavior repeated over time can generate significant variations in the current Lead Time compared to the team's historical average."
+                    },
+                    {
+                        "name": "WithoutWaitingColumns",
+                        "category": "teamArtifact",
+                        "howItRelates": "When the team's board does not have waiting columns, it is difficult to identify bottlenecks related to poorly defined process stages. For example: approval, code review, production deployment. As a result, the team can have significant variations in Lead Time in WIP and not be able to identify the source of the problem - since the action and waiting stages are not separated."
+                    },
+                    {
+                        "name": "WorkItemSkippingWIPColumns",
+                        "category": "teamArtifact",
+                        "howItRelates": "If it is identified that the team is skipping WIP columns, i.e., moving cards on the board directly from TO DO to DONE without going through the WIP phases. This behavior can generate significant variations in Lead Time in WIP, as the team is not respecting the defined workflow."
+                    },
+                    {
+                        "name": "BlockedTime",
+                        "category": "teamArtifact",
+                        "howItRelates": "When there are work items that remain blocked for a long time, the team can have significant variations in Lead Time in WIP. This happens because the time the item is blocked is not counted in Lead Time in WIP, and when the impediment is resolved, the item is completed very quickly, lowering the Lead Time in WIP."
+                    },
+                    {
+                        "name": "HighLeadTimeInWipDeviation",
+                        "category": "teamArtifact",
+                        "howItRelates": "When it occurs repeatedly week by week, the team needs to be informed that it is a recurring problem. This can indicate that the team is not able to keep Lead Time in WIP stable, which can generate predictability issues."
+                    }
+                ]
+            },
+            "whyIsImportant": "A high standard deviation in lead time indicates great variation in delivery times, suggesting inconsistency in the process. Identifying and reducing this variation is crucial to improving predictability and efficiency.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "kanban",
+                "scrum"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "title": "High lead time variation",
+                    "description": "The lead time variation is high, with a standard deviation of {0} hours. This indicates significant inconsistencies in delivery times, which can affect process efficiency and predictability.",
+                    "howIsIdentified": "We calculate the standard deviation of lead times. If the standard deviation is greater than 50 hours, we notify that the variation is high and requires attention."
+                }
+            ]
+        },
+        {
+            "name": "PullRequestWithSizeGreaterThanLimit",
+            "category": "Flow Monitoring",
+            "relatedItems": "Code Review, Quality Assurance",
+            "impactLevel": 3,
+            "impactArea": "Code Review Quality, Process Efficiency",
+            "impactDataRelationship": {
+                "impactedBy": [
+                    {
+                        "name": "LeadTimeForChange",
+                        "category": "teamMetric",
+                        "howItRelates": "If the Lead Time for change is very high (the time from the first commit until the PR is closed), it may indicate that the work items are very large and require a lot of code changes. This is not a direct cause of large Pull Requests, but it may indicate that the team is working on very large items."
+                    },
+                    {
+                        "name": "HighWorkloadPerPerson",
+                        "category": "teamArtifact",
+                        "howItRelates": "When there are overloaded team members, Pull Requests may become large because the developer does not have time to break the work into smaller parts and ends up doing more things in the PR. As a result, the team may have very large Pull Requests."
+                    },
+                    {
+                        "name": "PullRequestWithSizeGreaterThanLimit",
+                        "category": "teamArtifact",
+                        "howItRelates": "When it occurs repeatedly week by week, the team needs to be informed that it is a recurring problem. This may indicate that the team is not able to keep Pull Requests within the change limit, which can cause code review problems and technical debt."
+                    }
+                ]
+            },
+            "whyIsImportant": "Very large Pull Requests can make code review difficult, increasing the likelihood of errors going unnoticed. Monitoring the size of PRs helps to maintain effective and agile code reviews, ensuring code quality.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "scrum",
+                "kanban",
+                "all"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "title": "Pull Requests exceeding change limit",
+                    "description": "More than {0} of this week's Pull Requests exceeded the limit of {1} changes. This may indicate the need to break the work into smaller, more manageable parts to facilitate review.",
+                    "howIsIdentified": "We analyze the total number of changes (additions, deletions, and modifications) in each Pull Request. If a high percentage of PRs exceed the change limit, an alert is generated."
+                },
+                {
+                    "resultType": "Positive",
+                    "title": "Pull Requests within change limit",
+                    "description": "{0} of this week's Pull Requests exceeded the limit of {1} changes, indicating good control and division of work into manageable parts, facilitating review.",
+                    "howIsIdentified": "We analyze the total number of changes (additions, deletions, and modifications) in each Pull Request. If most PRs are within the change limit, a positive report is generated."
+                }
+            ]
+        },
+        {
+            "name": "CodeReviewTimeToMerge",
+            "category": "Flow Monitoring",
+            "relatedItems": "Code Review, Quality Assurance",
+            "impactLevel": 3,
+            "impactArea": "Process Efficiency, Code Review Quality",
+            "impactDataRelationship": {
+                "impactedBy": [
+                    {
+                        "name": "PullRequestWithSizeGreaterThanLimit",
+                        "category": "teamArtifact",
+                        "howItRelates": "When the team opens very large PRs, it can cause a cascading effect on code review time. This happens because developers need more time to review the code, and it may also be that developers. As a result, the time for the PR to be closed also increases."
+                    },
+                    {
+                        "name": "CodeReviewTimeToMerge",
+                        "category": "teamArtifact",
+                        "howItRelates": "When it occurs repeatedly week by week, the team needs to be informed that it is a recurring problem. This may indicate that the team is not able to improve the code review time."
+                    }
+                ]
+            },
+            "whyIsImportant": "Monitoring code review time is crucial to identify possible bottlenecks in the workflow. Delayed code reviews can delay the development cycle and negatively impact team efficiency. This artifact helps identify and improve the speed of code reviews, ensuring that PRs are reviewed and merged in a timely manner.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "scrum",
+                "kanban",
+                "all"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "title": "Delayed Code Reviews",
+                    "description": "More than {0} of this week's Pull Requests took more than {1} hours to be reviewed and merged. This may indicate bottlenecks in the code review process.",
+                    "howIsIdentified": "We analyze the time from the opening of the Pull Request to its merge. If a high percentage of PRs exceed the defined review time, an alert is generated."
+                },
+                {
+                    "resultType": "Positive",
+                    "title": "Quick Code Reviews",
+                    "description": "{0} of this week's Pull Requests were reviewed and merged within the limit of {1} hours, indicating an efficient code review process.",
+                    "howIsIdentified": "We analyze the time from the opening of the Pull Request to its merge. If most PRs are within the defined review time, a positive report is generated."
+                }
+            ]
+        },
+        {
+            "name": "HighWorkloadPerPerson",
+            "category": "Team Management",
+            "relatedItems": "Flow Efficiency",
+            "impactLevel": 2,
+            "impactArea": "Delivery Quality, Delivery Speed",
+            "impactDataRelationship": {
+                "impactedBy": [
+                    {
+                        "name": "BugRatio",
+                        "category": "teamMetric",
+                        "howItRelates": "A high bug ratio can cause team members to work outside conventional hours or on weekends to fix errors. This can lead to a high workload for team members."
+                    },
+                    {
+                        "name": "WIPLimit",
+                        "category": "teamArtifact",
+                        "howItRelates": "When the team does not respect the WIP limit and works on many items in parallel, it can lead to a high workload for team members. This happens because the team needs to focus on many things at the same time and cannot finish what is already in progress in a timely manner."
+                    },
+                    {
+                        "name": "BugRatio",
+                        "category": "teamArtifact",
+                        "howItRelates": "A high bug ratio can cause team members to work outside conventional hours or on weekends to fix errors. This can lead to a high workload for team members."
+                    },
+                    {
+                        "name": "PostStartSprintInclusions",
+                        "category": "teamArtifact",
+                        "howItRelates": "When many unplanned items are added after the start of the sprint, the team may need to work more hours and on weekends to meet the extra demands. This can lead to a high workload for team members."
+                    },
+                    {
+                        "name": "SprintSpillover",
+                        "category": "teamArtifact",
+                        "howItRelates": "If the team is having problems with items spilling over from one sprint to another, there may be a need to work outside conventional hours and on weekends. This can lead to a high workload for team members."
+                    },
+                    {
+                        "name": "HighWorkloadPerPerson",
+                        "category": "teamArtifact",
+                        "howItRelates": "When this artifact occurs repeatedly week by week, the team needs to be informed that it is a recurring problem. This can indicate that the team is not able to distribute tasks evenly, and some team members are overloaded."
+                    }
+                ]
+            },
+            "whyIsImportant": "Overloaded team members tend to have lower productivity, delivery quality, and satisfaction. Monitoring workload helps to identify and mitigate burnout risks and to distribute tasks more evenly.",
+            "status": true,
+            "frequenceTypes": [
+                "weekly"
+            ],
+            "teamMethodology": [
+                "xp"
+            ],
+            "results": [
+                {
+                    "resultType": "Negative",
+                    "title": "High workload per team member",
+                    "description": "There are indications of a high workload for the team member: {0}.",
+                    "howIsIdentified": "We analyze various aspects related to the amount of work for each team member, such as a high number of commits on weekends or after 9 PM during the week. We also check the number of items in progress for which the person is responsible and if there was a sudden increase in WIP activities for this member. If we identify one or more of these indicators, we notify the team.",
+                    "additionalInfoFormated": "Below are the indicators of high workload: \n {1}"
+                }
+            ]
+        }
+    ]
+}

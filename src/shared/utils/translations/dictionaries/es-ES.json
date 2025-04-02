@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Habla con Kody mencionando a @kody",
+        "feedback": "¿Fue útil esta sugerencia? Reacciona con 👍 o 👎 para ayudar a Kody a aprender de esta interacción."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## ¡Revisión de código completada! 🔥\n\nLa revisión de código se completó con éxito según sus configuraciones actuales.\n\n",
+        "withoutComments": "# Revisión de Kody completada\n**¡Grandes noticias!** 🎉\nNo se encontraron problemas que coincidan con sus configuraciones de revisión actuales.\n\n¡Sigue con el excelente trabajo! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "Resumen de PR (Comentario creado por [Kody](https://kodus.io) 🤖)",
+        "codeReviewStarted": "¡Revisión de código iniciada! 🚀",
+        "description": "✋ ¡Hola, equipo! Ya estoy revisando los archivos modificados y comenzando la revisión para asegurarme de que todo esté en orden. Si necesitan más detalles, ¡estoy aquí! [Kody](https://kodus.io)",
+        "changedFiles": "📂 Archivos modificados",
+        "filesTable": [
+            "Archivo",
+            "Estado",
+            "➕ Adiciones",
+            "➖ Eliminaciones",
+            "🔄 Cambios"
+        ],
+        "summary": "📊 Resumen de cambios",
+        "totalFiles": "Total de archivos",
+        "totalAdditions": "Total de líneas añadidas",
+        "totalDeletions": "Total de líneas eliminadas",
+        "totalChanges": "Total de cambios"
+    },
+    "configReviewMarkdown": {
+        "title": "Guía de Kody: Uso y configuración",
+        "interactingTitle": "Interactuando con Kody",
+        "requestReview": "Solicitar una revisión",
+        "requestReviewDesc": "Pida a Kody que revise su PR manualmente añadiendo un comentario con el comando `@kody start-review` en la raíz de su PR.",
+        "provideFeedback": "Proporcionar comentarios",
+        "provideFeedbackDesc": "Ayude a Kody a aprender y mejorar reaccionando a sus comentarios con un 👍 para sugerencias útiles o un 👎 si se necesitan mejoras.",
+        "configurationTitle": "Configuración actual de Kody",
+        "reviewOptionsTitle": "Opciones de revisión",
+        "reviewOptionsDesc": "Las siguientes opciones de revisión están habilitadas o deshabilitadas:",
+        "tableOptions": "Opciones",
+        "tableEnabled": "Habilitado",
+        "configurationLink": "Acceda a sus configuraciones aquí.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 Métricas de ingeniería",
+        "legend": {
+            "title": "Leyenda de resultados",
+            "same": "Significa que el resultado se mantuvo __igual__",
+            "improved": "Significa que el resultado __mejoró__",
+            "worsened": "Significa que el resultado __empeoró__"
+        },
+        "flowMetrics": {
+            "title": "Métricas de flujo",
+            "leadTime": {
+                "title": "Tiempo de ciclo",
+                "description": "El tiempo que tarda una actividad en pasar del estado ${todo} al estado ${done}."
+            },
+            "leadTimeInWip": {
+                "title": "Tiempo de ciclo en WIP",
+                "description": "El tiempo que tarda una actividad en pasar del estado ${wip} al estado ${done}."
+            },
+            "throughput": {
+                "title": "Rendimiento",
+                "description": "Número de elementos que alcanzaron el estado ${done} en los últimos 7 días.",
+                "items": "elementos"
+            },
+            "bugRatio": {
+                "title": "Proporción de errores",
+                "description": "Número de errores en WIP en relación con el total de actividades en WIP, en los últimos 7 días."
+            },
+            "leadTimeByColumn": {
+                "title": "Tiempo de ciclo por columna",
+                "description": "Tiempo que un elemento pasa en *P75* en cada estado de su tablero."
+            }
+        },
+        "doraMetrics": {
+            "title": "Métricas de Dora",
+            "deployFrequency": {
+                "title": "Frecuencia de despliegue",
+                "description": "Frecuencia de despliegue en la semana.",
+                "value": "${value} despliegues por semana"
+            },
+            "leadTimeForChange": {
+                "title": "Tiempo de ciclo para cambios",
+                "description": "Tiempo promedio desde el primer commit hasta la fusión del PR.",
+                "value": "${value} días"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (Optimista)",
+            "p75": "P75 (Confiado)",
+            "p95": "P95 (Pesimista)"
+        }
+    }
+}

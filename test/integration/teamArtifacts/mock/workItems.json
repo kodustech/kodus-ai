@@ -1,0 +1,538 @@
+{
+    "workItems": [
+        {
+            "key": "KC-259",
+            "id": "10315",
+            "title": "Novo prompt de avaliação de qualidade da task",
+            "issueType": "Small Wins",
+            "workItemCreatedAt": "2024-02-29T17:33:05.197-0300",
+            "workItemType": {
+                "name": "Small Wins",
+                "id": "10015",
+                "description": "",
+                "subtask": false
+            },
+            "changelog": [
+                {
+                    "id": "12901",
+                    "createdAt": "2024-03-05",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "3",
+                            "fromColumnName": "In Progress",
+                            "toColumnId": "10008",
+                            "toColumnName": "In Homolog"
+                        }
+                    ]
+                },
+                {
+                    "id": "12887",
+                    "createdAt": "2024-03-01",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10010",
+                            "fromColumnName": "Ready To Do",
+                            "toColumnId": "3",
+                            "toColumnName": "In Progress"
+                        }
+                    ]
+                },
+                {
+                    "id": "12875",
+                    "createdAt": "2024-02-29",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10003",
+                            "fromColumnName": "Backlog",
+                            "toColumnId": "10010",
+                            "toColumnName": "Ready To Do"
+                        }
+                    ]
+                }
+            ],
+            "description": "Especificação,Identificamos que o prompt atual que avalia a qualidade da descrição das tasks não está funcionando bem, temos como exemplo o que ocorreu com a,Essa uma task que está bem completa e bem descrita, mas que as vezes o prompt avalia ela com score 0, e outras vezes com score 70. Isso é um problema, já que notificar o usuário alegando que uma task está mal escrita e oferecendo ajuda para melhorá-la pode passar a impressão de que a Kody não está sabendo avaliar bem essa qualidade.,O prompt que temos atualmente roda na versão \n\n3,5 16K turbo\n\n do chat OpenAI, e esse novo prompt foi executado na versão \n\ngpt-4-turbo-preview,Como os custos mudam bastante, a ideia é colocarmos esse novo prompt apenas para a automação que verifica a qualidade da descrição das tasks que entraram em TO DO, e manter o diagnóstico rodando com o prompt atual ne versão 3,5.,No entanto, se fazer essa separação (porque hoje é tudo uma coisa só), for custar muito tempo de desenvolvimento, por exemplo: mais do que o dobro de tempo que demoraria para só trocar para a nova versão, além de trocarmos para a automação, vamos trocar também para o diagnóstico.,Configurações de execução do novo prompt,Provider:  ChatOpenAI\n\nModel:  gpt-4-turbo\n\nTemperature:  0,Novo Prompt,Desconsidere tudo o que te mandei até agora. Você é a Kody, a assistente virtual de gestão de entregas de software da Kodus.\n\nComo especialista em agilidade e entrega de software, você está aqui para avaliar um conjunto de tarefas fornecidas com base em critérios específicos.\n\nPor favor, avalie as tarefas usando os critérios e pesos especificados abaixo.\n\n## CRITÉRIOS E PESOS\n\n- Tem definição de dependências de outras atividades (Peso: 0.15)\n- Possui Critérios de Aceite/Definição de Pronto (Peso: 0.15)\n- Descrita com clareza técnica (Peso: 0.10)\n- Segue o padrão do Framework INVEST (Peso: 0.10)\n- Descrição clara e Assertiva (Peso: 0.10)\n- Tem Casos de Uso definidos (Peso: 0.08)\n- Definição clara do valor agregado ao projeto (Peso: 0.08)\n- Prioridade explícita (Peso: 0.07)\n- Definição de restrições (Peso: 0.07)\n- Tem Referências de links ou documentos de apoio (Peso: 0.05)\n- Tem no Mínimo 1000 Caracteres (Peso: 0.05)\n\n## FÓRMULA DE AVALIAÇÃO\n\nPegue cada item do array enviado e calcule a nota individualmente.\n\nPara cada item, salve o workItemId e workItemKey para usarmos no objeto de retorno.\n\nPara cada item, multiplique a avaliação de cada critério pelo seu peso e some todos os resultados.\n\nA pontuação total deve estar no intervalo de 0 a 100.\n\nA pontuação deve refletir rigorosamente a qualidade da tarefa em relação aos critérios estabelecidos.\n\nPara cada item, após o cálculo adicione o resultado no array de retorno.\n\n## OBSERVAÇÃO:\nA observação sobre a avaliação deve destacar os aspectos que foram atendidos de maneira satisfatória e quais áreas precisam de melhorias. \n\n## RETORNO ESPERADO\n\nVamos simular um exemplo de entrada e retorno pra você entender as referências.\n\n[{description: 'Essa é uma atividade de exemplo', workItemId: 10038, workItemKey: 'GTM-123' }, {description: 'Essa é uma atividade de exemplo 2', workItemId: 10045, workItemKey: 'GTM-133' }]\n\n## VOCÊ SÓ PODE RETORNAR NO PADRÃO ABAIXO \"PADRAO JSON\"\n\nObjeto de saída -  siga sempre esse padrão, sem nenhuma elaboração adicional:\n\n[{score: [Nota], obs: 'Observação de exemplo', workItemId: 10038, workItemKey: 'GTM-123', obs: 'Observação de teste 1'}]\n\nConsidere os exemplos acima para pegar as referências dos campos workItemId e workItemKey e para montar o objeto de retorno.\n\n## TAREFAS A SEREM AVALIADAS (OBJETO DE ENTRADA)",
+            "priority": "Medium",
+            "assignee": "Gabriel Malinosqui",
+            "status": {
+                "name": "In Homolog",
+                "id": "10008",
+                "statusCategory": { "name": "Em andamento", "id": 4 }
+            },
+            "flagged": false
+        },
+        {
+            "key": "KC-257",
+            "id": "10313",
+            "title": "Ajustes na feature de salvar interações do usuário",
+            "issueType": "Tarefa",
+            "workItemCreatedAt": "2024-02-29T15:21:29.335-0300",
+            "workItemType": {
+                "name": "Tarefa",
+                "id": "10005",
+                "description": "Uma parte pequena e distinta do trabalho.",
+                "subtask": false
+            },
+            "changelog": [
+                {
+                    "id": "12899",
+                    "createdAt": "2024-03-05",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10008",
+                            "fromColumnName": "In Homolog",
+                            "toColumnId": "3",
+                            "toColumnName": "In Progress"
+                        }
+                    ]
+                },
+                {
+                    "id": "12897",
+                    "createdAt": "2024-03-05",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "3",
+                            "fromColumnName": "In Progress",
+                            "toColumnId": "10008",
+                            "toColumnName": "In Homolog"
+                        }
+                    ]
+                },
+                {
+                    "id": "12884",
+                    "createdAt": "2024-03-01",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10010",
+                            "fromColumnName": "Ready To Do",
+                            "toColumnId": "3",
+                            "toColumnName": "In Progress"
+                        }
+                    ]
+                },
+                {
+                    "id": "12866",
+                    "createdAt": "2024-02-29",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10003",
+                            "fromColumnName": "Backlog",
+                            "toColumnId": "10010",
+                            "toColumnName": "Ready To Do"
+                        }
+                    ]
+                }
+            ],
+            "description": "Descrição,Precisamos ajustar o funcionamento da propriedade “buttonLabel”. Incialmente a ideia era usar ela para salvar o texto de todo e qualquer botão, e precisaremos fazer isso para poder distinguir melhor como o usuário interagiu. Mas testando aqui, vi que estamos salvando a “categoria” do botão nessa propriedade, no caso dos botões de aprofundamento salvamos o valor “projectInsigths”, já quando oferecemos ajuda para melhorar a descrição da task, nós salvamos como “improveTaskQuality”. Então faremos os seguintes ajustes: - O valor que antes era salvo nessa propriedade “Button_Label”, passará a ser salvo na propriedade “interationCommand”. Exemplo:   - Quando o usuário clicar em qualquer um dos botões que oferece ajuda para refinar a task, salvamos na propriedade “InteractionCommmand” o valor:  improveTaskQuality\n  - Quando o usuário clicar em qualquer um dos botões de aprofundamento, nós salvamos o valor:  projecInsights  na propriedade “InteractionCommand”\n- E na propriedade “buttonLabel” iremos salvar o texto do botão mesmo, sem nenhuma tratativa. Vamos precisar disso para entender melhor as interações do usuário.\n\nAlém disso, ficou faltando salvar o usuário que realizou a interação. Para ajustar isso será necessário fazer o seguinte: - Pegar o ID do usuário da plataforma de comunicação (é o mesmo ID que salvamos na TeamMembers) e salvar como uma nova propriedade do JSON.,IMPORTANTE: Caso dê muito trabalho salvar o ID do usuário que vem da plataforma de comunicação, me chama e alinhamos um jeito mais fácil de fazer isso. Eu suponho que isso já venha na requisição, mas não sei se vem mesmo.",
+            "priority": "Medium",
+            "assignee": "Lucas Vanni",
+            "status": {
+                "name": "Em andamento",
+                "id": "3",
+                "statusCategory": { "name": "Em andamento", "id": 4 }
+            },
+            "flagged": false
+        },
+        {
+            "key": "KC-245",
+            "id": "10301",
+            "title": "Bot está perdendo a memória quando conversamos sobre uma reposta do aprofundamento",
+            "issueType": "Bug",
+            "workItemCreatedAt": "2024-02-26T16:08:30.664-0300",
+            "workItemType": {
+                "name": "Bug",
+                "id": "10007",
+                "description": "Um problema ou erro.",
+                "subtask": false
+            },
+            "changelog": [
+                {
+                    "id": "12873",
+                    "createdAt": "2024-02-29",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10008",
+                            "fromColumnName": "In Homolog",
+                            "toColumnId": "10005",
+                            "toColumnName": "Done"
+                        }
+                    ]
+                },
+                {
+                    "id": "12710",
+                    "createdAt": "2024-02-26",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10007",
+                            "fromColumnName": "Waiting For Homolog",
+                            "toColumnId": "10008",
+                            "toColumnName": "In Homolog"
+                        }
+                    ]
+                },
+                {
+                    "id": "12709",
+                    "createdAt": "2024-02-26",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "3",
+                            "fromColumnName": "In Progress",
+                            "toColumnId": "10007",
+                            "toColumnName": "Waiting For Homolog"
+                        }
+                    ]
+                },
+                {
+                    "id": "12701",
+                    "createdAt": "2024-02-26",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10010",
+                            "fromColumnName": "Ready To Do",
+                            "toColumnId": "3",
+                            "toColumnName": "In Progress"
+                        }
+                    ]
+                },
+                {
+                    "id": "12699",
+                    "createdAt": "2024-02-26",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10003",
+                            "fromColumnName": "Backlog",
+                            "toColumnId": "10010",
+                            "toColumnName": "Ready To Do"
+                        }
+                    ]
+                }
+            ],
+            "description": "Descrição do Erro,Ao clicar em um botão de pergunta sobre o aprofundamento, a Kody responde a mensagem com os dados corretos;\n\nPorém, se eu tento continuar o papo ela se perde no raciocínio e perde o conteúdo da memória também;",
+            "priority": "Medium",
+            "assignee": "Wellington Santana",
+            "status": {
+                "name": "Concluído",
+                "id": "10005",
+                "statusCategory": { "name": "Itens concluídos", "id": 3 }
+            },
+            "flagged": false
+        },
+        {
+            "key": "KC-239",
+            "id": "10295",
+            "title": "Adicionar \"Bug Ratio\" ao comando metrics",
+            "issueType": "Small Wins",
+            "workItemCreatedAt": "2024-02-24T12:41:41.684-0300",
+            "workItemType": {
+                "name": "Small Wins",
+                "id": "10015",
+                "description": "",
+                "subtask": false
+            },
+            "changelog": [
+                {
+                    "id": "12891",
+                    "createdAt": "2024-03-01",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10008",
+                            "fromColumnName": "In Homolog",
+                            "toColumnId": "10009",
+                            "toColumnName": "Ready To Deploy"
+                        }
+                    ]
+                },
+                {
+                    "id": "12881",
+                    "createdAt": "2024-03-01",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10007",
+                            "fromColumnName": "Waiting For Homolog",
+                            "toColumnId": "10008",
+                            "toColumnName": "In Homolog"
+                        }
+                    ]
+                },
+                {
+                    "id": "12876",
+                    "createdAt": "2024-03-01",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "3",
+                            "fromColumnName": "In Progress",
+                            "toColumnId": "10007",
+                            "toColumnName": "Waiting For Homolog"
+                        }
+                    ]
+                },
+                {
+                    "id": "12846",
+                    "createdAt": "2024-02-28",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10010",
+                            "fromColumnName": "Ready To Do",
+                            "toColumnId": "3",
+                            "toColumnName": "In Progress"
+                        }
+                    ]
+                },
+                {
+                    "id": "12797",
+                    "createdAt": "2024-02-27",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10011",
+                            "fromColumnName": "In Refinement",
+                            "toColumnId": "10010",
+                            "toColumnName": "Ready To Do"
+                        }
+                    ]
+                },
+                {
+                    "id": "12782",
+                    "createdAt": "2024-02-27",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10006",
+                            "fromColumnName": "Ready To Refinement",
+                            "toColumnId": "10011",
+                            "toColumnName": "In Refinement"
+                        }
+                    ]
+                },
+                {
+                    "id": "12667",
+                    "createdAt": "2024-02-24",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10003",
+                            "fromColumnName": "Backlog",
+                            "toColumnId": "10006",
+                            "toColumnName": "Ready To Refinement"
+                        }
+                    ]
+                }
+            ],
+            "description": "Especificação,Adicionar o Bug Ratio, ao resultado do comando “/metrics”.,,Critérios de aceite,Confirmar se o índice do Bug Ratio enviado na mensagem está correto;\n\nApresentar o resultado como porcentagem arredondada, sem deixar aqueles números estourados com várias casas decimais depois da vírgula\n\nO bug ratio deve ser mostrado ao final da mensagem, abaixo da métrica Throughput\n\nDeve seguir o mesmo padrão de exibição das métricas atuais, com um símbolo de legenda na frente do título\n\nA comparação é sempre do resultado atual X o resultado da semana anterior, assim como já é feito com as outras métricas existentes\n\nQuando não houver dado da semana anterior para comparar, não exibir legenda de comparação de dados\n\nO cálculo já existe hoje, então dá pra usar o mesmo cálculo\n\nAssim com as outras métricas, devemos buscar esse dado em real time",
+            "priority": "Medium",
+            "assignee": "Lucas Vanni",
+            "status": {
+                "name": "Ready To Deploy",
+                "id": "10009",
+                "statusCategory": { "name": "Em andamento", "id": 4 }
+            },
+            "flagged": false
+        },
+        {
+            "key": "KC-218",
+            "id": "10274",
+            "title": "Kody está respondendo de forma incoerente sobre previsão de entrega de tasks já concluídas",
+            "issueType": "Bug",
+            "workItemCreatedAt": "2024-02-18T21:36:39.248-0300",
+            "workItemType": {
+                "name": "Bug",
+                "id": "10007",
+                "description": "Um problema ou erro.",
+                "subtask": false
+            },
+            "changelog": [
+                {
+                    "id": "12871",
+                    "createdAt": "2024-02-29",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10008",
+                            "fromColumnName": "In Homolog",
+                            "toColumnId": "10005",
+                            "toColumnName": "Done"
+                        }
+                    ]
+                },
+                {
+                    "id": "12544",
+                    "createdAt": "2024-02-20",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10007",
+                            "fromColumnName": "Waiting For Homolog",
+                            "toColumnId": "10008",
+                            "toColumnName": "In Homolog"
+                        }
+                    ]
+                },
+                {
+                    "id": "12538",
+                    "createdAt": "2024-02-20",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "3",
+                            "fromColumnName": "In Progress",
+                            "toColumnId": "10007",
+                            "toColumnName": "Waiting For Homolog"
+                        }
+                    ]
+                },
+                {
+                    "id": "12510",
+                    "createdAt": "2024-02-19",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10010",
+                            "fromColumnName": "Ready To Do",
+                            "toColumnId": "3",
+                            "toColumnName": "In Progress"
+                        }
+                    ]
+                },
+                {
+                    "id": "12499",
+                    "createdAt": "2024-02-19",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10003",
+                            "fromColumnName": "Backlog",
+                            "toColumnId": "10010",
+                            "toColumnName": "Ready To Do"
+                        }
+                    ]
+                }
+            ],
+            "description": "Descrição do Erro,Hoje (18/02)  estava testando a parte de conversação com a Kody, em uma organização que está usando o nosso board de produção como ferramenta de gestão de projeto. Em um determinado momento perguntei sobre a \n\n\n\n (Movida para DONE na última sexta 16/02). Ela conseguiu responder bem sobre o status atual, o problema foi quando perguntei sobre a previsão de entrega, a Kody informou o p50 e p75 com datas da semana que vem e da próxima, além de ter informado duas datas diferentes baseadas no p50.\n\n\n\nNesse caso ela deveria entender que a atividade já está em DONE e avisar isso, não teria problema passar a “previsão/estimativa”, pois mesmo já estando entregue e a previsão sendo maior que a data real de entrega, o usuário pode querer comparar a data de entrega real com aquilo que era estimado, mas ela deveria sim informar que a atividade já está entregue, pois se ela só passa a previsão sem avisar isso, o usuário pode entender que a atividade ainda não foi finalizada.,,Em resumo temos dois problemas aqui:,Quando um atividade já foi entregue, ela pode passar a data de previsão, mas precisa deixar claro pro usuário que aquela tarefa já está concluída (em DONE);\n\nEla passou uma previsão inicial de p50 e p75, e depois passou outra previsão de p50 atualizada, que era maior que as duas iniciais - isso na mesma mensagem. Pode ser que ela tenha considerado dados diferentes ou se confundido, mas o fato é que ela não pode passar duas datas diferentes para um mesmo percentil;",
+            "priority": "Medium",
+            "assignee": "Gabriel Malinosqui",
+            "status": {
+                "name": "Concluído",
+                "id": "10005",
+                "statusCategory": { "name": "Itens concluídos", "id": 3 }
+            },
+            "flagged": false
+        },
+        {
+            "key": "KC-217",
+            "id": "10273",
+            "title": "Registrar as interações dos usuários",
+            "issueType": "Tarefa",
+            "workItemCreatedAt": "2024-02-18T21:19:00.492-0300",
+            "workItemType": {
+                "name": "Tarefa",
+                "id": "10005",
+                "description": "Uma parte pequena e distinta do trabalho.",
+                "subtask": false
+            },
+            "changelog": [
+                {
+                    "id": "12858",
+                    "createdAt": "2024-02-29",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10008",
+                            "fromColumnName": "In Homolog",
+                            "toColumnId": "10005",
+                            "toColumnName": "Done"
+                        }
+                    ]
+                },
+                {
+                    "id": "12779",
+                    "createdAt": "2024-02-27",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10007",
+                            "fromColumnName": "Waiting For Homolog",
+                            "toColumnId": "10008",
+                            "toColumnName": "In Homolog"
+                        }
+                    ]
+                },
+                {
+                    "id": "12778",
+                    "createdAt": "2024-02-27",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "3",
+                            "fromColumnName": "In Progress",
+                            "toColumnId": "10007",
+                            "toColumnName": "Waiting For Homolog"
+                        }
+                    ]
+                },
+                {
+                    "id": "12579",
+                    "createdAt": "2024-02-21",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10010",
+                            "fromColumnName": "Ready To Do",
+                            "toColumnId": "3",
+                            "toColumnName": "In Progress"
+                        }
+                    ]
+                },
+                {
+                    "id": "12507",
+                    "createdAt": "2024-02-19",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10011",
+                            "fromColumnName": "In Refinement",
+                            "toColumnId": "10010",
+                            "toColumnName": "Ready To Do"
+                        }
+                    ]
+                },
+                {
+                    "id": "12497",
+                    "createdAt": "2024-02-19",
+                    "movements": [
+                        {
+                            "field": "status",
+                            "fromColumnId": "10003",
+                            "fromColumnName": "Backlog",
+                            "toColumnId": "10011",
+                            "toColumnName": "In Refinement"
+                        }
+                    ]
+                }
+            ],
+            "description": "Motivação,A fim de entender melhor o que os usuários do produto estão fazendo/mais utilizando na plataforma, e também mensurar o uso do produto, vamos começar a registrar as interações do time do cliente com a Kody. A ideia é registrar todas as vezes que o usuário utilizar algum comando direto no chat, e também quando ele acionar algum botão de ação que tenha sido enviado pela Kody.,Especificação,Vamos precisar criar uma tabela no banco de dados que registre as interações do usuário com a Kody. A tabela deverá salvar as seguintes informações:,Data e hora da interação;\n\nId do usuário que interagiu;\n\nTeam Id;\n\nTipo da interação: botão ou comando via chat;\n\nQual interação - Nesse caso para os comandos via chat, podemos salvar o nome do comando mesmo;\n- Já para os botões talvez precisemos salvar o texto do botão ou uma categoria, já que com a demanda de aprofundamento do Check-in semanal, a Kody irá gerar botões com conteúdos e ações dinâmicas;,Critérios de aceite,Toda vez que um usuário utilizar um comando via chat, essa interação deverá ser registrada no nosso banco de dados. Esse registro deve funcionar para as 3 plataformas de comunicação que temos hoje: - Slack\n- Discord\n- MS Teams\n\nAo finalizar essa atividade, os seguintes itens deverão estar finalizados/funcionando: - Nova estrutura criada no banco de dados contemplando todos os campos citados na descrição da seção “especificação” dessa atividade;\n- Método que irá salvar os dados da interação do usuário nessa nova estrutura de dados;\n- Chamada ao método que salva a interação com o usuário funcionando para toda vez que o usuário der um comando via chat;\n- A parte de salvar as interações com os botões dinâmicos do check-in semanal será feita em outra atividade, após a conclusão do aprofundamento do check-in semanal;,Casos de teste,Utilizar todos os comandos atuais da Kody via chat nas 3 plataformas de comunicação e verificar se essas interações foram salvas no banco de dados: - “/help”   - Slack\n  - Discord\n  - MS Teams\n- “/checkin_day”   - Slack\n  - Discord\n  - MS Teams\n- “/checkin_week”   - Slack\n  - Discord\n  - MS Teams\n- “/metrics”   - Slack\n  - Discord\n  - MS Teams\n- “/refine_task”   - Slack\n  - Discord\n  - MS Teams",
+            "priority": "Medium",
+            "assignee": "Lucas Vanni",
+            "status": {
+                "name": "Concluído",
+                "id": "10005",
+                "statusCategory": { "name": "Itens concluídos", "id": 3 }
+            },
+            "flagged": false
+        }
+    ]
+}

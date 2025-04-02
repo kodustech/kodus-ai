@@ -1,0 +1,2510 @@
+[
+    {
+        "uuid": "87ffea29-43ff-411b-af91-1139a84d6a4a",
+        "type": "leadTime",
+        "value": {
+            "total": {
+                "average": 329.812,
+                "percentiles": {
+                    "p50": 265.881,
+                    "p75": 526.182,
+                    "p85": 598.511,
+                    "p95": 783.617
+                }
+            },
+            "issues": [
+                {
+                    "KC-206": {
+                        "In Progress": 0.083,
+                        "Ready To Do": 18.149
+                    }
+                },
+                {
+                    "KC-205": {
+                        "In Progress": 1.297,
+                        "Ready To Do": 17.19
+                    }
+                },
+                {
+                    "KC-203": {
+                        "In Progress": 32.494,
+                        "Ready To Do": 0.019
+                    }
+                },
+                {
+                    "KC-195": {
+                        "In Progress": 46.88,
+                        "Ready To Do": 0.253
+                    }
+                },
+                {
+                    "KC-193": {
+                        "In Progress": 47.475,
+                        "Ready To Do": 9.708
+                    }
+                },
+                {
+                    "KC-178": {
+                        "In Progress": 120.557,
+                        "Ready To Do": 97.795
+                    }
+                },
+                {
+                    "KC-177": {
+                        "In Progress": 123.342,
+                        "Ready To Do": 95.011
+                    }
+                },
+                {
+                    "KC-202": {
+                        "In Homolog": 20.549,
+                        "In Progress": 7.838,
+                        "Ready To Do": 14.361,
+                        "Ready To Deploy": 2.468,
+                        "Waiting For Homolog": 0.549
+                    }
+                },
+                {
+                    "KC-200": {
+                        "Done": 21.88,
+                        "In Homolog": 8.87,
+                        "In Progress": 6.107,
+                        "Ready To Do": 1.292,
+                        "Ready To Deploy": 2.007,
+                        "Waiting For Homolog": 6.988
+                    }
+                },
+                {
+                    "KC-199": {
+                        "Done": 21.879,
+                        "In Homolog": 2.091,
+                        "In Progress": 4.622,
+                        "Ready To Do": 16.066,
+                        "Ready To Deploy": 1.912,
+                        "Waiting For Homolog": 0.74
+                    }
+                },
+                {
+                    "KC-194": {
+                        "Done": 46.864,
+                        "In Homolog": 0.922,
+                        "In Progress": 6.206,
+                        "Ready To Do": 0.063,
+                        "Ready To Deploy": 0.013,
+                        "Waiting For Homolog": 0.168
+                    }
+                },
+                {
+                    "KC-191": {
+                        "Done": 21.88,
+                        "In Homolog": 0.061,
+                        "In Progress": 1.048,
+                        "Ready To Do": 1.79,
+                        "Ready To Deploy": 97.133,
+                        "Waiting For Homolog": 0.127
+                    }
+                },
+                {
+                    "KC-190": {
+                        "Done": 21.88,
+                        "In Homolog": 15.908,
+                        "In Progress": 7.819,
+                        "Ready To Do": 66.133,
+                        "Ready To Deploy": 9.62,
+                        "Waiting For Homolog": 0.853
+                    }
+                },
+                {
+                    "KC-188": {
+                        "Done": 21.879,
+                        "In Homolog": 75.09,
+                        "In Progress": 2.839,
+                        "Ready To Do": 14.157,
+                        "Ready To Deploy": 28.797,
+                        "Waiting For Homolog": 0.058
+                    }
+                },
+                {
+                    "KC-187": {
+                        "Done": 21.88,
+                        "In Homolog": 4.007,
+                        "In Progress": 5.711,
+                        "Ready To Do": 16.264,
+                        "Ready To Deploy": 97.064,
+                        "Waiting For Homolog": 0.001
+                    }
+                },
+                {
+                    "KC-186": {
+                        "Done": 21.88,
+                        "In Homolog": 4.559,
+                        "In Progress": 17.76,
+                        "Ready To Do": 2.533,
+                        "Ready To Deploy": 98.275,
+                        "Waiting For Homolog": 0.548
+                    }
+                },
+                {
+                    "KC-184": {
+                        "Done": 145.389,
+                        "In Homolog": 4.172,
+                        "In Progress": 0.041,
+                        "Ready To Do": 0.897,
+                        "Ready To Deploy": 0,
+                        "Waiting For Homolog": 0.001
+                    }
+                },
+                {
+                    "KC-183": {
+                        "Done": 21.88,
+                        "In Homolog": 3.788,
+                        "In Progress": 17.762,
+                        "Ready To Do": 7.702,
+                        "Ready To Deploy": 99.045,
+                        "Waiting For Homolog": 0.548
+                    }
+                },
+                {
+                    "KC-182": {
+                        "Done": 21.88,
+                        "In Homolog": 0.281,
+                        "In Progress": 5.662,
+                        "Ready To Do": 24.135,
+                        "Ready To Deploy": 98.763,
+                        "Waiting For Homolog": 0.196
+                    }
+                },
+                {
+                    "KC-181": {
+                        "Done": 21.88,
+                        "In Homolog": 20.847,
+                        "In Progress": 22.68,
+                        "Ready To Do": 2.401,
+                        "Ready To Deploy": 98.834,
+                        "Waiting For Homolog": 1.456
+                    }
+                },
+                {
+                    "KC-180": {
+                        "Done": 21.879,
+                        "In Homolog": 0.122,
+                        "In Progress": 0.207,
+                        "Ready To Do": 8.174,
+                        "Ready To Deploy": 129.796,
+                        "Waiting For Homolog": 16.46
+                    }
+                },
+                {
+                    "KC-179": {
+                        "Done": 21.88,
+                        "In Homolog": 93.805,
+                        "In Progress": 32.972,
+                        "Ready To Do": 11.575,
+                        "Ready To Deploy": 25.877,
+                        "Waiting For Homolog": 1.462
+                    }
+                },
+                {
+                    "KC-166": {
+                        "Done": 21.88,
+                        "In Homolog": 63.849,
+                        "In Progress": 99.085,
+                        "Ready To Do": 0,
+                        "Ready To Deploy": 129.776,
+                        "Waiting For Homolog": 1.254
+                    }
+                },
+                {
+                    "KC-162": {
+                        "Done": 21.88,
+                        "In Homolog": 19.369,
+                        "In Progress": 4.075,
+                        "Ready To Do": 143.405,
+                        "Ready To Deploy": 174.257,
+                        "Waiting For Homolog": 3.123
+                    }
+                },
+                {
+                    "KC-160": {
+                        "Done": 21.88,
+                        "In Homolog": 19.336,
+                        "In Progress": 72.232,
+                        "Ready To Do": 86.999,
+                        "Ready To Deploy": 174.29,
+                        "Waiting For Homolog": 7.477
+                    }
+                },
+                {
+                    "KC-158": {
+                        "Done": 288.326,
+                        "In Homolog": 13.051,
+                        "In Progress": 0.005,
+                        "Ready To Do": 27.766,
+                        "Ready To Deploy": 78.103,
+                        "Waiting For Homolog": 0.158
+                    }
+                },
+                {
+                    "KC-157": {
+                        "Done": 288.305,
+                        "In Homolog": 21.027,
+                        "In Progress": 1.553,
+                        "Ready To Do": 69.625,
+                        "Ready To Deploy": 22.385,
+                        "Waiting For Homolog": 4.708
+                    }
+                },
+                {
+                    "KC-155": {
+                        "Done": 288.385,
+                        "In Homolog": 50.794,
+                        "In Progress": 41.358,
+                        "Ready To Do": 80.268,
+                        "Ready To Deploy": 3.799,
+                        "Waiting For Homolog": 0.209
+                    }
+                },
+                {
+                    "KC-154": {
+                        "Done": 288.312,
+                        "In Homolog": 2.898,
+                        "In Progress": 90.289,
+                        "Ready To Do": 20.614,
+                        "Ready To Deploy": 74.664,
+                        "Waiting For Homolog": 0.597
+                    }
+                },
+                {
+                    "KC-152": {
+                        "Done": 288.306,
+                        "In Homolog": 19.229,
+                        "In Progress": 47.917,
+                        "Ready To Do": 102.748,
+                        "Ready To Deploy": 24.18,
+                        "Waiting For Homolog": 0.001
+                    }
+                },
+                {
+                    "KC-151": {
+                        "Done": 288.327,
+                        "In Homolog": 2.605,
+                        "In Progress": 23.678,
+                        "Ready To Do": 2.472,
+                        "Ready To Deploy": 165.374,
+                        "Waiting For Homolog": 0.465
+                    }
+                },
+                {
+                    "KC-150": {
+                        "Done": 288.313,
+                        "In Homolog": 13.103,
+                        "In Progress": 106.636,
+                        "Ready To Do": 0.028,
+                        "Ready To Deploy": 78.351,
+                        "Waiting For Homolog": 0
+                    }
+                },
+                {
+                    "KC-149": {
+                        "Done": 288.326,
+                        "In Homolog": 19.203,
+                        "In Progress": 74.04,
+                        "Ready To Do": 14.579,
+                        "Ready To Deploy": 104.903,
+                        "Waiting For Homolog": 0.003
+                    }
+                },
+                {
+                    "KC-148": {
+                        "Done": 288.335,
+                        "In Homolog": 18.274,
+                        "In Progress": 1.114,
+                        "Ready To Do": 20.038,
+                        "Ready To Deploy": 173.086,
+                        "Waiting For Homolog": 0.755
+                    }
+                },
+                {
+                    "KC-146": {
+                        "Done": 288.382,
+                        "In Homolog": 17.89,
+                        "In Progress": 1.535,
+                        "Ready To Do": 1.742,
+                        "Ready To Deploy": 197.97,
+                        "Waiting For Homolog": 0.001
+                    }
+                },
+                {
+                    "KC-145": {
+                        "Done": 168.091,
+                        "In Homolog": 0,
+                        "In Progress": 3.794,
+                        "Ready To Do": 1.54,
+                        "Ready To Deploy": 0,
+                        "Waiting For Homolog": 336.015
+                    }
+                },
+                {
+                    "KC-144": {
+                        "Done": 288.381,
+                        "In Homolog": 3.705,
+                        "In Progress": 1.152,
+                        "Ready To Do": 14.482,
+                        "Ready To Deploy": 213.689,
+                        "Waiting For Homolog": 4.807
+                    }
+                },
+                {
+                    "KC-143": {
+                        "Done": 288.384,
+                        "In Homolog": 213.589,
+                        "In Progress": 0.31,
+                        "Ready To Do": 15.763,
+                        "Ready To Deploy": 3.801,
+                        "Waiting For Homolog": 4.495
+                    }
+                },
+                {
+                    "KC-141": {
+                        "Done": 288.383,
+                        "In Homolog": 88.463,
+                        "In Progress": 0.016,
+                        "Ready To Do": 3.203,
+                        "Ready To Deploy": 173.374,
+                        "Waiting For Homolog": 0.824
+                    }
+                },
+                {
+                    "KC-140": {
+                        "Done": 271.044,
+                        "In Homolog": 0,
+                        "In Progress": 0,
+                        "Ready To Do": 0,
+                        "Ready To Deploy": 0,
+                        "Waiting For Homolog": 0
+                    }
+                },
+                {
+                    "KC-139": {
+                        "Done": 288.349,
+                        "In Homolog": 40.308,
+                        "In Progress": 2.504,
+                        "Ready To Do": 0.926,
+                        "Ready To Deploy": 221.563,
+                        "Waiting For Homolog": 0.899
+                    }
+                },
+                {
+                    "KC-138": {
+                        "Done": 288.289,
+                        "In Homolog": 42.973,
+                        "In Progress": 0.89,
+                        "Ready To Do": 0.098,
+                        "Ready To Deploy": 221.443,
+                        "Waiting For Homolog": 0.957
+                    }
+                },
+                {
+                    "KC-137": {
+                        "Done": 288.287,
+                        "In Homolog": 42.726,
+                        "In Progress": 6.104,
+                        "Ready To Do": 0,
+                        "Ready To Deploy": 221.692,
+                        "Waiting For Homolog": 119.3
+                    }
+                },
+                {
+                    "KC-136": {
+                        "Done": 288.35,
+                        "In Homolog": 22.43,
+                        "In Progress": 91.827,
+                        "Ready To Do": 72.758,
+                        "Ready To Deploy": 220.848,
+                        "Waiting For Homolog": 0.428
+                    }
+                },
+                {
+                    "KC-135": {
+                        "Done": 625.836,
+                        "In Homolog": 10.172,
+                        "In Progress": 0,
+                        "Ready To Do": 41.887,
+                        "Ready To Deploy": 20.725,
+                        "Waiting For Homolog": 0
+                    }
+                },
+                {
+                    "KC-133": {
+                        "Done": 288.287,
+                        "In Homolog": 103.413,
+                        "In Progress": 1.714,
+                        "Ready To Do": 75.994,
+                        "Ready To Deploy": 168.179,
+                        "Waiting For Homolog": 64.05
+                    }
+                },
+                {
+                    "KC-132": {
+                        "Done": 625.823,
+                        "In Homolog": 0,
+                        "In Progress": 0,
+                        "Ready To Do": 73.732,
+                        "Ready To Deploy": 20.667,
+                        "Waiting For Homolog": 0
+                    }
+                },
+                {
+                    "KC-130": {
+                        "Done": 288.383,
+                        "In Homolog": 21.837,
+                        "In Progress": 67.263,
+                        "Ready To Do": 12.13,
+                        "Ready To Deploy": 102.218,
+                        "Waiting For Homolog": 0.001
+                    }
+                },
+                {
+                    "KC-129": {
+                        "Done": 625.834,
+                        "In Homolog": 12.887,
+                        "In Progress": 4.398,
+                        "Ready To Do": 1.958,
+                        "Ready To Deploy": 77.622,
+                        "Waiting For Homolog": 0.001
+                    }
+                },
+                {
+                    "KC-128": {
+                        "Done": 288.286,
+                        "In Homolog": 147.078,
+                        "In Progress": 92.174,
+                        "Ready To Do": 0.181,
+                        "Ready To Deploy": 194.548,
+                        "Waiting For Homolog": 1.108
+                    }
+                },
+                {
+                    "KC-126": {
+                        "Done": 625.829,
+                        "In Homolog": 73.604,
+                        "In Progress": 19.554,
+                        "Ready To Do": 0.453,
+                        "Ready To Deploy": 94.808,
+                        "Waiting For Homolog": 5.043
+                    }
+                },
+                {
+                    "KC-125": {
+                        "Done": 625.829,
+                        "In Homolog": 23.657,
+                        "In Progress": 17.674,
+                        "Ready To Do": 4.331,
+                        "Ready To Deploy": 144.754,
+                        "Waiting For Homolog": 5.042
+                    }
+                },
+                {
+                    "KC-122": {
+                        "Done": 625.832,
+                        "In Homolog": 90.94,
+                        "In Progress": 17.438,
+                        "Ready To Do": 31.326,
+                        "Ready To Deploy": 77.467,
+                        "Waiting For Homolog": 4.711
+                    }
+                },
+                {
+                    "KC-121": {
+                        "Done": 625.831,
+                        "In Homolog": 0.296,
+                        "In Progress": 5.419,
+                        "Ready To Do": 64.235,
+                        "Ready To Deploy": 102.541,
+                        "Waiting For Homolog": 65.568
+                    }
+                },
+                {
+                    "KC-118": {
+                        "Done": 625.826,
+                        "In Homolog": 27.754,
+                        "In Progress": 7.157,
+                        "Ready To Do": 0.036,
+                        "Ready To Deploy": 196.939,
+                        "Waiting For Homolog": 13.497
+                    }
+                },
+                {
+                    "KC-117": {
+                        "Done": 625.826,
+                        "In Homolog": 27.871,
+                        "In Progress": 7.421,
+                        "Ready To Do": 0.007,
+                        "Ready To Deploy": 196.822,
+                        "Waiting For Homolog": 13.497
+                    }
+                },
+                {
+                    "KC-116": {
+                        "Done": 288.286,
+                        "In Homolog": 318.897,
+                        "In Progress": 232.996,
+                        "Ready To Do": 3.556,
+                        "Ready To Deploy": 22.73,
+                        "Waiting For Homolog": 1.107
+                    }
+                },
+                {
+                    "KC-114": {
+                        "Done": 1039.061,
+                        "In Homolog": 0.049,
+                        "In Progress": 0.002,
+                        "Ready To Do": 0.788,
+                        "Ready To Deploy": 91.048,
+                        "Waiting For Homolog": 0.001
+                    }
+                },
+                {
+                    "KC-113": {
+                        "Done": 1039.062,
+                        "In Homolog": 0.193,
+                        "In Progress": 0.001,
+                        "Ready To Do": 1.135,
+                        "Ready To Deploy": 91.045,
+                        "Waiting For Homolog": 0.001
+                    }
+                },
+                {
+                    "KC-112": {
+                        "Done": 288.385,
+                        "In Homolog": 689.588,
+                        "In Progress": 148.185,
+                        "Ready To Do": 40.382,
+                        "Ready To Deploy": 3.066,
+                        "Waiting For Homolog": 0.003
+                    }
+                },
+                {
+                    "KC-111": {
+                        "Done": 625.835,
+                        "In Homolog": 432.225,
+                        "In Progress": 5.595,
+                        "Ready To Do": 18.044,
+                        "Ready To Deploy": 93.938,
+                        "Waiting For Homolog": 0.001
+                    }
+                },
+                {
+                    "KC-110": {
+                        "Done": 625.833,
+                        "In Homolog": 74.883,
+                        "In Progress": 288.598,
+                        "Ready To Do": 165.422,
+                        "Ready To Deploy": 20.72,
+                        "Waiting For Homolog": 0.417
+                    }
+                },
+                {
+                    "KC-109": {
+                        "Done": 625.825,
+                        "In Homolog": 333.654,
+                        "In Progress": 16.436,
+                        "Ready To Do": 3.379,
+                        "Ready To Deploy": 198.006,
+                        "Waiting For Homolog": 0.115
+                    }
+                },
+                {
+                    "KC-107": {
+                        "Done": 625.825,
+                        "In Homolog": 312.541,
+                        "In Progress": 0.122,
+                        "Ready To Do": 0.206,
+                        "Ready To Deploy": 239.42,
+                        "Waiting For Homolog": 0.881
+                    }
+                },
+                {
+                    "KC-106": {
+                        "Done": 1132.217,
+                        "In Homolog": 21.525,
+                        "In Progress": 6.311,
+                        "Ready To Do": 18.59,
+                        "Ready To Deploy": 0,
+                        "Waiting For Homolog": 1.164
+                    }
+                },
+                {
+                    "KC-104": {
+                        "Done": 287.118,
+                        "In Homolog": 265.586,
+                        "In Progress": 206.527,
+                        "Ready To Do": 406.776,
+                        "Ready To Deploy": 0,
+                        "Waiting For Homolog": 4.729
+                    }
+                },
+                {
+                    "KC-100": {
+                        "Done": 1039.067,
+                        "In Homolog": 47.989,
+                        "In Progress": 2.076,
+                        "Ready To Do": 144.541,
+                        "Ready To Deploy": 90.73,
+                        "Waiting For Homolog": 1.66
+                    }
+                },
+                {
+                    "KC-96": {
+                        "Done": 288.302,
+                        "In Homolog": 52.004,
+                        "In Progress": 236.073,
+                        "Ready To Do": 69.183,
+                        "Ready To Deploy": 49.696,
+                        "Waiting For Homolog": 0
+                    }
+                },
+                {
+                    "KC-95": {
+                        "Done": 625.827,
+                        "In Homolog": 238.597,
+                        "In Progress": 118.421,
+                        "Ready To Do": 1.356,
+                        "Ready To Deploy": 196.597,
+                        "Waiting For Homolog": 0.001
+                    }
+                },
+                {
+                    "KC-94": {
+                        "Done": 1039.049,
+                        "In Homolog": 49.626,
+                        "In Progress": 4.067,
+                        "Ready To Do": 0.02,
+                        "Ready To Deploy": 280.36,
+                        "Waiting For Homolog": 0.04
+                    }
+                },
+                {
+                    "KC-93": {
+                        "Done": 625.828,
+                        "In Homolog": 23.322,
+                        "In Progress": 41.092,
+                        "Ready To Do": 554.548,
+                        "Ready To Deploy": 145.091,
+                        "Waiting For Homolog": 5.415
+                    }
+                },
+                {
+                    "KC-92": {
+                        "Done": 1039.047,
+                        "In Homolog": 72.795,
+                        "In Progress": 1.722,
+                        "Ready To Do": 1.134,
+                        "Ready To Deploy": 282.911,
+                        "Waiting For Homolog": 0.19
+                    }
+                },
+                {
+                    "KC-91": {
+                        "Done": 1368.887,
+                        "In Homolog": 0.22,
+                        "In Progress": 0,
+                        "Ready To Do": 30.72,
+                        "Ready To Deploy": 0,
+                        "Waiting For Homolog": 0
+                    }
+                },
+                {
+                    "KC-89": {
+                        "Done": 1039.032,
+                        "In Homolog": 47.091,
+                        "In Progress": 0,
+                        "Ready To Do": 24.792,
+                        "Ready To Deploy": 282.979,
+                        "Waiting For Homolog": 0
+                    }
+                },
+                {
+                    "KC-87": {
+                        "Done": 1464.878,
+                        "In Homolog": 0,
+                        "In Progress": 1.645,
+                        "Ready To Do": 1.082,
+                        "Ready To Deploy": 0,
+                        "Waiting For Homolog": 0.064
+                    }
+                },
+                {
+                    "KC-86": {
+                        "Done": 625.835,
+                        "In Homolog": 363.516,
+                        "In Progress": 357.128,
+                        "Ready To Do": 95.704,
+                        "Ready To Deploy": 21.021,
+                        "Waiting For Homolog": 0.105
+                    }
+                },
+                {
+                    "KC-81": {
+                        "Done": 21.879,
+                        "In Homolog": 120.358,
+                        "In Progress": 187.282,
+                        "Ready To Do": 0,
+                        "Ready To Deploy": 9.56,
+                        "Waiting For Homolog": 164.05
+                    }
+                },
+                {
+                    "KC-63": {
+                        "Done": 625.827,
+                        "In Homolog": 381.124,
+                        "In Progress": 292.675,
+                        "Ready To Do": 4.118,
+                        "Ready To Deploy": 189.53,
+                        "Waiting For Homolog": 0.001
+                    }
+                },
+                {
+                    "KC-62": {
+                        "Done": 625.824,
+                        "In Homolog": 353.972,
+                        "In Progress": 311.494,
+                        "Ready To Do": 0,
+                        "Ready To Deploy": 197.991,
+                        "Waiting For Homolog": 4.109
+                    }
+                },
+                {
+                    "KC-61": {
+                        "Done": 1039.051,
+                        "In Homolog": 0.099,
+                        "In Progress": 124.243,
+                        "Ready To Do": 0.773,
+                        "Ready To Deploy": 329.879,
+                        "Waiting For Homolog": 0
+                    }
+                },
+                {
+                    "KC-58": {
+                        "Done": 625.831,
+                        "In Homolog": 260.076,
+                        "In Progress": 55.602,
+                        "Ready To Do": 112.925,
+                        "Ready To Deploy": 97.409,
+                        "Waiting For Homolog": 0.169
+                    }
+                },
+                {
+                    "KC-53": {
+                        "Done": 1039.038,
+                        "In Homolog": 142.896,
+                        "In Progress": 0.01,
+                        "Ready To Do": 1.13,
+                        "Ready To Deploy": 329.819,
+                        "Waiting For Homolog": 0.255
+                    }
+                },
+                {
+                    "KC-52": {
+                        "Done": 1039.042,
+                        "In Homolog": 167.22,
+                        "In Progress": 18.545,
+                        "Ready To Do": 0.004,
+                        "Ready To Deploy": 282.904,
+                        "Waiting For Homolog": 5.658
+                    }
+                },
+                {
+                    "KC-51": {
+                        "Done": 271.049,
+                        "In Homolog": 0,
+                        "In Progress": 0,
+                        "Ready To Do": 0,
+                        "Ready To Deploy": 0,
+                        "Waiting For Homolog": 0
+                    }
+                },
+                {
+                    "KC-44": {
+                        "Done": 1039.044,
+                        "In Homolog": 75.963,
+                        "In Progress": 22.881,
+                        "Ready To Do": 2.746,
+                        "Ready To Deploy": 352.192,
+                        "Waiting For Homolog": 0.129
+                    }
+                },
+                {
+                    "KC-41": {
+                        "Done": 1039.045,
+                        "In Homolog": 75.798,
+                        "In Progress": 3.564,
+                        "Ready To Do": 18.153,
+                        "Ready To Deploy": 352.356,
+                        "Waiting For Homolog": 0.129
+                    }
+                },
+                {
+                    "KC-40": {
+                        "Done": 1489.021,
+                        "In Homolog": 0.139,
+                        "In Progress": 17.878,
+                        "Ready To Do": 17.441,
+                        "Ready To Deploy": 0,
+                        "Waiting For Homolog": 6.852
+                    }
+                },
+                {
+                    "KC-37": {
+                        "Done": 1039.04,
+                        "In Homolog": 118.858,
+                        "In Progress": 21.324,
+                        "Ready To Do": 6.505,
+                        "Ready To Deploy": 352.182,
+                        "Waiting For Homolog": 0.001
+                    }
+                },
+                {
+                    "KC-36": {
+                        "Done": 1039.041,
+                        "In Homolog": 97.942,
+                        "In Progress": 23.652,
+                        "Ready To Do": 24.046,
+                        "Ready To Deploy": 352.184,
+                        "Waiting For Homolog": 1.046
+                    }
+                },
+                {
+                    "KC-35": {
+                        "Done": 1039.06,
+                        "In Homolog": 122.101,
+                        "In Progress": 23.364,
+                        "Ready To Do": 0.681,
+                        "Ready To Deploy": 351.978,
+                        "Waiting For Homolog": 0.726
+                    }
+                },
+                {
+                    "KC-34": {
+                        "Done": 1039.033,
+                        "In Homolog": 189.738,
+                        "In Progress": 31.553,
+                        "Ready To Do": 0.008,
+                        "Ready To Deploy": 282.983,
+                        "Waiting For Homolog": 0.001
+                    }
+                },
+                {
+                    "KC-33": {
+                        "Done": 1039.037,
+                        "In Homolog": 194.192,
+                        "In Progress": 29.669,
+                        "Ready To Do": 15.66,
+                        "Ready To Deploy": 279.91,
+                        "Waiting For Homolog": 0.752
+                    }
+                },
+                {
+                    "KC-32": {
+                        "Done": 1039.031,
+                        "In Homolog": 171.805,
+                        "In Progress": 9.634,
+                        "Ready To Do": 0.542,
+                        "Ready To Deploy": 333.752,
+                        "Waiting For Homolog": 13.223
+                    }
+                },
+                {
+                    "KC-31": {
+                        "Done": 1039.059,
+                        "In Homolog": 0.203,
+                        "In Progress": 1.718,
+                        "Ready To Do": 0.192,
+                        "Ready To Deploy": 528.36,
+                        "Waiting For Homolog": 63.611
+                    }
+                },
+                {
+                    "KC-25": {
+                        "Done": 1039.051,
+                        "In Homolog": 0.031,
+                        "In Progress": 1.947,
+                        "Ready To Do": 0.136,
+                        "Ready To Deploy": 528.541,
+                        "Waiting For Homolog": 68.964
+                    }
+                },
+                {
+                    "KC-24": {
+                        "Done": 1039.055,
+                        "In Homolog": 0.314,
+                        "In Progress": 17.183,
+                        "Ready To Do": 19.341,
+                        "Ready To Deploy": 599.731,
+                        "Waiting For Homolog": 0.082
+                    }
+                },
+                {
+                    "KC-23": {
+                        "Done": 1039.028,
+                        "In Homolog": 0.041,
+                        "In Progress": 1.08,
+                        "Ready To Do": 0.079,
+                        "Ready To Deploy": 636.56,
+                        "Waiting For Homolog": 3.243
+                    }
+                },
+                {
+                    "KC-22": {
+                        "Done": 1039.059,
+                        "In Homolog": 94.668,
+                        "In Progress": 25.629,
+                        "Ready To Do": 0.486,
+                        "Ready To Deploy": 529.155,
+                        "Waiting For Homolog": 17.318
+                    }
+                },
+                {
+                    "KC-21": {
+                        "Done": 1039.034,
+                        "In Homolog": 246.556,
+                        "In Progress": 44.934,
+                        "Ready To Do": 24.036,
+                        "Ready To Deploy": 352.185,
+                        "Waiting For Homolog": 0.019
+                    }
+                },
+                {
+                    "KC-19": {
+                        "Done": 1039.054,
+                        "In Homolog": 36.909,
+                        "In Progress": 1.319,
+                        "Ready To Do": 1.545,
+                        "Ready To Deploy": 599.724,
+                        "Waiting For Homolog": 30.07
+                    }
+                },
+                {
+                    "KC-18": {
+                        "Done": 1039.029,
+                        "In Homolog": 95.284,
+                        "In Progress": 0,
+                        "Ready To Do": 27.695,
+                        "Ready To Deploy": 528.567,
+                        "Waiting For Homolog": 19.855
+                    }
+                },
+                {
+                    "KC-17": {
+                        "Done": 1039.053,
+                        "In Homolog": 24.16,
+                        "In Progress": 9.705,
+                        "Ready To Do": 0.276,
+                        "Ready To Deploy": 599.669,
+                        "Waiting For Homolog": 39.27
+                    }
+                },
+                {
+                    "KC-16": {
+                        "Done": 1039.058,
+                        "In Homolog": 6.358,
+                        "In Progress": 0.044,
+                        "Ready To Do": 16.374,
+                        "Ready To Deploy": 667.237,
+                        "Waiting For Homolog": 0.068
+                    }
+                },
+                {
+                    "KC-15": {
+                        "Done": 1039.03,
+                        "In Homolog": 142.898,
+                        "In Progress": 29.671,
+                        "Ready To Do": 0.733,
+                        "Ready To Deploy": 352.061,
+                        "Waiting For Homolog": 3.241
+                    }
+                },
+                {
+                    "KC-14": {
+                        "Done": 1039.057,
+                        "In Homolog": 6.361,
+                        "In Progress": 20.261,
+                        "Ready To Do": 0.992,
+                        "Ready To Deploy": 667.235,
+                        "Waiting For Homolog": 0.067
+                    }
+                },
+                {
+                    "KC-198": {
+                        "Ready To Do": 45.893
+                    }
+                },
+                {
+                    "KC-197": {
+                        "In Homolog": 32.757,
+                        "In Progress": 10.394,
+                        "Ready To Do": 0.282,
+                        "Waiting For Homolog": 10.624
+                    }
+                },
+                {
+                    "KC-142": {
+                        "In Homolog": 512.313,
+                        "In Progress": 23.799,
+                        "Ready To Do": 10.636,
+                        "Waiting For Homolog": 0.001
+                    }
+                },
+                {
+                    "KC-127": {
+                        "In Homolog": 126.95,
+                        "In Progress": 384.035,
+                        "Ready To Do": 282.013,
+                        "Waiting For Homolog": 0.051
+                    }
+                }
+            ],
+            "columns": [
+                {
+                    "column": "Ready To Do",
+                    "average": 33.282,
+                    "percentile": {
+                        "p50": 7.702,
+                        "p75": 24.792,
+                        "p85": 69.537,
+                        "p95": 131.213
+                    }
+                }
+            ]
+        },
+        "status": true,
+        "team": null
+    },
+    {
+        "uuid": "66980591-44c2-4cba-923c-a164511fd727",
+        "type": "leadTimeInWip",
+        "value": {
+            "total": {
+                "average": 304.922,
+                "percentiles": {
+                    "p50": 245.479,
+                    "p75": 496.718,
+                    "p85": 559.144,
+                    "p95": 673.481
+                }
+            },
+            "issues": [
+                {
+                    "key": "KC-206",
+                    "average": 0.083
+                },
+                {
+                    "key": "KC-205",
+                    "average": 1.297
+                },
+                {
+                    "key": "KC-203",
+                    "average": 32.494
+                },
+                {
+                    "key": "KC-195",
+                    "average": 46.88
+                },
+                {
+                    "key": "KC-193",
+                    "average": 47.475
+                },
+                {
+                    "key": "KC-178",
+                    "average": 120.557
+                },
+                {
+                    "key": "KC-177",
+                    "average": 123.342
+                },
+                {
+                    "key": "KC-202",
+                    "average": 31.404
+                },
+                {
+                    "key": "KC-200",
+                    "average": 23.972
+                },
+                {
+                    "key": "KC-199",
+                    "average": 9.365
+                },
+                {
+                    "key": "KC-194",
+                    "average": 7.309
+                },
+                {
+                    "key": "KC-191",
+                    "average": 98.369
+                },
+                {
+                    "key": "KC-190",
+                    "average": 34.2
+                },
+                {
+                    "key": "KC-188",
+                    "average": 106.784
+                },
+                {
+                    "key": "KC-187",
+                    "average": 106.783
+                },
+                {
+                    "key": "KC-186",
+                    "average": 121.142
+                },
+                {
+                    "key": "KC-184",
+                    "average": 4.214
+                },
+                {
+                    "key": "KC-183",
+                    "average": 121.143
+                },
+                {
+                    "key": "KC-182",
+                    "average": 104.902
+                },
+                {
+                    "key": "KC-181",
+                    "average": 143.817
+                },
+                {
+                    "key": "KC-180",
+                    "average": 146.585
+                },
+                {
+                    "key": "KC-179",
+                    "average": 154.116
+                },
+                {
+                    "key": "KC-166",
+                    "average": 293.964
+                },
+                {
+                    "key": "KC-162",
+                    "average": 200.824
+                },
+                {
+                    "key": "KC-160",
+                    "average": 273.335
+                },
+                {
+                    "key": "KC-158",
+                    "average": 91.317
+                },
+                {
+                    "key": "KC-157",
+                    "average": 49.673
+                },
+                {
+                    "key": "KC-155",
+                    "average": 96.16
+                },
+                {
+                    "key": "KC-154",
+                    "average": 168.448
+                },
+                {
+                    "key": "KC-152",
+                    "average": 91.327
+                },
+                {
+                    "key": "KC-151",
+                    "average": 192.122
+                },
+                {
+                    "key": "KC-150",
+                    "average": 198.09
+                },
+                {
+                    "key": "KC-149",
+                    "average": 198.149
+                },
+                {
+                    "key": "KC-148",
+                    "average": 193.229
+                },
+                {
+                    "key": "KC-146",
+                    "average": 217.396
+                },
+                {
+                    "key": "KC-145",
+                    "average": 339.809
+                },
+                {
+                    "key": "KC-144",
+                    "average": 223.353
+                },
+                {
+                    "key": "KC-143",
+                    "average": 222.195
+                },
+                {
+                    "key": "KC-141",
+                    "average": 262.677
+                },
+                {
+                    "key": "KC-139",
+                    "average": 265.274
+                },
+                {
+                    "key": "KC-138",
+                    "average": 266.263
+                },
+                {
+                    "key": "KC-137",
+                    "average": 389.822
+                },
+                {
+                    "key": "KC-136",
+                    "average": 335.533
+                },
+                {
+                    "key": "KC-135",
+                    "average": 30.897
+                },
+                {
+                    "key": "KC-133",
+                    "average": 337.356
+                },
+                {
+                    "key": "KC-132",
+                    "average": 20.667
+                },
+                {
+                    "key": "KC-130",
+                    "average": 191.319
+                },
+                {
+                    "key": "KC-129",
+                    "average": 94.908
+                },
+                {
+                    "key": "KC-128",
+                    "average": 434.908
+                },
+                {
+                    "key": "KC-126",
+                    "average": 193.009
+                },
+                {
+                    "key": "KC-125",
+                    "average": 191.127
+                },
+                {
+                    "key": "KC-122",
+                    "average": 190.556
+                },
+                {
+                    "key": "KC-121",
+                    "average": 173.824
+                },
+                {
+                    "key": "KC-118",
+                    "average": 245.347
+                },
+                {
+                    "key": "KC-117",
+                    "average": 245.611
+                },
+                {
+                    "key": "KC-116",
+                    "average": 575.73
+                },
+                {
+                    "key": "KC-114",
+                    "average": 91.1
+                },
+                {
+                    "key": "KC-113",
+                    "average": 91.24
+                },
+                {
+                    "key": "KC-112",
+                    "average": 840.842
+                },
+                {
+                    "key": "KC-111",
+                    "average": 531.759
+                },
+                {
+                    "key": "KC-110",
+                    "average": 384.618
+                },
+                {
+                    "key": "KC-109",
+                    "average": 548.211
+                },
+                {
+                    "key": "KC-107",
+                    "average": 552.964
+                },
+                {
+                    "key": "KC-106",
+                    "average": 29
+                },
+                {
+                    "key": "KC-104",
+                    "average": 476.842
+                },
+                {
+                    "key": "KC-100",
+                    "average": 142.455
+                },
+                {
+                    "key": "KC-96",
+                    "average": 337.773
+                },
+                {
+                    "key": "KC-95",
+                    "average": 553.616
+                },
+                {
+                    "key": "KC-94",
+                    "average": 334.093
+                },
+                {
+                    "key": "KC-93",
+                    "average": 214.92
+                },
+                {
+                    "key": "KC-92",
+                    "average": 357.618
+                },
+                {
+                    "key": "KC-91",
+                    "average": 0.22
+                },
+                {
+                    "key": "KC-89",
+                    "average": 330.07
+                },
+                {
+                    "key": "KC-87",
+                    "average": 1.709
+                },
+                {
+                    "key": "KC-86",
+                    "average": 741.77
+                },
+                {
+                    "key": "KC-81",
+                    "average": 481.25
+                },
+                {
+                    "key": "KC-63",
+                    "average": 863.33
+                },
+                {
+                    "key": "KC-62",
+                    "average": 867.566
+                },
+                {
+                    "key": "KC-61",
+                    "average": 454.221
+                },
+                {
+                    "key": "KC-58",
+                    "average": 413.256
+                },
+                {
+                    "key": "KC-53",
+                    "average": 472.98
+                },
+                {
+                    "key": "KC-52",
+                    "average": 474.327
+                },
+                {
+                    "key": "KC-44",
+                    "average": 451.165
+                },
+                {
+                    "key": "KC-41",
+                    "average": 431.847
+                },
+                {
+                    "key": "KC-40",
+                    "average": 24.869
+                },
+                {
+                    "key": "KC-37",
+                    "average": 492.365
+                },
+                {
+                    "key": "KC-36",
+                    "average": 474.824
+                },
+                {
+                    "key": "KC-35",
+                    "average": 498.169
+                },
+                {
+                    "key": "KC-34",
+                    "average": 504.275
+                },
+                {
+                    "key": "KC-33",
+                    "average": 504.523
+                },
+                {
+                    "key": "KC-32",
+                    "average": 528.414
+                },
+                {
+                    "key": "KC-31",
+                    "average": 593.892
+                },
+                {
+                    "key": "KC-25",
+                    "average": 599.483
+                },
+                {
+                    "key": "KC-24",
+                    "average": 617.31
+                },
+                {
+                    "key": "KC-23",
+                    "average": 640.924
+                },
+                {
+                    "key": "KC-22",
+                    "average": 666.77
+                },
+                {
+                    "key": "KC-21",
+                    "average": 643.694
+                },
+                {
+                    "key": "KC-19",
+                    "average": 668.022
+                },
+                {
+                    "key": "KC-18",
+                    "average": 643.706
+                },
+                {
+                    "key": "KC-17",
+                    "average": 672.804
+                },
+                {
+                    "key": "KC-16",
+                    "average": 673.707
+                },
+                {
+                    "key": "KC-15",
+                    "average": 527.871
+                },
+                {
+                    "key": "KC-14",
+                    "average": 693.924
+                },
+                {
+                    "key": "KC-197",
+                    "average": 53.775
+                },
+                {
+                    "key": "KC-142",
+                    "average": 536.113
+                },
+                {
+                    "key": "KC-127",
+                    "average": 511.036
+                }
+            ]
+        },
+        "status": true,
+        "team": null
+    },
+    {
+        "uuid": "f4e9a2b0-09ad-45e6-b1cc-3d398a533f95",
+        "type": "leadTimeByColumn",
+        "value": {
+            "In Homolog": 103.413,
+            "In Progress": 42.252,
+            "Ready To Do": 24.792,
+            "Ready To Deploy": 280.248,
+            "Waiting For Homolog": 4.711
+        },
+        "status": true,
+        "team": null
+    },
+    {
+        "uuid": "34591ded-e949-4d73-a0b8-29399a9234e9",
+        "type": "throughput",
+        "value": {
+            "value": 18
+        },
+        "status": true,
+        "team": null
+    },
+    {
+        "uuid": "c354de30-2ce6-4b76-b416-8756fe699b46",
+        "type": "bugRatio",
+        "value": {
+            "value": 0.273
+        },
+        "status": true,
+        "team": null
+    },
+    {
+        "uuid": "75d8ea02-6845-43ea-b090-419fda6934eb",
+        "type": "predictedDeliveryDates",
+        "value": [
+            {
+                "p50": "17/02",
+                "p75": "27/02",
+                "p95": "06/03",
+                "aging": 0,
+                "isLate": true,
+                "issueKey": "KC-206",
+                "startDate": "07/02"
+            },
+            {
+                "p50": "17/02",
+                "p75": "27/02",
+                "p95": "06/03",
+                "aging": 0,
+                "isLate": true,
+                "issueKey": "KC-205",
+                "startDate": "07/02"
+            },
+            {
+                "p50": "16/02",
+                "p75": "27/02",
+                "p95": "05/03",
+                "aging": 1,
+                "isLate": true,
+                "issueKey": "KC-203",
+                "startDate": "06/02"
+            },
+            {
+                "p50": "15/02",
+                "p75": "26/02",
+                "p95": "04/03",
+                "aging": 1,
+                "isLate": true,
+                "issueKey": "KC-195",
+                "startDate": "05/02"
+            },
+            {
+                "p50": "15/02",
+                "p75": "26/02",
+                "p95": "04/03",
+                "aging": 2,
+                "isLate": true,
+                "issueKey": "KC-193",
+                "startDate": "05/02"
+            },
+            {
+                "p50": "08/02",
+                "p75": "19/02",
+                "p95": "26/02",
+                "aging": 9,
+                "isLate": true,
+                "issueKey": "KC-178",
+                "startDate": "29/01"
+            },
+            {
+                "p50": "08/02",
+                "p75": "19/02",
+                "p95": "26/02",
+                "aging": 9,
+                "isLate": true,
+                "issueKey": "KC-177",
+                "startDate": "29/01"
+            },
+            {
+                "p50": "16/02",
+                "p75": "26/02",
+                "p95": "04/03",
+                "aging": 1,
+                "isLate": true,
+                "issueKey": "KC-202",
+                "startDate": "05/02"
+            },
+            {
+                "p50": "15/02",
+                "p75": "26/02",
+                "p95": "04/03",
+                "aging": 1,
+                "isLate": true,
+                "issueKey": "KC-200",
+                "startDate": "05/02"
+            },
+            {
+                "p50": "15/02",
+                "p75": "26/02",
+                "p95": "04/03",
+                "aging": 1,
+                "isLate": true,
+                "issueKey": "KC-199",
+                "startDate": "05/02"
+            },
+            {
+                "p50": "15/02",
+                "p75": "26/02",
+                "p95": "04/03",
+                "aging": 2,
+                "isLate": true,
+                "issueKey": "KC-194",
+                "startDate": "05/02"
+            },
+            {
+                "p50": "12/02",
+                "p75": "23/02",
+                "p95": "01/03",
+                "aging": 5,
+                "isLate": true,
+                "issueKey": "KC-191",
+                "startDate": "02/02"
+            },
+            {
+                "p50": "12/02",
+                "p75": "23/02",
+                "p95": "01/03",
+                "aging": 5,
+                "isLate": true,
+                "issueKey": "KC-190",
+                "startDate": "02/02"
+            },
+            {
+                "p50": "11/02",
+                "p75": "22/02",
+                "p95": "29/02",
+                "aging": 5,
+                "isLate": true,
+                "issueKey": "KC-188",
+                "startDate": "01/02"
+            },
+            {
+                "p50": "11/02",
+                "p75": "22/02",
+                "p95": "29/02",
+                "aging": 6,
+                "isLate": true,
+                "issueKey": "KC-187",
+                "startDate": "01/02"
+            },
+            {
+                "p50": "11/02",
+                "p75": "22/02",
+                "p95": "29/02",
+                "aging": 6,
+                "isLate": true,
+                "issueKey": "KC-186",
+                "startDate": "01/02"
+            },
+            {
+                "p50": "11/02",
+                "p75": "22/02",
+                "p95": "29/02",
+                "aging": 6,
+                "isLate": true,
+                "issueKey": "KC-184",
+                "startDate": "01/02"
+            },
+            {
+                "p50": "11/02",
+                "p75": "22/02",
+                "p95": "29/02",
+                "aging": 6,
+                "isLate": true,
+                "issueKey": "KC-183",
+                "startDate": "01/02"
+            },
+            {
+                "p50": "11/02",
+                "p75": "22/02",
+                "p95": "29/02",
+                "aging": 6,
+                "isLate": true,
+                "issueKey": "KC-182",
+                "startDate": "01/02"
+            },
+            {
+                "p50": "10/02",
+                "p75": "21/02",
+                "p95": "28/02",
+                "aging": 7,
+                "isLate": true,
+                "issueKey": "KC-181",
+                "startDate": "31/01"
+            },
+            {
+                "p50": "10/02",
+                "p75": "21/02",
+                "p95": "28/02",
+                "aging": 7,
+                "isLate": true,
+                "issueKey": "KC-180",
+                "startDate": "31/01"
+            },
+            {
+                "p50": "10/02",
+                "p75": "20/02",
+                "p95": "27/02",
+                "aging": 7,
+                "isLate": true,
+                "issueKey": "KC-179",
+                "startDate": "31/01"
+            },
+            {
+                "errorMessage": "It was not possible to find when the activity started in the TODO column"
+            },
+            {
+                "p50": "02/02",
+                "p75": "13/02",
+                "p95": "20/02",
+                "aging": 15,
+                "isLate": true,
+                "issueKey": "KC-162",
+                "startDate": "23/01"
+            },
+            {
+                "p50": "02/02",
+                "p75": "12/02",
+                "p95": "19/02",
+                "aging": 15,
+                "isLate": true,
+                "issueKey": "KC-160",
+                "startDate": "22/01"
+            },
+            {
+                "p50": "31/01",
+                "p75": "11/02",
+                "p95": "18/02",
+                "aging": 16,
+                "isLate": true,
+                "issueKey": "KC-158",
+                "startDate": "21/01"
+            },
+            {
+                "p50": "31/01",
+                "p75": "11/02",
+                "p95": "18/02",
+                "aging": 16,
+                "isLate": true,
+                "issueKey": "KC-157",
+                "startDate": "21/01"
+            },
+            {
+                "p50": "29/01",
+                "p75": "09/02",
+                "p95": "16/02",
+                "aging": 19,
+                "isLate": true,
+                "issueKey": "KC-155",
+                "startDate": "19/01"
+            },
+            {
+                "p50": "29/01",
+                "p75": "08/02",
+                "p95": "15/02",
+                "aging": 19,
+                "isLate": true,
+                "issueKey": "KC-154",
+                "startDate": "18/01"
+            },
+            {
+                "p50": "28/01",
+                "p75": "08/02",
+                "p95": "15/02",
+                "aging": 20,
+                "isLate": true,
+                "issueKey": "KC-152",
+                "startDate": "18/01"
+            },
+            {
+                "p50": "28/01",
+                "p75": "08/02",
+                "p95": "15/02",
+                "aging": 20,
+                "isLate": true,
+                "issueKey": "KC-151",
+                "startDate": "18/01"
+            },
+            {
+                "p50": "28/01",
+                "p75": "08/02",
+                "p95": "15/02",
+                "aging": 20,
+                "isLate": true,
+                "issueKey": "KC-150",
+                "startDate": "18/01"
+            },
+            {
+                "p50": "28/01",
+                "p75": "07/02",
+                "p95": "14/02",
+                "aging": 20,
+                "isLate": true,
+                "issueKey": "KC-149",
+                "startDate": "17/01"
+            },
+            {
+                "p50": "28/01",
+                "p75": "07/02",
+                "p95": "14/02",
+                "aging": 20,
+                "isLate": true,
+                "issueKey": "KC-148",
+                "startDate": "17/01"
+            },
+            {
+                "p50": "27/01",
+                "p75": "07/02",
+                "p95": "14/02",
+                "aging": 21,
+                "isLate": true,
+                "issueKey": "KC-146",
+                "startDate": "17/01"
+            },
+            {
+                "p50": "27/01",
+                "p75": "07/02",
+                "p95": "14/02",
+                "aging": 21,
+                "isLate": true,
+                "issueKey": "KC-145",
+                "startDate": "17/01"
+            },
+            {
+                "p50": "27/01",
+                "p75": "06/02",
+                "p95": "13/02",
+                "aging": 21,
+                "isLate": true,
+                "issueKey": "KC-144",
+                "startDate": "16/01"
+            },
+            {
+                "p50": "27/01",
+                "p75": "06/02",
+                "p95": "13/02",
+                "aging": 21,
+                "isLate": true,
+                "issueKey": "KC-143",
+                "startDate": "16/01"
+            },
+            {
+                "p50": "25/01",
+                "p75": "05/02",
+                "p95": "12/02",
+                "aging": 23,
+                "isLate": true,
+                "issueKey": "KC-141",
+                "startDate": "15/01"
+            },
+            {
+                "errorMessage": "It was not possible to find when the activity started in the TODO column"
+            },
+            {
+                "p50": "25/01",
+                "p75": "05/02",
+                "p95": "12/02",
+                "aging": 23,
+                "isLate": true,
+                "issueKey": "KC-139",
+                "startDate": "15/01"
+            },
+            {
+                "p50": "25/01",
+                "p75": "05/02",
+                "p95": "12/02",
+                "aging": 23,
+                "isLate": true,
+                "issueKey": "KC-138",
+                "startDate": "15/01"
+            },
+            {
+                "errorMessage": "It was not possible to find when the activity started in the TODO column"
+            },
+            {
+                "p50": "19/01",
+                "p75": "30/01",
+                "p95": "06/02",
+                "aging": 29,
+                "isLate": true,
+                "issueKey": "KC-136",
+                "startDate": "09/01"
+            },
+            {
+                "p50": "19/01",
+                "p75": "30/01",
+                "p95": "06/02",
+                "aging": 29,
+                "isLate": true,
+                "issueKey": "KC-135",
+                "startDate": "09/01"
+            },
+            {
+                "p50": "19/01",
+                "p75": "30/01",
+                "p95": "06/02",
+                "aging": 29,
+                "isLate": true,
+                "issueKey": "KC-133",
+                "startDate": "09/01"
+            },
+            {
+                "p50": "18/01",
+                "p75": "29/01",
+                "p95": "05/02",
+                "aging": 30,
+                "isLate": true,
+                "issueKey": "KC-132",
+                "startDate": "08/01"
+            },
+            {
+                "p50": "28/01",
+                "p75": "08/02",
+                "p95": "15/02",
+                "aging": 20,
+                "isLate": true,
+                "issueKey": "KC-130",
+                "startDate": "18/01"
+            },
+            {
+                "p50": "18/01",
+                "p75": "29/01",
+                "p95": "05/02",
+                "aging": 30,
+                "isLate": true,
+                "issueKey": "KC-129",
+                "startDate": "08/01"
+            },
+            {
+                "p50": "18/01",
+                "p75": "29/01",
+                "p95": "05/02",
+                "aging": 30,
+                "isLate": true,
+                "issueKey": "KC-128",
+                "startDate": "08/01"
+            },
+            {
+                "p50": "14/01",
+                "p75": "25/01",
+                "p95": "01/02",
+                "aging": 34,
+                "isLate": true,
+                "issueKey": "KC-126",
+                "startDate": "04/01"
+            },
+            {
+                "p50": "14/01",
+                "p75": "25/01",
+                "p95": "01/02",
+                "aging": 34,
+                "isLate": true,
+                "issueKey": "KC-125",
+                "startDate": "04/01"
+            },
+            {
+                "p50": "13/01",
+                "p75": "24/01",
+                "p95": "31/01",
+                "aging": 35,
+                "isLate": true,
+                "issueKey": "KC-122",
+                "startDate": "03/01"
+            },
+            {
+                "p50": "12/01",
+                "p75": "23/01",
+                "p95": "30/01",
+                "aging": 35,
+                "isLate": true,
+                "issueKey": "KC-121",
+                "startDate": "02/01"
+            },
+            {
+                "p50": "12/01",
+                "p75": "23/01",
+                "p95": "30/01",
+                "aging": 36,
+                "isLate": true,
+                "issueKey": "KC-118",
+                "startDate": "02/01"
+            },
+            {
+                "p50": "12/01",
+                "p75": "23/01",
+                "p95": "30/01",
+                "aging": 36,
+                "isLate": true,
+                "issueKey": "KC-117",
+                "startDate": "02/01"
+            },
+            {
+                "p50": "12/01",
+                "p75": "23/01",
+                "p95": "30/01",
+                "aging": 36,
+                "isLate": true,
+                "issueKey": "KC-116",
+                "startDate": "02/01"
+            },
+            {
+                "p50": "01/01",
+                "p75": "12/01",
+                "p95": "19/01",
+                "aging": 47,
+                "isLate": true,
+                "issueKey": "KC-114",
+                "startDate": "22/12"
+            },
+            {
+                "p50": "01/01",
+                "p75": "12/01",
+                "p95": "19/01",
+                "aging": 47,
+                "isLate": true,
+                "issueKey": "KC-113",
+                "startDate": "22/12"
+            },
+            {
+                "p50": "31/12",
+                "p75": "11/01",
+                "p95": "18/01",
+                "aging": 48,
+                "isLate": true,
+                "issueKey": "KC-112",
+                "startDate": "21/12"
+            },
+            {
+                "p50": "30/12",
+                "p75": "10/01",
+                "p95": "17/01",
+                "aging": 48,
+                "isLate": true,
+                "issueKey": "KC-111",
+                "startDate": "20/12"
+            },
+            {
+                "p50": "30/12",
+                "p75": "10/01",
+                "p95": "17/01",
+                "aging": 48,
+                "isLate": true,
+                "issueKey": "KC-110",
+                "startDate": "20/12"
+            },
+            {
+                "p50": "30/12",
+                "p75": "10/01",
+                "p95": "17/01",
+                "aging": 49,
+                "isLate": true,
+                "issueKey": "KC-109",
+                "startDate": "20/12"
+            },
+            {
+                "p50": "30/12",
+                "p75": "10/01",
+                "p95": "17/01",
+                "aging": 49,
+                "isLate": true,
+                "issueKey": "KC-107",
+                "startDate": "20/12"
+            },
+            {
+                "p50": "30/12",
+                "p75": "10/01",
+                "p95": "17/01",
+                "aging": 49,
+                "isLate": true,
+                "issueKey": "KC-106",
+                "startDate": "20/12"
+            },
+            {
+                "p50": "15/01",
+                "p75": "26/01",
+                "p95": "02/02",
+                "aging": 33,
+                "isLate": true,
+                "issueKey": "KC-104",
+                "startDate": "05/01"
+            },
+            {
+                "p50": "24/12",
+                "p75": "04/01",
+                "p95": "11/01",
+                "aging": 55,
+                "isLate": true,
+                "issueKey": "KC-100",
+                "startDate": "14/12"
+            },
+            {
+                "p50": "19/01",
+                "p75": "30/01",
+                "p95": "06/02",
+                "aging": 28,
+                "isLate": true,
+                "issueKey": "KC-96",
+                "startDate": "09/01"
+            },
+            {
+                "p50": "30/12",
+                "p75": "10/01",
+                "p95": "17/01",
+                "aging": 49,
+                "isLate": true,
+                "issueKey": "KC-95",
+                "startDate": "20/12"
+            },
+            {
+                "p50": "22/12",
+                "p75": "02/01",
+                "p95": "09/01",
+                "aging": 57,
+                "isLate": true,
+                "issueKey": "KC-94",
+                "startDate": "12/12"
+            },
+            {
+                "p50": "07/01",
+                "p75": "18/01",
+                "p95": "25/01",
+                "aging": 41,
+                "isLate": true,
+                "issueKey": "KC-93",
+                "startDate": "28/12"
+            },
+            {
+                "p50": "21/12",
+                "p75": "01/01",
+                "p95": "08/01",
+                "aging": 58,
+                "isLate": true,
+                "issueKey": "KC-92",
+                "startDate": "11/12"
+            },
+            {
+                "p50": "21/12",
+                "p75": "01/01",
+                "p95": "08/01",
+                "aging": 58,
+                "isLate": true,
+                "issueKey": "KC-91",
+                "startDate": "11/12"
+            },
+            {
+                "p50": "21/12",
+                "p75": "01/01",
+                "p95": "08/01",
+                "aging": 58,
+                "isLate": true,
+                "issueKey": "KC-89",
+                "startDate": "11/12"
+            },
+            {
+                "p50": "18/12",
+                "p75": "29/12",
+                "p95": "05/01",
+                "aging": 61,
+                "isLate": true,
+                "issueKey": "KC-87",
+                "startDate": "08/12"
+            },
+            {
+                "p50": "18/12",
+                "p75": "29/12",
+                "p95": "05/01",
+                "aging": 60,
+                "isLate": true,
+                "issueKey": "KC-86",
+                "startDate": "08/12"
+            },
+            {
+                "errorMessage": "It was not possible to find when the activity started in the TODO column"
+            },
+            {
+                "p50": "17/12",
+                "p75": "28/12",
+                "p95": "04/01",
+                "aging": 62,
+                "isLate": true,
+                "issueKey": "KC-63",
+                "startDate": "07/12"
+            },
+            {
+                "errorMessage": "It was not possible to find when the activity started in the TODO column"
+            },
+            {
+                "p50": "17/12",
+                "p75": "28/12",
+                "p95": "04/01",
+                "aging": 62,
+                "isLate": true,
+                "issueKey": "KC-61",
+                "startDate": "07/12"
+            },
+            {
+                "p50": "31/12",
+                "p75": "11/01",
+                "p95": "18/01",
+                "aging": 48,
+                "isLate": true,
+                "issueKey": "KC-58",
+                "startDate": "21/12"
+            },
+            {
+                "p50": "16/12",
+                "p75": "27/12",
+                "p95": "03/01",
+                "aging": 63,
+                "isLate": true,
+                "issueKey": "KC-53",
+                "startDate": "06/12"
+            },
+            {
+                "p50": "16/12",
+                "p75": "27/12",
+                "p95": "03/01",
+                "aging": 63,
+                "isLate": true,
+                "issueKey": "KC-52",
+                "startDate": "06/12"
+            },
+            {
+                "errorMessage": "It was not possible to find when the activity started in the TODO column"
+            },
+            {
+                "p50": "17/12",
+                "p75": "28/12",
+                "p95": "04/01",
+                "aging": 62,
+                "isLate": true,
+                "issueKey": "KC-44",
+                "startDate": "07/12"
+            },
+            {
+                "p50": "17/12",
+                "p75": "28/12",
+                "p95": "04/01",
+                "aging": 62,
+                "isLate": true,
+                "issueKey": "KC-41",
+                "startDate": "07/12"
+            },
+            {
+                "p50": "16/12",
+                "p75": "26/12",
+                "p95": "02/01",
+                "aging": 63,
+                "isLate": true,
+                "issueKey": "KC-40",
+                "startDate": "06/12"
+            },
+            {
+                "p50": "15/12",
+                "p75": "26/12",
+                "p95": "02/01",
+                "aging": 64,
+                "isLate": true,
+                "issueKey": "KC-37",
+                "startDate": "05/12"
+            },
+            {
+                "p50": "15/12",
+                "p75": "26/12",
+                "p95": "02/01",
+                "aging": 64,
+                "isLate": true,
+                "issueKey": "KC-36",
+                "startDate": "05/12"
+            },
+            {
+                "p50": "15/12",
+                "p75": "26/12",
+                "p95": "02/01",
+                "aging": 64,
+                "isLate": true,
+                "issueKey": "KC-35",
+                "startDate": "05/12"
+            },
+            {
+                "p50": "15/12",
+                "p75": "26/12",
+                "p95": "02/01",
+                "aging": 64,
+                "isLate": true,
+                "issueKey": "KC-34",
+                "startDate": "05/12"
+            },
+            {
+                "p50": "14/12",
+                "p75": "25/12",
+                "p95": "01/01",
+                "aging": 64,
+                "isLate": true,
+                "issueKey": "KC-33",
+                "startDate": "04/12"
+            },
+            {
+                "p50": "14/12",
+                "p75": "25/12",
+                "p95": "01/01",
+                "aging": 65,
+                "isLate": true,
+                "issueKey": "KC-32",
+                "startDate": "04/12"
+            },
+            {
+                "p50": "11/12",
+                "p75": "22/12",
+                "p95": "29/12",
+                "aging": 68,
+                "isLate": true,
+                "issueKey": "KC-31",
+                "startDate": "01/12"
+            },
+            {
+                "p50": "11/12",
+                "p75": "22/12",
+                "p95": "29/12",
+                "aging": 68,
+                "isLate": true,
+                "issueKey": "KC-25",
+                "startDate": "01/12"
+            },
+            {
+                "p50": "10/12",
+                "p75": "20/12",
+                "p95": "27/12",
+                "aging": 69,
+                "isLate": true,
+                "issueKey": "KC-24",
+                "startDate": "30/11"
+            },
+            {
+                "p50": "09/12",
+                "p75": "20/12",
+                "p95": "27/12",
+                "aging": 70,
+                "isLate": true,
+                "issueKey": "KC-23",
+                "startDate": "29/11"
+            },
+            {
+                "p50": "08/12",
+                "p75": "19/12",
+                "p95": "26/12",
+                "aging": 71,
+                "isLate": true,
+                "issueKey": "KC-22",
+                "startDate": "28/11"
+            },
+            {
+                "p50": "08/12",
+                "p75": "19/12",
+                "p95": "26/12",
+                "aging": 71,
+                "isLate": true,
+                "issueKey": "KC-21",
+                "startDate": "28/11"
+            },
+            {
+                "p50": "08/12",
+                "p75": "19/12",
+                "p95": "26/12",
+                "aging": 71,
+                "isLate": true,
+                "issueKey": "KC-19",
+                "startDate": "28/11"
+            },
+            {
+                "p50": "08/12",
+                "p75": "19/12",
+                "p95": "26/12",
+                "aging": 71,
+                "isLate": true,
+                "issueKey": "KC-18",
+                "startDate": "28/11"
+            },
+            {
+                "p50": "08/12",
+                "p75": "19/12",
+                "p95": "26/12",
+                "aging": 71,
+                "isLate": true,
+                "issueKey": "KC-17",
+                "startDate": "28/11"
+            },
+            {
+                "p50": "07/12",
+                "p75": "18/12",
+                "p95": "25/12",
+                "aging": 72,
+                "isLate": true,
+                "issueKey": "KC-16",
+                "startDate": "27/11"
+            },
+            {
+                "p50": "14/12",
+                "p75": "25/12",
+                "p95": "01/01",
+                "aging": 65,
+                "isLate": true,
+                "issueKey": "KC-15",
+                "startDate": "04/12"
+            },
+            {
+                "p50": "07/12",
+                "p75": "18/12",
+                "p95": "25/12",
+                "aging": 72,
+                "isLate": true,
+                "issueKey": "KC-14",
+                "startDate": "27/11"
+            },
+            {
+                "p50": "15/02",
+                "p75": "26/02",
+                "p95": "04/03",
+                "aging": 2,
+                "isLate": true,
+                "issueKey": "KC-198",
+                "startDate": "05/02"
+            },
+            {
+                "p50": "15/02",
+                "p75": "26/02",
+                "p95": "04/03",
+                "aging": 2,
+                "isLate": true,
+                "issueKey": "KC-197",
+                "startDate": "05/02"
+            },
+            {
+                "p50": "26/01",
+                "p75": "05/02",
+                "p95": "12/02",
+                "aging": 22,
+                "isLate": true,
+                "issueKey": "KC-142",
+                "startDate": "16/01"
+            },
+            {
+                "p50": "15/01",
+                "p75": "26/01",
+                "p95": "02/02",
+                "aging": 33,
+                "isLate": true,
+                "issueKey": "KC-127",
+                "startDate": "05/01"
+            }
+        ],
+        "status": true,
+        "team": null
+    }
+]

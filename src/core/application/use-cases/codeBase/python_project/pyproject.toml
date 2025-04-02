@@ -1,0 +1,9 @@
+[tool.poetry]
+name = "example-project"
+version = "0.1.0"
+description = "Example project with different import types"
+packages = ["src"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+requests = "^2.25.1"

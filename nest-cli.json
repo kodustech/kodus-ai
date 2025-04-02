@@ -1,0 +1,15 @@
+{
+    "$schema": "https://json.schemastore.org/nest-cli",
+    "collection": "@nestjs/schematics",
+    "sourceRoot": "src",
+    "compilerOptions": {
+        "deleteOutDir": false,
+        "assets": [
+            {
+                "include": "shared/utils/translations/dictionaries/**",
+                "outDir": "dist"
+            }
+        ],
+        "watchAssets": true
+    }
+}

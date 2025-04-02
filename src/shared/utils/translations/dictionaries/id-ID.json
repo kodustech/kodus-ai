@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Bicaralah dengan Kody dengan menyebut @kody",
+        "feedback": "Apakah saran ini membantu? Beri reaksi dengan 👍 atau 👎 untuk membantu Kody belajar dari interaksi ini."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## Tinjauan Kode Selesai! 🔥\n\nTinjauan kode berhasil diselesaikan berdasarkan konfigurasi Anda saat ini.\n\n",
+        "withoutComments": "# Tinjauan Kody Selesai\n**Berita bagus!** 🎉\nTidak ditemukan masalah yang sesuai dengan konfigurasi tinjauan Anda saat ini.\n\nTeruskan pekerjaan yang luar biasa! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "Ringkasan PR (Komentar dibuat oleh [Kody](https://kodus.io) 🤖)",
+        "codeReviewStarted": "Tinjauan Kode Dimulai! 🚀",
+        "description": "✋ Hai, tim! Saya sudah melihat file yang diubah dan memulai tinjauan untuk memastikan semuanya beres. Jika Anda membutuhkan lebih banyak detail, saya di sini! [Kody](https://kodus.io)",
+        "changedFiles": "📂 File yang Diubah",
+        "filesTable": [
+            "File",
+            "Status",
+            "➕ Penambahan",
+            "➖ Penghapusan",
+            "🔄 Perubahan"
+        ],
+        "summary": "📊 Ringkasan Perubahan",
+        "totalFiles": "Total File",
+        "totalAdditions": "Total Baris yang Ditambahkan",
+        "totalDeletions": "Total Baris yang Dihapus",
+        "totalChanges": "Total Perubahan"
+    },
+    "configReviewMarkdown": {
+        "title": "Panduan Kody: Penggunaan dan Konfigurasi",
+        "interactingTitle": "Berinteraksi dengan Kody",
+        "requestReview": "Meminta Tinjauan",
+        "requestReviewDesc": "Minta Kody untuk meninjau PR Anda secara manual dengan menambahkan komentar dengan perintah `@kody start-review` di root PR Anda.",
+        "provideFeedback": "Memberikan Umpan Balik",
+        "provideFeedbackDesc": "Bantu Kody belajar dan meningkatkan dengan menanggapi komentarnya dengan 👍 untuk saran yang berguna atau 👎 jika diperlukan perbaikan.",
+        "configurationTitle": "Konfigurasi Kody Saat Ini",
+        "reviewOptionsTitle": "Opsi Tinjauan",
+        "reviewOptionsDesc": "Opsi tinjauan berikut diaktifkan atau dinonaktifkan:",
+        "tableOptions": "Opsi",
+        "tableEnabled": "Diaktifkan",
+        "configurationLink": "Akses pengaturan konfigurasi Anda di sini.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 Metrik Teknik",
+        "legend": {
+            "title": "Legenda hasil",
+            "same": "Berarti hasil tetap __sama__",
+            "improved": "Berarti hasil __meningkat__",
+            "worsened": "Berarti hasil __memburuk__"
+        },
+        "flowMetrics": {
+            "title": "Metrik Aliran",
+            "leadTime": {
+                "title": "Waktu Pengerjaan",
+                "description": "Waktu yang dibutuhkan untuk suatu aktivitas berpindah dari status ${todo} ke status ${done}."
+            },
+            "leadTimeInWip": {
+                "title": "Waktu Pengerjaan dalam WIP",
+                "description": "Waktu yang dibutuhkan untuk suatu aktivitas berpindah dari status ${wip} ke status ${done}."
+            },
+            "throughput": {
+                "title": "Laju Penyelesaian",
+                "description": "Jumlah item yang mencapai status ${done} dalam 7 hari terakhir.",
+                "items": "item"
+            },
+            "bugRatio": {
+                "title": "Rasio Bug",
+                "description": "Jumlah bug dalam WIP relatif terhadap total aktivitas dalam WIP, dalam 7 hari terakhir."
+            },
+            "leadTimeByColumn": {
+                "title": "Waktu Pengerjaan Berdasarkan Kolom",
+                "description": "Waktu yang dihabiskan suatu item dalam *P75* di setiap status papan Anda."
+            }
+        },
+        "doraMetrics": {
+            "title": "Metrik Dora",
+            "deployFrequency": {
+                "title": "Frekuensi Penerapan",
+                "description": "Frekuensi penerapan dalam seminggu.",
+                "value": "${value} penerapan per minggu"
+            },
+            "leadTimeForChange": {
+                "title": "Waktu Pengerjaan untuk Perubahan",
+                "description": "Waktu rata-rata dari commit pertama hingga penggabungan PR.",
+                "value": "${value} hari"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (Optimis)",
+            "p75": "P75 (Percaya Diri)",
+            "p95": "P95 (Pesimis)"
+        }
+    }
+}

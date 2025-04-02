@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Sprechen Sie mit Kody, indem Sie @kody erwähnen",
+        "feedback": "War dieser Vorschlag hilfreich? Reagieren Sie mit 👍 oder 👎, um Kody zu helfen, aus dieser Interaktion zu lernen."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## Code-Überprüfung abgeschlossen! 🔥\n\nDie Code-Überprüfung wurde basierend auf Ihren aktuellen Konfigurationen erfolgreich abgeschlossen.\n\n",
+        "withoutComments": "# Kody-Überprüfung abgeschlossen\n**Großartige Neuigkeiten!** 🎉\nEs wurden keine Probleme gefunden, die mit Ihren aktuellen Überprüfungskonfigurationen übereinstimmen.\n\nWeiter so! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "PR-Zusammenfassung (Kommentar erstellt von [Kody](https://kodus.io) 🤖)",
+        "codeReviewStarted": "Code-Überprüfung gestartet! 🚀",
+        "description": "✋ Hallo, Team! Ich schaue mir bereits die geänderten Dateien an und beginne mit der Überprüfung, um sicherzustellen, dass alles in Ordnung ist. Wenn ihr mehr Details benötigt, bin ich hier! [Kody](https://kodus.io)",
+        "changedFiles": "📂 Geänderte Dateien",
+        "filesTable": [
+            "Datei",
+            "Status",
+            "➕ Ergänzungen",
+            "➖ Löschungen",
+            "🔄 Änderungen"
+        ],
+        "summary": "📊 Zusammenfassung der Änderungen",
+        "totalFiles": "Gesamtdateien",
+        "totalAdditions": "Gesamt hinzugefügte Zeilen",
+        "totalDeletions": "Gesamt entfernte Zeilen",
+        "totalChanges": "Gesamtänderungen"
+    },
+    "configReviewMarkdown": {
+        "title": "Kody-Leitfaden: Nutzung und Konfiguration",
+        "interactingTitle": "Interaktion mit Kody",
+        "requestReview": "Überprüfung anfordern",
+        "requestReviewDesc": "Bitten Sie Kody, Ihre PR manuell zu überprüfen, indem Sie einen Kommentar mit dem Befehl `@kody start-review` an der Wurzel Ihrer PR hinzufügen.",
+        "provideFeedback": "Feedback geben",
+        "provideFeedbackDesc": "Helfen Sie Kody zu lernen und sich zu verbessern, indem Sie auf seine Kommentare mit einem 👍 für hilfreiche Vorschläge oder einem 👎 reagieren, wenn Verbesserungen erforderlich sind.",
+        "configurationTitle": "Aktuelle Kody-Konfiguration",
+        "reviewOptionsTitle": "Überprüfungsoptionen",
+        "reviewOptionsDesc": "Die folgenden Überprüfungsoptionen sind aktiviert oder deaktiviert:",
+        "tableOptions": "Optionen",
+        "tableEnabled": "Aktiviert",
+        "configurationLink": "Greifen Sie hier auf Ihre Konfigurationseinstellungen zu.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 Ingenieurmetriken",
+        "legend": {
+            "title": "Ergebnislegende",
+            "same": "Bedeutet, dass das Ergebnis __gleich__ geblieben ist",
+            "improved": "Bedeutet, dass sich das Ergebnis __verbessert__ hat",
+            "worsened": "Bedeutet, dass sich das Ergebnis __verschlechtert__ hat"
+        },
+        "flowMetrics": {
+            "title": "Flussmetriken",
+            "leadTime": {
+                "title": "Durchlaufzeit",
+                "description": "Die Zeit, die eine Aktivität benötigt, um vom Status ${todo} zum Status ${done} zu wechseln."
+            },
+            "leadTimeInWip": {
+                "title": "Durchlaufzeit in WIP",
+                "description": "Die Zeit, die eine Aktivität benötigt, um vom Status ${wip} zum Status ${done} zu wechseln."
+            },
+            "throughput": {
+                "title": "Durchsatz",
+                "description": "Anzahl der Elemente, die in den letzten 7 Tagen den Status ${done} erreicht haben.",
+                "items": "Elemente"
+            },
+            "bugRatio": {
+                "title": "Fehlerquote",
+                "description": "Anzahl der Fehler in WIP im Verhältnis zu den gesamten Aktivitäten in WIP in den letzten 7 Tagen."
+            },
+            "leadTimeByColumn": {
+                "title": "Durchlaufzeit nach Spalte",
+                "description": "Zeit, die ein Element in *P75* in jedem Status Ihres Boards verbringt."
+            }
+        },
+        "doraMetrics": {
+            "title": "Dora-Metriken",
+            "deployFrequency": {
+                "title": "Bereitstellungshäufigkeit",
+                "description": "Bereitstellungshäufigkeit in der Woche.",
+                "value": "${value} Bereitstellungen pro Woche"
+            },
+            "leadTimeForChange": {
+                "title": "Durchlaufzeit für Änderungen",
+                "description": "Durchschnittliche Zeit vom ersten Commit bis zum PR-Merge.",
+                "value": "${value} Tage"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (Optimistisch)",
+            "p75": "P75 (Zuversichtlich)",
+            "p95": "P95 (Pessimistisch)"
+        }
+    }
+}

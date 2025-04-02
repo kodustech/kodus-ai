@@ -1,0 +1,231 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "version": {
+            "type": "string",
+            "default": "1.2",
+            "description": "The version of the schema."
+        },
+        "summary": {
+            "type": "object",
+            "properties": {
+                "generatePRSummary": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Indicates whether to generate a summary for the pull request."
+                },
+                "customInstructions": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Custom instructions for the pull request review."
+                },
+                "behaviourForExistingDescription": {
+                    "type": "string",
+                    "enum": [
+                        "replace",
+                        "concatenate",
+                        "complement"
+                    ],
+                    "default": "concatenate",
+                    "description": "Defines how to handle existing descriptions."
+                }
+            },
+            "required": [
+                "generatePRSummary",
+                "customInstructions",
+                "behaviourForExistingDescription"
+            ],
+            "additionalProperties": false
+        },
+        "ignorePaths": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "default": [
+                "yarn.lock",
+                "package-lock.json",
+                "package.json",
+                ".env"
+            ],
+            "description": "List of file paths to ignore during the review."
+        },
+        "baseBranches": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "default": [],
+            "description": "List of base branches for the pull request."
+        },
+        "reviewOptions": {
+            "type": "object",
+            "properties": {
+                "security": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable security checks during the review."
+                },
+                "code_style": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable code style checks during the review."
+                },
+                "kody_rules": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable Kody rules checks during the review."
+                },
+                "refactoring": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable refactoring checks during the review."
+                },
+                "error_handling": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable error handling checks during the review."
+                },
+                "maintainability": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable maintainability checks during the review."
+                },
+                "potential_issues": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable checks for potential issues during the review."
+                },
+                "documentation_and_comments": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable checks for documentation and comments during the review."
+                },
+                "performance_and_optimization": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable performance and optimization checks during the review."
+                },
+                "breaking_changes": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable checks for breaking changes during the review."
+                }
+            },
+            "required": [
+                "security",
+                "code_style",
+                "kody_rules",
+                "refactoring",
+                "error_handling",
+                "maintainability",
+                "potential_issues",
+                "documentation_and_comments",
+                "performance_and_optimization",
+                "breaking_changes"
+            ],
+            "additionalProperties": false
+        },
+        "suggestionControl": {
+            "type": "object",
+            "properties": {
+                "groupingMode": {
+                    "type": "string",
+                    "enum": [
+                        "minimal",
+                        "full"
+                    ],
+                    "default": "full",
+                    "description": "Defines the grouping mode for suggestions."
+                },
+                "limitationType": {
+                    "type": "string",
+                    "enum": [
+                        "file",
+                        "pr"
+                    ],
+                    "default": "pr",
+                    "description": "Defines the limitation type for suggestions."
+                },
+                "maxSuggestions": {
+                    "type": "integer",
+                    "default": 9,
+                    "minimum": 9,
+                    "description": "Maximum number of suggestions to provide."
+                },
+                "severityLevelFilter": {
+                    "type": "string",
+                    "enum": [
+                        "critical",
+                        "high",
+                        "medium",
+                        "low"
+                    ],
+                    "default": "medium",
+                    "description": "Filter for the severity level of suggestions."
+                }
+            },
+            "required": [
+                "groupingMode",
+                "limitationType",
+                "maxSuggestions",
+                "severityLevelFilter"
+            ],
+            "additionalProperties": false,
+            "if": {
+                "properties": {
+                    "limitationType": {
+                        "const": "file"
+                    }
+                }
+            },
+            "then": {
+                "properties": {
+                    "maxSuggestions": {
+                        "maximum": 20
+                    }
+                }
+            },
+            "else": {
+                "properties": {}
+            }
+        },
+        "ignoredTitleKeywords": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "default": [],
+            "description": "List of keywords to ignore in the title."
+        },
+        "automatedReviewActive": {
+            "type": "boolean",
+            "default": true,
+            "description": "Indicates whether automated review processes are currently active. A value of true means that automated reviews are enabled, while false means they are disabled."
+        },
+        "pullRequestApprovalActive": {
+            "type": "boolean",
+            "default": false,
+            "description": "Indicates whether pull request approvals are currently active. A value of true means that pull request approvals are enabled, while false means they are disabled."
+        },
+        "isRequestChangesActive": {
+            "type": "boolean",
+            "default": false,
+            "description": "Indicates whether to change status to 'Request Changes' if a critical suggestions is found."
+        }
+    },
+    "required": [
+        "version",
+        "summary",
+        "ignorePaths",
+        "baseBranches",
+        "reviewOptions",
+        "suggestionControl",
+        "ignoredTitleKeywords",
+        "automatedReviewActive",
+        "pullRequestApprovalActive",
+        "isRequestChangesActive"
+    ],
+    "additionalProperties": false
+}

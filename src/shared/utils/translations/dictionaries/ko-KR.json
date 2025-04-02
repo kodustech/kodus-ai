@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Kody에게 @kody를 언급하여 이야기하세요",
+        "feedback": "이 제안이 도움이 되었나요? 👍 또는 👎로 반응하여 Kody가 이 상호작용에서 학습할 수 있도록 도와주세요."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## 코드 리뷰 완료! 🔥\n\n현재 설정을 기반으로 코드 리뷰가 성공적으로 완료되었습니다.\n\n",
+        "withoutComments": "# Kody 리뷰 완료\n**좋은 소식입니다!** 🎉\n현재 리뷰 설정에 맞는 문제가 발견되지 않았습니다.\n\n훌륭한 작업을 계속하세요! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "PR 요약 (댓글 작성자: [Kody](https://kodus.io) 🤖)",
+        "codeReviewStarted": "코드 리뷰 시작! 🚀",
+        "description": "✋ 안녕하세요, 팀! 변경된 파일을 이미 확인하고 있으며 모든 것이 정상인지 확인하기 위해 리뷰를 시작하고 있습니다. 자세한 내용이 필요하면 여기 있습니다! [Kody](https://kodus.io)",
+        "changedFiles": "📂 변경된 파일",
+        "filesTable": [
+            "파일",
+            "상태",
+            "➕ 추가",
+            "➖ 삭제",
+            "🔄 변경"
+        ],
+        "summary": "📊 변경 요약",
+        "totalFiles": "총 파일",
+        "totalAdditions": "추가된 총 줄 수",
+        "totalDeletions": "삭제된 총 줄 수",
+        "totalChanges": "총 변경 사항"
+    },
+    "configReviewMarkdown": {
+        "title": "Kody 가이드: 사용법 및 설정",
+        "interactingTitle": "Kody와 상호작용하기",
+        "requestReview": "리뷰 요청",
+        "requestReviewDesc": "PR의 루트에 `@kody start-review` 명령이 포함된 댓글을 추가하여 Kody에게 PR을 수동으로 리뷰하도록 요청하세요.",
+        "provideFeedback": "피드백 제공",
+        "provideFeedbackDesc": "유용한 제안에는 👍, 개선이 필요한 경우 👎로 반응하여 Kody가 학습하고 개선할 수 있도록 도와주세요.",
+        "configurationTitle": "현재 Kody 설정",
+        "reviewOptionsTitle": "리뷰 옵션",
+        "reviewOptionsDesc": "다음 리뷰 옵션이 활성화 또는 비활성화되었습니다:",
+        "tableOptions": "옵션",
+        "tableEnabled": "활성화됨",
+        "configurationLink": "여기에서 설정에 액세스하세요.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 엔지니어링 메트릭",
+        "legend": {
+            "title": "결과 범례",
+            "same": "결과가 __동일__하게 유지되었음을 의미합니다",
+            "improved": "결과가 __개선__되었음을 의미합니다",
+            "worsened": "결과가 __악화__되었음을 의미합니다"
+        },
+        "flowMetrics": {
+            "title": "플로우 메트릭",
+            "leadTime": {
+                "title": "리드 타임",
+                "description": "활동이 ${todo} 상태에서 ${done} 상태로 이동하는 데 걸리는 시간."
+            },
+            "leadTimeInWip": {
+                "title": "WIP의 리드 타임",
+                "description": "활동이 ${wip} 상태에서 ${done} 상태로 이동하는 데 걸리는 시간."
+            },
+            "throughput": {
+                "title": "처리량",
+                "description": "지난 7일 동안 ${done} 상태에 도달한 항목 수.",
+                "items": "항목"
+            },
+            "bugRatio": {
+                "title": "버그 비율",
+                "description": "지난 7일 동안 WIP의 버그 수와 WIP의 총 활동 수의 비율."
+            },
+            "leadTimeByColumn": {
+                "title": "컬럼별 리드 타임",
+                "description": "보드의 각 상태에서 항목이 *P75*에 머무는 시간."
+            }
+        },
+        "doraMetrics": {
+            "title": "Dora 메트릭",
+            "deployFrequency": {
+                "title": "배포 빈도",
+                "description": "주간 배포 빈도.",
+                "value": "주당 ${value} 배포"
+            },
+            "leadTimeForChange": {
+                "title": "변경 리드 타임",
+                "description": "첫 커밋부터 PR 병합까지의 평균 시간.",
+                "value": "${value}일"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (낙관적)",
+            "p75": "P75 (자신감 있음)",
+            "p95": "P95 (비관적)"
+        }
+    }
+}

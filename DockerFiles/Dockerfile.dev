@@ -1,0 +1,62 @@
+# 1) Estágio base: instalar dependências apenas 1x
+FROM --platform=linux/amd64 node:22.14.0-slim AS deps
+WORKDIR /usr/src/app
+
+# Instalar certificados raiz e git no estágio final
+RUN apt-get update && \
+    apt-get install -y ca-certificates git && \
+    rm -rf /var/lib/apt/lists/* && \
+    yarn global add clinic
+
+# Aumentar heap para evitar out of memory ao instalar libs em projetos grandes
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
+# Copiamos somente os arquivos de dependências
+COPY package.json yarn.lock ./
+
+# Instalamos todas as dependências (dev + prod)
+RUN yarn install --frozen-lockfile
+
+# -------------------------------------------------------------
+# 2) Estágio build-code: compila o código e gera ./dist
+FROM deps AS build-code
+
+# Copiamos o restante do código-fonte
+COPY . .
+
+# Aqui podemos (opcionalmente) aumentar o heap de novo para o build
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
+# Compilamos o código principal + workflows
+RUN yarn build
+
+# Instalar pgvector
+RUN apt-get update && apt-get install -y git build-essential postgresql-client postgresql-server-dev-all \
+    && cd /tmp \
+    && rm -rf pgvector || true \
+    && git clone --branch v0.5.1 https://github.com/pgvector/pgvector.git \
+    && cd pgvector \
+    && make \
+    && make install
+
+# -------------------------------------------------------------
+# 3) Estágio final de desenvolvimento
+FROM --platform=linux/amd64 node:20-slim AS development
+WORKDIR /usr/src/app
+EXPOSE 3001
+
+# Instalar certificados raiz e git no estágio final
+RUN apt-get update && \
+    apt-get install -y ca-certificates git && \
+    rm -rf /var/lib/apt/lists/*
+
+# Se no ambiente de desenvolvimento você quiser ter todas as dependências,
+# copie package.json e yarn.lock outra vez, e instale (ou não) as libs:
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile
+
+# Agora copiamos apenas os artefatos finais do build
+COPY --from=build-code /usr/src/app/dist ./dist
+
+# Comando de inicialização em modo desenvolvimento
+CMD ["yarn", "start:dev"]

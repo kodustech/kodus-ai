@@ -1,0 +1,29 @@
+services:
+    db_postgres:
+        image: postgres:latest
+        container_name: postgres
+        ports:
+            - '5432:5432'
+        environment:
+            POSTGRES_USER: ${API_PG_DB_USERNAME}
+            POSTGRES_PASSWORD: ${API_PG_DB_PASSWORD}
+            POSTGRES_DB: ${API_PG_DB_DATABASE}
+        networks:
+            - kodus-backend-services-test
+
+    db_mongodb:
+        image: mongo:6
+        container_name: mongodb
+        ports:
+            - '27017:27017'
+        environment:
+            MONGO_INITDB_ROOT_USERNAME: ${API_MG_DB_USERNAME}
+            MONGO_INITDB_ROOT_PASSWORD: ${API_MG_DB_PASSWORD}
+            MONGO_INITDB_DATABASE: ${API_MG_DB_DATABASE}
+        networks:
+            - kodus-backend-services-test
+
+networks:
+  kodus-backend-services-test:
+    external: true
+

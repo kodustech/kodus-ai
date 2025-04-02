@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Kodyに話しかけるには、@kodyに言及してください",
+        "feedback": "この提案は役に立ちましたか？ 👍または👎で反応して、Kodyがこの対話から学習するのを助けてください。"
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## コードレビュー完了！ 🔥\n\n現在の設定に基づいてコードレビューが正常に完了しました。\n\n",
+        "withoutComments": "# Kodyレビュー完了\n**素晴らしいニュースです！** 🎉\n現在のレビュー設定に一致する問題は見つかりませんでした。\n\nこの調子で頑張ってください! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "PRサマリー([Kody](https://kodus.io)によって作成されたコメント 🤖)",
+        "codeReviewStarted": "コードレビュー開始！ 🚀",
+        "description": "✋ こんにちは、チーム！ 変更されたファイルを既に確認しており、すべてが順調であることを確認するためにレビューを開始しています。 詳細が必要な場合は、ここにいます！ [Kody](https://kodus.io)",
+        "changedFiles": "📂 変更されたファイル",
+        "filesTable": [
+            "ファイル",
+            "ステータス",
+            "➕ 追加",
+            "➖ 削除",
+            "🔄 変更"
+        ],
+        "summary": "📊 変更の概要",
+        "totalFiles": "合計ファイル",
+        "totalAdditions": "追加された行の合計",
+        "totalDeletions": "削除された行の合計",
+        "totalChanges": "変更の合計"
+    },
+    "configReviewMarkdown": {
+        "title": "Kodyガイド:使用法と設定",
+        "interactingTitle": "Kodyとの対話",
+        "requestReview": "レビューをリクエスト",
+        "requestReviewDesc": "PRのルートに`@kody start-review`コマンドを含むコメントを追加して、Kodyに手動でPRをレビューするよう依頼します。",
+        "provideFeedback": "フィードバックを提供",
+        "provideFeedbackDesc": "役立つ提案には👍、改善が必要な場合には👎で反応することで、Kodyが学習し改善するのを助けてください。",
+        "configurationTitle": "現在のKody設定",
+        "reviewOptionsTitle": "レビューオプション",
+        "reviewOptionsDesc": "以下のレビューオプションが有効または無効になっています：",
+        "tableOptions": "オプション",
+        "tableEnabled": "有効",
+        "configurationLink": "ここで設定にアクセスします。",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 エンジニアリングメトリクス",
+        "legend": {
+            "title": "結果の凡例",
+            "same": "結果が__同じ__ままであることを意味します",
+            "improved": "結果が__改善された__ことを意味します",
+            "worsened": "結果が__悪化した__ことを意味します"
+        },
+        "flowMetrics": {
+            "title": "フローメトリクス",
+            "leadTime": {
+                "title": "リードタイム",
+                "description": "アクティビティが${todo}ステータスから${done}ステータスに移動するのにかかる時間。"
+            },
+            "leadTimeInWip": {
+                "title": "WIPのリードタイム",
+                "description": "アクティビティが${wip}ステータスから${done}ステータスに移動するのにかかる時間。"
+            },
+            "throughput": {
+                "title": "スループット",
+                "description": "過去7日間に${done}ステータスに達したアイテムの数。",
+                "items": "アイテム"
+            },
+            "bugRatio": {
+                "title": "バグ比率",
+                "description": "過去7日間のWIP内のバグの数と、WIP内の総アクティビティの比率。"
+            },
+            "leadTimeByColumn": {
+                "title": "カラムごとのリードタイム",
+                "description": "ボードの各ステータスでアイテムが*P75*に費やす時間。"
+            }
+        },
+        "doraMetrics": {
+            "title": "Doraメトリクス",
+            "deployFrequency": {
+                "title": "デプロイ頻度",
+                "description": "週のデプロイ頻度。",
+                "value": "週に${value}回のデプロイ"
+            },
+            "leadTimeForChange": {
+                "title": "変更のリードタイム",
+                "description": "最初のコミットからPRのマージまでの平均時間。",
+                "value": "${value}日"
+            }
+        },
+        "percentiles": {
+            "p50": "P50(楽観的)",
+            "p75": "P75(自信あり)",
+            "p95": "P95(悲観的)"
+        }
+    }
+}

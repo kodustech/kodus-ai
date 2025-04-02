@@ -1,0 +1,27 @@
+services:
+    kodus-orchestrator:
+        image: ${IMAGE_NAME_PROD}
+        container_name: ${CONTAINER_NAME}
+        volumes:
+            - log_volume:/app/logs
+        logging:
+            options:
+                max-size: '200m'
+                max-file: '10'
+        ports:
+            - '3001:3001'
+        environment:
+            - ENV=production
+            - API_NODE_ENV=production
+        env_file:
+            - .env.prod
+        networks:
+            - shared-network
+        restart: unless-stopped
+
+volumes:
+    log_volume:
+
+networks:
+    shared-network:
+        external: true

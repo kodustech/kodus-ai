@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Fale com o Kody mencionando @kody",
+        "feedback": "Essa sugestão foi útil? Reaja com 👍 ou 👎 para ajudar o Kody a aprender com essa interação."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## Revisão de Código Concluída! 🔥\n\nA revisão de código foi concluída com sucesso com base nas suas configurações atuais.\n\n",
+        "withoutComments": "# Revisão da Kody Concluída\n**Boa notícia!** 🎉\nNenhum problema foi encontrado com base nas suas configurações de revisão.\n\nContinuem com o ótimo trabalho! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "Resumo da PR (Comentário criado por [Kody](https://kodus.io) 🤖)",
+        "codeReviewStarted": "Revisão de Código Iniciada! 🚀",
+        "description": "✋ Olá, equipe! Já estou analisando os arquivos alterados e iniciando a revisão para garantir que tudo esteja em ordem. Se precisarem de mais detalhes, estou aqui! [Kody](https://kodus.io)",
+        "changedFiles": "📂 Arquivos Alterados",
+        "filesTable": [
+            "Arquivo",
+            "Status",
+            "➕ Adições",
+            "➖ Remoções",
+            "🔄 Alterações"
+        ],
+        "summary": "📊 Resumo das Alterações",
+        "totalFiles": "Total de Arquivos",
+        "totalAdditions": "Total de Linhas Adicionadas",
+        "totalDeletions": "Total de Linhas Removidas",
+        "totalChanges": "Total de Alterações"
+    },
+    "configReviewMarkdown": {
+        "title": "Guia Kody: Uso e Configuração",
+        "interactingTitle": "Interagindo com o Kody",
+        "requestReview": "Solicitar uma Revisão",
+        "requestReviewDesc": "Peça ao Kody para revisar sua PR manualmente adicionando um comentário com o comando `@kody start-review` na raiz da PR.",
+        "provideFeedback": "Fornecer Feedback",
+        "provideFeedbackDesc": "Ajude o Kody a aprender e melhorar reagindo aos seus comentários com um 👍 para sugestões úteis ou um 👎 se melhorias forem necessárias.",
+        "configurationTitle": "Configuração Atual do Kody",
+        "reviewOptionsTitle": "Opções de Revisão",
+        "reviewOptionsDesc": "As seguintes opções de revisão estão habilitadas ou desabilitadas:",
+        "tableOptions": "Opções",
+        "tableEnabled": "Habilitado",
+        "configurationLink": "Acesse suas configurações aqui.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 Métricas de Engenharia",
+        "legend": {
+            "title": "Legenda dos resultados",
+            "same": "Significa que o resultado permaneceu o __mesmo__",
+            "improved": "Significa que o resultado __melhorou__",
+            "worsened": "Significa que o resultado __piorou__"
+        },
+        "flowMetrics": {
+            "title": "Métricas de Fluxo",
+            "leadTime": {
+                "title": "Lead Time",
+                "description": "O tempo que uma atividade leva para ir do status ${todo} até o status ${done}."
+            },
+            "leadTimeInWip": {
+                "title": "Lead Time em WIP",
+                "description": "O tempo que uma atividade leva para ir do status ${wip} até o status ${done}."
+            },
+            "throughput": {
+                "title": "Throughput",
+                "description": "Número de itens que chegaram ao status ${done} nos últimos 7 dias.",
+                "items": "itens"
+            },
+            "bugRatio": {
+                "title": "Bug Ratio",
+                "description": "Número de bugs em WIP em relação ao total de atividades em WIP, nos últimos 7 dias."
+            },
+            "leadTimeByColumn": {
+                "title": "Lead Time por Coluna",
+                "description": "Tempo que um item passa em *P75* em cada status do seu quadro."
+            }
+        },
+        "doraMetrics": {
+            "title": "Métricas DORA",
+            "deployFrequency": {
+                "title": "Frequência de Deploy",
+                "description": "Frequência de deploy na semana.",
+                "value": "${value} deploys por semana"
+            },
+            "leadTimeForChange": {
+                "title": "Lead Time for Changes",
+                "description": "Tempo médio do primeiro commit até o merge do PR.",
+                "value": "${value} dias"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (Otimista)",
+            "p75": "P75 (Confiante)",
+            "p95": "P95 (Pessimista)"
+        }
+    }
+}

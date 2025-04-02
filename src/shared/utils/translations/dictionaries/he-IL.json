@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "דבר עם Kody על ידי אזכור @kody",
+        "feedback": "האם ההצעה הזו הייתה מועילה? הגיבו עם 👍 או 👎 כדי לעזור ל-Kody ללמוד מהאינטראקציה הזו."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## סקירת קוד הושלמה! 🔥\n\nסקירת הקוד הושלמה בהצלחה בהתבסס על ההגדרות הנוכחיות שלך.\n\n",
+        "withoutComments": "# סקירת Kody הושלמה\n**חדשות נהדרות!** 🎉\nלא נמצאו בעיות התואמות את הגדרות הסקירה הנוכחיות שלך.\n\nהמשך בעבודה המצוינת! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "סיכום PR (תגובה נוצרה על ידי [Kody](https://kodus.io) 🤖)",
+        "codeReviewStarted": "סקירת קוד התחילה! 🚀",
+        "description": "✋ היי, צוות! אני כבר מסתכל על הקבצים שהשתנו ומתחיל את הסקירה כדי לוודא שהכל בסדר. אם אתה צריך פרטים נוספים, אני כאן! [Kody](https://kodus.io)",
+        "changedFiles": "📂 קבצים שהשתנו",
+        "filesTable": [
+            "קובץ",
+            "סטטוס",
+            "➕ תוספות",
+            "➖ מחיקות",
+            "🔄 שינויים"
+        ],
+        "summary": "📊 סיכום שינויים",
+        "totalFiles": "סך הקבצים",
+        "totalAdditions": "סך השורות שנוספו",
+        "totalDeletions": "סך השורות שנמחקו",
+        "totalChanges": "סך השינויים"
+    },
+    "configReviewMarkdown": {
+        "title": "מדריך Kody: שימוש והגדרות",
+        "interactingTitle": "אינטראקציה עם Kody",
+        "requestReview": "בקש סקירה",
+        "requestReviewDesc": "בקש מ-Kody לסקור את ה-PR שלך ידנית על ידי הוספת תגובה עם הפקודה `@kody start-review` בשורש ה-PR שלך.",
+        "provideFeedback": "ספק משוב",
+        "provideFeedbackDesc": "עזור ל-Kody ללמוד ולהשתפר על ידי תגובה להערותיו עם 👍 להצעות מועילות או 👎 אם נדרשות שיפורים.",
+        "configurationTitle": "הגדרות Kody נוכחיות",
+        "reviewOptionsTitle": "אפשרויות סקירה",
+        "reviewOptionsDesc": "אפשרויות הסקירה הבאות מופעלות או מושבתות:",
+        "tableOptions": "אפשרויות",
+        "tableEnabled": "מופעל",
+        "configurationLink": "גש להגדרות התצורה שלך כאן.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 מדדי הנדסה",
+        "legend": {
+            "title": "מקרא תוצאות",
+            "same": "משמעותו שהתוצאה נותרה __זהה__",
+            "improved": "משמעותו שהתוצאה __השתפרה__",
+            "worsened": "משמעותו שהתוצאה __החמירה__"
+        },
+        "flowMetrics": {
+            "title": "מדדי זרימה",
+            "leadTime": {
+                "title": "זמן הובלה",
+                "description": "הזמן שלוקח לפעילות לעבור ממצב ${todo} למצב ${done}."
+            },
+            "leadTimeInWip": {
+                "title": "זמן הובלה ב-WIP",
+                "description": "הזמן שלוקח לפעילות לעבור ממצב ${wip} למצב ${done}."
+            },
+            "throughput": {
+                "title": "תפוקה",
+                "description": "מספר הפריטים שהגיעו למצב ${done} ב-7 הימים האחרונים.",
+                "items": "פריטים"
+            },
+            "bugRatio": {
+                "title": "יחס באגים",
+                "description": "מספר הבאגים ב-WIP ביחס לסך הפעילויות ב-WIP, ב-7 הימים האחרונים."
+            },
+            "leadTimeByColumn": {
+                "title": "זמן הובלה לפי עמודה",
+                "description": "הזמן שפריט מבלה ב-*P75* בכל מצב של הלוח שלך."
+            }
+        },
+        "doraMetrics": {
+            "title": "מדדי Dora",
+            "deployFrequency": {
+                "title": "תדירות פריסה",
+                "description": "תדירות הפריסה בשבוע.",
+                "value": "${value} פריסות בשבוע"
+            },
+            "leadTimeForChange": {
+                "title": "זמן הובלה לשינוי",
+                "description": "הזמן הממוצע מהקומיט הראשון ועד למיזוג ה-PR.",
+                "value": "${value} ימים"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (אופטימי)",
+            "p75": "P75 (בטוח)",
+            "p95": "P95 (פסימי)"
+        }
+    }
+}

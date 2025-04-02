@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Promluvte si s Kody zmíněním @kody",
+        "feedback": "Byl tento návrh užitečný? Reagujte s 👍 nebo 👎, aby se Kody mohl z této interakce učit."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## Kontrola kódu dokončena! 🔥\n\nKontrola kódu byla úspěšně dokončena na základě vašich aktuálních konfigurací.\n\n",
+        "withoutComments": "# Kontrola Kody dokončena\n**Skvělé zprávy!** 🎉\nNebyly nalezeny žádné problémy, které by odpovídaly vašim aktuálním konfiguracím kontroly.\n\nPokračujte v skvělé práci! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "Souhrn PR (Komentář vytvořený [Kody](https://kodus.io) 🤖)",
+        "codeReviewStarted": "Kontrola kódu zahájena! 🚀",
+        "description": "✋ Ahoj, týme! Už se dívám na změněné soubory a začínám kontrolu, abych se ujistil, že je vše v pořádku. Pokud potřebujete více podrobností, jsem tady! [Kody](https://kodus.io)",
+        "changedFiles": "📂 Změněné soubory",
+        "filesTable": [
+            "Soubor",
+            "Stav",
+            "➕ Přidání",
+            "➖ Odstranění",
+            "🔄 Změny"
+        ],
+        "summary": "📊 Souhrn změn",
+        "totalFiles": "Celkem souborů",
+        "totalAdditions": "Celkem přidaných řádků",
+        "totalDeletions": "Celkem odstraněných řádků",
+        "totalChanges": "Celkem změn"
+    },
+    "configReviewMarkdown": {
+        "title": "Průvodce Kody: Použití a konfigurace",
+        "interactingTitle": "Interakce s Kody",
+        "requestReview": "Požádat o kontrolu",
+        "requestReviewDesc": "Požádejte Kody, aby ručně zkontroloval váš PR přidáním komentáře s příkazem `@kody start-review` do kořene vašeho PR.",
+        "provideFeedback": "Poskytnout zpětnou vazbu",
+        "provideFeedbackDesc": "Pomozte Kody učit se a zlepšovat tím, že budete reagovat na jeho komentáře s 👍 pro užitečné návrhy nebo 👎 pokud jsou potřeba vylepšení.",
+        "configurationTitle": "Aktuální konfigurace Kody",
+        "reviewOptionsTitle": "Možnosti kontroly",
+        "reviewOptionsDesc": "Následující možnosti kontroly jsou povoleny nebo zakázány:",
+        "tableOptions": "Možnosti",
+        "tableEnabled": "Povoleno",
+        "configurationLink": "Přístup k vašim nastavením konfigurace zde.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 Inženýrské metriky",
+        "legend": {
+            "title": "Legenda výsledků",
+            "same": "Znamená, že výsledek zůstal __stejný__",
+            "improved": "Znamená, že výsledek se __zlepšil__",
+            "worsened": "Znamená, že výsledek se __zhoršil__"
+        },
+        "flowMetrics": {
+            "title": "Metriky toku",
+            "leadTime": {
+                "title": "Doba realizace",
+                "description": "Čas potřebný k přesunu aktivity ze stavu ${todo} do stavu ${done}."
+            },
+            "leadTimeInWip": {
+                "title": "Doba realizace ve WIP",
+                "description": "Čas potřebný k přesunu aktivity ze stavu ${wip} do stavu ${done}."
+            },
+            "throughput": {
+                "title": "Propustnost",
+                "description": "Počet položek, které dosáhly stavu ${done} za posledních 7 dní.",
+                "items": "položky"
+            },
+            "bugRatio": {
+                "title": "Poměr chyb",
+                "description": "Počet chyb ve WIP vzhledem k celkovému počtu aktivit ve WIP za posledních 7 dní."
+            },
+            "leadTimeByColumn": {
+                "title": "Doba realizace podle sloupce",
+                "description": "Čas, který položka stráví v *P75* v každém stavu vaší tabule."
+            }
+        },
+        "doraMetrics": {
+            "title": "Metriky Dora",
+            "deployFrequency": {
+                "title": "Frekvence nasazení",
+                "description": "Frekvence nasazení v týdnu.",
+                "value": "${value} nasazení za týden"
+            },
+            "leadTimeForChange": {
+                "title": "Doba realizace změn",
+                "description": "Průměrný čas od prvního commitu do sloučení PR.",
+                "value": "${value} dní"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (Optimistický)",
+            "p75": "P75 (Sebevědomý)",
+            "p95": "P95 (Pesimistický)"
+        }
+    }
+}

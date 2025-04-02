@@ -1,0 +1,19 @@
+{
+    "warnings": [
+        {
+            "title": "Overdue work items in the current column",
+            "description": "The following work items are overdue in the current column and require immediate attention.",
+            "relatedWorkItems": "KC-203, KC-195, KC-193, KC-142, KC-127, KC-73"
+        },
+        {
+            "title": "Waiting lead time exceeding 24 hours",
+            "description": "This work item has been in a waiting status for more than 24 hours, which may indicate a bottleneck in the process.",
+            "relatedWorkItems": "KC-202"
+        },
+        {
+            "title": "Members with more than one assigned task",
+            "description": "The following members have multiple assigned tasks, which may overload them and affect productivity.",
+            "relatedWorkItems": ""
+        }
+    ]
+}

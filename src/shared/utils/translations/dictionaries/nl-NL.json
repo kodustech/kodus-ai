@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Praat met Kody door @kody te vermelden",
+        "feedback": "Was dit voorstel nuttig? Reageer met 👍 of 👎 om Kody te helpen leren van deze interactie."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## Code Review Voltooid! 🔥\n\nDe code review is succesvol voltooid op basis van je huidige configuraties.\n\n",
+        "withoutComments": "# Kody Review Voltooid\n**Geweldig nieuws!** 🎉\nEr zijn geen problemen gevonden die overeenkomen met je huidige review configuraties.\n\nGa zo door met het uitstekende werk! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "PR Samenvatting (Commentaar gemaakt door [Kody](https://kodus.io) 🤖)",
+        "codeReviewStarted": "Code Review Gestart! 🚀",
+        "description": "✋ Hallo, team! Ik bekijk de gewijzigde bestanden al en begin met de review om ervoor te zorgen dat alles in orde is. Als je meer details nodig hebt, ben ik hier! [Kody](https://kodus.io)",
+        "changedFiles": "📂 Gewijzigde Bestanden",
+        "filesTable": [
+            "Bestand",
+            "Status",
+            "➕ Toevoegingen",
+            "➖ Verwijderingen",
+            "🔄 Wijzigingen"
+        ],
+        "summary": "📊 Samenvatting van Wijzigingen",
+        "totalFiles": "Totaal Bestanden",
+        "totalAdditions": "Totaal Toegevoegde Regels",
+        "totalDeletions": "Totaal Verwijderde Regels",
+        "totalChanges": "Totaal Wijzigingen"
+    },
+    "configReviewMarkdown": {
+        "title": "Kody Gids: Gebruik en Configuratie",
+        "interactingTitle": "Interactie met Kody",
+        "requestReview": "Vraag een Review aan",
+        "requestReviewDesc": "Vraag Kody om je PR handmatig te reviewen door een commentaar toe te voegen met het commando `@kody start-review` in de root van je PR.",
+        "provideFeedback": "Geef Feedback",
+        "provideFeedbackDesc": "Help Kody te leren en te verbeteren door te reageren op zijn commentaren met een 👍 voor nuttige suggesties of een 👎 als er verbeteringen nodig zijn.",
+        "configurationTitle": "Huidige Kody Configuratie",
+        "reviewOptionsTitle": "Review Opties",
+        "reviewOptionsDesc": "De volgende review opties zijn ingeschakeld of uitgeschakeld:",
+        "tableOptions": "Opties",
+        "tableEnabled": "Ingeschakeld",
+        "configurationLink": "Toegang tot je configuratie-instellingen hier.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 Engineering Metrics",
+        "legend": {
+            "title": "Legenda van resultaten",
+            "same": "Betekent dat het resultaat __hetzelfde__ is gebleven",
+            "improved": "Betekent dat het resultaat __verbeterd__ is",
+            "worsened": "Betekent dat het resultaat __verslechterd__ is"
+        },
+        "flowMetrics": {
+            "title": "Flow Metrics",
+            "leadTime": {
+                "title": "Lead Time",
+                "description": "De tijd die nodig is voor een activiteit om van de status ${todo} naar de status ${done} te gaan."
+            },
+            "leadTimeInWip": {
+                "title": "Lead Time in WIP",
+                "description": "De tijd die nodig is voor een activiteit om van de status ${wip} naar de status ${done} te gaan."
+            },
+            "throughput": {
+                "title": "Throughput",
+                "description": "Aantal items dat de status ${done} heeft bereikt in de afgelopen 7 dagen.",
+                "items": "items"
+            },
+            "bugRatio": {
+                "title": "Bug Ratio",
+                "description": "Aantal bugs in WIP ten opzichte van het totale aantal activiteiten in WIP, in de afgelopen 7 dagen."
+            },
+            "leadTimeByColumn": {
+                "title": "Lead Time per Kolom",
+                "description": "De tijd die een item in *P75* doorbrengt in elke status van je board."
+            }
+        },
+        "doraMetrics": {
+            "title": "Dora Metrics",
+            "deployFrequency": {
+                "title": "Deploy Frequentie",
+                "description": "Deploy frequentie in de week.",
+                "value": "${value} deploys per week"
+            },
+            "leadTimeForChange": {
+                "title": "Lead Time voor Wijzigingen",
+                "description": "Gemiddelde tijd van de eerste commit tot de PR-merge.",
+                "value": "${value} dagen"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (Optimistisch)",
+            "p75": "P75 (Zelfverzekerd)",
+            "p95": "P95 (Pessimistisch)"
+        }
+    }
+}

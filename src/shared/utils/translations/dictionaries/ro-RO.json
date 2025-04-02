@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Vorbește cu Kody menționând @kody",
+        "feedback": "A fost această sugestie utilă? Reacționează cu 👍 sau 👎 pentru a ajuta Kody să învețe din această interacțiune."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## Revizuirea codului completată! 🔥\n\nRevizuirea codului a fost finalizată cu succes pe baza configurațiilor dvs. curente.\n\n",
+        "withoutComments": "# Revizuirea Kody completată\n**Vești grozave!** 🎉\nNu au fost găsite probleme care să corespundă configurațiilor dvs. curente de revizuire.\n\nContinuați munca excelentă! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "Rezumat PR (Comentariu creat de [Kody](https://kodus.io) 🤖)",
+        "codeReviewStarted": "Revizuirea codului a început! 🚀",
+        "description": "✋ Bună, echipă! Deja mă uit la fișierele modificate și încep revizuirea pentru a mă asigura că totul este în ordine. Dacă aveți nevoie de mai multe detalii, sunt aici! [Kody](https://kodus.io)",
+        "changedFiles": "📂 Fișiere modificate",
+        "filesTable": [
+            "Fișier",
+            "Stare",
+            "➕ Adăugiri",
+            "➖ Ștergeri",
+            "🔄 Modificări"
+        ],
+        "summary": "📊 Rezumatul modificărilor",
+        "totalFiles": "Total fișiere",
+        "totalAdditions": "Total linii adăugate",
+        "totalDeletions": "Total linii șterse",
+        "totalChanges": "Total modificări"
+    },
+    "configReviewMarkdown": {
+        "title": "Ghid Kody: Utilizare și Configurare",
+        "interactingTitle": "Interacțiunea cu Kody",
+        "requestReview": "Solicită o revizuire",
+        "requestReviewDesc": "Solicitați ca Kody să revizuiască manual PR-ul dvs. adăugând un comentariu cu comanda `@kody start-review` la rădăcina PR-ului dvs.",
+        "provideFeedback": "Oferiți feedback",
+        "provideFeedbackDesc": "Ajutați Kody să învețe și să se îmbunătățească reacționând la comentariile sale cu un 👍 pentru sugestii utile sau un 👎 dacă sunt necesare îmbunătățiri.",
+        "configurationTitle": "Configurația curentă Kody",
+        "reviewOptionsTitle": "Opțiuni de revizuire",
+        "reviewOptionsDesc": "Următoarele opțiuni de revizuire sunt activate sau dezactivate:",
+        "tableOptions": "Opțiuni",
+        "tableEnabled": "Activat",
+        "configurationLink": "Accesați setările de configurare aici.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 Metrice de inginerie",
+        "legend": {
+            "title": "Legenda rezultatelor",
+            "same": "Înseamnă că rezultatul a rămas __același__",
+            "improved": "Înseamnă că rezultatul s-a __îmbunătățit__",
+            "worsened": "Înseamnă că rezultatul s-a __înrăutățit__"
+        },
+        "flowMetrics": {
+            "title": "Metrice de flux",
+            "leadTime": {
+                "title": "Timp de execuție",
+                "description": "Timpul necesar pentru ca o activitate să treacă de la starea ${todo} la starea ${done}."
+            },
+            "leadTimeInWip": {
+                "title": "Timp de execuție în WIP",
+                "description": "Timpul necesar pentru ca o activitate să treacă de la starea ${wip} la starea ${done}."
+            },
+            "throughput": {
+                "title": "Rata de finalizare",
+                "description": "Numărul de elemente care au ajuns la starea ${done} în ultimele 7 zile.",
+                "items": "elemente"
+            },
+            "bugRatio": {
+                "title": "Rata de bug-uri",
+                "description": "Numărul de bug-uri în WIP în raport cu totalul activităților în WIP, în ultimele 7 zile."
+            },
+            "leadTimeByColumn": {
+                "title": "Timp de execuție pe coloană",
+                "description": "Timpul pe care un element îl petrece în *P75* în fiecare stare a tabloului dvs."
+            }
+        },
+        "doraMetrics": {
+            "title": "Metrice Dora",
+            "deployFrequency": {
+                "title": "Frecvența de implementare",
+                "description": "Frecvența de implementare pe săptămână.",
+                "value": "${value} implementări pe săptămână"
+            },
+            "leadTimeForChange": {
+                "title": "Timp de execuție pentru schimbare",
+                "description": "Timpul mediu de la primul commit până la îmbinarea PR-ului.",
+                "value": "${value} zile"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (Optimist)",
+            "p75": "P75 (Încrezător)",
+            "p95": "P95 (Pesimist)"
+        }
+    }
+}

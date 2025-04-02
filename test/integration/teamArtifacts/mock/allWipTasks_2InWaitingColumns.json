@@ -1,0 +1,162 @@
+[
+    {
+        "key": "KC-101",
+        "id": "10101",
+        "title": "Task em espera há mais de 48 horas",
+        "issueType": "Bug",
+        "status": {
+            "id": "10007",
+            "name": "Waiting for Review"
+        },
+        "workItemCreatedAt": "2024-03-14T10:00:00.000Z",
+        "workItemType": {
+            "name": "Bug",
+            "id": "20015",
+            "description": "Correção de bugs",
+            "subtask": false
+        },
+        "changelog": [
+            {
+                "id": "20101",
+                "createdAt": "2024-03-15",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "3",
+                        "fromColumnName": "In Progress",
+                        "toColumnId": "10007",
+                        "toColumnName": "Waiting for Review"
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "key": "KC-102",
+        "id": "10102",
+        "title": "Task em espera há 24 horas",
+        "issueType": "Feature",
+        "status": {
+            "id": "10009",
+            "name": "Waiting for Deployment"
+        },
+        "workItemCreatedAt": "2024-03-16T10:00:00.000Z",
+        "workItemType": {
+            "name": "Feature",
+            "id": "20016",
+            "description": "New feature development",
+            "subtask": false
+        },
+        "changelog": [
+            {
+                "id": "20201",
+                "createdAt": "2024-03-17",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "5",
+                        "fromColumnName": "Development",
+                        "toColumnId": "10009",
+                        "toColumnName": "Waiting for Deployment"
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "key": "KC-103",
+        "id": "10103",
+        "title": "Task não está em espera",
+        "issueType": "Improvement",
+        "status": {
+            "id": "4",
+            "name": "Done"
+        },
+        "workItemCreatedAt": "2024-03-15T10:00:00.000Z",
+        "workItemType": {
+            "name": "Improvement",
+            "id": "20017",
+            "description": "Improvement",
+            "subtask": false
+        },
+        "changelog": [
+            {
+                "id": "20301",
+                "createdAt": "2024-03-17",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "2",
+                        "fromColumnName": "To Do",
+                        "toColumnId": "4",
+                        "toColumnName": "Done"
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "key": "KC-104",
+        "id": "10104",
+        "title": "Outra task não está em espera",
+        "issueType": "Task",
+        "status": {
+            "id": "3",
+            "name": "In Progress"
+        },
+        "workItemCreatedAt": "2024-03-16T10:00:00.000Z",
+        "workItemType": {
+            "name": "Task",
+            "id": "20018",
+            "description": "General task",
+            "subtask": false
+        },
+        "changelog": [
+            {
+                "id": "20401",
+                "createdAt": "2024-03-17",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "2",
+                        "fromColumnName": "To Do",
+                        "toColumnId": "3",
+                        "toColumnName": "In Progress"
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "key": "KC-105",
+        "id": "10105",
+        "title": "Mais uma task não está em espera",
+        "issueType": "Research",
+        "status": {
+            "id": "2",
+            "name": "To Do"
+        },
+        "workItemCreatedAt": "2024-03-13T10:00:00.000Z",
+        "workItemType": {
+            "name": "Research",
+            "id": "20019",
+            "description": "Research task",
+            "subtask": false
+        },
+        "changelog": [
+            {
+                "id": "20501",
+                "createdAt": "2024-03-16",
+                "movements": [
+                    {
+                        "field": "status",
+                        "fromColumnId": "1",
+                        "fromColumnName": "Backlog",
+                        "toColumnId": "2",
+                        "toColumnName": "To Do"
+                    }
+                ]
+            }
+        ]
+    }
+]

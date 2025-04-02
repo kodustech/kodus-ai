@@ -1,0 +1,95 @@
+{
+    "reviewComment": {
+        "talkToKody": "Beszélj Kody-val úgy, hogy megemlíted @kody",
+        "feedback": "Hasznos volt ez a javaslat? Reagálj egy 👍 vagy 👎 jellel, hogy segíts Kody-nak tanulni ebből az interakcióból."
+    },
+    "pullRequestFinishSummaryMarkdown": {
+        "withComments": "## Kódellenőrzés befejezve! 🔥\n\nA kódellenőrzés sikeresen befejeződött a jelenlegi konfigurációid alapján.\n\n",
+        "withoutComments": "# Kody ellenőrzés befejezve\n**Nagyszerű hír!** 🎉\nNem találtunk olyan problémákat, amelyek megfelelnek a jelenlegi ellenőrzési konfigurációidnak.\n\nFolytasd a kiváló munkát! 🚀"
+    },
+    "pullRequestSummaryMarkdown": {
+        "title": "PR összefoglaló (Megjegyzés létrehozva [Kody](https://kodus.io) által 🤖)",
+        "codeReviewStarted": "Kódellenőrzés elkezdődött! 🚀",
+        "description": "✋ Sziasztok, csapat! Már nézem a módosított fájlokat és elkezdem az ellenőrzést, hogy megbizonyosodjak arról, hogy minden rendben van. Ha további részletekre van szükséged, itt vagyok! [Kody](https://kodus.io)",
+        "changedFiles": "📂 Módosított fájlok",
+        "filesTable": [
+            "Fájl",
+            "Állapot",
+            "➕ Hozzáadások",
+            "➖ Törlések",
+            "🔄 Módosítások"
+        ],
+        "summary": "📊 Módosítások összefoglalója",
+        "totalFiles": "Összes fájl",
+        "totalAdditions": "Összes hozzáadott sor",
+        "totalDeletions": "Összes törölt sor",
+        "totalChanges": "Összes módosítás"
+    },
+    "configReviewMarkdown": {
+        "title": "Kody útmutató: Használat és konfiguráció",
+        "interactingTitle": "Interakció Kody-val",
+        "requestReview": "Ellenőrzés kérése",
+        "requestReviewDesc": "Kérd meg Kody-t, hogy manuálisan ellenőrizze a PR-edet, ha hozzáadsz egy megjegyzést a `@kody start-review` parancsával a PR gyökeréhez.",
+        "provideFeedback": "Visszajelzés adása",
+        "provideFeedbackDesc": "Segíts Kody-nak tanulni és fejlődni azzal, hogy reagálsz a megjegyzéseire egy 👍 hasznos javaslatokért vagy egy 👎 ha javításokra van szükség.",
+        "configurationTitle": "Jelenlegi Kody konfiguráció",
+        "reviewOptionsTitle": "Ellenőrzési beállítások",
+        "reviewOptionsDesc": "A következő ellenőrzési beállítások engedélyezve vagy letiltva vannak:",
+        "tableOptions": "Beállítások",
+        "tableEnabled": "Engedélyezve",
+        "configurationLink": "Hozzáférés a konfigurációs beállításaidhoz itt.",
+        "enabled": "✅",
+        "disabled": "❌"
+    },
+    "discordFormatter": {
+        "title": "📦 Mérnöki metrikák",
+        "legend": {
+            "title": "Eredmények magyarázata",
+            "same": "Jelenti, hogy az eredmény __ugyanaz__ maradt",
+            "improved": "Jelenti, hogy az eredmény __javult__",
+            "worsened": "Jelenti, hogy az eredmény __romlott__"
+        },
+        "flowMetrics": {
+            "title": "Áramlási metrikák",
+            "leadTime": {
+                "title": "Átfutási idő",
+                "description": "Az az idő, amely alatt egy tevékenység a ${todo} állapotból a ${done} állapotba kerül."
+            },
+            "leadTimeInWip": {
+                "title": "Átfutási idő WIP-ben",
+                "description": "Az az idő, amely alatt egy tevékenység a ${wip} állapotból a ${done} állapotba kerül."
+            },
+            "throughput": {
+                "title": "Áteresztőképesség",
+                "description": "Az elmúlt 7 napban a ${done} állapotba került elemek száma.",
+                "items": "elemek"
+            },
+            "bugRatio": {
+                "title": "Hibaarány",
+                "description": "A WIP-ben lévő hibák száma a WIP-ben lévő összes tevékenységhez viszonyítva az elmúlt 7 napban."
+            },
+            "leadTimeByColumn": {
+                "title": "Átfutási idő oszloponként",
+                "description": "Az az idő, amelyet egy elem a *P75* állapotban tölt a táblád minden állapotában."
+            }
+        },
+        "doraMetrics": {
+            "title": "Dora metrikák",
+            "deployFrequency": {
+                "title": "Telepítési gyakoriság",
+                "description": "Heti telepítési gyakoriság.",
+                "value": "${value} telepítések hetente"
+            },
+            "leadTimeForChange": {
+                "title": "Átfutási idő a változásokhoz",
+                "description": "Az első commit-tól a PR egyesítéséig eltelt átlagos idő.",
+                "value": "${value} nap"
+            }
+        },
+        "percentiles": {
+            "p50": "P50 (Optimista)",
+            "p75": "P75 (Magabiztos)",
+            "p95": "P95 (Pesszimista)"
+        }
+    }
+}
