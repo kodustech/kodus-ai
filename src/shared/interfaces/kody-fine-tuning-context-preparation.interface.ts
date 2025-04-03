@@ -29,5 +29,8 @@ export interface IKodyFineTuningContextPreparationService {
         },
         suggestionsToAnalyze: CodeSuggestion[],
         isFineTuningEnabled: boolean,
-    ): Promise<Partial<CodeSuggestion>[]>;
+    ): Promise<{
+        keepedSuggestions: Partial<CodeSuggestion>[];
+        discardedSuggestions: Partial<CodeSuggestion>[];
+    }>;
 }

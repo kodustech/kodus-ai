@@ -840,7 +840,6 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                 ),
             );
 
-            // TESTAR
             const getDataPipelineKodyFineTunning =
                 await this.kodyFineTuningContextPreparation.prepareKodyFineTuningContext(
                     context?.organizationAndTeamData.organizationId,
@@ -855,10 +854,12 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                 );
 
             discardedSuggestionsByKodyFineTuning.push(
-                ...this.suggestionService.getDiscardedSuggestions(
-                    suggestionsWithId,
-                    getDataPipelineKodyFineTunning,
-                    PriorityStatus.DISCARDED_BY_KODY_FINE_TUNING,
+                ...getDataPipelineKodyFineTunning.discardedSuggestions.map(
+                    (suggestion) => {
+                        suggestion.priorityStatus =
+                            PriorityStatus.DISCARDED_BY_KODY_FINE_TUNING;
+                        return suggestion;
+                    },
                 ),
             );
 
@@ -868,7 +869,8 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                     context?.pullRequest?.number,
                     file,
                     patchWithLinesStr,
-                    suggestionsWithId,
+                    getDataPipelineKodyFineTunning?.keepedSuggestions ??
+                        suggestionsWithId,
                     context?.codeReviewConfig?.languageResultPrompt,
                     reviewModeResponse,
                 );
@@ -893,7 +895,7 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                 await this.suggestionService.analyzeSuggestionsSeverity(
                     context?.organizationAndTeamData,
                     context?.pullRequest?.number,
-                    safeGuardResponse?.suggestions,
+                    safeGuardResponse?.suggestions ?? suggestionsWithId,
                     context?.codeReviewConfig?.reviewOptions,
                 );
 
