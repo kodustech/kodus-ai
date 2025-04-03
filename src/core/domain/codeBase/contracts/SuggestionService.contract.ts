@@ -217,6 +217,13 @@ export interface ISuggestionService {
         sortedPrioritizedSuggestions: Partial<CodeSuggestion>[],
         commentResults: CommentResult[],
     ): Promise<Partial<CodeSuggestion>[]>;
+
+    /**
+     * Adds implementation status to suggestions
+     */
+    addImplementationStatusToSuggestions(
+        suggestions: Partial<CodeSuggestion>[],
+    ): Partial<CodeSuggestion>[];
 }
 
 export const SUGGESTION_SERVICE_TOKEN = 'SUGGESTION_SERVICE_TOKEN';

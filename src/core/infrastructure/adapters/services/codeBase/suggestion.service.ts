@@ -835,11 +835,16 @@ export class SuggestionService implements ISuggestionService {
             const prioritizedSuggestions =
                 analyzedSuggestions.prioritizedSuggestions;
 
+            const prioritizedSuggestionsWithImplementationStatus =
+                this.addImplementationStatusToSuggestions(
+                    prioritizedSuggestions,
+                );
+
             allDiscardedSuggestions.push(
                 ...analyzedSuggestions.discardedSuggestionsBySeverityOrQuantity,
             );
 
-            if (prioritizedSuggestions?.length <= 0) {
+            if (prioritizedSuggestionsWithImplementationStatus?.length <= 0) {
                 return {
                     sortedPrioritizedSuggestions: [],
                     allDiscardedSuggestions,
@@ -848,7 +853,7 @@ export class SuggestionService implements ISuggestionService {
 
             let sortedPrioritizedSuggestions =
                 this.sortSuggestionsByFilePathAndSeverity(
-                    prioritizedSuggestions,
+                    prioritizedSuggestionsWithImplementationStatus,
                     codeReviewConfig.suggestionControl.groupingMode,
                 );
 
@@ -914,7 +919,6 @@ export class SuggestionService implements ISuggestionService {
                 ...suggestion,
                 id: suggestion?.id || uuidv4(),
                 severity: severityLevels.get(index + 1) || 'medium',
-                implementationStatus: ImplementationStatus.NOT_IMPLEMENTED,
             }));
         } catch (error) {
             this.logger.error({
@@ -1190,5 +1194,14 @@ export class SuggestionService implements ISuggestionService {
             });
             return sortedPrioritizedSuggestions;
         }
+    }
+
+    public addImplementationStatusToSuggestions(
+        suggestions: Partial<CodeSuggestion>[],
+    ): CodeSuggestion[] {
+        return suggestions.map((suggestion) => ({
+            ...suggestion,
+            implementationStatus: ImplementationStatus.NOT_IMPLEMENTED,
+        })) as CodeSuggestion[];
     }
 }

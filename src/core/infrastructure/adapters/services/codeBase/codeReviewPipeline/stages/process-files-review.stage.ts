@@ -880,7 +880,8 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
 
             discardedSuggestionsBySafeGuard.push(
                 ...this.suggestionService.getDiscardedSuggestions(
-                    suggestionsWithId,
+                    getDataPipelineKodyFineTunning?.keepedSuggestions ??
+                        suggestionsWithId,
                     safeGuardResponse?.suggestions || [],
                     PriorityStatus.DISCARDED_BY_SAFEGUARD,
                 ),
@@ -899,13 +900,17 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                     context?.codeReviewConfig?.reviewOptions,
                 );
 
-            let mergedSuggestions = [
-                ...(kodyRulesSuggestions
-                    ? kodyRulesSuggestions?.codeSuggestions
-                    : suggestionsWithSeverity?.length > 0
-                      ? suggestionsWithSeverity
-                      : []),
-            ];
+            let mergedSuggestions = [];
+
+            // Se tem sugestões do Kody Rules, adiciona
+            if (kodyRulesSuggestions?.codeSuggestions?.length > 0) {
+                mergedSuggestions.push(...kodyRulesSuggestions.codeSuggestions);
+            }
+
+            // Se tem sugestões com severidade, adiciona também
+            if (suggestionsWithSeverity?.length > 0) {
+                mergedSuggestions.push(...suggestionsWithSeverity);
+            }
 
             // TESTAR
             const kodyASTSuggestions =
