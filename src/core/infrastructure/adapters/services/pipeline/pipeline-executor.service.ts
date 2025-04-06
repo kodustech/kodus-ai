@@ -32,7 +32,10 @@ export class PipelineExecutor<TContext extends PipelineContext> {
         );
 
         for (const stage of stages) {
-            if (context.status === PipelineStatus.SKIP) break;
+            if (context.status === PipelineStatus.SKIP) {
+                break;
+            }
+
             const start = Date.now();
 
             try {
