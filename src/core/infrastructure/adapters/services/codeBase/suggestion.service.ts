@@ -835,16 +835,11 @@ export class SuggestionService implements ISuggestionService {
             const prioritizedSuggestions =
                 analyzedSuggestions.prioritizedSuggestions;
 
-            const prioritizedSuggestionsWithImplementationStatus =
-                this.addImplementationStatusToSuggestions(
-                    prioritizedSuggestions,
-                );
-
             allDiscardedSuggestions.push(
                 ...analyzedSuggestions.discardedSuggestionsBySeverityOrQuantity,
             );
 
-            if (prioritizedSuggestionsWithImplementationStatus?.length <= 0) {
+            if (prioritizedSuggestions?.length <= 0) {
                 return {
                     sortedPrioritizedSuggestions: [],
                     allDiscardedSuggestions,
@@ -853,7 +848,7 @@ export class SuggestionService implements ISuggestionService {
 
             let sortedPrioritizedSuggestions =
                 this.sortSuggestionsByFilePathAndSeverity(
-                    prioritizedSuggestionsWithImplementationStatus,
+                    prioritizedSuggestions,
                     codeReviewConfig.suggestionControl.groupingMode,
                 );
 
@@ -1159,6 +1154,7 @@ export class SuggestionService implements ISuggestionService {
                         return {
                             ...suggestion,
                             deliveryStatus: commentResult?.deliveryStatus,
+                            implementationStatus: ImplementationStatus.NOT_IMPLEMENTED,
                             comment: {
                                 ...(suggestion?.comment || {}),
                                 id: commentResult?.codeReviewFeedbackData
@@ -1194,14 +1190,5 @@ export class SuggestionService implements ISuggestionService {
             });
             return sortedPrioritizedSuggestions;
         }
-    }
-
-    public addImplementationStatusToSuggestions(
-        suggestions: Partial<CodeSuggestion>[],
-    ): CodeSuggestion[] {
-        return suggestions.map((suggestion) => ({
-            ...suggestion,
-            implementationStatus: ImplementationStatus.NOT_IMPLEMENTED,
-        })) as CodeSuggestion[];
     }
 }
