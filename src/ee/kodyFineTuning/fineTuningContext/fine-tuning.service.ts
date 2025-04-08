@@ -50,40 +50,50 @@ export class KodyFineTuningContextPreparationServiceEE extends BaseKodyFineTunin
         },
         suggestionsToAnalyze: CodeSuggestion[],
         isFineTuningEnabled: boolean,
-    ): Promise<Partial<CodeSuggestion>[]> {
+    ): Promise<{
+        keepedSuggestions: Partial<CodeSuggestion>[];
+        discardedSuggestions: Partial<CodeSuggestion>[];
+    }> {
         // Verifica se o fine tuning está habilitado
         if (!isFineTuningEnabled) {
-            return [];
+            return {
+                keepedSuggestions: suggestionsToAnalyze,
+                discardedSuggestions: [],
+            };
         }
 
         const mainClusterizedSuggestions = await this.kodyFineTuningService.startAnalysis(
             organizationId,
             repository,
             prNumber,
-            suggestionsToAnalyze[0].language,
+            suggestionsToAnalyze[0]?.language,
         );
 
         // Verifica se há clusterizedSuggestions
         if (!mainClusterizedSuggestions || mainClusterizedSuggestions.length === 0) {
-            return [];
+            return {
+                keepedSuggestions: suggestionsToAnalyze,
+                discardedSuggestions: [],
+            };
         }
 
         try {
-            const clusteredSuggestions: Partial<CodeSuggestion>[] = [];
-
             const result = await this.kodyFineTuningService.fineTuningAnalysis(
                 organizationId,
                 prNumber,
                 {
                     id: repository.id,
                     full_name: repository.full_name,
-                    language: '', // Language is not used in this context
+                    language: suggestionsToAnalyze[0]?.language,
                 },
                 suggestionsToAnalyze,
                 mainClusterizedSuggestions,
             );
 
-            return result;
+            return {
+                keepedSuggestions: result.keepedSuggestions,
+                discardedSuggestions: result.discardedSuggestions,
+            };
         } catch (error) {
             this.logger.error({
                 message: 'Error performing fine tuning analysis',
@@ -98,7 +108,10 @@ export class KodyFineTuningContextPreparationServiceEE extends BaseKodyFineTunin
                     },
                 },
             });
-            return suggestionsToAnalyze;
+            return {
+                keepedSuggestions: suggestionsToAnalyze,
+                discardedSuggestions: [],
+            };
         }
     }
 }

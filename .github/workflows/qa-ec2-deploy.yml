@@ -47,13 +47,13 @@ jobs:
         steps:
             - name: Get runner IP
               run: |
-                  ip=`curl https://ipinfo.io/ip`
-                  echo $ip
+                  ip=$(curl -s https://ipinfo.io/ip)
+                  echo "::add-mask::$ip"
                   echo "runner_ip=$ip" >> $GITHUB_ENV
 
             - name: Add Github Actions IP to Security group as a Postgres inbound rule
               run: |
-                  aws ec2 authorize-security-group-ingress --group-id ${{ secrets.AWS_SECURITY_GROUP }} --protocol tcp --port 22 --cidr ${{ env.runner_ip }}/32
+                  aws ec2 authorize-security-group-ingress --group-id ${{ secrets.AWS_SECURITY_GROUP }} --protocol tcp --port 22 --cidr ${{ env.runner_ip }}/32 > /dev/null 2>&1
               env:
                   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
                   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -71,7 +71,7 @@ jobs:
 
             - name: Remove Github Actions IP from security group
               run: |
-                  aws ec2 revoke-security-group-ingress --group-id ${{ secrets.AWS_SECURITY_GROUP }} --protocol tcp --port 22 --cidr ${{ env.runner_ip }}/32
+                  aws ec2 revoke-security-group-ingress --group-id ${{ secrets.AWS_SECURITY_GROUP }} --protocol tcp --port 22 --cidr ${{ env.runner_ip }}/32 > /dev/null 2>&1
               env:
                   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
                   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

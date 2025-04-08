@@ -914,7 +914,6 @@ export class SuggestionService implements ISuggestionService {
                 ...suggestion,
                 id: suggestion?.id || uuidv4(),
                 severity: severityLevels.get(index + 1) || 'medium',
-                implementationStatus: ImplementationStatus.NOT_IMPLEMENTED,
             }));
         } catch (error) {
             this.logger.error({
@@ -1155,6 +1154,7 @@ export class SuggestionService implements ISuggestionService {
                         return {
                             ...suggestion,
                             deliveryStatus: commentResult?.deliveryStatus,
+                            implementationStatus: ImplementationStatus.NOT_IMPLEMENTED,
                             comment: {
                                 ...(suggestion?.comment || {}),
                                 id: commentResult?.codeReviewFeedbackData

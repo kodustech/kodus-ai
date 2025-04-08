@@ -75,6 +75,10 @@ export class KodyFineTuningService {
             language,
         );
 
+        if (!fineTuningType) {
+            return [];
+        }
+
         try {
             if (fineTuningType === FineTuningType.REPOSITORY) {
                 suggestions =
@@ -123,10 +127,11 @@ export class KodyFineTuningService {
             !suggestionsToAnalyze?.length ||
             !mainClusterizedSuggestions?.length
         ) {
-            return [];
+            return {
+                keepSuggestions: suggestionsToAnalyze,
+                discardedSuggestions: [],
+            };
         }
-
-        const suggestionsAnalyzed: Partial<CodeSuggestion>[] = [];
 
         const newSuggestionsToAnalyzeEmbedded =
             await this.suggestionEmbeddedService.embedSuggestionsForISuggestionToEmbed(
@@ -137,17 +142,19 @@ export class KodyFineTuningService {
                 repository.full_name,
             );
 
-        suggestionsAnalyzed.push(
-            ...(await this.analyzeWithClusterization(
+        const { keepedSuggestions, discardedSuggestions } =
+            await this.analyzeWithClusterization(
                 organizationId,
                 repository,
                 prNumber,
                 newSuggestionsToAnalyzeEmbedded,
                 mainClusterizedSuggestions,
-            )),
-        );
+            );
 
-        return suggestionsAnalyzed;
+        return {
+            keepedSuggestions,
+            discardedSuggestions,
+        };
     }
 
     //#region Get Embedded Suggestions to make analysis
@@ -552,19 +559,29 @@ export class KodyFineTuningService {
         organizationId: string,
         repository: { id: string; full_name: string },
         language: string,
-    ): Promise<FineTuningType> {
+    ): Promise<FineTuningType | null> {
         const suggestionEmbedded = await this.suggestionEmbeddedService.find({
             organization: { uuid: organizationId },
             repositoryId: repository.id,
             repositoryFullName: repository.full_name,
-            language: language.toLowerCase(),
+            language: language?.toLowerCase(),
         });
 
         if (suggestionEmbedded?.length >= 50) {
             return FineTuningType.REPOSITORY;
         }
 
-        return FineTuningType.GLOBAL;
+        const globalSuggestionEmbedded =
+            await this.suggestionEmbeddedService.find({
+                organization: { uuid: organizationId },
+                language: language?.toLowerCase(),
+            });
+
+        if (globalSuggestionEmbedded?.length >= 50) {
+            return FineTuningType.GLOBAL;
+        }
+
+        return null;
     }
     //#endregion
 
@@ -810,9 +827,15 @@ export class KodyFineTuningService {
         prNumber: number,
         suggestionsToAnalyze: Partial<CodeSuggestion>[],
         mainClusterizedSuggestions: IClusterizedSuggestion[],
-    ): Promise<Partial<CodeSuggestion>[]> {
+    ): Promise<{
+        keepedSuggestions: Partial<CodeSuggestion>[];
+        discardedSuggestions: Partial<CodeSuggestion>[];
+    }> {
         if (!mainClusterizedSuggestions?.length) {
-            return;
+            return {
+                keepedSuggestions: suggestionsToAnalyze,
+                discardedSuggestions: [],
+            };
         }
 
         const results = [];
@@ -851,15 +874,25 @@ export class KodyFineTuningService {
             results.push(comparison);
         }
 
-        const filteredResults = results.filter(
+        const keepSuggestions = results.filter(
             (suggestion) =>
                 suggestion.fineTuningDecision === FineTuningDecision.KEEP ||
                 suggestion.fineTuningDecision === FineTuningDecision.UNCERTAIN,
         );
 
-        return filteredResults.map(
-            (suggestion) => suggestion.analyzedSuggestion,
+        const discardedSuggestions = results.filter(
+            (suggestion) =>
+                suggestion.fineTuningDecision === FineTuningDecision.DISCARD,
         );
+
+        return {
+            keepedSuggestions: keepSuggestions.map(
+                (suggestion) => suggestion.analyzedSuggestion,
+            ),
+            discardedSuggestions: discardedSuggestions.map(
+                (suggestion) => suggestion.analyzedSuggestion,
+            ),
+        };
     }
     //#endregion
 
@@ -891,8 +924,7 @@ export class KodyFineTuningService {
 
         return {
             max_clusters:
-                globalParameters?.configValue?.maxClusters ??
-                this.MAX_CLUSTERS,
+                globalParameters?.configValue?.maxClusters ?? this.MAX_CLUSTERS,
             divisor_for_cluster_quantity:
                 globalParameters?.configValue?.divisorForClusterQuantity ??
                 this.DIVISOR_FOR_CLUSTER_QUANTITY,
