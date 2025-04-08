@@ -30,7 +30,7 @@ import {
     PullRequestDetails,
 } from '@/core/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repositories } from '@/core/domain/platformIntegrations/types/codeManagement/repositories.type';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4, v4 } from 'uuid';
 import * as moment from 'moment-timezone';
 import {
     IIntegrationService,
@@ -51,7 +51,20 @@ import { IntegrationConfigEntity } from '@/core/domain/integrationConfigs/entiti
 import { CodeManagementConnectionStatus } from '@/shared/utils/decorators/validate-code-management-integration.decorator';
 import { getLLMModelProviderWithFallback } from '@/shared/utils/get-llm-model-provider.util';
 import { LLMModelProvider } from '@/shared/domain/enums/llm-model-provider.enum';
-
+import { CreateAuthIntegrationStatus } from '@/shared/domain/enums/create-auth-integration-status.enum';
+import { AuthMode } from '@/core/domain/platformIntegrations/enums/codeManagement/authMode.enum';
+import { BitbucketService } from './bitbucket/bitbucket.service';
+import { BitbucketAuthDetail } from '@/core/domain/authIntegrations/types/bitbucket-auth-detail.type';
+import * as AzureDevops from 'azure-devops-node-api';
+import { AzureReposAuthDetail } from '@/core/domain/authIntegrations/types/azure-repos-auth-detail';
+import { IntegrationEntity } from '@/core/domain/integrations/entities/integration.entity';
+import { project } from 'ramda';
+import {
+    ProjectVisibility,
+    TeamProjectReference,
+} from 'azure-devops-node-api/interfaces/CoreInterfaces';
+import { GitRepository } from 'azure-devops-node-api/interfaces/GitInterfaces';
+import axios from 'axios';
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.AZURE_REPOS, 'codeManagement')
 export class AzureReposService {
@@ -140,43 +153,278 @@ export class AzureReposService {
         throw new Error('Method not implemented.');
     }
 
+    async getAuthDetails(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<AzureReposAuthDetail> {
+        try {
+            const azureAuthDetail =
+                await this.integrationService.getPlatformAuthDetails<AzureReposAuthDetail>(
+                    organizationAndTeamData,
+                    PlatformType.AZURE_REPOS,
+                );
+
+            return {
+                ...azureAuthDetail,
+                authMode: azureAuthDetail?.authMode || AuthMode.TOKEN,
+            };
+        } catch (err) {
+            this.logger.error({
+                message: 'Error to get auth details',
+                context: AzureReposService.name,
+                serviceName: 'AzureReposService getAuthDetails',
+                error: err,
+                metadata: {
+                    organizationAndTeamData,
+                },
+            });
+        }
+    }
+
+    async createWebhook(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<void> {
+        try {
+            const azureAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            const authHandler = AzureDevops.getPersonalAccessTokenHandler(
+                azureAuthDetail.token,
+            );
+            const connection = new AzureDevops.WebApi(
+                azureAuthDetail.orgUrl,
+                authHandler,
+            );
+
+            const notificationApi = await connection.getNotificationApi();
+            const coreAPI = await connection.getCoreApi();
+
+            const webhookUrl =
+                process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK;
+
+            const projects = await coreAPI.getProjects();
+
+            for (const project of projects) {
+                const existingHooks = await notificationApi.listSubscriptions(
+                    project.id,
+                );
+
+                const hookExists = existingHooks.some(
+                    (hook) => hook.url === webhookUrl,
+                );
+
+                if (!hookExists) {
+                    await notificationApi.createSubscription({
+                        filter: {
+                            eventType: 'git.pullrequest.created',
+                        },
+                    });
+                }
+            }
+        } catch (error) {
+            this.logger.error({
+                message: 'Error to create webhook',
+                context: AzureReposService.name,
+                serviceName: 'AzureReposService createWebhook',
+                error: error,
+                metadata: {
+                    organizationAndTeamData,
+                },
+            });
+        }
+    }
+
     async createAuthIntegration(params: any): Promise<any> {
         try {
-            const authUuid = uuidv4();
+            let res: {
+                success: boolean;
+                status?: CreateAuthIntegrationStatus;
+            } = { success: true, status: CreateAuthIntegrationStatus.SUCCESS };
+            if (params && params?.authMode === AuthMode.OAUTH) {
+                throw new Error(
+                    'Authenticating on Azure Devops Repos via OAuth not implemented',
+                );
+            } else if (
+                params &&
+                params?.authMode === AuthMode.TOKEN &&
+                params.token
+            ) {
+                res = await this.authenticateWithToken({
+                    organizationAndTeamData: params.organizationAndTeamData,
+                    token: params.token,
+                    orgUrl: params.orgUrl,
+                });
+            }
 
-            const authIntegration = await this.authIntegrationService.create({
-                uuid: authUuid,
-                status: true,
-                authDetails: {
-                    tenantId: params.tenantId,
+            return res;
+        } catch (err) {
+            this.logger.error({
+                message: 'Error to create auth integration',
+                context: AzureReposService.name,
+                serviceName: 'AzureReposService createAuthIntegration',
+                error: err,
+                metadata: {
+                    params,
                 },
-                organization: {
-                    uuid: params.organizationAndTeamData.organizationId,
-                },
-                team: { uuid: params.organizationAndTeamData.teamId },
+            });
+            throw new BadRequestException(err);
+        }
+    }
+
+    async authenticateWithToken(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        orgUrl: string;
+        token: string;
+    }): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+        try {
+            const { organizationAndTeamData, token, orgUrl } = params;
+
+            const authHandler =
+                AzureDevops.getPersonalAccessTokenHandler(token);
+            const connection = new AzureDevops.WebApi(orgUrl, authHandler);
+
+            const testResponse = await (
+                await connection.getGitApi()
+            ).getRepositories();
+
+            if (!testResponse) {
+                throw new Error('Bitbucket failed to validate the PAT.');
+            }
+
+            const checkRepos = await this.checkRepositoryPermissions({
+                connection,
             });
 
-            const integrationUuid = uuidv4();
+            if (!checkRepos.success) return checkRepos;
 
-            await this.integrationService.create({
-                uuid: integrationUuid,
+            const integration = await this.integrationService.findOne({
+                organization: {
+                    uuid: organizationAndTeamData.organizationId,
+                },
+                team: { uuid: organizationAndTeamData.teamId },
                 platform: PlatformType.AZURE_REPOS,
-                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
-                status: true,
-                organization: {
-                    uuid: params.organizationAndTeamData.organizationId,
-                },
-                team: { uuid: params.organizationAndTeamData.teamId },
-                authIntegration: { uuid: authIntegration.uuid },
             });
+
+            const authDetails: AzureReposAuthDetail = {
+                orgUrl: orgUrl,
+                token: token,
+                authMode: AuthMode.TOKEN,
+            };
+
+            await this.handleIntegration(
+                integration,
+                authDetails,
+                organizationAndTeamData,
+            );
 
             return {
                 success: true,
+                status: CreateAuthIntegrationStatus.SUCCESS,
+            };
+        } catch (err) {
+            this.logger.error({
+                message: 'Error to authenticate with token',
+                context: AzureReposService.name,
+                serviceName: 'AzureReposService authenticateWithToken',
+                error: err,
+                metadata: {
+                    params,
+                },
+            });
+            throw new BadRequestException(
+                'Error authenticating with Azure Devops PAT.',
+            );
+        }
+    }
+
+    private async checkRepositoryPermissions(params: {
+        connection: AzureDevops.WebApi;
+    }) {
+        try {
+            const { connection } = params;
+
+            const gitApi = await connection.getGitApi();
+
+            const repositories = await gitApi.getRepositories();
+
+            if (repositories.length === 0) {
+                return {
+                    success: false,
+                    status: CreateAuthIntegrationStatus.NO_REPOSITORIES,
+                };
+            }
+
+            return {
+                success: true,
+                status: CreateAuthIntegrationStatus.SUCCESS,
             };
         } catch (error) {
-            console.log(error);
-            throw error;
+            this.logger.error({
+                message:
+                    'Failed to list repositories when creating integration',
+                context: AzureReposService.name,
+                error: error,
+                metadata: params,
+            });
+            return {
+                success: false,
+                status: CreateAuthIntegrationStatus.NO_REPOSITORIES,
+            };
         }
+    }
+
+    async handleIntegration(
+        integration: IntegrationEntity | null,
+        authDetails: AzureReposAuthDetail,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<void> {
+        if (!integration) {
+            await this.addAccessToken(organizationAndTeamData, authDetails);
+        } else {
+            await this.updateAuthIntegration({
+                organizationAndTeamData,
+                authIntegrationId: integration?.authIntegration?.uuid,
+                integrationId: integration?.uuid,
+                authDetails,
+            });
+        }
+    }
+
+    async addAccessToken(
+        organizationAndTeamData: OrganizationAndTeamData,
+        authDetails: AzureReposAuthDetail,
+    ): Promise<IntegrationEntity> {
+        const authUuid = v4();
+
+        const authIntegration = await this.authIntegrationService.create({
+            uuid: authUuid,
+            status: true,
+            authDetails,
+            organization: { uuid: organizationAndTeamData.organizationId },
+            team: { uuid: organizationAndTeamData.teamId },
+        });
+
+        return await this.addIntegration(
+            organizationAndTeamData,
+            authIntegration?.uuid,
+        );
+    }
+
+    async addIntegration(
+        organizationAndTeamData: OrganizationAndTeamData,
+        authIntegrationId: string,
+    ): Promise<IntegrationEntity> {
+        const integrationUuid = v4();
+
+        return await this.integrationService.create({
+            uuid: integrationUuid,
+            platform: PlatformType.AZURE_REPOS,
+            integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+            status: true,
+            organization: { uuid: organizationAndTeamData.organizationId },
+            team: { uuid: organizationAndTeamData.teamId },
+            authIntegration: { uuid: authIntegrationId },
+        });
     }
 
     async updateAuthIntegration(params: any): Promise<any> {
@@ -382,33 +630,115 @@ export class AzureReposService {
 
     async getRepositories(params: any): Promise<Repositories[]> {
         try {
-            const { client, integration } =
-                await this.getAzureReposParams(params);
+            const { organizationAndTeamData } = params;
 
-            const repos = await client.get('/api/repositories');
+            const azureAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            if (!azureAuthDetail) {
+                return [];
+            }
+
+            const integration = await this.integrationService.findOne({
+                organization: {
+                    uuid: organizationAndTeamData.organizationId,
+                },
+                team: {
+                    uuid: organizationAndTeamData.teamId,
+                },
+                platform: PlatformType.AZURE_REPOS,
+            });
 
             const integrationConfig =
                 await this.integrationConfigService.findOne({
                     integration: { uuid: integration?.uuid },
                     configKey: IntegrationConfigKey.REPOSITORIES,
-                    team: { uuid: params.organizationAndTeamData.teamId },
+                    team: { uuid: organizationAndTeamData.teamId },
                 });
 
-            return repos?.map((repo) => ({
-                id: repo.id,
-                name: repo.name,
-                project: {
-                    id: repo?.project?.id,
-                    name: repo?.project?.name,
+            const authHandler = AzureDevops.getPersonalAccessTokenHandler(
+                azureAuthDetail.token,
+            );
+
+            const connection = new AzureDevops.WebApi(
+                azureAuthDetail.orgUrl,
+                authHandler,
+            );
+
+            const coreAPI = await connection.getCoreApi();
+            const gitAPI = await connection.getGitApi();
+
+            const projects = await coreAPI.getProjects();
+
+            const projectsWithRepos = await Promise.all(
+                projects.map(async (project) => {
+                    const repositories = await gitAPI.getRepositories(
+                        project.id,
+                    );
+                    return {
+                        project,
+                        repositories,
+                    };
+                }),
+            );
+
+            const repositories = projectsWithRepos.reduce<Repositories[]>(
+                (acc, { project, repositories }) => {
+                    repositories.forEach((repo) => {
+                        acc.push(
+                            this.transformRepo(
+                                repo,
+                                project,
+                                integrationConfig,
+                            ),
+                        );
+                    });
+                    return acc;
                 },
-                selected: integrationConfig?.configValue?.some(
-                    (repository: { name: string }) =>
-                        repository?.name === repo?.name,
-                ),
-            }));
+                [],
+            );
+
+            return repositories;
         } catch (error) {
-            console.log(error);
+            this.logger.error({
+                message: 'Error to get repositories',
+                context: BitbucketService.name,
+                serviceName: 'BitbucketService getRepositories',
+                error: error,
+                metadata: {
+                    params,
+                },
+            });
+            throw new BadRequestException(error);
         }
+    }
+
+    private transformRepo(
+        repo: GitRepository,
+        project: TeamProjectReference,
+        integrationConfig: IntegrationConfigEntity,
+    ): Repositories {
+        return {
+            id: repo.id,
+            name: repo.name ?? '',
+            http_url: repo.webUrl ?? '',
+            avatar_url: '',
+            organizationName: project.name ?? '',
+            visibility:
+                project.visibility === ProjectVisibility.Private
+                    ? 'private'
+                    : 'public',
+            selected:
+                integrationConfig?.configValue?.some(
+                    (repository) => repository?.name === repo.name,
+                ) ?? false,
+            default_branch: repo.defaultBranch ?? '',
+            project: {
+                id: project?.id,
+                name: project?.name ?? '',
+            },
+        };
     }
 
     async getListMembers(params: any): Promise<User[]> {
@@ -1173,5 +1503,129 @@ export class AzureReposService {
         throw new Error(
             'Method createResponseToComment not implemented for AzureReposService',
         );
+    }
+
+    async getOrganizationName(orgUrl, token) {
+        try {
+            const response = await axios.get(`${orgUrl}/_apis/organization`, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+            const organizationName = response?.data?.value[0]?.accountName;
+            return organizationName;
+        } catch (error) {
+            console.error('Error fetching organization name:', error);
+        }
+    }
+
+    async findOneByOrganizationAndTeamDataAndConfigKey(
+        organizationAndTeamData: OrganizationAndTeamData,
+        configKey:
+            | IntegrationConfigKey.INSTALLATION_GITHUB
+            | IntegrationConfigKey.REPOSITORIES,
+    ): Promise<any> {
+        try {
+            const integration = await this.integrationService.findOne({
+                organization: { uuid: organizationAndTeamData.organizationId },
+                team: { uuid: organizationAndTeamData.teamId },
+                platform: PlatformType.AZURE_REPOS,
+            });
+
+            if (!integration) return;
+
+            const integrationConfig =
+                await this.integrationConfigService.findOne({
+                    integration: { uuid: integration?.uuid },
+                    team: { uuid: organizationAndTeamData.teamId },
+                    configKey,
+                });
+
+            return integrationConfig?.configValue || null;
+        } catch (err) {
+            this.logger.error({
+                message: 'Error to find one by organization and team data',
+                context: AzureReposService.name,
+                serviceName:
+                    'AzureReposService findOneByOrganizationAndTeamDataAndConfigKey',
+                error: err,
+                metadata: {
+                    organizationAndTeamData,
+                    configKey,
+                },
+            });
+            throw new BadRequestException(err);
+        }
+    }
+
+    private async createNotificationChannel(
+        projectId: string,
+        userToken,
+        organizationName: string,
+        repoId: string,
+        webhookUrl: string,
+    ) {
+        const AUTH_HEADER = {
+            'Authorization': `Basic ${Buffer.from(`:${userToken}`).toString('base64')}`,
+            'Content-Type': 'application/json',
+        };
+
+        const url = `https://dev.azure.com/${organizationName}/${project}/_apis/hooks/subscriptions?api-version=7.1-preview.1`;
+
+        const eventTypes = [
+            'git.pullrequest.created',
+            'git.pullrequest.updated',
+            'git.pullrequest.merge.attempe',
+            'git.pullrequest.merge.attempted',
+            'ms.vss-code.git-pullrequest-comment-event',
+        ];
+
+        for (const evt of eventTypes) {
+            await this.createSubscription(
+                url,
+                evt,
+                projectId,
+                repoId,
+                webhookUrl,
+                AUTH_HEADER,
+            );
+        }
+    }
+
+    private async createSubscription(
+        url,
+        eventType,
+        projectId,
+        repoId,
+        webhookUrl,
+        authHeader,
+    ) {
+        const payload = {
+            publisherId: 'tfs', // sempre "tfs"
+            eventType,
+            resourceVersion: '1.0',
+            consumerId: 'webHooks',
+            consumerActionId: 'httpRequest',
+            publisherInputs: {
+                projectId: projectId,
+                repository: repoId,
+            },
+            consumerInputs: {
+                url: webhookUrl,
+            },
+        };
+
+        try {
+            const res = await axios.post(url, payload, {
+                headers: authHeader,
+            });
+            console.log(`✅ Criado: ${eventType} -> id ${res.data.id}`);
+        } catch (err) {
+            console.error(
+                `❌ Erro ao criar ${eventType}:`,
+                err.response?.data || err.message,
+            );
+        }
     }
 }

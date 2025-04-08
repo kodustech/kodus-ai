@@ -86,6 +86,7 @@
     "amqp-connection-manager": "^4.1.14",
     "amqplib": "^0.10.7",
     "axios": "^1.8.4",
+    "azure-devops-node-api": "^14.1.0",
     "bcryptjs": "^3.0.2",
     "bitbucket": "^2.12.0",
     "body-parser": "^2.2.0",
