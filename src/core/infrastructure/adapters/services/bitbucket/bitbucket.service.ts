@@ -51,7 +51,12 @@ import { PromptService } from '../prompt.service';
 import moment from 'moment';
 import { ParametersKey } from '@/shared/domain/enums/parameters-key.enum';
 import { Commit } from '@/config/types/general/commit.type';
-import { CommentResult, FileChange, Repository, ReviewComment } from '@/config/types/general/codeReview.type';
+import {
+    CommentResult,
+    FileChange,
+    Repository,
+    ReviewComment,
+} from '@/config/types/general/codeReview.type';
 import { getLabelShield } from '@/shared/utils/codeManagement/labels';
 import { Response as BitbucketResponse } from 'bitbucket/src/request/types';
 import { CreateAuthIntegrationStatus } from '@/shared/domain/enums/create-auth-integration-status.enum';
@@ -67,8 +72,9 @@ import { IRepository } from '@/core/domain/pullRequests/interfaces/pullRequests.
 @IntegrationServiceDecorator(PlatformType.BITBUCKET, 'codeManagement')
 export class BitbucketService
     implements
-    IBitbucketService,
-    Omit<ICodeManagementService, 'getOrganizations'> {
+        IBitbucketService,
+        Omit<ICodeManagementService, 'getOrganizations'>
+{
     constructor(
         @Inject(INTEGRATION_SERVICE_TOKEN)
         private readonly integrationService: IIntegrationService,
@@ -88,8 +94,12 @@ export class BitbucketService
         private readonly promptService: PromptService,
 
         private readonly logger: PinoLoggerService,
-    ) { }
-    getPullRequestReviewThreads(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; prNumber: number; }): Promise<any | null> {
+    ) {}
+    getPullRequestReviewThreads(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<any | null> {
         throw new Error('Method not implemented.');
     }
 
@@ -1294,15 +1304,15 @@ export class BitbucketService
             const bitbucketAPI =
                 this.instanceBitbucketApi(bitbucketAuthDetails);
 
-            const severityShield = lineComment?.suggestion
-                ? getSeverityLevelShield(lineComment.suggestion.severity)
+            const severityText = lineComment?.suggestion
+                ? lineComment.suggestion.severity
                 : '';
-            const labelShield = lineComment?.suggestion
-                ? getLabelShield(lineComment.suggestion.label)
+            const labelText = lineComment?.suggestion
+                ? lineComment.suggestion.label
                 : '';
 
             const bodyFormatted =
-                `${getCodeReviewBadge()} ${labelShield} ${severityShield}\n\n` +
+                `\`kody|code-review\` \`${labelText}\` \`severity-level|${severityText}\`\n\n` +
                 `\`\`\`${repository?.language?.toLowerCase()}\n` +
                 `${lineComment?.body?.improvedCode}\n` +
                 `\`\`\`\n` +
@@ -1324,7 +1334,7 @@ export class BitbucketService
                             path: lineComment?.path,
                             to: this.sanitizeLine(
                                 params.lineComment.start_line ??
-                                params.lineComment.line,
+                                    params.lineComment.line,
                             ),
                         },
                     },
@@ -1360,18 +1370,14 @@ export class BitbucketService
     }
 
     async createCommentInPullRequest(params: {
-        organizationAndTeamData: OrganizationAndTeamData,
-        repository: Partial<IRepository>,
-        prNumber: number,
-        body: string,
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<IRepository>;
+        prNumber: number;
+        body: string;
     }): Promise<any | null> {
         try {
-            const {
-                organizationAndTeamData,
-                repository,
-                prNumber,
-                body,
-            } = params;
+            const { organizationAndTeamData, repository, prNumber, body } =
+                params;
 
             const bitbucketAuthDetails = await this.getAuthDetails(
                 organizationAndTeamData,
@@ -1388,7 +1394,6 @@ export class BitbucketService
 
             const bitbucketAPI =
                 this.instanceBitbucketApi(bitbucketAuthDetails);
-
 
             // added ts-ignore because _body expects a type property but Bitbucket rejects it
             const comment = await bitbucketAPI.pullrequests
@@ -1753,12 +1758,8 @@ export class BitbucketService
         commentId: number;
     }): Promise<any | null> {
         try {
-            const {
-                organizationAndTeamData,
-                repository,
-                prNumber,
-                commentId,
-            } = params;
+            const { organizationAndTeamData, repository, prNumber, commentId } =
+                params;
 
             const bitbucketAuthDetails = await this.getAuthDetails(
                 organizationAndTeamData,
@@ -1769,14 +1770,16 @@ export class BitbucketService
                 repository.id,
             );
 
-            const bitbucketAPI = this.instanceBitbucketApi(bitbucketAuthDetails);
+            const bitbucketAPI =
+                this.instanceBitbucketApi(bitbucketAuthDetails);
 
-            const resolvedComment = await bitbucketAPI.pullrequests.resolveComment({
-                comment_id: commentId,
-                pull_request_id: prNumber,
-                repo_slug: `{${repository.id}}`,
-                workspace: `{${workspace}}`,
-            })
+            const resolvedComment =
+                await bitbucketAPI.pullrequests.resolveComment({
+                    comment_id: commentId,
+                    pull_request_id: prNumber,
+                    repo_slug: `{${repository.id}}`,
+                    workspace: `{${workspace}}`,
+                });
             return resolvedComment.data;
         } catch (error) {
             this.logger.error({
@@ -1788,7 +1791,9 @@ export class BitbucketService
                     params,
                 },
             });
-            throw new BadRequestException('Failed to mark discussion as resolved for merge request');
+            throw new BadRequestException(
+                'Failed to mark discussion as resolved for merge request',
+            );
         }
     }
 
@@ -2722,10 +2727,15 @@ export class BitbucketService
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
         repository: { id: string; name: string };
-        criticalComments: CommentResult[]
+        criticalComments: CommentResult[];
     }) {
         try {
-            const { organizationAndTeamData, prNumber, repository, criticalComments } = params;
+            const {
+                organizationAndTeamData,
+                prNumber,
+                repository,
+                criticalComments,
+            } = params;
 
             const bitbucketAuthDetails = await this.getAuthDetails(
                 organizationAndTeamData,
@@ -2740,9 +2750,8 @@ export class BitbucketService
                 return null;
             }
 
-            const listOfCriticalIssues = this.getListOfCriticalIssues(
-                criticalComments,
-            );
+            const listOfCriticalIssues =
+                this.getListOfCriticalIssues(criticalComments);
 
             const bitbucketAPI =
                 this.instanceBitbucketApi(bitbucketAuthDetails);
@@ -2753,7 +2762,8 @@ export class BitbucketService
                 workspace: `{${workspace}}`,
             });
 
-            const title = "# Found critical issues please review the requested changes";
+            const title =
+                '# Found critical issues please review the requested changes';
 
             const bodyFormatted = `${title}\n\n${listOfCriticalIssues}`;
 
@@ -2787,25 +2797,31 @@ export class BitbucketService
     }
 
     getListOfCriticalIssues(criticalComments: CommentResult[]): string {
-        const criticalIssuesSummaryArray = this.getCriticalIssuesSummaryArray(criticalComments);
+        const criticalIssuesSummaryArray =
+            this.getCriticalIssuesSummaryArray(criticalComments);
 
-        const listOfCriticalIssues = criticalIssuesSummaryArray.map((criticalIssue) => {
-            const summary = criticalIssue.oneSentenceSummary;
-            const formattedItem = `- ${summary}`;
+        const listOfCriticalIssues = criticalIssuesSummaryArray
+            .map((criticalIssue) => {
+                const summary = criticalIssue.oneSentenceSummary;
+                const formattedItem = `- ${summary}`;
 
-            return formattedItem.trim();
-        }).join("\n")
+                return formattedItem.trim();
+            })
+            .join('\n');
 
         return listOfCriticalIssues;
     }
 
-    getCriticalIssuesSummaryArray(criticalComments: CommentResult[]): OneSentenceSummaryItem[] {
+    getCriticalIssuesSummaryArray(
+        criticalComments: CommentResult[],
+    ): OneSentenceSummaryItem[] {
         const criticalIssuesSummaryArray: OneSentenceSummaryItem[] =
             criticalComments.map((comment) => {
                 return {
                     id: comment.codeReviewFeedbackData.commentId,
-                    oneSentenceSummary: comment.comment.suggestion.oneSentenceSummary ?? "",
-                }
+                    oneSentenceSummary:
+                        comment.comment.suggestion.oneSentenceSummary ?? '',
+                };
             });
 
         return criticalIssuesSummaryArray;
@@ -2893,8 +2909,9 @@ export class BitbucketService
                 queryString += `created_on >= "${filters.startDate}"`;
             }
             if (filters?.endDate) {
-                queryString += `${queryString ? ' AND ' : ''
-                    }created_on <= "${filters.endDate}"`;
+                queryString += `${
+                    queryString ? ' AND ' : ''
+                }created_on <= "${filters.endDate}"`;
             }
 
             const pullRequests = await bitbucketAPI.pullrequests
@@ -2986,9 +3003,9 @@ export class BitbucketService
     }
 
     async getPullRequestReviewComments(params: {
-        organizationAndTeamData: OrganizationAndTeamData,
-        repository: Partial<Repository>,
-        prNumber: number,
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
     }): Promise<PullRequestReviewComment[] | null> {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -3012,34 +3029,35 @@ export class BitbucketService
 
             const bitbucketAPI = this.instanceBitbucketApi(bitbucketAuthDetail);
 
-            const comments = await bitbucketAPI.pullrequests.listComments({
-                repo_slug: `{${repository.id}}`,
-                workspace: `{${workspace}}`,
-                pull_request_id: prNumber,
-            }).then((res) => this.getPaginatedResults(bitbucketAPI, res));
+            const comments = await bitbucketAPI.pullrequests
+                .listComments({
+                    repo_slug: `{${repository.id}}`,
+                    workspace: `{${workspace}}`,
+                    pull_request_id: prNumber,
+                })
+                .then((res) => this.getPaginatedResults(bitbucketAPI, res));
 
-            return comments.map((comment) => {
-                const mappedComment: PullRequestReviewComment = {
-                    id: comment?.id,
-                    threadId: null, // Bitbucket comments are resolved by id,so no threadId necessary
-                    body: comment?.content?.raw ?? "",
-                    createdAt: comment?.created_on,
-                    updatedAt: comment?.updated_on,
-                    author: {
-                        id: this.sanitizeUUId(comment?.user?.uuid) ?? "",
-                        username: comment?.user?.display_name ?? "",
-                        name: comment?.user?.display_name ?? "",
-                    },
-                }
-                return mappedComment
-            })
+            return comments
+                .map((comment) => {
+                    const mappedComment: PullRequestReviewComment = {
+                        id: comment?.id,
+                        threadId: null, // Bitbucket comments are resolved by id,so no threadId necessary
+                        body: comment?.content?.raw ?? '',
+                        createdAt: comment?.created_on,
+                        updatedAt: comment?.updated_on,
+                        author: {
+                            id: this.sanitizeUUId(comment?.user?.uuid) ?? '',
+                            username: comment?.user?.display_name ?? '',
+                            name: comment?.user?.display_name ?? '',
+                        },
+                    };
+                    return mappedComment;
+                })
                 .sort(
                     (a, b) =>
                         new Date(b.createdAt).getTime() -
                         new Date(a.createdAt).getTime(),
                 );
-
-
         } catch (error) {
             this.logger.error({
                 message: 'Error to get pull requests with files',
