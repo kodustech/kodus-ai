@@ -57,13 +57,9 @@ import {
     CommentResult,
     FileChange,
     Repository,
-    ReviewComment,
 } from '@/config/types/general/codeReview.type';
-import { getLabelShield } from '@/shared/utils/codeManagement/labels';
 import { Response as BitbucketResponse } from 'bitbucket/src/request/types';
 import { CreateAuthIntegrationStatus } from '@/shared/domain/enums/create-auth-integration-status.enum';
-import { getSeverityLevelShield } from '@/shared/utils/codeManagement/severityLevel';
-import { getCodeReviewBadge } from '@/shared/utils/codeManagement/codeReviewBadge';
 import {
     IRepositoryManager,
     REPOSITORY_MANAGER_TOKEN,
@@ -97,6 +93,9 @@ export class BitbucketService
 
         private readonly logger: PinoLoggerService,
     ) { }
+    getListOfValidReviews(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; prNumber: number; }): Promise<any[] | null> {
+        throw new Error('Method not implemented.');
+    }
 
     async getPullRequestsWithChangesRequested(params: {
         organizationAndTeamData: OrganizationAndTeamData;
@@ -156,46 +155,6 @@ export class BitbucketService
         }
     }
 
-    async getListOfValidReviews(params: {
-        organizationAndTeamData: OrganizationAndTeamData;
-        repository: Partial<Repository>;
-        prNumber: number;
-    }): Promise<any[] | null> {
-        try {
-            const { organizationAndTeamData, repository } = params;
-
-            const bitbucketAuthDetail = await this.getAuthDetails(
-                organizationAndTeamData,
-            );
-
-            if (!bitbucketAuthDetail) {
-                return null;
-            }
-
-            const workspace = await this.getWorkspaceFromRepository(
-                organizationAndTeamData,
-                repository.id,
-            );
-
-            if (!workspace) {
-                return null;
-            }
-
-            const bitbucketAPI = this.instanceBitbucketApi(bitbucketAuthDetail);
-        }
-        catch (error) {
-            this.logger.error({
-                message: 'Error to get pull requests with files',
-                context: BitbucketService.name,
-                serviceName: 'BitbucketService getPullRequestsWithFiles',
-                error: error,
-                metadata: {
-                    params,
-                },
-            });
-            return null;
-        }
-    }
 
     // Only relevant for github
     getPullRequestReviewThreads(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; prNumber: number; }): Promise<any | null> {
@@ -394,10 +353,99 @@ export class BitbucketService
 
     async getPullRequestDetails(params: {
         organizationAndTeamData: OrganizationAndTeamData;
-        repository: { name: string; id: string };
+        repository: { id: string, name: string };
         prNumber: number;
     }): Promise<any | null> {
-        throw new Error('Method not implemented.');
+        try {
+            const { organizationAndTeamData, repository, prNumber } = params;
+
+            if (!organizationAndTeamData.organizationId || !repository.id || !prNumber) {
+                return null;
+            }
+
+            const bitbucketAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            if (!bitbucketAuthDetail) {
+                return null;
+            }
+
+            const bitbucketAPI = this.instanceBitbucketApi(bitbucketAuthDetail);
+
+            const workspace = await this.getWorkspaceFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+
+            if (!workspace) {
+                return null;
+            }
+
+
+            const prDetails = (await bitbucketAPI.pullrequests.get({
+                repo_slug: `{${repository.id}}`,
+                workspace: `{${workspace}}`,
+                pull_request_id: prNumber,
+                fields: '+values.participants,+values.reviewers',
+            })).data;
+
+            const prData = {
+                id: prDetails?.toString(),
+                author_id: this.sanitizeUUId(prDetails.author?.uuid?.toString()),
+                author_name: prDetails.author?.display_name,
+                repository: repository.name,
+                repositoryId: this.sanitizeUUId(prDetails.source?.repository?.uuid),
+                message: prDetails.summary?.raw,
+                state: prDetails.state,
+                prURL: prDetails.links?.html?.href,
+                organizationId: organizationAndTeamData.organizationId,
+                pull_number: prDetails.id,
+                number: prDetails.id,
+                body: prDetails.summary?.raw,
+                title: prDetails.title,
+                created_at: prDetails.created_on,
+                updated_at: prDetails.updated_on,
+                merged_at: prDetails.updated_on,
+                participants: prDetails.participants.map((participant) => ({
+                    id: this.sanitizeUUId(participant.user.uuid),
+                    approved: participant.approved,
+                    state: participant.state,
+                    type: participant.type
+                })),
+                reviewers: prDetails.reviewers.map((reviewer) => ({
+                    id: this.sanitizeUUId(reviewer.uuid),
+                })),
+                head: {
+                    ref: prDetails.source?.branch?.name,
+                    repo: {
+                        id: this.sanitizeUUId(prDetails.source?.repository?.uuid),
+                        name: prDetails.source?.repository?.name,
+                    },
+                },
+                base: {
+                    ref: prDetails.destination?.branch?.name,
+                },
+                user: {
+                    login: prDetails.author?.display_name ?? '',
+                    name: prDetails.author?.display_name,
+                    id: this.sanitizeUUId(prDetails.author?.uuid),
+                },
+            };
+
+            return prData;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error to get pull request details',
+                context: BitbucketService.name,
+                serviceName: 'BitbucketService getPullRequestDetails',
+                error: error,
+                metadata: {
+                    params,
+                },
+            });
+            return null;
+        }
     }
 
     async getRepositories(params: {

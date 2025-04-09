@@ -205,7 +205,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
 
         let isPlatformTypeGithub: boolean = platformType === PlatformType.GITHUB;
 
-        let reviewComments;
+        let reviewComments: any[];
         if (isPlatformTypeGithub) {
             reviewComments = await this.codeManagementService.getPullRequestReviewThreads(codeManagementRequestData, PlatformType.GITHUB);
         }
@@ -246,8 +246,58 @@ export class CheckIfPRCanBeApprovedCronProvider {
              * We can use the reviewers information to filter the comments arrays that were made by other users besides kody.
              * That should return to us a list of reviews specifically made by users. We can use this to check if the PR should be approved.
             */
+            await this.getValidUserReviews({ organizationAndTeamData, prNumber, repository, reviewComments });
 
         }
+
+    }
+
+    private async getValidUserReviews(params: {
+        repository: Partial<Repository>,
+        prNumber: number,
+        organizationAndTeamData: OrganizationAndTeamData,
+        reviewComments: any[]
+    }): Promise<boolean> {
+        const { organizationAndTeamData, prNumber, repository, reviewComments } = params;
+
+        const pr: any = await this.codeManagementService.getPullRequestDetails({
+            organizationAndTeamData, prNumber, repository: {
+                id: repository.id,
+                name: repository.name,
+            }
+        }, PlatformType.BITBUCKET);
+
+        //First we need to eliminate kody from the list of reviewers.
+        const kodyUserId = reviewComments.find((reviewComment) => {
+            return reviewComment.body && reviewComment.body.includes('![kody code-review]');
+        })?.author.id; // Use optional chaining to safely access the id
+
+        const reviewers = kodyUserId
+            ? pr.participants.filter((participant) => participant.id !== kodyUserId)
+            : pr.participants;
+
+        /**
+         * Check if both reviewers are approved, if they are
+         * Approve PR.
+         */
+        const validReviews = reviewComments.filter((reviewComment) => {
+            return reviewers.some((reviewer) => reviewer.id === reviewComment.author.id);
+        });
+
+        const unresolvedReviews = validReviews.filter((review) => review.isResolved === false);
+
+        if (unresolvedReviews.length < 1) {
+            await this.codeManagementService.approvePullRequest({
+                organizationAndTeamData,
+                prNumber,
+                repository: {
+                    name: repository.name,
+                    id: repository.id,
+                }
+            }, PlatformType.BITBUCKET);
+            return true;
+        }
+        return false;
 
     }
 
