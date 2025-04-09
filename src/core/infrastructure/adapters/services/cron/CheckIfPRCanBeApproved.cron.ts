@@ -267,7 +267,6 @@ export class CheckIfPRCanBeApprovedCronProvider {
             }
         }, PlatformType.BITBUCKET);
 
-        //First we need to eliminate kody from the list of reviewers.
         const kodyUser = reviewComments.find((reviewComment) => {
             return reviewComment.body && reviewComment.body.includes('![kody code-review]');
         });
@@ -320,7 +319,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     ?.filter((suggestion) =>
                         suggestion.comment &&
                         suggestion.deliveryStatus === DeliveryStatus.SENT &&
-                        suggestion.severity === SeverityLevel.HIGH
+                        suggestion.severity === SeverityLevel.CRITICAL
                     )
                     .forEach((filteredSuggestion) => {
                         implementedSuggestionsCommentIds.push(filteredSuggestion);
