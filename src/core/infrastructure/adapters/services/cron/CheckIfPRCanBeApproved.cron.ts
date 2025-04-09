@@ -268,18 +268,28 @@ export class CheckIfPRCanBeApprovedCronProvider {
         }, PlatformType.BITBUCKET);
 
         //First we need to eliminate kody from the list of reviewers.
-        const kodyUserId = reviewComments.find((reviewComment) => {
+        const kodyUser = reviewComments.find((reviewComment) => {
             return reviewComment.body && reviewComment.body.includes('![kody code-review]');
-        })?.author.id; // Use optional chaining to safely access the id
+        });
 
-        const reviewers = kodyUserId
-            ? pr.participants.filter((participant) => participant.id !== kodyUserId)
+        const reviewers = kodyUser
+            ? pr.participants.filter((participant) => participant.id !== kodyUser?.author.id)
             : pr.participants;
 
-        /**
-         * Check if both reviewers are approved, if they are
-         * Approve PR.
-         */
+        const kodyReviewer = kodyUser
+            ? pr.participants.filter((participant) => participant.id === kodyUser?.author.id)
+            : null;
+
+        if (kodyReviewer && kodyReviewer?.approved) {
+            return true;
+        }
+
+        const anyReviewerApproved = reviewers.some((reviewer) => reviewer.approved);
+
+        if (anyReviewerApproved) {
+            return true;
+        }
+
         const validReviews = reviewComments.filter((reviewComment) => {
             return reviewers.some((reviewer) => reviewer.id === reviewComment.author.id);
         });
