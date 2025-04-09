@@ -1,0 +1,66 @@
+name: Deploy to Production
+
+on:
+    workflow_dispatch:
+        inputs:
+            image_tag:
+                description: "Tag da Imagem Docker para Implantação"
+                required: true
+
+jobs:
+    deploy:
+        name: Deploy to Production
+        runs-on: ubuntu-latest
+        steps:
+            - name: Get runner IP
+              run: |
+                  ip=$(curl -s https://ipinfo.io/ip)
+                  echo "::add-mask::$ip"
+                  echo "runner_ip=$ip" >> $GITHUB_ENV
+
+            - name: Adicionar IP do Runner ao Grupo de Segurança
+              run: |
+                  aws ec2 authorize-security-group-ingress --group-id ${{ secrets.AWS_SECURITY_GROUP }} --protocol tcp --port 22 --cidr ${{ env.runner_ip }}/32 > /dev/null 2>&1
+              env:
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+            - name: Executar Script de Implantação no EC2
+              uses: appleboy/ssh-action@v1.2.2
+              with:
+                  host: ${{ secrets.AWS_PROD_HOST }}
+                  username: ${{ secrets.AWS_PROD_USERNAME }}
+                  key: ${{ secrets.AWS_PROD_KEY_SSH }}
+                  script: |
+                      cd ~/kodus-orchestrator
+                      ./start-app.sh prod ${{ github.event.inputs.image_tag }} > /dev/null 2>&1
+
+            - name: Remover IP do Runner do Grupo de Segurança
+              run: |
+                  aws ec2 revoke-security-group-ingress --group-id ${{ secrets.AWS_SECURITY_GROUP }} --protocol tcp --port 22 --cidr ${{ env.runner_ip }}/32 > /dev/null 2>&1
+              env:
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+              if: always()
+
+            - name: Notificar Discord sobre Sucesso
+              if: success()
+              uses: sarisia/actions-status-discord@v1.15.3
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK }}
+                  content: ":tada: A implantação em produção foi concluída com sucesso."
+                  title: "Implantação: kodus-orchestrator"
+                  username: "GitHub Actions"
+                  color: 0x00FF00
+
+            - name: Notificar Discord sobre Falha
+              if: failure()
+              uses: sarisia/actions-status-discord@v1.15.3
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK }}
+                  content: ":x: A implantação em produção falhou. Verifique os logs para mais detalhes."
+                  title: "Implantação: kodus-orchestrator"
+                  username: "GitHub Actions"
+                  color: 0xFF0000
