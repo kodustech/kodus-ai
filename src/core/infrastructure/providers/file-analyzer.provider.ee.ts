@@ -16,6 +16,7 @@ import {
     IASTAnalysisService,
 } from '@/core/domain/codeBase/contracts/ASTAnalysisService.contract';
 import { IAIAnalysisService } from '@/core/domain/codeBase/contracts/AIAnalysisService.contract';
+import { environment } from '@/ee/configs/environment';
 
 export const FILE_REVIEW_CONTEXT_PREPARATION_PROVIDER: Provider = {
     provide: FILE_REVIEW_CONTEXT_PREPARATION_TOKEN,
@@ -25,8 +26,7 @@ export const FILE_REVIEW_CONTEXT_PREPARATION_PROVIDER: Provider = {
         aiAnalysisService: IAIAnalysisService,
         astAnalysisService: IASTAnalysisService,
     ): IFileReviewContextPreparation => {
-        const isCloud =
-            (process.env.API_CLOUD_MODE || 'true').toLowerCase() === 'true';
+        const isCloud = environment.API_CLOUD_MODE;
 
         if (isCloud) {
             return new ProFileReviewContextPreparation(

@@ -43,7 +43,6 @@ export class TreeSitterService {
     private initializeParsers(): void {
         try {
             for (const [lang, grammar] of this.languageMap) {
-                console.log('Initializing parser for language:', lang);
                 const parser = new Parser();
                 parser.setLanguage(grammar);
                 this.parsers.set(lang, parser);
@@ -209,7 +208,7 @@ export class TreeSitterService {
             // Create a new query using the defined language
             const query = new Parser.Query(parser.getLanguage(), queryString);
             const matches = query.matches(tree.rootNode);
-            
+
             return matches.map((match) => ({
                 pattern: match.pattern,
                 captures: match.captures.map((capture) => ({

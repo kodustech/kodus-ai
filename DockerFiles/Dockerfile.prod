@@ -3,7 +3,6 @@ ARG API_CLOUD_MODE=false
 # Estágio base: instalar dependências apenas 1x
 FROM --platform=linux/amd64 node:22.14.0-slim AS deps
 
-# Redefinir ARG e definir ENV neste estágio
 ARG API_CLOUD_MODE
 ENV API_CLOUD_MODE=${API_CLOUD_MODE}
 
@@ -13,59 +12,48 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 WORKDIR /usr/src/app
 
-# Instalar certificados de CA para conexões seguras
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Instalar dependências de produção (dev + prod para o build)
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
 # -------------------------------------------------------------
-# Estágio build: compila o código e workflows
+# Estágio build
 FROM deps AS build
 
-# Redefinir ARG e definir ENV neste estágio
 ARG API_CLOUD_MODE
 ENV API_CLOUD_MODE=${API_CLOUD_MODE}
 
 WORKDIR /usr/src/app
 
-# Copiar o restante do código-fonte
 COPY . .
 
-# Compilar o código principal e workflows
+# ✅ Injeta o valor fixo antes do build
+RUN echo "export const IS_CLOUD_MODE = '${API_CLOUD_MODE}';" > ee/configs/environment.ts
+
 RUN yarn build:production
 
 # -------------------------------------------------------------
-# Estágio final para Produção
+# Estágio final
 FROM deps AS production
 
-# Redefinir ARG e definir ENV neste estágio
 ARG API_CLOUD_MODE
 ENV API_CLOUD_MODE=${API_CLOUD_MODE}
 
 WORKDIR /usr/src/app
 EXPOSE 3001
 
-# Instalar certificados de CA novamente para garantir conexões seguras
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Reaproveitar dependências de produção instaladas no estágio deps
 COPY --from=deps /usr/src/app/node_modules ./node_modules
 COPY package.json yarn.lock ./
-
-# Copiar artefatos do build
 COPY --from=build /usr/src/app/dist ./dist
 COPY ecosystem.config.js ./
-
-# Copiar o arquivo de configuração para a pasta raiz
 COPY default-kodus-config.yml ./default-kodus-config.yml
 
-# Instalação do PM2 e PM2-Logrotate
 RUN yarn global add pm2
 RUN pm2 install pm2-logrotate
 RUN pm2 set pm2-logrotate:max_size 30M
 RUN pm2 set pm2-logrotate:retain 10
 
-# Comando de inicialização para Produção
 CMD ["pm2-runtime", "start", "ecosystem.config.js", "--env", "production"]

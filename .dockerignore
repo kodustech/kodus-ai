@@ -11,3 +11,6 @@ dist
 .dockerignore
 Dockerfile
 docker-compose.yml
+
+# Evita que o arquivo local vá pro build e atrapalhe o echo do Docker
+src/ee/configs/environment/environment.ts

@@ -1,4 +1,5 @@
 import 'source-map-support/register';
+import { environment } from '@/ee/configs/environment';
 
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -29,7 +30,6 @@ async function bootstrap() {
 
     const pinoLogger = app.get(PinoLoggerService);
     app.useLogger(pinoLogger);
-
 
     const configService: ConfigService = app.get(ConfigService);
     const config = configService.get<HttpServerConfiguration>('server');
@@ -69,8 +69,14 @@ async function bootstrap() {
     app.useStaticAssets('static');
     useContainer(app.select(AppModule), { fallbackOnErrors: true });
 
+    console.log(
+        `[BOOT] - Running in ${environment.API_CLOUD_MODE ? 'CLOUD' : 'SELF-HOSTED'} mode`,
+    );
     await app.listen(port, host, () => {
-        console.log(`Server ready on http://${host}:${port}`, 'Application');
+        console.log(
+            `[Server] - Ready on http://${host}:${port}`,
+            'Application',
+        );
     });
 }
 

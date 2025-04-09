@@ -58,3 +58,6 @@ dev.env
 /temp
 
 .kodus-graph-cache.json
+
+environment.ts
+src/ee/configs/environment/environment.ts
