@@ -391,7 +391,7 @@ export class BitbucketService
             })).data;
 
             const prData = {
-                id: prDetails?.toString(),
+                id: prDetails.id.toString(),
                 author_id: this.sanitizeUUId(prDetails.author?.uuid?.toString()),
                 author_name: prDetails.author?.display_name,
                 repository: repository.name,
