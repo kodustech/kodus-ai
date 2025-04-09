@@ -1,5 +1,13 @@
+# Declaração global do argumento de build com valor padrão
+ARG API_CLOUD_MODE=false
+
 # 1) Estágio base: instalar dependências apenas 1x
 FROM --platform=linux/amd64 node:22.14.0-slim AS deps
+
+# Redefinir ARG e definir ENV neste estágio
+ARG API_CLOUD_MODE
+ENV API_CLOUD_MODE=${API_CLOUD_MODE}
+
 WORKDIR /usr/src/app
 
 # Instalar certificados raiz e git no estágio final
@@ -20,6 +28,10 @@ RUN yarn install --frozen-lockfile
 # -------------------------------------------------------------
 # 2) Estágio build-code: compila o código e gera ./dist
 FROM deps AS build-code
+
+# Redefinir ARG e definir ENV neste estágio
+ARG API_CLOUD_MODE
+ENV API_CLOUD_MODE=${API_CLOUD_MODE}
 
 # Copiamos o restante do código-fonte
 COPY . .
@@ -42,6 +54,11 @@ RUN apt-get update && apt-get install -y git build-essential postgresql-client p
 # -------------------------------------------------------------
 # 3) Estágio final de desenvolvimento
 FROM --platform=linux/amd64 node:20-slim AS development
+
+# Redefinir ARG e definir ENV neste estágio
+ARG API_CLOUD_MODE
+ENV API_CLOUD_MODE=${API_CLOUD_MODE}
+
 WORKDIR /usr/src/app
 EXPOSE 3001
 

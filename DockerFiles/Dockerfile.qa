@@ -1,5 +1,11 @@
+ARG API_CLOUD_MODE=false
+
 # Estágio base: instalar dependências apenas 1x
 FROM --platform=linux/amd64 node:22.14.0-slim AS deps
+
+# Redefinir ARG e definir ENV neste estágio
+ARG API_CLOUD_MODE
+ENV API_CLOUD_MODE=${API_CLOUD_MODE}
 
 ARG RELEASE_VERSION
 ENV SENTRY_RELEASE=$RELEASE_VERSION
@@ -19,6 +25,11 @@ RUN yarn install --frozen-lockfile
 # -------------------------------------------------------------
 # Estágio build: compila o código e workflows
 FROM deps AS build
+
+# Redefinir ARG e definir ENV neste estágio
+ARG API_CLOUD_MODE
+ENV API_CLOUD_MODE=${API_CLOUD_MODE}
+
 WORKDIR /usr/src/app
 
 # Copiar o restante do código-fonte
@@ -30,6 +41,11 @@ RUN yarn build:production
 # -------------------------------------------------------------
 # Estágio final para QA
 FROM deps AS homolog
+
+# Redefinir ARG e definir ENV neste estágio
+ARG API_CLOUD_MODE
+ENV API_CLOUD_MODE=${API_CLOUD_MODE}
+
 WORKDIR /usr/src/app
 EXPOSE 3001
 

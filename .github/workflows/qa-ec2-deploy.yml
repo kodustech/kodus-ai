@@ -12,11 +12,11 @@ jobs:
 
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4.1.1
+              uses: actions/checkout@v4.2.2
 
               # see: https://github.com/aws-actions/configure-aws-credentials
             - name: Configure AWS Credentials
-              uses: aws-actions/configure-aws-credentials@v4.0.1
+              uses: aws-actions/configure-aws-credentials@v4.1.0
               with:
                   aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
                   aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -32,7 +32,7 @@ jobs:
                   ECR_REPOSITORY: kodus-orchestrator-qa
                   IMAGE_TAG: ${{ github.sha }}
               run: |
-                  docker build -f DockerFiles/Dockerfile.qa -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+                  docker build --build-arg RELEASE_VERSION=${{ env.RELEASE_VERSION }} --build-arg API_CLOUD_MODE=true -f DockerFiles/Dockerfile.qa -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
                   docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
             - name: Log out of Amazon ECR
@@ -60,14 +60,14 @@ jobs:
                   AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
 
             - name: Execute start-app.sh on EC2
-              uses: appleboy/ssh-action@v1.0.0
+              uses: appleboy/ssh-action@v1.2.2
               with:
                   host: ${{ secrets.AWS_QA_HOST }}
                   username: ${{ secrets.AWS_QA_USERNAME }}
                   key: ${{ secrets.AWS_QA_KEY_SSH }}
                   script: |
                       cd ~/kodus-orchestrator
-                      ./start-app.sh qa ${{ github.sha }} ${{ github.ref }}
+                      ./start-app.sh qa ${{ github.sha }} ${{ github.ref }} > /dev/null 2>&1
 
             - name: Remove Github Actions IP from security group
               run: |
@@ -78,11 +78,22 @@ jobs:
                   AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
               if: always()
 
-            - name: Actions for Discord
-              uses: sarisia/actions-status-discord@v1.13.0
+            - name: Notify Discord on Success
+              if: success()
+              uses: sarisia/actions-status-discord@v1.15.3
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK }}
-                  status: ${{ job.status }}
-                  content: ":clap: Build successful!"
-                  title: "Deploy QA: kodus-orchestrator"
-                  username: GitHub Actions
+                  content: ":tada: Build and deployment successful!"
+                  title: "Deploy QA: kodus-ai"
+                  username: "GitHub Actions"
+                  color: 0x00FF00
+
+            - name: Notify Discord on Failure
+              if: failure()
+              uses: sarisia/actions-status-discord@v1.15.3
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK }}
+                  content: ":x: Build or deployment failed. Please check the logs."
+                  title: "Deploy QA: kodus-ai"
+                  username: "GitHub Actions"
+                  color: 0xFF0000
