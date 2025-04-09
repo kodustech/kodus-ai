@@ -156,8 +156,45 @@ export class BitbucketService
         }
     }
 
-    getListOfValidReviews(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; prNumber: number; }): Promise<any[] | null> {
-        throw new Error('Method not implemented.');
+    async getListOfValidReviews(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<any[] | null> {
+        try {
+            const { organizationAndTeamData, repository } = params;
+
+            const bitbucketAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            if (!bitbucketAuthDetail) {
+                return null;
+            }
+
+            const workspace = await this.getWorkspaceFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+
+            if (!workspace) {
+                return null;
+            }
+
+            const bitbucketAPI = this.instanceBitbucketApi(bitbucketAuthDetail);
+        }
+        catch (error) {
+            this.logger.error({
+                message: 'Error to get pull requests with files',
+                context: BitbucketService.name,
+                serviceName: 'BitbucketService getPullRequestsWithFiles',
+                error: error,
+                metadata: {
+                    params,
+                },
+            });
+            return null;
+        }
     }
 
     // Only relevant for github
