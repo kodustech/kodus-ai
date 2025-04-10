@@ -363,8 +363,6 @@ Follow this step-by-step thinking:
 ## Code Under Review
 Below is the file information to analyze:
 
-File Path:
-
 Complete File Content:
 \`\`\`
 ${payload?.fileContent}
