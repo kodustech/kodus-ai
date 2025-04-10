@@ -15,7 +15,7 @@ export function getLLMModelProviderWithFallback(
         [LLMModelProvider.GEMINI_1_5_PRO_EXP]: 'API_LLM_MODEL_GEMINI_1_5_PRO_EXP',
         [LLMModelProvider.GEMINI_1_5_FLASH]: 'LLM_MODEL_GEMINI_1_5_FLASH',
         [LLMModelProvider.GEMINI_2_0_FLASH]: 'LLM_MODEL_GEMINI_2_0_FLASH',
-        [LLMModelProvider.GEMINI_2_5_PRO]: 'LLM_MODEL_GEMINI_2_5_PRO',
+        [LLMModelProvider.GEMINI_2_5_PRO_PREVIEW]: 'LLM_MODEL_GEMINI_2_5_PRO_PREVIEW',
         [LLMModelProvider.DEEPSEEK_V3]: 'LLM_MODEL_DEEPSEEK_V3',
         [LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET]:
             'LLM_MODEL_VERTEX_CLAUDE_3_5_SONNET',
