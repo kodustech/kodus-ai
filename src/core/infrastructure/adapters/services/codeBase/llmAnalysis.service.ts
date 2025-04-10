@@ -13,6 +13,7 @@ import {
 import { OrganizationAndTeamData } from '@/config/types/general/organizationAndTeamData';
 import { PinoLoggerService } from '../logger/pino.service';
 import {
+    getChatGemini,
     getChatGPT,
     getChatVertexAI,
     getDeepseekByNovitaAI,
@@ -35,10 +36,9 @@ import { LLMResponseProcessor } from './utils/transforms/llmResponseProcessor.tr
 import { prompt_validateImplementedSuggestions } from '@/shared/utils/langchainCommon/prompts/validateImplementedSuggestions';
 import { prompt_selectorLightOrHeavyMode_system } from '@/shared/utils/langchainCommon/prompts/seletorLightOrHeavyMode';
 import {
+    prompt_codereview_system_gemini,
     prompt_codereview_user_light_mode,
-    prompt_codereview_user_main,
 } from '@/shared/utils/langchainCommon/prompts/configuration/codeReview';
-import { prompt_codereview_system_main } from '@/shared/utils/langchainCommon/prompts/configuration/codeReview';
 import {
     prompt_severity_analysis_system,
     prompt_severity_analysis_user,
@@ -335,8 +335,9 @@ export class LLMAnalysisService implements IAIAnalysisService {
                           temperature: 0,
                           callbacks: [this.tokenTracker],
                       })
-                    : provider === LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET
-                      ? getChatVertexAI({
+                    : provider === LLMModelProvider.GEMINI_2_5_PRO_PREVIEW
+                      ? getChatGemini({
+                            model: LLMModelProvider.GEMINI_2_5_PRO_PREVIEW,
                             temperature: 0,
                             callbacks: [this.tokenTracker],
                         })
@@ -387,18 +388,9 @@ export class LLMAnalysisService implements IAIAnalysisService {
                         {
                             role: 'user',
                             content: [
-                                // Required for pipeline steps that use file or codeDiff
-                                this.preparePrefixChainForCache(
-                                    input,
-                                    reviewModeResponse,
-                                ),
                                 {
                                     type: 'text',
-                                    text: prompt_codereview_system_main(),
-                                },
-                                {
-                                    type: 'text',
-                                    text: prompt_codereview_user_main(input),
+                                    text: prompt_codereview_system_gemini(input),
                                 },
                             ],
                         },
@@ -433,7 +425,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         ) {
             return LLMModelProvider.DEEPSEEK_V3;
         }
-        return LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET;
+        return LLMModelProvider.GEMINI_2_5_PRO_PREVIEW;
     }
 
     private getFallbackProvider(
@@ -441,13 +433,13 @@ export class LLMAnalysisService implements IAIAnalysisService {
         reviewMode: ReviewModeResponse,
     ): LLMModelProvider {
         if (reviewMode === ReviewModeResponse.LIGHT_MODE) {
-            return LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET;
+            return LLMModelProvider.GEMINI_2_5_PRO_PREVIEW;
         }
 
         const fallbackProvider =
-            provider === LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET
+            provider === LLMModelProvider.GEMINI_2_5_PRO_PREVIEW
                 ? LLMModelProvider.CHATGPT_4_ALL
-                : LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET;
+                : LLMModelProvider.GEMINI_2_5_PRO_PREVIEW;
 
         return fallbackProvider;
     }
@@ -460,7 +452,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
     ) {
         const fallbackProvider =
             provider === LLMModelProvider.CHATGPT_4_ALL
-                ? LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET
+                ? LLMModelProvider.GEMINI_2_5_PRO_PREVIEW
                 : LLMModelProvider.CHATGPT_4_ALL;
         try {
             // Main chain
@@ -500,7 +492,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         reviewMode: ReviewModeResponse = ReviewModeResponse.LIGHT_MODE,
     ) {
         const provider =
-            parameters.llmProvider || LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET;
+            parameters.llmProvider || LLMModelProvider.GEMINI_2_5_PRO_PREVIEW;
 
         // Reset token tracking for new suggestions
         this.tokenTracker.reset();
@@ -781,7 +773,10 @@ export class LLMAnalysisService implements IAIAnalysisService {
                           callbacks: [this.tokenTracker],
                       });
 
-            if (provider === LLMModelProvider.CHATGPT_4_ALL) {
+            if (
+                provider === LLMModelProvider.CHATGPT_4_ALL ||
+                provider === LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET
+            ) {
                 llm = llm.bind({
                     response_format: { type: 'json_object' },
                 });
