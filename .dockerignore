@@ -1,13 +1,22 @@
+# Ignora dependências locais
 node_modules
 lib/
+dist/
+
+# Logs e arquivos temporários
 npm-debug.log
 *.log
 *.test.js
-*.md
 .DS_Store
 
-dist
-.git
+# Infra de dev
 .dockerignore
 Dockerfile
 docker-compose.yml
+
+# Git e outros
+.git
+
+# Ignora apenas o arquivo gerado no build (não o template!)
+ee/configs/environment/environment.ts
+src/ee/configs/environment/environment.ts

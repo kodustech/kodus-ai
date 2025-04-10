@@ -13,6 +13,7 @@ import {
     KODY_FINE_TUNING_CONTEXT_PREPARATION_TOKEN,
 } from '@/shared/interfaces/kody-fine-tuning-context-preparation.interface';
 import { ISuggestionService } from '@/core/domain/codeBase/contracts/SuggestionService.contract';
+import { environment } from '@/ee/configs/environment';
 
 export const KODY_FINE_TUNING_CONTEXT_PREPARATION_PROVIDER: Provider = {
     provide: KODY_FINE_TUNING_CONTEXT_PREPARATION_TOKEN,
@@ -22,8 +23,7 @@ export const KODY_FINE_TUNING_CONTEXT_PREPARATION_PROVIDER: Provider = {
         pinoLoggerService: PinoLoggerService,
         suggestionService: ISuggestionService,
     ): IKodyFineTuningContextPreparationService => {
-        const isCloud =
-            (process.env.API_CLOUD_MODE || 'true').toLowerCase() === 'true';
+        const isCloud = environment.API_CLOUD_MODE;
 
         if (isCloud) {
             return new KodyFineTuningContextPreparationServiceEE(

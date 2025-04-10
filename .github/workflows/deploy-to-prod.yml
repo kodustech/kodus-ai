@@ -1,32 +1,77 @@
-name: Deploy to Production
+name: 🚀 Deploy Manual para Cloud Production
 
 on:
     workflow_dispatch:
         inputs:
             image_tag:
-                description: "Tag da Imagem Docker para Implantação"
-                required: true
+                description: "Tag da imagem Docker para deploy. Se vazio, será usada a última publicada no ECR."
+                required: false
+
+env:
+    ECR_REPOSITORY: kodus-orchestrator-prod
 
 jobs:
     deploy:
-        name: Deploy to Production
         runs-on: ubuntu-latest
         steps:
-            - name: Get runner IP
+            - name: 🧠 Definir imagem a ser usada
+              id: define-image
+              env:
+                  AWS_REGION: ${{ secrets.AWS_REGION }}
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+              run: |
+                  IMAGE_TAG_INPUT="${{ github.event.inputs.image_tag }}"
+
+                  if [ -n "$IMAGE_TAG_INPUT" ]; then
+                    echo "🧪 Validando se a imagem com tag '$IMAGE_TAG_INPUT' existe no ECR..."
+                    IMAGE_EXISTS=$(aws ecr describe-images \
+                      --repository-name $ECR_REPOSITORY \
+                      --region $AWS_REGION \
+                      --query "imageDetails[?contains(imageTags, '$IMAGE_TAG_INPUT')]" \
+                      --output text)
+
+                    if [ -z "$IMAGE_EXISTS" ]; then
+                      echo "❌ Imagem com a tag '$IMAGE_TAG_INPUT' não encontrada no ECR."
+                      exit 1
+                    fi
+                    echo "🟢 Imagem válida. Usando tag: $IMAGE_TAG_INPUT"
+                    echo "IMAGE_TAG=$IMAGE_TAG_INPUT" >> $GITHUB_ENV
+                  else
+                    echo "ℹ️ Nenhuma tag fornecida. Buscando a mais recente no ECR..."
+                    LAST_TAG=$(aws ecr describe-images \
+                      --repository-name $ECR_REPOSITORY \
+                      --region $AWS_REGION \
+                      --query "sort_by(imageDetails[?imageTags], &imagePushedAt)[-1].imageTags[0]" \
+                      --output text)
+
+                    if [ -z "$LAST_TAG" ]; then
+                      echo "❌ Nenhuma imagem encontrada no ECR."
+                      exit 1
+                    fi
+
+                    echo "🟢 Última tag encontrada: $LAST_TAG"
+                    echo "IMAGE_TAG=$LAST_TAG" >> $GITHUB_ENV
+                  fi
+
+            - name: 🌐 Obter IP do Runner
               run: |
                   ip=$(curl -s https://ipinfo.io/ip)
                   echo "::add-mask::$ip"
                   echo "runner_ip=$ip" >> $GITHUB_ENV
 
-            - name: Adicionar IP do Runner ao Grupo de Segurança
+            - name: 🔐 Liberar acesso temporário SSH
               run: |
-                  aws ec2 authorize-security-group-ingress --group-id ${{ secrets.AWS_SECURITY_GROUP }} --protocol tcp --port 22 --cidr ${{ env.runner_ip }}/32 > /dev/null 2>&1
+                  aws ec2 authorize-security-group-ingress \
+                    --group-id ${{ secrets.AWS_SECURITY_GROUP }} \
+                    --protocol tcp --port 22 \
+                    --cidr ${{ env.runner_ip }}/32 > /dev/null 2>&1
               env:
                   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
                   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
                   AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
 
-            - name: Executar Script de Implantação no EC2
+            - name: 🚀 Executar Deploy na instância EC2
               uses: appleboy/ssh-action@v1.2.2
               with:
                   host: ${{ secrets.AWS_PROD_HOST }}
@@ -34,33 +79,34 @@ jobs:
                   key: ${{ secrets.AWS_PROD_KEY_SSH }}
                   script: |
                       cd ~/kodus-orchestrator
-                      ./start-app.sh prod ${{ github.event.inputs.image_tag }} > /dev/null 2>&1
+                      ./start-app.sh prod ${{ env.IMAGE_TAG }} > /dev/null 2>&1
 
-            - name: Remover IP do Runner do Grupo de Segurança
+            - name: 🔒 Revogar acesso SSH
+              if: always()
               run: |
-                  aws ec2 revoke-security-group-ingress --group-id ${{ secrets.AWS_SECURITY_GROUP }} --protocol tcp --port 22 --cidr ${{ env.runner_ip }}/32 > /dev/null 2>&1
+                  aws ec2 revoke-security-group-ingress \
+                    --group-id ${{ secrets.AWS_SECURITY_GROUP }} \
+                    --protocol tcp --port 22 \
+                    --cidr ${{ env.runner_ip }}/32 > /dev/null 2>&1
               env:
                   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
                   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
                   AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
-              if: always()
 
-            - name: Notificar Discord sobre Sucesso
+            - name: 📣 Notificar Sucesso no Discord
               if: success()
               uses: sarisia/actions-status-discord@v1.15.3
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK }}
-                  content: ":tada: A implantação em produção foi concluída com sucesso."
-                  title: "Implantação: kodus-orchestrator"
-                  username: "GitHub Actions"
+                  content: ":tada: Deploy realizado com a imagem `${{ env.IMAGE_TAG }}` com sucesso em produção!"
+                  title: "Deploy - kodus-orchestrator"
                   color: 0x00FF00
 
-            - name: Notificar Discord sobre Falha
+            - name: ❌ Notificar Falha no Discord
               if: failure()
               uses: sarisia/actions-status-discord@v1.15.3
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK }}
-                  content: ":x: A implantação em produção falhou. Verifique os logs para mais detalhes."
-                  title: "Implantação: kodus-orchestrator"
-                  username: "GitHub Actions"
+                  content: ":x: Falha ao fazer deploy com a imagem `${{ env.IMAGE_TAG }}`. Verifique os logs!"
+                  title: "Deploy - kodus-orchestrator"
                   color: 0xFF0000

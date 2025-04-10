@@ -39,6 +39,13 @@ jobs:
               if: always()
               run: docker logout ${{ steps.login-ecr.outputs.registry }}
 
+            - name: Cleanup Docker image
+              run: docker rmi $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG || true
+              env:
+                  ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+                  ECR_REPOSITORY: kodus-orchestrator-prod
+                  IMAGE_TAG: ${{ github.sha }}
+
     deploy_in_server:
         name: Deploy in server
         runs-on: ubuntu-latest
