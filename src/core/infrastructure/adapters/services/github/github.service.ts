@@ -3758,4 +3758,142 @@ export class GithubService
             return null;
         }
     }
+
+    async getListOfValidReviews(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<any[] | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+        } = params;
+
+        const githubAuthDetail = await this.getGithubAuthDetails(
+            organizationAndTeamData,
+        );
+
+        const graphql = await this.instanceGraphQL(organizationAndTeamData);
+
+        const query = `
+           query ($owner: String!, $name: String!, $number: Int!) {
+                repository(owner: $owner, name: $name) {
+                    pullRequest(number: $number) {
+                    reviews(first: 100) {
+                        nodes {
+                        state
+                        id
+                        comments(first: 100) {
+                            nodes {
+                            id
+                            body
+                            outdated
+                            isMinimized
+                            }
+                        }
+                        }
+                    }
+                    reviewThreads(first: 100) {
+                        nodes {
+                        id
+                        isResolved
+                        isOutdated
+                        comments(first: 10) {
+                            nodes {
+                            id
+                            body
+                            }
+                        }
+                        }
+                    }
+                    state
+                    reviewDecision
+                    }
+                }
+                }
+        `;
+
+        const variables = {
+            owner: githubAuthDetail?.org,
+            name: repository.name,
+            number: prNumber,
+        };
+
+        try {
+            const response: any = await graphql(query, variables);
+
+            const reviews = response.repository.pullRequest.reviews.nodes;
+            const reviewThreads = response.repository.pullRequest.reviewThreads.nodes;
+
+            const reviewThreadComments: PullRequestReviewComment[] = reviewThreads.map((reviewThread) => {
+                const firstComment = reviewThread.comments.nodes[0];
+
+                // The same resource in graphQL API and REST API have different ids.
+                // So we need one of them to actually mark the thread as resolved and the other to match the id we saved in the database.
+                return firstComment ? {
+                    id: firstComment.id, // Used to actually resolve the thread
+                    threadId: reviewThread.id,
+                    isResolved: reviewThread.isResolved,
+                    isOutdated: reviewThread.isOutdated,
+                    fullDatabaseId: firstComment.fullDatabaseId, // The REST API id, used to match comments saved in the database.
+                    body: firstComment.body,
+                } : null;
+            }).filter(comment => comment !== null);
+
+            const reviewsThatRequestedChanges = reviews
+                .filter((review) => review.state === PullRequestReviewState.CHANGES_REQUESTED)
+
+            if (reviewsThatRequestedChanges.length < 1) {
+                return [];
+            }
+
+            const reviewsComments: any[] = reviewsThatRequestedChanges.map((review) => {
+                const firstComment = review?.comments?.nodes[0];
+
+                if (!firstComment) {
+                    return {
+                        reviewId: review.id,
+                    }
+                }
+                // The same resource in graphQL API and REST API have different ids.
+                // So we need one of them to actually mark the thread as resolved and the other to match the id we saved in the database.
+                return firstComment ? {
+                    id: firstComment.id, // Used to actually resolve the thread
+                    reviewId: review.id,
+                    fullDatabaseId: firstComment.fullDatabaseId, // The REST API id, used to match comments saved in the database.
+                    body: firstComment.body,
+                } : null;
+            }).filter(comment => comment !== null);
+
+            const validReviews = reviewsComments
+                .map(reviewComment => {
+                    const matchingThreadComment = reviewThreadComments.find(threadComment => threadComment.id === reviewComment.id);
+
+                    if (matchingThreadComment) {
+                        return {
+                            ...reviewComment,
+                            isResolved: matchingThreadComment?.isResolved,
+                            isOutdated: matchingThreadComment?.isOutdated
+                        };
+                    }
+
+                    return null;
+                })
+                .filter(comment => comment !== null);
+            return validReviews;
+
+        } catch (error) {
+            this.logger.error({
+                message: `Error retrieving list of valid reviews for PR#${prNumber}`,
+                context: GithubService.name,
+                error: error,
+                metadata: {
+                    ...params
+                },
+            });
+
+            return null;
+        }
+    }
 }
