@@ -143,7 +143,15 @@ export class CheckIfPRCanBeApprovedCronProvider {
 
                         return prsWithRequest;
                     })
-                ).then(results => results.flat());
+                ).then(results => results.flat())
+                    .catch((error) => {
+                        this.logger.error({
+                            message: 'Error fetching pull requests with changes requested for some repositories',
+                            context: CheckIfPRCanBeApprovedCronProvider.name, error
+                        }
+                        );
+                        return [];
+                    });
 
                 if (!prsWithChangesRequested || prsWithChangesRequested.length === 0) {
                     continue;
