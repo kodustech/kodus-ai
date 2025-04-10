@@ -203,59 +203,70 @@ export class CheckIfPRCanBeApprovedCronProvider {
             },
             prNumber: prNumber,
         }
+        try {
 
-        let criticalSuggestions = this.getCriticalSuggestions(pr);
+            let criticalSuggestions = this.getCriticalSuggestions(pr);
 
-        if (criticalSuggestions.length < 1) {
-            await this.codeManagementService.approvePullRequest(codeManagementRequestData, platformType);
-            return true;
-        }
-
-        let isPlatformTypeGithub: boolean = platformType === PlatformType.GITHUB;
-
-        let reviewComments: any[];
-        if (isPlatformTypeGithub) {
-            reviewComments = await this.codeManagementService.getPullRequestReviewThreads(codeManagementRequestData, PlatformType.GITHUB);
-        }
-        else {
-            reviewComments = await this.codeManagementService.getPullRequestReviewComments(codeManagementRequestData);
-        }
-
-        const foundComments: PullRequestReviewComment[] = isPlatformTypeGithub
-            ? reviewComments.filter((comment) =>
-                criticalSuggestions.map(c => c.comment.id).includes(Number(comment.fullDatabaseId))
-            )
-            : reviewComments.filter((comment) =>
-                criticalSuggestions.map(c => c.comment.id).includes(comment.id)
-            );
-
-        const resolvedComments = foundComments.filter((comment) => comment.isResolved == true)
-
-        if (resolvedComments.length < criticalSuggestions.length) {
-            return false;
-        }
-
-        // Github has a different route where the reviews of different types are registered
-        // So we need to get all of them, filter so we get the ones that requested_changed and check if they're resolved.
-        if (isPlatformTypeGithub) {
-            const validReviews = await this.codeManagementService.getListOfValidReviews(codeManagementRequestData, platformType);
-
-            const unresolvedReviews = validReviews.filter((review) => review.isResolved === false);
-
-            if (unresolvedReviews.length < 1) {
+            if (criticalSuggestions.length < 1) {
                 await this.codeManagementService.approvePullRequest(codeManagementRequestData, platformType);
                 return true;
             }
-            return false;
-        }
-        else if (platformType === PlatformType.BITBUCKET) {
-            /**
-             * Each time someone requests a change, they appear as a reviewer on the PR (except kody, dunno why)
-             * We can use the reviewers information to filter the comments arrays that were made by other users besides kody.
-             * That should return to us a list of reviews specifically made by users. We can use this to check if the PR should be approved.
-            */
-            await this.getValidUserReviews({ organizationAndTeamData, prNumber, repository, reviewComments });
 
+            let isPlatformTypeGithub: boolean = platformType === PlatformType.GITHUB;
+
+            let reviewComments: any[];
+            if (isPlatformTypeGithub) {
+                reviewComments = await this.codeManagementService.getPullRequestReviewThreads(codeManagementRequestData, PlatformType.GITHUB);
+            }
+            else {
+                reviewComments = await this.codeManagementService.getPullRequestReviewComments(codeManagementRequestData);
+            }
+
+            const foundComments: PullRequestReviewComment[] = isPlatformTypeGithub
+                ? reviewComments.filter((comment) =>
+                    criticalSuggestions.map(c => c.comment.id).includes(Number(comment.fullDatabaseId))
+                )
+                : reviewComments.filter((comment) =>
+                    criticalSuggestions.map(c => c.comment.id).includes(comment.id)
+                );
+
+            const resolvedComments = foundComments.filter((comment) => comment.isResolved == true)
+
+            if (resolvedComments.length < criticalSuggestions.length) {
+                return false;
+            }
+
+            // Github has a different route where the reviews of different types are registered
+            // So we need to get all of them, filter so we get the ones that requested_changed and check if they're resolved.
+            if (isPlatformTypeGithub) {
+                const validReviews = await this.codeManagementService.getListOfValidReviews(codeManagementRequestData, platformType);
+
+                const unresolvedReviews = validReviews.filter((review) => review.isResolved === false);
+
+                if (unresolvedReviews.length < 1) {
+                    await this.codeManagementService.approvePullRequest(codeManagementRequestData, platformType);
+                    return true;
+                }
+                return false;
+            }
+            else if (platformType === PlatformType.BITBUCKET) {
+                /**
+                 * Each time someone requests a change, they appear as a reviewer on the PR (except kody, dunno why)
+                 * We can use the reviewers information to filter the comments arrays that were made by other users besides kody.
+                 * That should return to us a list of reviews specifically made by users. We can use this to check if the PR should be approved.
+                */
+                await this.getValidUserReviews({ organizationAndTeamData, prNumber, repository, reviewComments });
+
+            }
+        }
+        catch (error) {
+            this.logger.error({
+                message: 'Error in shouldApprovePR',
+                context: CheckIfPRCanBeApprovedCronProvider.name,
+                error
+            });
+
+            return false;
         }
 
     }
