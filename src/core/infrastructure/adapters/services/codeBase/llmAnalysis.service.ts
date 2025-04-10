@@ -775,7 +775,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
 
             if (
                 provider === LLMModelProvider.CHATGPT_4_ALL ||
-                provider === LLMModelProvider.GEMINI_2_5_PRO_PREVIEW
+                provider === LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET
             ) {
                 llm = llm.bind({
                     response_format: { type: 'json_object' },
