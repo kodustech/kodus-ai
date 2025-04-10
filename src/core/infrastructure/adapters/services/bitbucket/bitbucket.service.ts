@@ -143,9 +143,9 @@ export class BitbucketService
 
         } catch (error) {
             this.logger.error({
-                message: 'Error to get pull requests with files',
+                message: 'Error to get pull requests with changes requested',
                 context: BitbucketService.name,
-                serviceName: 'BitbucketService getPullRequestsWithFiles',
+                serviceName: 'BitbucketService getPullRequestsWithChangesRequested',
                 error: error,
                 metadata: {
                     params,
