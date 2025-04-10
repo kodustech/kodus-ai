@@ -263,7 +263,6 @@ export class CheckIfPRCanBeApprovedCronProvider {
 
             return false;
         }
-
     }
 
     private async getValidUserReviews(params: {
