@@ -281,7 +281,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
         }, PlatformType.BITBUCKET);
 
         const kodyUser = reviewComments.find((reviewComment) => {
-            return reviewComment.body && reviewComment.body.includes('![kody code-review]');
+            return reviewComment.body && (reviewComment.body.includes('kody|code-review') || reviewComment.body.includes('![kody code-review]'));
         });
 
         const reviewers = kodyUser
