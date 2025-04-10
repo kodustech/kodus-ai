@@ -127,9 +127,14 @@ export class CheckIfPRCanBeApprovedCronProvider {
 
                     const codeReviewConfigFromRepo = codeReviewConfig.repositories.find((codeReviewConfigRepo) => codeReviewConfigRepo.id === repository.id)
 
-                    if (!codeReviewConfig.global.pullRequestApprovalActive && !codeReviewConfigFromRepo.pullRequestApprovalActive) {
+                    if (!codeReviewConfig.global.pullRequestApprovalActive && !codeReviewConfigFromRepo?.pullRequestApprovalActive) {
                         return;
                     }
+
+                    if (codeReviewConfigFromRepo?.pullRequestApprovalActive === false) {
+                        return;
+                    }
+
 
                     await this.shouldApprovePR({
                         organizationAndTeamData,
