@@ -207,11 +207,6 @@ export class CheckIfPRCanBeApprovedCronProvider {
 
             let criticalSuggestions = this.getCriticalSuggestions(pr);
 
-            if (criticalSuggestions.length < 1) {
-                await this.codeManagementService.approvePullRequest(codeManagementRequestData, platformType);
-                return true;
-            }
-
             let isPlatformTypeGithub: boolean = platformType === PlatformType.GITHUB;
 
             let reviewComments: any[];
