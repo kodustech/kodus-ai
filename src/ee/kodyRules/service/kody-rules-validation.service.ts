@@ -7,6 +7,7 @@ import {
     IKodyRule,
     KodyRulesStatus,
 } from '@/core/domain/kodyRules/interfaces/kodyRules.interface';
+import { environment } from '@/ee/configs/environment';
 import { Injectable } from '@nestjs/common';
 
 /**
@@ -18,9 +19,7 @@ export class KodyRulesValidationService {
     public readonly isCloud: boolean;
 
     constructor() {
-        // When in cloud mode, no rules limit is enforced.
-        this.isCloud =
-            (process.env.API_CLOUD_MODE || 'true').toLowerCase() === 'true';
+        this.isCloud = environment.API_CLOUD_MODE;
     }
 
     /**

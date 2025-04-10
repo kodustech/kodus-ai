@@ -45,6 +45,7 @@ jobs:
                   push: true
                   tags: ${{ steps.meta.outputs.tags }}
                   labels: ${{ steps.meta.outputs.labels }}
+                  platforms: linux/amd64
                   build-args: |
                       API_CLOUD_MODE=false
                       RELEASE_VERSION=${{ env.RELEASE_VERSION }}

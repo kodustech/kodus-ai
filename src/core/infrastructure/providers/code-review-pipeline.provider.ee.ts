@@ -9,6 +9,7 @@ import { CodeReviewPipelineStrategyEE } from '@/ee/codeReview/strategies/code-re
 import { CodeReviewPipelineContext } from '../adapters/services/codeBase/codeReviewPipeline/context/code-review-pipeline.context';
 import { PipelineExecutor } from '../adapters/services/pipeline/pipeline-executor.service';
 import { PinoLoggerService } from '../adapters/services/logger/pino.service';
+import { environment } from '@/ee/configs/environment';
 
 export const CODE_REVIEW_PIPELINE_TOKEN = 'CODE_REVIEW_PIPELINE';
 
@@ -19,15 +20,29 @@ export const codeReviewPipelineProvider: Provider = {
         eeStrategy: CodeReviewPipelineStrategyEE,
         logger: PinoLoggerService,
     ): IPipeline<CodeReviewPipelineContext> => {
-        const isCloud = (process.env.API_CLOUD_MODE || 'true').toLowerCase() === 'true';
+        const isCloud = environment.API_CLOUD_MODE;
         const strategy = isCloud ? eeStrategy : ceStrategy;
+
+        logger.log({
+            message: `🔁 Modo de execução: ${isCloud ? 'Cloud (EE)' : 'Self-Hosted (CE)'}`,
+            context: 'CodeReviewPipelineProvider',
+            metadata: {
+                mode: isCloud ? 'cloud' : 'selfhosted',
+            },
+        });
 
         return {
             pipeLineName: 'CodeReviewPipeline',
-            execute: async (context: CodeReviewPipelineContext): Promise<CodeReviewPipelineContext> => {
+            execute: async (
+                context: CodeReviewPipelineContext,
+            ): Promise<CodeReviewPipelineContext> => {
                 const stages = strategy.configureStages();
                 const executor = new PipelineExecutor(logger);
-                return await executor.execute(context, stages, strategy.getPipelineName()) as CodeReviewPipelineContext;
+                return (await executor.execute(
+                    context,
+                    stages,
+                    strategy.getPipelineName(),
+                )) as CodeReviewPipelineContext;
             },
         };
     },

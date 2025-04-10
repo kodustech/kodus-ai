@@ -12,6 +12,7 @@ import {
 } from '@/shared/interfaces/kody-ast-analyze-context-preparation.interface';
 import { KodyASTAnalyzeContextPreparationServiceEE } from '@/ee/kodyASTAnalyze/kody-ast-analyze-context-preparation.ts';
 import { CodeAnalysisOrchestrator } from '@/ee/codeBase/codeAnalysisOrchestrator.service';
+import { environment } from '@/ee/configs/environment';
 
 export const KODY_AST_ANALYZE_CONTEXT_PREPARATION_PROVIDER: Provider = {
     provide: KODY_AST_ANALYZE_CONTEXT_PREPARATION_TOKEN,
@@ -20,8 +21,7 @@ export const KODY_AST_ANALYZE_CONTEXT_PREPARATION_PROVIDER: Provider = {
         codeAnalysisOrchestrator: CodeAnalysisOrchestrator,
         pinoLoggerService: PinoLoggerService,
     ): IKodyASTAnalyzeContextPreparationService => {
-        const isCloud =
-            (process.env.API_CLOUD_MODE || 'true').toLowerCase() === 'true';
+        const isCloud = environment.API_CLOUD_MODE;
 
         if (isCloud) {
             return new KodyASTAnalyzeContextPreparationServiceEE(
