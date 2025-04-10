@@ -227,7 +227,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 reviewComments = await this.codeManagementService.getPullRequestReviewThreads(codeManagementRequestData, PlatformType.GITHUB);
             }
             else {
-                reviewComments = await this.codeManagementService.getPullRequestReviewComments(codeManagementRequestData);
+                reviewComments = await this.codeManagementService.getPullRequestReviewComments(codeManagementRequestData, platformType);
             }
 
             const isEveryReviewCommentResolved = reviewComments.every((reviewComment) => reviewComment.isResolved);
