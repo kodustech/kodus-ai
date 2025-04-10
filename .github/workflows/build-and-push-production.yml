@@ -54,6 +54,17 @@ jobs:
               if: always()
               run: docker logout ${{ steps.login-ecr.outputs.registry }}
 
+            - name: Cleanup Docker images
+              run: |
+                  docker rmi $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_SHA || true
+                  docker rmi $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION || true
+                  docker rmi $ECR_REGISTRY/$ECR_REPOSITORY:latest || true
+              env:
+                  ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+                  ECR_REPOSITORY: kodus-orchestrator-prod
+                  IMAGE_TAG_SHA: ${{ github.sha }}
+                  IMAGE_TAG_VERSION: ${{ github.event.release.tag_name }}
+
             - name: Notificar Discord sobre Sucesso
               if: success()
               uses: sarisia/actions-status-discord@v1.15.3

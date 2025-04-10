@@ -1,6 +1,5 @@
 ARG API_CLOUD_MODE=false
 
-# Estágio base: instalar dependências apenas 1x
 FROM --platform=linux/amd64 node:22.14.0-slim AS deps
 
 ARG API_CLOUD_MODE
@@ -13,28 +12,28 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 WORKDIR /usr/src/app
 
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
 # -------------------------------------------------------------
-# Estágio build
 FROM deps AS build
 
 ARG API_CLOUD_MODE
 ENV API_CLOUD_MODE=${API_CLOUD_MODE}
 
 WORKDIR /usr/src/app
-
+# Copia todo o projeto (inclui o environment.template.ts)
 COPY . .
 
-# ✅ Injeta o valor fixo antes do build
-RUN echo "export const IS_CLOUD_MODE = '${API_CLOUD_MODE}';" > ee/configs/environment.ts
+# Garante que a pasta existe (importante em build limpo de cache)
+RUN mkdir -p ee/configs/environment
+
+# Gera o environment.ts substituindo o placeholder
+RUN sed "s/__CLOUD_MODE__/${API_CLOUD_MODE}/g" src/ee/configs/environment/environment.template.ts > src/ee/configs/environment/environment.ts
 
 RUN yarn build:production
 
 # -------------------------------------------------------------
-# Estágio final
 FROM deps AS production
 
 ARG API_CLOUD_MODE

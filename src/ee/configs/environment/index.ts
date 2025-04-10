@@ -7,16 +7,24 @@
  * - ✅ In QA/Prod, loads from environment.ts (generated at build time)
  */
 
-let environment;
+import { existsSync } from 'fs';
+import { join } from 'path';
+import { Environment } from './types';
 
-try {
-    // Dev mode: file is committed
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    environment = require('./environment.dev').environment;
-} catch {
-    // QA/Prod: injected during build
+let environment: Environment;
+
+// Caminhos absolutos relativos ao arquivo atual
+const prodPath = join(__dirname, 'environment.js'); // esse é gerado no build
+const devPath = join(__dirname, 'environment.dev.js'); // sempre presente
+
+if (existsSync(prodPath)) {
+    // 🟢 Docker QA/Prod: injetado no build
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     environment = require('./environment').environment;
+} else {
+    // 🛠️ Dev: valor dinâmico via process.env
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    environment = require('./environment.dev').environment;
 }
 
 export { environment };
