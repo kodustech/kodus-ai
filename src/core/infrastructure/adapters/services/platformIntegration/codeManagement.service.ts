@@ -4,7 +4,7 @@ import {
     IIntegrationService,
     INTEGRATION_SERVICE_TOKEN,
 } from '@/core/domain/integrations/contracts/integration.service.contracts';
-import { PullRequestReviewComment, PullRequests } from '@/core/domain/platformIntegrations/types/codeManagement/pullRequests.type';
+import { PullRequestReviewComment, PullRequests, PullRequestsWithChangesRequested } from '@/core/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repositories } from '@/core/domain/platformIntegrations/types/codeManagement/repositories.type';
 import { PlatformType } from '@/shared/domain/enums/platform-type.enum';
 import { IntegrationCategory } from '@/shared/domain/enums/integration-category.enum';
@@ -23,6 +23,7 @@ export class CodeManagementService implements ICodeManagementService {
         private readonly integrationService: IIntegrationService,
         private platformIntegrationFactory: PlatformIntegrationFactory,
     ) { }
+
 
     async getTypeIntegration(
         organizationAndTeamData: OrganizationAndTeamData,
@@ -898,6 +899,45 @@ export class CodeManagementService implements ICodeManagementService {
             this.platformIntegrationFactory.getCodeManagementService(type);
 
         return codeManagementService.getPullRequestReviewThreads(params);
+
+    }
+
+    async getPullRequestsWithChangesRequested(params: {
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: Partial<Repository>,
+    },
+        type?: PlatformType
+    ): Promise<PullRequestsWithChangesRequested[] | null> {
+
+        if (!type) {
+            type = await this.getTypeIntegration(
+                extractOrganizationAndTeamData(params)
+            )
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        return codeManagementService.getPullRequestsWithChangesRequested(params);
+    }
+
+    async getListOfValidReviews(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    },
+        type?: PlatformType
+    ): Promise<any[] | null> {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                extractOrganizationAndTeamData(params),
+            );
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        return codeManagementService.getListOfValidReviews(params);
 
     }
 }

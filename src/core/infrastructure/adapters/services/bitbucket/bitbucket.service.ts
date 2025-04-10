@@ -70,9 +70,8 @@ import { IRepository } from '@/core/domain/pullRequests/interfaces/pullRequests.
 @IntegrationServiceDecorator(PlatformType.BITBUCKET, 'codeManagement')
 export class BitbucketService
     implements
-        IBitbucketService,
-        Omit<ICodeManagementService, 'getOrganizations'>
-{
+    IBitbucketService,
+    Omit<ICodeManagementService, 'getOrganizations'> {
     constructor(
         @Inject(INTEGRATION_SERVICE_TOKEN)
         private readonly integrationService: IIntegrationService,
@@ -1481,7 +1480,7 @@ export class BitbucketService
                             path: lineComment?.path,
                             to: this.sanitizeLine(
                                 params.lineComment.start_line ??
-                                    params.lineComment.line,
+                                params.lineComment.line,
                             ),
                         },
                     },
@@ -3056,9 +3055,8 @@ export class BitbucketService
                 queryString += `created_on >= "${filters.startDate}"`;
             }
             if (filters?.endDate) {
-                queryString += `${
-                    queryString ? ' AND ' : ''
-                }created_on <= "${filters.endDate}"`;
+                queryString += `${queryString ? ' AND ' : ''
+                    }created_on <= "${filters.endDate}"`;
             }
 
             const pullRequests = await bitbucketAPI.pullrequests

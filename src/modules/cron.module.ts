@@ -34,6 +34,7 @@ import { CodeReviewFeedbackCronProvider } from '@/core/infrastructure/adapters/s
 import { KodyLearningCronProvider } from '@/core/infrastructure/adapters/services/cron/kodyLearning.cron';
 import { KodyRulesModule } from './kodyRules.module';
 import { CheckIfPRCanBeApprovedCronProvider } from '@/core/infrastructure/adapters/services/cron/CheckIfPRCanBeApproved.cron';
+import { PullRequestsModule } from './pullRequests.module';
 
 @Module({
     imports: [
@@ -43,6 +44,7 @@ import { CheckIfPRCanBeApprovedCronProvider } from '@/core/infrastructure/adapte
         forwardRef(() => PlatformIntegrationModule),
         forwardRef(() => ParametersModule),
         forwardRef(() => KodyRulesModule),
+        PullRequestsModule,
         OrganizationArtifactsModule,
         JiraModule,
         TeamAutomationModule,
@@ -90,4 +92,4 @@ import { CheckIfPRCanBeApprovedCronProvider } from '@/core/infrastructure/adapte
         CheckIfPRCanBeApprovedCronProvider
     ],
 })
-export class CronModule {}
+export class CronModule { }

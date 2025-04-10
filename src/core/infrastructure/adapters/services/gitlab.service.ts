@@ -5,6 +5,7 @@ import {
     PullRequestDetails,
     PullRequestReviewComment,
     PullRequests,
+    PullRequestsWithChangesRequested,
     PullRequestWithFiles,
 } from '@/core/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repositories } from '@/core/domain/platformIntegrations/types/codeManagement/repositories.type';
@@ -96,9 +97,15 @@ export class GitlabService
 
         private readonly promptService: PromptService,
         private readonly logger: PinoLoggerService,
-    ) {}
+    ) { }
+    getPullRequestsWithChangesRequested(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; }): Promise<PullRequestsWithChangesRequested[] | null> {
+        throw new Error('Method not implemented.');
+    }
+    getListOfValidReviews(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; prNumber: number; }): Promise<any[] | null> {
+        throw new Error('Method not implemented.');
+    }
 
-    getPullRequestReviewThreads(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; prNumber: number; }): Promise<PullRequestReviewComment | null> {
+    getPullRequestReviewThreads(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; prNumber: number; }): Promise<PullRequestReviewComment[] | null> {
         throw new Error('Method not implemented.');
     }
 

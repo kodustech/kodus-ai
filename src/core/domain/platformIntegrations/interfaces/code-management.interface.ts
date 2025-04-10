@@ -6,6 +6,7 @@ import {
     PullRequestDetails,
     PullRequestReviewComment,
     PullRequests,
+    PullRequestsWithChangesRequested,
     PullRequestWithFiles,
 } from '../types/codeManagement/pullRequests.type';
 import { Repositories } from '../types/codeManagement/repositories.type';
@@ -96,5 +97,17 @@ export interface ICodeManagementService
         organizationAndTeamData: OrganizationAndTeamData,
         repository: Partial<Repository>,
         prNumber: number,
-    }): Promise<PullRequestReviewComment | null>
+    }): Promise<PullRequestReviewComment[] | null>
+
+    getListOfValidReviews(params: {
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: Partial<Repository>,
+        prNumber: number,
+    }): Promise<any[] | null>
+
+    getPullRequestsWithChangesRequested(params: {
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: Partial<Repository>,
+    }): Promise<PullRequestsWithChangesRequested[] | null>
+
 }

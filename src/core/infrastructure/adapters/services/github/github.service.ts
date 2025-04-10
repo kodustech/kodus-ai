@@ -32,7 +32,9 @@ import {
     PullRequestDetails,
     PullRequestFile,
     PullRequestReviewComment,
+    PullRequestReviewState,
     PullRequests,
+    PullRequestsWithChangesRequested,
     PullRequestWithFiles,
 } from '@/core/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repositories } from '@/core/domain/platformIntegrations/types/codeManagement/repositories.type';
@@ -133,6 +135,7 @@ export class GithubService
         private readonly promptService: PromptService,
         private readonly logger: PinoLoggerService,
     ) { }
+
 
     getUserById(params: {
         organizationAndTeamData: OrganizationAndTeamData;
@@ -2574,7 +2577,7 @@ export class GithubService
         organizationAndTeamData: OrganizationAndTeamData,
         repository: Partial<Repository>,
         prNumber: number,
-    }): Promise<PullRequestReviewComment | null> {
+    }): Promise<PullRequestReviewComment[] | null> {
         const {
             organizationAndTeamData,
             repository,
@@ -3435,6 +3438,26 @@ export class GithubService
             );
 
             const octokit = await this.instanceOctokit(organizationAndTeamData);
+
+            const { data: reviews } = await octokit.rest.pulls.listReviews({
+                owner: githubAuthDetail.org,
+                repo: repository.name,
+                pull_number: prNumber,
+            });
+
+            if (reviews.length > 0) {
+                const lastReview = reviews[reviews.length - 1];
+
+                if (lastReview.state === PullRequestReviewState.APPROVED) {
+                    this.logger.log({
+                        message: `Pull request #${prNumber} has already been approved.`,
+                        context: GithubService.name,
+                        serviceName: 'GithubService approvePullRequest',
+                        metadata: params,
+                    });
+                    return;
+                }
+            }
 
             await octokit.rest.pulls.createReview({
                 owner: githubAuthDetail.org,
