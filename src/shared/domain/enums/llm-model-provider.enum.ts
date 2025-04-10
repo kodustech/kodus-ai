@@ -10,6 +10,7 @@ export enum LLMModelProvider {
     GEMINI_1_5_PRO_EXP = 'gemini-1.5-pro-exp-0801',
     GEMINI_1_5_FLASH = 'gemini-1.5-flash',
     GEMINI_2_0_FLASH = 'gemini-2.0-flash',
+    GEMINI_2_5_PRO = 'gemini-2.5-pro-preview-03-25',
     DEEPSEEK_V3 = 'deepseek-v3',
     VERTEX_CLAUDE_3_5_SONNET = 'claude-3-5-sonnet-v2@20241022',
 }
