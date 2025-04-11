@@ -15,14 +15,12 @@ import {
     PARAMETERS_SERVICE_TOKEN,
 } from '@/core/domain/parameters/contracts/parameters.service.contract';
 import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logger/pino.service';
-import { AgentExecutionType } from '@/shared/domain/enums/agent-execute-type.enum';
 import { ParametersKey } from '@/shared/domain/enums/parameters-key.enum';
 import { PlatformType } from '@/shared/domain/enums/platform-type.enum';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { CreateOrUpdateParametersUseCase } from '../parameters/create-or-update-use-case';
 import { OrganizationAndTeamData } from '@/config/types/general/organizationAndTeamData';
-import { fi } from '@faker-js/faker';
 
 @Injectable()
 export class ExecutionAgentPromptUseCase {
