@@ -224,25 +224,56 @@ export class CheckIfPRCanBeApprovedCronProvider {
 
             let reviewComments: any[];
             if (isPlatformTypeGithub) {
+                const isEveryReviewCommentResolved = reviewComments?.every((reviewComment) => reviewComment.isResolved);
+
                 reviewComments = await this.codeManagementService.getPullRequestReviewThreads(codeManagementRequestData, PlatformType.GITHUB);
+
+                if (isEveryReviewCommentResolved) {
+                    await this.codeManagementService.approvePullRequest({
+                        organizationAndTeamData,
+                        prNumber,
+                        repository: {
+                            name: repository.name,
+                            id: repository.id,
+                        }
+                    }, platformType);
+                    return true;
+                }
+
+            }
+            else if (platformType === PlatformType.BITBUCKET) {
+                /**
+                 * Each time someone requests a change, they appear as a reviewer on the PR (except kody, dunno why)
+                 * We can use the reviewers information to filter the comments arrays that were made by other users besides kody.
+                 * That should return to us a list of reviews specifically made by users. We can use this to check if the PR should be approved.
+                */
+                reviewComments = await this.codeManagementService.getPullRequestReviewComments(codeManagementRequestData, platformType);
+
+                await this.getValidUserReviews({ organizationAndTeamData, prNumber, repository, reviewComments });
             }
             else {
                 reviewComments = await this.codeManagementService.getPullRequestReviewComments(codeManagementRequestData, platformType);
+
+                const isEveryReviewCommentResolved = reviewComments.every((reviewComment) => reviewComment.isResolved);
+
+                if (isEveryReviewCommentResolved) {
+                    await this.codeManagementService.approvePullRequest({
+                        organizationAndTeamData,
+                        prNumber,
+                        repository: {
+                            name: repository.name,
+                            id: repository.id,
+                        }
+                    }, platformType);
+                    return true;
+                }
             }
 
-            const isEveryReviewCommentResolved = reviewComments.every((reviewComment) => reviewComment.isResolved);
 
-            if (isEveryReviewCommentResolved) {
-                await this.codeManagementService.approvePullRequest({
-                    organizationAndTeamData,
-                    prNumber,
-                    repository: {
-                        name: repository.name,
-                        id: repository.id,
-                    }
-                }, platformType);
-                return true;
-            }
+
+
+
+
 
             // if (platformType === PlatformType.GITLAB) {
             //     return false;
@@ -298,63 +329,63 @@ export class CheckIfPRCanBeApprovedCronProvider {
         }
     }
 
-    // private async getValidUserReviews(params: {
-    //     repository: Partial<Repository>,
-    //     prNumber: number,
-    //     organizationAndTeamData: OrganizationAndTeamData,
-    //     reviewComments: any[]
-    // }): Promise<boolean> {
-    //     const { organizationAndTeamData, prNumber, repository, reviewComments } = params;
+    private async getValidUserReviews(params: {
+        repository: Partial<Repository>,
+        prNumber: number,
+        organizationAndTeamData: OrganizationAndTeamData,
+        reviewComments: any[]
+    }): Promise<boolean> {
+        const { organizationAndTeamData, prNumber, repository, reviewComments } = params;
 
-    //     const pr: any = await this.codeManagementService.getPullRequestDetails({
-    //         organizationAndTeamData, prNumber, repository: {
-    //             id: repository.id,
-    //             name: repository.name,
-    //         }
-    //     }, PlatformType.BITBUCKET);
+        const pr: any = await this.codeManagementService.getPullRequestDetails({
+            organizationAndTeamData, prNumber, repository: {
+                id: repository.id,
+                name: repository.name,
+            }
+        }, PlatformType.BITBUCKET);
 
-    //     const kodyUser = reviewComments.find((reviewComment) => {
-    //         return reviewComment.body && (reviewComment.body.includes('kody|code-review') || reviewComment.body.includes('![kody code-review]'));
-    //     });
+        const kodyUser = reviewComments.find((reviewComment) => {
+            return reviewComment.body && (reviewComment.body.includes('kody|code-review') || reviewComment.body.includes('![kody code-review]'));
+        });
 
-    //     const reviewers = kodyUser
-    //         ? pr.participants.filter((participant) => participant.id !== kodyUser?.author.id)
-    //         : pr.participants;
+        const reviewers = kodyUser
+            ? pr.participants.filter((participant) => participant.id !== kodyUser?.author.id)
+            : pr.participants;
 
-    //     const kodyReviewer = kodyUser
-    //         ? pr.participants.filter((participant) => participant.id === kodyUser?.author.id)
-    //         : null;
+        const kodyReviewer = kodyUser
+            ? pr.participants.find((participant) => participant.id === kodyUser?.author.id)
+            : null;
 
-    //     if (kodyReviewer && kodyReviewer?.approved) {
-    //         return true;
-    //     }
+        if (kodyReviewer && kodyReviewer?.approved) {
+            return true;
+        }
 
-    //     const anyReviewerApproved = reviewers.some((reviewer) => reviewer.approved);
+        const anyReviewerApproved = reviewers.some((reviewer) => reviewer.approved);
 
-    //     if (anyReviewerApproved) {
-    //         return true;
-    //     }
+        if (anyReviewerApproved) {
+            return true;
+        }
 
-    //     const validReviews = reviewComments.filter((reviewComment) => {
-    //         return reviewers.some((reviewer) => reviewer.id === reviewComment.author.id);
-    //     });
+        const validReviews = reviewComments.filter((reviewComment) => {
+            return reviewers.some((reviewer) => reviewer.id === reviewComment.author.id);
+        });
 
-    //     const unresolvedReviews = validReviews.filter((review) => review.isResolved === false);
+        const unresolvedReviews = validReviews.filter((review) => review.isResolved === false);
 
-    //     if (unresolvedReviews.length < 1) {
-    //         await this.codeManagementService.approvePullRequest({
-    //             organizationAndTeamData,
-    //             prNumber,
-    //             repository: {
-    //                 name: repository.name,
-    //                 id: repository.id,
-    //             }
-    //         }, PlatformType.BITBUCKET);
-    //         return true;
-    //     }
-    //     return false;
+        if (unresolvedReviews.length < 1) {
+            await this.codeManagementService.approvePullRequest({
+                organizationAndTeamData,
+                prNumber,
+                repository: {
+                    name: repository.name,
+                    id: repository.id,
+                }
+            }, PlatformType.BITBUCKET);
+            return true;
+        }
+        return false;
 
-    // }
+    }
 
     // private getCriticalSuggestions(pr: PullRequestsEntity): CodeSuggestion[] {
     //     const implementedSuggestionsCommentIds: CodeSuggestion[] = [];
