@@ -224,56 +224,29 @@ export class CheckIfPRCanBeApprovedCronProvider {
 
             let reviewComments: any[];
             if (isPlatformTypeGithub) {
-                const isEveryReviewCommentResolved = reviewComments?.every((reviewComment) => reviewComment.isResolved);
-
                 reviewComments = await this.codeManagementService.getPullRequestReviewThreads(codeManagementRequestData, PlatformType.GITHUB);
-
-                if (isEveryReviewCommentResolved) {
-                    await this.codeManagementService.approvePullRequest({
-                        organizationAndTeamData,
-                        prNumber,
-                        repository: {
-                            name: repository.name,
-                            id: repository.id,
-                        }
-                    }, platformType);
-                    return true;
-                }
-
-            }
-            else if (platformType === PlatformType.BITBUCKET) {
-                /**
-                 * Each time someone requests a change, they appear as a reviewer on the PR (except kody, dunno why)
-                 * We can use the reviewers information to filter the comments arrays that were made by other users besides kody.
-                 * That should return to us a list of reviews specifically made by users. We can use this to check if the PR should be approved.
-                */
-                reviewComments = await this.codeManagementService.getPullRequestReviewComments(codeManagementRequestData, platformType);
-
-                await this.getValidUserReviews({ organizationAndTeamData, prNumber, repository, reviewComments });
             }
             else {
                 reviewComments = await this.codeManagementService.getPullRequestReviewComments(codeManagementRequestData, platformType);
-
-                const isEveryReviewCommentResolved = reviewComments.every((reviewComment) => reviewComment.isResolved);
-
-                if (isEveryReviewCommentResolved) {
-                    await this.codeManagementService.approvePullRequest({
-                        organizationAndTeamData,
-                        prNumber,
-                        repository: {
-                            name: repository.name,
-                            id: repository.id,
-                        }
-                    }, platformType);
-                    return true;
-                }
             }
 
+            if (platformType === PlatformType.BITBUCKET) {
+                await this.getValidUserReviews({ organizationAndTeamData, prNumber, repository, reviewComments });
+            }
 
+            const isEveryReviewCommentResolved = reviewComments?.every((reviewComment) => reviewComment.isResolved);
 
-
-
-
+            if (isEveryReviewCommentResolved) {
+                await this.codeManagementService.approvePullRequest({
+                    organizationAndTeamData,
+                    prNumber,
+                    repository: {
+                        name: repository.name,
+                        id: repository.id,
+                    }
+                }, platformType);
+                return true;
+            }
 
             // if (platformType === PlatformType.GITLAB) {
             //     return false;
