@@ -3182,6 +3182,10 @@ export class BitbucketService
             }).then((res) => this.getPaginatedResults(bitbucketAPI, res));
 
             return comments
+                .filter((comment) => {
+                    return !comment?.content?.raw.includes("## Code Review Completed! 🔥") &&
+                        !comment?.content?.raw.includes("# Found critical issues please"); // Exclude comments with the specific strings
+                })
                 .map((comment) => {
                     const mappedComment: PullRequestReviewComment = {
                         id: comment?.id,

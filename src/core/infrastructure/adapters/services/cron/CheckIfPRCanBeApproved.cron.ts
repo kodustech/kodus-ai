@@ -230,9 +230,10 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 reviewComments = await this.codeManagementService.getPullRequestReviewComments(codeManagementRequestData, platformType);
             }
 
-            if (platformType === PlatformType.BITBUCKET) {
-                await this.getValidUserReviews({ organizationAndTeamData, prNumber, repository, reviewComments });
-            }
+            // if (platformType === PlatformType.BITBUCKET) {
+            //     await this.getValidUserReviews({ organizationAndTeamData, prNumber, repository, reviewComments });
+            //     return true;
+            // }
 
             const isEveryReviewCommentResolved = reviewComments?.every((reviewComment) => reviewComment.isResolved);
 
@@ -317,6 +318,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
             }
         }, PlatformType.BITBUCKET);
 
+
+
+
         const kodyUser = reviewComments.find((reviewComment) => {
             return reviewComment.body && (reviewComment.body.includes('kody|code-review') || reviewComment.body.includes('![kody code-review]'));
         });
@@ -325,27 +329,10 @@ export class CheckIfPRCanBeApprovedCronProvider {
             ? pr.participants.filter((participant) => participant.id !== kodyUser?.author.id)
             : pr.participants;
 
-        const kodyReviewer = kodyUser
-            ? pr.participants.find((participant) => participant.id === kodyUser?.author.id)
-            : null;
 
-        if (kodyReviewer && kodyReviewer?.approved) {
-            return true;
-        }
+        const isEveryReviewCommentResolved = reviewComments?.every((reviewComment) => reviewComment.isResolved);
 
-        const anyReviewerApproved = reviewers.some((reviewer) => reviewer.approved);
-
-        if (anyReviewerApproved) {
-            return true;
-        }
-
-        const validReviews = reviewComments.filter((reviewComment) => {
-            return reviewers.some((reviewer) => reviewer.id === reviewComment.author.id);
-        });
-
-        const unresolvedReviews = validReviews.filter((review) => review.isResolved === false);
-
-        if (unresolvedReviews.length < 1) {
+        if (isEveryReviewCommentResolved) {
             await this.codeManagementService.approvePullRequest({
                 organizationAndTeamData,
                 prNumber,
@@ -356,7 +343,38 @@ export class CheckIfPRCanBeApprovedCronProvider {
             }, PlatformType.BITBUCKET);
             return true;
         }
-        return false;
+        // const kodyReviewer = kodyUser
+        //     ? pr.participants.find((participant) => participant.id === kodyUser?.author.id)
+        //     : null;
+
+        // if (kodyReviewer && kodyReviewer?.approved) {
+        //     return true;
+        // }
+
+        // const anyReviewerApproved = reviewers.some((reviewer) => reviewer.approved);
+
+        // if (anyReviewerApproved) {
+        //     return true;
+        // }
+
+        // const validReviews = reviewComments.filter((reviewComment) => {
+        //     return reviewers.some((reviewer) => reviewer.id === reviewComment.author.id);
+        // });
+
+        // const unresolvedReviews = validReviews.filter((review) => review.isResolved === false);
+
+        // if (unresolvedReviews.length < 1) {
+        //     await this.codeManagementService.approvePullRequest({
+        //         organizationAndTeamData,
+        //         prNumber,
+        //         repository: {
+        //             name: repository.name,
+        //             id: repository.id,
+        //         }
+        //     }, PlatformType.BITBUCKET);
+        //     return true;
+        // }
+        // return false;
 
     }
 
