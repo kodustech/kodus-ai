@@ -308,6 +308,9 @@ export class LLMAnalysisService implements IAIAnalysisService {
                             context?.organizationAndTeamData?.organizationId,
                         teamId: context?.organizationAndTeamData?.teamId,
                         pullRequestId: context?.pullRequest?.number,
+                        provider: provider,
+                        fallbackProvider: fallbackProvider,
+                        reviewMode: reviewMode,
                     },
                 });
         } catch (error) {
@@ -733,6 +736,10 @@ export class LLMAnalysisService implements IAIAnalysisService {
                         organizationId:
                             context?.organizationAndTeamData?.organizationId,
                         teamId: context?.organizationAndTeamData?.teamId,
+                        pullRequestId: prNumber,
+                        provider: provider,
+                        fallbackProvider: fallbackProvider,
+                        reviewMode: reviewMode,
                     },
                 });
         } catch (error) {
@@ -935,9 +942,11 @@ export class LLMAnalysisService implements IAIAnalysisService {
                 .withConfig({
                     runName: 'extractSuggestionsFromCodeReviewSafeguard',
                     metadata: {
-                        provider,
                         organizationId: organizationAndTeamData?.organizationId,
                         teamId: organizationAndTeamData?.teamId,
+                        pullRequestId: context?.pullRequest?.number,
+                        provider: provider,
+                        fallbackProvider: fallbackProvider,
                     },
                 });
         } catch (error) {
@@ -1133,8 +1142,8 @@ export class LLMAnalysisService implements IAIAnalysisService {
                         organizationId: organizationAndTeamData?.organizationId,
                         teamId: organizationAndTeamData?.teamId,
                         pullRequestId: prNumber,
-                        provider,
-                        fallbackProvider,
+                        provider: provider,
+                        fallbackProvider: fallbackProvider,
                     },
                 });
         } catch (error) {
@@ -1307,8 +1316,8 @@ export class LLMAnalysisService implements IAIAnalysisService {
                         organizationId: organizationAndTeamData?.organizationId,
                         teamId: organizationAndTeamData?.teamId,
                         pullRequestId: prNumber,
-                        provider,
-                        fallbackProvider,
+                        provider: provider,
+                        fallbackProvider: fallbackProvider,
                     },
                 });
         } catch (error) {
