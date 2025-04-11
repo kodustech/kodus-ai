@@ -235,7 +235,12 @@ export class CheckIfPRCanBeApprovedCronProvider {
             //     return true;
             // }
 
+            if (!reviewComments || reviewComments.length < 1) {
+                return false;
+            }
+
             const isEveryReviewCommentResolved = reviewComments?.every((reviewComment) => reviewComment.isResolved);
+
 
             if (isEveryReviewCommentResolved) {
                 await this.codeManagementService.approvePullRequest({
