@@ -4,7 +4,6 @@ import { CODE_REVIEW_FEEDBACK_SERVICE_TOKEN } from '@/core/domain/codeReviewFeed
 import { CodeReviewFeedbackRepository } from '@/core/infrastructure/adapters/repositories/mongoose/codeReviewFeedback.repository';
 import { CodeReviewFeedbackModelInstance } from '@/core/infrastructure/adapters/repositories/mongoose/schema';
 import { CodeReviewFeedbackService } from '@/core/infrastructure/adapters/services/codeReviewFeedback/codeReviewFeedback.service';
-import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logger/pino.service';
 import { forwardRef, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { TeamsModule } from './team.module';
@@ -21,6 +20,7 @@ import { CodeReviewFeedbackController } from '@/core/infrastructure/http/control
 import { GetCodeReviewFeedbackByOrganizationUseCase } from '@/core/application/use-cases/codeReviewFeedback/get-feedback-by-organization.use-case';
 import { GetReactionsUseCase } from '@/core/application/use-cases/codeReviewFeedback/get-reactions.use-case';
 import { PullRequestsModule } from './pullRequests.module';
+import { LogModule } from './log.module';
 
 const UseCases = [
     GetReactionsUseCase,
@@ -41,10 +41,10 @@ const UseCases = [
         forwardRef(() => GithubModule),
         forwardRef(() => GitlabModule),
         forwardRef(() => PullRequestsModule),
+        LogModule,
     ],
     providers: [
         ...UseCases,
-        PinoLoggerService,
         PromptService,
 
         {

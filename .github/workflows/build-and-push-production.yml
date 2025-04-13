@@ -43,12 +43,10 @@ jobs:
                     --build-arg API_CLOUD_MODE=true \
                     -f DockerFiles/Dockerfile.prod \
                     -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_SHA \
-                    -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION \
-                    -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+                    -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION .
 
                   docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_SHA
                   docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION
-                  docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
             - name: Log out of Amazon ECR
               if: always()
@@ -58,7 +56,6 @@ jobs:
               run: |
                   docker rmi $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_SHA || true
                   docker rmi $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION || true
-                  docker rmi $ECR_REGISTRY/$ECR_REPOSITORY:latest || true
               env:
                   ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
                   ECR_REPOSITORY: kodus-orchestrator-prod

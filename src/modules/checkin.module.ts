@@ -8,7 +8,6 @@ import { CheckinController } from '@/core/infrastructure/http/controllers/checki
 import { UseCases } from '@/core/application/use-cases/checkin';
 import { CheckinService } from '@/core/infrastructure/adapters/services/checkin/checkin.service';
 import { CHECKIN_SERVICE_TOKEN } from '@/core/domain/checkins/contracts/checkin.service.contract';
-import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logger/pino.service';
 import { FlowMetricsCheckinSection } from '@/core/infrastructure/adapters/services/checkin/sections/teamFlowMetrics.section';
 import { DoraMetricsCheckinSection } from '@/core/infrastructure/adapters/services/checkin/sections/teamDoraMetrics.section';
 import { TeamArtifactsSection } from '@/core/infrastructure/adapters/services/checkin/sections/teamArtifacts.section';
@@ -21,6 +20,7 @@ import { ParametersModule } from './parameters.module';
 import { ButtonsSection } from '@/core/infrastructure/adapters/services/checkin/sections/buttons.section';
 import { SnoozedItemsModule } from './snoozedItems.module';
 import { CheckinHistoryModule } from './checkinHistory.module';
+import { LogModule } from './log.module';
 
 @Module({
     imports: [
@@ -33,6 +33,7 @@ import { CheckinHistoryModule } from './checkinHistory.module';
         forwardRef(() => ParametersModule),
         forwardRef(() => SnoozedItemsModule),
         forwardRef(() => CheckinHistoryModule),
+        LogModule,
     ],
     providers: [
         ...UseCases,
@@ -43,7 +44,6 @@ import { CheckinHistoryModule } from './checkinHistory.module';
         LateWorkItemsSection,
         PullRequestsOpenedSection,
         ButtonsSection,
-        PinoLoggerService,
         PromptService,
         {
             provide: CHECKIN_SERVICE_TOKEN,

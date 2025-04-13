@@ -1,4 +1,3 @@
-import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logger/pino.service';
 import { forwardRef, Module } from '@nestjs/common';
 import { IntegrationModule } from './integration.module';
 import { IntegrationConfigModule } from './integrationConfig.module';
@@ -44,8 +43,12 @@ import CodeBaseConfigService from '@/ee/codeBase/codeBaseConfig.service';
 import { CodeAnalysisOrchestrator } from '@/ee/codeBase/codeAnalysisOrchestrator.service';
 import { DiffAnalyzerService } from '@/ee/codeBase/diffAnalyzer.service';
 import { CodeAstAnalysisService } from '@/ee/codeBase/codeASTAnalysis.service';
-import { KODY_RULES_ANALYSIS_SERVICE_TOKEN, KodyRulesAnalysisService } from '@/ee/codeBase/kodyRulesAnalysis.service';
+import {
+    KODY_RULES_ANALYSIS_SERVICE_TOKEN,
+    KodyRulesAnalysisService,
+} from '@/ee/codeBase/kodyRulesAnalysis.service';
 import { GlobalParametersModule } from './global-parameters.module';
+import { LogModule } from './log.module';
 
 @Module({
     imports: [
@@ -68,6 +71,7 @@ import { GlobalParametersModule } from './global-parameters.module';
         forwardRef(() => KodyFineTuningContextModule),
         forwardRef(() => KodyASTAnalyzeContextModule),
         forwardRef(() => GlobalParametersModule),
+        LogModule,
     ],
     providers: [
         ...UseCases,
@@ -106,7 +110,6 @@ import { GlobalParametersModule } from './global-parameters.module';
         DiffAnalyzerService,
         PromptService,
         CodeAnalysisOrchestrator,
-        PinoLoggerService,
         CodeReviewHandlerService,
         KodyFineTuningService,
         PromptRunnerService,
@@ -131,4 +134,4 @@ import { GlobalParametersModule } from './global-parameters.module';
     ],
     controllers: [CodeBaseController],
 })
-export class CodebaseModule { }
+export class CodebaseModule {}
