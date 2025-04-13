@@ -409,6 +409,8 @@ export class KodyRulesAnalysisService implements IAIAnalysisService {
                             context?.organizationAndTeamData?.organizationId,
                         teamId: context?.organizationAndTeamData?.teamId,
                         pullRequestId: context?.pullRequest?.number,
+                        provider: provider,
+                        fallbackProvider: fallbackProvider,
                     },
                 });
         } catch (error) {
