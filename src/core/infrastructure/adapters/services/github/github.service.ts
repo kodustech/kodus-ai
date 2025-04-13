@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
 import { IGithubService } from '@/core/domain/github/contracts/github.service.contract';
 import { PlatformType } from '@/shared/domain/enums/platform-type.enum';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';

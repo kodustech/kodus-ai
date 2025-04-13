@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ITool, ToolExecutionContext } from '../../interfaces/ITool.interface';
 import { IToolResult } from '@/core/domain/agents/interfaces/toolResult.interface';
-import { fromBuffer } from 'file-type';
+import { fileTypeFromBuffer } from 'file-type';
 import {
     getOpenAIAssistant,
     getOpenAIAssistantFileContent,
@@ -287,7 +287,7 @@ ${structureDataResult}
             const fileResponse = await openAIRetrieveFile(fileId);
             const fileContent = await getOpenAIAssistantFileContent(fileId);
 
-            const fileType = await fromBuffer(fileContent);
+            const fileType = await fileTypeFromBuffer(fileContent);
             const extension = fileType ? `.${fileType.ext}` : '.png';
 
             const fileName = `${organizationId}/${teamId}/${fileResponse.filename}${extension}`;
