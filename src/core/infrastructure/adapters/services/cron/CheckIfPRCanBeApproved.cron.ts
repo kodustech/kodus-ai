@@ -100,7 +100,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     repositories: CodeReviewConfigWithRepositoryInfo[]
                 }
 
-                if (!codeReviewParameter || !codeReviewConfig || codeReviewConfig.repositories.length < 1) {
+                if (!codeReviewParameter || !codeReviewConfig || !Array.isArray(codeReviewConfig.repositories) || codeReviewConfig.repositories.length < 1) {
                     this.logger.error({
                         message: 'Code review parameter configs not found',
                         context: CheckIfPRCanBeApprovedCronProvider.name,
@@ -110,7 +110,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         },
                     });
 
-                    return;
+                    continue;
                 }
 
                 const openPullRequests = await this.pullRequestService.find({
