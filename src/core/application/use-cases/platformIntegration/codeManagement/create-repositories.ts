@@ -88,16 +88,6 @@ export class CreateRepositoriesUseCase implements IUseCase {
                     false,
                 );
 
-            await this.saveArtifactsStructureUseCase.execute({
-                teamId,
-                organizationId,
-            });
-
-            await this.generateCodeArtifactsUseCase.execute({
-                organizationId,
-                teamId,
-            });
-
             await this.activeCodeReviewAutomationUseCase.execute(
                 teamId,
                 codeManagementTeamAutomations,

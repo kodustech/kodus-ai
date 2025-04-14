@@ -10,7 +10,6 @@ import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@/core/domain/parameters/contracts/parameters.service.contract';
-import { ICodeManagementService } from '@/core/domain/platformIntegrations/interfaces/code-management.interface';
 import { PlatformType } from '@/shared/domain/enums/platform-type.enum';
 import { IntegrationServiceDecorator } from '@/shared/utils/decorators/integration-service.decorator';
 import {
@@ -53,19 +52,22 @@ import { getLLMModelProviderWithFallback } from '@/shared/utils/get-llm-model-pr
 import { LLMModelProvider } from '@/shared/domain/enums/llm-model-provider.enum';
 import { CreateAuthIntegrationStatus } from '@/shared/domain/enums/create-auth-integration-status.enum';
 import { AuthMode } from '@/core/domain/platformIntegrations/enums/codeManagement/authMode.enum';
-import { BitbucketService } from './bitbucket/bitbucket.service';
-import { BitbucketAuthDetail } from '@/core/domain/authIntegrations/types/bitbucket-auth-detail.type';
-import * as AzureDevops from 'azure-devops-node-api';
 import { AzureReposAuthDetail } from '@/core/domain/authIntegrations/types/azure-repos-auth-detail';
 import { IntegrationEntity } from '@/core/domain/integrations/entities/integration.entity';
-import { project } from 'ramda';
-import {
-    ProjectVisibility,
-    TeamProjectReference,
-} from 'azure-devops-node-api/interfaces/CoreInterfaces';
-import { GitRepository } from 'azure-devops-node-api/interfaces/GitInterfaces';
 import axios from 'axios';
-@Injectable()
+import { AzureReposRequestHelper } from './azureRepos/azure-repos-request-helper';
+import { PullRequestState } from '@/shared/domain/enums/pullRequestState.enum';
+import { AzureGitPullRequestState } from '@/shared/domain/enums/pullRequestState.enum';
+import {
+    CommentResult,
+    FileChange,
+    Repository,
+    ReviewComment,
+} from '@/config/types/general/codeReview.type';
+import { IRepositoryManager } from '@/core/domain/repository/contracts/repository-manager.contract';
+import { REPOSITORY_MANAGER_TOKEN } from '@/core/domain/repository/contracts/repository-manager.contract';
+import { decrypt, encrypt } from '@/shared/utils/crypto';
+
 @IntegrationServiceDecorator(PlatformType.AZURE_REPOS, 'codeManagement')
 export class AzureReposService {
     constructor(
@@ -77,80 +79,65 @@ export class AzureReposService {
         private readonly authIntegrationService: IAuthIntegrationService,
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parameterService: IParametersService,
-        private readonly promptService: PromptService,
+
+        @Inject(REPOSITORY_MANAGER_TOKEN)
+        private readonly repositoryManager: IRepositoryManager,
+
         private readonly logger: PinoLoggerService,
+        private readonly azureReposRequestHelper: AzureReposRequestHelper,
     ) {}
-    getLanguageRepository(params: any): Promise<any | null> {
-        throw new Error('Method not implemented.');
-    }
-    createSingleIssueComment(params: any): Promise<any | null> {
-        throw new Error('Method not implemented.');
-    }
 
-    getRepositoryAllFiles(params: {
-        repository: string;
-        branch: string;
+    async cloneRepository(params: {
+        repository: Pick<
+            Repository,
+            'id' | 'defaultBranch' | 'fullName' | 'name'
+        >;
         organizationAndTeamData: OrganizationAndTeamData;
-        filePatterns?: string[];
-        excludePatterns?: string[];
-        maxFiles?: number;
-    }): Promise<any> {
-        throw new Error('Method not implemented.');
-    }
+    }): Promise<string> {
+        try {
+            const azureAuthDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
 
-    async countReactions(params: any): Promise<any[]> {
-        throw new Error('Method not implemented.');
-    }
-    getAuthenticationOAuthToken(params: any): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    updateDescriptionInPullRequest(params: any): Promise<any | null> {
-        throw new Error('Method not implemented.');
-    }
-    getPullRequestDetails(params: any): Promise<PullRequestDetails | null> {
-        throw new Error('Method not implemented.');
-    }
-    getDefaultBranch(params: any): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    getChangedFilesSinceLastCommit(params: any): Promise<any | null> {
-        throw new Error('Method not implemented.');
-    }
-    findTeamAndOrganizationIdByConfigKey(
-        params: any,
-    ): Promise<IntegrationConfigEntity | null> {
-        throw new Error('Method not implemented.');
-    }
-    updateIssueComment(params: any): Promise<any | null> {
-        throw new Error('Method not implemented.');
-    }
-    createIssueComment(params: any): Promise<any | null> {
-        throw new Error('Method not implemented.');
-    }
-    getCommitsForPullRequestForCodeReview(params: any): Promise<any[] | null> {
-        throw new Error('Method not implemented.');
-    }
-    createReviewComment(params: any): Promise<any | null> {
-        throw new Error('Method not implemented.');
-    }
-    indexRepositoriesForCodeReview(params: any): Promise<void> {
-        throw new Error('Method not implemented.');
-    }
+            if (!azureAuthDetail) {
+                throw new BadRequestException('Installation not found');
+            }
 
-    getPullRequestByNumber(params: any): Promise<any | null> {
-        throw new Error('Method not implemented.');
-    }
+            const repositories = await this.getRepositories({
+                organizationAndTeamData: params.organizationAndTeamData,
+            });
 
-    getRepositoryContentFile(params: any): Promise<any[] | null> {
-        throw new Error('Method not implemented.');
-    }
+            const repository = repositories.find(
+                (repo) => repo.id === params?.repository?.id,
+            );
 
-    createCommentInPullRequest(params: any): Promise<any[] | null> {
-        throw new Error('Method not implemented.');
-    }
+            if (!repository) {
+                throw new BadRequestException('Repository not found');
+            }
 
-    getFilesByPullRequestId(params: any): Promise<any[] | null> {
-        throw new Error('Method not implemented.');
+            const repoPath = await this.repositoryManager.gitCloneWithAuth({
+                organizationId: params?.organizationAndTeamData?.organizationId,
+                repositoryId: params?.repository?.id,
+                repositoryName: params?.repository?.name,
+                url: repository.http_url,
+                branch: params?.repository?.defaultBranch,
+                provider: PlatformType.AZURE_REPOS,
+                auth: {
+                    type: azureAuthDetail.authMode,
+                    token: decrypt(azureAuthDetail.token),
+                },
+            });
+
+            return repoPath;
+        } catch (error) {
+            this.logger.error({
+                message: `Failed to clone repository ${params?.repository?.fullName} from Azure Repos`,
+                context: AzureReposService.name,
+                error: error.message,
+                metadata: params,
+            });
+            return '';
+        }
     }
 
     async getAuthDetails(
@@ -188,37 +175,36 @@ export class AzureReposService {
                 organizationAndTeamData,
             );
 
-            const authHandler = AzureDevops.getPersonalAccessTokenHandler(
-                azureAuthDetail.token,
-            );
-            const connection = new AzureDevops.WebApi(
-                azureAuthDetail.orgUrl,
-                authHandler,
-            );
-
-            const notificationApi = await connection.getNotificationApi();
-            const coreAPI = await connection.getCoreApi();
-
             const webhookUrl =
                 process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK;
 
-            const projects = await coreAPI.getProjects();
+            const projects = await this.azureReposRequestHelper.getProjects({
+                orgName: azureAuthDetail.orgName,
+                token: azureAuthDetail.token,
+            });
 
             for (const project of projects) {
-                const existingHooks = await notificationApi.listSubscriptions(
-                    project.id,
-                );
+                const existingHooks =
+                    await this.azureReposRequestHelper.listSubscriptionsByProject(
+                        {
+                            orgName: azureAuthDetail.orgName,
+                            token: azureAuthDetail.token,
+                            projectId: project.id,
+                        },
+                    );
 
                 const hookExists = existingHooks.some(
                     (hook) => hook.url === webhookUrl,
                 );
 
                 if (!hookExists) {
-                    await notificationApi.createSubscription({
-                        filter: {
-                            eventType: 'git.pullrequest.created',
-                        },
-                    });
+                    this.createNotificationChannel(
+                        project.id,
+                        azureAuthDetail.token,
+                        azureAuthDetail.orgName,
+                        project.id,
+                        webhookUrl,
+                    );
                 }
             }
         } catch (error) {
@@ -249,11 +235,16 @@ export class AzureReposService {
                 params?.authMode === AuthMode.TOKEN &&
                 params.token
             ) {
-                res = await this.authenticateWithToken({
+                const res = await this.authenticateWithToken({
                     organizationAndTeamData: params.organizationAndTeamData,
                     token: params.token,
                     orgUrl: params.orgUrl,
+                    orgName: params.orgName,
                 });
+
+                if (!res.success) {
+                    throw new BadRequestException(res.status);
+                }
             }
 
             return res;
@@ -275,24 +266,15 @@ export class AzureReposService {
         organizationAndTeamData: OrganizationAndTeamData;
         orgUrl: string;
         token: string;
+        orgName: string;
     }): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
         try {
-            const { organizationAndTeamData, token, orgUrl } = params;
-
-            const authHandler =
-                AzureDevops.getPersonalAccessTokenHandler(token);
-            const connection = new AzureDevops.WebApi(orgUrl, authHandler);
-
-            const testResponse = await (
-                await connection.getGitApi()
-            ).getRepositories();
-
-            if (!testResponse) {
-                throw new Error('Bitbucket failed to validate the PAT.');
-            }
+            const { organizationAndTeamData, token, orgUrl, orgName } = params;
 
             const checkRepos = await this.checkRepositoryPermissions({
-                connection,
+                token: token,
+                orgUrl: orgUrl,
+                orgName: orgName,
             });
 
             if (!checkRepos.success) return checkRepos;
@@ -309,6 +291,7 @@ export class AzureReposService {
                 orgUrl: orgUrl,
                 token: token,
                 authMode: AuthMode.TOKEN,
+                orgName: orgName,
             };
 
             await this.handleIntegration(
@@ -338,14 +321,28 @@ export class AzureReposService {
     }
 
     private async checkRepositoryPermissions(params: {
-        connection: AzureDevops.WebApi;
+        token: string;
+        orgUrl: string;
+        orgName: string;
     }) {
         try {
-            const { connection } = params;
+            const projects = await this.azureReposRequestHelper.getProjects({
+                orgName: params.orgName,
+                token: params.token,
+            });
 
-            const gitApi = await connection.getGitApi();
+            const repositories = [];
 
-            const repositories = await gitApi.getRepositories();
+            for (const project of projects) {
+                const prjectRepositories =
+                    await this.azureReposRequestHelper.getRepositories({
+                        orgName: params.orgName,
+                        token: params.token,
+                        projectId: project.id,
+                    });
+
+                repositories.push(...prjectRepositories);
+            }
 
             if (repositories.length === 0) {
                 return {
@@ -498,133 +495,343 @@ export class AzureReposService {
                 return;
             }
 
-            return await this.integrationConfigService.createOrUpdateConfig(
+            await this.integrationConfigService.createOrUpdateConfig(
                 params.configKey,
                 params.configValue,
                 integration?.uuid,
                 params.organizationAndTeamData,
             );
+
+            this.createWebhook(params.organizationAndTeamData);
         } catch (err) {
             throw new BadRequestException(err);
         }
     }
 
-    async getOrganizations(params: any): Promise<Organization[]> {
+    async getPullRequestsByRepository(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: {
+            id: string;
+            name: string;
+        };
+        filters?: {
+            startDate: string;
+            endDate: string;
+        };
+    }) {
         try {
-            const { client, integration } =
-                await this.getAzureReposParams(params);
+            const { organizationAndTeamData, repository, filters } = params;
 
-            const data = await client.get('/api/organizations');
-
-            // Maps the response to the structure of the Domain type
-            const organizations = data.map(
-                (item: Organization): Organization => ({
-                    name: item.name,
-                    id: item.id,
-                    url: item.url,
-                    selected: item.id.includes(
-                        integration?.authIntegration?.authDetails?.organization
-                            ?.id,
-                    ),
-                }),
+            const { orgName, token } = await this.getAuthDetails(
+                organizationAndTeamData,
             );
 
-            return organizations;
+            let queryString = '';
+            if (filters?.startDate) {
+                queryString += `created_on >= "${filters.startDate}"`;
+            }
+            if (filters?.endDate) {
+                queryString += `${
+                    queryString ? ' AND ' : ''
+                }created_on <= "${filters.endDate}"`;
+            }
+
+            const projectId = await this.getProjectIdFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+
+            const pullRequests =
+                await this.azureReposRequestHelper.getPullRequestsByRepo({
+                    orgName,
+                    token,
+                    projectId,
+                    repositoryId: repository.id,
+                    startDate: filters?.startDate,
+                    endDate: filters?.endDate,
+                });
+
+            return (
+                pullRequests?.map((pr) =>
+                    this.transformPullRequest(
+                        pr,
+                        repository.name,
+                        organizationAndTeamData.organizationId,
+                    ),
+                ) || []
+            );
         } catch (error) {
-            console.log(error);
+            this.logger.error({
+                message: 'Error to get pull requests by repository',
+                context: AzureReposService.name,
+                serviceName: 'AzureReposService getPullRequestsByRepository',
+                error: error,
+                metadata: {
+                    params,
+                },
+            });
+            return null;
         }
     }
 
-    async getPullRequests(params: any): Promise<PullRequests[]> {
+    async getPullRequests(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        filters?: {
+            startDate?: string;
+            endDate?: string;
+            assignFilter?: any;
+            state?: PullRequestState;
+            includeChanges?: boolean;
+            pullRequestNumbers?: number[];
+        };
+    }): Promise<PullRequests[]> {
         try {
-            if (!params?.organizationAndTeamData.organizationId) {
+            const { organizationAndTeamData, filters } = params;
+
+            if (!organizationAndTeamData.organizationId) {
                 return null;
             }
 
-            const { client } = await this.getAzureReposParams(params);
-
-            const filters = params?.filters ?? {};
-            const repoFilter = params?.repo ?? null;
-
-            let repositories = await this.findOneByOrganizationIdAndConfigKey(
-                params?.organizationAndTeamData,
-                IntegrationConfigKey.REPOSITORIES,
+            const azureAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
             );
 
-            if (!repositories) {
+            const repositories = <Repositories[]>(
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                )
+            );
+
+            if (
+                !azureAuthDetail ||
+                !repositories ||
+                repositories.length === 0
+            ) {
                 return null;
             }
 
-            if (repoFilter) {
-                repositories = repositories.filter(
-                    (repo) => repo.name === repoFilter,
+            let allPRs: any[] = [];
+
+            const results = await Promise.all(
+                repositories.map(async (repo) => {
+                    const prs = await this.getPullRequestsByRepository({
+                        organizationAndTeamData,
+                        repository: {
+                            id: repo.id,
+                            name: repo.name,
+                        },
+                        filters: {
+                            startDate: filters?.startDate,
+                            endDate: filters?.endDate,
+                        },
+                    });
+
+                    return prs?.map((item) => ({
+                        ...item,
+                        repository: repo.name,
+                    }));
+                }),
+            );
+
+            allPRs = results.flat();
+
+            const stateMap: Record<string, PullRequestState> = {
+                active: PullRequestState.OPENED,
+                completed: PullRequestState.MERGED,
+                abandoned: PullRequestState.CLOSED,
+            };
+
+            const transformed = allPRs.map((pr) => ({
+                id: pr.pullRequestId?.toString(),
+                author_id: pr.createdBy?.id,
+                author_name: pr.createdBy?.displayName,
+                author_created_at: pr.creationDate,
+                repository: pr.repository,
+                repositoryId: pr.repository
+                    ? pr.repository.id
+                    : pr.repositoryId,
+                message: pr.description,
+                state:
+                    stateMap[pr.status?.toLowerCase()] || PullRequestState.ALL,
+                prURL: pr._links?.web?.href,
+                organizationId: organizationAndTeamData.organizationId,
+                pull_number: pr.pullRequestId,
+                number: pr.pullRequestId,
+                body: pr.description,
+                title: pr.title,
+                created_at: pr.creationDate,
+                updated_at:
+                    pr.status === 'completed' || pr.status === 'abandoned'
+                        ? pr.closedDate
+                        : pr.creationDate,
+                merged_at: pr.status === 'completed' ? pr.closedDate : null,
+                participants: [],
+                reviewers:
+                    pr.reviewers?.map((reviewer) => ({
+                        ...reviewer,
+                        uuid: reviewer.id,
+                    })) || [],
+                head: {
+                    ref: pr.sourceRefName?.replace('refs/heads/', ''),
+                    repo: {
+                        id: pr.repository?.id,
+                        name: pr.repository?.name,
+                    },
+                },
+                base: {
+                    ref: pr.targetRefName?.replace('refs/heads/', ''),
+                },
+                user: {
+                    login:
+                        pr.createdBy?.uniqueName ||
+                        pr.createdBy?.displayName ||
+                        '',
+                    name: pr.createdBy?.displayName,
+                    id: pr.createdBy?.id,
+                },
+            }));
+
+            let finalPRs = transformed;
+            if (filters && filters.state) {
+                finalPRs = finalPRs.filter((pr) => pr.state === filters.state);
+            }
+
+            finalPRs.sort(
+                (a, b) =>
+                    new Date(b.created_at).getTime() -
+                    new Date(a.created_at).getTime(),
+            );
+
+            if (filters && filters.pullRequestNumbers) {
+                finalPRs = finalPRs.filter((pr) =>
+                    filters.pullRequestNumbers.includes(Number(pr.id)),
                 );
             }
 
-            const { startDate, endDate } = filters || {};
-            const startDateOnly = startDate
-                ? moment(startDate, 'YYYY-MM-DD HH:mm')
-                      .startOf('day')
-                      .add(1, 'minute')
-                      .format('YYYY-MM-DD HH:mm')
-                : null;
+            return finalPRs;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error to get pull requests',
+                context: AzureReposService.name,
+                serviceName: 'AzureReposService getPullRequests',
+                error: error,
+                metadata: { params },
+            });
+            return [];
+        }
+    }
 
-            const endDateOnly = endDate
-                ? moment(endDate, 'YYYY-MM-DD HH:mm')
-                      .endOf('day')
-                      .subtract(1, 'minute')
-                      .format('YYYY-MM-DD HH:mm')
-                : null;
+    private async getProjectIdFromRepository(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId: string,
+    ): Promise<string | null> {
+        const repositories = <Repositories[]>(
+            await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                organizationAndTeamData,
+                IntegrationConfigKey.REPOSITORIES,
+            )
+        );
 
-            let criteria = `?$orderby=${encodeURIComponent('creationDate desc')}&searchCriteria.status=completed`;
+        if (!repositories) {
+            return null;
+        }
 
-            // Adicionar os filtros de data à URL
-            if (startDateOnly && endDateOnly) {
-                criteria += `&searchCriteria.minTime=${encodeURIComponent(startDateOnly)}&searchCriteria.maxTime=${encodeURIComponent(endDateOnly)}&searchCriteria.queryTimeRangeType=Created`;
-            } else if (startDateOnly) {
-                criteria += `&searchCriteria.minTime=${encodeURIComponent(startDateOnly)}&searchCriteria.queryTimeRangeType=Created`;
-            } else if (endDateOnly) {
-                criteria += `&searchCriteria.maxTime=${encodeURIComponent(endDateOnly)}&searchCriteria.queryTimeRangeType=Created`;
+        const repo = repositories.find((repo) => repo.id === repositoryId);
+
+        return repo.project.id || null;
+    }
+
+    async getPullRequestsWithFiles(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        filters?: { period?: { startDate?: string; endDate?: string } };
+    }): Promise<PullRequestWithFiles[] | null> {
+        try {
+            const { organizationAndTeamData } = params;
+            const filters = params.filters ?? {};
+            const { startDate, endDate } = filters.period || {};
+
+            const repositories: Repositories[] =
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                );
+
+            if (!repositories || repositories.length === 0) {
+                return null;
             }
 
-            const promises = repositories.map(async (repo) => {
-                return client.get('/api/pull-request-by-repo', {
-                    params: {
-                        repositoryId: repo?.id,
-                        criteria,
-                    },
-                });
-            });
+            const { orgName, token } = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
 
-            const results = await Promise.all(promises);
-
-            const pullRequests =
-                results
-                    .flat(Infinity)
-                    .sort((a, b) => {
-                        return (
-                            new Date(b.closedDate).getTime() -
-                            new Date(a.closedDate).getTime()
+            const reposWithPRs = await Promise.all(
+                repositories.map(async (repo) => {
+                    const prs =
+                        await this.azureReposRequestHelper.getPullRequestsByRepo(
+                            {
+                                orgName,
+                                token,
+                                projectId: repo.project.id,
+                                repositoryId: repo.id,
+                                startDate,
+                                endDate,
+                            },
                         );
-                    })
-                    .map((pr) => ({
-                        id: pr.pullRequestId,
-                        author_id: pr.createdBy.id,
-                        author_name: pr.createdBy.displayName,
-                        message: pr.description,
-                        created_at: pr.creationDate,
-                        closed_at: pr.closedDate,
-                        targetRefName: pr.targetRefName,
-                        sourceRefName: pr.sourceRefName,
-                        state: pr.state,
-                        organizationId:
-                            params?.organizationAndTeamData?.organizationId,
-                    })) || null;
+                    return { repo, prs };
+                }),
+            );
 
-            return pullRequests;
-        } catch (err) {
-            console.log(err);
-            return [];
+            const pullRequestsWithFiles: PullRequestWithFiles[] = [];
+
+            await Promise.all(
+                reposWithPRs.map(async ({ repo, prs }) => {
+                    const prsWithDiffs = await Promise.all(
+                        prs.map(async (pr) => {
+                            const iterations =
+                                await this.azureReposRequestHelper.getIterations(
+                                    {
+                                        orgName,
+                                        token,
+                                        projectId: repo.project.id,
+                                        repositoryId: repo.id,
+                                        prId: pr.pullRequestId,
+                                    },
+                                );
+
+                            const lastIteration =
+                                iterations[iterations.length - 1];
+
+                            const iterationId = lastIteration.id;
+
+                            const changes =
+                                await this.azureReposRequestHelper.getChanges({
+                                    orgName,
+                                    token,
+                                    projectId: repo.project.id,
+                                    repositoryId: repo.id,
+                                    pullRequestId: pr.pullRequestId,
+                                    iterationId,
+                                });
+
+                            const diffs =
+                                changes.map((change) => change.item) || [];
+                            return { pr, diffs };
+                        }),
+                    );
+                }),
+            );
+
+            return pullRequestsWithFiles;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error to get pull requests with files',
+                context: 'AzureReposRequestHelper',
+                serviceName: 'getPullRequestsWithFiles',
+                error: error,
+                metadata: { params },
+            });
+            return null;
         }
     }
 
@@ -657,25 +864,19 @@ export class AzureReposService {
                     team: { uuid: organizationAndTeamData.teamId },
                 });
 
-            const authHandler = AzureDevops.getPersonalAccessTokenHandler(
-                azureAuthDetail.token,
-            );
-
-            const connection = new AzureDevops.WebApi(
-                azureAuthDetail.orgUrl,
-                authHandler,
-            );
-
-            const coreAPI = await connection.getCoreApi();
-            const gitAPI = await connection.getGitApi();
-
-            const projects = await coreAPI.getProjects();
+            const projects = await this.azureReposRequestHelper.getProjects({
+                orgName: azureAuthDetail.orgName,
+                token: azureAuthDetail.token,
+            });
 
             const projectsWithRepos = await Promise.all(
                 projects.map(async (project) => {
-                    const repositories = await gitAPI.getRepositories(
-                        project.id,
-                    );
+                    const repositories =
+                        await this.azureReposRequestHelper.getRepositories({
+                            orgName: azureAuthDetail.orgName,
+                            token: azureAuthDetail.token,
+                            projectId: project.id,
+                        });
                     return {
                         project,
                         repositories,
@@ -703,8 +904,8 @@ export class AzureReposService {
         } catch (error) {
             this.logger.error({
                 message: 'Error to get repositories',
-                context: BitbucketService.name,
-                serviceName: 'BitbucketService getRepositories',
+                context: AzureReposService.name,
+                serviceName: 'AzureReposService getRepositories',
                 error: error,
                 metadata: {
                     params,
@@ -715,8 +916,8 @@ export class AzureReposService {
     }
 
     private transformRepo(
-        repo: GitRepository,
-        project: TeamProjectReference,
+        repo: any,
+        project: any,
         integrationConfig: IntegrationConfigEntity,
     ): Repositories {
         return {
@@ -725,10 +926,7 @@ export class AzureReposService {
             http_url: repo.webUrl ?? '',
             avatar_url: '',
             organizationName: project.name ?? '',
-            visibility:
-                project.visibility === ProjectVisibility.Private
-                    ? 'private'
-                    : 'public',
+            visibility: project.visibility === 'private' ? 'private' : 'public',
             selected:
                 integrationConfig?.configValue?.some(
                     (repository) => repository?.name === repo.name,
@@ -741,18 +939,224 @@ export class AzureReposService {
         };
     }
 
-    async getListMembers(params: any): Promise<User[]> {
-        const { client } = await this.getAzureReposParams(params);
+    async getCommits(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        filters?: {
+            startDate?: string;
+            endDate?: string;
+        };
+    }): Promise<Commit[]> {
+        try {
+            const { organizationAndTeamData } = params;
+            const filters = params.filters ?? {};
+            const { startDate, endDate } = filters;
 
-        const data = await client.get(`/api/members`);
+            const azureAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
 
-        return data
-            ?.filter((member) => member?.metaType === 'member')
-            ?.map((member: any) => ({
-                id: member.originId,
-                name: member.displayName,
-                email: member.mailAddress,
-            }));
+            const { orgName, token } = azureAuthDetail;
+
+            const repositories: Repositories[] =
+                await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                    organizationAndTeamData,
+                    IntegrationConfigKey.REPOSITORIES,
+                );
+            if (!repositories || repositories.length === 0) {
+                return [];
+            }
+
+            const commitsByRepo = await Promise.all(
+                repositories.map(async (repo) => {
+                    return this.azureReposRequestHelper.getCommits({
+                        orgName,
+                        token,
+                        projectId: repo.project.id,
+                        repositoryId: repo.id,
+                    });
+                }),
+            );
+
+            const allCommits = commitsByRepo.flat();
+
+            const filteredCommits = allCommits.filter((commit: any) => {
+                const commitDate = new Date(commit.author?.date).getTime();
+                const start = startDate ? new Date(startDate).getTime() : null;
+                const end = endDate ? new Date(endDate).getTime() : null;
+                return (
+                    (!start || commitDate >= start) &&
+                    (!end || commitDate <= end)
+                );
+            });
+
+            const formattedCommits: Commit[] = filteredCommits.map(
+                (commit: any) => {
+                    return {
+                        sha: commit.commitId,
+                        commit: {
+                            author: {
+                                id: commit.author?.id || '',
+                                name: commit.author?.name,
+                                email: commit.author?.email,
+                                date: commit.author?.date,
+                            },
+                            message: commit.comment,
+                        },
+                    };
+                },
+            );
+
+            const sortedCommits = formattedCommits.sort(
+                (a, b) =>
+                    new Date(b.commit.author.date).getTime() -
+                    new Date(a.commit.author.date).getTime(),
+            );
+
+            return sortedCommits;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error to get commits',
+                context: AzureReposRequestHelper.name,
+                serviceName: 'getCommits',
+                error: error,
+                metadata: { params },
+            });
+            return [];
+        }
+    }
+
+    async getFilesByPullRequestId(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string };
+        prNumber: number;
+    }): Promise<FileChange[] | null> {
+        try {
+            const { organizationAndTeamData, repository, prNumber } = params;
+
+            const azureAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            const { orgName, token } = azureAuthDetail;
+
+            const repo = await this.getRepoById(
+                organizationAndTeamData,
+                repository.id,
+            );
+
+            const pr = await this.azureReposRequestHelper.getPullRequestDetails(
+                {
+                    orgName,
+                    token,
+                    projectId: repo.project.id,
+                    repositoryId: repo.id,
+                    prId: prNumber,
+                },
+            );
+
+            const iterations = await this.azureReposRequestHelper.getIterations(
+                {
+                    orgName,
+                    token,
+                    projectId: repo.project.id,
+                    repositoryId: repo.id,
+                    prId: prNumber,
+                },
+            );
+
+            if (!iterations || iterations.length === 0) {
+                return [];
+            }
+
+            const lastIteration = iterations[iterations.length - 1];
+            const iterationId = lastIteration.id;
+
+            const changes = await this.azureReposRequestHelper.getChanges({
+                orgName,
+                token,
+                projectId: repo.project.id,
+                repositoryId: repo.id,
+                pullRequestId: pr.pullRequestId,
+                iterationId,
+            });
+
+            const changeEntries = changes || [];
+
+            const fileChanges: FileChange[] = await Promise.all(
+                changeEntries
+                    .filter((entry: any) => entry.item?.path)
+                    .map(async (entry: any) => {
+                        const filePath = entry.item.path;
+
+                        const commitId = pr.lastMergeSourceCommit?.commitId;
+                        ('');
+                        let contents = '';
+                        try {
+                            contents = (
+                                await this.azureReposRequestHelper.getFileContent(
+                                    {
+                                        orgName,
+                                        token,
+                                        projectId: repo.project.id,
+                                        repositoryId: repo.id,
+                                        filePath,
+                                        commitId,
+                                    },
+                                )
+                            )?.content;
+                        } catch (err) {
+                            contents = '';
+                        }
+
+                        let diffText = '';
+                        const baseCommit =
+                            pr.lastMergeTargetCommit?.commitId || '';
+                        if (baseCommit && commitId) {
+                            try {
+                                const diffRes =
+                                    await this.azureReposRequestHelper.getDiff({
+                                        orgName,
+                                        token,
+                                        projectId: repo.project.id,
+                                        repositoryId: repo.id,
+                                        baseCommit,
+                                        commitId,
+                                        filePath,
+                                    });
+                                // Para simplificar, armazenamos o diff como JSON (você pode customizar o tratamento do diff se necessário)
+                                diffText = JSON.stringify(diffRes);
+                            } catch (err) {
+                                diffText = '';
+                            }
+                        }
+
+                        return {
+                            filename: filePath,
+                            sha: commitId,
+                            status: entry.changeType, // ex: "add", "edit", "delete", etc.
+                            additions: 0, // A API de changes do Azure não retorna as quantidades de linhas
+                            deletions: 0,
+                            changes: 0,
+                            patch: diffText,
+                            blob_url: null,
+                            content: contents,
+                            contents_url: null,
+                            raw_url: null,
+                        };
+                    }),
+            );
+
+            return fileChanges;
+        } catch (error) {
+            this.logger.error({
+                message: `Error to get files by pull request id: ${params.prNumber}`,
+                context: AzureReposRequestHelper.name,
+                serviceName: 'getFilesByPullRequestId',
+                error: error,
+                metadata: { params },
+            });
+            return null;
+        }
     }
 
     async verifyConnection(
@@ -803,530 +1207,6 @@ export class AzureReposService {
         }
     }
 
-    async predictDeploymentType(params: {
-        organizationAndTeamData: OrganizationAndTeamData;
-    }) {
-        try {
-            const repositories = await this.findOneByOrganizationIdAndConfigKey(
-                params.organizationAndTeamData,
-                IntegrationConfigKey.REPOSITORIES,
-            );
-
-            if (!repositories) {
-                return null;
-            }
-
-            const prs = await this.getPullRequests({
-                organizationAndTeamData: params.organizationAndTeamData,
-                filters: {
-                    startDate: moment()
-                        .subtract(90, 'days')
-                        .format('YYYY-MM-DD'),
-                    endDate: moment().format('YYYY-MM-DD'),
-                },
-            });
-
-            if (prs && prs.length > 0) {
-                return {
-                    type: 'PRs',
-                    madeBy: 'Kody',
-                };
-            }
-        } catch (error) {
-            this.logger.error({
-                message: 'Error executing predict deployment type service',
-                context: AzureReposService.name,
-                serviceName: 'PredictDeploymentType',
-                error: error,
-                metadata: {
-                    teamId: params.organizationAndTeamData.teamId,
-                },
-            });
-        }
-    }
-
-    async savePredictedDeploymentType(params: any) {
-        const integration = await this.integrationService.findOne({
-            organization: {
-                uuid: params.organizationAndTeamData.organizationId,
-            },
-            team: {
-                uuid: params.organizationAndTeamData.teamId,
-            },
-            platform: PlatformType.AZURE_REPOS,
-            status: true,
-        });
-
-        if (!integration) {
-            return null;
-        }
-
-        const deploymentType = await this.predictDeploymentType(params);
-
-        if (!deploymentType) {
-            return null;
-        }
-
-        return await this.parameterService.createOrUpdateConfig(
-            ParametersKey.DEPLOYMENT_TYPE,
-            deploymentType,
-            params.organizationAndTeamData,
-        );
-    }
-
-    async getDataForCalculateDeployFrequency(
-        params: any,
-    ): Promise<DeployFrequency[]> {
-        try {
-            let deployFrequency: DeployFrequency[] = [];
-
-            const { organizationAndTeamData, doraMetricsConfig } = params;
-
-            const repositories = await this.findOneByOrganizationIdAndConfigKey(
-                organizationAndTeamData,
-                IntegrationConfigKey.REPOSITORIES,
-            );
-
-            if (!repositories) {
-                return;
-            }
-
-            const teamConfig = await this.parameterService.findOne({
-                configKey: ParametersKey.DEPLOYMENT_TYPE,
-                team: {
-                    uuid: organizationAndTeamData?.teamId,
-                },
-            });
-
-            const startDate = moment(
-                doraMetricsConfig?.analysisPeriod?.startTime,
-            ).format('YYYY-MM-DD');
-            const endDate = moment(
-                doraMetricsConfig?.analysisPeriod?.endTime,
-            ).format('YYYY-MM-DD');
-
-            const deployFrequencyPromises = repositories
-                ?.map((repo) => {
-                    const workflow =
-                        teamConfig?.configValue?.value?.workflows.find(
-                            (config: any) => config.repo === repo.name,
-                        );
-
-                    if (
-                        teamConfig?.configValue?.type === 'deployment' &&
-                        !workflow &&
-                        !workflow?.id
-                    ) {
-                        return;
-                    }
-
-                    return this.getRepoData(
-                        organizationAndTeamData,
-                        repo,
-                        teamConfig,
-                        startDate,
-                        endDate,
-                    );
-                })
-                ?.filter((deployFrequencyPromise) => !!deployFrequencyPromise);
-
-            const deployFrequencyResults = await Promise.all(
-                deployFrequencyPromises,
-            );
-            deployFrequency = deployFrequencyResults.flat();
-
-            return deployFrequency.filter((deploy) => !!deploy);
-        } catch (error) {
-            console.log(error);
-        }
-    }
-
-    async getCommitsByReleaseMode(
-        params: any,
-    ): Promise<CommitLeadTimeForChange[]> {
-        try {
-            const { organizationAndTeamData, deployFrequencyData } = params;
-
-            const { client } = await this.getAzureReposParams(params);
-
-            const repositories = await this.findOneByOrganizationIdAndConfigKey(
-                organizationAndTeamData,
-                IntegrationConfigKey.REPOSITORIES,
-            );
-
-            if (!repositories) {
-                return;
-            }
-
-            let commitsLeadTimeForChange: CommitLeadTimeForChange[] = [];
-
-            for (let index = 0; index < repositories.length; index++) {
-                const repo = repositories[index];
-
-                const deployFrequencyFiltered = deployFrequencyData.filter(
-                    (deployFrequency) =>
-                        deployFrequency?.repository?.name === repo?.name,
-                );
-
-                const getDate = (deploy) => new Date(deploy.created_at);
-
-                const sortDeploysByDate = (a, b) =>
-                    getDate(b).getTime() - getDate(a).getTime();
-
-                const sortedDeploys =
-                    deployFrequencyFiltered.sort(sortDeploysByDate);
-
-                for (let i = 0; i < sortedDeploys.length - 1; i++) {
-                    let commits: Commit[] = [];
-
-                    const lastDeploy = sortedDeploys[i];
-                    const secondToLastDeploy = sortedDeploys[i + 1];
-
-                    if (lastDeploy && secondToLastDeploy) {
-                        if (
-                            secondToLastDeploy &&
-                            lastDeploy.teamConfig?.configValue?.type === 'PRs'
-                        ) {
-                            commits = await this.getCommitsFromPullRequest(
-                                client,
-                                repo.id,
-                                lastDeploy?.id,
-                            );
-                        }
-
-                        if (commits?.length > 0) {
-                            const firstCommitDate = commits[0];
-
-                            const commitLeadTimeForChange = {
-                                lastDeploy,
-                                secondToLastDeploy,
-                                commit: firstCommitDate,
-                            };
-
-                            commitsLeadTimeForChange.push(
-                                commitLeadTimeForChange,
-                            );
-                        }
-                    }
-                }
-            }
-
-            return commitsLeadTimeForChange;
-        } catch (error) {
-            console.log(error);
-        }
-    }
-
-    // NOT IMPLEMENTED,
-    // BECAUSE AZURE REPOS DON'T HAVE SPECIFIC API FOR GET THE CHANGES LINES OF CODE.
-    async getPullRequestsWithFiles(
-        params,
-    ): Promise<PullRequestWithFiles[] | null> {
-        return null;
-        // if (!params?.organizationAndTeamData.organizationId) {
-        //     return null;
-        // }
-
-        // const { client } = await this.getAzureReposParams(params);
-
-        // const filters = params?.filters ?? {};
-        // const { startDate, endDate } = filters?.period || {};
-
-        // const repositories = await this.findOneByOrganizationIdAndConfigKey(
-        //     params?.organizationAndTeamData,
-        //     IntegrationConfigKey.REPOSITORIES,
-        // );
-
-        // if (!repositories) {
-        //     return null;
-        // }
-
-        // const pullRequestsWithFiles: PullRequestWithFiles[] = [];
-
-        // for (const repo of repositories) {
-        //     const pullRequests = await this.getPullRequests({
-        //         repo: repo.name,
-        //         organizationAndTeamData: params?.organizationAndTeamData,
-        //         filters: {
-        //             startDate,
-        //             endDate,
-        //         },
-        //     });
-
-        //     const pullRequestDetails = await Promise.all(
-        //         pullRequests.map(async (pullRequest) => {
-        //             const files = await this.getPullRequestFiles(
-        //                 client,
-        //                 repo.id,
-        //                 pullRequest,
-        //             );
-
-        //             return {
-        //                 id: parseInt(pullRequest.id),
-        //                 pull_number: parseInt(pullRequest.id),
-        //                 state: 'pullRequest.state',
-        //                 title: 'pullRequest.title',
-        //                 repository: repo,
-        //                 pullRequestFiles: files,
-        //             };
-        //         }),
-        //     );
-
-        //     pullRequestsWithFiles.push(...pullRequestDetails);
-        // }
-
-        // return pullRequestsWithFiles;
-    }
-
-    async getPullRequestsForRTTM(
-        params,
-    ): Promise<PullRequestCodeReviewTime[] | null> {
-        if (!params?.organizationAndTeamData.organizationId) {
-            return null;
-        }
-
-        const { client } = await this.getAzureReposParams(params);
-
-        const filters = params?.filters ?? {};
-        const { startDate, endDate } = filters?.period || {};
-
-        const repositories = await this.findOneByOrganizationIdAndConfigKey(
-            params?.organizationAndTeamData,
-            IntegrationConfigKey.REPOSITORIES,
-        );
-
-        if (!repositories) {
-            return null;
-        }
-
-        const pullRequestCodeReviewTime: PullRequestCodeReviewTime[] = [];
-
-        for (const repo of repositories) {
-            const pullRequests = await this.getPullRequests({
-                repo: repo.name,
-                organizationAndTeamData: params?.organizationAndTeamData,
-                filters: {
-                    startDate,
-                    endDate,
-                },
-            });
-
-            const pullRequestsFormatted = pullRequests?.map((pullRequest) => ({
-                id: parseInt(pullRequest.id),
-                created_at: pullRequest.created_at,
-                closed_at: pullRequest.closed_at,
-            }));
-
-            pullRequestCodeReviewTime.push(...pullRequestsFormatted);
-        }
-
-        return pullRequestCodeReviewTime;
-    }
-
-    async getCommits(params: any): Promise<Commit[]> {
-        try {
-            const repositories = await this.findOneByOrganizationIdAndConfigKey(
-                params.organizationAndTeamData,
-                IntegrationConfigKey.REPOSITORIES,
-            );
-
-            if (!repositories) {
-                return null;
-            }
-
-            const { client } = await this.getAzureReposParams(params);
-
-            const { startDate, endDate } = params.filters || {};
-
-            const promises = repositories?.map(async (repo) => {
-                return await this.getAllCommits(
-                    client,
-                    repo.id,
-                    startDate,
-                    endDate,
-                );
-            });
-
-            const results = await Promise.all(promises);
-
-            const commits =
-                results.flat().map((item) => ({
-                    sha: item.sha,
-                    commit: {
-                        author: {
-                            id: item?.commit?.author?.id,
-                            name: item?.commit?.author?.name,
-                            email: item?.commit?.author?.email,
-                            date: item?.commit?.author?.date,
-                        },
-                        message: item.commit.message,
-                    },
-                })) || null;
-
-            return commits;
-        } catch (err) {
-            console.log(err);
-            return [];
-        }
-    }
-
-    async getAllCommits(
-        client,
-        repoId: string,
-        startDate?: string,
-        endDate?: string,
-    ): Promise<Commit[]> {
-        try {
-            const startDateOnly = startDate
-                ? moment(startDate, 'YYYY-MM-DD HH:mm')
-                      .startOf('day')
-                      .add(1, 'minute')
-                      .format('YYYY-MM-DD HH:mm')
-                : null;
-
-            const endDateOnly = endDate
-                ? moment(endDate, 'YYYY-MM-DD HH:mm')
-                      .endOf('day')
-                      .subtract(1, 'minute')
-                      .format('YYYY-MM-DD HH:mm')
-                : null;
-
-            let criteria = ``;
-
-            if (startDateOnly && endDateOnly) {
-                criteria += `&$searchCriteria.fromDate=${encodeURIComponent(startDateOnly)}&$searchCriteria.toDate=${encodeURIComponent(endDateOnly)}`;
-            } else if (startDateOnly) {
-                criteria += `&$searchCriteria.fromDate=${encodeURIComponent(startDateOnly)}`;
-            } else if (endDateOnly) {
-                criteria += `&$searchCriteria.toDate=${encodeURIComponent(endDateOnly)}`;
-            }
-
-            const commits = await client.get('/api/repository-commits', {
-                params: {
-                    repositoryId: repoId,
-                    criteria,
-                },
-            });
-
-            return commits
-                ?.map((commit) => ({
-                    sha: commit.commitId,
-                    commit: {
-                        author: commit.author,
-                        message: commit.comment,
-                    },
-                }))
-                .sort((a, b) => {
-                    return (
-                        new Date(a.commit.author.date).getTime() -
-                        new Date(b.commit.author.date).getTime()
-                    );
-                });
-        } catch (error) {
-            console.error('Error fetching commits: ', error);
-            return [];
-        }
-    }
-
-    async getCommitsForTagName(
-        lastDeploy,
-        secondLastDeploy,
-    ): Promise<Commit[]> {
-        return await this.getCommitsBetweenTags(
-            lastDeploy.repository,
-            secondLastDeploy.tag_name,
-            lastDeploy.tag_name,
-        );
-    }
-
-    async getCommitsBetweenTags(repo, baseTag, headTag): Promise<Commit[]> {
-        return null;
-    }
-
-    async getCommitsFromPullRequest(
-        client: any,
-        repositoryId: string,
-        pullRequestId: number,
-        criteria = '',
-    ) {
-        const commits = await client.get('/api/pull-request-commits', {
-            params: {
-                repositoryId,
-                criteria,
-                pullRequestId,
-            },
-        });
-
-        return commits
-            ?.map((commit) => ({
-                sha: commit.commitId,
-                commit: {
-                    author: commit.author,
-                    message: commit.comment,
-                },
-            }))
-            .sort((a, b) => {
-                return (
-                    new Date(a.commit.author.date).getTime() -
-                    new Date(b.commit.author.date).getTime()
-                );
-            });
-    }
-
-    async getWorkflows(params: any) {
-        const { client, organizationAndTeamData, repositories } = params;
-
-        const workflows = [];
-
-        for (const repo of repositories) {
-            const workflowsFromRepo = await client.get('/api/list-all-builds', {
-                params: {
-                    repository: repo,
-                },
-            });
-
-            if (!workflowsFromRepo || workflowsFromRepo?.length <= 0) {
-                continue;
-            }
-
-            workflows.push({
-                repo: repo,
-                workflows: workflowsFromRepo,
-            });
-        }
-
-        if (!workflows || workflows?.length <= 0) {
-            return [];
-        }
-
-        let llm = getChatGPT({
-            model: getLLMModelProviderWithFallback(
-                LLMModelProvider.CHATGPT_4_TURBO,
-            ),
-        }).bind({
-            response_format: { type: 'json_object' },
-        });
-
-        const promptWorkflows =
-            await this.promptService.getCompleteContextPromptByName(
-                'prompt_getProductionWorkflows',
-                {
-                    organizationAndTeamData,
-                    payload: JSON.stringify(workflows),
-                    promptIsForChat: false,
-                },
-            );
-
-        const chain = await llm.invoke(promptWorkflows, {
-            metadata: {
-                module: 'Setup',
-                submodule: 'GetProductionDeployment',
-            },
-        });
-
-        return safelyParseMessageContent(chain.content).repos;
-    }
-
     async findOneByOrganizationIdAndConfigKey(
         organizationAndTeamData: OrganizationAndTeamData,
         configKey: IntegrationConfigKey.REPOSITORIES,
@@ -1351,172 +1231,6 @@ export class AzureReposService {
             return integrationConfig?.configValue || null;
         } catch (err) {
             throw new BadRequestException(err);
-        }
-    }
-
-    private async getPullRequestFiles(
-        client: any,
-        repositoryId: string,
-        pullRequest: any,
-    ): Promise<PullRequestFile[]> {
-        const files = await client.get('/api/pull-request-files', {
-            params: {
-                repositoryId,
-                pullRequest,
-            },
-        });
-
-        return files?.map((file) => ({
-            additions: file.additions,
-            changes: file.changes,
-            deletions: file.deletions,
-            status: file.status,
-        }));
-    }
-
-    private async getRepoData(
-        organizationAndTeamData: OrganizationAndTeamData,
-        repo: any,
-        teamConfig: any,
-        startDate: string,
-        endDate: string,
-    ): Promise<DeployFrequency[]> {
-        try {
-            const workflow = teamConfig?.configValue?.value?.workflows.find(
-                (config: any) => config.repo === repo,
-            );
-            let releasesFromRepo: any[] = [];
-
-            if (teamConfig?.configValue?.type === 'PRs') {
-                releasesFromRepo = await this.getPullRequests({
-                    repo: repo.name,
-                    organizationAndTeamData,
-                    filters: {
-                        startDate,
-                        endDate,
-                    },
-                });
-            }
-
-            return releasesFromRepo?.map((release) => ({
-                id: release.number ?? release?.id,
-                created_at: release?.created_at,
-                closed_at: release?.closed_at,
-                repository: repo,
-                teamConfig,
-                tag_name: release?.tag_name || release?.head_branch,
-                published_at: release?.published_at,
-            }));
-        } catch (error) {
-            console.log(error);
-        }
-    }
-
-    private async getDeployRuns(
-        repo: string,
-        workflowId: number,
-        startDate: string,
-        endDate: string,
-    ): Promise<any[]> {
-        // return await octokit.paginate(octokit.actions.listWorkflowRuns, {
-        //     owner: githubAuthDetail?.org,
-        //     repo: repo,
-        //     workflow_id: workflowId,
-        //     status: 'completed',
-        //     created: `${startDate}..${endDate}`,
-        //     per_page: 100,
-        // });
-        return null;
-    }
-
-    private async getAzureReposParams(params: any) {
-        try {
-            const integration = await this.ensureAuthenticatedIntegration(
-                params.organizationAndTeamData,
-            );
-
-            const { tenantId, organization } =
-                integration.authIntegration.authDetails;
-
-            return {
-                client: new AxiosAzureReposService({
-                    tenantId,
-                    organization:
-                        params?.organizationSelected?.name ||
-                        organization?.name,
-                }),
-                integration,
-            };
-        } catch (error) {
-            console.log(error);
-        }
-    }
-
-    private async ensureAuthenticatedIntegration(
-        organizationAndTeamData: OrganizationAndTeamData,
-    ) {
-        try {
-            return await this.integrationService.findOne({
-                organization: { uuid: organizationAndTeamData.organizationId },
-                team: {
-                    uuid: organizationAndTeamData.teamId,
-                },
-                platform: PlatformType.AZURE_REPOS,
-                status: true,
-            });
-        } catch (error) {
-            this.logger.error({
-                message: 'Error executing ensureAuthenticatedIntegration',
-                context: AzureReposService.name,
-                error: error,
-                metadata: {
-                    teamId: organizationAndTeamData.teamId,
-                    organizationId: organizationAndTeamData.organizationId,
-                },
-            });
-
-            throw error;
-        }
-    }
-
-    private formatDeploymentTypeFromDeploy(workflows) {
-        return {
-            type: 'deployment',
-            madeBy: 'Kody',
-            value: {
-                workflows: workflows.flatMap((repo) =>
-                    repo.productionWorkflows.map((workflow) => ({
-                        id: workflow.id,
-                        name: workflow.name,
-                        repo: repo.repo,
-                    })),
-                ),
-            },
-        };
-    }
-
-    async getPullRequestReviewComment(params: any): Promise<any | null> {
-        return null;
-    }
-
-    async createResponseToComment(params: any): Promise<any | null> {
-        throw new Error(
-            'Method createResponseToComment not implemented for AzureReposService',
-        );
-    }
-
-    async getOrganizationName(orgUrl, token) {
-        try {
-            const response = await axios.get(`${orgUrl}/_apis/organization`, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-            });
-            const organizationName = response?.data?.value[0]?.accountName;
-            return organizationName;
-        } catch (error) {
-            console.error('Error fetching organization name:', error);
         }
     }
 
@@ -1566,13 +1280,6 @@ export class AzureReposService {
         repoId: string,
         webhookUrl: string,
     ) {
-        const AUTH_HEADER = {
-            'Authorization': `Basic ${Buffer.from(`:${userToken}`).toString('base64')}`,
-            'Content-Type': 'application/json',
-        };
-
-        const url = `https://dev.azure.com/${organizationName}/${project}/_apis/hooks/subscriptions?api-version=7.1-preview.1`;
-
         const eventTypes = [
             'git.pullrequest.created',
             'git.pullrequest.updated',
@@ -1582,50 +1289,102 @@ export class AzureReposService {
         ];
 
         for (const evt of eventTypes) {
-            await this.createSubscription(
-                url,
-                evt,
-                projectId,
-                repoId,
-                webhookUrl,
-                AUTH_HEADER,
-            );
+            const payload = {
+                publisherId: 'tfs',
+                eventType: evt,
+                resourceVersion: '1.0',
+                consumerId: 'webHooks',
+                consumerActionId: 'httpRequest',
+                publisherInputs: {
+                    projectId,
+                },
+                consumerInputs: {
+                    url: webhookUrl,
+                },
+            };
+
+            await this.azureReposRequestHelper.createSubscriptionForProject({
+                orgName: organizationName,
+                token: userToken,
+                projectId: projectId,
+                subscriptionPayload: payload,
+            });
         }
     }
 
-    private async createSubscription(
-        url,
-        eventType,
-        projectId,
-        repoId,
-        webhookUrl,
-        authHeader,
-    ) {
-        const payload = {
-            publisherId: 'tfs', // sempre "tfs"
-            eventType,
-            resourceVersion: '1.0',
-            consumerId: 'webHooks',
-            consumerActionId: 'httpRequest',
-            publisherInputs: {
-                projectId: projectId,
-                repository: repoId,
-            },
-            consumerInputs: {
-                url: webhookUrl,
-            },
+    private transformPullRequest(
+        pr: any,
+        repository: string,
+        organizationId: string,
+    ): PullRequests & any {
+        const stateMap: Record<AzureGitPullRequestState, PullRequestState> = {
+            [AzureGitPullRequestState.ACTIVE]: PullRequestState.OPENED,
+            [AzureGitPullRequestState.COMPLETED]: PullRequestState.MERGED,
+            [AzureGitPullRequestState.ABANDONED]: PullRequestState.CLOSED,
         };
 
-        try {
-            const res = await axios.post(url, payload, {
-                headers: authHeader,
-            });
-            console.log(`✅ Criado: ${eventType} -> id ${res.data.id}`);
-        } catch (err) {
-            console.error(
-                `❌ Erro ao criar ${eventType}:`,
-                err.response?.data || err.message,
-            );
+        return {
+            id: pr.pullRequestId?.toString(),
+            author_id: pr.createdBy?.id,
+            author_name: pr.createdBy?.displayName,
+            author_created_at: pr.creationDate,
+            repository,
+            repositoryId: pr.repository?.id,
+            message: pr.description,
+            state:
+                stateMap[pr.status as AzureGitPullRequestState] ||
+                PullRequestState.ALL,
+            prURL: pr._links?.web?.href,
+            organizationId,
+            pull_number: pr.pullRequestId,
+            number: pr.pullRequestId,
+            body: pr.description,
+            title: pr.title,
+            created_at: pr.creationDate,
+            updated_at:
+                pr.status === 'completed' || pr.status === 'abandoned'
+                    ? pr.closedDate
+                    : pr.creationDate,
+            merged_at: pr.status === 'completed' ? pr.closedDate : null,
+            participants: [],
+            reviewers:
+                pr.reviewers?.map((reviewer) => ({
+                    ...reviewer,
+                    uuid: reviewer.id,
+                })) ?? [],
+            head: {
+                ref: pr.sourceRefName?.replace('refs/heads/', ''),
+                repo: {
+                    id: pr.repository?.id,
+                    name: pr.repository?.name,
+                },
+            },
+            base: {
+                ref: pr.targetRefName?.replace('refs/heads/', ''),
+            },
+            user: {
+                login: pr.createdBy?.uniqueName ?? '',
+                name: pr.createdBy?.displayName,
+                id: pr.createdBy?.id,
+            },
+        };
+    }
+
+    private async getRepoById(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId: string,
+    ): Promise<Repositories | null> {
+        const repositories = <Repositories[]>(
+            await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                organizationAndTeamData,
+                IntegrationConfigKey.REPOSITORIES,
+            )
+        );
+
+        if (!repositories) {
+            return null;
         }
+
+        return repositories.find((repo) => repo.id === repositoryId);
     }
 }

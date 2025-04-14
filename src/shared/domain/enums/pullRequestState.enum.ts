@@ -18,4 +18,8 @@ export enum GitlabPullRequestState {
     MERGED = 'merged',
 }
 
-export enum AzureGitPullRequestState {}
+export enum AzureGitPullRequestState {
+    ACTIVE = 'active',
+    COMPLETED = 'completed',
+    ABANDONED = 'abandoned',
+}

@@ -8,7 +8,11 @@ import { ImplementationStatus } from '@/core/domain/pullRequests/enums/implement
 
 import { IClusterizedSuggestion } from '@/ee/kodyFineTuning/domain/interfaces/kodyFineTuning.interface';
 import { FunctionAnalysis } from '@/ee/codeBase/ast/contracts/CodeGraph';
-import { EnrichGraph, FunctionsAffectResult, FunctionSimilarity } from '@/ee/codeBase/ast/services/code-analyzer.service';
+import {
+    EnrichGraph,
+    FunctionsAffectResult,
+    FunctionSimilarity,
+} from '@/ee/codeBase/ast/services/code-analyzer.service';
 
 export interface IFinalAnalysisResult {
     validSuggestionsToAnalyze: Partial<CodeSuggestion>[];
@@ -47,7 +51,7 @@ export interface ChangedFilesWithAST {
 }
 
 export type Repository = {
-    platform: 'github' | 'gitlab' | 'bitbucket';
+    platform: 'github' | 'gitlab' | 'bitbucket' | 'azure-devops';
     id: string;
     name: string;
     fullName?: string;
@@ -147,13 +151,13 @@ export type FileChange = {
     sha: string;
     filename: string;
     status:
-    | 'added'
-    | 'removed'
-    | 'modified'
-    | 'renamed'
-    | 'copied'
-    | 'changed'
-    | 'unchanged';
+        | 'added'
+        | 'removed'
+        | 'modified'
+        | 'renamed'
+        | 'copied'
+        | 'changed'
+        | 'unchanged';
     additions: number;
     deletions: number;
     changes: number;

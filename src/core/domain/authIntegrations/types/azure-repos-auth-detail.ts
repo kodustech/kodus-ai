@@ -3,5 +3,6 @@ import { AuthMode } from '../../platformIntegrations/enums/codeManagement/authMo
 export type AzureReposAuthDetail = {
     orgUrl: string;
     token: string;
+    orgName: string;
     authMode: AuthMode;
 };

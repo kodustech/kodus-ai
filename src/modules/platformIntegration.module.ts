@@ -27,7 +27,6 @@ import { ProfileConfigModule } from './profileConfig.module';
 import { PromptService } from '@/core/infrastructure/adapters/services/prompt.service';
 import { ParametersModule } from './parameters.module';
 import { MetricsModule } from './metrics.module';
-import { AzureReposService } from '@/core/infrastructure/adapters/services/azureRepos.service';
 import { CheckinHistoryOrganizationModule } from './checkInHistoryOrganization.module';
 import { GitlabModule } from './gitlab.module';
 import { AgentModule } from './agent.module';
@@ -46,7 +45,7 @@ import { PullRequestsModule } from './pullRequests.module';
 import { CodebaseModule } from './codeBase.module';
 import { KodyRulesModule } from './kodyRules.module';
 import { BitbucketService } from '@/core/infrastructure/adapters/services/bitbucket/bitbucket.service';
-
+import { AzureReposModule } from './azureRepos.module';
 @Module({
     imports: [
         forwardRef(() => IntegrationModule),
@@ -72,6 +71,7 @@ import { BitbucketService } from '@/core/infrastructure/adapters/services/bitbuc
         forwardRef(() => CodeReviewFeedbackModule),
         forwardRef(() => CodebaseModule),
         forwardRef(() => KodyRulesModule),
+        forwardRef(() => AzureReposModule),
         PullRequestsModule,
     ],
     providers: [
@@ -89,7 +89,6 @@ import { BitbucketService } from '@/core/infrastructure/adapters/services/bitbuc
         GitlabService,
         DiscordService,
         AzureBoardsService,
-        AzureReposService,
         BitbucketService,
     ],
     controllers: [
