@@ -1,5 +1,9 @@
-# Estágio base: instalar dependências apenas 1x
+ARG API_CLOUD_MODE=false
+
 FROM --platform=linux/amd64 node:22.14.0-slim AS deps
+
+ARG API_CLOUD_MODE
+ENV API_CLOUD_MODE=${API_CLOUD_MODE}
 
 ARG RELEASE_VERSION
 ENV SENTRY_RELEASE=$RELEASE_VERSION
@@ -7,49 +11,48 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 WORKDIR /usr/src/app
 
-# Instalar certificados de CA para conexões seguras
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-
-# Instalar dependências de produção (dev + prod para o build)
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
 # -------------------------------------------------------------
-# Estágio build: compila o código e workflows
 FROM deps AS build
-WORKDIR /usr/src/app
 
-# Copiar o restante do código-fonte
+ARG API_CLOUD_MODE
+ENV API_CLOUD_MODE=${API_CLOUD_MODE}
+
+WORKDIR /usr/src/app
+# Copia todo o projeto (inclui o environment.template.ts)
 COPY . .
 
-# Compilar o código principal e workflows
+# Garante que a pasta existe (importante em build limpo de cache)
+RUN mkdir -p ee/configs/environment
+
+# Gera o environment.ts substituindo o placeholder
+RUN sed "s/__CLOUD_MODE__/${API_CLOUD_MODE}/g" src/ee/configs/environment/environment.template.ts > src/ee/configs/environment/environment.ts
+
 RUN yarn build:production
 
 # -------------------------------------------------------------
-# Estágio final para Produção
 FROM deps AS production
+
+ARG API_CLOUD_MODE
+ENV API_CLOUD_MODE=${API_CLOUD_MODE}
+
 WORKDIR /usr/src/app
 EXPOSE 3001
 
-# Instalar certificados de CA novamente para garantir conexões seguras
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Reaproveitar dependências de produção instaladas no estágio deps
 COPY --from=deps /usr/src/app/node_modules ./node_modules
 COPY package.json yarn.lock ./
-
-# Copiar artefatos do build
 COPY --from=build /usr/src/app/dist ./dist
 COPY ecosystem.config.js ./
-
-# Copiar o arquivo de configuração para a pasta raiz
 COPY default-kodus-config.yml ./default-kodus-config.yml
 
-# Instalação do PM2 e PM2-Logrotate
 RUN yarn global add pm2
 RUN pm2 install pm2-logrotate
 RUN pm2 set pm2-logrotate:max_size 30M
 RUN pm2 set pm2-logrotate:retain 10
 
-# Comando de inicialização para Produção
 CMD ["pm2-runtime", "start", "ecosystem.config.js", "--env", "production"]

@@ -1,11 +1,14 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class AddTableGlobalParameters1743068082536 implements MigrationInterface {
-    name = 'AddTableGlobalParameters1743068082536'
+export class AddTableGlobalParameters1744241683720 implements MigrationInterface {
+    name = 'AddTableGlobalParameters1744241683720'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`
-            CREATE TYPE "public"."global_parameters_configkey_enum" AS ENUM('kody_fine_tuning_config')
+            CREATE TYPE "public"."global_parameters_configkey_enum" AS ENUM(
+                'kody_fine_tuning_config',
+                'code_review_max_files'
+            )
         `);
         await queryRunner.query(`
             CREATE TABLE "global_parameters" (

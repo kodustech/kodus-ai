@@ -121,11 +121,16 @@ export class AutomationCodeReviewService
                 );
 
             if (result) {
+                const validLastAnalyzedCommit =
+                    result.lastAnalyzedCommit &&
+                    typeof result.lastAnalyzedCommit === 'object' &&
+                    Object.keys(result.lastAnalyzedCommit).length > 0;
+
                 if (
-                    result?.commentId ||
-                    result?.noteId ||
-                    result?.lastAnalyzedCommit ||
-                    result?.overallComments
+                    validLastAnalyzedCommit &&
+                    (result.commentId ||
+                        result.noteId ||
+                        result.overallComments)
                 ) {
                     this.createAutomationExecution(
                         {
@@ -133,10 +138,10 @@ export class AutomationCodeReviewService
                             platformType,
                             organizationAndTeamData: organizationAndTeamData,
                             pullRequestNumber: pullRequest?.number,
-                            overallComments: result?.overallComments,
-                            lastAnalyzedCommit: result?.lastAnalyzedCommit,
-                            commentId: result?.commentId,
-                            noteId: result?.noteId,
+                            overallComments: result.overallComments,
+                            lastAnalyzedCommit: result.lastAnalyzedCommit,
+                            commentId: result.commentId,
+                            noteId: result.noteId,
                         },
                         teamAutomationId,
                         'System',

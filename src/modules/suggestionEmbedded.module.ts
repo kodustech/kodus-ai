@@ -1,5 +1,4 @@
 import { SuggestionEmbeddedModel } from '@/core/infrastructure/adapters/repositories/typeorm/schema/suggestionEmbedded.model';
-import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logger/pino.service';
 import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CodeReviewFeedbackModule } from './codeReviewFeedback.module';
@@ -11,6 +10,7 @@ import { KodyFineTuningService } from '@/ee/kodyFineTuning/kodyFineTuning.servic
 import { SuggestionEmbeddedService } from '@/ee/kodyFineTuning/suggestionEmbedded/suggestionEmbedded.service';
 import { SUGGESTION_EMBEDDED_REPOSITORY_TOKEN } from '@/ee/kodyFineTuning/domain/suggestionEmbedded/contracts/suggestionEmbedded.repository.contract';
 import { SUGGESTION_EMBEDDED_SERVICE_TOKEN } from '@/ee/kodyFineTuning/domain/suggestionEmbedded/contracts/suggestionEmbedded.service.contract';
+import { LogModule } from './log.module';
 
 @Module({
     imports: [
@@ -18,9 +18,9 @@ import { SUGGESTION_EMBEDDED_SERVICE_TOKEN } from '@/ee/kodyFineTuning/domain/su
         forwardRef(() => PullRequestsModule),
         forwardRef(() => CodeReviewFeedbackModule),
         forwardRef(() => GlobalParametersModule),
+        LogModule,
     ],
     providers: [
-        PinoLoggerService,
         SuggestionEmbeddedDatabaseRepository,
         KodyFineTuningService,
         SuggestionEmbeddedService,

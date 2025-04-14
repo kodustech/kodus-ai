@@ -27,7 +27,13 @@ export class KodyFineTuningContextPreparationService extends BaseKodyFineTuningC
         },
         suggestionsToAnalyze: CodeSuggestion[],
         isFineTuningEnabled: boolean,
-    ): Promise<Partial<CodeSuggestion>[]> {
-        return [];
+    ): Promise<{
+        keepedSuggestions: Partial<CodeSuggestion>[];
+        discardedSuggestions: Partial<CodeSuggestion>[];
+    }> {
+        return {
+            keepedSuggestions: [],
+            discardedSuggestions: [],
+        };
     }
 }

@@ -1,14 +1,13 @@
 import { v4 as uuid } from 'uuid';
-import { LoggerService } from '@nestjs/common';
 import {
     PipelineContext,
-    PipelineError,
     PipelineStatus,
 } from './interfaces/pipeline-context.interface';
-import { IPipeline, PipelineStage } from './interfaces/pipeline.interface';
+import { PipelineStage } from './interfaces/pipeline.interface';
+import { PinoLoggerService } from '../logger/pino.service';
 
 export class PipelineExecutor<TContext extends PipelineContext> {
-    constructor(private readonly logger: LoggerService) {}
+    constructor(private readonly logger: PinoLoggerService) {}
 
     async execute(
         context: TContext,
@@ -27,36 +26,71 @@ export class PipelineExecutor<TContext extends PipelineContext> {
             pipelineName,
         };
 
-        this.logger.log(
-            `🚀 Starting pipeline: ${pipelineName} (ID: ${pipelineId})`,
-        );
+        this.logger.log({
+            message: `Starting pipeline: ${pipelineName} (ID: ${pipelineId})`,
+            context: PipelineExecutor.name,
+            metadata: {
+                pipelineId,
+                pipelineName,
+            },
+        });
 
         for (const stage of stages) {
-            if (context.status === PipelineStatus.SKIP) break;
+            if (context.status === PipelineStatus.SKIP) {
+                this.logger.log({
+                    message: `Pipeline '${pipelineName}' skipped due to SKIP status ${pipelineId}`,
+                    context: PipelineExecutor.name,
+                    metadata: {
+                        pipelineId,
+                        pipelineName,
+                    },
+                });
+                break;
+            }
+
             const start = Date.now();
 
             try {
                 context = await stage.execute(context);
-                this.logger.log(
-                    `✅ Stage '${stage.stageName}' completed in ${Date.now() - start}ms`,
-                );
-            } catch (error) {
-                this.logger.error(
-                    `❌ Stage '${stage.stageName}' failed: ${error.message}`,
-                    { error },
-                );
 
-                // Não relançamos o erro para permitir que o pipeline continue
-                // mesmo quando um estágio falha
-                this.logger.warn(
-                    `⚠️ Pipeline '${pipelineName}' continuing despite error in stage '${stage.stageName}'`,
-                );
+                this.logger.log({
+                    message: `Stage '${stage.stageName}' completed in ${Date.now() - start}ms: ${pipelineId}`,
+                    context: PipelineExecutor.name,
+                    metadata: {
+                        pipelineId,
+                        pipelineName,
+                    },
+                });
+            } catch (error) {
+                this.logger.error({
+                    message: `Stage '${stage.stageName}' failed: ${error.message}`,
+                    context: PipelineExecutor.name,
+                    error: error,
+                    metadata: {
+                        pipelineId,
+                        pipelineName,
+                    },
+                });
+
+                this.logger.warn({
+                    message: `Pipeline '${pipelineName}:${pipelineId}' continuing despite error in stage '${stage.stageName}'`,
+                    context: PipelineExecutor.name,
+                    metadata: {
+                        pipelineId,
+                        pipelineName,
+                    },
+                });
             }
         }
 
-        this.logger.log(
-            `🏁 Finished pipeline: ${pipelineName} (ID: ${pipelineId})`,
-        );
+        this.logger.log({
+            message: `Finished pipeline: ${pipelineName} (ID: ${pipelineId})`,
+            context: PipelineExecutor.name,
+            metadata: {
+                pipelineId,
+                pipelineName,
+            },
+        });
 
         return context;
     }

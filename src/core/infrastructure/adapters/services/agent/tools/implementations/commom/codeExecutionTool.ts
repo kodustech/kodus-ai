@@ -18,7 +18,7 @@ import { ARTIFACTS_STRUCTURE_DATA } from '../../../structureData/artifacts';
 import { METRICS_STRUCTURE_DATA } from '../../../structureData/metrics';
 import { WORKITEM_STRUCTURE_DATA } from '../../../structureData/workItems';
 import { PULL_REQUEST_STRUCTURE_DATA } from '../../../structureData/pullRequest';
-import { fromBuffer } from 'file-type';
+import { fileTypeFromBuffer } from 'file-type';
 import { S3Service } from '../../../../amazonS3.service';
 
 const codeExecutionToolDefinition = {
@@ -260,7 +260,7 @@ ${structureDataResult}
             const fileResponse = await openAIRetrieveFile(fileId);
             const fileContent = await getOpenAIAssistantFileContent(fileId);
 
-            const fileType = await fromBuffer(fileContent);
+            const fileType = await fileTypeFromBuffer(fileContent);
             const extension = fileType ? `.${fileType.ext}` : '.png';
 
             const fileName = `${organizationId}/${teamId}/${fileResponse.filename}${extension}`;

@@ -1,0 +1,83 @@
+name: Build and Publish Docker Images for cloud
+
+on:
+    release:
+        types: [published]
+
+jobs:
+    build-and-push:
+        name: Build and Push Docker Image for Production (Cloud)
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v4.2.2
+
+            - name: Capture release version
+              run: echo "RELEASE_VERSION=${{ github.event.release.tag_name }}" >> $GITHUB_ENV
+
+            - name: Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v4.1.0
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws-region: ${{ secrets.AWS_REGION }}
+
+            - name: Login to Amazon ECR
+              id: login-ecr
+              uses: aws-actions/amazon-ecr-login@v2.0.1
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3.10.0
+
+            - name: Build and Push Docker Image
+              env:
+                  ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+                  ECR_REPOSITORY: kodus-orchestrator-prod
+                  IMAGE_TAG_SHA: ${{ github.sha }}
+                  IMAGE_TAG_VERSION: ${{ github.event.release.tag_name }}
+              run: |
+                  docker build \
+                    --build-arg RELEASE_VERSION=$IMAGE_TAG_VERSION \
+                    --build-arg API_CLOUD_MODE=true \
+                    -f DockerFiles/Dockerfile.prod \
+                    -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_SHA \
+                    -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION .
+
+                  docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_SHA
+                  docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION
+
+            - name: Log out of Amazon ECR
+              if: always()
+              run: docker logout ${{ steps.login-ecr.outputs.registry }}
+
+            - name: Cleanup Docker images
+              run: |
+                  docker rmi $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_SHA || true
+                  docker rmi $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION || true
+              env:
+                  ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+                  ECR_REPOSITORY: kodus-orchestrator-prod
+                  IMAGE_TAG_SHA: ${{ github.sha }}
+                  IMAGE_TAG_VERSION: ${{ github.event.release.tag_name }}
+
+            - name: Notificar Discord sobre Sucesso
+              if: success()
+              uses: sarisia/actions-status-discord@v1.15.3
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK }}
+                  content: ":tada: A imagem Docker `${{ env.RELEASE_VERSION }}` foi publicada no Amazon ECR com sucesso."
+                  title: "Build e Push: kodus-orchestrator"
+                  username: "GitHub Actions"
+                  color: 0x00FF00
+
+            - name: Notificar Discord sobre Falha
+              if: failure()
+              uses: sarisia/actions-status-discord@v1.15.3
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK }}
+                  content: ":x: Falha ao publicar a imagem Docker `${{ env.RELEASE_VERSION }}` no Amazon ECR."
+                  title: "Build e Push: kodus-orchestrator"
+                  username: "GitHub Actions"
+                  color: 0xFF0000

@@ -20,6 +20,7 @@ import { CreateOrUpdateKodyRulesUseCase } from '@/core/application/use-cases/kod
 import { KodyRulesValidationModule } from '@/ee/kodyRules/kody-rules-validation.module';
 import { KodyRulesService } from '@/ee/kodyRules/service/kodyRules.service';
 import { KodyRulesRepository } from '@/ee/kodyRules/repository/kodyRules.repository';
+import { KodyRulesValidationService } from '@/ee/kodyRules/service/kody-rules-validation.service';
 
 @Module({
     imports: [
@@ -46,6 +47,7 @@ import { KodyRulesRepository } from '@/ee/kodyRules/repository/kodyRules.reposit
             provide: KODY_RULES_SERVICE_TOKEN,
             useClass: KodyRulesService,
         },
+        KodyRulesValidationService,
     ],
     controllers: [KodyRulesController],
     exports: [
@@ -55,6 +57,7 @@ import { KodyRulesRepository } from '@/ee/kodyRules/repository/kodyRules.reposit
         FindRulesInOrganizationByRuleFilterKodyRulesUseCase,
         ChangeStatusKodyRulesUseCase,
         CreateOrUpdateKodyRulesUseCase,
+        KodyRulesValidationService,
     ],
 })
-export class KodyRulesModule { }
+export class KodyRulesModule {}

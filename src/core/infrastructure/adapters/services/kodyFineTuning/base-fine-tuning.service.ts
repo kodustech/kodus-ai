@@ -38,15 +38,24 @@ export abstract class BaseKodyFineTuningContextPreparation
         },
         suggestionsToAnalyze: CodeSuggestion[],
         isFineTuningEnabled: boolean,
-    ): Promise<Partial<CodeSuggestion>[]> {
+    ): Promise<{
+        keepedSuggestions: Partial<CodeSuggestion>[];
+        discardedSuggestions: Partial<CodeSuggestion>[];
+    }> {
         try {
-            return await this.prepareKodyFineTuningContextInternal(
-                organizationId,
-                prNumber,
-                repository,
-                suggestionsToAnalyze,
-                isFineTuningEnabled,
-            );
+            const { keepedSuggestions, discardedSuggestions } =
+                await this.prepareKodyFineTuningContextInternal(
+                    organizationId,
+                    prNumber,
+                    repository,
+                    suggestionsToAnalyze,
+                    isFineTuningEnabled,
+                );
+
+            return {
+                keepedSuggestions,
+                discardedSuggestions,
+            };
         } catch (error) {
             this.logger.error({
                 message: 'Error while preparing Kody fine tuning context',
@@ -61,7 +70,10 @@ export abstract class BaseKodyFineTuningContextPreparation
                     },
                 },
             });
-            return suggestionsToAnalyze;
+            return {
+                keepedSuggestions: suggestionsToAnalyze,
+                discardedSuggestions: [],
+            };
         }
     }
 
@@ -85,5 +97,8 @@ export abstract class BaseKodyFineTuningContextPreparation
         },
         suggestionsToAnalyze: CodeSuggestion[],
         isFineTuningEnabled: boolean,
-    ): Promise<Partial<CodeSuggestion>[]>;
+    ): Promise<{
+        keepedSuggestions: Partial<CodeSuggestion>[];
+        discardedSuggestions: Partial<CodeSuggestion>[];
+    }>;
 }

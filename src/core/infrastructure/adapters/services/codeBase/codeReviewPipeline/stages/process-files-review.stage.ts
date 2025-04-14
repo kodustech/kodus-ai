@@ -840,7 +840,6 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                 ),
             );
 
-            // TESTAR
             const getDataPipelineKodyFineTunning =
                 await this.kodyFineTuningContextPreparation.prepareKodyFineTuningContext(
                     context?.organizationAndTeamData.organizationId,
@@ -855,10 +854,12 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                 );
 
             discardedSuggestionsByKodyFineTuning.push(
-                ...this.suggestionService.getDiscardedSuggestions(
-                    suggestionsWithId,
-                    getDataPipelineKodyFineTunning,
-                    PriorityStatus.DISCARDED_BY_KODY_FINE_TUNING,
+                ...getDataPipelineKodyFineTunning.discardedSuggestions.map(
+                    (suggestion) => {
+                        suggestion.priorityStatus =
+                            PriorityStatus.DISCARDED_BY_KODY_FINE_TUNING;
+                        return suggestion;
+                    },
                 ),
             );
 
@@ -868,7 +869,8 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                     context?.pullRequest?.number,
                     file,
                     patchWithLinesStr,
-                    suggestionsWithId,
+                    getDataPipelineKodyFineTunning?.keepedSuggestions ??
+                        suggestionsWithId,
                     context?.codeReviewConfig?.languageResultPrompt,
                     reviewModeResponse,
                 );
@@ -878,7 +880,8 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
 
             discardedSuggestionsBySafeGuard.push(
                 ...this.suggestionService.getDiscardedSuggestions(
-                    suggestionsWithId,
+                    getDataPipelineKodyFineTunning?.keepedSuggestions ??
+                        suggestionsWithId,
                     safeGuardResponse?.suggestions || [],
                     PriorityStatus.DISCARDED_BY_SAFEGUARD,
                 ),
@@ -893,17 +896,21 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                 await this.suggestionService.analyzeSuggestionsSeverity(
                     context?.organizationAndTeamData,
                     context?.pullRequest?.number,
-                    safeGuardResponse?.suggestions,
+                    safeGuardResponse?.suggestions ?? suggestionsWithId,
                     context?.codeReviewConfig?.reviewOptions,
                 );
 
-            let mergedSuggestions = [
-                ...(kodyRulesSuggestions
-                    ? kodyRulesSuggestions?.codeSuggestions
-                    : suggestionsWithSeverity?.length > 0
-                      ? suggestionsWithSeverity
-                      : []),
-            ];
+            let mergedSuggestions = [];
+
+            // Se tem sugestões do Kody Rules, adiciona
+            if (kodyRulesSuggestions?.codeSuggestions?.length > 0) {
+                mergedSuggestions.push(...kodyRulesSuggestions.codeSuggestions);
+            }
+
+            // Se tem sugestões com severidade, adiciona também
+            if (suggestionsWithSeverity?.length > 0) {
+                mergedSuggestions.push(...suggestionsWithSeverity);
+            }
 
             // TESTAR
             const kodyASTSuggestions =

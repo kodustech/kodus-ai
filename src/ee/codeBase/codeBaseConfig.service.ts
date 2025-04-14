@@ -39,7 +39,6 @@ import validateKodusConfigFile, {
     isParameterValidInConfigFile,
 } from '@/shared/utils/validateCodeReviewConfigFile';
 import { ErrorObject } from 'ajv';
-import { IKodyRule } from '@/core/domain/kodyRules/interfaces/kodyRules.interface';
 import {
     IOrganizationParametersService,
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
@@ -48,6 +47,7 @@ import { OrganizationParametersKey } from '@/shared/domain/enums/organization-pa
 import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logger/pino.service';
 import { CodeManagementService } from '@/core/infrastructure/adapters/services/platformIntegration/codeManagement.service';
 import { ICodeBaseConfigService } from '@/core/domain/codeBase/contracts/CodeBaseConfigService.contract';
+import { KodyRulesValidationService } from '../kodyRules/service/kody-rules-validation.service';
 
 interface GetKodusConfigFileResponse {
     kodusConfigFile: Omit<KodusConfigFile, 'version'> | null;
@@ -76,6 +76,9 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         private readonly kodyRulesService: IKodyRulesService,
 
         private readonly codeManagementService: CodeManagementService,
+
+        private readonly kodyRulesValidationService: KodyRulesValidationService,
+
         private readonly logger: PinoLoggerService,
     ) {
         this.DEFAULT_CONFIG = this.getDefaultConfigs();
@@ -112,7 +115,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 this.getKodyFineTuningConfigParameter(organizationAndTeamData),
             ]);
 
-            const kodyRules = this.filterKodyRules(
+            const kodyRules = this.kodyRulesValidationService.filterKodyRules(
                 kodyRulesEntity?.toObject()?.rules,
                 repository.id,
             );
@@ -308,44 +311,6 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
 
         // Merge with global ignore paths
         return ignorePaths.concat(globalIgnorePathsJson?.paths ?? []);
-    }
-
-    private filterKodyRules(
-        rules: Partial<IKodyRule>[] = [],
-        repositoryId: string,
-    ): any[] {
-        if (!rules?.length) {
-            return [];
-        }
-
-        const repositoryRules = rules?.filter(
-            (rule) => rule?.repositoryId === repositoryId,
-        );
-
-        const globalRules = rules?.filter(
-            (rule) => rule?.repositoryId === 'global',
-        );
-
-        const mergedRules = (repositoryRules ?? []).concat(globalRules ?? []);
-
-        const mergedRulesWithoutDuplicates =
-            this.extractUniqueKodyRules(mergedRules);
-
-        return mergedRulesWithoutDuplicates ?? [];
-    }
-
-    private extractUniqueKodyRules(kodyRules: Partial<IKodyRule>[]) {
-        const seenRules = new Set<string>();
-        const uniqueKodyRules: Partial<IKodyRule>[] = [];
-
-        kodyRules.forEach((kodyRule) => {
-            if (kodyRule?.rule && !seenRules.has(kodyRule.rule)) {
-                seenRules.add(kodyRule.rule);
-                uniqueKodyRules.push(kodyRule);
-            }
-        });
-
-        return uniqueKodyRules;
     }
 
     private mergeArrayConfig<T>(
@@ -733,8 +698,8 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             return authDetails.authMode === AuthMode.TOKEN
                 ? decrypt(authDetails?.authToken)
                 : await this.codeManagementService.getAuthenticationOAuthToken({
-                    organizationAndTeamData,
-                });
+                      organizationAndTeamData,
+                  });
         }
 
         if (platform === 'gitlab') {
@@ -895,9 +860,10 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 organizationAndTeamData,
             );
 
-        const enableService = kodyFineTuningConfig?.configValue?.enabled !== undefined
-            ? kodyFineTuningConfig.configValue.enabled
-            : true;
+        const enableService =
+            kodyFineTuningConfig?.configValue?.enabled !== undefined
+                ? kodyFineTuningConfig.configValue.enabled
+                : true;
 
         return {
             enabled: enableService,

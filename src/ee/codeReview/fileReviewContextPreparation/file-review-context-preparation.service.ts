@@ -66,7 +66,7 @@ export class FileReviewContextPreparation extends BaseFileReviewContextPreparati
                 reviewMode = await this.getReviewMode(options);
             }
 
-            return ReviewModeResponse.LIGHT_MODE;
+            return reviewMode;
         } catch (error) {
             this.logger.warn({
                 message:

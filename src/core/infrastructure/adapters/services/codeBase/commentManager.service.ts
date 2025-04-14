@@ -663,7 +663,7 @@ ${reviewOptionsMarkdown}
 
 </details>
 
-**[${translation.configurationLink}](https://app.kodus.io/automations/AutomationCodeReview/global/general)**
+**[${translation.configurationLink}](https://app.kodus.io/settings/code-review/global/general)**
 
 </details>
 </details>

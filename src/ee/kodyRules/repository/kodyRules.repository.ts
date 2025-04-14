@@ -40,18 +40,22 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         kodyRules: Omit<IKodyRules, 'uuid'>,
     ): Promise<KodyRulesEntity> {
         try {
-            const count = await this.kodyRulesModel.countDocuments({ organizationId: kodyRules.organizationId });
+            const count = await this.kodyRulesModel.countDocuments({
+                organizationId: kodyRules.organizationId,
+            });
 
-            // TESTAR
-            if (count && count > 0) {
-                if (!this.kodyRulesValidationService.validateRulesLimit(count, kodyRules?.rules?.length)) {
-                    throw new Error(
-                        this.kodyRulesValidationService.getExceededLimitErrorMessage(kodyRules.organizationId),
-                    );
-                }
+            const totalRules = count + (kodyRules?.rules?.length || 0);
+
+            if (
+                !this.kodyRulesValidationService.validateRulesLimit(totalRules)
+            ) {
+                throw new Error(
+                    this.kodyRulesValidationService.getExceededLimitErrorMessage(
+                        kodyRules.organizationId,
+                    ),
+                );
             }
 
-            // Criar novo documento
             const saved = await this.kodyRulesModel.create(kodyRules);
             return mapSimpleModelToEntity(saved, KodyRulesEntity);
         } catch (error) {
