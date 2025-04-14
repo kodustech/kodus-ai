@@ -5,6 +5,7 @@ import {
     PullRequestDetails,
     PullRequestReviewComment,
     PullRequests,
+    PullRequestsWithChangesRequested,
     PullRequestWithFiles,
 } from '@/core/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repositories } from '@/core/domain/platformIntegrations/types/codeManagement/repositories.type';
@@ -96,9 +97,15 @@ export class GitlabService
 
         private readonly promptService: PromptService,
         private readonly logger: PinoLoggerService,
-    ) {}
+    ) { }
+    getPullRequestsWithChangesRequested(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; }): Promise<PullRequestsWithChangesRequested[] | null> {
+        throw new Error('Method not implemented.');
+    }
+    getListOfValidReviews(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; prNumber: number; }): Promise<any[] | null> {
+        throw new Error('Method not implemented.');
+    }
 
-    getPullRequestReviewThreads(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; prNumber: number; }): Promise<PullRequestReviewComment | null> {
+    getPullRequestReviewThreads(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; prNumber: number; }): Promise<PullRequestReviewComment[] | null> {
         throw new Error('Method not implemented.');
     }
 
@@ -2551,28 +2558,35 @@ export class GitlabService
 
             const discussions = await gitlabAPI.MergeRequestDiscussions.all(projectId, mergeRequestIid);
 
+            const validRequestReviews = discussions
+                .filter((discussion) => {
+                    const firstDiscussionComment = discussion.notes[0];
+                    return firstDiscussionComment.resolvable &&
+                        !firstDiscussionComment.body.includes("## Code Review Completed! 🔥"); // Exclude comments with the specific string
+                })
+                .map((discussion) => {
+                    // The review comment will always be the first one.
+                    const firstDiscussionComment = discussion.notes[0];
+                    const isDiscussionResolved: boolean = (firstDiscussionComment.resolved && firstDiscussionComment.resolved === true) ? (true) : (false);
 
-            const mappedDiscussions = discussions.map((discussion) => {
-                // The review comment will always be the first one.
-                const firstDiscussionComment = discussion.notes[0];
+                    const comment: PullRequestReviewComment = {
+                        id: firstDiscussionComment.id,
+                        threadId: discussion.id,
+                        body: firstDiscussionComment.body ?? "",
+                        author: {
+                            id: firstDiscussionComment?.author?.id ?? "",
+                            name: firstDiscussionComment?.author?.name ?? "",
+                            username: firstDiscussionComment?.author?.username ?? ""
+                        },
+                        isResolved: isDiscussionResolved,
+                        createdAt: firstDiscussionComment.created_at,
+                        updatedAt: firstDiscussionComment.updated_at
+                    }
 
-                const comment: PullRequestReviewComment = {
-                    id: firstDiscussionComment.id,
-                    threadId: discussion.id,
-                    body: firstDiscussionComment.body ?? "",
-                    author: {
-                        id: firstDiscussionComment?.author?.id ?? "",
-                        name: firstDiscussionComment?.author?.name ?? "",
-                        username: firstDiscussionComment?.author?.username ?? ""
-                    },
-                    createdAt: firstDiscussionComment.created_at,
-                    updatedAt: firstDiscussionComment.updated_at
-                }
+                    return comment;
+                })
 
-                return comment;
-            })
-
-            return mappedDiscussions || null;
+            return validRequestReviews || null;
 
         } catch (error) {
             this.logger.error({

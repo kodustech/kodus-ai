@@ -1280,10 +1280,10 @@
   resolved "https://registry.yarnpkg.com/@faker-js/faker/-/faker-8.4.1.tgz#5d5e8aee8fce48f5e189bf730ebd1f758f491451"
   integrity sha512-XQ3cU+Q8Uqmrbf2e0cIC/QN43sTBSC8KF12u29Mb47tWrt2hAgBXSgpZMj4Ao8Uk0iJcU99QsOCaIL8934obCg==
 
-"@faker-js/faker@^9.6.0":
-  version "9.6.0"
-  resolved "https://registry.yarnpkg.com/@faker-js/faker/-/faker-9.6.0.tgz#64235d20330b142eef3d1d1638ba56c083b4bf1d"
-  integrity sha512-3vm4by+B5lvsFPSyep3ELWmZfE3kicDtmemVpuwl1yH7tqtnHdsA6hG8fbXedMVdkzgtvzWoRgjSB4Q+FHnZiw==
+"@faker-js/faker@^9.7.0":
+  version "9.7.0"
+  resolved "https://registry.yarnpkg.com/@faker-js/faker/-/faker-9.7.0.tgz#1cf1fecfcad5e2da2332140bf3b5f23cc1c2a7f4"
+  integrity sha512-aozo5vqjCmDoXLNUJarFZx2IN/GgGaogY4TMJ6so/WLZOWpSV7fvj2dmrV6sEAnUm1O7aCrhTibjpzeDFgNqbg==
 
 "@gitbeaker/core@^42.2.0":
   version "42.2.0"
@@ -2080,10 +2080,10 @@
     webpack "5.98.0"
     webpack-node-externals "3.0.0"
 
-"@nestjs/common@^11.0.16":
-  version "11.0.16"
-  resolved "https://registry.yarnpkg.com/@nestjs/common/-/common-11.0.16.tgz#b6550ac2998e9991f24a99563a93475542885ba7"
-  integrity sha512-agvuQ8su4aZ+PVxAmY89odG1eR97HEQvxPmTMdDqyvDWzNerl7WQhUEd+j4/UyNWcF1or1UVcrtPj52x+eUSsA==
+"@nestjs/common@^11.0.17":
+  version "11.0.17"
+  resolved "https://registry.yarnpkg.com/@nestjs/common/-/common-11.0.17.tgz#aa9dafd2f1c14e8eb8e9715ff18a62ba811449f3"
+  integrity sha512-FwKylI/hVxaNvzBJdWMMG1LH0cLKz4Oh4jKOHet2JUVMM9j6CuodRbrSnL++KL6PJY/b2E6AY58UDPLNeCqJWw==
   dependencies:
     uid "2.0.2"
     iterare "1.2.1"
@@ -2098,10 +2098,10 @@
     dotenv-expand "12.0.1"
     lodash "4.17.21"
 
-"@nestjs/core@^11.0.16":
-  version "11.0.16"
-  resolved "https://registry.yarnpkg.com/@nestjs/core/-/core-11.0.16.tgz#9be793cb905a4b9deb1fe45b223566a79410dbbc"
-  integrity sha512-2YuPotgypux2RFYu2Toa5NUbPdp2bZE7CC10OgUpjJMZ3ZBfoWe0jcGqS5yPdoV+u8v+/IvqShy1Mz10HJvexA==
+"@nestjs/core@^11.0.17":
+  version "11.0.17"
+  resolved "https://registry.yarnpkg.com/@nestjs/core/-/core-11.0.17.tgz#8b13aa5cbb8b35634e508c6f54b937ae95489475"
+  integrity sha512-ImK6qNxtegKqK7EJLGTBpP5Ild/DTpcduEtAOS+WLLjZOMjK1k214G9roXvlrNQwlVt9ALAY2jcqnsasdEd7Ow==
   dependencies:
     uid "2.0.2"
     "@nuxt/opencollective" "0.4.1"
@@ -2126,10 +2126,10 @@
     "@types/jsonwebtoken" "9.0.7"
     jsonwebtoken "9.0.2"
 
-"@nestjs/microservices@^11.0.16":
-  version "11.0.16"
-  resolved "https://registry.yarnpkg.com/@nestjs/microservices/-/microservices-11.0.16.tgz#336a87197d9629ff73fd24cab971a37398b0ea70"
-  integrity sha512-ErF3RwuFOvldA+aMvIbANWznqgIbP34AJqhnM4SPbtYTBkw2Zhq4ygbLZVcSprIT+mVVDeKuu4lPhdCSZS8Rzg==
+"@nestjs/microservices@^11.0.17":
+  version "11.0.17"
+  resolved "https://registry.yarnpkg.com/@nestjs/microservices/-/microservices-11.0.17.tgz#8336858c4abcdbfaaf2cf6c856d301d8d15cbdaf"
+  integrity sha512-eUPJR8BG+bvhl92GWx8uvNDY95HHidYefWG4pfXr4rbUK7HxQCGxnyeM458QFu3w66Ia1KqlQbKnfdhY8wu6pQ==
   dependencies:
     iterare "1.2.1"
     tslib "2.8.1"
@@ -2144,10 +2144,10 @@
   resolved "https://registry.yarnpkg.com/@nestjs/passport/-/passport-11.0.5.tgz#dd3e506c2fb7ddc80fd1321c01cc1a0ca6d6b609"
   integrity sha512-ulQX6mbjlws92PIM15Naes4F4p2JoxGnIJuUsdXQPT+Oo2sqQmENEZXM7eYuimocfHnKlcfZOuyzbA33LwUlOQ==
 
-"@nestjs/platform-express@^11.0.16":
-  version "11.0.16"
-  resolved "https://registry.yarnpkg.com/@nestjs/platform-express/-/platform-express-11.0.16.tgz#b63142491e9cc7805d3e14c1e4ba718f8d466553"
-  integrity sha512-R/wDoLFyVdxVFMiTy12Jtr4rxRXU6kSrrGLnfDofYiMfHesbHxcc2n2x5bfLxQfsMPv9lfHM4rMdfY/Jk+kDlA==
+"@nestjs/platform-express@^11.0.17":
+  version "11.0.17"
+  resolved "https://registry.yarnpkg.com/@nestjs/platform-express/-/platform-express-11.0.17.tgz#7541ba5947acc8d7783a3f3f3212b77ded681620"
+  integrity sha512-et6Ydd6dR0FlcE/WR/9VRnQoTqEpDdzBgGK+aWadA0dFJ65wlN+snJRg/9JGP4ngj90S6xwe0VKD/BbfUGj9cw==
   dependencies:
     cors "2.8.5"
     express "5.1.0"
@@ -2181,10 +2181,10 @@
     boxen "5.1.2"
     check-disk-space "3.4.0"
 
-"@nestjs/testing@^11.0.16":
-  version "11.0.16"
-  resolved "https://registry.yarnpkg.com/@nestjs/testing/-/testing-11.0.16.tgz#9e6557e6ac99bdf58f67ecbfb3905bc4f7a30f12"
-  integrity sha512-PWIA4+LTee1LpJycp+BQj0JKut6852LWzST/f61Po1G3nlWAxhT9qWEeRdWgSJ4KD0Ci7oTVBJ9OyZ+xGlhXdg==
+"@nestjs/testing@^11.0.17":
+  version "11.0.17"
+  resolved "https://registry.yarnpkg.com/@nestjs/testing/-/testing-11.0.17.tgz#ee7f939f35fb5f4f7eaca5c2ead022e9edf380a9"
+  integrity sha512-ryEx6fCYZFCsjEBZo8jOVikQluEHMESocVqHdXWOkkG7UqMPMHimf9gT2qij0GpNnYeDAGw+i7FhSJN3Cajoug==
   dependencies:
     tslib "2.8.1"
 
@@ -3955,7 +3955,7 @@
     "@types/node" "*"
     form-data "^4.0.0"
 
-"@types/node@*", "@types/node@>=18.0.0", "@types/node@^22.14.0":
+"@types/node@*", "@types/node@>=18.0.0":
   version "22.14.0"
   resolved "https://registry.yarnpkg.com/@types/node/-/node-22.14.0.tgz#d3bfa3936fef0dbacd79ea3eb17d521c628bb47e"
   integrity sha512-Kmpl+z84ILoG+3T/zQFyAJsU6EPTmOCj8/2+83fSN6djd6I4o7uOuGIH6vq3PrjY5BGitSbFuMN18j3iknubbA==
@@ -3968,6 +3968,13 @@
   integrity sha512-fifKayi175wLyKyc5qUfyENhQ1dCNI1UNjp653d8kuYcPQN5JhX3dGuP/XmvPTg/xRBn1VTLpbmi+H/Mr7tLfQ==
   dependencies:
     undici-types "~5.26.4"
+
+"@types/node@^22.14.1":
+  version "22.14.1"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-22.14.1.tgz#53b54585cec81c21eee3697521e31312d6ca1e6f"
+  integrity sha512-u0HuPQwe/dHrItgHHpmw3N2fYCR6x4ivMNbPHRkBVP4CvN+kiRrKHWk3i8tXiO/joPwXLMYvF9TTF0eqgHIuOw==
+  dependencies:
+    undici-types "~6.21.0"
 
 "@types/passport-jwt@^4.0.1":
   version "4.0.1"
@@ -9450,10 +9457,10 @@ ts-api-utils@^2.0.1:
   resolved "https://registry.yarnpkg.com/ts-api-utils/-/ts-api-utils-2.1.0.tgz#595f7094e46eed364c13fd23e75f9513d29baf91"
   integrity sha512-CUgTZL1irw8u29bzrOD/nH85jqyc74D6SshFgujOIA7osm2Rz7dYH77agkx7H4FBNxDq7Cjf+IjaX/8zwFW+ZQ==
 
-ts-jest@^29.3.1:
-  version "29.3.1"
-  resolved "https://registry.yarnpkg.com/ts-jest/-/ts-jest-29.3.1.tgz#2e459e1f94a833bd8216ba4b045fac948e265937"
-  integrity sha512-FT2PIRtZABwl6+ZCry8IY7JZ3xMuppsEV9qFVHOVe8jDzggwUZ9TsM4chyJxL9yi6LvkqcZYU3LmapEE454zBQ==
+ts-jest@^29.3.2:
+  version "29.3.2"
+  resolved "https://registry.yarnpkg.com/ts-jest/-/ts-jest-29.3.2.tgz#0576cdf0a507f811fe73dcd16d135ce89f8156cb"
+  integrity sha512-bJJkrWc6PjFVz5g2DGCNUo8z7oFEYaz1xP1NpeDU7KNLMWPpEyV8Chbpkn8xjzgRDpQhnGMyvyldoL7h8JXyug==
   dependencies:
     bs-logger "^0.2.6"
     ejs "^3.1.10"
@@ -9463,7 +9470,7 @@ ts-jest@^29.3.1:
     lodash.memoize "^4.1.2"
     make-error "^1.3.6"
     semver "^7.7.1"
-    type-fest "^4.38.0"
+    type-fest "^4.39.1"
     yargs-parser "^21.1.1"
 
 ts-loader@^9.5.2:
@@ -9552,7 +9559,7 @@ type-fest@^0.21.3:
   resolved "https://registry.yarnpkg.com/type-fest/-/type-fest-0.21.3.tgz#d260a24b0198436e133fa26a524a6d65fa3b2e37"
   integrity sha512-t0rzBq87m3fVcduHDUFhKmyyX+9eo6WQjZvf51Ea/M0Q7+T374Jp1aUiyUl0GKxp8M/OETVHSDvmkyPgvX+X2w==
 
-type-fest@^4.38.0:
+type-fest@^4.39.1:
   version "4.39.1"
   resolved "https://registry.yarnpkg.com/type-fest/-/type-fest-4.39.1.tgz#7521f6944e279abaf79cf60cfbc4823f4858083e"
   integrity sha512-uW9qzd66uyHYxwyVBYiwS4Oi0qZyUqwjU+Oevr6ZogYiXt99EOYtwvzMSLw1c3lYo2HzJsep/NB23iEVEgjG/w==

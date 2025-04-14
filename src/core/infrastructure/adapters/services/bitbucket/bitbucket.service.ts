@@ -11,6 +11,8 @@ import {
     PullRequestFile,
     PullRequestReviewComment,
     OneSentenceSummaryItem,
+    PullRequestsWithChangesRequested,
+    PullRequestReviewState,
 } from '@/core/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repositories } from '@/core/domain/platformIntegrations/types/codeManagement/repositories.type';
 import { PlatformType } from '@/shared/domain/enums/platform-type.enum';
@@ -55,13 +57,9 @@ import {
     CommentResult,
     FileChange,
     Repository,
-    ReviewComment,
 } from '@/config/types/general/codeReview.type';
-import { getLabelShield } from '@/shared/utils/codeManagement/labels';
 import { Response as BitbucketResponse } from 'bitbucket/src/request/types';
 import { CreateAuthIntegrationStatus } from '@/shared/domain/enums/create-auth-integration-status.enum';
-import { getSeverityLevelShield } from '@/shared/utils/codeManagement/severityLevel';
-import { getCodeReviewBadge } from '@/shared/utils/codeManagement/codeReviewBadge';
 import {
     IRepositoryManager,
     REPOSITORY_MANAGER_TOKEN,
@@ -72,9 +70,8 @@ import { IRepository } from '@/core/domain/pullRequests/interfaces/pullRequests.
 @IntegrationServiceDecorator(PlatformType.BITBUCKET, 'codeManagement')
 export class BitbucketService
     implements
-        IBitbucketService,
-        Omit<ICodeManagementService, 'getOrganizations'>
-{
+    IBitbucketService,
+    Omit<ICodeManagementService, 'getOrganizations'> {
     constructor(
         @Inject(INTEGRATION_SERVICE_TOKEN)
         private readonly integrationService: IIntegrationService,
@@ -94,12 +91,72 @@ export class BitbucketService
         private readonly promptService: PromptService,
 
         private readonly logger: PinoLoggerService,
-    ) {}
-    getPullRequestReviewThreads(params: {
+    ) { }
+    getListOfValidReviews(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; prNumber: number; }): Promise<any[] | null> {
+        throw new Error('Method not implemented.');
+    }
+
+    async getPullRequestsWithChangesRequested(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
-        prNumber: number;
-    }): Promise<any | null> {
+    }): Promise<PullRequestsWithChangesRequested[] | null> {
+        try {
+            const { organizationAndTeamData, repository } = params;
+
+            const bitbucketAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            if (!bitbucketAuthDetail) {
+                return null;
+            }
+
+            const workspace = await this.getWorkspaceFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+
+            if (!workspace) {
+                return null;
+            }
+
+            const bitbucketAPI = this.instanceBitbucketApi(bitbucketAuthDetail);
+
+            // takes a while
+            const activities: any[] = await bitbucketAPI.pullrequests.listActivitiesForRepo({
+                repo_slug: `{${repository.id}}`,
+                workspace: `{${workspace}}`,
+            }).then((res) => this.getPaginatedResults(bitbucketAPI, res));
+
+            return activities
+                .filter((activity) =>
+                    (activity.changes_requested))
+                .map((filteredActivity) => ({
+                    title: filteredActivity.pull_request.title ?? "",
+                    number: filteredActivity.pull_request.id,
+                    reviewDecision: PullRequestReviewState.CHANGES_REQUESTED,
+                    date: new Date(filteredActivity.changes_requested.date)
+                }))
+                .sort((a, b) => a.date.getTime() - b.date.getTime())
+                .map(({ date, ...rest }) => rest);
+
+        } catch (error) {
+            this.logger.error({
+                message: 'Error to get pull requests with changes requested',
+                context: BitbucketService.name,
+                serviceName: 'BitbucketService getPullRequestsWithChangesRequested',
+                error: error,
+                metadata: {
+                    params,
+                },
+            });
+            return null;
+        }
+    }
+
+
+    // Only relevant for github
+    getPullRequestReviewThreads(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; prNumber: number; }): Promise<any | null> {
         throw new Error('Method not implemented.');
     }
 
@@ -295,10 +352,99 @@ export class BitbucketService
 
     async getPullRequestDetails(params: {
         organizationAndTeamData: OrganizationAndTeamData;
-        repository: { name: string; id: string };
+        repository: { id: string, name: string };
         prNumber: number;
     }): Promise<any | null> {
-        throw new Error('Method not implemented.');
+        try {
+            const { organizationAndTeamData, repository, prNumber } = params;
+
+            if (!organizationAndTeamData.organizationId || !repository.id || !prNumber) {
+                return null;
+            }
+
+            const bitbucketAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            if (!bitbucketAuthDetail) {
+                return null;
+            }
+
+            const bitbucketAPI = this.instanceBitbucketApi(bitbucketAuthDetail);
+
+            const workspace = await this.getWorkspaceFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+
+            if (!workspace) {
+                return null;
+            }
+
+
+            const prDetails = (await bitbucketAPI.pullrequests.get({
+                repo_slug: `{${repository.id}}`,
+                workspace: `{${workspace}}`,
+                pull_request_id: prNumber,
+                fields: '+values.participants,+values.reviewers',
+            })).data;
+
+            const prData = {
+                id: prDetails.id.toString(),
+                author_id: this.sanitizeUUId(prDetails.author?.uuid?.toString()),
+                author_name: prDetails.author?.display_name,
+                repository: repository.name,
+                repositoryId: this.sanitizeUUId(prDetails.source?.repository?.uuid),
+                message: prDetails.summary?.raw,
+                state: prDetails.state,
+                prURL: prDetails.links?.html?.href,
+                organizationId: organizationAndTeamData.organizationId,
+                pull_number: prDetails.id,
+                number: prDetails.id,
+                body: prDetails.summary?.raw,
+                title: prDetails.title,
+                created_at: prDetails.created_on,
+                updated_at: prDetails.updated_on,
+                merged_at: prDetails.updated_on,
+                participants: prDetails.participants.map((participant) => ({
+                    id: this.sanitizeUUId(participant.user.uuid),
+                    approved: participant.approved,
+                    state: participant.state,
+                    type: participant.type
+                })),
+                reviewers: prDetails.reviewers.map((reviewer) => ({
+                    id: this.sanitizeUUId(reviewer.uuid),
+                })),
+                head: {
+                    ref: prDetails.source?.branch?.name,
+                    repo: {
+                        id: this.sanitizeUUId(prDetails.source?.repository?.uuid),
+                        name: prDetails.source?.repository?.name,
+                    },
+                },
+                base: {
+                    ref: prDetails.destination?.branch?.name,
+                },
+                user: {
+                    login: prDetails.author?.display_name ?? '',
+                    name: prDetails.author?.display_name,
+                    id: this.sanitizeUUId(prDetails.author?.uuid),
+                },
+            };
+
+            return prData;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error to get pull request details',
+                context: BitbucketService.name,
+                serviceName: 'BitbucketService getPullRequestDetails',
+                error: error,
+                metadata: {
+                    params,
+                },
+            });
+            return null;
+        }
     }
 
     async getRepositories(params: {
@@ -1334,7 +1480,7 @@ export class BitbucketService
                             path: lineComment?.path,
                             to: this.sanitizeLine(
                                 params.lineComment.start_line ??
-                                    params.lineComment.line,
+                                params.lineComment.line,
                             ),
                         },
                     },
@@ -2909,9 +3055,8 @@ export class BitbucketService
                 queryString += `created_on >= "${filters.startDate}"`;
             }
             if (filters?.endDate) {
-                queryString += `${
-                    queryString ? ' AND ' : ''
-                }created_on <= "${filters.endDate}"`;
+                queryString += `${queryString ? ' AND ' : ''
+                    }created_on <= "${filters.endDate}"`;
             }
 
             const pullRequests = await bitbucketAPI.pullrequests
@@ -3029,29 +3174,33 @@ export class BitbucketService
 
             const bitbucketAPI = this.instanceBitbucketApi(bitbucketAuthDetail);
 
-            const comments = await bitbucketAPI.pullrequests
-                .listComments({
-                    repo_slug: `{${repository.id}}`,
-                    workspace: `{${workspace}}`,
-                    pull_request_id: prNumber,
-                })
-                .then((res) => this.getPaginatedResults(bitbucketAPI, res));
+            const comments = await bitbucketAPI.pullrequests.listComments({
+                repo_slug: `{${repository.id}}`,
+                workspace: `{${workspace}}`,
+                pull_request_id: prNumber,
+                fields: '+values.resolution.type,+values.resolution.+values.id,+values.pullrequest',
+            }).then((res) => this.getPaginatedResults(bitbucketAPI, res));
 
             return comments
+                .filter((comment) => {
+                    return !comment?.content?.raw.includes("## Code Review Completed! 🔥") &&
+                        !comment?.content?.raw.includes("# Found critical issues please"); // Exclude comments with the specific strings
+                })
                 .map((comment) => {
                     const mappedComment: PullRequestReviewComment = {
                         id: comment?.id,
                         threadId: null, // Bitbucket comments are resolved by id,so no threadId necessary
-                        body: comment?.content?.raw ?? '',
+                        body: comment?.content?.raw ?? "",
                         createdAt: comment?.created_on,
                         updatedAt: comment?.updated_on,
+                        isResolved: comment.resolution ? (true) : (false),
                         author: {
-                            id: this.sanitizeUUId(comment?.user?.uuid) ?? '',
-                            username: comment?.user?.display_name ?? '',
-                            name: comment?.user?.display_name ?? '',
+                            id: this.sanitizeUUId(comment?.user?.uuid) ?? "",
+                            username: comment?.user?.display_name ?? "",
+                            name: comment?.user?.display_name ?? "",
                         },
-                    };
-                    return mappedComment;
+                    }
+                    return mappedComment
                 })
                 .sort(
                     (a, b) =>

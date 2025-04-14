@@ -89,6 +89,7 @@ KEYS=(
     "/qa/kodus-orchestrator/API_CRON_AUTOMATION_EXECUTIVE_CHECKIN"
     "/qa/kodus-orchestrator/API_CRON_SYNC_CODE_REVIEW_REACTIONS"
     "/qa/kodus-orchestrator/API_CRON_KODY_LEARNING"
+    "/qa/kodus-orchestrator/API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED"
 
     "/qa/kodus-orchestrator/KODUS_SERVICE_TEAMS"
     "/qa/kodus-orchestrator/GLOBAL_KODUS_SERVICE_SLACK"

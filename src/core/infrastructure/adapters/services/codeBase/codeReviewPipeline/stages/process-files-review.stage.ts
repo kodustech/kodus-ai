@@ -54,6 +54,9 @@ import {
     KODY_AST_ANALYZE_CONTEXT_PREPARATION_TOKEN,
 } from '@/shared/interfaces/kody-ast-analyze-context-preparation.interface';
 import { CodeAnalysisOrchestrator } from '@/ee/codeBase/codeAnalysisOrchestrator.service';
+import { PlatformType } from '@/shared/domain/enums/platform-type.enum';
+import { PullRequestsEntity } from '@/core/domain/pullRequests/entities/pullRequests.entity';
+import { PullRequestReviewComment } from '@/core/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 @Injectable()
 export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -510,6 +513,14 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
             platformType,
         );
 
+        // Resolve comments that refer to suggestions partially or fully implemented
+        await this.resolveCommentsWithImplementedSuggestions({
+            organizationAndTeamData,
+            repository,
+            prNumber: pullRequest.number,
+            platformType: platformType as PlatformType,
+        });
+
         return {
             overallComments,
             lastAnalyzedCommit,
@@ -870,7 +881,7 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                     file,
                     patchWithLinesStr,
                     getDataPipelineKodyFineTunning?.keepedSuggestions ??
-                        suggestionsWithId,
+                    suggestionsWithId,
                     context?.codeReviewConfig?.languageResultPrompt,
                     reviewModeResponse,
                 );
@@ -881,7 +892,7 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
             discardedSuggestionsBySafeGuard.push(
                 ...this.suggestionService.getDiscardedSuggestions(
                     getDataPipelineKodyFineTunning?.keepedSuggestions ??
-                        suggestionsWithId,
+                    suggestionsWithId,
                     safeGuardResponse?.suggestions || [],
                     PriorityStatus.DISCARDED_BY_SAFEGUARD,
                 ),
@@ -939,7 +950,7 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                         (suggestion) =>
                             suggestion.deliveryStatus === DeliveryStatus.SENT &&
                             suggestion.implementationStatus ===
-                                ImplementationStatus.NOT_IMPLEMENTED,
+                            ImplementationStatus.NOT_IMPLEMENTED,
                     );
 
                     if (mergedSuggestions?.length > 0) {
@@ -1012,5 +1023,118 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
             codeAnalysisAST: context.codeAnalysisAST,
             clusterizedSuggestions: context.clusterizedSuggestions,
         };
+    }
+
+    private async resolveCommentsWithImplementedSuggestions({
+        organizationAndTeamData,
+        repository,
+        prNumber,
+        platformType,
+    }: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        platformType: PlatformType;
+    }) {
+        const codeManagementRequestData = {
+            organizationAndTeamData,
+            repository: {
+                id: repository.id,
+                name: repository.name,
+            },
+            prNumber: prNumber,
+        };
+
+        let isPlatformTypeGithub: boolean =
+            platformType === PlatformType.GITHUB;
+
+        const pr = await this.pullRequestService.findByNumberAndRepository(
+            prNumber,
+            repository.name,
+        );
+
+        let implementedSuggestionsCommentIds =
+            this.getImplementedSuggestionsCommentIds(pr);
+
+        let reviewComments = [];
+
+        /**
+         * Marking comments as resolved in github needs to be done using another API.
+         * Marking comments as resolved in github also is done using threadId rather than the comment Id.
+         */
+        if (isPlatformTypeGithub) {
+            reviewComments =
+                await this.codeManagementService.getPullRequestReviewThreads(
+                    codeManagementRequestData,
+                    PlatformType.GITHUB,
+                );
+        } else {
+            reviewComments =
+                await this.codeManagementService.getPullRequestReviewComments(
+                    codeManagementRequestData,
+                );
+        }
+
+        const foundComments = isPlatformTypeGithub
+            ? reviewComments.filter((comment) =>
+                implementedSuggestionsCommentIds.includes(
+                    Number(comment.fullDatabaseId),
+                ),
+            )
+            : reviewComments.filter((comment) =>
+                implementedSuggestionsCommentIds.includes(comment.id),
+            );
+
+        if (foundComments.length > 0) {
+            const promises = foundComments.map(
+                async (foundComment: PullRequestReviewComment) => {
+                    let commentId =
+                        platformType === PlatformType.BITBUCKET
+                            ? foundComment.id
+                            : foundComment.threadId;
+
+                    return this.codeManagementService.markReviewCommentAsResolved(
+                        {
+                            organizationAndTeamData,
+                            repository,
+                            prNumber: pr.number,
+                            commentId: commentId,
+                        },
+                    );
+                },
+            );
+
+            // timeout mechanism for the Promise.allSettled operation to prevent potential hanging.
+            await Promise.race([
+                Promise.allSettled(promises),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Operation timed out')), 30000))
+            ]);
+        }
+    }
+
+    private getImplementedSuggestionsCommentIds(
+        pr: PullRequestsEntity,
+    ): number[] {
+        const implementedSuggestionsCommentIds: number[] = [];
+
+        pr.files?.forEach((file) => {
+            if (file.suggestions.length > 0) {
+                file.suggestions
+                    ?.filter(
+                        (suggestion) =>
+                            suggestion.comment &&
+                            suggestion.implementationStatus !==
+                            ImplementationStatus.NOT_IMPLEMENTED &&
+                            suggestion.deliveryStatus === DeliveryStatus.SENT,
+                    )
+                    .forEach((filteredSuggestion) => {
+                        implementedSuggestionsCommentIds.push(
+                            filteredSuggestion.comment.id,
+                        );
+                    });
+            }
+        });
+
+        return implementedSuggestionsCommentIds;
     }
 }

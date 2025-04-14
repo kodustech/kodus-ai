@@ -48,6 +48,8 @@ export type PullRequestReviewComment = {
     id: string | number;
     threadId?: string;
     fullDatabaseId?: string; // only needed on github to handle different ids due to graphQL API
+    isResolved?: boolean;
+    isOutdated?: boolean;
     body: string;
     author?: {
         id?: string | number;
@@ -56,6 +58,21 @@ export type PullRequestReviewComment = {
     }
     createdAt?: string;
     updatedAt?: string;
+}
+
+export type PullRequestsWithChangesRequested = {
+    title: string;
+    number: number;
+    reviewDecision: PullRequestReviewState;
+}
+
+// For now it's only relevant for github
+export enum PullRequestReviewState {
+    COMMENTED = "COMMENTED",
+    PENDING = "PENDING",
+    APPROVED = "APPROVED",
+    CHANGES_REQUESTED = "CHANGES_REQUESTED",
+    DISMISSED = "DISMISSED"
 }
 
 export type OneSentenceSummaryItem = {

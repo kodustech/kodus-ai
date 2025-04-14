@@ -32,7 +32,9 @@ import {
     PullRequestDetails,
     PullRequestFile,
     PullRequestReviewComment,
+    PullRequestReviewState,
     PullRequests,
+    PullRequestsWithChangesRequested,
     PullRequestWithFiles,
 } from '@/core/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repositories } from '@/core/domain/platformIntegrations/types/codeManagement/repositories.type';
@@ -133,6 +135,7 @@ export class GithubService
         private readonly promptService: PromptService,
         private readonly logger: PinoLoggerService,
     ) { }
+
 
     getUserById(params: {
         organizationAndTeamData: OrganizationAndTeamData;
@@ -2574,7 +2577,7 @@ export class GithubService
         organizationAndTeamData: OrganizationAndTeamData,
         repository: Partial<Repository>,
         prNumber: number,
-    }): Promise<PullRequestReviewComment | null> {
+    }): Promise<PullRequestReviewComment[] | null> {
         const {
             organizationAndTeamData,
             repository,
@@ -2588,23 +2591,29 @@ export class GithubService
         const graphql = await this.instanceGraphQL(organizationAndTeamData);
 
         const query = `
-           query ($owner: String!, $name: String!, $number: Int!) {
-            repository(owner: $owner, name: $name) {
+           query ($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+              repository(owner: $owner, name: $name) {
                 pullRequest(number: $number) {
-                reviewThreads(first: 100) {
+                  reviewThreads(first: 100, after: $cursor) {
                     nodes {
-                        id
-                    comments(first: 100) {
+                      id
+                      isResolved
+                      isOutdated
+                      comments(first: 100) {
                         nodes {
-                        id           # Este é o ID global que você precisa para outras operações
-                        fullDatabaseId   # Este é o ID numérico que você vai comparar com o $commentDatabaseId
-                        body
+                          id
+                          fullDatabaseId
+                          body
                         }
+                      }
                     }
+                    pageInfo {
+                      hasNextPage
+                      endCursor
                     }
+                  }
                 }
-                }
-            }
+              }
             }
         `;
 
@@ -2612,30 +2621,101 @@ export class GithubService
             owner: githubAuthDetail?.org,
             name: repository.name,
             number: prNumber,
+            cursor: null, // Start with no cursor
+        };
+
+        const allReviewComments: PullRequestReviewComment[] = [];
+
+        try {
+            let hasNextPage = true;
+
+            while (hasNextPage) {
+                const response: any = await graphql(query, variables);
+                const reviewThreads = response.repository.pullRequest.reviewThreads.nodes;
+
+                const reviewComments: PullRequestReviewComment[] = reviewThreads.map((reviewThread) => {
+                    const firstComment = reviewThread.comments.nodes[0];
+
+                    // The same resource in graphQL API and REST API have different ids.
+                    // So we need one of them to actually mark the thread as resolved and the other to match the id we saved in the database.
+                    return firstComment ? {
+                        id: firstComment.id, // Used to actually resolve the thread
+                        threadId: reviewThread.id,
+                        isResolved: reviewThread.isResolved,
+                        isOutdated: reviewThread.isOutdated,
+                        fullDatabaseId: firstComment.fullDatabaseId, // The REST API id, used to match comments saved in the database.
+                        body: firstComment.body,
+                    } : null;
+                }).filter(comment => comment !== null);
+
+                allReviewComments.push(...reviewComments);
+
+                // Check if there are more pages
+                hasNextPage = response.repository.pullRequest.reviewThreads.pageInfo.hasNextPage;
+                variables.cursor = response.repository.pullRequest.reviewThreads.pageInfo.endCursor; // Update cursor for next request
+            }
+
+            return allReviewComments;
+        } catch (error) {
+            this.logger.error({
+                message: `Error retrieving review comments for PR#${prNumber}`,
+                context: GithubService.name,
+                error: error,
+                metadata: {
+                    ...params,
+                },
+            });
+
+            return null;
+        }
+    }
+
+
+    async getPullRequestsWithChangesRequested(params: {
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: Partial<Repository>,
+    }): Promise<PullRequestsWithChangesRequested[] | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+        } = params;
+
+        const githubAuthDetail = await this.getGithubAuthDetails(
+            organizationAndTeamData,
+        );
+
+        const graphql = await this.instanceGraphQL(organizationAndTeamData);
+
+        const query = `
+           query ($owner: String!, $name: String!) {
+                repository(owner: $owner, name: $name) {
+                    pullRequests(first: 100, states: OPEN) {
+                        nodes {
+                            title
+                            number
+                            reviewDecision
+                        }
+                    }
+                }
+            }
+        `;
+
+        const variables = {
+            owner: githubAuthDetail?.org,
+            name: repository.name,
         };
 
         try {
             const response: any = await graphql(query, variables);
 
-            const reviewThreads = response.repository.pullRequest.reviewThreads.nodes;
+            const prs: PullRequestsWithChangesRequested[] = response.repository.pullRequests.nodes;
 
-            const reviewComments: PullRequestReviewComment = reviewThreads.map((reviewThread) => {
-                const firstComment = reviewThread.comments.nodes[0];
+            const prsWithRequestedChanges = prs.filter((pr) => pr.reviewDecision === PullRequestReviewState.CHANGES_REQUESTED);
 
-                // The same resource in graphQL API and REST API have different ids.
-                // So we need one of them to actually mark the thread as resolved and the other to match the id we saved in the database.
-                return firstComment ? {
-                    id: firstComment.id, // Used to actually resolve the thread
-                    threadId: reviewThread.id,
-                    fullDatabaseId: firstComment.fullDatabaseId, // The REST API id, used to match comments saved in the database.
-                    body: firstComment.body,
-                } : null;
-            }).filter(comment => comment !== null);
-
-            return reviewComments;
+            return prsWithRequestedChanges;
         } catch (error) {
             this.logger.error({
-                message: `Error retrieving review comments for PR#${prNumber}`,
+                message: `Error retrieving open PRs with requested_change for repository: ${repository.name}}`,
                 context: GithubService.name,
                 error: error,
                 metadata: {
@@ -3359,6 +3439,26 @@ export class GithubService
 
             const octokit = await this.instanceOctokit(organizationAndTeamData);
 
+            const { data: reviews } = await octokit.rest.pulls.listReviews({
+                owner: githubAuthDetail.org,
+                repo: repository.name,
+                pull_number: prNumber,
+            });
+
+            if (reviews.length > 0) {
+                const lastReview = reviews[reviews.length - 1];
+
+                if (lastReview.state === PullRequestReviewState.APPROVED) {
+                    this.logger.log({
+                        message: `Pull request #${prNumber} has already been approved.`,
+                        context: GithubService.name,
+                        serviceName: 'GithubService approvePullRequest',
+                        metadata: params,
+                    });
+                    return;
+                }
+            }
+
             await octokit.rest.pulls.createReview({
                 owner: githubAuthDetail.org,
                 repo: repository.name,
@@ -3678,6 +3778,144 @@ export class GithubService
                 error: error.message,
                 metadata: params,
             });
+            return null;
+        }
+    }
+
+    async getListOfValidReviews(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<any[] | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+        } = params;
+
+        const githubAuthDetail = await this.getGithubAuthDetails(
+            organizationAndTeamData,
+        );
+
+        const graphql = await this.instanceGraphQL(organizationAndTeamData);
+
+        const query = `
+           query ($owner: String!, $name: String!, $number: Int!) {
+                repository(owner: $owner, name: $name) {
+                    pullRequest(number: $number) {
+                    reviews(first: 100) {
+                        nodes {
+                        state
+                        id
+                        comments(first: 100) {
+                            nodes {
+                            id
+                            body
+                            outdated
+                            isMinimized
+                            }
+                        }
+                        }
+                    }
+                    reviewThreads(first: 100) {
+                        nodes {
+                        id
+                        isResolved
+                        isOutdated
+                        comments(first: 10) {
+                            nodes {
+                            id
+                            body
+                            }
+                        }
+                        }
+                    }
+                    state
+                    reviewDecision
+                    }
+                }
+                }
+        `;
+
+        const variables = {
+            owner: githubAuthDetail?.org,
+            name: repository.name,
+            number: prNumber,
+        };
+
+        try {
+            const response: any = await graphql(query, variables);
+
+            const reviews = response.repository.pullRequest.reviews.nodes;
+            const reviewThreads = response.repository.pullRequest.reviewThreads.nodes;
+
+            const reviewThreadComments: PullRequestReviewComment[] = reviewThreads.map((reviewThread) => {
+                const firstComment = reviewThread.comments.nodes[0];
+
+                // The same resource in graphQL API and REST API have different ids.
+                // So we need one of them to actually mark the thread as resolved and the other to match the id we saved in the database.
+                return firstComment ? {
+                    id: firstComment.id, // Used to actually resolve the thread
+                    threadId: reviewThread.id,
+                    isResolved: reviewThread.isResolved,
+                    isOutdated: reviewThread.isOutdated,
+                    fullDatabaseId: firstComment.fullDatabaseId, // The REST API id, used to match comments saved in the database.
+                    body: firstComment.body,
+                } : null;
+            }).filter(comment => comment !== null);
+
+            const reviewsThatRequestedChanges = reviews
+                .filter((review) => review.state === PullRequestReviewState.CHANGES_REQUESTED)
+
+            if (reviewsThatRequestedChanges.length < 1) {
+                return [];
+            }
+
+            const reviewsComments: any[] = reviewsThatRequestedChanges.map((review) => {
+                const firstComment = review?.comments?.nodes[0];
+
+                if (!firstComment) {
+                    return {
+                        reviewId: review.id,
+                    }
+                }
+                // The same resource in graphQL API and REST API have different ids.
+                // So we need one of them to actually mark the thread as resolved and the other to match the id we saved in the database.
+                return firstComment ? {
+                    id: firstComment.id, // Used to actually resolve the thread
+                    reviewId: review.id,
+                    fullDatabaseId: firstComment.fullDatabaseId, // The REST API id, used to match comments saved in the database.
+                    body: firstComment.body,
+                } : null;
+            }).filter(comment => comment !== null);
+
+            const validReviews = reviewsComments
+                .map(reviewComment => {
+                    const matchingThreadComment = reviewThreadComments.find(threadComment => threadComment.id === reviewComment.id);
+
+                    if (matchingThreadComment) {
+                        return {
+                            ...reviewComment,
+                            isResolved: matchingThreadComment?.isResolved,
+                            isOutdated: matchingThreadComment?.isOutdated
+                        };
+                    }
+
+                    return null;
+                })
+                .filter(comment => comment !== null);
+            return validReviews;
+
+        } catch (error) {
+            this.logger.error({
+                message: `Error retrieving list of valid reviews for PR#${prNumber}`,
+                context: GithubService.name,
+                error: error,
+                metadata: {
+                    ...params
+                },
+            });
+
             return null;
         }
     }
