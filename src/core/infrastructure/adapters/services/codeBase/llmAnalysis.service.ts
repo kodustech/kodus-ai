@@ -364,10 +364,6 @@ export class LLMAnalysisService implements IAIAnalysisService {
                     callbacks: [this.tokenTracker],
                 });
 
-                llm = llm.bind({
-                    response_format: { type: 'json_object' },
-                });
-
                 const chain = RunnableSequence.from([
                     async (input: any) => {
                         return [
@@ -795,14 +791,6 @@ export class LLMAnalysisService implements IAIAnalysisService {
                           temperature: 0,
                           callbacks: [this.tokenTracker],
                       });
-
-            if (
-                provider === LLMModelProvider.GEMINI_2_5_PRO_PREVIEW
-            ) {
-                llm = llm.bind({
-                    response_format: { type: 'json_object' },
-                });
-            }
 
             const chain = RunnableSequence.from([
                 async (input: any) => {
