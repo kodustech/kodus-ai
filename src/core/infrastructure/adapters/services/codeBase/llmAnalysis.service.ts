@@ -785,9 +785,6 @@ export class LLMAnalysisService implements IAIAnalysisService {
                           callbacks: [this.tokenTracker],
                       })
                     : getDeepseekByNovitaAI({
-                          model: getLLMModelProviderWithFallback(
-                              LLMModelProvider.DEEPSEEK_V3,
-                          ),
                           temperature: 0,
                           callbacks: [this.tokenTracker],
                       });
