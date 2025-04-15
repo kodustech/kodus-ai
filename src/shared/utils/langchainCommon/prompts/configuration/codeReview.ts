@@ -133,7 +133,7 @@ Your final output should be **only** a JSON object with the following structure:
 </finalSteps>`;
 };
 
-export const prompt_codereview_user_light_mode = (
+export const prompt_codereview_user_deepseek = (
     payload: CodeReviewPayload,
 ) => {
     return `# Code Analysis Mission
@@ -283,7 +283,7 @@ Note: If no changes are necessary, omit the Original Code and Suggested Code sec
 </finalSteps>`;
 };
 
-export const prompt_codereview_system_gemini = (payload: CodeReviewPayload) => {
+export const prompt_codereview_user_gemini = (payload: CodeReviewPayload) => {
     const maxSuggestionsNote =
         payload?.limitationType === 'file' && payload?.maxSuggestionsParams
             ? `Note: Provide up to ${payload.maxSuggestionsParams} code suggestions.`
