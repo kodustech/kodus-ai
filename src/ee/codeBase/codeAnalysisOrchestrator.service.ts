@@ -45,7 +45,7 @@ export class CodeAnalysisOrchestrator {
                     organizationAndTeamData,
                     prNumber,
                     fileContext,
-                    reviewModeResponse,
+                    ReviewModeResponse.HEAVY_MODE, //Now all reviews will be done in Heavy Mode, using the Gemini 2.5 Pro model.
                     context,
                 );
 
