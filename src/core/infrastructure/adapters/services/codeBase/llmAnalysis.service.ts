@@ -623,7 +623,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         reviewMode: ReviewModeResponse,
     ): Promise<ISafeguardResponse> {
         try {
-            const provider = LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET;
+            const provider = LLMModelProvider.GEMINI_2_5_PRO_PREVIEW;
             const baseContext = {
                 organizationAndTeamData,
                 file: {
@@ -731,7 +731,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
     ) {
         const fallbackProvider =
             provider === LLMModelProvider.CHATGPT_4_ALL
-                ? LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET
+                ? LLMModelProvider.GEMINI_2_5_PRO_PREVIEW
                 : LLMModelProvider.CHATGPT_4_ALL;
         try {
             const mainChain = await this.createSafeGuardProviderChain(
@@ -790,8 +790,9 @@ export class LLMAnalysisService implements IAIAnalysisService {
     ) {
         try {
             let llm =
-                provider === LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET
-                    ? getChatVertexAI({
+                provider === LLMModelProvider.GEMINI_2_5_PRO_PREVIEW
+                    ? getChatGemini({
+                          model: LLMModelProvider.GEMINI_2_5_PRO_PREVIEW,
                           temperature: 0,
                           callbacks: [this.tokenTracker],
                       })
@@ -805,7 +806,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
 
             if (
                 provider === LLMModelProvider.CHATGPT_4_ALL ||
-                provider === LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET
+                provider === LLMModelProvider.GEMINI_2_5_PRO_PREVIEW
             ) {
                 llm = llm.bind({
                     response_format: { type: 'json_object' },
