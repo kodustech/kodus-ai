@@ -27,8 +27,8 @@ import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import {
-    prompt_codeReviewSafeguard_system,
-    prompt_codeReviewSafeguard_user,
+    CodeReviewSafeguardPayload,
+    prompt_codeReviewSafeguard_gemini,
 } from '@/shared/utils/langchainCommon/prompts/codeReviewSafeguard';
 import { getLLMModelProviderWithFallback } from '@/shared/utils/get-llm-model-provider.util';
 import { LLMModelProvider } from '@/shared/domain/enums/llm-model-provider.enum';
@@ -176,6 +176,29 @@ export class LLMAnalysisService implements IAIAnalysisService {
             </filePath>
             `,
             cache_control: { type: 'ephemeral' },
+        };
+    }
+
+    private preparePayloadForCodeReviewSafeguard(
+        fileContentContext: string,
+        codeDiffContext: string,
+        suggestionsContext: string,
+        languageResultPrompt: string,
+        reviewMode: ReviewModeResponse,
+    ): CodeReviewSafeguardPayload {
+        if (reviewMode === ReviewModeResponse.HEAVY_MODE) {
+            return {
+                fileContentContext,
+                codeDiffContext,
+                suggestionsContext,
+                languageResultPrompt,
+            };
+        }
+
+        return {
+            codeDiffContext,
+            suggestionsContext,
+            languageResultPrompt,
         };
     }
 
@@ -791,40 +814,25 @@ export class LLMAnalysisService implements IAIAnalysisService {
 
             const chain = RunnableSequence.from([
                 async (input: any) => {
-                    const systemPrompt = prompt_codeReviewSafeguard_system();
-                    const humanPrompt = prompt_codeReviewSafeguard_user(
+                    const payload = this.preparePayloadForCodeReviewSafeguard(
+                        input.file.fileContent,
+                        input.codeDiff,
+                        JSON.stringify(input?.suggestions, null, 2) || 'No suggestions provided',
                         input.languageResultPrompt,
+                        reviewMode,
+                    );
+
+                    const humanPrompt = prompt_codeReviewSafeguard_gemini(
+                        payload,
                     );
 
                     return [
                         {
                             role: 'user',
                             content: [
-                                // Required for pipeline steps that use file or codeDiff
-                                this.preparePrefixChainForCache(
-                                    {
-                                        fileContent: input.file.fileContent,
-                                        patchWithLinesStr: input.codeDiff,
-                                        language: input.file.language,
-                                        filePath: input.file.filename,
-                                    },
-                                    reviewMode,
-                                ),
-                                {
-                                    type: 'text',
-                                    text: `<suggestionsContext>${JSON.stringify(input?.suggestions, null, 2) || 'No suggestions provided'}</suggestionsContext>`,
-                                },
-                                {
-                                    type: 'text',
-                                    text: systemPrompt,
-                                },
                                 {
                                     type: 'text',
                                     text: humanPrompt,
-                                },
-                                {
-                                    type: 'text',
-                                    text: 'Start analysis',
                                 },
                             ],
                         },

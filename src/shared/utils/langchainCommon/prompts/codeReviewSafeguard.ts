@@ -164,12 +164,7 @@ Use this schema (no extra commentary after the JSON):
 - Stylistic vs. Real Improvements: Clearly instructs to discard purely stylistic suggestions with no real benefits.`;
 };
 
-export const prompt_codeReviewSafeguard_gemini = (payload: {
-    fileContentContext: string;
-    codeDiffContext: string;
-    suggestionsContext: string;
-    languageResultPrompt: string;
-}) => {
+export const prompt_codeReviewSafeguard_gemini = (payload: CodeReviewSafeguardPayload) => {
     return `
     # SafeGuard: Code Review Suggestions Evaluation
 
@@ -353,4 +348,11 @@ Use this schema (no extra commentary after the JSON):
 - You are an LLM that always responds in ${payload.languageResultPrompt} when providing explanations or instructions.
 - Do not translate or modify any code snippets; always keep code in its original language/syntax, including comments, variable names, and strings.
 `;
+};
+
+export type CodeReviewSafeguardPayload = {
+    fileContentContext?: string;
+    codeDiffContext: string;
+    suggestionsContext: string;
+    languageResultPrompt: string;
 };
