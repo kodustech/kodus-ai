@@ -69,6 +69,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
             '/snoozed-items/slack',
             '/gitlab/webhook',
             '/bitbucket/webhook',
+            '/azure-repos/webhook',
         ];
 
         // Allow access to public routes
