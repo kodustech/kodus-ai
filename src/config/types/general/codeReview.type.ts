@@ -289,6 +289,15 @@ export type CodeReviewConfigWithoutLLMProvider = Omit<
     'llmProvider' | 'languageResultPrompt'
 >;
 
+export type CodeReviewConfigWithRepositoryInfo = Omit<
+    CodeReviewConfig,
+    'llmProvider' | 'languageResultPrompt'
+> & {
+    id: string;
+    name: string;
+    isSelected?: boolean;
+}
+
 // Omit every configuration that isn't present on the kodus configuration file.
 export type KodusConfigFile = Omit<
     CodeReviewConfig,
