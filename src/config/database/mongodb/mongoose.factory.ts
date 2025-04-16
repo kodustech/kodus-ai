@@ -37,6 +37,8 @@ export class MongooseFactory implements MongooseOptionsFactory {
             uri: uri,
             dbName: this.config.database,
             connectionFactory: createForInstance,
+            minPoolSize: 2,
+            maxIdleTimeMS: 50000,
         };
     }
 }

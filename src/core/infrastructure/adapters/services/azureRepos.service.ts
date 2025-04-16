@@ -27,6 +27,8 @@ import {
     PullRequestCodeReviewTime,
     PullRequestFile,
     PullRequestDetails,
+    PullRequestReviewComment,
+    PullRequestsWithChangesRequested,
 } from '@/core/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repositories } from '@/core/domain/platformIntegrations/types/codeManagement/repositories.type';
 import { v4 as uuidv4, v4 } from 'uuid';
@@ -67,9 +69,14 @@ import {
 import { IRepositoryManager } from '@/core/domain/repository/contracts/repository-manager.contract';
 import { REPOSITORY_MANAGER_TOKEN } from '@/core/domain/repository/contracts/repository-manager.contract';
 import { decrypt, encrypt } from '@/shared/utils/crypto';
+import { generateWebhookToken } from '@/shared/utils/webhooks/webhookTokenCrypto';
+import { ICodeManagementService } from '@/core/domain/platformIntegrations/interfaces/code-management.interface';
+import { Workflow } from '@/core/domain/platformIntegrations/types/codeManagement/workflow.type';
 
 @IntegrationServiceDecorator(PlatformType.AZURE_REPOS, 'codeManagement')
-export class AzureReposService {
+export class AzureReposService
+    implements Omit<ICodeManagementService, 'getOrganizations'>
+{
     constructor(
         @Inject(INTEGRATION_SERVICE_TOKEN)
         private readonly integrationService: IIntegrationService,
@@ -86,6 +93,203 @@ export class AzureReposService {
         private readonly logger: PinoLoggerService,
         private readonly azureReposRequestHelper: AzureReposRequestHelper,
     ) {}
+
+    getPullRequestDetails(params: any): Promise<PullRequestDetails | null> {
+        throw new Error('Method not implemented.');
+    }
+    getWorkflows(params: any): Promise<Workflow[]> {
+        throw new Error('Method not implemented.');
+    }
+    getListMembers(
+        params: any,
+    ): Promise<{ name: string; id: string | number }[]> {
+        throw new Error('Method not implemented.');
+    }
+    getCommitsByReleaseMode(params: any): Promise<CommitLeadTimeForChange[]> {
+        throw new Error('Method not implemented.');
+    }
+    getPullRequestsForRTTM(
+        params: any,
+    ): Promise<PullRequestCodeReviewTime[] | null> {
+        throw new Error('Method not implemented.');
+    }
+    getChangedFilesSinceLastCommit(params: any): Promise<any | null> {
+        throw new Error('Method not implemented.');
+    }
+    createReviewComment(params: any): Promise<any | null> {
+        throw new Error('Method not implemented.');
+    }
+    createCommentInPullRequest(params: any): Promise<any[] | null> {
+        throw new Error('Method not implemented.');
+    }
+    getRepositoryContentFile(params: any): Promise<any | null> {
+        throw new Error('Method not implemented.');
+    }
+    getPullRequestByNumber(params: any): Promise<any | null> {
+        throw new Error('Method not implemented.');
+    }
+    getCommitsForPullRequestForCodeReview(params: any): Promise<any[] | null> {
+        throw new Error('Method not implemented.');
+    }
+    createIssueComment(params: any): Promise<any | null> {
+        throw new Error('Method not implemented.');
+    }
+    createSingleIssueComment(params: any): Promise<any | null> {
+        throw new Error('Method not implemented.');
+    }
+    updateIssueComment(params: any): Promise<any | null> {
+        throw new Error('Method not implemented.');
+    }
+    findTeamAndOrganizationIdByConfigKey(
+        params: any,
+    ): Promise<IntegrationConfigEntity | null> {
+        throw new Error('Method not implemented.');
+    }
+    async getDefaultBranch(params: any): Promise<string> {
+        const { organizationAndTeamData, repository } = params;
+
+        const { orgName, token } = await this.getAuthDetails(
+            organizationAndTeamData,
+        );
+
+        const projectId = await this.getProjectIdFromRepository(
+            organizationAndTeamData,
+            repository.id,
+        );
+
+        const defaultBranch =
+            await this.azureReposRequestHelper.getDefaultBranch({
+                orgName,
+                token,
+                projectId,
+                repositoryId: repository.id,
+            });
+
+        return defaultBranch;
+    }
+    getPullRequestReviewComment(params: any): Promise<any | null> {
+        throw new Error('Method not implemented.');
+    }
+    createResponseToComment(params: any): Promise<any | null> {
+        throw new Error('Method not implemented.');
+    }
+    updateDescriptionInPullRequest(params: any): Promise<any | null> {
+        throw new Error('Method not implemented.');
+    }
+    getAuthenticationOAuthToken(params: any): Promise<string> {
+        throw new Error('Method not implemented.');
+    }
+    countReactions(params: any): Promise<any[]> {
+        throw new Error('Method not implemented.');
+    }
+    async getLanguageRepository(params: any): Promise<any | null> {
+        try {
+            const { organizationAndTeamData, repository } = params;
+
+            const { orgName, token } = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            const projectId = await this.getProjectIdFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+
+            const data =
+                await this.azureReposRequestHelper.getLanguageRepository({
+                    orgName,
+                    token,
+                    projectId,
+                });
+
+            const languages = data?.languageBreakdown ?? [];
+
+            if (!languages?.length) {
+                return '';
+            }
+
+            const main = languages.reduce((a, b) =>
+                (b.languagePercentage ?? 0) > (a.languagePercentage ?? 0)
+                    ? b
+                    : a,
+            );
+
+            return main?.name ?? '';
+        } catch (error) {
+            this.logger?.error?.({
+                message: 'Erro ao obter linguagens do repositório',
+                context: 'AzureReposRequestHelper.getLanguageRepository',
+                error,
+                metadata: { ...params },
+            });
+            return null;
+        }
+    }
+
+    getRepositoryAllFiles(params: any): Promise<any> {
+        throw new Error('Method not implemented.');
+    }
+    mergePullRequest(params: any): Promise<any> {
+        throw new Error('Method not implemented.');
+    }
+    approvePullRequest(params: any): Promise<any> {
+        throw new Error('Method not implemented.');
+    }
+    requestChangesPullRequest(params: any): Promise<any> {
+        throw new Error('Method not implemented.');
+    }
+    getAllCommentsInPullRequest(params: any): Promise<any[]> {
+        throw new Error('Method not implemented.');
+    }
+    getUserByUsername(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        username: string;
+    }): Promise<any> {
+        throw new Error('Method not implemented.');
+    }
+    getUserByEmailOrName(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        email?: string;
+        userName: string;
+    }): Promise<any> {
+        throw new Error('Method not implemented.');
+    }
+    getUserById(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        userId: string;
+    }): Promise<any | null> {
+        throw new Error('Method not implemented.');
+    }
+    markReviewCommentAsResolved(params: any): Promise<any | null> {
+        throw new Error('Method not implemented.');
+    }
+    getPullRequestReviewComments(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<PullRequestReviewComment[] | null> {
+        throw new Error('Method not implemented.');
+    }
+    getPullRequestReviewThreads(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<PullRequestReviewComment[] | null> {
+        throw new Error('Method not implemented.');
+    }
+    getListOfValidReviews(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<any[] | null> {
+        throw new Error('Method not implemented.');
+    }
+    getPullRequestsWithChangesRequested(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+    }): Promise<PullRequestsWithChangesRequested[] | null> {
+        throw new Error('Method not implemented.');
+    }
 
     async cloneRepository(params: {
         repository: Pick<
@@ -175,43 +379,24 @@ export class AzureReposService {
                 organizationAndTeamData,
             );
 
-            const webhookUrl =
-                process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK;
-
             const projects = await this.azureReposRequestHelper.getProjects({
                 orgName: azureAuthDetail.orgName,
                 token: azureAuthDetail.token,
             });
 
             for (const project of projects) {
-                const existingHooks =
-                    await this.azureReposRequestHelper.listSubscriptionsByProject(
-                        {
-                            orgName: azureAuthDetail.orgName,
-                            token: azureAuthDetail.token,
-                            projectId: project.id,
-                        },
-                    );
-
-                const hookExists = existingHooks.some(
-                    (hook) => hook.url === webhookUrl,
+                await this.createNotificationChannel(
+                    project.id,
+                    azureAuthDetail.token,
+                    azureAuthDetail.orgName,
+                    project.id,
                 );
-
-                if (!hookExists) {
-                    this.createNotificationChannel(
-                        project.id,
-                        azureAuthDetail.token,
-                        azureAuthDetail.orgName,
-                        project.id,
-                        webhookUrl,
-                    );
-                }
             }
         } catch (error) {
             this.logger.error({
                 message: 'Error to create webhook',
                 context: AzureReposService.name,
-                serviceName: 'AzureReposService createWebhook',
+                serviceName: 'AzureReposService.createWebhook',
                 error: error,
                 metadata: {
                     organizationAndTeamData,
@@ -289,7 +474,7 @@ export class AzureReposService {
 
             const authDetails: AzureReposAuthDetail = {
                 orgUrl: orgUrl,
-                token: token,
+                token: encrypt(token),
                 authMode: AuthMode.TOKEN,
                 orgName: orgName,
             };
@@ -1080,12 +1265,12 @@ export class AzureReposService {
                 iterationId,
             });
 
-            const changeEntries = changes || [];
+            const changeEntries = changes;
 
             const fileChanges: FileChange[] = await Promise.all(
                 changeEntries
-                    .filter((entry: any) => entry.item?.path)
-                    .map(async (entry: any) => {
+                    ?.filter((entry: any) => entry.item?.path)
+                    ?.map(async (entry: any) => {
                         const filePath = entry.item.path;
 
                         const commitId = pr.lastMergeSourceCommit?.commitId;
@@ -1133,7 +1318,7 @@ export class AzureReposService {
                         return {
                             filename: filePath,
                             sha: commitId,
-                            status: entry.changeType, // ex: "add", "edit", "delete", etc.
+                            status: entry.changeType,
                             additions: 0, // A API de changes do Azure não retorna as quantidades de linhas
                             deletions: 0,
                             changes: 0,
@@ -1192,9 +1377,10 @@ export class AzureReposService {
             const hasRepositories = azureReposRepositories?.length > 0;
 
             return {
-                platformName: 'azure-repos',
+                platformName: PlatformType.AZURE_REPOS,
                 isSetupComplete:
-                    azureReposOrg?.authIntegration?.authDetails?.organization &&
+                    azureReposOrg?.authIntegration?.authDetails?.token &&
+                    azureReposOrg?.authIntegration?.authDetails?.orgName &&
                     hasRepositories,
                 hasConnection: !!azureReposOrg,
                 config: {
@@ -1275,41 +1461,113 @@ export class AzureReposService {
 
     private async createNotificationChannel(
         projectId: string,
-        userToken,
+        userToken: string,
         organizationName: string,
         repoId: string,
-        webhookUrl: string,
-    ) {
+    ): Promise<void> {
         const eventTypes = [
             'git.pullrequest.created',
             'git.pullrequest.updated',
-            'git.pullrequest.merge.attempe',
-            'git.pullrequest.merge.attempted',
             'ms.vss-code.git-pullrequest-comment-event',
         ];
+        const webhookUrl =
+            process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK;
+        const encryptedToken = generateWebhookToken();
 
-        for (const evt of eventTypes) {
+        const tasks = eventTypes.map(async (eventType) => {
             const payload = {
                 publisherId: 'tfs',
-                eventType: evt,
-                resourceVersion: '1.0',
+                eventType,
+                resourceVersion: '2.0',
                 consumerId: 'webHooks',
                 consumerActionId: 'httpRequest',
                 publisherInputs: {
                     projectId,
+                    // AJUSTAR PARA O REPO ID
+                    // repository: repoId,
                 },
                 consumerInputs: {
-                    url: webhookUrl,
+                    url: `${webhookUrl}?token=${encodeURIComponent(encryptedToken)}`,
                 },
             };
 
-            await this.azureReposRequestHelper.createSubscriptionForProject({
-                orgName: organizationName,
-                token: userToken,
-                projectId: projectId,
-                subscriptionPayload: payload,
-            });
-        }
+            try {
+                const existingHooks =
+                    await this.azureReposRequestHelper.listSubscriptionsByProject(
+                        {
+                            orgName: organizationName,
+                            token: userToken,
+                            projectId,
+                        },
+                    );
+
+                const alreadyExists = existingHooks.find(
+                    (sub) =>
+                        sub.eventType === eventType &&
+                        sub.publisherInputs?.repository === repoId &&
+                        sub.consumerInputs?.url?.includes(webhookUrl),
+                );
+
+                if (alreadyExists) {
+                    this.logger.log({
+                        message: `Webhook already exists for ${eventType}, id: ${alreadyExists.id}, will be removed`,
+                        context: 'AzureReposService.createNotificationChannel',
+                    });
+
+                    await this.azureReposRequestHelper.deleteWebhookById({
+                        orgName: organizationName,
+                        token: userToken,
+                        subscriptionId: alreadyExists.id,
+                    });
+                }
+
+                const created =
+                    await this.azureReposRequestHelper.createSubscriptionForProject(
+                        {
+                            orgName: organizationName,
+                            token: userToken,
+                            projectId,
+                            subscriptionPayload: payload,
+                        },
+                    );
+
+                this.logger.log({
+                    message: `Webhook created for ${eventType}`,
+                    context: 'AzureReposService.createNotificationChannel',
+                    metadata: { subscriptionId: created?.id },
+                });
+            } catch (error) {
+                this.logger.error({
+                    message: `Error creating webhook for event ${eventType}`,
+                    context: 'AzureReposService.createNotificationChannel',
+                    error,
+                    metadata: {
+                        projectId,
+                        repoId,
+                        eventType,
+                    },
+                });
+            }
+        });
+
+        const results = await Promise.allSettled(tasks);
+
+        results.forEach((res, idx) => {
+            const evt = eventTypes[idx];
+
+            if (res.status === 'rejected') {
+                this.logger.error({
+                    message: `Error final in processing ${evt}`,
+                    context: 'AzureReposService.createNotificationChannel',
+                    error: res.reason,
+                    metadata: {
+                        projectId,
+                        repoId,
+                        eventType: evt,
+                    },
+                });
+            }
+        });
     }
 
     private transformPullRequest(

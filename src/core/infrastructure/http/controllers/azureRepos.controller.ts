@@ -1,8 +1,9 @@
 import { Controller, HttpStatus, Post, Req, Res } from '@nestjs/common';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { PinoLoggerService } from '../../adapters/services/logger/pino.service';
 import { PlatformType } from '@/shared/domain/enums/platform-type.enum';
 import { ReceiveWebhookUseCase } from '@/core/application/use-cases/platformIntegration/codeManagement/receiveWebhook.use-case';
+import { validateWebhookToken } from '@/shared/utils/webhooks/webhookTokenCrypto';
 
 @Controller('azure-repos')
 export class AzureReposController {
@@ -13,6 +14,16 @@ export class AzureReposController {
 
     @Post('/webhook')
     handleWebhook(@Req() req: Request, @Res() res: Response) {
+        const encrypted = req.query.token as string;
+
+        if (!validateWebhookToken(encrypted)) {
+            this.logger.error({
+                message: 'Webhook Azure DevOps Not Token Valid',
+                context: AzureReposController.name,
+            });
+            return res.status(403).send('Unauthorized');
+        }
+
         const payload = req.body as any;
         const eventType = payload?.eventType as string;
 

@@ -110,30 +110,33 @@ export class ReceiveWebhookUseCase implements IUseCase {
                     await this.savePullRequestUseCase.execute(params);
                     break;
                 case 'ms.vss-code.git-pullrequest-comment-event':
-                    const comment = params.payload?.resource?.comment?.content;
-                    const pullRequestId =
-                        params.payload?.resource?.pullRequest?.pullRequestId;
+                    const comment = params.payload?.resource.comment.content;
+                    const pullRequestId = params.payload?.resource.pullRequest.status === 'active';
 
-                    if (comment && this.isAzureDevOpsStartCommand(comment)) {
-                        const updatedParams = {
-                            ...params,
-                            payload: {
-                                ...params.payload,
-                                action: 'synchronize',
-                                origin: 'command',
-                            },
-                        };
-
-                        await this.savePullRequestUseCase.execute(
-                            updatedParams,
-                        );
-                        await this.runCodeReviewAutomationUseCase.execute(
-                            updatedParams,
-                        );
-                    } else {
-                        // Processar comentário normal
-                        this.chatWithKodyFromGitUseCase.execute(params);
+                    if (comment && pullRequestId) {
+                        this.isStartCommand(params);
                     }
+
+                    // if (comment && this.isAzureDevOpsStartCommand(comment)) {
+                    //     const updatedParams = {
+                    //         ...params,
+                    //         payload: {
+                    //             ...params.payload,
+                    //             action: 'synchronize',
+                    //             origin: 'command',
+                    //         },
+                    //     };
+
+                    //     await this.savePullRequestUseCase.execute(
+                    //         updatedParams,
+                    //     );
+                    //     await this.runCodeReviewAutomationUseCase.execute(
+                    //         updatedParams,
+                    //     );
+                    // } else {
+                    //     // Processar comentário normal
+                    //     this.chatWithKodyFromGitUseCase.execute(params);
+                    // }
                     break;
 
                 default:

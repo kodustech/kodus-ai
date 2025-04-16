@@ -22,7 +22,8 @@ import { CodebaseModule } from './codeBase.module';
 import { AzureReposService } from '@/core/infrastructure/adapters/services/azureRepos.service';
 import { AZURE_REPOS_SERVICE_TOKEN } from '@/core/domain/azureRepos/contracts/azure-repos.service.contract';
 import { AzureReposRequestHelper } from '@/core/infrastructure/adapters/services/azureRepos/azure-repos-request-helper';
-import { AzureReposController } from '@/core/infrastructure/http/controllers/azure-repos.controller';
+import { AzureReposController } from '@/core/infrastructure/http/controllers/azureRepos.controller';
+
 @Module({
     imports: [
         forwardRef(() => TeamsModule),

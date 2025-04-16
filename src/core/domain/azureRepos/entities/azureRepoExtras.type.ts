@@ -122,10 +122,14 @@ export interface AzureRepoIteration {
  * Representa uma entrada de mudança (change entry) em uma iteração de PR.
  */
 export interface AzureRepoChange {
+    changeTrackingId: number;
+    changeId: number;
+    changeType?: 'edit' | 'add' | 'delete' | 'rename' | string;
     item?: {
+        objectId: string;
+        originalObjectId?: string;
         path?: string;
     };
-    changeType?: string;
 }
 
 /**
@@ -144,20 +148,21 @@ export interface AzureRepoCommit {
 }
 
 export interface AzureRepoFileContent {
-    objectId: string;       // O ID do objeto Git
-    gitObjectType: string;  // Tipo do objeto Git (geralmente "blob" para arquivos)
-    size?: number;          // Tamanho do arquivo
-    content?: string;       // Conteúdo do arquivo (presente apenas com includeContent=true)
-    path?: string;          // Caminho do arquivo
-    url: string;            // URL para acessar o item
-    commitId?: string;      // ID do commit relacionado
-    _links?: {              // Links relacionados
+    objectId: string; // O ID do objeto Git
+    gitObjectType: string; // Tipo do objeto Git (geralmente "blob" para arquivos)
+    size?: number; // Tamanho do arquivo
+    content?: string; // Conteúdo do arquivo (presente apenas com includeContent=true)
+    path?: string; // Caminho do arquivo
+    url: string; // URL para acessar o item
+    commitId?: string; // ID do commit relacionado
+    _links?: {
+        // Links relacionados
         self: {
             href: string;
-        },
+        };
         repository: {
             href: string;
-        }
+        };
     };
 }
 

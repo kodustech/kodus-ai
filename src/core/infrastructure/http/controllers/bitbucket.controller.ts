@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpStatus, Post, Query, Req, Res } from '@nestjs/common';
+import { Controller, HttpStatus, Post, Req, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { PinoLoggerService } from '../../adapters/services/logger/pino.service';
 import { ReceiveWebhookUseCase } from '@/core/application/use-cases/platformIntegration/codeManagement/receiveWebhook.use-case';
@@ -8,7 +8,7 @@ import { PlatformType } from '@/shared/domain/enums/platform-type.enum';
 export class BitbucketController {
     constructor(
         private readonly receiveWebhookUseCase: ReceiveWebhookUseCase,
-        private readonly logger: PinoLoggerService
+        private readonly logger: PinoLoggerService,
     ) {}
 
     @Post('/webhook')

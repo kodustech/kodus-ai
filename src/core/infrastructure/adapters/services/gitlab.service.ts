@@ -2,10 +2,8 @@ import { ICodeManagementService } from '@/core/domain/platformIntegrations/inter
 import { DeployFrequency } from '@/core/domain/platformIntegrations/types/codeManagement/deployFrequency.type';
 import {
     PullRequestCodeReviewTime,
-    PullRequestDetails,
     PullRequestReviewComment,
     PullRequests,
-    PullRequestsWithChangesRequested,
     PullRequestWithFiles,
 } from '@/core/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repositories } from '@/core/domain/platformIntegrations/types/codeManagement/repositories.type';
@@ -14,10 +12,7 @@ import { PlatformType } from '@/shared/domain/enums/platform-type.enum';
 import { IntegrationServiceDecorator } from '@/shared/utils/decorators/integration-service.decorator';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 
-import {
-    Gitlab,
-    MergeRequestSchemaWithBasicLabels,
-} from '@gitbeaker/rest';
+import { Gitlab, MergeRequestSchemaWithBasicLabels } from '@gitbeaker/rest';
 import axios from 'axios';
 import {
     IIntegrationConfigService,
@@ -78,7 +73,18 @@ import { getCodeReviewBadge } from '@/shared/utils/codeManagement/codeReviewBadg
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITLAB, 'codeManagement')
 export class GitlabService
-    implements Omit<ICodeManagementService, 'getOrganizations'> {
+    implements
+        Omit<
+            ICodeManagementService,
+            | 'getOrganizations'
+            | 'getPullRequestsWithChangesRequested'
+            | 'getListOfValidReviews'
+            | 'getPullRequestReviewThreads'
+            | 'getRepositoryAllFiles'
+            | 'getAuthenticationOAuthToken'
+            | 'getPullRequestDetails'
+        >
+{
     constructor(
         @Inject(INTEGRATION_SERVICE_TOKEN)
         private readonly integrationService: IIntegrationService,
@@ -97,36 +103,7 @@ export class GitlabService
 
         private readonly promptService: PromptService,
         private readonly logger: PinoLoggerService,
-    ) { }
-    getPullRequestsWithChangesRequested(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; }): Promise<PullRequestsWithChangesRequested[] | null> {
-        throw new Error('Method not implemented.');
-    }
-    getListOfValidReviews(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; prNumber: number; }): Promise<any[] | null> {
-        throw new Error('Method not implemented.');
-    }
-
-    getPullRequestReviewThreads(params: { organizationAndTeamData: OrganizationAndTeamData; repository: Partial<Repository>; prNumber: number; }): Promise<PullRequestReviewComment[] | null> {
-        throw new Error('Method not implemented.');
-    }
-
-    getRepositoryAllFiles(params: {
-        repository: string;
-        branch: string;
-        organizationAndTeamData: OrganizationAndTeamData;
-        filePatterns?: string[];
-        excludePatterns?: string[];
-        maxFiles?: number;
-    }): Promise<any> {
-        throw new Error('Method not implemented.');
-    }
-
-    getAuthenticationOAuthToken(params: any): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-
-    getPullRequestDetails(params: any): Promise<PullRequestDetails | null> {
-        throw new Error('Method not implemented.');
-    }
+    ) {}
 
     async getPullRequestByNumber(params: {
         organizationAndTeamData: OrganizationAndTeamData;
@@ -595,7 +572,8 @@ export class GitlabService
                                     http_url: project.http_url_to_repo,
                                     avatar_url: project.namespace?.avatar_url,
                                     organizationName: project.namespace?.name,
-                                    visibility: (project?.visibility === 'public'
+                                    visibility: (project?.visibility ===
+                                    'public'
                                         ? 'public'
                                         : 'private') as 'public' | 'private',
                                     selected:
@@ -645,14 +623,16 @@ export class GitlabService
                                     http_url: project.http_url_to_repo,
                                     avatar_url: project.namespace?.avatar_url,
                                     organizationName: project.namespace?.name,
-                                    visibility: (project?.visibility === 'public'
+                                    visibility: (project?.visibility ===
+                                    'public'
                                         ? 'public'
                                         : 'private') as 'public' | 'private',
-                                    selected: integrationConfig?.configValue?.some(
-                                        (repository: { name: string }) =>
-                                            repository?.name ===
-                                            project?.path_with_namespace,
-                                    ),
+                                    selected:
+                                        integrationConfig?.configValue?.some(
+                                            (repository: { name: string }) =>
+                                                repository?.name ===
+                                                project?.path_with_namespace,
+                                        ),
                                     default_branch: project?.default_branch,
                                 };
                             }
@@ -763,8 +743,8 @@ export class GitlabService
                         pr.state === GitlabPullRequestState.OPENED
                             ? PullRequestState.OPENED
                             : pr.state === GitlabPullRequestState.CLOSED
-                                ? PullRequestState.CLOSED
-                                : PullRequestState.ALL,
+                              ? PullRequestState.CLOSED
+                              : PullRequestState.ALL,
                     pull_number: pr.iid,
                     project_id: pr.project_id,
                     prURL: pr.web_url,
@@ -1522,7 +1502,7 @@ export class GitlabService
             actionStatement,
             this.formatSub(translations.talkToKody),
             this.formatSub(translations.feedback) +
-            '<!-- kody-codereview -->&#8203;\n&#8203;',
+                '<!-- kody-codereview -->&#8203;\n&#8203;',
         ]
             .join('\n')
             .trim();
@@ -2512,8 +2492,8 @@ export class GitlabService
                         pr.state === GitlabPullRequestState.OPENED
                             ? PullRequestState.OPENED
                             : pr.state === GitlabPullRequestState.CLOSED
-                                ? PullRequestState.CLOSED
-                                : PullRequestState.ALL,
+                              ? PullRequestState.CLOSED
+                              : PullRequestState.ALL,
                     pull_number: pr.iid,
                     project_id: pr.project_id,
                     prURL: pr.web_url,
@@ -2534,9 +2514,9 @@ export class GitlabService
     }
 
     async getPullRequestReviewComments(params: {
-        organizationAndTeamData: OrganizationAndTeamData,
-        repository: Partial<Repository>,
-        prNumber: number,
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
     }): Promise<PullRequestReviewComment[] | null> {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -2548,7 +2528,9 @@ export class GitlabService
                 return null;
             }
 
-            const gitlabAuthDetail = await this.getAuthDetails(organizationAndTeamData);
+            const gitlabAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
 
             if (!gitlabAuthDetail) {
                 return null;
@@ -2556,38 +2538,49 @@ export class GitlabService
 
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
-            const discussions = await gitlabAPI.MergeRequestDiscussions.all(projectId, mergeRequestIid);
+            const discussions = await gitlabAPI.MergeRequestDiscussions.all(
+                projectId,
+                mergeRequestIid,
+            );
 
             const validRequestReviews = discussions
                 .filter((discussion) => {
                     const firstDiscussionComment = discussion.notes[0];
-                    return firstDiscussionComment.resolvable &&
-                        !firstDiscussionComment.body.includes("## Code Review Completed! 🔥"); // Exclude comments with the specific string
+                    return (
+                        firstDiscussionComment.resolvable &&
+                        !firstDiscussionComment.body.includes(
+                            '## Code Review Completed! 🔥',
+                        )
+                    ); // Exclude comments with the specific string
                 })
                 .map((discussion) => {
                     // The review comment will always be the first one.
                     const firstDiscussionComment = discussion.notes[0];
-                    const isDiscussionResolved: boolean = (firstDiscussionComment.resolved && firstDiscussionComment.resolved === true) ? (true) : (false);
+                    const isDiscussionResolved: boolean =
+                        firstDiscussionComment.resolved &&
+                        firstDiscussionComment.resolved === true
+                            ? true
+                            : false;
 
                     const comment: PullRequestReviewComment = {
                         id: firstDiscussionComment.id,
                         threadId: discussion.id,
-                        body: firstDiscussionComment.body ?? "",
+                        body: firstDiscussionComment.body ?? '',
                         author: {
-                            id: firstDiscussionComment?.author?.id ?? "",
-                            name: firstDiscussionComment?.author?.name ?? "",
-                            username: firstDiscussionComment?.author?.username ?? ""
+                            id: firstDiscussionComment?.author?.id ?? '',
+                            name: firstDiscussionComment?.author?.name ?? '',
+                            username:
+                                firstDiscussionComment?.author?.username ?? '',
                         },
                         isResolved: isDiscussionResolved,
                         createdAt: firstDiscussionComment.created_at,
-                        updatedAt: firstDiscussionComment.updated_at
-                    }
+                        updatedAt: firstDiscussionComment.updated_at,
+                    };
 
                     return comment;
-                })
+                });
 
             return validRequestReviews || null;
-
         } catch (error) {
             this.logger.error({
                 message: `Error retrieving discussions for merge request: ${params.prNumber}`,
@@ -2602,7 +2595,8 @@ export class GitlabService
 
     async markReviewCommentAsResolved(params: any): Promise<any | null> {
         try {
-            const { organizationAndTeamData, repository, prNumber, commentId } = params;
+            const { organizationAndTeamData, repository, prNumber, commentId } =
+                params;
 
             const projectId = repository.id;
             const mergeRequestIid = prNumber;
@@ -2611,7 +2605,9 @@ export class GitlabService
                 return null;
             }
 
-            const gitlabAuthDetail = await this.getAuthDetails(organizationAndTeamData);
+            const gitlabAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
 
             if (!gitlabAuthDetail) {
                 return null;
@@ -2619,11 +2615,15 @@ export class GitlabService
 
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
-            const resolvedDiscussion = await gitlabAPI.MergeRequestDiscussions.resolve(
-                projectId, mergeRequestIid, discussionId, true);
+            const resolvedDiscussion =
+                await gitlabAPI.MergeRequestDiscussions.resolve(
+                    projectId,
+                    mergeRequestIid,
+                    discussionId,
+                    true,
+                );
 
             return resolvedDiscussion || null;
-
         } catch (error) {
             this.logger.error({
                 message: `Failed to mark discussion as resolved for merge request`,
@@ -2634,12 +2634,12 @@ export class GitlabService
                     projectId: params.repository.id,
                     mergeRequestIid: params.prNumber,
                     discussionId: params.commentId,
-                    organizationAndTeamData: params.organizationAndTeamData
+                    organizationAndTeamData: params.organizationAndTeamData,
                 },
             });
-            throw new BadRequestException('Failed to mark discussion as resolved for merge request');
-
+            throw new BadRequestException(
+                'Failed to mark discussion as resolved for merge request',
+            );
         }
-
     }
 }
