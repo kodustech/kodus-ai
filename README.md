@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://kodus.io" target="_blank">Website</a>
   .
-  <a href="" target="_blank">Community</a>
+  <a href="https://discord.gg/qfJEEdXu" target="_blank">Community</a>
   ·
   <a href="https://docs.kodus.io" target="_blank">Docs</a>
   .
