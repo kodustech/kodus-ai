@@ -14,18 +14,13 @@ import { IntegrationStatusFilter } from '@/core/domain/team/interfaces/team.inte
 import { STATUS } from '@/config/types/database/status.type';
 import { ParametersKey } from '@/shared/domain/enums/parameters-key.enum';
 import { PullRequestsEntity } from '@/core/domain/pullRequests/entities/pullRequests.entity';
-import { ImplementationStatus } from '@/core/domain/pullRequests/enums/implementationStatus.enum';
-import { DeliveryStatus } from '@/core/domain/pullRequests/enums/deliveryStatus.enum';
 import { IPullRequestsService, PULL_REQUESTS_SERVICE_TOKEN } from '@/core/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { CodeManagementService } from '../platformIntegration/codeManagement.service';
 import { OrganizationAndTeamData } from '@/config/types/general/organizationAndTeamData';
 import { PlatformType } from '@/shared/domain/enums/platform-type.enum';
-import { CodeReviewConfig, CodeReviewConfigWithRepositoryInfo, CodeSuggestion, Repository } from '@/config/types/general/codeReview.type';
-import { PullRequestReviewComment, PullRequests, PullRequestsWithChangesRequested, PullRequestWithFiles } from '@/core/domain/platformIntegrations/types/codeManagement/pullRequests.type';
+import { CodeReviewConfig, CodeReviewConfigWithRepositoryInfo, Repository } from '@/config/types/general/codeReview.type';
 import { PullRequestState } from '@/shared/domain/enums/pullRequestState.enum';
-import { SeverityLevel } from '@/shared/utils/enums/severityLevel.enum';
 import { IIntegrationService, INTEGRATION_SERVICE_TOKEN } from '@/core/domain/integrations/contracts/integration.service.contracts';
-import moment from 'moment';
 
 const API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED = process.env.API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED;
 
@@ -322,9 +317,6 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 name: repository.name,
             }
         }, PlatformType.BITBUCKET);
-
-
-
 
         const kodyUser = reviewComments.find((reviewComment) => {
             return reviewComment.body && (reviewComment.body.includes('kody|code-review') || reviewComment.body.includes('![kody code-review]'));
