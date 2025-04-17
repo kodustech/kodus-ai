@@ -358,9 +358,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
                 });
             }
 
-            if (
-                provider === LLMModelProvider.DEEPSEEK_V3
-            ) {
+            if (provider === LLMModelProvider.DEEPSEEK_V3) {
                 const lightModeChain = RunnableSequence.from([
                     async (input: any) => {
                         return [
@@ -392,7 +390,9 @@ export class LLMAnalysisService implements IAIAnalysisService {
                             content: [
                                 {
                                     type: 'text',
-                                    text: prompt_codereview_system_gemini(input),
+                                    text: prompt_codereview_system_gemini(
+                                        input,
+                                    ),
                                 },
                             ],
                         },
@@ -599,6 +599,17 @@ export class LLMAnalysisService implements IAIAnalysisService {
         reviewMode: ReviewModeResponse,
     ): Promise<ISafeguardResponse> {
         try {
+            suggestions.forEach((suggestion) => {
+                if (
+                    Object.prototype.hasOwnProperty.call(
+                        suggestion,
+                        'suggestionEmbedded',
+                    )
+                ) {
+                    delete suggestion.suggestionEmbedded;
+                }
+            });
+
             const provider = LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET;
             const baseContext = {
                 organizationAndTeamData,
