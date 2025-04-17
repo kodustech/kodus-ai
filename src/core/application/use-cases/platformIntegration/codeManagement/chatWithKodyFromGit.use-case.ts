@@ -269,8 +269,8 @@ export class ChatWithKodyFromGitUseCase {
         platformType: PlatformType,
     ): boolean {
         const commentBody = comment.body.toLowerCase();
-        return ['kody', 'kodus'].some((keyword) =>
-            commentBody.includes(keyword),
+        return ['@kody', '@kodus'].some((keyword) =>
+            commentBody.startsWith(keyword),
         );
     }
 
