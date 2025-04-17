@@ -599,14 +599,15 @@ export class LLMAnalysisService implements IAIAnalysisService {
         reviewMode: ReviewModeResponse,
     ): Promise<ISafeguardResponse> {
         try {
-            suggestions.forEach((suggestion) => {
+            suggestions?.forEach((suggestion) => {
                 if (
+                    suggestion &&
                     Object.prototype.hasOwnProperty.call(
                         suggestion,
                         'suggestionEmbedded',
                     )
                 ) {
-                    delete suggestion.suggestionEmbedded;
+                    delete suggestion?.suggestionEmbedded;
                 }
             });
 
