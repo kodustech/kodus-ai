@@ -39,10 +39,10 @@ const tryParseJSONObjectWithFallback = (payload: any) => {
             try {
                 const noCodeBlocks = stripCodeBlocks(payload);
                 const cleanedPayload = noCodeBlocks
-                    .replace(/\\n/g, '')
-                    .replace(/\\/g, '') // Remove escapes
-                    .replace(/\/\*[\s\S]*?\*\//g, '')
-                    .replace(/<[^>]*>/g, '')
+                    .replace(/\\n/g, '') // Remove newline characters
+                    .replace(/\\/g, '') // Remove backslashes (escape characters)
+                    .replace(/\/\*[\s\S]*?\*\//g, '') // Remove multi-line comments (/* comment */)
+                    .replace(/<[^>]*>/g, '') // Remove HTML tags (e.g., <tag>)
                     .trim();
 
                 return JSON.parse(cleanedPayload);
