@@ -95,8 +95,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         message: 'Code review parameter configs not found',
                         context: CheckIfPRCanBeApprovedCronProvider.name,
                         metadata: {
-                            teamId,
                             timestamp: new Date().toISOString(),
+                            organizationAndTeamData,
                         },
                     });
 
@@ -113,7 +113,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         message: 'No repositories were found on the code review parameter config value',
                         context: CheckIfPRCanBeApprovedCronProvider.name,
                         metadata: {
-                            teamId,
+                            organizationAndTeamData,
                             timestamp: new Date().toISOString(),
                         },
                     });
@@ -309,6 +309,15 @@ export class CheckIfPRCanBeApprovedCronProvider {
             this.logger.error({
                 message: 'Error in shouldApprovePR',
                 context: CheckIfPRCanBeApprovedCronProvider.name,
+                metadata: {
+                    organizationAndTeamData,
+                    platformType,
+                    prNumber: pr.number,
+                    repository: {
+                        name: repository.name,
+                        id: repository.id,
+                    }
+                },
                 error
             });
 
