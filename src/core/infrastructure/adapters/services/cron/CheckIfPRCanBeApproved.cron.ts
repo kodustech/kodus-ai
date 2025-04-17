@@ -90,14 +90,27 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     organizationAndTeamData,
                 );
 
+                if (!codeReviewParameter || !codeReviewParameter.configValue) {
+                    this.logger.error({
+                        message: 'Code review parameter configs not found',
+                        context: CheckIfPRCanBeApprovedCronProvider.name,
+                        metadata: {
+                            teamId,
+                            timestamp: new Date().toISOString(),
+                        },
+                    });
+
+                    continue;
+                }
+
                 const codeReviewConfig = codeReviewParameter.configValue as {
                     global: CodeReviewConfig
                     repositories: CodeReviewConfigWithRepositoryInfo[]
                 }
 
-                if (!codeReviewParameter || !codeReviewConfig || !Array.isArray(codeReviewConfig.repositories) || codeReviewConfig.repositories.length < 1) {
+                if (!Array.isArray(codeReviewConfig.repositories) || codeReviewConfig.repositories.length < 1) {
                     this.logger.error({
-                        message: 'Code review parameter configs not found',
+                        message: 'No repositories were found on the code review parameter config value',
                         context: CheckIfPRCanBeApprovedCronProvider.name,
                         metadata: {
                             teamId,
