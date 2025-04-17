@@ -121,6 +121,7 @@ For each suggestion, meticulously verify:
 - **discard**:
   - Definition: The suggestion is flawed, irrelevant, or introduces problems that cannot be easily fixed.
   - Use when: The suggestion doesn't apply to the PR, introduces significant issues, or offers no meaningful benefit.
+  - Important: If the suggestion does not explain that something needs to be implemented, fixed, or improved in the code, it should be discarded.
 
 
 </DecisionCriteria>
