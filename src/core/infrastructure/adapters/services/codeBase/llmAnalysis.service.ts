@@ -27,8 +27,8 @@ import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import {
-    prompt_codeReviewSafeguard_system,
-    prompt_codeReviewSafeguard_user,
+    CodeReviewSafeguardPayload,
+    prompt_codeReviewSafeguard_gemini,
 } from '@/shared/utils/langchainCommon/prompts/codeReviewSafeguard';
 import { getLLMModelProviderWithFallback } from '@/shared/utils/get-llm-model-provider.util';
 import { LLMModelProvider } from '@/shared/domain/enums/llm-model-provider.enum';
@@ -36,8 +36,8 @@ import { LLMResponseProcessor } from './utils/transforms/llmResponseProcessor.tr
 import { prompt_validateImplementedSuggestions } from '@/shared/utils/langchainCommon/prompts/validateImplementedSuggestions';
 import { prompt_selectorLightOrHeavyMode_system } from '@/shared/utils/langchainCommon/prompts/seletorLightOrHeavyMode';
 import {
-    prompt_codereview_system_gemini,
-    prompt_codereview_user_light_mode,
+    prompt_codereview_user_gemini,
+    prompt_codereview_user_deepseek,
 } from '@/shared/utils/langchainCommon/prompts/configuration/codeReview';
 import {
     prompt_severity_analysis_system,
@@ -176,6 +176,29 @@ export class LLMAnalysisService implements IAIAnalysisService {
             </filePath>
             `,
             cache_control: { type: 'ephemeral' },
+        };
+    }
+
+    private preparePayloadForCodeReviewSafeguard(
+        fileContentContext: string,
+        codeDiffContext: string,
+        suggestionsContext: string,
+        languageResultPrompt: string,
+        reviewMode: ReviewModeResponse,
+    ): CodeReviewSafeguardPayload {
+        if (reviewMode === ReviewModeResponse.HEAVY_MODE) {
+            return {
+                fileContentContext,
+                codeDiffContext,
+                suggestionsContext,
+                languageResultPrompt,
+            };
+        }
+
+        return {
+            codeDiffContext,
+            suggestionsContext,
+            languageResultPrompt,
         };
     }
 
@@ -332,36 +355,44 @@ export class LLMAnalysisService implements IAIAnalysisService {
         reviewModeResponse: ReviewModeResponse,
     ) {
         try {
-            let llm =
-                provider === LLMModelProvider.DEEPSEEK_V3
-                    ? getDeepseekByNovitaAI({
-                          temperature: 0,
-                          callbacks: [this.tokenTracker],
-                      })
-                    : provider === LLMModelProvider.GEMINI_2_5_PRO_PREVIEW
-                      ? getChatGemini({
-                            model: LLMModelProvider.GEMINI_2_5_PRO_PREVIEW,
-                            temperature: 0,
-                            callbacks: [this.tokenTracker],
-                        })
-                      : getChatGPT({
-                            model: getLLMModelProviderWithFallback(
-                                LLMModelProvider.CHATGPT_4_ALL,
-                            ),
-                            temperature: 0,
-                            callbacks: [this.tokenTracker],
-                        });
+            let llm;
 
-            if (provider === LLMModelProvider.CHATGPT_4_ALL) {
-                llm = llm.bind({
-                    response_format: { type: 'json_object' },
+            if (provider === LLMModelProvider.GEMINI_2_5_PRO_PREVIEW) {
+                llm = getChatGemini({
+                    model: LLMModelProvider.GEMINI_2_5_PRO_PREVIEW,
+                    temperature: 0,
+                    callbacks: [this.tokenTracker],
                 });
-            }
 
-            if (
-                provider === LLMModelProvider.DEEPSEEK_V3 &&
-                reviewModeResponse === ReviewModeResponse.LIGHT_MODE
-            ) {
+                const chain = RunnableSequence.from([
+                    async (input: any) => {
+                        return [
+                            {
+                                role: 'user',
+                                content: [
+                                    {
+                                        type: 'text',
+                                        text: prompt_codereview_user_gemini(
+                                            input,
+                                        ),
+                                    },
+                                ],
+                            },
+                        ];
+                    },
+                    llm,
+                    new StringOutputParser(),
+                ]);
+
+                return chain;
+            } else {
+                llm = getDeepseekByNovitaAI({
+                    temperature: 0,
+                    callbacks: [this.tokenTracker],
+                });
+
+                provider === LLMModelProvider.DEEPSEEK_V3;
+
                 const lightModeChain = RunnableSequence.from([
                     async (input: any) => {
                         return [
@@ -370,7 +401,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
                                 content: [
                                     {
                                         type: 'text',
-                                        text: prompt_codereview_user_light_mode(
+                                        text: prompt_codereview_user_deepseek(
                                             input,
                                         ),
                                     },
@@ -384,26 +415,6 @@ export class LLMAnalysisService implements IAIAnalysisService {
 
                 return lightModeChain;
             }
-
-            const chain = RunnableSequence.from([
-                async (input: any) => {
-                    return [
-                        {
-                            role: 'user',
-                            content: [
-                                {
-                                    type: 'text',
-                                    text: prompt_codereview_system_gemini(input),
-                                },
-                            ],
-                        },
-                    ];
-                },
-                llm,
-                new StringOutputParser(),
-            ]);
-
-            return chain;
         } catch (error) {
             this.logger.error({
                 message: 'Error creating analysis code chain',
@@ -441,7 +452,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
 
         const fallbackProvider =
             provider === LLMModelProvider.GEMINI_2_5_PRO_PREVIEW
-                ? LLMModelProvider.CHATGPT_4_ALL
+                ? LLMModelProvider.DEEPSEEK_V3
                 : LLMModelProvider.GEMINI_2_5_PRO_PREVIEW;
 
         return fallbackProvider;
@@ -600,7 +611,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         reviewMode: ReviewModeResponse,
     ): Promise<ISafeguardResponse> {
         try {
-            const provider = LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET;
+            const provider = LLMModelProvider.GEMINI_2_5_PRO_PREVIEW;
             const baseContext = {
                 organizationAndTeamData,
                 file: {
@@ -707,9 +718,9 @@ export class LLMAnalysisService implements IAIAnalysisService {
         context: any,
     ) {
         const fallbackProvider =
-            provider === LLMModelProvider.CHATGPT_4_ALL
-                ? LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET
-                : LLMModelProvider.CHATGPT_4_ALL;
+            provider === LLMModelProvider.GEMINI_2_5_PRO_PREVIEW
+                ? LLMModelProvider.DEEPSEEK_V3
+                : LLMModelProvider.GEMINI_2_5_PRO_PREVIEW;
         try {
             const mainChain = await this.createSafeGuardProviderChain(
                 organizationAndTeamData,
@@ -767,64 +778,38 @@ export class LLMAnalysisService implements IAIAnalysisService {
     ) {
         try {
             let llm =
-                provider === LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET
-                    ? getChatVertexAI({
+                provider === LLMModelProvider.GEMINI_2_5_PRO_PREVIEW
+                    ? getChatGemini({
+                          model: LLMModelProvider.GEMINI_2_5_PRO_PREVIEW,
                           temperature: 0,
                           callbacks: [this.tokenTracker],
                       })
-                    : getChatGPT({
-                          model: getLLMModelProviderWithFallback(
-                              LLMModelProvider.CHATGPT_4_ALL,
-                          ),
+                    : getDeepseekByNovitaAI({
                           temperature: 0,
                           callbacks: [this.tokenTracker],
                       });
 
-            if (
-                provider === LLMModelProvider.CHATGPT_4_ALL ||
-                provider === LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET
-            ) {
-                llm = llm.bind({
-                    response_format: { type: 'json_object' },
-                });
-            }
-
             const chain = RunnableSequence.from([
                 async (input: any) => {
-                    const systemPrompt = prompt_codeReviewSafeguard_system();
-                    const humanPrompt = prompt_codeReviewSafeguard_user(
+                    const payload = this.preparePayloadForCodeReviewSafeguard(
+                        input.file.fileContent,
+                        input.codeDiff,
+                        JSON.stringify(input?.suggestions, null, 2) ||
+                            'No suggestions provided',
                         input.languageResultPrompt,
+                        reviewMode,
                     );
+
+                    const humanPrompt =
+                        prompt_codeReviewSafeguard_gemini(payload);
 
                     return [
                         {
                             role: 'user',
                             content: [
-                                // Required for pipeline steps that use file or codeDiff
-                                this.preparePrefixChainForCache(
-                                    {
-                                        fileContent: input.file.fileContent,
-                                        patchWithLinesStr: input.codeDiff,
-                                        language: input.file.language,
-                                        filePath: input.file.filename,
-                                    },
-                                    reviewMode,
-                                ),
-                                {
-                                    type: 'text',
-                                    text: `<suggestionsContext>${JSON.stringify(input?.suggestions, null, 2) || 'No suggestions provided'}</suggestionsContext>`,
-                                },
-                                {
-                                    type: 'text',
-                                    text: systemPrompt,
-                                },
                                 {
                                     type: 'text',
                                     text: humanPrompt,
-                                },
-                                {
-                                    type: 'text',
-                                    text: 'Start analysis',
                                 },
                             ],
                         },
