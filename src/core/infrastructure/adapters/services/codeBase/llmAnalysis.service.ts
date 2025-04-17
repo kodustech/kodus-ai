@@ -37,7 +37,7 @@ import { prompt_validateImplementedSuggestions } from '@/shared/utils/langchainC
 import { prompt_selectorLightOrHeavyMode_system } from '@/shared/utils/langchainCommon/prompts/seletorLightOrHeavyMode';
 import {
     prompt_codereview_system_gemini,
-    prompt_codereview_user_light_mode,
+    prompt_codereview_user_deepseek,
 } from '@/shared/utils/langchainCommon/prompts/configuration/codeReview';
 import {
     prompt_severity_analysis_system,
@@ -359,8 +359,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
             }
 
             if (
-                provider === LLMModelProvider.DEEPSEEK_V3 &&
-                reviewModeResponse === ReviewModeResponse.LIGHT_MODE
+                provider === LLMModelProvider.DEEPSEEK_V3
             ) {
                 const lightModeChain = RunnableSequence.from([
                     async (input: any) => {
@@ -370,7 +369,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
                                 content: [
                                     {
                                         type: 'text',
-                                        text: prompt_codereview_user_light_mode(
+                                        text: prompt_codereview_user_deepseek(
                                             input,
                                         ),
                                     },
@@ -441,7 +440,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
 
         const fallbackProvider =
             provider === LLMModelProvider.GEMINI_2_5_PRO_PREVIEW
-                ? LLMModelProvider.CHATGPT_4_ALL
+                ? LLMModelProvider.DEEPSEEK_V3
                 : LLMModelProvider.GEMINI_2_5_PRO_PREVIEW;
 
         return fallbackProvider;
@@ -779,15 +778,6 @@ export class LLMAnalysisService implements IAIAnalysisService {
                           temperature: 0,
                           callbacks: [this.tokenTracker],
                       });
-
-            if (
-                provider === LLMModelProvider.CHATGPT_4_ALL ||
-                provider === LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET
-            ) {
-                llm = llm.bind({
-                    response_format: { type: 'json_object' },
-                });
-            }
 
             const chain = RunnableSequence.from([
                 async (input: any) => {
