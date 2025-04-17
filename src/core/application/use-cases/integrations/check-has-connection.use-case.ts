@@ -26,10 +26,8 @@ export class CheckHasIntegrationByPlatformUseCase implements IUseCase {
             organizationId: this.request.user.organization.uuid,
         };
 
-        const platformType = toPlatformType(params.integrationData.platform);
-        const integrationCategory = toIntegrationCategory(
-            params.integrationData.category,
-        );
+        const platformType = toPlatformType(params.platform);
+        const integrationCategory = toIntegrationCategory(params.category);
 
         const integration = await this.integrationService.findOne({
             organization: { uuid: organizationAndTeamData.organizationId },
