@@ -455,7 +455,9 @@ export class SuggestionService implements ISuggestionService {
 
             return suggestions.map((suggestion) => ({
                 ...suggestion,
-                priorityStatus: acceptedSeverities.includes(suggestion.severity)
+                priorityStatus: acceptedSeverities.includes(
+                    suggestion?.severity?.toLowerCase(),
+                )
                     ? PriorityStatus.PRIORITIZED
                     : PriorityStatus.DISCARDED_BY_SEVERITY,
                 deliveryStatus: DeliveryStatus.NOT_SENT,
@@ -1154,7 +1156,8 @@ export class SuggestionService implements ISuggestionService {
                         return {
                             ...suggestion,
                             deliveryStatus: commentResult?.deliveryStatus,
-                            implementationStatus: ImplementationStatus.NOT_IMPLEMENTED,
+                            implementationStatus:
+                                ImplementationStatus.NOT_IMPLEMENTED,
                             comment: {
                                 ...(suggestion?.comment || {}),
                                 id: commentResult?.codeReviewFeedbackData
