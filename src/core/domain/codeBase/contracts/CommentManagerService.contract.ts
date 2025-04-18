@@ -61,13 +61,6 @@ export interface ICommentManagerService {
         commentResults: Array<CommentResult>;
     }>;
 
-    createNewComment(
-        organizationAndTeamData: OrganizationAndTeamData,
-        prNumber: number,
-        repository: { name: string; id: string },
-        comment: string,
-    ): Promise<string>;
-
     generateSummaryMarkdown(
         changedFiles: FileChange[],
         description: string,

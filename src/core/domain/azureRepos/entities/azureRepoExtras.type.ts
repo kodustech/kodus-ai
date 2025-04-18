@@ -1,10 +1,27 @@
-import {
-    AzureRepoIdentity,
-    AzureRepoCommitRef,
-} from './azureRepoPullRequest.type';
+import { AzureRepoIdentity } from './azureRepoPullRequest.type';
 
 export interface AzureRepoLink {
     href: string;
+}
+
+export enum AzureRepoCommentType {
+    /**
+     * General comment not attached to specific lines of code.
+     * Typically used for opening messages, summaries, or generic feedback.
+     */
+    TEXT = 1,
+
+    /**
+     * Code-related comment attached to a specific file and line number.
+     * Used in code review to give feedback on specific parts of the diff.
+     */
+    CODE = 2,
+
+    /**
+     * System-generated comment.
+     * Usually created by Azure DevOps itself for actions like build status, merges, etc.
+     */
+    SYSTEM = 3,
 }
 
 export interface AzureRepoLinks {

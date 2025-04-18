@@ -436,49 +436,6 @@ Avoid making assumptions or including inferred details not present in the provid
         }
     }
 
-    async createNewComment(
-        organizationAndTeamData: OrganizationAndTeamData,
-        prNumber: number,
-        repository: { name: string; id: string },
-        comment: string,
-    ): Promise<string> {
-        try {
-            const newComment =
-                await this.codeManagementService.createIssueComment({
-                    organizationAndTeamData,
-                    prNumber,
-                    repository: {
-                        name: repository.name,
-                        id: repository.id,
-                    },
-                    body: comment,
-                });
-
-            const newCommentId = newComment?.id || '';
-
-            this.logger.log({
-                message: `Created new comment for PR#${prNumber}`,
-                context: CommentManagerService.name,
-                metadata: { newCommentId },
-            });
-
-            return newCommentId;
-        } catch (error) {
-            this.logger.error({
-                message: `Failed to create new comment for PR#${prNumber}`,
-                context: CommentManagerService.name,
-                error: error.message,
-                metadata: {
-                    organizationAndTeamData,
-                    prNumber,
-                    repository,
-                    comment,
-                },
-            });
-            throw error;
-        }
-    }
-
     private generatePullRequestFinishSummaryMarkdown(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,

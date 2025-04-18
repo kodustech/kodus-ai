@@ -11,12 +11,14 @@ import {
     AzureRepoDiffChange,
     AzureRepoPRThread,
     AzureRepoSubscription,
+    AzureRepoCommentType,
 } from '@/core/domain/azureRepos/entities/azureRepoExtras.type';
 import { decrypt } from '@/shared/utils/crypto';
+import { FileChange } from '@/config/types/general/codeReview.type';
 
 @Injectable()
 export class AzureReposRequestHelper {
-    constructor() {}
+    constructor() { }
 
     async getProjects(params: {
         orgName: string;
@@ -101,20 +103,6 @@ export class AzureReposRequestHelper {
         });
     }
 
-    async getCommitsForPullRequest(params: {
-        orgName: string;
-        token: string;
-        projectId: string;
-        repositoryId: string;
-        prId: number | string;
-    }): Promise<any[]> {
-        const instance = await this.azureRequest(params);
-        const { data } = await instance.get(
-            `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/pullrequests/${params.prId}/commits?api-version=7.1`,
-        );
-        return data?.value ?? [];
-    }
-
     async getPullRequestComments(params: {
         orgName: string;
         token: string;
@@ -136,26 +124,35 @@ export class AzureReposRequestHelper {
         repositoryId: string;
         prId: number | string;
         filePath: string;
-        lineNumber: number;
+        start_line: number;
+        line: number;
         commentContent: string;
     }): Promise<AzureRepoPRThread> {
         const instance = await this.azureRequest(params);
+
+        const isMultiLine = params.start_line !== undefined && params.start_line !== null;
+
         const payload = {
             comments: [
                 {
                     content: params.commentContent,
-                    commentType: 1,
+                    commentType: AzureRepoCommentType.CODE,
                 },
             ],
             status: 'active',
             threadContext: {
                 filePath: params.filePath,
-                rightFileStart: { line: params.lineNumber, offset: 1 },
-                rightFileEnd: { line: params.lineNumber, offset: 1 },
-                leftFileStart: null,
-                leftFileEnd: null,
+                rightFileStart: {
+                    line: Math.max(isMultiLine ? params.start_line! : params.line, 1),
+                    offset: 1,
+                },
+                rightFileEnd: {
+                    line: Math.max(params.line, 1),
+                    offset: 1,
+                },
             },
         };
+
         const { data } = await instance.post(
             `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/pullRequests/${params.prId}/threads?api-version=7.1`,
             payload,
@@ -317,7 +314,7 @@ export class AzureReposRequestHelper {
         const instance = axios.create({
             baseURL,
             headers: {
-                'Authorization': `Basic ${Buffer.from(`:${token}`).toString('base64')}`,
+                'Authorization': `Basic ${Buffer.from(`:${decrypt(token)}`).toString('base64')}`,
                 'Content-Type': 'application/json',
             },
         });
@@ -372,6 +369,40 @@ export class AzureReposRequestHelper {
         return data?.value;
     }
 
+    async getFileDiff(params: {
+        orgName: string;
+        token: string;
+        projectId: string;
+        repositoryId: string;
+        filePath: string;
+        commitId: string;
+        parentCommitId: string;
+    }): Promise<any> {
+        const instance = await this.azureRequest(params);
+
+        const url = `/${params.projectId}/_apis/Contribution/HierarchyQuery/project/${params.projectId}?api-version=5.1-preview`;
+
+        const body = {
+            contributionIds: ['ms.vss-code-web.file-diff-data-provider'],
+            dataProviderContext: {
+                properties: {
+                    repositoryId: params.repositoryId,
+                    diffParameters: {
+                        includeCharDiffs: true,
+                        modifiedPath: params.filePath,
+                        modifiedVersion: `GC${params.commitId}`,
+                        originalPath: params.filePath,
+                        originalVersion: `GC${params.parentCommitId}`,
+                        partialDiff: true,
+                    },
+                },
+            },
+        };
+
+        const { data } = await instance.post(url, body);
+        return data;
+    }
+
     async getFileContent(params: {
         orgName: string;
         token: string;
@@ -388,8 +419,9 @@ export class AzureReposRequestHelper {
                 const { data } = await instance.get(
                     `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/items?path=${encodeURIComponent(
                         params.filePath,
-                    )}&versionDescriptor.version=${params.commitId}&versionDescriptor.versionType=commit&api-version=7.1`,
+                    )}&versionDescriptor.version=${params.commitId}&versionDescriptor.versionType=commit&includeContent=true&api-version=7.1`,
                 );
+
                 return data;
             } catch (initialError) {
                 // Se a primeira tentativa falhar, tente a abordagem alternativa
@@ -406,7 +438,7 @@ export class AzureReposRequestHelper {
                 const { data } = await instance.get(
                     `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/items/${encodeURIComponent(
                         normalizedPath,
-                    )}?version=${params.commitId}&versionType=commit&api-version=7.1`,
+                    )}?version=${params.commitId}&versionType=commit&includeContent=true&api-version=7.1`,
                 );
                 return data;
             }
@@ -441,54 +473,39 @@ export class AzureReposRequestHelper {
         projectId: string;
         repositoryId: string;
         baseCommit: string;
-        commitId: string;
-        filePath: string;
-    }): Promise<AzureRepoDiffChange[]> {
+        targetCommitId: string;
+        filePath?: string;
+    }): Promise<any[]> {
         const instance = await this.azureRequest(params);
 
-        try {
-            // Primeira tentativa com versionType explícito
-            try {
-                const { data } = await instance.get(
-                    `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/diffs/commits?baseVersionType=commit&baseVersion=${params.baseCommit}&targetVersionType=commit&targetVersion=${params.commitId}&path=${encodeURIComponent(
-                        params.filePath,
-                    )}&api-version=7.1`,
-                );
-                return data?.changes || [];
-            } catch (initialError) {
-                console.log(
-                    `Primeira tentativa de obter diff falhou: ${initialError.message}. Tentando abordagem alternativa.`,
-                );
+        const queryParams = [
+            `diffCommonCommit=true`,
+            `baseVersionType=commit`,
+            `baseVersion=${params.baseCommit}`,
+            `targetVersionType=commit`,
+            `targetVersion=${params.targetCommitId}`,
+            `api-version=7.1`,
+        ];
 
-                // Segunda tentativa: formato alternativo sem especificar tipos de versão
-                const { data } = await instance.get(
-                    `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/diffs/commits?baseVersion=${params.baseCommit}&targetVersion=${params.commitId}&path=${encodeURIComponent(
-                        params.filePath,
-                    )}&api-version=7.1`,
-                );
-                return data?.changes || [];
-            }
+        if (params.filePath) {
+            queryParams.push(`path=${encodeURIComponent(params.filePath)}`);
+        }
+
+        const url = `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/diffs/commits?${queryParams.join('&')}`;
+
+        console.log('url', url);
+        try {
+            const { data } = await instance.get(url);
+            return data?.changes || [];
         } catch (error) {
-            // Verificar se é um erro de versão não encontrada
             if (
-                error.response &&
-                error.response.data &&
-                error.response.data.message &&
-                error.response.data.message.includes('TF401175')
+                error.response?.data?.message?.includes('TF401175') ||
+                error.response?.status === 404
             ) {
                 throw new Error(
-                    `O commit ${params.baseCommit} ou ${params.commitId} não pode ser encontrado no repositório ou você não tem permissão para acessá-lo.`,
+                    `Erro ao buscar diff para o arquivo '${params.filePath || 'ALL'}' entre ${params.baseCommit} e ${params.targetCommitId}.`,
                 );
             }
-
-            // Verificar se o arquivo não existe em um dos commits
-            if (error.response && error.response.status === 404) {
-                throw new Error(
-                    `O arquivo ${params.filePath} não foi encontrado em um dos commits especificados.`,
-                );
-            }
-
-            // Se for outro erro, repasse
             throw error;
         }
     }
@@ -525,22 +542,136 @@ export class AzureReposRequestHelper {
             throw error;
         }
     }
-}
 
-[
-    {
-        id: 'c40f5b3b-aae8-42e4-82e0-a9a37ac852e9',
-        name: 'Novo project',
-        project: {
-            id: '1db724e9-1c35-4ee8-8664-c58bf0ad4f57',
-            name: 'Novo project',
-        },
-        http_url:
-            'https://dev.azure.com/wellingtonsantana0395/Novo%20project/_git/Novo%20project',
-        selected: true,
-        avatar_url: '',
-        visibility: 'private',
-        default_branch: 'refs/heads/main',
-        organizationName: 'Novo project',
-    },
-];
+    async createIssueComment(params: {
+        orgName: string;
+        token: string;
+        projectId: string;
+        repositoryId: string;
+        prId: number;
+        comment: string;
+    }): Promise<any> {
+        const instance = await this.azureRequest(params);
+
+        const payload = {
+            comments: [
+                {
+                    content: params.comment,
+                    commentType: AzureRepoCommentType.TEXT,
+                },
+            ],
+            status: 'active',
+        };
+
+        const { data } = await instance.post(
+            `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/pullRequests/${params.prId}/threads?api-version=7.1`,
+            payload,
+        );
+
+        return data;
+    }
+
+    async getRepositoryContentFile(params: {
+        orgName: string;
+        token: string;
+        projectId: string;
+        repositoryId: string;
+        commitId: string;
+        filePath: string;
+    }): Promise<{ content: string } | null> {
+        const instance = await this.azureRequest(params);
+
+        const { data } = await instance.get(
+            `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/items?path=${encodeURIComponent(
+                params.filePath,
+            )}&versionDescriptor.version=${params.commitId}&versionDescriptor.versionType=commit&includeContent=true&resolveLfs=true&api-version=7.1`,
+        );
+
+        return {
+            content: data?.content || '',
+        };
+    }
+
+    async getCommitsForPullRequest(params: {
+        orgName: string;
+        token: string;
+        projectId: string;
+        repositoryId: string;
+        prId: number | string;
+    }): Promise<any[]> {
+        const instance = await this.azureRequest(params);
+
+        const { data } = await instance.get(
+            `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/pullrequests/${params.prId}/commits?api-version=7.1`,
+        );
+
+        return data?.value ?? [];
+    }
+
+    async updatePullRequestDescription(params: {
+        orgName: string;
+        token: string;
+        projectId: string;
+        repositoryId: string;
+        prId: number;
+        description: string;
+    }): Promise<any> {
+        const instance = await this.azureRequest(params);
+
+        const { data } = await instance.patch(
+            `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/pullRequests/${params.prId}?api-version=7.1`,
+            {
+                description: params.description,
+            },
+        );
+
+        return data;
+    }
+
+    async updateCommentOnPullRequest(params: {
+        orgName: string;
+        token: string;
+        projectId: string;
+        repositoryId: string;
+        prNumber: number;
+        threadId: number;
+        commentId: number;
+        content: string;
+    }): Promise<any> {
+        const instance = await this.azureRequest(params);
+
+        const { data } = await instance.patch(
+            `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/pullRequests/${params.prNumber}/threads/${params.threadId}/comments/${params.commentId}?api-version=7.1`,
+            {
+                content: params.content,
+                commentType: AzureRepoCommentType.TEXT,
+            },
+        );
+
+        return data;
+    }
+
+    mapAzureStatusToFileChangeStatus(status: string): FileChange['status'] {
+        switch (status.toLowerCase()) {
+            case 'add':
+            case 'added':
+                return 'added';
+            case 'edit':
+            case 'modified':
+                return 'modified';
+            case 'delete':
+            case 'removed':
+                return 'removed';
+            case 'rename':
+            case 'renamed':
+                return 'renamed';
+            case 'copy':
+            case 'copied':
+                return 'copied';
+            case 'unchanged':
+                return 'unchanged';
+            default:
+                return 'changed';
+        }
+    }
+}
