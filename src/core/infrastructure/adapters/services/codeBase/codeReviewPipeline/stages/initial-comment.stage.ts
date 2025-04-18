@@ -5,6 +5,8 @@ import {
     ICommentManagerService,
 } from '@/core/domain/codeBase/contracts/CommentManagerService.contract';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logger/pino.service';
+import { PlatformType } from '@/shared/domain/enums/platform-type.enum';
 
 @Injectable()
 export class InitialCommentStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -13,6 +15,7 @@ export class InitialCommentStage extends BasePipelineStage<CodeReviewPipelineCon
     constructor(
         @Inject(COMMENT_MANAGER_SERVICE_TOKEN)
         private commentManagerService: ICommentManagerService,
+        private readonly logger: PinoLoggerService,
     ) {
         super();
     }
@@ -20,18 +23,6 @@ export class InitialCommentStage extends BasePipelineStage<CodeReviewPipelineCon
     protected async executeStage(
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
-        const lastExecution = context.lastExecution;
-
-        if (lastExecution?.commentId && lastExecution?.noteId) {
-            // TALVEZ FALTE PARTE DE LOG loginfo
-            return this.updateContext(context, (draft) => {
-                draft.initialCommentData = {
-                    commentId: lastExecution.commentId,
-                    noteId: lastExecution.noteId,
-                };
-            });
-        }
-
         const result = await this.commentManagerService.createInitialComment(
             context.organizationAndTeamData,
             context.pullRequest.number,

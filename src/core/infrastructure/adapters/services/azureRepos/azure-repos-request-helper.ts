@@ -479,7 +479,6 @@ export class AzureReposRequestHelper {
         const instance = await this.azureRequest(params);
 
         const queryParams = [
-            `diffCommonCommit=true`,
             `baseVersionType=commit`,
             `baseVersion=${params.baseCommit}`,
             `targetVersionType=commit`,
@@ -493,7 +492,6 @@ export class AzureReposRequestHelper {
 
         const url = `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/diffs/commits?${queryParams.join('&')}`;
 
-        console.log('url', url);
         try {
             const { data } = await instance.get(url);
             return data?.changes || [];

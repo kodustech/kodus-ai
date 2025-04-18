@@ -35,6 +35,7 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     lastExecution?: {
         commentId?: any;
         noteId?: any;
+        threadId?: any;
         lastAnalyzedCommit?: any;
     };
     pipelineMetadata?: {
@@ -44,6 +45,7 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     initialCommentData?: {
         commentId: number;
         noteId: number;
+        threadId?: number;
     };
 
     batches: FileChange[][];

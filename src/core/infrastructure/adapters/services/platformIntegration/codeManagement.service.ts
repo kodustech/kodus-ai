@@ -469,6 +469,7 @@ export class CodeManagementService implements ICodeManagementService {
             body: string;
             commentId: number;
             noteId?: number;
+            threadId?: number;
         },
         type?: PlatformType,
     ) {

@@ -131,72 +131,165 @@ export class AzureReposService
         throw new Error('Method not implemented.');
     }
 
+    // async getChangedFilesSinceLastCommit(params: {
+    //     organizationAndTeamData: OrganizationAndTeamData;
+    //     repository: { id: string; name: string; project: { id: string } };
+    //     prNumber: number;
+    //     lastCommit: { created_at: string };
+    // }): Promise<FileChange[] | null> {
+    //     try {
+    //         const {
+    //             organizationAndTeamData,
+    //             repository,
+    //             prNumber,
+    //             lastCommit,
+    //         } = params;
+    //         const { orgName, token } = await this.getAuthDetails(
+    //             organizationAndTeamData,
+    //         );
+
+    //         const commits =
+    //             await this.azureReposRequestHelper.getCommitsForPullRequest({
+    //                 orgName,
+    //                 token,
+    //                 projectId: repository.project.id,
+    //                 repositoryId: repository.id,
+    //                 prId: prNumber,
+    //             });
+
+    //         const newCommits = commits.filter(
+    //             (commit) =>
+    //                 new Date(commit.author?.date).getTime() >
+    //                 new Date(lastCommit.created_at).getTime(),
+    //         );
+
+    //         const changedFiles: FileChange[] = [];
+
+    //         for (const commit of newCommits) {
+    //             const changes =
+    //                 await this.azureReposRequestHelper.getChangesForCommit({
+    //                     orgName,
+    //                     token,
+    //                     projectId: repository.project.id,
+    //                     repositoryId: repository.id,
+    //                     commitId: commit.commitId,
+    //                 });
+
+    //             for (const change of changes) {
+    //                 changedFiles.push({
+    //                     filename: change.item.path,
+    //                     sha: commit.commitId,
+    //                     status: this.azureReposRequestHelper.mapAzureStatusToFileChangeStatus(
+    //                         change.changeType,
+    //                     ),
+    //                     additions: 0,
+    //                     deletions: 0,
+    //                     changes: 0,
+    //                     patch: null,
+    //                     blob_url: null,
+    //                     raw_url: null,
+    //                     contents_url: null,
+    //                     content: null,
+    //                     previous_filename: null,
+    //                     fileContent: null,
+    //                     reviewMode: null,
+    //                     codeReviewModelUsed: {
+    //                         generateSuggestions: null,
+    //                         safeguard: null,
+    //                     },
+    //                 });
+    //             }
+    //         }
+
+    //         return changedFiles;
+    //     } catch (error) {
+    //         this.logger.error({
+    //             message: `Error to get changed files since last commit for PR#${params.prNumber}`,
+    //             context: this.getChangedFilesSinceLastCommit.name,
+    //             error,
+    //             metadata: { params },
+    //         });
+    //         return null;
+    //     }
+    // }
+
     async getChangedFilesSinceLastCommit(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string; project: { id: string } };
         prNumber: number;
-        lastCommit: { created_at: string };
+        lastCommit: any;
     }): Promise<FileChange[] | null> {
         try {
-            const {
-                organizationAndTeamData,
-                repository,
-                prNumber,
-                lastCommit,
-            } = params;
-            const { orgName, token } = await this.getAuthDetails(
-                organizationAndTeamData,
-            );
+            const { organizationAndTeamData, repository, prNumber, lastCommit } = params;
+            const { orgName, token } = await this.getAuthDetails(organizationAndTeamData);
+            const projectId = repository.project.id;
 
-            const commits =
-                await this.azureReposRequestHelper.getCommitsForPullRequest({
-                    orgName,
-                    token,
-                    projectId: repository.project.id,
-                    repositoryId: repository.id,
-                    prId: prNumber,
+            // Obter detalhes do PR
+            const pr = await this.azureReposRequestHelper.getPullRequestDetails({
+                orgName,
+                token,
+                projectId,
+                repositoryId: repository.id,
+                prId: prNumber,
+            });
+
+            const targetCommitId = pr.lastMergeSourceCommit?.commitId;
+
+            if (!targetCommitId) {
+                this.logger.error({
+                    message: `Não foi possível determinar o commit alvo para o PR #${prNumber}`,
+                    context: this.getChangedFilesSinceLastCommit.name,
+                    metadata: { prNumber, targetCommitId },
                 });
+                return null;
+            }
 
-            const newCommits = commits.filter(
-                (commit) =>
-                    new Date(commit.author?.date).getTime() >
-                    new Date(lastCommit.created_at).getTime(),
-            );
+            // Obter o diff entre lastCommit e targetCommitId
+            const diffResponse = await this.azureReposRequestHelper.getDiff({
+                orgName,
+                token,
+                projectId,
+                repositoryId: repository.id,
+                baseCommit: lastCommit.sha,
+                targetCommitId,
+            });
+
+            const fileChanges = diffResponse?.filter(change => change?.item?.gitObjectType === 'blob');
+
+            if (!fileChanges?.length) {
+                return null;
+            }
 
             const changedFiles: FileChange[] = [];
 
-            for (const commit of newCommits) {
-                const changes =
-                    await this.azureReposRequestHelper.getChangesForCommit({
-                        orgName,
-                        token,
-                        projectId: repository.project.id,
-                        repositoryId: repository.id,
-                        commitId: commit.commitId,
-                    });
+            for (const change of fileChanges) {
+                const filePath = change.item?.path;
+                if (!filePath) continue;
 
-                for (const change of changes) {
+                const fileDiff = await this._generateFileDiffForAzure({
+                    orgName,
+                    token,
+                    projectId,
+                    repositoryId: repository.id,
+                    filePath,
+                    baseCommitId: lastCommit.sha,
+                    targetCommitId,
+                    changeType: change.changeType,
+                });
+
+                if (fileDiff) {
                     changedFiles.push({
-                        filename: change.item.path,
-                        sha: commit.commitId,
-                        status: this.azureReposRequestHelper.mapAzureStatusToFileChangeStatus(
-                            change.changeType,
-                        ),
-                        additions: 0,
-                        deletions: 0,
-                        changes: 0,
-                        patch: null,
+                        filename: fileDiff.filename,
+                        sha: fileDiff.sha,
+                        status: fileDiff.status,
+                        additions: fileDiff.additions,
+                        deletions: fileDiff.deletions,
+                        changes: fileDiff.changes,
+                        patch: fileDiff.patch,
+                        content: fileDiff.content,
                         blob_url: null,
                         raw_url: null,
                         contents_url: null,
-                        content: null,
-                        previous_filename: null,
-                        fileContent: null,
-                        reviewMode: null,
-                        codeReviewModelUsed: {
-                            generateSuggestions: null,
-                            safeguard: null,
-                        },
                     });
                 }
             }
@@ -204,7 +297,7 @@ export class AzureReposService
             return changedFiles;
         } catch (error) {
             this.logger.error({
-                message: `Error to get changed files since last commit for PR#${params.prNumber}`,
+                message: `Erro ao obter arquivos alterados desde o último commit para o PR #${params.prNumber}`,
                 context: this.getChangedFilesSinceLastCommit.name,
                 error,
                 metadata: { params },
@@ -399,13 +492,13 @@ export class AzureReposService
                         name: commit.author?.name,
                         email: commit.author?.email,
                         date: commit.author?.date,
-                        username: commit.author?.name, // Azure não separa "username" em campo próprio
+                        username: commit.author?.name, // Azure doesn't separate "username" in its own field
                     },
                 }))
                 .sort(
                     (a, b) =>
-                        new Date(b.created_at).getTime() -
-                        new Date(a.created_at).getTime(),
+                        new Date(a.created_at).getTime() -
+                        new Date(b.created_at).getTime()
                 );
         } catch (error) {
             this.logger.error({
@@ -455,6 +548,7 @@ export class AzureReposService
                 metadata: { params },
             });
 
+            // Modify return object to match expected format
             return {
                 ...comment,
                 id: comment?.comments?.[0]?.id,
@@ -479,6 +573,7 @@ export class AzureReposService
         prNumber: number;
         commentId: number;
         body: string;
+        threadId?: number;
     }): Promise<any | null> {
         try {
             const {
@@ -487,6 +582,7 @@ export class AzureReposService
                 prNumber,
                 commentId,
                 body,
+                threadId,
             } = params;
             const { orgName, token } = await this.getAuthDetails(
                 organizationAndTeamData,
@@ -497,25 +593,6 @@ export class AzureReposService
                 repository.id,
             );
 
-            const threads =
-                await this.azureReposRequestHelper.getPullRequestComments({
-                    orgName,
-                    token,
-                    projectId,
-                    repositoryId: repository.id,
-                    prId: prNumber,
-                });
-
-            const thread = threads.find(
-                (thread) => thread.id === Number(commentId),
-            );
-
-            if (!thread) {
-                throw new NotFoundException(
-                    `Could not find thread #${thread}`,
-                );
-            }
-
             return await this.azureReposRequestHelper.updateCommentOnPullRequest(
                 {
                     orgName,
@@ -523,7 +600,7 @@ export class AzureReposService
                     projectId,
                     repositoryId: repository.id,
                     prNumber,
-                    threadId: Number(thread.id),
+                    threadId,
                     commentId,
                     content: body,
                 },
@@ -2408,5 +2485,29 @@ export class AzureReposService
         ]
             .join('\n')
             .trim();
+    }
+
+    private filterIterationsAfterCommit(params: {
+        iterations: any[];
+        commits: { commitId: string }[];
+        lastReviewedCommitId: string;
+    }): any[] {
+        const { iterations, commits, lastReviewedCommitId } = params;
+
+        const reviewedIndex = commits.findIndex(
+            (commit) => commit.commitId === lastReviewedCommitId,
+        );
+
+        if (reviewedIndex === -1) {
+            throw new Error(`Commit ${lastReviewedCommitId} not found in PR commit history`);
+        }
+
+        return iterations.filter((iteration) => {
+            const commitId = iteration.sourceRefCommit?.commitId;
+            if (!commitId) return false;
+
+            const iterationIndex = commits.findIndex((commit) => commit.commitId === commitId);
+            return iterationIndex > reviewedIndex;
+        });
     }
 }

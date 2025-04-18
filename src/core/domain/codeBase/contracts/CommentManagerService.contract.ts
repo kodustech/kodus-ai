@@ -20,7 +20,7 @@ export interface ICommentManagerService {
         changedFiles: FileChange[],
         language: string,
         platformType: string,
-    ): Promise<{ commentId: number; noteId: number }>;
+    ): Promise<{ commentId: number; noteId: number; threadId?: number }>;
 
     generateSummaryPR(
         pullRequest: any,
@@ -40,6 +40,7 @@ export interface ICommentManagerService {
         platformType: string,
         codeSuggestions?: Array<CommentResult>,
         codeReviewConfig?: CodeReviewConfig,
+        threadId?: number,
     ): Promise<void>;
 
     updateSummarizationInPR(

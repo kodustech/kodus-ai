@@ -89,7 +89,7 @@ Avoid making assumptions or including inferred details not present in the provid
                 if (
                     updatedPR?.body &&
                     summaryConfig?.behaviourForExistingDescription ===
-                        BehaviourForExistingDescription.COMPLEMENT
+                    BehaviourForExistingDescription.COMPLEMENT
                 ) {
                     promptBase += `\n\n**Additional Instructions**:
                     - Focus on generating new insights and relevant information
@@ -137,7 +137,7 @@ Avoid making assumptions or including inferred details not present in the provid
                 if (
                     updatedPR?.body &&
                     summaryConfig?.behaviourForExistingDescription ===
-                        BehaviourForExistingDescription.CONCATENATE
+                    BehaviourForExistingDescription.CONCATENATE
                 ) {
                     finalDescription = `${updatedPR.body}\n\n---\n\n${finalDescription}`;
                 }
@@ -215,7 +215,7 @@ Avoid making assumptions or including inferred details not present in the provid
         changedFiles: FileChange[],
         language: string,
         platformType: PlatformType,
-    ): Promise<{ commentId: number; noteId: number }> {
+    ): Promise<{ commentId: number; noteId: number; threadId?: number }> {
         try {
             let commentBody = await this.generatePullRequestSummaryMarkdown(
                 changedFiles,
@@ -240,18 +240,32 @@ Avoid making assumptions or including inferred details not present in the provid
                 },
             );
 
-            const commentId = comment?.id;
-            // gitlab noteid
-            const noteId =
-                comment?.notes?.length > 0 ? comment.notes[0].id : '';
+            const commentId = Number(comment?.id) || null;
+
+            let noteId = null;
+            let threadId = null;
+
+            // Extract platform-specific IDs
+            switch (platformType) {
+                case PlatformType.GITLAB:
+                    // GitLab uses noteId
+                    noteId = comment?.notes?.[0]?.id ? Number(comment.notes[0].id) : null;
+                    break;
+                case PlatformType.AZURE_REPOS:
+                    // Azure Repos uses threadId
+                    threadId = comment?.threadId ? Number(comment.threadId) : null;
+                    break;
+                default:
+                    break;
+            }
 
             this.logger.log({
                 message: `Created initial comment for PR#${prNumber}`,
                 context: CommentManagerService.name,
-                metadata: { commentId, noteId },
+                metadata: { commentId, noteId, threadId },
             });
 
-            return { commentId, noteId };
+            return { commentId, noteId, threadId };
         } catch (error) {
             this.logger.error({
                 message: `Failed to create initial comment for PR#${prNumber}`,
@@ -279,6 +293,7 @@ Avoid making assumptions or including inferred details not present in the provid
         platformType: PlatformType,
         codeSuggestions?: Array<CommentResult>,
         codeReviewConfig?: CodeReviewConfig,
+        threadId?: number,
     ): Promise<void> {
         try {
             let commentBody =
@@ -304,12 +319,13 @@ Avoid making assumptions or including inferred details not present in the provid
                 },
                 body: commentBody,
                 noteId,
+                threadId,
             });
 
             this.logger.log({
                 message: `Updated overall comment for PR#${prNumber}`,
                 context: CommentManagerService.name,
-                metadata: { commentId, noteId },
+                metadata: { commentId, noteId, threadId },
             });
         } catch (error) {
             this.logger.error({
@@ -322,6 +338,7 @@ Avoid making assumptions or including inferred details not present in the provid
                     repository,
                     commentId,
                     noteId,
+                    threadId,
                     platformType,
                 },
             });
@@ -587,8 +604,7 @@ ${filesTable}
             )
                 .map(
                     ([key, value]) =>
-                        `| **${key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())}** | ${
-                            value ? translation.enabled : translation.disabled
+                        `| **${key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())}** | ${value ? translation.enabled : translation.disabled
                         } |`,
                 )
                 .join('\n');
@@ -768,15 +784,15 @@ ${reviewOptionsMarkdown}
             let llm =
                 provider === LLMModelProvider.DEEPSEEK_V3
                     ? getDeepseekByNovitaAI({
-                          temperature: 0,
-                          maxTokens: 8000,
-                      })
+                        temperature: 0,
+                        maxTokens: 8000,
+                    })
                     : getChatGPT({
-                          model: getLLMModelProviderWithFallback(
-                              LLMModelProvider.CHATGPT_4_ALL_MINI,
-                          ),
-                          temperature: 0,
-                      });
+                        model: getLLMModelProviderWithFallback(
+                            LLMModelProvider.CHATGPT_4_ALL_MINI,
+                        ),
+                        temperature: 0,
+                    });
 
             if (provider === LLMModelProvider.CHATGPT_4_ALL_MINI) {
                 llm = llm.bind({
@@ -978,7 +994,7 @@ ${reviewOptionsMarkdown}
                 (s) =>
                     s.clusteringInformation?.type === ClusteringType.RELATED &&
                     s.clusteringInformation?.parentSuggestionId ===
-                        suggestion.id,
+                    suggestion.id,
             );
 
             const occurrences = [
@@ -1009,11 +1025,11 @@ ${reviewOptionsMarkdown}
     ): string {
         return platformType === PlatformType.BITBUCKET
             ? markdown
-                  .replace(
-                      /(<\/?details>)|(<\/?summary>)|(<!-- kody-codereview -->(\n|\\n)?&#8203;)/g,
-                      '',
-                  )
-                  .trim()
+                .replace(
+                    /(<\/?details>)|(<\/?summary>)|(<!-- kody-codereview -->(\n|\\n)?&#8203;)/g,
+                    '',
+                )
+                .trim()
             : markdown;
     }
 }

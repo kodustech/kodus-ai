@@ -130,6 +130,7 @@ export class AutomationCodeReviewService
                     validLastAnalyzedCommit &&
                     (result.commentId ||
                         result.noteId ||
+                        result.threadId ||
                         result.overallComments)
                 ) {
                     this.createAutomationExecution(
@@ -142,6 +143,7 @@ export class AutomationCodeReviewService
                             lastAnalyzedCommit: result.lastAnalyzedCommit,
                             commentId: result.commentId,
                             noteId: result.noteId,
+                            threadId: result.threadId,
                         },
                         teamAutomationId,
                         'System',

@@ -49,7 +49,7 @@ export class RunCodeReviewAutomationUseCase {
         private readonly codeManagement: CodeManagementService,
 
         private logger: PinoLoggerService,
-    ) {}
+    ) { }
 
     async execute(params: {
         payload: any;
@@ -187,9 +187,10 @@ export class RunCodeReviewAutomationUseCase {
     }
 
     private shouldRunAutomation(payload: any, platformType: PlatformType) {
-        const allowedActions = ['opened', 'synchronize', 'open', 'update'];
+        const allowedActions = ['opened', 'synchronize', 'open', 'update', 'git.pullrequest.updated', 'git.pullrequest.created'];
         const currentAction =
-            payload?.action || payload?.object_attributes?.action;
+            payload?.action || payload?.object_attributes?.action || payload?.eventType;
+
         const isMerged = payload?.object_attributes?.state === 'merged';
         const isCommand = payload?.origin === 'command';
 

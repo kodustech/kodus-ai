@@ -752,6 +752,7 @@ export class CodeReviewHandlerService {
                 ? {
                     commentId: lastExecution?.dataExecution?.commentId,
                     noteId: lastExecution?.dataExecution?.noteId,
+                    threadId: lastExecution?.dataExecution?.threadId,
                     lastAnalyzedCommit:
                         lastExecution?.dataExecution?.lastAnalyzedCommit,
                 }
@@ -776,6 +777,7 @@ export class CodeReviewHandlerService {
                 data: {
                     commentId: filesResult.lastExecution.commentId,
                     noteId: filesResult.lastExecution.noteId,
+                    threadId: filesResult.lastExecution.threadId,
                 },
                 loginfo: {
                     message: `Using existing comment for PR#${pullRequest.number}`,
@@ -785,6 +787,7 @@ export class CodeReviewHandlerService {
                         prNumber: pullRequest.number,
                         commentId: filesResult.lastExecution.commentId,
                         noteId: filesResult.lastExecution.noteId,
+                        threadId: filesResult.lastExecution.threadId,
                     },
                 },
             };
@@ -932,6 +935,7 @@ export class CodeReviewHandlerService {
                 lastAnalyzedCommit: result?.lastAnalyzedCommit,
                 commentId: result?.initialCommentData?.commentId,
                 noteId: result?.initialCommentData?.noteId,
+                threadId: result?.initialCommentData?.threadId,
             };
         } catch (error) {
             this.logger.error({
@@ -983,6 +987,7 @@ export class CodeReviewHandlerService {
         commentId: number,
         noteId: number,
         platformType: string,
+        threadId?: number,
     ) {
         await this.commentManagerService.updateOverallComment(
             organizationAndTeamData,
@@ -991,6 +996,9 @@ export class CodeReviewHandlerService {
             commentId,
             noteId,
             platformType,
+            undefined,
+            undefined,
+            threadId,
         );
     }
 

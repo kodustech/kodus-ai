@@ -67,6 +67,7 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
             ? {
                   commentId: lastExecution?.dataExecution?.commentId,
                   noteId: lastExecution?.dataExecution?.noteId,
+                  threadId: lastExecution?.dataExecution?.threadId,
                   lastAnalyzedCommit:
                       lastExecution?.dataExecution?.lastAnalyzedCommit,
               }

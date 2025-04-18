@@ -19,6 +19,7 @@ export interface GetChangedFilesResult {
     lastExecution?: {
         commentId?: number;
         noteId?: number;
+        threadId?: number;
         lastAnalyzedCommit?: string;
     };
 }
@@ -28,6 +29,7 @@ export interface GetOrCreateInitialCommentResult {
     data?: {
         commentId: number;
         noteId: number;
+        threadId?: number;
     };
     loginfo?: LogInfo
 }

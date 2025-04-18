@@ -75,6 +75,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
             platformType,
             lineComments,
             codeReviewConfig,
+            initialCommentData.threadId,
         );
 
         return context;
