@@ -727,12 +727,12 @@ export class LLMAnalysisService implements IAIAnalysisService {
 
             const payload: NewCodeReviewPayload = {
                 languageResultPrompt: 'pt-BR',
-                fileContent: context.fileChangeContext.file.fileContent,
-                codeDiff: context.fileChangeContext.patchWithLinesStr,
+                fileContent: context.fileContent,
+                codeDiff: context.patchWithLinesStr,
                 categorySpecificInstructions: prompt_potentialIssues(),
                 isLanguageContextEnabled: true,
                 languageContext: prompt_languageContext({
-                    languageName: context.repository.language,
+                    languageName: 'NestJS',
                     libraryContexts: [
                         {
                             name: 'NestJS',
