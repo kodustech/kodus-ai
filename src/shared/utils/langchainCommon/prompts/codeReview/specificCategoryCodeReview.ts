@@ -1,4 +1,4 @@
-export interface CodeReviewPayload {
+export interface NewCodeReviewPayload {
     languageResultPrompt?: string;
     fileContent?: string;
     codeDiff?: string;
@@ -7,7 +7,7 @@ export interface CodeReviewPayload {
     languageContext?: string;
 }
 
-export const prompt_generateSuggestionsMaster = (payload: CodeReviewPayload) => {
+export const prompt_specificCategoryCodeReview = (payload: NewCodeReviewPayload) => {
     return `
 # Code Review Expert
 
