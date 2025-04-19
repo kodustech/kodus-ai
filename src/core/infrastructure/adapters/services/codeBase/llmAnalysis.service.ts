@@ -730,6 +730,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
                 fileContent: context.fileContent,
                 codeDiff: context.patchWithLinesStr,
                 categorySpecificInstructions: prompt_potentialIssues(),
+                categoryName: 'potential_issues',
                 isLanguageContextEnabled: true,
                 languageContext: prompt_languageContext({
                     languageName: 'NestJS',
