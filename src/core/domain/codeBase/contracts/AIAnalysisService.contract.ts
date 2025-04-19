@@ -59,11 +59,11 @@ export interface IAIAnalysisService {
         file: FileChange,
         codeDiff: string,
     ): Promise<ReviewModeResponse>;
-    specificCategoryCodeReview(
-        organizationAndTeamData: OrganizationAndTeamData,
-        prNumber: number,
-        fileContext: FileChangeContext,
-        reviewModeResponse: ReviewModeResponse,
-        context: AnalysisContext,
-    ): Promise<AIAnalysisResult>;
+    specificCategoriesCodeReview(
+        organizationAndTeamData,
+        prNumber,
+        fileContext,
+        reviewModeResponse,
+        context,
+    ): Promise<AIAnalysisResult[]>;
 }

@@ -700,13 +700,13 @@ export class KodyRulesAnalysisService implements IAIAnalysisService {
         throw new Error('Method not implemented.');
     }
 
-    specificCategoryCodeReview(
-        organizationAndTeamData: OrganizationAndTeamData,
-        prNumber: number,
-        fileContext: FileChangeContext,
-        reviewModeResponse: ReviewModeResponse,
-        context: AnalysisContext,
-    ): Promise<AIAnalysisResult> {
+    specificCategoriesCodeReview(
+        organizationAndTeamData: any,
+        prNumber: any,
+        fileContext: any,
+        reviewModeResponse: any,
+        context: any,
+    ): Promise<AIAnalysisResult[]> {
         throw new Error('Method not implemented.');
     }
 }
