@@ -629,37 +629,6 @@ const getChatVertexAI = (
     });
 };
 
-const getDeepseekByTogetherAI = (
-    options?: {
-        model?: string;
-        temperature?: number;
-        maxTokens?: number;
-        verbose?: boolean;
-        callbacks?: BaseCallbackHandler[];
-    } | null,
-): any => {
-    const defaultOptions = {
-        model: 'deepseek-ai/DeepSeek-V3',
-        temperature: 0,
-        maxTokens: 8000,
-        verbose: false,
-        streaming: false,
-        callbacks: [],
-    };
-
-    const finalOptions = options
-        ? { ...defaultOptions, ...options }
-        : defaultOptions;
-
-    return new ChatTogetherAI({
-        model: finalOptions.model,
-        togetherAIApiKey: process.env.TOGETHER_AI_API_KEY,
-        temperature: finalOptions.temperature,
-        maxTokens: finalOptions.maxTokens,
-        callbacks: finalOptions.callbacks,
-    });
-};
-
 const getDeepseekByNovitaAI = (
     options?: {
         model?: string;
@@ -670,7 +639,7 @@ const getDeepseekByNovitaAI = (
     } | null,
 ): any => {
     const defaultOptions = {
-        model: 'deepseek/deepseek-v3-0324',
+        model: 'deepseek/deepseek_v3',
         temperature: 0,
         maxTokens: 8000,
         verbose: false,
