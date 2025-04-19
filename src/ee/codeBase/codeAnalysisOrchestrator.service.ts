@@ -30,7 +30,7 @@ export class CodeAnalysisOrchestrator {
         private readonly codeASTAnalysisService: IASTAnalysisService,
 
         private readonly logger: PinoLoggerService,
-    ) { }
+    ) {}
 
     async executeStandardAnalysis(
         organizationAndTeamData: OrganizationAndTeamData,
@@ -90,7 +90,7 @@ export class CodeAnalysisOrchestrator {
         }
     }
 
-    async executeSpecificCategoryCodeReview(
+    async executeMultipleCategoriesAnalysis(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
         fileContext: FileChangeContext,
@@ -98,18 +98,34 @@ export class CodeAnalysisOrchestrator {
         context: AnalysisContext,
     ): Promise<AIAnalysisResult | null> {
         try {
-            const result = await this.standardLLMAnalysisService.specificCategoryCodeReview(
-                organizationAndTeamData,
-                prNumber,
-                fileContext,
-                reviewModeResponse,
-                context,
-            );
+            const categoryResults =
+                await this.standardLLMAnalysisService.specificCategoriesCodeReview(
+                    organizationAndTeamData,
+                    prNumber,
+                    fileContext,
+                    reviewModeResponse,
+                    context,
+                );
 
-            return result;
+            if (!categoryResults || categoryResults.length === 0) {
+                this.logger.log({
+                    message: `No category suggestions for file: ${fileContext?.file?.filename} from PR#${prNumber}`,
+                    context: CodeAnalysisOrchestrator.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        prNumber,
+                        fileContext,
+                    },
+                });
+                return null;
+            }
+
+            const combinedResult = this.combineAnalysisResults(categoryResults);
+
+            return combinedResult;
         } catch (error) {
             this.logger.error({
-                message: `Error executing specific category analysis for file: ${fileContext?.file?.filename} from PR#${prNumber}`,
+                message: `Error executing multiple categories analysis for file: ${fileContext?.file?.filename} from PR#${prNumber}`,
                 context: CodeAnalysisOrchestrator.name,
                 error: error,
                 metadata: {
@@ -121,6 +137,32 @@ export class CodeAnalysisOrchestrator {
             });
             return null;
         }
+    }
+
+    private combineAnalysisResults(
+        results: AIAnalysisResult[],
+    ): AIAnalysisResult {
+        if (!results || results.length === 0) {
+            return null;
+        }
+
+        const baseResult = { ...results[0] };
+
+        baseResult.codeSuggestions = results.reduce(
+            (allSuggestions, result) => {
+                if (
+                    result &&
+                    result.codeSuggestions &&
+                    result.codeSuggestions.length > 0
+                ) {
+                    return [...allSuggestions, ...result.codeSuggestions];
+                }
+                return allSuggestions;
+            },
+            [],
+        );
+
+        return baseResult;
     }
 
     async executeKodyRulesAnalysis(

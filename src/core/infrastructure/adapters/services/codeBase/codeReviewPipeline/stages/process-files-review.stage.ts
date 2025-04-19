@@ -749,7 +749,7 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
             };
 
             const standardAnalysisResult =
-                await this.codeAnalysisOrchestrator.executeSpecificCategoryCodeReview(
+                await this.codeAnalysisOrchestrator.executeMultipleCategoriesAnalysis(
                     context.organizationAndTeamData,
                     context.pullRequest.number,
                     { file, patchWithLinesStr },
