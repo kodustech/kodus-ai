@@ -426,13 +426,16 @@ export class LLMAnalysisService implements IAIAnalysisService {
     private getInitialProvider(
         context: AnalysisContext,
         reviewModeResponse: ReviewModeResponse,
+        newDeepseekVersion: boolean = false,
     ): LLMModelProvider {
         if (
             reviewModeResponse === ReviewModeResponse.LIGHT_MODE &&
             context?.codeReviewConfig?.reviewModeConfig ===
                 ReviewModeConfig.LIGHT_MODE_FULL
         ) {
-            return LLMModelProvider.DEEPSEEK_V3;
+            return newDeepseekVersion
+                ? LLMModelProvider.DEEPSEEK_V3_0324
+                : LLMModelProvider.DEEPSEEK_V3;
         }
         return LLMModelProvider.GEMINI_2_5_PRO_PREVIEW;
     }
@@ -440,17 +443,12 @@ export class LLMAnalysisService implements IAIAnalysisService {
     private getFallbackProvider(
         provider: LLMModelProvider,
         reviewMode: ReviewModeResponse,
+        newDeepseekVersion: boolean = false,
     ): LLMModelProvider {
-        if (reviewMode === ReviewModeResponse.LIGHT_MODE) {
-            return LLMModelProvider.GEMINI_2_5_PRO_PREVIEW;
+        if (newDeepseekVersion) {
+            return LLMModelProvider.DEEPSEEK_V3_0324;
         }
-
-        const fallbackProvider =
-            provider === LLMModelProvider.GEMINI_2_5_PRO_PREVIEW
-                ? LLMModelProvider.DEEPSEEK_V3
-                : LLMModelProvider.GEMINI_2_5_PRO_PREVIEW;
-
-        return fallbackProvider;
+        return LLMModelProvider.DEEPSEEK_V3;
     }
     //#endregion
 
@@ -607,6 +605,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
             const provider = this.getInitialProvider(
                 context,
                 reviewModeResponse,
+                true,
             );
 
             // Reset token tracking for new analysis
@@ -622,8 +621,8 @@ export class LLMAnalysisService implements IAIAnalysisService {
             const chain =
                 await this.createSpecificCategoryCodeReviewChainWithFallback(
                     provider,
-                baseContext,
-                reviewModeResponse,
+                    baseContext,
+                    reviewModeResponse,
                 );
 
             // Execute analysis
@@ -660,7 +659,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         context: any,
         reviewMode: ReviewModeResponse,
     ) {
-        const fallbackProvider = LLMModelProvider.GEMINI_2_5_PRO_PREVIEW;
+        const fallbackProvider = this.getFallbackProvider(provider, reviewMode);
 
         try {
             const mainChain =
@@ -714,8 +713,9 @@ export class LLMAnalysisService implements IAIAnalysisService {
     ) {
         try {
             let llm =
-                provider === LLMModelProvider.DEEPSEEK_V3
+                provider === LLMModelProvider.DEEPSEEK_V3_0324
                     ? getDeepseekByNovitaAI({
+                          model: LLMModelProvider.DEEPSEEK_V3_0324,
                           temperature: 0,
                           callbacks: [this.tokenTracker],
                       })
