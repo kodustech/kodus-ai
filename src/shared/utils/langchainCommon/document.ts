@@ -670,7 +670,7 @@ const getDeepseekByNovitaAI = (
     } | null,
 ): any => {
     const defaultOptions = {
-        model: 'deepseek/deepseek_v3',
+        model: 'deepseek/deepseek-v3-0324',
         temperature: 0,
         maxTokens: 8000,
         verbose: false,

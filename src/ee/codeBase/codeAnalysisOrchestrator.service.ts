@@ -90,6 +90,39 @@ export class CodeAnalysisOrchestrator {
         }
     }
 
+    async executeSpecificCategoryCodeReview(
+        organizationAndTeamData: OrganizationAndTeamData,
+        prNumber: number,
+        fileContext: FileChangeContext,
+        reviewModeResponse: ReviewModeResponse,
+        context: AnalysisContext,
+    ): Promise<AIAnalysisResult | null> {
+        try {
+            const result = await this.standardLLMAnalysisService.specificCategoryCodeReview(
+                organizationAndTeamData,
+                prNumber,
+                fileContext,
+                reviewModeResponse,
+                context,
+            );
+
+            return result;
+        } catch (error) {
+            this.logger.error({
+                message: `Error executing specific category analysis for file: ${fileContext?.file?.filename} from PR#${prNumber}`,
+                context: CodeAnalysisOrchestrator.name,
+                error: error,
+                metadata: {
+                    organizationAndTeamData,
+                    prNumber,
+                    fileContext,
+                    error,
+                },
+            });
+            return null;
+        }
+    }
+
     async executeKodyRulesAnalysis(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,

@@ -1,6 +1,5 @@
 export const prompt_languageContext = (payload: {
     languageName: string;
-    detectedLibraries: { name: string; description: string }[];
     libraryContexts: { name: string; description: string }[];
     languageBestPractices: string;
 }) => {
@@ -16,9 +15,6 @@ This language-specific context provides insights about the programming language,
 
 ## Language Identification
 ${payload.languageName}
-
-## Detected Libraries and Frameworks
-${payload.detectedLibraries.map((lib) => `- ${lib.name}`).join('\n')}
 
 ## Library-Specific Context
 ${payload.libraryContexts
