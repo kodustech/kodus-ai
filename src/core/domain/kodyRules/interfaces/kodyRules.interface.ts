@@ -17,6 +17,7 @@ export interface IKodyRule {
     type?: string;
     extendedContext?: IKodyRulesExtendedContext;
     examples?: IKodyRulesExample[];
+    contextPaths?: string[];
     repositoryId: string;
     origin?: KodyRulesOrigin;
     createdAt?: Date;

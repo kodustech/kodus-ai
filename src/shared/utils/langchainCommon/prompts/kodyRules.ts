@@ -22,7 +22,7 @@ If the panel is uncertain about a finding, treat it as non-violating and omit it
 };
 
 export const prompt_kodyrules_classifier_user = (payload: any) => {
-    const { patchWithLinesStr, kodyRules } = payload;
+    const { patchWithLinesStr, kodyRules, contextFilesContent } = payload;
 
     return `
 <context>
@@ -31,6 +31,8 @@ Code for Review (PR Diff):
 <codeForAnalysis>
 ${patchWithLinesStr}
 </codeForAnalysis>
+
+${contextFilesContent ? `<additionalContext>\n${contextFilesContent}\n</additionalContext>` : ''}
 
 <kodyRules>
 ${JSON.stringify(kodyRules, null, 2)}
@@ -103,7 +105,7 @@ Let's think through this step-by-step:
 
 export const prompt_kodyrules_updatestdsuggestions_user = (payload: any) => {
     const languageNote = payload?.languageResultPrompt || 'en-US';
-    const { patchWithLinesStr, standardSuggestions, kodyRules } = payload;
+    const { patchWithLinesStr, standardSuggestions, kodyRules, contextFilesContent } = payload;
 
     return `
 Always consider the language parameter (e.g., en-US, pt-BR) when giving suggestions. Language: ${languageNote}
@@ -119,6 +121,8 @@ ${JSON.stringify(kodyRules, null, 2)}
 File diff:
 
 ${patchWithLinesStr}
+
+${contextFilesContent ? `\nAdditional Context:\n${contextFilesContent}` : ''}
 `;
 };
 
@@ -155,7 +159,7 @@ Your output must strictly be a valid JSON in the format specified below.`;
 
 export const prompt_kodyrules_suggestiongeneration_user = (payload: any) => {
     const languageNote = payload?.languageResultPrompt || 'en-US';
-    const { patchWithLinesStr, filteredKodyRules, updatedSuggestions } =
+    const { patchWithLinesStr, filteredKodyRules, updatedSuggestions, contextFilesContent } =
         payload;
 
     return `
@@ -195,6 +199,8 @@ ${updatedSuggestions ? JSON.stringify(updatedSuggestions, null, 2) : 'No standar
 Code for Review (PR Diff):
 
 ${patchWithLinesStr}
+
+${contextFilesContent ? `\nAdditional Context:\n${contextFilesContent}` : ''}
 
 kodyRules:
 

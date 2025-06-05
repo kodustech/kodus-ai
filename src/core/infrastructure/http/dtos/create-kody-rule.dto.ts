@@ -58,6 +58,11 @@ export class CreateKodyRuleDto {
     @ValidateNested({ each: true })
     @Type(() => KodyRulesExampleDto)
     examples: KodyRulesExampleDto[];
+
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    contextPaths?: string[];
 }
 
 export class KodyRulesExampleDto implements IKodyRulesExample {

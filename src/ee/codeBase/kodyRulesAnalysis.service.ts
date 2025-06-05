@@ -37,6 +37,7 @@ import { LLM_PROVIDER_SERVICE_TOKEN } from '@/core/infrastructure/adapters/servi
 import { KodyRulesService } from '../kodyRules/service/kodyRules.service';
 import { KODY_RULES_SERVICE_TOKEN } from '@/core/domain/kodyRules/contracts/kodyRules.service.contract';
 import { string } from 'joi';
+import { REPOSITORY_MANAGER_TOKEN, IRepositoryManager } from '@/core/domain/repository/contracts/repository-manager.contract';
 
 // Interface for token tracking
 interface TokenUsage {
@@ -175,6 +176,8 @@ export class KodyRulesAnalysisService implements IAIAnalysisService {
         private readonly logger: PinoLoggerService,
         @Inject(LLM_PROVIDER_SERVICE_TOKEN)
         private readonly llmProviderService: LLMProviderService,
+        @Inject(REPOSITORY_MANAGER_TOKEN)
+        private readonly repositoryManager: IRepositoryManager,
     ) {
         this.anthropic = new Anthropic({
             apiKey: process.env.API_ANTHROPIC_API_KEY,
@@ -632,7 +635,27 @@ export class KodyRulesAnalysisService implements IAIAnalysisService {
             rule: rule?.rule,
             severity: rule?.severity,
             examples: rule?.examples ?? [],
+            contextPaths: rule?.contextPaths ?? [],
         }));
+
+        const contextPaths = new Set<string>();
+        kodyRulesFiltered?.forEach((rule) => {
+            rule.contextPaths?.forEach((p) => contextPaths.add(p));
+        });
+
+        let contextFilesContent = '';
+        for (const p of contextPaths) {
+            try {
+                const content = await this.repositoryManager.readFileContent(
+                    context.organizationAndTeamData.organizationId,
+                    context.repository.id,
+                    context.repository.name,
+                    p,
+                    context.repository.defaultBranch,
+                );
+                contextFilesContent += `\n// ${p}\n${content}`;
+            } catch {}
+        }
 
         const baseContext = {
             pullRequest: context?.pullRequest,
@@ -652,6 +675,7 @@ export class KodyRulesAnalysisService implements IAIAnalysisService {
                     ?.severityLevelFilter,
             organizationAndTeamData: context?.organizationAndTeamData,
             kodyRules: kodyRulesFiltered,
+            contextFilesContent,
         };
 
         return baseContext;

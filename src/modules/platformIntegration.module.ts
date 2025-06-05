@@ -17,6 +17,7 @@ import { CodeManagementController } from '@/core/infrastructure/http/controllers
 import { UseCases } from '@/core/application/use-cases/platformIntegration';
 import { ProjectManagementController } from '@/core/infrastructure/http/controllers/platformIntegration/projectManagement.controller';
 import { CommunicationController } from '@/core/infrastructure/http/controllers/platformIntegration/communication.controller';
+import { ReposController } from '@/core/infrastructure/http/controllers/repos.controller';
 import { MSTeamsService } from '@/core/infrastructure/adapters/services/msTeams.service';
 import { GitlabService } from '@/core/infrastructure/adapters/services/gitlab.service';
 import { TeamMembersModule } from './teamMembers.module';
@@ -123,6 +124,7 @@ import { IWebhookEventHandler } from '@/core/domain/platformIntegrations/interfa
         CodeManagementController,
         ProjectManagementController,
         CommunicationController,
+        ReposController,
     ],
     exports: [
         PlatformIntegrationFactory,
