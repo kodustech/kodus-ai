@@ -8,6 +8,7 @@ import { FindLibraryKodyRulesUseCase } from './find-library-kody-rules.use-case'
 import { FindRuleInOrganizationByRuleIdKodyRulesUseCase } from './find-rule-in-organization-by-id.use-case';
 import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from './find-rules-in-organization-by-filter.use-case';
 import { GenerateKodyRulesUseCase } from './generate-kody-rules.use-case';
+import { SendRulesNotificationUseCase } from './send-rules-notification.use-case';
 
 export const UseCases = [
     CreateOrUpdateKodyRulesUseCase,
@@ -20,4 +21,5 @@ export const UseCases = [
     AddLibraryKodyRulesUseCase,
     GenerateKodyRulesUseCase,
     ChangeStatusKodyRulesUseCase,
+    SendRulesNotificationUseCase,
 ];

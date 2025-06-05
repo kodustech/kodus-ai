@@ -30,6 +30,7 @@ import { ParametersKey } from '@/shared/domain/enums/parameters-key.enum';
 import { KodyLearningStatus } from '@/core/domain/parameters/types/configValue.type';
 import { ParametersEntity } from '@/core/domain/parameters/entities/parameters.entity';
 import { OrganizationAndTeamData } from '@/config/types/general/organizationAndTeamData';
+import { SendRulesNotificationUseCase } from './send-rules-notification.use-case';
 
 @Injectable()
 export class GenerateKodyRulesUseCase {
@@ -50,6 +51,8 @@ export class GenerateKodyRulesUseCase {
         private readonly createOrUpdateKodyRulesUseCase: CreateOrUpdateKodyRulesUseCase,
 
         private readonly findRulesInOrganizationByRuleFilterKodyRulesUseCase: FindRulesInOrganizationByRuleFilterKodyRulesUseCase,
+
+        private readonly sendRulesNotificationUseCase: SendRulesNotificationUseCase,
 
         private readonly logger: PinoLoggerService,
     ) {}
@@ -289,6 +292,11 @@ export class GenerateKodyRulesUseCase {
                 context: GenerateKodyRulesUseCase.name,
                 metadata: { body, organizationAndTeamData },
             });
+
+            await this.sendRulesNotificationUseCase.execute(
+                organizationId,
+                allRules.flat(),
+            );
 
             return allRules.flat();
         } catch (error) {

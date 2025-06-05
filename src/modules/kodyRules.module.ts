@@ -17,6 +17,7 @@ import { IntegrationConfigModule } from './integrationConfig.module';
 import { IntegrationModule } from './integration.module';
 import { ParametersModule } from './parameters.module';
 import { CreateOrUpdateKodyRulesUseCase } from '@/core/application/use-cases/kodyRules/create-or-update.use-case';
+import { SendRulesNotificationUseCase } from '@/core/application/use-cases/kodyRules/send-rules-notification.use-case';
 import { KodyRulesValidationModule } from '@/ee/kodyRules/kody-rules-validation.module';
 import { KodyRulesService } from '@/ee/kodyRules/service/kodyRules.service';
 import { KodyRulesRepository } from '@/ee/kodyRules/repository/kodyRules.repository';
@@ -57,6 +58,7 @@ import { KodyRulesValidationService } from '@/ee/kodyRules/service/kody-rules-va
         FindRulesInOrganizationByRuleFilterKodyRulesUseCase,
         ChangeStatusKodyRulesUseCase,
         CreateOrUpdateKodyRulesUseCase,
+        SendRulesNotificationUseCase,
         KodyRulesValidationService,
     ],
 })

@@ -74,17 +74,54 @@ const sendForgotPasswordEmail = async (
             },
         ];
 
+  const emailParams = new EmailParams()
+      .setFrom(sentFrom)
+      .setTo(recipients)
+      .setSubject('Reset your Kodus password')
+      .setTemplateId('z3m5jgrmxpm4dpyo')
+      .setPersonalization(personalization);
+
+  return await mailersend.email.send(emailParams);
+} catch (error) {
+  console.error('sendForgotPasswordEmail error:', error);
+}
+};
+
+const sendKodyRulesNotification = async (
+    users: Array<{ email: string; name: string }>,
+    rules: Array<{ title: string; rule: string; severity: string }>,
+) => {
+    try {
+        const mailersend = new MailerSend({
+            apiKey: process.env.API_MAILSEND_API_TOKEN,
+        });
+
+        const sentFrom = new Sender(
+            'kody@notifications.kodus.io',
+            'Kody from Kodus',
+        );
+
+        const recipients = users.map((u) => new Recipient(u.email, u.name));
+        const topRules = rules.slice(0, 3);
+        const personalization = users.map((u) => ({
+            email: u.email,
+            data: {
+                user: { name: u.name },
+                rules: topRules,
+            },
+        }));
+
         const emailParams = new EmailParams()
             .setFrom(sentFrom)
             .setTo(recipients)
-            .setSubject('Reset your Kodus password')
-            .setTemplateId('z3m5jgrmxpm4dpyo')
+            .setSubject('New Kody Rules were generated')
+            .setTemplateId('yzkq340nv50gd796')
             .setPersonalization(personalization);
 
         return await mailersend.email.send(emailParams);
     } catch (error) {
-        console.error('sendForgotPasswordEmail error:', error);
+        console.error('sendKodyRulesNotification error:', error);
     }
 };
 
-export { sendInvite, sendForgotPasswordEmail };
+export { sendInvite, sendForgotPasswordEmail, sendKodyRulesNotification };
