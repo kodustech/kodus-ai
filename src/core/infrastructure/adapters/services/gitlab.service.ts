@@ -274,7 +274,7 @@ export class GitlabService
                 gitlabAuthDetail.authMode === AuthMode.OAUTH
                     ? gitlabAuthDetail.accessToken
                     : decrypt(gitlabAuthDetail.accessToken),
-            ...(gitlabAuthDetail.host && { host: gitlabAuthDetail.host }),
+            host: process.env.API_GITLAB_HOST,
             queryTimeout: 600000,
             camelize: false,
         });
