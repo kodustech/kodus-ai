@@ -7,6 +7,7 @@ import {
     Param,
     Query,
     Inject,
+    BadRequestException,
 } from '@nestjs/common';
 import { ProgrammingLanguage } from '@/shared/domain/enums/programming-language.enum';
 import { IRuleLikeService } from '@/core/domain/kodyRules/contracts/ruleLike.service.contract';
@@ -20,6 +21,8 @@ import { GetTopRulesByLanguageUseCase } from '@/core/application/use-cases/rule-
 import { FindRuleLikesUseCase } from '@/core/application/use-cases/rule-like/find-rule-likes.use-case';
 import { GetAllRuleLikesUseCase } from '@/core/application/use-cases/rule-like/get-all-rules-likes.use-case';
 import { GetAllRulesWithLikesUseCase } from '@/core/application/use-cases/rule-like/get-all-rules-with-likes.use-case';
+import { ICodeBaseConfigService } from '@/ee/codeBase/codeBaseConfig.service.interface';
+import { CODE_BASE_CONFIG_SERVICE_TOKEN } from '@/ee/codeBase/codeBaseConfig.service.interface';
 
 @Controller('rule-like')
 export class RuleLikeController {
@@ -36,15 +39,33 @@ export class RuleLikeController {
         private readonly request: Request & {
             user: { uuid: string; organization: { uuid: string } };
         },
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
     ) {}
 
     @Post(':ruleId/feedback')
     async setFeedback(
         @Param('ruleId') ruleId: string,
         @Body() body: SetRuleFeedbackDto,
+        @Query('repositoryId') repositoryId?: string,
+        @Query('repositoryName') repositoryName?: string,
     ) {
         if (!this.request.user?.uuid) {
             throw new Error('User not authenticated');
+        }
+
+        // Check if fine-tuning is enabled for this repository
+        if (repositoryId && repositoryName) {
+            const isFineTuningEnabled = await this.checkFineTuningEnabled(
+                repositoryId,
+                repositoryName,
+            );
+            
+            if (!isFineTuningEnabled) {
+                throw new BadRequestException(
+                    'Fine-tuning is disabled for this repository. Feedback cannot be saved.',
+                );
+            }
         }
 
         return this.setRuleLikeUseCase.execute(
@@ -101,5 +122,28 @@ export class RuleLikeController {
     @Get('all-rules-with-feedback')
     async getAllRulesWithFeedback() {
         return this.getAllRulesWithLikesUseCase.execute();
+    }
+
+    private async checkFineTuningEnabled(
+        repositoryId: string,
+        repositoryName: string,
+    ): Promise<boolean> {
+        try {
+            const organizationAndTeamData = {
+                organizationId: this.request.user.organization.uuid,
+                teamId: this.request.user.organization.uuid, // Assuming teamId is same as organizationId for now
+            };
+
+            const config = await this.codeBaseConfigService.getConfig(
+                organizationAndTeamData,
+                { id: repositoryId, name: repositoryName },
+            );
+
+            return config.kodyFineTuningConfig?.enabled && 
+                   config.kodyFineTuningConfig?.fineTuningEnabled;
+        } catch (error) {
+            // Default to enabled on error to avoid breaking existing functionality
+            return true;
+        }
     }
 }

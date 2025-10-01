@@ -196,6 +196,7 @@ export interface ICodeManagementService
         includeFooter?: boolean;
         language?: string;
         organizationAndTeamData: OrganizationAndTeamData;
+        fineTuningEnabled?: boolean;
     }): Promise<string>;
 
     getRepositoryTree(params: {

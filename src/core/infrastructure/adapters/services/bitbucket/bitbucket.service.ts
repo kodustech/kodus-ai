@@ -4121,6 +4121,7 @@ export class BitbucketService
         includeFooter?: boolean;
         language?: string;
         organizationAndTeamData: OrganizationAndTeamData;
+        fineTuningEnabled?: boolean;
     }): Promise<string> {
         const {
             suggestion,

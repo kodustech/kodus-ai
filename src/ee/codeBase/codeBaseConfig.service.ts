@@ -252,7 +252,10 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                     language?.configValue ||
                     this.DEFAULT_CONFIG.languageResultPrompt,
                 reviewModeConfig,
-                kodyFineTuningConfig,
+                kodyFineTuningConfig: {
+                    ...kodyFineTuningConfig,
+                    fineTuningEnabled: repoConfig.kodyFineTuningConfig?.fineTuningEnabled ?? kodyFineTuningConfig.fineTuningEnabled,
+                },
                 pullRequestApprovalActive:
                     (isParameterValidInConfigFile(
                         'pullRequestApprovalActive',
@@ -1096,6 +1099,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
 
         return {
             enabled: enableService,
+            fineTuningEnabled: true, // Default to true for per-repository toggle
         };
     }
 
@@ -1432,7 +1436,10 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                     language?.configValue ||
                     this.DEFAULT_CONFIG.languageResultPrompt,
                 reviewModeConfig,
-                kodyFineTuningConfig,
+                kodyFineTuningConfig: {
+                    ...kodyFineTuningConfig,
+                    fineTuningEnabled: configSource.kodyFineTuningConfig?.fineTuningEnabled ?? kodyFineTuningConfig.fineTuningEnabled,
+                },
                 pullRequestApprovalActive:
                     configSource.pullRequestApprovalActive ??
                     this.DEFAULT_CONFIG.pullRequestApprovalActive,

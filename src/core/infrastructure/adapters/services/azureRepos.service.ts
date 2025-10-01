@@ -3564,6 +3564,7 @@ export class AzureReposService
         includeFooter?: boolean;
         language?: string;
         organizationAndTeamData: OrganizationAndTeamData;
+        fineTuningEnabled?: boolean;
     }): Promise<string> {
         const {
             suggestion,
@@ -3571,6 +3572,7 @@ export class AzureReposService
             includeHeader = true,
             includeFooter = true,
             language,
+            fineTuningEnabled = true,
         } = params;
 
         let commentBody = '';
@@ -3614,11 +3616,15 @@ export class AzureReposService
             );
 
             commentBody += this.formatSub(translations.talkToKody) + '\n';
-            commentBody += this.formatSub(translations.feedback) + '\n\n';
+            
+            // Only include feedback text and buttons if fine-tuning is enabled
+            if (fineTuningEnabled) {
+                commentBody += this.formatSub(translations.feedback) + '\n\n';
 
-            const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;
-            const thumbsDownBlock = `\`\`\`\n👎\n\`\`\`\n`;
-            commentBody += thumbsUpBlock + thumbsDownBlock;
+                const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;
+                const thumbsDownBlock = `\`\`\`\n👎\n\`\`\`\n`;
+                commentBody += thumbsUpBlock + thumbsDownBlock;
+            }
         }
 
         return Promise.resolve(commentBody.trim());

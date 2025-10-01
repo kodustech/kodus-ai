@@ -3167,6 +3167,7 @@ export class GitlabService
         includeFooter?: boolean;
         language?: string;
         organizationAndTeamData: OrganizationAndTeamData;
+        fineTuningEnabled?: boolean;
     }): Promise<string> {
         const {
             suggestion,
@@ -3174,6 +3175,7 @@ export class GitlabService
             includeHeader = true,
             includeFooter = true,
             language,
+            fineTuningEnabled = true,
         } = params;
 
         let commentBody = '';
@@ -3217,7 +3219,11 @@ export class GitlabService
             );
 
             commentBody += this.formatSub(translations.talkToKody) + '\n';
-            commentBody += this.formatSub(translations.feedback);
+            
+            // Only include feedback text if fine-tuning is enabled
+            if (fineTuningEnabled) {
+                commentBody += this.formatSub(translations.feedback);
+            }
         }
 
         return Promise.resolve(commentBody.trim());

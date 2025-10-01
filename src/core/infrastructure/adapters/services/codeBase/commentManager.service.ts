@@ -1207,6 +1207,8 @@ ${reviewOptions}
                                 includeFooter: false, // PR-level NÃO inclui footer de interação
                                 language,
                                 organizationAndTeamData,
+                                fineTuningEnabled: codeReviewConfig.kodyFineTuningConfig?.enabled && 
+                                                 codeReviewConfig.kodyFineTuningConfig?.fineTuningEnabled,
                             },
                         );
 

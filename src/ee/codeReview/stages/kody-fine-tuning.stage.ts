@@ -14,7 +14,8 @@ export class KodyFineTuningStage extends BasePipelineStage<CodeReviewPipelineCon
     protected async executeStage(
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
-        if (!context.codeReviewConfig.kodyFineTuningConfig?.enabled) {
+        if (!context.codeReviewConfig.kodyFineTuningConfig?.enabled || 
+            !context.codeReviewConfig.kodyFineTuningConfig?.fineTuningEnabled) {
             return context;
         }
 

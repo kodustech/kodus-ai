@@ -365,6 +365,7 @@ export enum ReviewModeConfig {
 
 export type KodyFineTuningConfig = {
     enabled: boolean;
+    fineTuningEnabled?: boolean; // Per-repository toggle (default: true)
 };
 
 export enum SuggestionType {

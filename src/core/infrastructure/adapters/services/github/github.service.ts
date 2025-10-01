@@ -5298,6 +5298,7 @@ export class GithubService
         includeFooter?: boolean;
         language?: string;
         organizationAndTeamData: OrganizationAndTeamData;
+        fineTuningEnabled?: boolean;
     }): Promise<string> {
         const {
             suggestion,
@@ -5305,6 +5306,7 @@ export class GithubService
             includeHeader = true,
             includeFooter = true,
             language,
+            fineTuningEnabled = true,
         } = params;
 
         let commentBody = '';
@@ -5348,9 +5350,13 @@ export class GithubService
             );
 
             commentBody += this.formatSub(translations.talkToKody) + '\n';
-            commentBody +=
-                this.formatSub(translations.feedback) +
-                '<!-- kody-codereview -->&#8203;\n&#8203;';
+            
+            // Only include feedback text and buttons if fine-tuning is enabled
+            if (fineTuningEnabled) {
+                commentBody +=
+                    this.formatSub(translations.feedback) +
+                    '<!-- kody-codereview -->&#8203;\n&#8203;';
+            }
         }
 
         return Promise.resolve(commentBody.trim());

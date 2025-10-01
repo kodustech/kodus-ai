@@ -1084,6 +1084,7 @@ export class CodeManagementService implements ICodeManagementService {
         includeFooter?: boolean;
         language?: string;
         organizationAndTeamData: OrganizationAndTeamData;
+        fineTuningEnabled?: boolean;
     }): Promise<string> {
         const type = await this.getTypeIntegration(
             params.organizationAndTeamData,
@@ -1099,6 +1100,7 @@ export class CodeManagementService implements ICodeManagementService {
             includeFooter: params.includeFooter ?? true,
             language: params.language,
             organizationAndTeamData: params.organizationAndTeamData,
+            fineTuningEnabled: params.fineTuningEnabled ?? true,
         });
     }
 
