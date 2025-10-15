@@ -25,10 +25,15 @@ const KODY_IDENTIFIERS = {
 } as const;
 
 const ACKNOWLEDGMENT_MESSAGES = {
-    DEFAULT: 'Analyzing your request...',
     MARKDOWN_SUFFIX: '<!-- kody-codereview -->\n&#8203;',
     BUSINESS_LOGIC_INVALID_CONTEXT:
         'The "@kody -v business-logic" command can only be used in the general PR conversation, not in code suggestions or inline comments. Please use it in the main PR discussion thread.',
+} as const;
+
+const PROCESSING_REACTIONS = {
+    HOURGLASS: '⏳',
+    EYES: '👀',
+    THINKING: '🤔',
 } as const;
 
 enum CommandType {
@@ -400,46 +405,13 @@ export class ChatWithKodyFromGitUseCase {
             },
         );
 
-        const ackResponse = await this.codeManagementService.createIssueComment(
-            {
-                organizationAndTeamData,
-                repository,
-                prNumber: pullRequestNumber,
-                body: this.getAcknowledgmentBody(params.platformType),
-            },
-        );
-
-        if (!ackResponse) {
-            this.logger.warn({
-                message: 'Failed to create acknowledgment response',
-                context: ChatWithKodyFromGitUseCase.name,
-                metadata: {
-                    repository: repository.name,
-                    pullRequestNumber,
-                },
-            });
-            return;
-        }
-
-        const [ackResponseId, parentId] =
-            this.getBusinessLogicAcknowledgmentIds(
-                ackResponse,
-                params.platformType,
-            );
-
-        if (!ackResponseId) {
-            this.logger.warn({
-                message:
-                    'Failed to get acknowledgment response ID for business logic',
-                context: ChatWithKodyFromGitUseCase.name,
-                metadata: {
-                    repository: repository.name,
-                    pullRequestNumber,
-                    platformType: params.platformType,
-                },
-            });
-            return;
-        }
+        // Add processing reaction instead of interim message
+        await this.addProcessingReaction({
+            organizationAndTeamData,
+            repository,
+            pullRequestNumber,
+            commentId: issueId,
+        });
 
         const prepareContext = {
             userQuestion: commentBody,
@@ -471,25 +443,24 @@ export class ChatWithKodyFromGitUseCase {
         }
 
         try {
-            const updateParams: any = {
+            // Remove processing reaction and post final response
+            await this.removeProcessingReaction({
+                organizationAndTeamData,
+                repository,
+                pullRequestNumber,
+                commentId: issueId,
+            });
+
+            await this.codeManagementService.createIssueComment({
                 organizationAndTeamData,
                 repository,
                 prNumber: pullRequestNumber,
-                commentId: Number(ackResponseId),
                 body: response,
-            };
-
-            if (params.platformType === PlatformType.GITLAB) {
-                updateParams.noteId = parentId ? Number(parentId) : undefined;
-            } else if (params.platformType === PlatformType.AZURE_REPOS) {
-                updateParams.threadId = parentId ? Number(parentId) : undefined;
-            }
-
-            await this.codeManagementService.updateIssueComment(updateParams);
+            });
 
             this.logger.log({
                 message:
-                    'Successfully updated PR response for business logic validation',
+                    'Successfully posted PR response for business logic validation',
                 context: ChatWithKodyFromGitUseCase.name,
                 metadata: {
                     repository: repository.name,
@@ -499,7 +470,7 @@ export class ChatWithKodyFromGitUseCase {
         } catch (error) {
             this.logger.error({
                 message:
-                    'Failed to update PR response for business logic validation',
+                    'Failed to post PR response for business logic validation',
                 context: ChatWithKodyFromGitUseCase.name,
                 error,
                 metadata: {
@@ -580,50 +551,13 @@ export class ChatWithKodyFromGitUseCase {
         );
         const sender = this.getSender(params);
 
-        const ackResponse =
-            await this.codeManagementService.createResponseToComment({
-                organizationAndTeamData,
-                inReplyToId: comment.id,
-                discussionId: params.payload?.object_attributes?.discussion_id,
-                threadId: comment.threadId,
-                body: this.getAcknowledgmentBody(params.platformType),
-                repository,
-                prNumber: pullRequestNumber,
-            });
-
-        if (!ackResponse) {
-            this.logger.warn({
-                message: 'Failed to create acknowledgment response',
-                context: ChatWithKodyFromGitUseCase.name,
-                metadata: {
-                    repository: repository.name,
-                    pullRequestNumber,
-                    commentId: comment.id,
-                },
-            });
-            return;
-        }
-
-        const [ackResponseId, parentId] = this.getAcknowledgmentIds(
-            originalKodyComment,
-            ackResponse,
-            params.platformType,
-            comment,
-        );
-
-        if (!ackResponseId || !parentId) {
-            this.logger.warn({
-                message:
-                    'Failed to get acknowledgment response ID or parent ID',
-                context: ChatWithKodyFromGitUseCase.name,
-                metadata: {
-                    repository: repository.name,
-                    pullRequestNumber,
-                    commentId: comment.id,
-                },
-            });
-            return;
-        }
+        // Add processing reaction instead of interim message
+        await this.addProcessingReaction({
+            organizationAndTeamData,
+            repository,
+            pullRequestNumber,
+            commentId: comment.id,
+        });
 
         let response = '';
         if (
@@ -683,19 +617,27 @@ export class ChatWithKodyFromGitUseCase {
             return;
         }
 
-        const updatedComment =
-            await this.codeManagementService.updateResponseToComment({
-                organizationAndTeamData,
-                parentId,
-                commentId: ackResponseId,
-                body: response,
-                prNumber: pullRequestNumber,
-                repository,
-            });
+        // Remove processing reaction and post final response
+        await this.removeProcessingReaction({
+            organizationAndTeamData,
+            repository,
+            pullRequestNumber,
+            commentId: comment.id,
+        });
 
-        if (!updatedComment) {
+        const finalResponse = await this.codeManagementService.createResponseToComment({
+            organizationAndTeamData,
+            inReplyToId: comment.id,
+            discussionId: params.payload?.object_attributes?.discussion_id,
+            threadId: comment.threadId,
+            body: response,
+            repository,
+            prNumber: pullRequestNumber,
+        });
+
+        if (!finalResponse) {
             this.logger.warn({
-                message: 'Failed to update acknowledgment response',
+                message: 'Failed to create final response',
                 context: ChatWithKodyFromGitUseCase.name,
                 metadata: {
                     repository: repository.name,
@@ -713,7 +655,7 @@ export class ChatWithKodyFromGitUseCase {
                 repository: repository.name,
                 pullRequestNumber,
                 commentId: comment.id,
-                responseId: ackResponseId,
+                responseId: finalResponse.id,
             },
         });
     }
@@ -1421,98 +1363,53 @@ export class ChatWithKodyFromGitUseCase {
         );
     }
 
-    private getAcknowledgmentBody(platformType: PlatformType): string {
-        let msg: string = ACKNOWLEDGMENT_MESSAGES.DEFAULT;
-        if (platformType !== PlatformType.BITBUCKET) {
-            msg = `${msg}${ACKNOWLEDGMENT_MESSAGES.MARKDOWN_SUFFIX}`;
+    private async addProcessingReaction(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string; id: string };
+        pullRequestNumber: number;
+        commentId: number;
+    }): Promise<void> {
+        try {
+            await this.codeManagementService.addReactionToComment({
+                organizationAndTeamData: params.organizationAndTeamData,
+                repository: params.repository,
+                prNumber: params.pullRequestNumber,
+                commentId: params.commentId,
+                reaction: PROCESSING_REACTIONS.HOURGLASS as any,
+            });
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to add processing reaction',
+                context: ChatWithKodyFromGitUseCase.name,
+                error,
+            });
         }
-        return msg.trim();
     }
 
-    private getAcknowledgmentIds(
-        originalKodyComment: Comment,
-        ackResponse: any,
-        platformType: PlatformType,
-        comment?: Comment,
-    ): [ackResponseId: string, parentId: string] {
-        let ackResponseId;
-        let parentId;
-
-        switch (platformType) {
-            case PlatformType.GITHUB:
-                ackResponseId = ackResponse.id;
-                parentId = originalKodyComment?.id;
-                break;
-            case PlatformType.GITLAB:
-                ackResponseId = ackResponse.id;
-                parentId = comment?.id;
-                break;
-            case PlatformType.BITBUCKET:
-                ackResponseId = ackResponse.id;
-                parentId =
-                    ackResponse.parent?.id === comment?.id
-                        ? ackResponse.parent?.id
-                        : originalKodyComment?.id;
-                break;
-            case PlatformType.AZURE_REPOS:
-                ackResponseId = ackResponse?.id;
-                parentId = originalKodyComment?.threadId;
-                break;
-            default:
-                this.logger.warn({
-                    message: `Unsupported platform type: ${platformType}`,
-                    context: ChatWithKodyFromGitUseCase.name,
-                    metadata: {
-                        originalKodyComment,
-                        ackResponse,
-                        platformType,
-                    },
-                });
-                return ['', ''];
+    private async removeProcessingReaction(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { name: string; id: string };
+        pullRequestNumber: number;
+        commentId: number;
+    }): Promise<void> {
+        try {
+            await this.codeManagementService.removeReactionsFromComment({
+                organizationAndTeamData: params.organizationAndTeamData,
+                repository: params.repository,
+                prNumber: params.pullRequestNumber,
+                commentId: params.commentId,
+                reactions: [PROCESSING_REACTIONS.HOURGLASS as any],
+            });
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to remove processing reaction',
+                context: ChatWithKodyFromGitUseCase.name,
+                error,
+            });
         }
-
-        if (!ackResponseId || !parentId) {
-            return ['', ''];
-        }
-
-        return [ackResponseId, parentId];
     }
 
-    private getBusinessLogicAcknowledgmentIds(
-        ackResponse: any,
-        platformType: PlatformType,
-    ): [string | number | null, string | number | null] {
-        let ackResponseId;
-        let parentId;
 
-        switch (platformType) {
-            case PlatformType.GITHUB:
-                ackResponseId = ackResponse?.id;
-                parentId = ackResponse?.id;
-                break;
-
-            case PlatformType.GITLAB:
-                ackResponseId = ackResponse?.id;
-                parentId = ackResponse?.notes?.[0]?.id;
-                break;
-
-            case PlatformType.BITBUCKET:
-                ackResponseId = ackResponse?.id;
-                parentId = ackResponse?.id;
-                break;
-
-            case PlatformType.AZURE_REPOS:
-                ackResponseId = ackResponse?.id;
-                parentId = ackResponse?.threadId;
-                break;
-
-            default:
-                ackResponseId = ackResponse?.id;
-                parentId = ackResponse?.id;
-        }
-
-        return [ackResponseId, parentId];
-    }
 
     private async processCommand(
         commandType: CommandType,
