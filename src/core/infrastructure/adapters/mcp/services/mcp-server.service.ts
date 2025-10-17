@@ -4,7 +4,16 @@ import { Response } from 'express';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { nanoid } from 'nanoid';
-import { CodeManagementTools, KodyRulesTools } from '../tools';
+import {
+    CodeManagementTools,
+    KodyRulesTools,
+    AutomationTools,
+    CodeReviewTools,
+    OrganizationTools,
+    IssuesTools,
+    WebhookTools,
+    UsageTools,
+} from '../tools';
 import { toShape } from '../types/mcp-tool.interface';
 
 interface McpSession {
@@ -21,6 +30,12 @@ export class McpServerService {
     constructor(
         private readonly codeManagementTools: CodeManagementTools,
         private readonly kodyRulesTools: KodyRulesTools,
+        private readonly automationTools: AutomationTools,
+        private readonly codeReviewTools: CodeReviewTools,
+        private readonly organizationTools: OrganizationTools,
+        private readonly issuesTools: IssuesTools,
+        private readonly webhookTools: WebhookTools,
+        private readonly usageTools: UsageTools,
         private readonly logger: PinoLoggerService,
     ) {}
 
@@ -85,7 +100,23 @@ export class McpServerService {
         // Get all tools from tool classes
         const codeManagementTools = this.codeManagementTools.getAllTools();
         const kodyRulesTools = this.kodyRulesTools.getAllTools();
-        const allTools = [...codeManagementTools, ...kodyRulesTools];
+        const automationTools = this.automationTools.getAllTools();
+        const codeReviewTools = this.codeReviewTools.getAllTools();
+        const organizationTools = this.organizationTools.getAllTools();
+        const issuesTools = this.issuesTools.getAllTools();
+        const webhookTools = this.webhookTools.getAllTools();
+        const usageTools = this.usageTools.getAllTools();
+
+        const allTools = [
+            ...codeManagementTools,
+            ...kodyRulesTools,
+            ...automationTools,
+            ...codeReviewTools,
+            ...organizationTools,
+            ...issuesTools,
+            ...webhookTools,
+            ...usageTools,
+        ];
 
         for (const tool of allTools) {
             server.registerTool(
@@ -103,7 +134,19 @@ export class McpServerService {
         this.logger.log({
             message: 'Registered MCP tools',
             context: McpServerService.name,
-            metadata: { toolCount: allTools.length },
+            metadata: {
+                toolCount: allTools.length,
+                breakdown: {
+                    codeManagement: codeManagementTools.length,
+                    kodyRules: kodyRulesTools.length,
+                    automation: automationTools.length,
+                    codeReview: codeReviewTools.length,
+                    organization: organizationTools.length,
+                    issues: issuesTools.length,
+                    webhook: webhookTools.length,
+                    usage: usageTools.length,
+                },
+            },
         });
     }
 
@@ -161,7 +204,23 @@ export class McpServerService {
     getAvailableToolsCount(): number {
         const codeManagementTools = this.codeManagementTools.getAllTools();
         const kodyRulesTools = this.kodyRulesTools.getAllTools();
-        return codeManagementTools.length + kodyRulesTools.length;
+        const automationTools = this.automationTools.getAllTools();
+        const codeReviewTools = this.codeReviewTools.getAllTools();
+        const organizationTools = this.organizationTools.getAllTools();
+        const issuesTools = this.issuesTools.getAllTools();
+        const webhookTools = this.webhookTools.getAllTools();
+        const usageTools = this.usageTools.getAllTools();
+
+        return (
+            codeManagementTools.length +
+            kodyRulesTools.length +
+            automationTools.length +
+            codeReviewTools.length +
+            organizationTools.length +
+            issuesTools.length +
+            webhookTools.length +
+            usageTools.length
+        );
     }
 
     getSessionInfo(sessionId: string): Partial<McpSession> | undefined {
