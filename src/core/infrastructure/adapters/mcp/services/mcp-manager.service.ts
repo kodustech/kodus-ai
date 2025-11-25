@@ -1,11 +1,11 @@
 import { AxiosMCPManagerService } from '@/config/axios/microservices/mcpManager.axios';
 import { OrganizationAndTeamData } from '@/config/types/general/organizationAndTeamData';
+import { PermissionValidationService } from '@/ee/shared/services/permissionValidation.service';
 import { MCPServerConfig } from '@kodus/flow';
+import { TransportType } from '@kodus/flow/dist/core/types/allTypes';
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PinoLoggerService } from '../../services/logger/pino.service';
-import { PermissionValidationService } from '@/ee/shared/services/permissionValidation.service';
-import { TransportType } from '@kodus/flow/dist/core/types/allTypes';
 
 type MCPConnection = {
     id: string;
@@ -150,22 +150,11 @@ export class MCPManagerService {
 
     public async getConnections(
         organizationAndTeamData: OrganizationAndTeamData,
-        format?: true,
-    ): Promise<MCPServerConfig[]>;
-
-    public async getConnections(
-        organizationAndTeamData: OrganizationAndTeamData,
-        format?: false,
-    ): Promise<MCPItem[]>;
-
-    public async getConnections(
-        organizationAndTeamData: OrganizationAndTeamData,
-        format: boolean = true,
         filters?: {
             provider?: string;
             status?: string;
         },
-    ): Promise<MCPItem[] | MCPServerConfig[]> {
+    ): Promise<MCPServerConfig[]> {
         try {
             const limited =
                 await this.permissionValidationService.shouldLimitResources(
@@ -189,17 +178,13 @@ export class MCPManagerService {
 
             const limitedData = limited ? data.items.slice(0, 3) : data.items;
 
-            if (format) {
-                const formattedConnections: MCPServerConfig[] = [];
-                for (const connection of limitedData) {
-                    const formattedConnection =
-                        await this.formatConnection(connection);
-                    formattedConnections.push(formattedConnection);
-                }
-                return formattedConnections;
+            const formattedConnections: MCPServerConfig[] = [];
+            for (const connection of limitedData) {
+                const formattedConnection =
+                    await this.formatConnection(connection);
+                formattedConnections.push(formattedConnection);
             }
-
-            return limitedData;
+            return formattedConnections;
         } catch (error) {
             this.logger.error({
                 message: 'Error fetching MCP connections',
@@ -246,7 +231,7 @@ export class MCPManagerService {
         let headers: Record<string, string> = {};
         let type: string = 'http';
         if (connection.provider === 'custom') {
-            const integration: MCPIntegrationInterface =
+            let integration: MCPIntegrationInterface =
                 await this.axiosMCPManagerService.get(
                     `mcp/integration/custom/${connection.integrationId}`,
                     {
@@ -259,6 +244,17 @@ export class MCPManagerService {
             if (!integration) {
                 throw new Error(
                     `Integration not found: ${connection.integrationId}`,
+                );
+            }
+
+            if (integration.authType === MCPIntegrationAuthType.OAUTH2) {
+                integration = await this.axiosMCPManagerService.get(
+                    `mcp/integration/custom/oauth/${connection.integrationId}/refresh-token`,
+                    {
+                        headers: this.getAuthHeaders({
+                            organizationId: connection.organizationId,
+                        }),
+                    },
                 );
             }
 

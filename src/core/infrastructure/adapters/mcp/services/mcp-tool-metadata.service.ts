@@ -1,13 +1,13 @@
-import { Injectable } from '@nestjs/common';
-import { createMCPAdapter, type MCPServerConfig } from '@kodus/flow';
 import type { OrganizationAndTeamData } from '@/config/types/general/organizationAndTeamData';
-import { MCPManagerService } from './mcp-manager.service';
-import { PinoLoggerService } from '../../services/logger/pino.service';
 import {
     markProviderHasMetadata,
     normalizeProviderKey,
     normalizeToolKey,
 } from '@context-os-core/mcp/utils';
+import { createMCPAdapter, type MCPServerConfig } from '@kodus/flow';
+import { Injectable } from '@nestjs/common';
+import { PinoLoggerService } from '../../services/logger/pino.service';
+import { MCPManagerService } from './mcp-manager.service';
 
 export interface MCPToolMetadata {
     requiredArgs: string[];
@@ -33,10 +33,9 @@ export class MCPToolMetadataService {
             return this.buildEmptyResult();
         }
 
-        const rawConnections = (await this.mcpManagerService.getConnections(
+        const rawConnections = await this.mcpManagerService.getConnections(
             organizationAndTeamData,
-            true,
-        )) as MCPServerConfig[];
+        );
 
         if (!rawConnections?.length) {
             return this.buildEmptyResult();
