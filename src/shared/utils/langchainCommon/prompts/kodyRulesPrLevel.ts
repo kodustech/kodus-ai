@@ -7,7 +7,7 @@ export type KodyRulesPrLevelPayload = {
     pr_title: string;
     pr_description: string;
     stats: AnalysisContext['pullRequest']['stats'];
-    files: FileChange[];
+    files: Partial<FileChange>[];
     rules?: any;
     rule?: any;
     language?: string;

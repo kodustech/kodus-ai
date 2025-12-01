@@ -1067,6 +1067,16 @@ export class KodyRulesPrLevelAnalysisService
         externalReferencesMap?: Map<string, any[]>,
         mcpResultsMap?: Map<string, Record<string, unknown>>,
     ): Promise<ExtendedKodyRule[] | null> {
+        const filesToAnalyze = filesChunk.map((file) => ({
+            filename: file?.filename,
+            sha: file?.sha,
+            patchWithLinesStr: file?.patchWithLinesStr,
+            additions: file?.additions,
+            changes: file?.changes,
+            deletions: file?.deletions,
+            status: file?.status,
+        }));
+
         // payload do chunk
         const analyzerPayload: KodyRulesPrLevelPayload = {
             pr_title: context.pullRequest.title,
@@ -1077,7 +1087,7 @@ export class KodyRulesPrLevelAnalysisService
                 total_files: 0,
                 total_lines_changed: 0,
             },
-            files: filesChunk,
+            files: filesToAnalyze,
             rules: kodyRulesPrLevel,
             language,
             externalReferencesMap,
