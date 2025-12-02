@@ -28,10 +28,10 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
 
     constructor(
         @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
-        private pullRequestHandlerService: IPullRequestManagerService,
+        private readonly pullRequestHandlerService: IPullRequestManagerService,
         @Inject(COMMENT_MANAGER_SERVICE_TOKEN)
-        private commentManagerService: ICommentManagerService,
-        private logger: PinoLoggerService,
+        private readonly commentManagerService: ICommentManagerService,
+        private readonly logger: PinoLoggerService,
     ) {
         super();
     }
