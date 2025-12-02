@@ -11,8 +11,8 @@ import { SignUpUseCase } from '@/core/application/use-cases/auth/signup.use-case
 import { ConfirmEmailUseCase } from '@/core/application/use-cases/auth/confirm-email.use-case';
 import { ResendEmailUseCase } from '@/core/application/use-cases/auth/resend-email.use-case';
 
-import { CheckSSOUseCase } from '@/core/application/use-cases/auth/check-sso.use-case';
-import { SSOLoginUseCase } from '@/core/application/use-cases/auth/sso-login.use-case';
+import { CheckSSOUseCase } from '@/core/application/use-cases/auth/checkSsoUseCase';
+import { SSOLoginUseCase } from '@/core/application/use-cases/auth/ssoLoginUseCase';
 
 @Controller('auth')
 export class AuthController {

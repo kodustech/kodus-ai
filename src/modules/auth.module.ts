@@ -20,8 +20,8 @@ import { TeamMembersModule } from './teamMembers.module';
 import { UsersModule } from './user.module';
 
 import { OrganizationParametersModule } from './organizationParameters.module';
-import { CheckSSOUseCase } from '@/core/application/use-cases/auth/check-sso.use-case';
-import { SSOLoginUseCase } from '@/core/application/use-cases/auth/sso-login.use-case';
+import { CheckSSOUseCase } from '@/core/application/use-cases/auth/checkSsoUseCase';
+import { SSOLoginUseCase } from '@/core/application/use-cases/auth/ssoLoginUseCase';
 
 @Module({
     imports: [

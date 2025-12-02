@@ -27,7 +27,7 @@ import axios from 'axios';
 import { randomBytes } from 'node:crypto';
 import { GetOrganizationsByDomainUseCase } from '@/core/application/use-cases/organization/get-organizations-domain.use-case';
 import { SignUpUseCase } from './signup.use-case';
-import { SSOConfig } from '@/core/domain/organizationParameters/types/sso-config.type';
+import { SSOConfig } from '@/core/domain/organizationParameters/types/ssoConfig.type';
 import {
     IOrganizationParametersService,
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
@@ -58,9 +58,10 @@ export class SSOLoginUseCase {
         code: string,
         state: string,
     ): Promise<{ accessToken: string; refreshToken: string }> {
+        let organizationId: string | undefined;
         try {
             const stateJson = JSON.parse(decodeURIComponent(state));
-            const organizationId = stateJson.organizationId;
+            organizationId = stateJson.organizationId;
 
             if (!organizationId) {
                 throw new UnauthorizedException('Invalid state: missing organizationId');
@@ -149,6 +150,9 @@ export class SSOLoginUseCase {
                 message: 'SSO Login failed',
                 error,
                 context: SSOLoginUseCase.name,
+                metadata: {
+                    organizationId,
+                },
             });
             throw new UnauthorizedException('SSO Login failed');
         }
