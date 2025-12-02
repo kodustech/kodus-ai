@@ -47,6 +47,7 @@ interface ReviewComment {
 interface PullRequestFinishSummaryMarkdown {
     withComments: string;
     withoutComments: string;
+    noChangesDetected: string;
 }
 
 interface PullRequestSummaryMarkdown {

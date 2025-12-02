@@ -4,6 +4,10 @@ import {
     IPullRequestManagerService,
     PULL_REQUEST_MANAGER_SERVICE_TOKEN,
 } from '@/core/domain/codeBase/contracts/PullRequestManagerService.contract';
+import {
+    ICommentManagerService,
+    COMMENT_MANAGER_SERVICE_TOKEN,
+} from '@/core/domain/codeBase/contracts/CommentManagerService.contract';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { PinoLoggerService } from '../../../logger/pino.service';
 import {
@@ -25,6 +29,8 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
     constructor(
         @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
         private pullRequestHandlerService: IPullRequestManagerService,
+        @Inject(COMMENT_MANAGER_SERVICE_TOKEN)
+        private commentManagerService: ICommentManagerService,
         private logger: PinoLoggerService,
     ) {
         super();
@@ -63,6 +69,17 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
             const msg = !files?.length
                 ? AutomationMessage.NO_FILES_AFTER_IGNORE
                 : AutomationMessage.TOO_MANY_FILES;
+
+            if (!files?.length && context.lastExecution) {
+                await this.commentManagerService.createNoChangesComment(
+                    context.organizationAndTeamData,
+                    context.pullRequest.number,
+                    context.repository,
+                    context.platformType,
+                    context.codeReviewConfig?.languageResultPrompt ?? 'en-US',
+                    context.dryRun,
+                );
+            }
 
             this.logger.warn({
                 message: `Skipping code review for PR#${context.pullRequest.number} - ${msg}`,
