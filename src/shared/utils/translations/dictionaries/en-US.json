@@ -5,7 +5,8 @@
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## Code Review Completed! 🔥\n\nThe code review was successfully completed based on your current configurations.\n\n",
-        "withoutComments": "# Kody Review Complete\n**Great news!** 🎉\nNo issues were found that match your current review configurations.\n\nKeep up the excellent work! 🚀"
+        "withoutComments": "# Kody Review Complete\n**Great news!** 🎉\nNo issues were found that match your current review configurations.\n\nKeep up the excellent work! 🚀",
+        "noChangesDetected": "# Kody Review Complete ✅\n**Info:** This PR has already been reviewed with no new changes detected.\n\nIf you've made new changes, ensure they're committed and pushed."
     },
     "pullRequestSummaryMarkdown": {
         "title": "PR Summary (Comment created by [Kody](https://kodus.io) 🤖)",

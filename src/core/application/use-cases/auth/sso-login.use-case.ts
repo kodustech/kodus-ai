@@ -24,7 +24,7 @@ import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logge
 import { AuthProvider } from '@/shared/domain/enums/auth-provider.enum';
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import axios from 'axios';
-import { randomBytes } from 'crypto';
+import { randomBytes } from 'node:crypto';
 import { GetOrganizationsByDomainUseCase } from '@/core/application/use-cases/organization/get-organizations-domain.use-case';
 import { SignUpUseCase } from './signup.use-case';
 import { SSOConfig } from '@/core/domain/organizationParameters/types/sso-config.type';
@@ -113,7 +113,7 @@ export class SSOLoginUseCase {
             // 4. Find or Create User
             let user = await this.authService.validateUser({ email });
 
-            if (!user) {
+            if (!user || !user.uuid) {
                 // Create user and add to the SSO organization
                 user = await this.signUpUseCase.execute({
                     email,

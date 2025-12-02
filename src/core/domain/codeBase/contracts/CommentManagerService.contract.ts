@@ -142,4 +142,13 @@ export interface ICommentManagerService {
         pullRequestMessagesConfig?: IPullRequestMessages,
         dryRun?: CodeReviewPipelineContext['dryRun'],
     ): Promise<void>;
+
+    createNoChangesComment(
+        organizationAndTeamData: OrganizationAndTeamData,
+        prNumber: number,
+        repository: { name: string; id: string },
+        platformType: PlatformType,
+        language: string,
+        dryRun?: CodeReviewPipelineContext['dryRun'],
+    ): Promise<void>;
 }

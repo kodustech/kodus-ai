@@ -135,7 +135,7 @@ export class CommentManagerService implements ICommentManagerService {
                     !isCommitRun &&
                     updatedPR?.body &&
                     summaryConfig?.behaviourForExistingDescription ===
-                        BehaviourForExistingDescription.COMPLEMENT
+                    BehaviourForExistingDescription.COMPLEMENT
                 ) {
                     promptBase += `\n\n**Additional Instructions**:
                     - Focus on generating new insights and relevant information based on the code changes
@@ -197,14 +197,14 @@ export class CommentManagerService implements ICommentManagerService {
                 let userPrompt = '';
 
                 if (isCommitRun && summaryConfig?.behaviourForNewCommits === BehaviourForNewCommits.REPLACE) {
-                    userPrompt =  `
+                    userPrompt = `
                     This is the updated pull request summary:
                     <pullRequestSummaryContext>${updatedPR?.body || 'No pull request summary'}</pullRequestSummaryContext>
                     Use this summary to concatenate the existing pull request summary with the new changed files context:`;
                 }
 
                 const fallbackProvider = LLMModelProvider.OPENAI_GPT_4O
-                ;
+                    ;
                 userPrompt += `<changedFilesContext>${JSON.stringify(baseContext?.changedFiles, null, 2) || 'No files changed'}</changedFilesContext>`;
 
                 const promptRunner = new BYOKPromptRunnerService(
@@ -345,7 +345,7 @@ export class CommentManagerService implements ICommentManagerService {
                     if (
                         updatedPR?.body &&
                         summaryConfig?.behaviourForExistingDescription ===
-                            BehaviourForExistingDescription.CONCATENATE
+                        BehaviourForExistingDescription.CONCATENATE
                     ) {
                         // Log for debugging
                         this.logger.log({
@@ -1282,7 +1282,7 @@ ${reviewOptions}
                 (s) =>
                     s.clusteringInformation?.type === ClusteringType.RELATED &&
                     s.clusteringInformation?.parentSuggestionId ===
-                        suggestion.id,
+                    suggestion.id,
             );
 
             const occurrences = [
@@ -1313,11 +1313,11 @@ ${reviewOptions}
     ): string {
         return platformType === PlatformType.BITBUCKET
             ? markdown
-                  .replace(
-                      /(<\/?details>)|(<\/?summary>)|(<!-- kody-codereview -->(\n|\\n)?&#8203;)/g,
-                      '',
-                  )
-                  .trim()
+                .replace(
+                    /(<\/?details>)|(<\/?summary>)|(<!-- kody-codereview -->(\n|\\n)?&#8203;)/g,
+                    '',
+                )
+                .trim()
             : markdown;
     }
 
@@ -1698,5 +1698,57 @@ ${reviewOptions}
             language,
             platformType,
         };
+    }
+    async createNoChangesComment(
+        organizationAndTeamData: OrganizationAndTeamData,
+        prNumber: number,
+        repository: { name: string; id: string },
+        platformType: PlatformType,
+        language: string,
+        dryRun?: CodeReviewPipelineContext['dryRun'],
+    ): Promise<void> {
+        try {
+            const noChangesMessage = getTranslationsForLanguageByCategory(
+                language as LanguageValue,
+                TranslationsCategory.PullRequestFinishSummaryMarkdown,
+            ).noChangesDetected;
+
+            const commentBody = this.sanitizeBitbucketMarkdown(
+                noChangesMessage,
+                platformType,
+            );
+
+            await this.codeManagementService.createIssueComment(
+                {
+                    organizationAndTeamData,
+                    prNumber,
+                    repository: {
+                        name: repository.name,
+                        id: repository.id,
+                    },
+                    body: commentBody,
+                    dryRun,
+                },
+                dryRun?.enabled ? PlatformType.INTERNAL : undefined,
+            );
+
+            this.logger.log({
+                message: `Created no changes comment for PR#${prNumber}`,
+                context: CommentManagerService.name,
+                metadata: { prNumber },
+            });
+        } catch (error) {
+            this.logger.error({
+                message: `Failed to create no changes comment for PR#${prNumber}`,
+                context: CommentManagerService.name,
+                error: error.message,
+                metadata: {
+                    organizationAndTeamData,
+                    prNumber,
+                    repository,
+                },
+            });
+            throw error;
+        }
     }
 }
