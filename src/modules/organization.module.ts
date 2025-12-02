@@ -1,4 +1,5 @@
 import { UseCases } from '@/core/application/use-cases/organization';
+import { GetOrganizationsByDomainUseCase } from '@/core/application/use-cases/organization/get-organizations-domain.use-case';
 import { ORGANIZATION_REPOSITORY_TOKEN } from '@/core/domain/organization/contracts/organization.repository.contract';
 import { ORGANIZATION_SERVICE_TOKEN } from '@/core/domain/organization/contracts/organization.service.contract';
 import { OrganizationDatabaseRepository } from '@/core/infrastructure/adapters/repositories/typeorm/organization.repository';
@@ -43,9 +44,9 @@ import { OrganizationParametersModule } from './organizationParameters.module';
     ],
     controllers: [OrganizationController],
     exports: [
-        ORGANIZATION_SERVICE_TOKEN,
         ORGANIZATION_REPOSITORY_TOKEN,
         OrganizationModule,
+        GetOrganizationsByDomainUseCase,
     ],
 })
-export class OrganizationModule {}
+export class OrganizationModule { }

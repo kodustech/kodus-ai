@@ -19,6 +19,10 @@ import { TeamsModule } from './team.module';
 import { TeamMembersModule } from './teamMembers.module';
 import { UsersModule } from './user.module';
 
+import { OrganizationParametersModule } from './organizationParameters.module';
+import { CheckSSOUseCase } from '@/core/application/use-cases/auth/check-sso.use-case';
+import { SSOLoginUseCase } from '@/core/application/use-cases/auth/sso-login.use-case';
+
 @Module({
     imports: [
         forwardRef(() => UsersModule),
@@ -39,9 +43,12 @@ import { UsersModule } from './user.module';
         TeamMembersModule,
         forwardRef(() => ProfilesModule),
         forwardRef(() => TeamsModule),
+        OrganizationParametersModule,
     ],
     providers: [
         ...UseCases,
+        CheckSSOUseCase,
+        SSOLoginUseCase,
         {
             provide: AUTH_REPOSITORY_TOKEN,
             useClass: AuthRepository,
@@ -55,4 +62,4 @@ import { UsersModule } from './user.module';
     exports: [AUTH_SERVICE_TOKEN, JwtModule],
     controllers: [AuthController],
 })
-export class AuthModule {}
+export class AuthModule { }

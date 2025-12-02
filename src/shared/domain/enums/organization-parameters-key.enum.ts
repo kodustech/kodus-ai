@@ -8,4 +8,5 @@ export enum OrganizationParametersKey {
     COCKPIT_METRICS_VISIBILITY = 'cockpit_metrics_visibility',
     DRY_RUN_LIMIT = 'dry_run_limit',
     AUTO_LICENSE_ASSIGNMENT = 'auto_license_assignment',
+    SSO_CONFIG = 'sso_config',
 }

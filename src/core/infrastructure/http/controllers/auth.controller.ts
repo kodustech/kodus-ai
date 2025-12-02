@@ -1,7 +1,7 @@
 import { LoginUseCase } from '@/core/application/use-cases/auth/login.use-case';
 import { LogoutUseCase } from '@/core/application/use-cases/auth/logout.use-case';
 import { RefreshTokenUseCase } from '@/core/application/use-cases/auth/refresh-toke.use-case';
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { SignUpDTO } from '../dtos/create-user-organization.dto';
 import { OAuthLoginUseCase } from '@/core/application/use-cases/auth/oauth-login.use-case';
 import { CreateUserOrganizationOAuthDto } from '../dtos/create-user-organization-oauth.dto';
@@ -10,6 +10,9 @@ import { ResetPasswordUseCase } from '@/core/application/use-cases/auth/resetPas
 import { SignUpUseCase } from '@/core/application/use-cases/auth/signup.use-case';
 import { ConfirmEmailUseCase } from '@/core/application/use-cases/auth/confirm-email.use-case';
 import { ResendEmailUseCase } from '@/core/application/use-cases/auth/resend-email.use-case';
+
+import { CheckSSOUseCase } from '@/core/application/use-cases/auth/check-sso.use-case';
+import { SSOLoginUseCase } from '@/core/application/use-cases/auth/sso-login.use-case';
 
 @Controller('auth')
 export class AuthController {
@@ -23,7 +26,22 @@ export class AuthController {
         private readonly resetPasswordUseCase: ResetPasswordUseCase,
         private readonly confirmEmailUseCase: ConfirmEmailUseCase,
         private readonly resendEmailUseCase: ResendEmailUseCase,
-    ) {}
+        private readonly checkSSOUseCase: CheckSSOUseCase,
+        private readonly ssoLoginUseCase: SSOLoginUseCase,
+    ) { }
+
+    @Post('sso/check')
+    async checkSSO(@Body() body: { email: string }) {
+        return await this.checkSSOUseCase.execute(body.email);
+    }
+
+    @Get('sso/callback')
+    async ssoCallback(
+        @Query('code') code: string,
+        @Query('state') state: string,
+    ) {
+        return await this.ssoLoginUseCase.execute(code, state);
+    }
 
     @Post('login')
     async login(@Body() body: { email: string; password: string }) {
