@@ -31,6 +31,7 @@ import { OrganizationParametersModule } from './organizationParameters.module';
 import { ParametersModule } from './parameters.module';
 import { PullRequestsModule } from './pullRequests.module';
 import { UsersModule } from './user.module';
+import { KodyRulesModule } from './kodyRules.module';
 
 const UseCases = [
     UpdateIssuePropertyUseCase,
@@ -55,6 +56,7 @@ const UseCases = [
         forwardRef(() => CodebaseModule),
         forwardRef(() => UsersModule),
         forwardRef(() => OrganizationModule),
+        forwardRef(() => KodyRulesModule),
         GlobalCacheModule,
         forwardRef(() => LicenseModule),
         forwardRef(() => OrganizationParametersModule),

@@ -1,3 +1,4 @@
+import { UserRequest } from '@/config/types/http/user-request.type';
 import { RemoveRuleLikeUseCase } from '@/core/application/use-cases/rule-like/remove-rule-like.use-case';
 import { SetRuleLikeUseCase } from '@/core/application/use-cases/rule-like/set-rule-like.use-case';
 import { Body, Controller, Delete, Inject, Param, Post } from '@nestjs/common';
@@ -11,9 +12,7 @@ export class RuleLikeController {
         private readonly removeRuleLikeUseCase: RemoveRuleLikeUseCase,
 
         @Inject(REQUEST)
-        private readonly request: Request & {
-            user: { uuid: string; organization: { uuid: string } };
-        },
+        private readonly request: UserRequest,
     ) {}
 
     @Post(':ruleId/feedback')

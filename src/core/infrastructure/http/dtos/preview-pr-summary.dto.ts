@@ -1,5 +1,11 @@
-import { BehaviourForExistingDescription } from "@/config/types/general/codeReview.type";
-import { IsEnum, IsNotEmpty, IsObject, IsOptional, IsString } from "class-validator";
+import { BehaviourForExistingDescription } from '@/config/types/general/codeReview.type';
+import {
+    IsEnum,
+    IsNotEmpty,
+    IsObject,
+    IsOptional,
+    IsString,
+} from 'class-validator';
 
 export class PreviewPrSummaryDto {
     @IsNotEmpty()
@@ -12,10 +18,6 @@ export class PreviewPrSummaryDto {
         id: string;
         name: string;
     };
-
-    @IsNotEmpty()
-    @IsString()
-    organizationId: string;
 
     @IsNotEmpty()
     @IsString()

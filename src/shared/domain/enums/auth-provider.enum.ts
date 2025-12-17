@@ -3,4 +3,5 @@ export enum AuthProvider {
     GOOGLE = 'google',
     GITHUB = 'github',
     GITLAB = 'gitlab',
+    SSO = 'sso',
 }

@@ -79,3 +79,5 @@ scripts/duplicate-prs
 # Custom
 test.json
 .cursor/rules/bmad/
+.cursor
+.specify

@@ -1,7 +1,6 @@
 import { isRabbitContext } from '@golevelup/nestjs-rabbitmq';
 import {
     ExecutionContext,
-    ForbiddenException,
     Injectable,
     UnauthorizedException,
 } from '@nestjs/common';
@@ -81,8 +80,13 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
             '/auth/resend-email',
         ];
 
+        const wildCardExcludePaths = ['/auth/sso/'];
+
         // Allow access to public routes
-        if (excludePaths?.includes(request?.path)) {
+        if (
+            excludePaths?.includes(request?.path) ||
+            wildCardExcludePaths?.some((path) => request?.path.startsWith(path))
+        ) {
             return true;
         }
 

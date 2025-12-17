@@ -11,6 +11,8 @@ import { GetPRsUseCase } from './get-prs.use-case';
 import { GetRepositoriesUseCase } from './get-repositories';
 import { GetRepositoryTreeByDirectoryUseCase } from './get-repository-tree-by-directory.use-case';
 import { GetWebhookStatusUseCase } from './get-webhook-status.use-case';
+import { GetCurrentCodeManagementUserUseCase } from './get-current-code-management-user.use-case';
+import { SearchCodeManagementUsersUseCase } from './search-code-management-users.use-case';
 import { ReceiveWebhookUseCase } from './receiveWebhook.use-case';
 
 export default [
@@ -28,4 +30,6 @@ export default [
     GetRepositoryTreeByDirectoryUseCase,
     GetPRsByRepoUseCase,
     GetWebhookStatusUseCase,
+    SearchCodeManagementUsersUseCase,
+    GetCurrentCodeManagementUserUseCase,
 ];

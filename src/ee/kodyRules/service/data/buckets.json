@@ -110,6 +110,16 @@
         "description": "Require docs/ADRs for impactful changes and decisions."
     },
     {
+        "slug": "repo-context-files",
+        "title": "Repository Context (Files)",
+        "description": "Rules that rely on reading specific repository files the user references (e.g., OpenAPI specs, DoD, design system docs)."
+    },
+    {
+        "slug": "external-context-mcps",
+        "title": "External Context (MCPs)",
+        "description": "Rules that validate changes using external systems via installed MCPs (tickets, monitoring, incidents, vulnerabilities)."
+    },
+    {
         "slug": "privacy-pii",
         "title": "Privacy & PII",
         "description": "Minimize, mask, and retain personal data responsibly."

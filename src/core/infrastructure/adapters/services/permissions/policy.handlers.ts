@@ -1,3 +1,4 @@
+import { STATUS } from '@/config/types/database/status.type';
 import {
     Action,
     ResourceType,
@@ -49,12 +50,19 @@ export const extractReposFromAbility = (
  * @param resource The resource type to check (e.g., 'Issues', 'PullRequests').
  * @returns
  */
-export const checkPermissions = (
-    action: Action,
-    resource: ResourceType,
-): PolicyHandler => {
+export const checkPermissions = (params: {
+    action: Action;
+    resource: ResourceType;
+    status?: STATUS[];
+}): PolicyHandler => {
+    const { action, resource, status = [STATUS.ACTIVE] } = params;
+
     return (ability, request) => {
         if (!request.user?.organization?.uuid) {
+            return false;
+        }
+
+        if (!status.includes(request.user.status)) {
             return false;
         }
 
@@ -76,9 +84,9 @@ export const checkPermissions = (
  * It can have keys for params, query, body, or a custom function/value.
  * @returns
  */
-export const checkRepoPermissions = (
-    action: Action,
-    resource: ResourceType,
+export const checkRepoPermissions = (params: {
+    action: Action;
+    resource: ResourceType;
     repo: {
         key?: {
             params?: string;
@@ -86,10 +94,17 @@ export const checkRepoPermissions = (
             body?: string;
         };
         custom?: string | number | (() => string | number) | null;
-    },
-): PolicyHandler => {
+    };
+    status?: STATUS[];
+}): PolicyHandler => {
+    const { action, resource, repo, status = [STATUS.ACTIVE] } = params;
+
     return (ability, request) => {
         if (!request.user?.organization?.uuid) {
+            return false;
+        }
+
+        if (!status.includes(request.user.status)) {
             return false;
         }
 
@@ -113,9 +128,18 @@ export const checkRepoPermissions = (
     };
 };
 
-export const checkRole = (role: Role): PolicyHandler => {
+export const checkRole = (params: {
+    role: Role;
+    status?: STATUS[];
+}): PolicyHandler => {
+    const { role, status = [STATUS.ACTIVE] } = params;
+
     return (ability, request) => {
         if (!request.user?.organization?.uuid) {
+            return false;
+        }
+
+        if (!status.includes(request.user.status)) {
             return false;
         }
 

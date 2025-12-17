@@ -1,33 +1,33 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { REQUEST } from '@nestjs/core';
-import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logger/pino.service';
-import { IUseCase } from '@/shared/domain/interfaces/use-case.interface';
-import { EnrichedPullRequestsQueryDto } from '@/core/infrastructure/http/dtos/enriched-pull-requests-query.dto';
-import { EnrichedPullRequestResponse } from '@/core/infrastructure/http/dtos/enriched-pull-request-response.dto';
-import {
-    PaginatedEnrichedPullRequestsResponse,
-    PaginationMetadata,
-} from '@/core/infrastructure/http/dtos/paginated-enriched-pull-requests.dto';
+import { UserRequest } from '@/config/types/http/user-request.type';
 import {
     AUTOMATION_EXECUTION_SERVICE_TOKEN,
     IAutomationExecutionService,
 } from '@/core/domain/automation/contracts/automation-execution.service';
 import {
-    PULL_REQUESTS_SERVICE_TOKEN,
-    IPullRequestsService,
-} from '@/core/domain/pullRequests/contracts/pullRequests.service.contracts';
-import {
     CODE_REVIEW_EXECUTION_SERVICE,
     ICodeReviewExecutionService,
 } from '@/core/domain/codeReviewExecutions/contracts/codeReviewExecution.service.contract';
-import { UserRequest } from '@/config/types/http/user-request.type';
-import { AuthorizationService } from '@/core/infrastructure/adapters/services/permissions/authorization.service';
 import {
     Action,
     ResourceType,
 } from '@/core/domain/permissions/enums/permissions.enum';
-import { IPullRequests } from '@/core/domain/pullRequests/interfaces/pullRequests.interface';
+import {
+    IPullRequestsService,
+    PULL_REQUESTS_SERVICE_TOKEN,
+} from '@/core/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { DeliveryStatus } from '@/core/domain/pullRequests/enums/deliveryStatus.enum';
+import { IPullRequests } from '@/core/domain/pullRequests/interfaces/pullRequests.interface';
+import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logger/pino.service';
+import { AuthorizationService } from '@/core/infrastructure/adapters/services/permissions/authorization.service';
+import { EnrichedPullRequestResponse } from '@/core/infrastructure/http/dtos/enriched-pull-request-response.dto';
+import { EnrichedPullRequestsQueryDto } from '@/core/infrastructure/http/dtos/enriched-pull-requests-query.dto';
+import {
+    PaginatedEnrichedPullRequestsResponse,
+    PaginationMetadata,
+} from '@/core/infrastructure/http/dtos/paginated-enriched-pull-requests.dto';
+import { IUseCase } from '@/shared/domain/interfaces/use-case.interface';
+import { Inject, Injectable } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
 
 @Injectable()
 export class GetEnrichedPullRequestsUseCase implements IUseCase {
@@ -83,11 +83,11 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
 
         try {
             const assignedRepositoryIds =
-                await this.authorizationService.getRepositoryScope(
-                    this.request.user,
-                    Action.Read,
-                    ResourceType.PullRequests,
-                );
+                await this.authorizationService.getRepositoryScope({
+                    user: this.request.user,
+                    action: Action.Read,
+                    resource: ResourceType.PullRequests,
+                });
 
             const allowedRepositoryIds = (() => {
                 if (repositoryId) {
@@ -179,7 +179,8 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             codeReviewExecutions.length === 0
                         ) {
                             this.logger.debug({
-                                message: 'Skipping PR without code review history',
+                                message:
+                                    'Skipping PR without code review history',
                                 context: GetEnrichedPullRequestsUseCase.name,
                                 metadata: {
                                     prNumber: execution.pullRequestNumber,
@@ -371,9 +372,10 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         };
     }
 
-    private extractSuggestionsCount(
-        pullRequest: IPullRequests,
-    ): { sent: number; filtered: number } {
+    private extractSuggestionsCount(pullRequest: IPullRequests): {
+        sent: number;
+        filtered: number;
+    } {
         return (pullRequest.files ?? []).reduce(
             (
                 acc: { sent: number; filtered: number },

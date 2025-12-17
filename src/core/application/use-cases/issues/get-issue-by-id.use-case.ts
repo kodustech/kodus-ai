@@ -27,6 +27,7 @@ import {
     INTEGRATION_CONFIG_SERVICE_TOKEN,
 } from '@/core/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { IntegrationConfigKey } from '@/shared/domain/enums/Integration-config-key.enum';
+import { IIssue } from '@/core/domain/issues/interfaces/issues.interface';
 
 @Injectable()
 export class GetIssueByIdUseCase implements IUseCase {
@@ -168,7 +169,32 @@ export class GetIssueByIdUseCase implements IUseCase {
             });
         }
 
-        const allRelevantFeedbacks = codeReviewFeedback?.filter(
+        const latestFeedbackBySuggestionId = new Map();
+        
+        codeReviewFeedback?.forEach((feedback) => {
+            if (!feedback?.suggestionId) return;
+
+            const existingFeedback = latestFeedbackBySuggestionId.get(
+                feedback.suggestionId,
+            );
+
+            if (
+                !existingFeedback ||
+                new Date(feedback.createdAt) >
+                    new Date(existingFeedback.createdAt)
+            ) {
+                latestFeedbackBySuggestionId.set(
+                    feedback.suggestionId,
+                    feedback,
+                );
+            }
+        });
+
+        const uniqueFeedbacks = Array.from(
+            latestFeedbackBySuggestionId.values(),
+        );
+
+        const allRelevantFeedbacks = uniqueFeedbacks.filter(
             (feedback) =>
                 feedback?.suggestionId &&
                 suggestionIds.has(feedback.suggestionId),

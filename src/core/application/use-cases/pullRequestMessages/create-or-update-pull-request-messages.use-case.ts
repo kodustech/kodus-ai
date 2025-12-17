@@ -76,8 +76,9 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
         // For non-global configurations, check if content matches global/parent config
         // If it does, delete the specific config to inherit instead of creating/updating
         if (pullRequestMessages.configLevel !== ConfigLevel.GLOBAL) {
-            const shouldInherit = await this.shouldInheritFromParent(pullRequestMessages);
-            
+            const shouldInherit =
+                await this.shouldInheritFromParent(pullRequestMessages);
+
             if (shouldInherit && existingPullRequestMessage) {
                 // Delete existing configuration to inherit from parent
                 await this.pullRequestMessagesService.deleteByFilter({
@@ -86,9 +87,10 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
                     directoryId: pullRequestMessages.directoryId,
                     configLevel: pullRequestMessages.configLevel,
                 });
-                
+
                 this.logger.log({
-                    message: 'Deleted repository/directory configuration to inherit from parent',
+                    message:
+                        'Deleted repository/directory configuration to inherit from parent',
                     context: CreateOrUpdatePullRequestMessagesUseCase.name,
                     metadata: {
                         organizationId: pullRequestMessages.organizationId,
@@ -99,11 +101,12 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
                 });
                 return;
             }
-            
+
             if (shouldInherit && !existingPullRequestMessage) {
                 // No need to create config if it matches parent - just inherit
                 this.logger.log({
-                    message: 'Configuration matches parent, no action needed - inheriting',
+                    message:
+                        'Configuration matches parent, no action needed - inheriting',
                     context: CreateOrUpdatePullRequestMessagesUseCase.name,
                     metadata: {
                         organizationId: pullRequestMessages.organizationId,
@@ -207,7 +210,10 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
                 pullRequestMessages.directoryId,
             );
 
-            return this.areConfigurationsEqual(pullRequestMessages, parentConfig);
+            return this.areConfigurationsEqual(
+                pullRequestMessages,
+                parentConfig,
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Error checking if should inherit from parent',
@@ -266,10 +272,20 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
         overrideConfig: Partial<IPullRequestMessages>,
     ): IPullRequestMessages {
         return {
-            startReviewMessage: overrideConfig.startReviewMessage || baseConfig.startReviewMessage,
-            endReviewMessage: overrideConfig.endReviewMessage || baseConfig.endReviewMessage,
+            startReviewMessage:
+                overrideConfig.startReviewMessage ||
+                baseConfig.startReviewMessage,
+            endReviewMessage:
+                overrideConfig.endReviewMessage || baseConfig.endReviewMessage,
             globalSettings: {
-                hideComments: overrideConfig.globalSettings?.hideComments ?? baseConfig.globalSettings?.hideComments ?? false,
+                hideComments:
+                    overrideConfig.globalSettings?.hideComments ??
+                    baseConfig.globalSettings?.hideComments ??
+                    false,
+                suggestionCopyPrompt:
+                    overrideConfig.globalSettings?.suggestionCopyPrompt ??
+                    baseConfig.globalSettings?.suggestionCopyPrompt ??
+                    true,
             },
         } as IPullRequestMessages;
     }
@@ -278,7 +294,10 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
         return {
             startReviewMessage: config.startReviewMessage,
             endReviewMessage: config.endReviewMessage,
-            globalSettings: config.globalSettings || { hideComments: false },
+            globalSettings: config.globalSettings || {
+                hideComments: false,
+                suggestionCopyPrompt: true,
+            },
         } as IPullRequestMessages;
     }
 
@@ -300,27 +319,39 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
         config2: IPullRequestMessages,
     ): boolean {
         // Compare startReviewMessage
-        if (!this.areMessagesEqual(config1.startReviewMessage, config2.startReviewMessage)) {
+        if (
+            !this.areMessagesEqual(
+                config1.startReviewMessage,
+                config2.startReviewMessage,
+            )
+        ) {
             return false;
         }
 
         // Compare endReviewMessage
-        if (!this.areMessagesEqual(config1.endReviewMessage, config2.endReviewMessage)) {
+        if (
+            !this.areMessagesEqual(
+                config1.endReviewMessage,
+                config2.endReviewMessage,
+            )
+        ) {
             return false;
         }
 
         // Compare globalSettings
-        if (!this.areGlobalSettingsEqual(config1.globalSettings, config2.globalSettings)) {
+        if (
+            !this.areGlobalSettingsEqual(
+                config1.globalSettings,
+                config2.globalSettings,
+            )
+        ) {
             return false;
         }
 
         return true;
     }
 
-    private areMessagesEqual(
-        message1: any,
-        message2: any,
-    ): boolean {
+    private areMessagesEqual(message1: any, message2: any): boolean {
         // Handle null/undefined cases
         if (!message1 && !message2) return true;
         if (!message1 || !message2) return false;
@@ -331,14 +362,14 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
         );
     }
 
-    private areGlobalSettingsEqual(
-        settings1: any,
-        settings2: any,
-    ): boolean {
+    private areGlobalSettingsEqual(settings1: any, settings2: any): boolean {
         // Handle null/undefined cases
         if (!settings1 && !settings2) return true;
         if (!settings1 || !settings2) return false;
 
-        return settings1.hideComments === settings2.hideComments;
+        return (
+            settings1.hideComments === settings2.hideComments &&
+            settings1.suggestionCopyPrompt === settings2.suggestionCopyPrompt
+        );
     }
 }

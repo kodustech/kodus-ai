@@ -3,6 +3,7 @@ import { Column, Entity, OneToMany } from 'typeorm';
 import { AuthIntegrationModel } from './authIntegration.model';
 import { IntegrationModel } from './integration.model';
 import { OrganizationParametersModel } from './organizationParameters.model';
+import { SSOConfigModel } from './ssoConfig.model';
 import { TeamModel } from './team.model';
 import { TeamMemberModel } from './teamMember.model';
 import { UserModel } from './user.model';
@@ -44,4 +45,7 @@ export class OrganizationModel extends CoreModel {
         (config) => config.organization,
     )
     organizationParameters: OrganizationParametersModel[];
+
+    @OneToMany(() => SSOConfigModel, (ssoConfig) => ssoConfig.organization)
+    ssoConfig: SSOConfigModel[];
 }

@@ -90,7 +90,10 @@ export class PermissionsController {
 
     @Post('assign-repos')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Update, ResourceType.UserSettings))
+    @CheckPolicies(checkPermissions({
+        action: Action.Update,
+        resource: ResourceType.UserSettings
+    }))
     async assignRepos(
         @Body()
         body: {

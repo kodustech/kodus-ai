@@ -35,14 +35,20 @@ export class TeamMembersController {
 
     @Get('/')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Read, ResourceType.UserSettings))
+    @CheckPolicies(checkPermissions({
+        action: Action.Read,
+        resource: ResourceType.UserSettings
+    }))
     public async getTeamMembers(@Query() query: TeamQueryDto) {
         return this.getTeamMembersUseCase.execute(query.teamId);
     }
 
     @Post('/')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Create, ResourceType.UserSettings))
+    @CheckPolicies(checkPermissions({
+        action: Action.Create,
+        resource: ResourceType.UserSettings
+    }))
     public async createOrUpdateTeamMembers(
         @Body() body: { members: IMembers[]; teamId: string },
     ) {
@@ -54,7 +60,10 @@ export class TeamMembersController {
 
     @Delete('/:uuid')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Delete, ResourceType.UserSettings))
+    @CheckPolicies(checkPermissions({
+        action: Action.Delete,
+        resource: ResourceType.UserSettings
+    }))
     public async deleteTeamMember(
         @Param('uuid') uuid: string,
         @Query('removeAll', new DefaultValuePipe(false), ParseBoolPipe)

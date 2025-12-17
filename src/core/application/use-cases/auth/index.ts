@@ -1,12 +1,14 @@
-import { OAuthLoginUseCase } from './oauth-login.use-case';
+import { ConfirmEmailUseCase } from './confirm-email.use-case';
+import { ForgotPasswordUseCase } from './forgotPasswordUseCase';
 import { LoginUseCase } from './login.use-case';
 import { LogoutUseCase } from './logout.use-case';
+import { OAuthLoginUseCase } from './oauth-login.use-case';
 import { RefreshTokenUseCase } from './refresh-toke.use-case';
-import { ForgotPasswordUseCase } from './forgotPasswordUseCase';
+import { ResendEmailUseCase } from './resend-email.use-case';
 import { ResetPasswordUseCase } from './resetPasswordUseCase';
 import { SignUpUseCase } from './signup.use-case';
-import { ConfirmEmailUseCase } from './confirm-email.use-case';
-import { ResendEmailUseCase } from './resend-email.use-case';
+import { SSOCheckUseCase } from './sso-check.use-case';
+import { SSOLoginUseCase } from './sso-login.use-case';
 
 export const UseCases = [
     LoginUseCase,
@@ -18,4 +20,6 @@ export const UseCases = [
     SignUpUseCase,
     ConfirmEmailUseCase,
     ResendEmailUseCase,
+    SSOLoginUseCase,
+    SSOCheckUseCase,
 ];

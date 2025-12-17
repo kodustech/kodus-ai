@@ -38,7 +38,10 @@ export class PullRequestMessagesController {
     @Post('/')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
-        checkPermissions(Action.Create, ResourceType.CodeReviewSettings),
+        checkPermissions({
+            action: Action.Create,
+            resource: ResourceType.CodeReviewSettings,
+        }),
     )
     public async createOrUpdatePullRequestMessages(
         @Body() body: IPullRequestMessages,
@@ -52,17 +55,26 @@ export class PullRequestMessagesController {
     @Get('/find-by-repository-or-directory')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
-        checkRepoPermissions(Action.Read, ResourceType.CodeReviewSettings, {
-            key: {
-                query: 'repositoryId',
+        checkRepoPermissions({
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+            repo: {
+                key: {
+                    query: 'repositoryId',
+                },
             },
         }),
     )
     public async findByRepoOrDirectoryId(
-        @Query('organizationId') organizationId: string,
         @Query('repositoryId') repositoryId: string,
         @Query('directoryId') directoryId?: string,
     ) {
+        const organizationId = this.request?.user?.organization?.uuid;
+
+        if (!organizationId) {
+            throw new Error('Organization ID is missing from request');
+        }
+
         return await this.findByRepositoryOrDirectoryIdPullRequestMessagesUseCase.execute(
             organizationId,
             repositoryId,

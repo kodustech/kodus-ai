@@ -997,7 +997,6 @@
         "**/rust-project.json",
         "**/pom.xml",
         "**/pom.xml.asc",
-        "**/classes/**",
         "**/checkouts/**",
         "**/.lein-deps-sum",
         "**/.lein-repl-history",

@@ -700,6 +700,27 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             throw error;
         }
     }
+
+    async findRecentByRepositoryId(
+        organizationId: string,
+        repositoryId: string,
+        limit: number = 10,
+    ): Promise<PullRequestsEntity[]> {
+        try {
+            const docs = await this.pullRequestsModel
+                .find({
+                    'organizationId': organizationId,
+                    'repository.id': repositoryId,
+                })
+                .sort({ openedAt: -1, createdAt: -1 })
+                .limit(limit)
+                .exec();
+
+            return mapSimpleModelsToEntities(docs, PullRequestsEntity);
+        } catch (error) {
+            throw error;
+        }
+    }
     //#endregion
 
     //#region Update

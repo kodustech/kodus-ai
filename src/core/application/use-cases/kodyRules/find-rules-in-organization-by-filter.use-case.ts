@@ -3,7 +3,10 @@ import {
     KODY_RULES_SERVICE_TOKEN,
     IKodyRulesService,
 } from '@/core/domain/kodyRules/contracts/kodyRules.service.contract';
-import { IKodyRule } from '@/core/domain/kodyRules/interfaces/kodyRules.interface';
+import {
+    IKodyRule,
+    KodyRulesStatus,
+} from '@/core/domain/kodyRules/interfaces/kodyRules.interface';
 import {
     Action,
     ResourceType,
@@ -49,9 +52,21 @@ export class FindRulesInOrganizationByRuleFilterKodyRulesUseCase {
                 repoIds: [repositoryId],
             });
 
+            const ruleFilters: Partial<IKodyRule>[] = [];
+
+            if (repositoryId && directoryId) {
+                ruleFilters.push({ repositoryId, directoryId });
+                ruleFilters.push({ repositoryId: 'global' });
+            } else if (repositoryId) {
+                ruleFilters.push({ repositoryId });
+                ruleFilters.push({ repositoryId: 'global' });
+            } else if (directoryId) {
+                ruleFilters.push({ directoryId });
+            }
+
             const existingRules = await this.kodyRulesService.find({
                 organizationId,
-                rules: [{ repositoryId, directoryId }],
+                ...(ruleFilters.length ? { rules: ruleFilters } : {}),
             });
 
             if (!existingRules || existingRules.length === 0) {
@@ -65,15 +80,33 @@ export class FindRulesInOrganizationByRuleFilterKodyRulesUseCase {
             let filteredRules = allRules;
 
             if (repositoryId && !directoryId) {
-                filteredRules = allRules.filter((rule) => !rule.directoryId);
+                filteredRules = allRules.filter(
+                    (rule) =>
+                        rule.repositoryId === 'global' ||
+                        (rule.repositoryId === repositoryId &&
+                            !rule.directoryId),
+                );
             } else if (repositoryId && directoryId) {
                 filteredRules = allRules.filter(
-                    (rule) => rule.directoryId === directoryId,
+                    (rule) =>
+                        rule.repositoryId === 'global' ||
+                        (rule.repositoryId === repositoryId &&
+                            rule.directoryId === directoryId),
                 );
             }
 
-            // Aplica o filtro personalizado passado como parâmetro
-            const rules = filteredRules.filter((rule) => {
+            const includeDeleted = Object.prototype.hasOwnProperty.call(
+                filter,
+                'status',
+            );
+
+            const filteredByStatus = includeDeleted
+                ? filteredRules
+                : filteredRules.filter(
+                      (rule) => rule.status !== KodyRulesStatus.DELETED,
+                  );
+
+            const rules = filteredByStatus.filter((rule) => {
                 for (const key in filter) {
                     if (rule[key] !== filter[key]) {
                         return false;

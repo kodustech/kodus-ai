@@ -6,26 +6,26 @@ import {
     Action,
     ResourceType,
 } from '@/core/domain/permissions/enums/permissions.enum';
+import { BackoffPresets } from '@/shared/utils/polling';
 import {
-    Controller,
-    Post,
     Body,
-    StreamableFile,
-    Res,
+    Controller,
     Inject,
+    Post,
+    Res,
+    StreamableFile,
     UseGuards,
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Response } from 'express';
-import { writeFileSync, createReadStream, unlink } from 'fs';
+import { createReadStream, unlink, writeFileSync } from 'fs';
 import { join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import {
-    PolicyGuard,
     CheckPolicies,
+    PolicyGuard,
 } from '../../adapters/services/permissions/policy.guard';
 import { checkPermissions } from '../../adapters/services/permissions/policy.handlers';
-import { BackoffPresets } from '@/shared/utils/polling';
 
 function replacer(key: any, value: any) {
     if (value instanceof Map) {
@@ -49,7 +49,10 @@ export class CodeBaseController {
     @Post('analyze-dependencies')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
-        checkPermissions(Action.Manage, ResourceType.CodeReviewSettings),
+        checkPermissions({
+            action: Action.Manage,
+            resource: ResourceType.CodeReviewSettings
+        }),
     )
     async analyzeDependencies(
         @Body()
@@ -140,7 +143,10 @@ export class CodeBaseController {
     @Post('content-from-diff')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
-        checkPermissions(Action.Manage, ResourceType.CodeReviewSettings),
+        checkPermissions({
+            action: Action.Manage,
+            resource: ResourceType.CodeReviewSettings
+        }),
     )
     async getRelatedContentFromDiff(
         @Body()

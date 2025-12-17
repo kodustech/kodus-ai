@@ -22,6 +22,7 @@ import { OrganizationAndTeamData } from '@/config/types/general/organizationAndT
 import { PlatformType } from '@/shared/domain/enums/platform-type.enum';
 import { DeliveryStatus } from '@/core/domain/pullRequests/enums/deliveryStatus.enum';
 import { Repository } from '@/config/types/general/codeReview.type';
+import { PullRequest } from '@/core/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 @Injectable()
 export class PullRequestsService implements IPullRequestsService {
@@ -199,6 +200,18 @@ export class PullRequestsService implements IPullRequestsService {
             newSuggestion,
             pullRequestNumber,
             repositoryName,
+        );
+    }
+
+    async findRecentByRepositoryId(
+        organizationId: string,
+        repositoryId: string,
+        limit: number = 10,
+    ): Promise<PullRequestsEntity[]> {
+        return this.pullRequestsRepository.findRecentByRepositoryId(
+            organizationId,
+            repositoryId,
+            limit,
         );
     }
 
@@ -1013,6 +1026,473 @@ export class PullRequestsService implements IPullRequestsService {
             });
             return [];
         }
+    }
+
+    async getOnboardingReviewModeSignals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds: string[];
+        limit?: number;
+    }): Promise<
+        Array<{
+            repositoryId: string;
+            sampleSize: number;
+            metrics: Record<string, number>;
+            recommendation: {
+                mode: 'Safety' | 'Speed' | 'Coach' | 'Default';
+                reasons: string[];
+            };
+        }>
+    > {
+        const { organizationAndTeamData, repositoryIds, limit = 10 } = params;
+        const perRepoPrLimit = Math.min(Math.max(limit, 1), 3);
+        const perRepoTimeoutMs = 5000;
+
+        const sensitivePathTokens = [
+            'auth',
+            'security',
+            'payment',
+            'billing',
+            'checkout',
+            'permissions',
+            'admin',
+            'migrations',
+            'infra',
+            'terraform',
+            'k8s',
+            'helm',
+            'prod',
+        ];
+
+        const pct = (count: number, total: number) =>
+            total > 0 ? (count / total) * 100 : 0;
+
+        const calcMedian = (values: number[]) => {
+            if (!values.length) return 0;
+            const sorted = [...values].sort((a, b) => a - b);
+            const mid = Math.floor(sorted.length / 2);
+            return sorted.length % 2
+                ? sorted[mid]
+                : (sorted[mid - 1] + sorted[mid]) / 2;
+        };
+
+        const calcP90 = (values: number[]) => {
+            if (!values.length) return 0;
+            const sorted = [...values].sort((a, b) => a - b);
+            const idx = Math.ceil(sorted.length * 0.9) - 1;
+            return sorted[Math.min(Math.max(idx, 0), sorted.length - 1)];
+        };
+
+        const classifyTitle = (title: string, tokens: string[]) => {
+            const lower = (title || '').toLowerCase();
+            return tokens.some((t) => lower.includes(t));
+        };
+
+        const getPrSize = (pr: PullRequestsEntity) => {
+            if (typeof pr.totalChanges === 'number') return pr.totalChanges;
+            if (
+                typeof pr.totalAdded === 'number' &&
+                typeof pr.totalDeleted === 'number'
+            ) {
+                return pr.totalAdded + pr.totalDeleted;
+            }
+            const filesTotal = (pr.files || []).reduce(
+                (acc, f) => acc + (f.changes ?? 0),
+                0,
+            );
+            return filesTotal || 0;
+        };
+
+        const hasSensitivePathTouch = (pr: PullRequestsEntity) => {
+            return (pr.files || []).some((f) =>
+                sensitivePathTokens.some((token) =>
+                    (f.path || f.filename || '').toLowerCase().includes(token),
+                ),
+            );
+        };
+
+        const getWeeksRange = (dates: Date[]) => {
+            if (!dates.length) return 1;
+            const min = dates.reduce((acc, d) => (d < acc ? d : acc), dates[0]);
+            const max = dates.reduce((acc, d) => (d > acc ? d : acc), dates[0]);
+            const diffDays = Math.max(
+                1,
+                (max.getTime() - min.getTime()) / (1000 * 60 * 60 * 24),
+            );
+            return Math.max(1, diffDays / 7);
+        };
+
+        const buildReasons = (
+            entries: Array<{ key: string; value: number }>,
+            topN: number = 2,
+        ) =>
+            entries
+                .sort((a, b) => b.value - a.value)
+                .slice(0, topN)
+                .map((e) => e.key);
+
+        const repositories =
+            (await this.codeManagement.getRepositories({
+                organizationAndTeamData,
+            })) || [];
+
+        const repoById = new Map(
+            repositories
+                .filter((r) => r && (r.id || (r as any).uuid))
+                .map((r) => [String(r.id ?? (r as any).uuid), r]),
+        );
+
+        const results = await Promise.all(
+            repositoryIds.map(async (repositoryId) => {
+                const repo = repoById.get(String(repositoryId));
+
+                let prs: PullRequestsEntity[] = [];
+
+                try {
+                    const integrationPRs =
+                        (await Promise.race([
+                            this.codeManagement.getPullRequestsWithFiles({
+                                organizationAndTeamData,
+                                filters: {
+                                    repositoryId: String(repositoryId),
+                                    limit: perRepoPrLimit,
+                                },
+                            }),
+                            new Promise<null>((resolve) =>
+                                setTimeout(
+                                    () => resolve(null),
+                                    perRepoTimeoutMs,
+                                ),
+                            ),
+                        ])) || [];
+
+                    if (integrationPRs === null) {
+                        this.logger.warn({
+                            message:
+                                'Timed out fetching PRs for onboarding signals',
+                            context: PullRequestsService.name,
+                            metadata: { repositoryId, organizationAndTeamData },
+                        });
+                    } else {
+                        const sortedPRs = (integrationPRs as any[]).sort(
+                            (a: any, b: any) => {
+                                const ad = new Date(
+                                    a.created_at || a.updated_at || '',
+                                ).getTime();
+                                const bd = new Date(
+                                    b.created_at || b.updated_at || '',
+                                ).getTime();
+                                return bd - ad;
+                            },
+                        );
+
+                        const recentPRs = sortedPRs.slice(0, perRepoPrLimit);
+
+                        prs = recentPRs.map((pr: any) => {
+                            const prNumber =
+                                pr.number ?? pr.pull_number ?? pr.id;
+                            const totalChanges = (pr as any).totalChanges;
+                            const addedDeleted =
+                                ((pr as any).totalAdded ?? 0) +
+                                ((pr as any).totalDeleted ?? 0);
+                            const safeTotalChanges =
+                                totalChanges !== undefined &&
+                                totalChanges !== null &&
+                                !Number.isNaN(totalChanges)
+                                    ? Number(totalChanges)
+                                    : addedDeleted;
+
+                            const mappedFiles: IFile[] = (
+                                pr.pullRequestFiles ||
+                                pr.files ||
+                                []
+                            ).map((f: any) => {
+                                const added = Number(f.additions ?? 0) || 0;
+                                const deleted = Number(f.deletions ?? 0) || 0;
+                                const changes =
+                                    Number(f.changes ?? added + deleted) || 0;
+
+                                const path =
+                                    f.path || f.filePath || f.filename || '';
+
+                                return {
+                                    id: uuidv4(),
+                                    path,
+                                    filename:
+                                        f.filename ||
+                                        f.path ||
+                                        f.filePath ||
+                                        '',
+                                    previousName: '',
+                                    status: f.status || '',
+                                    createdAt: '',
+                                    updatedAt: '',
+                                    added,
+                                    deleted,
+                                    changes,
+                                    suggestions: [],
+                                };
+                            });
+
+                            const totals =
+                                this.generateTotalFileMetrics(mappedFiles);
+                            const totalAdded =
+                                (pr as any).totalAdded ?? totals.totalAdded;
+                            const totalDeleted =
+                                (pr as any).totalDeleted ?? totals.totalDeleted;
+                            const totalChangesValue =
+                                safeTotalChanges || totals.totalChanges || 0;
+
+                            return {
+                                title: pr.title,
+                                status: pr.state,
+                                merged:
+                                    (pr as any).merged ??
+                                    (pr.state || '').toLowerCase() ===
+                                        PullRequestState.MERGED,
+                                number: prNumber,
+                                url: (pr as any).prURL || (pr as any).url || '',
+                                baseBranchRef:
+                                    (pr as any).base?.ref ||
+                                    pr.targetRefName ||
+                                    '',
+                                headBranchRef:
+                                    (pr as any).head?.ref ||
+                                    pr.sourceRefName ||
+                                    '',
+                                openedAt: pr.created_at,
+                                closedAt: pr.closed_at,
+                                updatedAt: pr.updated_at,
+                                repository: {
+                                    id: String(repositoryId),
+                                    name:
+                                        repo?.name ||
+                                        (repo as any)?.fullName ||
+                                        pr.repositoryData?.name ||
+                                        '',
+                                    fullName: (repo as any)?.fullName || '',
+                                    language: (repo as any)?.language || '',
+                                    url: '',
+                                    createdAt: '',
+                                    updatedAt: '',
+                                },
+                                files: mappedFiles,
+                                totalAdded,
+                                totalDeleted,
+                                totalChanges: totalChangesValue,
+                                user: null,
+                                commits: [],
+                                provider: '',
+                                assignees: [],
+                                reviewers: [],
+                                suggestionsByPR: [],
+                                prLevelSuggestions: [],
+                                organizationId:
+                                    organizationAndTeamData.organizationId,
+                                syncedEmbeddedSuggestions: false,
+                                syncedWithIssues: false,
+                                isDraft: Boolean(pr.isDraft),
+                            } as unknown as PullRequestsEntity;
+                        });
+                    }
+                } catch (error) {
+                    this.logger.warn({
+                        message: 'Failed to fetch PRs for onboarding signals',
+                        context: PullRequestsService.name,
+                        error,
+                        metadata: { repositoryId, organizationAndTeamData },
+                    });
+                    prs = [];
+                }
+
+                const N = prs?.length;
+                if (!N) {
+                    return {
+                        repositoryId,
+                        sampleSize: 0,
+                        metrics: {},
+                        recommendation: {
+                            mode: 'Speed',
+                            reasons: ['no_pr_history'],
+                        },
+                    };
+                }
+
+                const hotfixPct = pct(
+                    prs.filter((pr) =>
+                        classifyTitle(pr.title, [
+                            'hotfix',
+                            'revert',
+                            'rollback',
+                        ]),
+                    ).length,
+                    N,
+                );
+                const bugfixPct = pct(
+                    prs.filter((pr) =>
+                        classifyTitle(pr.title, ['fix', 'bug', 'regression']),
+                    ).length,
+                    N,
+                );
+                const securityPct = pct(
+                    prs.filter((pr) =>
+                        classifyTitle(pr.title, [
+                            'security',
+                            'vuln',
+                            'auth',
+                            'permission',
+                        ]),
+                    ).length,
+                    N,
+                );
+                const perfPct = pct(
+                    prs.filter((pr) =>
+                        classifyTitle(pr.title, [
+                            'perf',
+                            'optimize',
+                            'slow',
+                            'latency',
+                        ]),
+                    ).length,
+                    N,
+                );
+
+                const sensitiveTouchPct = pct(
+                    prs.filter((pr) => hasSensitivePathTouch(pr)).length,
+                    N,
+                );
+
+                const prSizes = prs.map((pr) => getPrSize(pr));
+                const medianLines = calcMedian(prSizes);
+                const p90Lines = calcP90(prSizes);
+
+                const mergedDates = prs
+                    .filter((pr) => pr.merged)
+                    .map(
+                        (pr) =>
+                            new Date(pr.closedAt || pr.updatedAt || Date.now()),
+                    );
+                const weeks = getWeeksRange(
+                    mergedDates.length
+                        ? mergedDates
+                        : prs.map(
+                              (pr) => new Date(pr.openedAt || pr.createdAt),
+                          ),
+                );
+                const mergesPerWeek = mergedDates.length
+                    ? mergedDates.length / weeks
+                    : prs.length / weeks;
+
+                // Comment-based metrics are not available in the current model; default to 0.
+                const commentsPerPR = 0;
+                const qualityPct = 0;
+                const nitPct = 0;
+
+                const HIGH_RISK =
+                    hotfixPct >= 10 ||
+                    securityPct >= 10 ||
+                    sensitiveTouchPct >= 30 ||
+                    (bugfixPct >= 40 && hotfixPct >= 10) ||
+                    (perfPct >= 25 && p90Lines >= 800);
+
+                const HIGH_VELOCITY = mergesPerWeek >= 8;
+
+                const LARGE_PRS = p90Lines >= 800 || medianLines >= 400;
+
+                const LOW_NOISE_TOLERANCE =
+                    commentsPerPR <= 1.0 ||
+                    (commentsPerPR <= 1.5 && HIGH_VELOCITY);
+
+                const COACHING_NEED =
+                    qualityPct >= 35 && nitPct <= 35 && commentsPerPR >= 1.5;
+
+                let mode: 'Safety' | 'Speed' | 'Coach' | 'Default' = 'Default';
+                let reasons: string[] = [];
+
+                if (
+                    HIGH_RISK &&
+                    !(
+                        HIGH_VELOCITY &&
+                        LOW_NOISE_TOLERANCE &&
+                        !(securityPct >= 10)
+                    )
+                ) {
+                    mode = 'Safety';
+                    reasons = buildReasons(
+                        [
+                            { key: 'hotfixPct', value: hotfixPct },
+                            { key: 'securityPct', value: securityPct },
+                            {
+                                key: 'sensitiveTouchPct',
+                                value: sensitiveTouchPct,
+                            },
+                            { key: 'perfPct', value: perfPct },
+                            { key: 'p90Lines', value: p90Lines },
+                        ],
+                        2,
+                    );
+                } else if (
+                    !HIGH_RISK &&
+                    (HIGH_VELOCITY || LARGE_PRS) &&
+                    LOW_NOISE_TOLERANCE
+                ) {
+                    mode = 'Speed';
+                    reasons = buildReasons(
+                        [
+                            { key: 'HIGH_VELOCITY', value: mergesPerWeek },
+                            {
+                                key: 'LOW_NOISE_TOLERANCE',
+                                value: commentsPerPR,
+                            },
+                            { key: 'p90Lines', value: p90Lines },
+                            { key: 'medianLines', value: medianLines },
+                        ],
+                        2,
+                    );
+                } else if (!HIGH_RISK && COACHING_NEED) {
+                    mode = 'Coach';
+                    reasons = buildReasons(
+                        [
+                            { key: 'qualityPct', value: qualityPct },
+                            { key: 'commentsPerPR', value: commentsPerPR },
+                        ],
+                        2,
+                    );
+                }
+
+                return {
+                    repositoryId,
+                    sampleSize: N,
+                    metrics: {
+                        hotfixPct,
+                        bugfixPct,
+                        securityPct,
+                        perfPct,
+                        sensitiveTouchPct,
+                        medianLines,
+                        p90Lines,
+                        mergesPerWeek,
+                        commentsPerPR,
+                        qualityPct,
+                        nitPct,
+                    },
+                    recommendation: { mode, reasons },
+                };
+            }),
+        );
+
+        return results.map((r) => ({
+            repositoryId: r.repositoryId,
+            sampleSize: r.sampleSize,
+            metrics: r.metrics || {},
+            recommendation: {
+                mode: r.recommendation.mode as
+                    | 'Safety'
+                    | 'Speed'
+                    | 'Coach'
+                    | 'Default',
+                reasons: r.recommendation.reasons || [],
+            },
+        }));
     }
 
     private isValidEmail(email?: string): boolean {

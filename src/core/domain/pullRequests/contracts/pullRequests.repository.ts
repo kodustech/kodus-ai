@@ -89,6 +89,11 @@ export interface IPullRequestsRepository {
         pullRequestNumber: number,
         repositoryName: string,
     ): Promise<PullRequestsEntity | null>;
+    findRecentByRepositoryId(
+        organizationId: string,
+        repositoryId: string,
+        limit?: number,
+    ): Promise<PullRequestsEntity[]>;
 
     update(
         pullRequest: PullRequestsEntity,

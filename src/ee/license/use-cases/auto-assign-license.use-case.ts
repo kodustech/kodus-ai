@@ -42,7 +42,8 @@ export class AutoAssignLicenseUseCase {
             | 'ASSIGNMENT_FAILED'
             | 'AUTO_ASSIGN_DISABLED'
             | 'NOT_ENOUGH_PRS'
-            | 'IGNORED_USER';
+            | 'IGNORED_USER'
+            | 'NOT_ALLOWED_USER';
     }> {
         const { organizationAndTeamData, userGitId, provider } = params;
 
@@ -57,7 +58,16 @@ export class AutoAssignLicenseUseCase {
                 return { shouldProceed: false, reason: 'AUTO_ASSIGN_DISABLED' };
             }
 
-            // 2. Check if user already has a license (double check)
+            // 2. If allowedUsers is set, only those users are eligible
+            if (
+                Array.isArray(config?.configValue?.allowedUsers) &&
+                config.configValue.allowedUsers.length > 0 &&
+                !config.configValue.allowedUsers.includes(userGitId)
+            ) {
+                return { shouldProceed: false, reason: 'NOT_ALLOWED_USER' };
+            }
+
+            // 3. Check if user already has a license (double check)
             const usersWithLicense =
                 await this.licenseService.getAllUsersWithLicense(
                     organizationAndTeamData,
@@ -70,14 +80,14 @@ export class AutoAssignLicenseUseCase {
                 return { shouldProceed: true, reason: 'ALREADY_LICENSED' };
             }
 
-            // 3. Check if user is ignored
+            // 4. Check if user is ignored
             if (config?.configValue?.ignoredUsers?.length > 0) {
                 if (config?.configValue?.ignoredUsers.includes(userGitId)) {
                     return { shouldProceed: false, reason: 'IGNORED_USER' };
                 }
             }
 
-            // 4. Count user's PRs
+            // 5. Count user's PRs
             const prs = await this.pullRequestsService.find({
                 organizationId: organizationAndTeamData.organizationId,
                 'user.id': userGitId,
@@ -88,7 +98,7 @@ export class AutoAssignLicenseUseCase {
                 return { shouldProceed: true, reason: 'FREEBIE' };
             }
 
-            // 5. If user has 2 or more PRs, assign license
+            // 6. If user has 2 or more PRs, assign license
             this.logger.log({
                 message: `Auto-assigning license to user ${userGitId}`,
                 context: AutoAssignLicenseUseCase.name,

@@ -7,6 +7,7 @@ import {
 } from '@/core/application/use-cases/organizationParameters/get-cockpit-metrics-visibility.use-case';
 import { GetModelsByProviderUseCase } from '@/core/application/use-cases/organizationParameters/get-models-by-provider.use-case';
 import { IgnoreBotsUseCase } from '@/core/application/use-cases/organizationParameters/ignore-bots.use-case';
+import { UpdateAutoLicenseAllowedUsersUseCase } from '@/core/application/use-cases/organizationParameters/update-auto-license-allowed-users.use-case';
 import { ORGANIZATION_PARAMETERS_REPOSITORY_TOKEN } from '@/core/domain/organizationParameters/contracts/organizationParameters.repository.contract';
 import { ORGANIZATION_PARAMETERS_SERVICE_TOKEN } from '@/core/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { OrganizationParametersRepository } from '@/core/infrastructure/adapters/repositories/typeorm/organizationParameters.repository';
@@ -43,6 +44,7 @@ import { TeamsModule } from './team.module';
         GetModelsByProviderUseCase,
         DeleteByokConfigUseCase,
         IgnoreBotsUseCase,
+        UpdateAutoLicenseAllowedUsersUseCase,
         {
             provide: GET_COCKPIT_METRICS_VISIBILITY_USE_CASE_TOKEN,
             useClass: GetCockpitMetricsVisibilityUseCase,

@@ -1,3 +1,4 @@
+import { STATUS } from '@/config/types/database/status.type';
 import { JWT } from '@/config/types/jwt/jwt';
 import {
     AUTH_SERVICE_TOKEN,
@@ -36,6 +37,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         }
 
         if (user.role !== payload.role) {
+            throw new UnauthorizedException();
+        }
+
+        if (user.status !== payload.status || user.status === STATUS.REMOVED) {
             throw new UnauthorizedException();
         }
 

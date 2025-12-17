@@ -18,6 +18,7 @@ import { KodyRulesModule } from './kodyRules.module';
 import { UpdateOrCreateCodeReviewParameterUseCase } from '@/core/application/use-cases/parameters/update-or-create-code-review-parameter-use-case';
 import { PromptsModule } from './prompts.module';
 import { ContextReferenceModule } from './contextReference.module';
+import { OrganizationParametersModule } from './organizationParameters.module';
 
 @Module({
     imports: [
@@ -31,6 +32,7 @@ import { ContextReferenceModule } from './contextReference.module';
         forwardRef(() => KodyRulesModule),
         forwardRef(() => PromptsModule),
         forwardRef(() => ContextReferenceModule),
+        forwardRef(() => OrganizationParametersModule),
     ],
     providers: [
         ...UseCases,

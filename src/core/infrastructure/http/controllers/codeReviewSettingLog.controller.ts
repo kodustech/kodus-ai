@@ -30,7 +30,10 @@ export class CodeReviewSettingLogController {
 
     @Get('/code-review-settings')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Read, ResourceType.Logs))
+    @CheckPolicies(checkPermissions({
+        action: Action.Read,
+        resource: ResourceType.Logs
+    }))
     public async findCodeReviewSettingsLogs(
         @Query() filters: CodeReviewSettingsLogFiltersDto,
     ) {

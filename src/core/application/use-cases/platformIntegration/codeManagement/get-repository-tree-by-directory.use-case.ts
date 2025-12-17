@@ -1,14 +1,14 @@
+import { TreeItem } from '@/config/types/general/tree.type';
 import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logger/pino.service';
 import { CodeManagementService } from '@/core/infrastructure/adapters/services/platformIntegration/codeManagement.service';
+import { GetRepositoryTreeByDirectoryDto } from '@/core/infrastructure/http/dtos/get-repository-tree-by-directory.dto';
+import {
+    GET_ADDITIONAL_INFO_HELPER_TOKEN,
+    IGetAdditionalInfoHelper,
+} from '@/shared/domain/contracts/getAdditionalInfo.helper.contract';
 import { IUseCase } from '@/shared/domain/interfaces/use-case.interface';
 import { CacheService } from '@/shared/utils/cache/cache.service';
-import {
-    IGetAdditionalInfoHelper,
-    GET_ADDITIONAL_INFO_HELPER_TOKEN,
-} from '@/shared/domain/contracts/getAdditionalInfo.helper.contract';
 import { Inject, Injectable } from '@nestjs/common';
-import { TreeItem } from '@/config/types/general/tree.type';
-import { GetRepositoryTreeByDirectoryDto } from '@/core/infrastructure/http/dtos/get-repository-tree-by-directory.dto';
 
 export interface DirectoryItem {
     name: string;
@@ -35,7 +35,7 @@ export class GetRepositoryTreeByDirectoryUseCase implements IUseCase {
     ) {}
 
     public async execute(
-        params: GetRepositoryTreeByDirectoryDto,
+        params: GetRepositoryTreeByDirectoryDto & { organizationId: string },
     ): Promise<RepositoryTreeByDirectoryResponse> {
         try {
             const cacheKey = this.buildCacheKey(

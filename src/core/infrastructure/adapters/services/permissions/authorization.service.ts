@@ -1,12 +1,13 @@
+import { STATUS } from '@/config/types/database/status.type';
+import { GetAssignedReposUseCase } from '@/core/application/use-cases/permissions/get-assigned-repos.use-case';
 import {
     Action,
     ResourceType,
 } from '@/core/domain/permissions/enums/permissions.enum';
 import { IUser } from '@/core/domain/user/interfaces/user.interface';
+import { subject as caslSubject } from '@casl/ability';
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PermissionsAbilityFactory } from './permissionsAbility.factory';
-import { subject as caslSubject } from '@casl/ability';
-import { GetAssignedReposUseCase } from '@/core/application/use-cases/permissions/get-assigned-repos.use-case';
 import { extractReposFromAbility } from './policy.handlers';
 
 @Injectable()
@@ -21,10 +22,21 @@ export class AuthorizationService {
         action: Action;
         resource: ResourceType;
         repoIds?: string[];
+        status?: STATUS[];
     }): Promise<boolean> {
-        const { user, action, resource, repoIds = [undefined] } = params;
+        const {
+            user,
+            action,
+            resource,
+            repoIds = [undefined],
+            status = [STATUS.ACTIVE],
+        } = params;
 
         if (!user || !user.uuid || !user.organization?.uuid) {
+            return false;
+        }
+
+        if (!status.includes(user.status)) {
             return false;
         }
 
@@ -51,14 +63,16 @@ export class AuthorizationService {
         action: Action;
         resource: ResourceType;
         repoIds?: string[];
+        status?: STATUS[];
     }): Promise<void> {
-        const { user, action, resource, repoIds } = params;
+        const { user, action, resource, repoIds, status } = params;
 
         const isAllowed = await this.check({
             user,
             action,
             resource,
             repoIds,
+            status,
         });
 
         if (!isAllowed) {
@@ -68,12 +82,19 @@ export class AuthorizationService {
         }
     }
 
-    async getRepositoryScope(
-        user: Partial<IUser>,
-        action: Action,
-        resource: ResourceType,
-    ): Promise<string[] | null> {
+    async getRepositoryScope(params: {
+        user: Partial<IUser>;
+        action: Action;
+        resource: ResourceType;
+        status?: STATUS[];
+    }): Promise<string[] | null> {
+        const { user, action, resource, status = [STATUS.ACTIVE] } = params;
+
         if (!user || !user.organization?.uuid) {
+            return [];
+        }
+
+        if (!status.includes(user.status)) {
             return [];
         }
 

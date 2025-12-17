@@ -18,5 +18,6 @@ export interface IPullRequestMessages {
     directoryId?: string;
     globalSettings?: {
         hideComments?: boolean;
+        suggestionCopyPrompt?: boolean;
     };
 }

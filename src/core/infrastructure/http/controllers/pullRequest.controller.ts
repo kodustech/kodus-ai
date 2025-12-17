@@ -24,6 +24,11 @@ import { CodeManagementService } from '../../adapters/services/platformIntegrati
 import { BackfillPRsDto } from '../dtos/backfill-prs.dto';
 import { EnrichedPullRequestsQueryDto } from '../dtos/enriched-pull-requests-query.dto';
 import { PaginatedEnrichedPullRequestsResponse } from '../dtos/paginated-enriched-pull-requests.dto';
+import { OnboardingReviewModeSignalsQueryDto } from '../dtos/onboarding-review-mode-signals-query.dto';
+import {
+    IPullRequestsService,
+    PULL_REQUESTS_SERVICE_TOKEN,
+} from '@/core/domain/pullRequests/contracts/pullRequests.service.contracts';
 
 @Controller('pull-requests')
 export class PullRequestController {
@@ -33,21 +38,63 @@ export class PullRequestController {
         private readonly backfillHistoricalPRsUseCase: BackfillHistoricalPRsUseCase,
         @Inject(REQUEST)
         private readonly request: UserRequest,
+        @Inject(PULL_REQUESTS_SERVICE_TOKEN)
+        private readonly pullRequestsService: IPullRequestsService,
     ) {}
 
     @Get('/executions')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Read, ResourceType.PullRequests))
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.PullRequests,
+        }),
+    )
     public async getPullRequestExecutions(
         @Query() query: EnrichedPullRequestsQueryDto,
     ): Promise<PaginatedEnrichedPullRequestsResponse> {
         return await this.getEnrichedPullRequestsUseCase.execute(query);
     }
 
+    @Get('/onboarding-signals')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.PullRequests,
+        }),
+    )
+    public async getOnboardingSignals(
+        @Query() query: OnboardingReviewModeSignalsQueryDto,
+    ) {
+        const organizationId = this.request.user?.organization?.uuid;
+        if (!organizationId) {
+            throw new Error('No organization found in request');
+        }
+
+        const { teamId, repositoryIds, limit } = query;
+
+        const organizationAndTeamData = {
+            organizationId,
+            teamId,
+        };
+
+        return this.pullRequestsService.getOnboardingReviewModeSignals({
+            organizationAndTeamData,
+            repositoryIds,
+            limit,
+        });
+    }
+
     // NOT USED IN WEB - INTERNAL USE ONLY
     @Post('/backfill')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Create, ResourceType.PullRequests))
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Create,
+            resource: ResourceType.PullRequests,
+        }),
+    )
     public async backfillHistoricalPRs(@Body() body: BackfillPRsDto) {
         const { teamId, repositoryIds, startDate, endDate } = body;
         const organizationId = this.request.user?.organization?.uuid;

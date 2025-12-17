@@ -1,24 +1,23 @@
-import { OrganizationAndTeamData } from './organizationAndTeamData';
-import { PriorityStatus } from '@/core/domain/pullRequests/enums/priorityStatus.enum';
-import { DeliveryStatus } from '@/core/domain/pullRequests/enums/deliveryStatus.enum';
+import { IClusterizedSuggestion } from '@/core/domain/kodyFineTuning/interfaces/kodyFineTuning.interface';
 import { IKodyRule } from '@/core/domain/kodyRules/interfaces/kodyRules.interface';
-import { SeverityLevel } from '@/shared/utils/enums/severityLevel.enum';
+import { IPullRequestMessages } from '@/core/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
+import { DeliveryStatus } from '@/core/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@/core/domain/pullRequests/enums/implementationStatus.enum';
-import { LLMModelProvider } from '@kodus/kodus-common/llm';
+import { PriorityStatus } from '@/core/domain/pullRequests/enums/priorityStatus.enum';
+import { ISuggestionByPR } from '@/core/domain/pullRequests/interfaces/pullRequests.interface';
+import { CodeReviewPipelineContext } from '@/core/infrastructure/adapters/services/codeBase/codeReviewPipeline/context/code-review-pipeline.context';
+import type { ContextAugmentationsMap } from '@/core/infrastructure/adapters/services/context/code-review-context-pack.service';
 import {
     GetImpactAnalysisResponse,
     TaskStatus,
 } from '@/ee/kodyAST/codeASTAnalysis.service';
-import { ISuggestionByPR } from '@/core/domain/pullRequests/interfaces/pullRequests.interface';
-import { ConfigLevel } from './pullRequestMessages.type';
-import z from 'zod';
-import { CodeReviewPipelineContext } from '@/core/infrastructure/adapters/services/codeBase/codeReviewPipeline/context/code-review-pipeline.context';
-import { BYOKConfig } from '@kodus/kodus-common/llm';
-import { IClusterizedSuggestion } from '@/core/domain/kodyFineTuning/interfaces/kodyFineTuning.interface';
-import { DeepPartial } from 'typeorm';
-import { IPullRequestMessages } from '@/core/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
+import { SeverityLevel } from '@/shared/utils/enums/severityLevel.enum';
 import type { ContextLayer, ContextPack } from '@context-os-core/interfaces';
-import type { ContextAugmentationsMap } from '@/core/infrastructure/adapters/services/context/code-review-context-pack.service';
+import { BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
+import { DeepPartial } from 'typeorm';
+import z from 'zod';
+import { OrganizationAndTeamData } from './organizationAndTeamData';
+import { ConfigLevel } from './pullRequestMessages.type';
 
 export interface IFinalAnalysisResult {
     validSuggestionsToAnalyze: Partial<CodeSuggestion>[];
@@ -139,6 +138,7 @@ export type CodeSuggestion = {
     relevantLinesStart?: number;
     relevantLinesEnd?: number;
     label: string;
+    llmPrompt?: string;
     severity?: string;
     rankScore?: number;
     priorityStatus?: PriorityStatus;
@@ -415,6 +415,12 @@ export enum ReviewModeConfig {
     LIGHT_MODE_FULL = 'light_mode_full',
     LIGHT_MODE_PARTIAL = 'light_mode_partial',
     HEAVY_MODE = 'heavy_mode',
+}
+
+export enum ReviewPreset {
+    SPEED = 'speed',
+    SAFETY = 'safety',
+    COACH = 'coach',
 }
 
 export type KodyFineTuningConfig = {

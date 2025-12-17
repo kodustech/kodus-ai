@@ -24,7 +24,7 @@ export class PreviewPrSummaryUseCase {
         private readonly codeManagementService: CodeManagementService,
     ) {}
 
-    async execute(body: PreviewPrSummaryDto) {
+    async execute(body: PreviewPrSummaryDto & { organizationId: string }) {
         const {
             prNumber,
             repository,

@@ -1,3 +1,4 @@
+import { UserRequest } from '@/config/types/http/user-request.type';
 import { CreateIntegrationUseCase } from '@/core/application/use-cases/platformIntegration/codeManagement/create-integration.use-case';
 import { CreateRepositoriesUseCase } from '@/core/application/use-cases/platformIntegration/codeManagement/create-repositories';
 import { DeleteIntegrationAndRepositoriesUseCase } from '@/core/application/use-cases/platformIntegration/codeManagement/delete-integration-and-repositories.use-case';
@@ -9,6 +10,8 @@ import { GetPRsUseCase } from '@/core/application/use-cases/platformIntegration/
 import { GetRepositoriesUseCase } from '@/core/application/use-cases/platformIntegration/codeManagement/get-repositories';
 import { GetRepositoryTreeByDirectoryUseCase } from '@/core/application/use-cases/platformIntegration/codeManagement/get-repository-tree-by-directory.use-case';
 import { GetWebhookStatusUseCase } from '@/core/application/use-cases/platformIntegration/codeManagement/get-webhook-status.use-case';
+import { GetCurrentCodeManagementUserUseCase } from '@/core/application/use-cases/platformIntegration/codeManagement/get-current-code-management-user.use-case';
+import { SearchCodeManagementUsersUseCase } from '@/core/application/use-cases/platformIntegration/codeManagement/search-code-management-users.use-case';
 import { Repository } from '@/core/domain/integrationConfigs/types/codeManagement/repositories.type';
 import {
     Action,
@@ -24,14 +27,17 @@ import {
 } from '@/core/infrastructure/adapters/services/permissions/policy.handlers';
 import { PullRequestState } from '@/shared/domain/enums/pullRequestState.enum';
 import {
+    BadRequestException,
     Body,
     Controller,
     Delete,
     Get,
+    Inject,
     Post,
     Query,
     UseGuards,
 } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
 import { FinishOnboardingDTO } from '../../dtos/finish-onboarding.dto';
 import { GetRepositoryTreeByDirectoryDto } from '../../dtos/get-repository-tree-by-directory.dto';
 import { WebhookStatusQueryDto } from '../../dtos/webhook-status-query.dto';
@@ -50,12 +56,20 @@ export class CodeManagementController {
         private readonly getRepositoryTreeByDirectoryUseCase: GetRepositoryTreeByDirectoryUseCase,
         private readonly getPRsByRepoUseCase: GetPRsByRepoUseCase,
         private readonly getWebhookStatusUseCase: GetWebhookStatusUseCase,
+        private readonly searchCodeManagementUsersUseCase: SearchCodeManagementUsersUseCase,
+        private readonly getCurrentCodeManagementUserUseCase: GetCurrentCodeManagementUserUseCase,
+
+        @Inject(REQUEST)
+        private readonly request: UserRequest,
     ) {}
 
     @Get('/repositories/org')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
-        checkPermissions(Action.Read, ResourceType.CodeReviewSettings),
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+        }),
     )
     public async getRepositories(
         @Query()
@@ -63,6 +77,8 @@ export class CodeManagementController {
             teamId: string;
             organizationSelected: any;
             isSelected?: boolean;
+            page?: number;
+            perPage?: number;
         },
     ) {
         return this.getRepositoriesUseCase.execute(query);
@@ -70,7 +86,12 @@ export class CodeManagementController {
 
     @Post('/auth-integration')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Create, ResourceType.GitSettings))
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Create,
+            resource: ResourceType.GitSettings,
+        }),
+    )
     public async authIntegrationToken(@Body() body: any) {
         return this.createIntegrationUseCase.execute(body);
     }
@@ -78,7 +99,10 @@ export class CodeManagementController {
     @Post('/repositories')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
-        checkPermissions(Action.Create, ResourceType.CodeReviewSettings),
+        checkPermissions({
+            action: Action.Create,
+            resource: ResourceType.CodeReviewSettings,
+        }),
     )
     public async createRepositories(
         @Body()
@@ -93,14 +117,24 @@ export class CodeManagementController {
 
     @Get('/organization-members')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Read, ResourceType.UserSettings))
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.UserSettings,
+        }),
+    )
     public async getOrganizationMembers() {
         return this.getCodeManagementMemberListUseCase.execute();
     }
 
     @Get('/get-prs')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Read, ResourceType.PullRequests))
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.PullRequests,
+        }),
+    )
     public async getPRs(
         @Query()
         query: {
@@ -120,7 +154,12 @@ export class CodeManagementController {
 
     @Get('/get-prs-repo')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Read, ResourceType.PullRequests))
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.PullRequests,
+        }),
+    )
     public async getPRsByRepo(
         @Query()
         query: {
@@ -146,7 +185,10 @@ export class CodeManagementController {
     @Post('/finish-onboarding')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
-        checkPermissions(Action.Create, ResourceType.CodeReviewSettings),
+        checkPermissions({
+            action: Action.Create,
+            resource: ResourceType.CodeReviewSettings,
+        }),
     )
     public async onboardingReviewPR(
         @Body()
@@ -157,35 +199,126 @@ export class CodeManagementController {
 
     @Delete('/delete-integration')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Delete, ResourceType.GitSettings))
-    public async deleteIntegration(
-        @Query() query: { organizationId: string; teamId: string },
-    ) {
-        return await this.deleteIntegrationUseCase.execute(query);
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Delete,
+            resource: ResourceType.GitSettings,
+        }),
+    )
+    public async deleteIntegration(@Query() query: { teamId: string }) {
+        const organizationId = this.request?.user?.organization?.uuid;
+
+        if (!organizationId) {
+            throw new BadRequestException(
+                'organizationId not found in request',
+            );
+        }
+
+        return await this.deleteIntegrationUseCase.execute({
+            organizationId,
+            teamId: query.teamId,
+        });
     }
 
     @Delete('/delete-integration-and-repositories')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Delete, ResourceType.GitSettings))
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Delete,
+            resource: ResourceType.GitSettings,
+        }),
+    )
     public async deleteIntegrationAndRepositories(
-        @Query() query: { organizationId: string; teamId: string },
+        @Query() query: { teamId: string },
     ) {
-        return await this.deleteIntegrationAndRepositoriesUseCase.execute(
-            query,
-        );
+        const organizationId = this.request?.user?.organization?.uuid;
+
+        if (!organizationId) {
+            throw new BadRequestException(
+                'organizationId not found in request',
+            );
+        }
+
+        return await this.deleteIntegrationAndRepositoriesUseCase.execute({
+            organizationId,
+            teamId: query.teamId,
+        });
     }
 
     @Get('/get-repository-tree-by-directory')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
-        checkRepoPermissions(Action.Read, ResourceType.CodeReviewSettings, {
-            key: { query: 'repositoryId' },
+        checkRepoPermissions({
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+            repo: {
+                key: { query: 'repositoryId' },
+            },
         }),
     )
     public async getRepositoryTreeByDirectory(
         @Query() query: GetRepositoryTreeByDirectoryDto,
     ) {
-        return await this.getRepositoryTreeByDirectoryUseCase.execute(query);
+        const organizationId = this.request?.user?.organization?.uuid;
+
+        if (!organizationId) {
+            throw new BadRequestException(
+                'organizationId not found in request',
+            );
+        }
+
+        return await this.getRepositoryTreeByDirectoryUseCase.execute({
+            ...query,
+            organizationId,
+        });
+    }
+
+    @Get('/search-users')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.UserSettings,
+        }),
+    )
+    public async searchUsers(
+        @Query()
+        query: {
+            organizationId: string;
+            teamId?: string;
+            q?: string;
+            userId?: string;
+            limit?: number;
+        },
+    ) {
+        return await this.searchCodeManagementUsersUseCase.execute({
+            organizationId: query.organizationId,
+            teamId: query.teamId,
+            query: query.q,
+            userId: query.userId,
+            limit: query.limit ? Number(query.limit) : undefined,
+        });
+    }
+
+    @Get('/current-user')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.UserSettings,
+        }),
+    )
+    public async getCurrentUser(
+        @Query()
+        query: {
+            organizationId: string;
+            teamId?: string;
+        },
+    ) {
+        return await this.getCurrentCodeManagementUserUseCase.execute({
+            organizationId: query.organizationId,
+            teamId: query.teamId,
+        });
     }
 
     // NOT USED IN WEB - INTERNAL USE ONLY

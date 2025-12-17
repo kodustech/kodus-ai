@@ -287,6 +287,12 @@ export class KodyIssuesManagementService
                                 id: pullRequest?.user?.id.toString() || '',
                                 name: pullRequest?.user?.name || '',
                             },
+                            ...(suggestion.brokenKodyRulesIds?.length
+                                ? {
+                                      brokenKodyRulesIds:
+                                          suggestion.brokenKodyRulesIds,
+                                  }
+                                : {}),
                         },
                     ],
                     repository: {
@@ -598,13 +604,38 @@ export class KodyIssuesManagementService
         contributingSuggestions: IContributingSuggestion[],
         organizationId: string,
     ): Promise<IContributingSuggestion[]> {
+        const suggestionsCache = new Map<number, ISuggestion[]>();
+
         const enrichedContributingSuggestions = await Promise.all(
             contributingSuggestions.map(async (contributingSuggestion) => {
+                if (
+                    typeof contributingSuggestion.prNumber !== 'number' ||
+                    Number.isNaN(contributingSuggestion.prNumber)
+                ) {
+                    return contributingSuggestion;
+                }
+
                 try {
-                    const suggestionsFromPR = await this.getSuggestionByPR(
-                        organizationId,
-                        contributingSuggestion.prNumber,
-                    );
+                    if (
+                        !suggestionsCache.has(
+                            contributingSuggestion.prNumber,
+                        )
+                    ) {
+                        const suggestionsFromPR = await this.getSuggestionByPR(
+                            organizationId,
+                            contributingSuggestion.prNumber,
+                        );
+                        suggestionsCache.set(
+                            contributingSuggestion.prNumber,
+                            suggestionsFromPR,
+                        );
+                    }
+
+                    const suggestionsFromPR =
+                        suggestionsCache.get(
+                            contributingSuggestion.prNumber,
+                        ) || [];
+
                     const fullSuggestion = suggestionsFromPR.find(
                         (suggestion) =>
                             suggestion.id === contributingSuggestion.id,
@@ -624,6 +655,8 @@ export class KodyIssuesManagementService
                             label: fullSuggestion.label,
                             severity: fullSuggestion.severity,
                             relevantFile: fullSuggestion.relevantFile,
+                            brokenKodyRulesIds:
+                                fullSuggestion.brokenKodyRulesIds,
                             //prAuthor: fullSuggestion.user.username,
                         };
                     }

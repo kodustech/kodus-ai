@@ -30,4 +30,8 @@ export interface IIssue {
         gitId: string;
         username: string;
     };
+    kodyRule?: {
+        number?: string;
+        title?: string;
+    };
 }

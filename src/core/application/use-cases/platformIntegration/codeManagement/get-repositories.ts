@@ -9,7 +9,6 @@ import { CodeManagementService } from '@/core/infrastructure/adapters/services/p
 import { IUseCase } from '@/shared/domain/interfaces/use-case.interface';
 import { Inject } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
-import { Request } from 'express';
 
 export class GetRepositoriesUseCase implements IUseCase {
     constructor(
@@ -26,6 +25,8 @@ export class GetRepositoriesUseCase implements IUseCase {
         teamId: string;
         organizationSelected: any;
         isSelected?: boolean;
+        page?: number;
+        perPage?: number;
     }) {
         try {
             const repositories =
@@ -40,11 +41,11 @@ export class GetRepositoriesUseCase implements IUseCase {
                 });
 
             const assignedRepositoryIds =
-                await this.authorizationService.getRepositoryScope(
-                    this.request.user,
-                    Action.Read,
-                    ResourceType.CodeReviewSettings,
-                );
+                await this.authorizationService.getRepositoryScope({
+                    user: this.request.user,
+                    action: Action.Read,
+                    resource: ResourceType.CodeReviewSettings,
+                });
 
             let filteredRepositories = repositories;
             if (assignedRepositoryIds !== null) {
@@ -54,9 +55,39 @@ export class GetRepositoriesUseCase implements IUseCase {
             }
 
             if (params.isSelected !== undefined) {
+                const isSelectedFilter =
+                    typeof params.isSelected === 'string'
+                        ? params.isSelected === 'true'
+                        : Boolean(params.isSelected);
                 filteredRepositories = filteredRepositories.filter(
-                    (repo) => repo.selected === Boolean(params.isSelected),
+                    (repo) => repo.selected === isSelectedFilter,
                 );
+            }
+
+            const total = filteredRepositories.length;
+
+            if (params.page !== undefined || params.perPage !== undefined) {
+                const page =
+                    Number(params.page ?? 1) > 0 ? Number(params.page ?? 1) : 1;
+                const perPage =
+                    Number(params.perPage ?? 20) > 0
+                        ? Number(params.perPage ?? 20)
+                        : 20;
+
+                const startIndex = (page - 1) * perPage;
+                const paginatedRepositories = filteredRepositories.slice(
+                    startIndex,
+                    startIndex + perPage,
+                );
+
+                return {
+                    data: paginatedRepositories,
+                    pagination: {
+                        page,
+                        perPage,
+                        total,
+                    },
+                };
             }
 
             return filteredRepositories;

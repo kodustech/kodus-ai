@@ -9,6 +9,7 @@ import { ListCodeReviewAutomationLabelsWithStatusUseCase } from './list-code-rev
 import { PreviewPrSummaryUseCase } from './preview-pr-summary.use-case';
 import { UpdateCodeReviewParameterRepositoriesUseCase } from './update-code-review-parameter-repositories-use-case';
 import { UpdateOrCreateCodeReviewParameterUseCase } from './update-or-create-code-review-parameter-use-case';
+import { ApplyCodeReviewPresetUseCase } from './apply-code-review-preset.use-case';
 
 export const UseCases = [
     CreateOrUpdateParametersUseCase,
@@ -22,4 +23,5 @@ export const UseCases = [
     ListCodeReviewAutomationLabelsWithStatusUseCase,
     GetDefaultConfigUseCase,
     GetCodeReviewParameterUseCase,
+    ApplyCodeReviewPresetUseCase,
 ];

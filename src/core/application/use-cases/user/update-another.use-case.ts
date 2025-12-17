@@ -1,18 +1,18 @@
 import {
-    ORGANIZATION_SERVICE_TOKEN,
     IOrganizationService,
+    ORGANIZATION_SERVICE_TOKEN,
 } from '@/core/domain/organization/contracts/organization.service.contract';
 import {
-    TEAM_SERVICE_TOKEN,
     ITeamService,
+    TEAM_SERVICE_TOKEN,
 } from '@/core/domain/team/contracts/team.service.contract';
 import {
-    TEAM_MEMBERS_SERVICE_TOKEN,
     ITeamMemberService,
+    TEAM_MEMBERS_SERVICE_TOKEN,
 } from '@/core/domain/teamMembers/contracts/teamMembers.service.contracts';
 import {
-    USER_SERVICE_TOKEN,
     IUsersService,
+    USER_SERVICE_TOKEN,
 } from '@/core/domain/user/contracts/user.service.contract';
 import { IUser } from '@/core/domain/user/interfaces/user.interface';
 import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logger/pino.service';
@@ -42,6 +42,7 @@ export class UpdateAnotherUserUseCase implements IUseCase {
         userId: string,
         targetUserId: string,
         data: UpdateAnotherUserDto,
+        organizationId: string,
     ): Promise<IUser> {
         const { role, status } = data;
 
@@ -54,7 +55,7 @@ export class UpdateAnotherUserUseCase implements IUseCase {
             }
 
             const organization = await this.organizationService.findOne({
-                uuid: targetUser.organization?.uuid,
+                uuid: organizationId,
             });
             if (!organization) {
                 throw new Error('Organization not found');

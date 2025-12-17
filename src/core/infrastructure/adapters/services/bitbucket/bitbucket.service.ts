@@ -762,6 +762,12 @@ export class BitbucketService
             visibility?: 'all' | 'public' | 'private';
             language?: string;
         };
+        options?: {
+            includePullRequestMetrics?: {
+                lastNDays?: number;
+                limit?: number;
+            };
+        };
     }): Promise<Repositories[]> {
         try {
             const { organizationAndTeamData } = params;
@@ -811,20 +817,11 @@ export class BitbucketService
                 ),
             );
 
-            const repositories = workspacesWithRepos.reduce<Repositories[]>(
-                (acc, { workspace, repos }) => {
-                    repos.forEach((repo) => {
-                        acc.push(
-                            this.transformRepo(
-                                repo,
-                                workspace,
-                                integrationConfig,
-                            ),
-                        );
-                    });
-                    return acc;
-                },
-                [],
+            const repositories: Repositories[] = workspacesWithRepos.flatMap(
+                ({ workspace, repos }) =>
+                    repos.map((repo) =>
+                        this.transformRepo(repo, workspace, integrationConfig),
+                    ),
             );
 
             return repositories;
@@ -839,6 +836,50 @@ export class BitbucketService
                 },
             });
             throw new BadRequestException(error);
+        }
+    }
+
+    private async getRecentPullRequestsCount(params: {
+        bitbucketAPI: InstanceType<typeof Bitbucket>;
+        repoId: string;
+        workspaceId: string;
+        days: number;
+        organizationAndTeamData: OrganizationAndTeamData;
+    }): Promise<number> {
+        try {
+            const sinceDate = moment()
+                .subtract(Math.max(params.days, 1), 'days')
+                .toISOString();
+
+            const response = await params.bitbucketAPI.pullrequests.list({
+                repo_slug: `{${params.repoId}}`,
+                workspace: `{${params.workspaceId}}`,
+                q: `created_on >= "${sinceDate}"`,
+                sort: '-created_on',
+                pagelen: 50,
+            });
+
+            const pullRequests = await this.getPaginatedResults(
+                params.bitbucketAPI,
+                response,
+            );
+
+            return pullRequests.length;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Failed to count recent pull requests from Bitbucket repository',
+                context: BitbucketService.name,
+                error: error,
+                metadata: {
+                    repoId: params.repoId,
+                    workspaceId: params.workspaceId,
+                    organizationId:
+                        params.organizationAndTeamData?.organizationId,
+                    teamId: params.organizationAndTeamData?.teamId,
+                },
+            });
+            return 0;
         }
     }
 
@@ -867,6 +908,7 @@ export class BitbucketService
                 id: this.sanitizeUUID(project?.uuid),
                 name: project?.name ?? '',
             },
+            lastActivityAt: repo?.updated_on || repo?.created_on,
         };
     }
 
@@ -1319,6 +1361,13 @@ export class BitbucketService
 
             const filters = params?.filters ?? {};
             const { prStatus } = filters ?? 'OPEN';
+            const perRepoLimit = Math.min(Math.max(filters?.limit || 5, 1), 10);
+            const repoFilter = filters?.repositoryId
+                ? new Set([String(filters.repositoryId)])
+                : null;
+            const useFastPath = Boolean(
+                filters?.repositoryId || filters?.limit,
+            );
 
             const stateMap = {
                 open: PullRequestState.OPENED.toUpperCase(),
@@ -1351,6 +1400,14 @@ export class BitbucketService
 
             const reposWithPrs = await Promise.all(
                 repositories.map(async (repo) => {
+                    if (
+                        repoFilter &&
+                        !repoFilter.has(String(repo.id)) &&
+                        !repoFilter.has(String(repo.name))
+                    ) {
+                        return { repo, prs: [] };
+                    }
+
                     let prs = await bitbucketAPI.pullrequests
                         .list({
                             repo_slug: `{${repo.id}}`,
@@ -1372,6 +1429,16 @@ export class BitbucketService
                         });
                     }
 
+                    if (useFastPath) {
+                        prs = prs
+                            .sort(
+                                (a, b) =>
+                                    new Date(b.created_on).getTime() -
+                                    new Date(a.created_on).getTime(),
+                            )
+                            .slice(0, perRepoLimit);
+                    }
+
                     return { repo, prs };
                 }),
             );
@@ -1381,8 +1448,12 @@ export class BitbucketService
             await Promise.all(
                 reposWithPrs.map(async ({ repo, prs }) => {
                     const prsWithDiffs = await Promise.all(
-                        prs.map((pr) =>
-                            bitbucketAPI.pullrequests
+                        prs.map((pr) => {
+                            if (useFastPath && filters?.skipFiles) {
+                                return Promise.resolve({ pr, diffs: [] });
+                            }
+
+                            return bitbucketAPI.pullrequests
                                 .getDiffStat({
                                     pull_request_id: pr.id,
                                     repo_slug: `{${repo.id}}`,
@@ -1394,8 +1465,8 @@ export class BitbucketService
                                         res,
                                     ),
                                 )
-                                .then((res) => ({ pr, diffs: res })),
-                        ),
+                                .then((res) => ({ pr, diffs: res }));
+                        }),
                     );
 
                     const prsWithFiles: PullRequestWithFiles[] =
@@ -1885,6 +1956,49 @@ export class BitbucketService
         }
     }
 
+    formatCodeBlock(language: string, code: string) {
+        return `\`\`\`${language}\n${code}\n\`\`\``;
+    }
+
+    private formatBodyForBitbucket(lineComment: any, repository: any) {
+        const codeBlock = lineComment?.body?.improvedCode
+            ? this.formatCodeBlock(
+                  repository?.language?.toLowerCase(),
+                  lineComment?.body?.improvedCode,
+              )
+            : '';
+        const suggestionContent = lineComment?.body?.suggestionContent || '';
+        const actionStatement = lineComment?.body?.actionStatement
+            ? `${lineComment.body.actionStatement}\n\n`
+            : '';
+
+        const severityText = lineComment?.suggestion
+            ? lineComment.suggestion.severity
+            : '';
+        const labelText = lineComment?.suggestion
+            ? lineComment.suggestion.label
+            : '';
+
+        const header = `\`kody|code-review\` \`${labelText}\` \`severity-level|${severityText}\`\n\n`;
+
+        const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;
+        const thumbsDownBlock = `\`\`\`\n👎\n\`\`\`\n`;
+
+        const footer = `Was this suggestion helpful? reply with 👍 or 👎 to help Kody learn from this interaction.\n`;
+
+        return [
+            header,
+            suggestionContent,
+            actionStatement,
+            codeBlock,
+            footer,
+            thumbsUpBlock,
+            thumbsDownBlock,
+        ]
+            .join('\n')
+            .trim();
+    }
+
     async createReviewComment(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: any;
@@ -1918,27 +2032,10 @@ export class BitbucketService
             const bitbucketAPI =
                 this.instanceBitbucketApi(bitbucketAuthDetails);
 
-            const severityText = lineComment?.suggestion
-                ? lineComment.suggestion.severity
-                : '';
-            const labelText = lineComment?.suggestion
-                ? lineComment.suggestion.label
-                : '';
-
-            const bodyFormatted =
-                `\`kody|code-review\` \`${labelText}\` \`severity-level|${severityText}\`\n\n` +
-                `\`\`\`${repository?.language?.toLowerCase()}\n` +
-                `${lineComment?.body?.improvedCode}\n` +
-                `\`\`\`\n` +
-                `${lineComment?.body?.suggestionContent}\n\n\n\n` +
-                `${lineComment?.body?.actionStatement ? `${lineComment?.body?.actionStatement}\n\n\n\n` : ''}` +
-                `Was this suggestion helpful? reply with 👍 or 👎 to help Kody learn from this interaction.\n`;
-
-            const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;
-            const thumbsDownBlock = `\`\`\`\n👎\n\`\`\`\n`;
-
-            const updatedBodyFormatted =
-                bodyFormatted + thumbsUpBlock + thumbsDownBlock;
+            const bodyFormatted = this.formatBodyForBitbucket(
+                lineComment,
+                repository,
+            );
 
             // added ts-ignore because _body expects a type property but Bitbucket rejects it
             const comment = await bitbucketAPI.pullrequests
@@ -1949,7 +2046,7 @@ export class BitbucketService
                     // @ts-ignore
                     _body: {
                         content: {
-                            raw: updatedBodyFormatted,
+                            raw: bodyFormatted,
                         },
                         inline: {
                             path: lineComment?.path,
@@ -3891,6 +3988,51 @@ export class BitbucketService
         }
     }
 
+    async getCurrentUser(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+    }): Promise<any | null> {
+        try {
+            const bitbucketAuthDetail = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+
+            if (!bitbucketAuthDetail) {
+                return null;
+            }
+
+            const bitbucketAPI = this.instanceBitbucketApi(bitbucketAuthDetail);
+            const user = await bitbucketAPI.user
+                .get({})
+                .then((res) => res.data);
+
+            if (!user) {
+                return null;
+            }
+
+            const sanitizedUuid =
+                user?.uuid && this.sanitizeUUID(String(user.uuid));
+            const sanitizedId = user?.id && this.sanitizeUUID(String(user.id));
+            const sanitizedAccountId =
+                user?.account_id && this.sanitizeUUID(String(user.account_id));
+
+            return {
+                ...user,
+                ...(sanitizedUuid && { uuid: sanitizedUuid }),
+                ...(sanitizedId && { id: sanitizedId }),
+                ...(sanitizedAccountId && { account_id: sanitizedAccountId }),
+            };
+        } catch (error) {
+            this.logger.error({
+                message: 'Error retrieving current Bitbucket user',
+                context: BitbucketService.name,
+                serviceName: 'BitbucketService getCurrentUser',
+                error,
+                metadata: params,
+            });
+            return null;
+        }
+    }
+
     async getPullRequestReviewComments(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
@@ -4341,21 +4483,21 @@ export class BitbucketService
             const severityText = suggestion?.severity || '';
             const labelText = suggestion?.label || '';
 
-            commentBody += `\`kody|code-review\` \`${labelText}\` \`severity-level|${severityText}\`\n\n`;
+            commentBody += `\`kody|code-review\` \`${labelText}\` \`severity-level|${severityText}\`\n\n\n`;
         }
 
         // BODY - Conteúdo principal
-        if (suggestion?.improvedCode) {
-            const lang = repository?.language?.toLowerCase() || 'javascript';
-            commentBody += `\`\`\`${lang}\n${suggestion.improvedCode}\n\`\`\`\n\n`;
-        }
-
         if (suggestion?.suggestionContent) {
             commentBody += `${suggestion.suggestionContent}\n\n`;
         }
 
         if (suggestion?.clusteringInformation?.actionStatement) {
             commentBody += `${suggestion.clusteringInformation.actionStatement}\n\n`;
+        }
+
+        if (suggestion?.improvedCode) {
+            const lang = repository?.language?.toLowerCase() || 'javascript';
+            commentBody += `\`\`\`${lang}\n${suggestion.improvedCode}\n\`\`\`\n\n`;
         }
 
         // FOOTER - Interação/Feedback (formato Bitbucket)

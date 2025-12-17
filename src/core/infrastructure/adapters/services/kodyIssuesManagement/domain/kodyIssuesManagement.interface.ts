@@ -52,6 +52,7 @@ export interface IContributingSuggestion {
     improvedCode?: string;
     startLine?: number;
     endLine?: number;
+    brokenKodyRulesIds?: string[];
 }
 
 export interface IRepositoryToIssues {

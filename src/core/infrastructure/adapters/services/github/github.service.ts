@@ -1428,6 +1428,11 @@ export class GithubService
             visibility?: 'all' | 'public' | 'private';
             language?: string;
         };
+        options?: {
+            includePullRequestMetrics?: {
+                lastNDays?: number;
+            };
+        };
     }): Promise<Repositories[]> {
         try {
             const githubAuthDetail = await this.getGithubAuthDetails(
@@ -1513,6 +1518,7 @@ export class GithubService
                     (repository: { name: string }) =>
                         repository?.name === repo?.name,
                 ),
+                lastActivityAt: (repo as any)?.pushed_at || repo.updated_at,
             }));
         } catch (err) {
             throw new BadRequestException(err);
@@ -2915,13 +2921,13 @@ export class GithubService
     async getPullRequestsWithFiles(
         params,
     ): Promise<PullRequestWithFiles[] | null> {
-        let repositories;
-
         if (!params?.organizationAndTeamData.organizationId) {
             return null;
         }
 
         const filters = params?.filters ?? {};
+        const perRepoLimit = Math.min(Math.max(filters?.limit || 5, 1), 10);
+        const useFastPath = Boolean(filters?.repositoryId || filters?.limit);
         const { startDate, endDate } = filters?.period || {};
         const prStatus = filters?.prStatus || 'all';
 
@@ -2929,16 +2935,30 @@ export class GithubService
             params.organizationAndTeamData,
         );
 
-        repositories = await this.findOneByOrganizationAndTeamDataAndConfigKey(
-            params?.organizationAndTeamData,
-            IntegrationConfigKey.REPOSITORIES,
-        );
+        const repositories =
+            (await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                params?.organizationAndTeamData,
+                IntegrationConfigKey.REPOSITORIES,
+            )) || [];
 
         if (!githubAuthDetail || !repositories) {
             return null;
         }
 
         const formatRepo = extractRepoNames(repositories);
+        const repoFilter = filters?.repositoryId
+            ? new Set([String(filters.repositoryId)])
+            : null;
+
+        const selectedRepos = formatRepo.filter((repo) => {
+            if (!repoFilter) return true;
+            const data = extractRepoData(repositories, repo, 'github');
+            return (
+                repoFilter.has(String(data?.id)) ||
+                repoFilter.has(String(data?.name)) ||
+                repoFilter.has(String(repo))
+            );
+        });
 
         const octokit = await this.instanceOctokit(
             params?.organizationAndTeamData,
@@ -2946,13 +2966,59 @@ export class GithubService
 
         const pullRequestsWithFiles: PullRequestWithFiles[] = [];
 
-        for (const repo of formatRepo) {
+        for (const repo of selectedRepos) {
             const respositoryData = extractRepoData(
                 repositories,
                 repo,
                 'github',
             );
 
+            // Fast path: limited PRs for specific repo/limit (used in onboarding presets)
+            if (useFastPath) {
+                const pullRequests =
+                    (
+                        await octokit.pulls.list({
+                            owner: githubAuthDetail.org,
+                            repo,
+                            state: 'all',
+                            sort: 'created',
+                            direction: 'desc',
+                            per_page: perRepoLimit,
+                            page: 1,
+                        })
+                    )?.data ?? [];
+
+                const pullRequestDetails = await Promise.all(
+                    pullRequests.map(async (pullRequest) => {
+                        const files = filters?.skipFiles
+                            ? []
+                            : await this.getPullRequestFiles(
+                                  octokit,
+                                  githubAuthDetail.org,
+                                  repo,
+                                  pullRequest?.number,
+                              );
+                        return {
+                            id: pullRequest.id,
+                            pull_number: pullRequest?.number,
+                            state: pullRequest?.state as any,
+                            title: pullRequest?.title,
+                            repository: repo,
+                            repositoryData: respositoryData,
+                            pullRequestFiles: files,
+                            created_at: pullRequest?.created_at,
+                            updated_at: pullRequest?.updated_at,
+                            closed_at: pullRequest?.closed_at,
+                            merged_at: pullRequest?.merged_at,
+                        };
+                    }),
+                );
+
+                pullRequestsWithFiles.push(...pullRequestDetails);
+                continue;
+            }
+
+            // Legacy path: full pagination for all configured repos
             const pullRequests = await this.getAllPrMessages(
                 octokit,
                 githubAuthDetail.org,
@@ -2973,11 +3039,15 @@ export class GithubService
                     return {
                         id: pullRequest.id,
                         pull_number: pullRequest?.number,
-                        state: pullRequest?.state,
+                        state: pullRequest?.state as any,
                         title: pullRequest?.title,
                         repository: repo,
                         repositoryData: respositoryData,
                         pullRequestFiles: files,
+                        created_at: pullRequest?.created_at,
+                        updated_at: pullRequest?.updated_at,
+                        closed_at: pullRequest?.closed_at,
+                        merged_at: pullRequest?.merged_at,
                     };
                 }),
             );
@@ -3167,32 +3237,81 @@ export class GithubService
         return `<sub>${text}</sub>\n\n`;
     }
 
-    formatBodyForGitHub(lineComment: any, repository: any, translations: any) {
+    private formatPromptForLLM(lineComment: any) {
+        let copyPrompt = '';
+        if (lineComment?.suggestion?.llmPrompt) {
+            if (lineComment.path) {
+                copyPrompt += `File ${lineComment.path}:\n\n`;
+            }
+
+            if (lineComment.start_line && lineComment.line) {
+                copyPrompt += `Line ${lineComment.start_line} to ${lineComment.line}:\n\n`;
+            } else if (lineComment.line) {
+                copyPrompt += `Line ${lineComment.line}:\n\n`;
+            }
+
+            copyPrompt += lineComment?.suggestion?.llmPrompt;
+
+            if (lineComment?.body?.improvedCode) {
+                copyPrompt +=
+                    '\n\nSuggested Code:\n\n' + lineComment?.body?.improvedCode;
+            }
+
+            copyPrompt = `\n\n<details>
+
+<summary>Prompt for LLM</summary>
+
+\`\`\`
+
+${copyPrompt}
+
+\`\`\`
+
+</details>\n\n`;
+        }
+
+        return copyPrompt;
+    }
+
+    formatBodyForGitHub(
+        lineComment: any,
+        repository: any,
+        translations: any,
+        suggestionCopyPrompt: boolean,
+    ) {
         const severityShield = lineComment?.suggestion
             ? getSeverityLevelShield(lineComment.suggestion.severity)
             : '';
-        const codeBlock = this.formatCodeBlock(
-            repository?.language?.toLowerCase(),
-            lineComment?.body?.improvedCode,
-        );
+        const codeBlock = lineComment?.body?.improvedCode
+            ? this.formatCodeBlock(
+                  repository?.language?.toLowerCase(),
+                  lineComment?.body?.improvedCode,
+              )
+            : '';
         const suggestionContent = lineComment?.body?.suggestionContent || '';
         const actionStatement = lineComment?.body?.actionStatement
             ? `${lineComment.body.actionStatement}\n\n`
             : '';
 
-        const badges = [
-            getCodeReviewBadge(),
-            lineComment?.suggestion
-                ? getLabelShield(lineComment.suggestion.label)
-                : '',
-            severityShield,
-        ].join(' ');
+        const badges =
+            [
+                getCodeReviewBadge(),
+                lineComment?.suggestion
+                    ? getLabelShield(lineComment.suggestion.label)
+                    : '',
+                severityShield,
+            ].join(' ') + '\n\n';
+
+        const copyPrompt = suggestionCopyPrompt
+            ? this.formatPromptForLLM(lineComment)
+            : '';
 
         return [
             badges,
-            codeBlock,
             suggestionContent,
             actionStatement,
+            codeBlock,
+            copyPrompt,
             this.formatSub(translations.talkToKody),
             this.formatSub(translations.feedback) +
                 '<!-- kody-codereview -->&#8203;\n&#8203;',
@@ -3209,6 +3328,7 @@ export class GithubService
             lineComment,
             commit,
             language,
+            suggestionCopyPrompt = true,
         } = params;
 
         const githubAuthDetail = await this.getGithubAuthDetails(
@@ -3226,6 +3346,7 @@ export class GithubService
             lineComment,
             repository,
             translations,
+            suggestionCopyPrompt,
         );
 
         try {
@@ -5190,6 +5311,35 @@ export class GithubService
         throw new Error('Method not implemented.');
     }
 
+    async getCurrentUser(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+    }): Promise<any | null> {
+        try {
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                params.organizationAndTeamData,
+            );
+
+            if (!githubAuthDetail?.authToken) {
+                return null;
+            }
+
+            const token = decrypt(githubAuthDetail.authToken);
+            const userOctokit = new Octokit({ auth: token });
+            const { data } = await userOctokit.rest.users.getAuthenticated();
+
+            return data || null;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error retrieving current GitHub user',
+                context: GithubService.name,
+                serviceName: 'GithubService getCurrentUser',
+                error: error,
+                metadata: params,
+            });
+            return null;
+        }
+    }
+
     async getPullRequestsByRepository(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: {
@@ -5918,6 +6068,7 @@ export class GithubService
         includeFooter?: boolean;
         language?: string;
         organizationAndTeamData: OrganizationAndTeamData;
+        suggestionCopyPrompt?: boolean;
     }): Promise<string> {
         const {
             suggestion,
@@ -5925,6 +6076,7 @@ export class GithubService
             includeHeader = true,
             includeFooter = true,
             language,
+            suggestionCopyPrompt = true,
         } = params;
 
         let commentBody = '';
@@ -5947,17 +6099,21 @@ export class GithubService
         }
 
         // BODY - Conteúdo principal
-        if (suggestion?.improvedCode) {
-            const lang = repository?.language?.toLowerCase() || 'javascript';
-            commentBody += `\`\`\`${lang}\n${suggestion.improvedCode}\n\`\`\`\n\n`;
-        }
-
         if (suggestion?.suggestionContent) {
             commentBody += `${suggestion.suggestionContent}\n\n`;
         }
 
         if (suggestion?.clusteringInformation?.actionStatement) {
             commentBody += `${suggestion.clusteringInformation.actionStatement}\n\n`;
+        }
+
+        if (suggestion?.improvedCode) {
+            const lang = repository?.language?.toLowerCase() || 'javascript';
+            commentBody += `\`\`\`${lang}\n${suggestion.improvedCode}\n\`\`\`\n\n`;
+        }
+
+        if (suggestionCopyPrompt) {
+            commentBody += this.formatPromptForLLM(suggestion);
         }
 
         // FOOTER - Interação/Feedback

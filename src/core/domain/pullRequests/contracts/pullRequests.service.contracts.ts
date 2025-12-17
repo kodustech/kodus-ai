@@ -59,4 +59,20 @@ export interface IPullRequestsService extends IPullRequestsRepository {
         prLevelSuggestions: ISuggestionByPR[],
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null>;
+
+    getOnboardingReviewModeSignals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds: string[];
+        limit?: number;
+    }): Promise<
+        Array<{
+            repositoryId: string;
+            sampleSize: number;
+            metrics: Record<string, number>;
+            recommendation: {
+                mode: 'Safety' | 'Speed' | 'Coach' | 'Default';
+                reasons: string[];
+            };
+        }>
+    >;
 }

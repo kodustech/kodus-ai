@@ -75,6 +75,7 @@ import {
 } from '@/shared/utils/translations/translations';
 import { generateWebhookToken } from '@/shared/utils/webhooks/webhookTokenCrypto';
 import { ConfigService } from '@nestjs/config';
+import axios, { AxiosInstance } from 'axios';
 import { MCPManagerService } from '../mcp/services/mcp-manager.service';
 import { AzureReposRequestHelper } from './azureRepos/azure-repos-request-helper';
 
@@ -1044,6 +1045,7 @@ export class AzureReposService
         prNumber: number;
         lineComment: Comment;
         language: LanguageValue;
+        suggestionCopyPrompt?: boolean;
     }): Promise<AzureRepoPRThread | null> {
         try {
             const {
@@ -1052,6 +1054,7 @@ export class AzureReposService
                 prNumber,
                 lineComment,
                 language,
+                suggestionCopyPrompt = true,
             } = params;
             const { orgName, token } = await this.getAuthDetails(
                 organizationAndTeamData,
@@ -1071,6 +1074,7 @@ export class AzureReposService
                 lineComment,
                 repository,
                 translations,
+                suggestionCopyPrompt,
             );
 
             const thread =
@@ -1698,6 +1702,121 @@ export class AzureReposService
         }
     }
 
+    async getCurrentUser(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+    }): Promise<any | null> {
+        try {
+            const authDetails = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+
+            if (!authDetails?.orgName || !authDetails?.token) {
+                return null;
+            }
+
+            const { orgName, token } = authDetails;
+
+            const instance = axios.create({
+                baseURL: `https://vssps.dev.azure.com/${orgName}`,
+                headers: {
+                    'Authorization': `Basic ${Buffer.from(`:${decrypt(token)}`).toString('base64')}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            const { data } = await instance.get(
+                '/_apis/profile/profiles/me?api-version=7.1-preview',
+            );
+
+            const descriptor = await this.resolveCurrentUserDescriptor({
+                instance,
+                profile: data,
+                orgName,
+            });
+
+            const normalizedUser = {
+                ...data,
+                descriptor,
+                originId: data?.id,
+            };
+
+            if (descriptor) {
+                normalizedUser.id = descriptor;
+            }
+
+            return normalizedUser || null;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error retrieving current Azure Repos user',
+                context: AzureReposService.name,
+                serviceName: 'AzureReposService getCurrentUser',
+                error: error,
+                metadata: params,
+            });
+            return null;
+        }
+    }
+
+    private async resolveCurrentUserDescriptor(params: {
+        instance: AxiosInstance;
+        profile?: any;
+        orgName: string;
+    }): Promise<string | undefined> {
+        const { instance, profile, orgName } = params;
+
+        const descriptorFromProfile =
+            profile?.coreAttributes?.SubjectDescriptor?.value ||
+            profile?.coreAttributes?.Descriptor?.value ||
+            profile?.descriptor;
+
+        if (descriptorFromProfile) {
+            return descriptorFromProfile;
+        }
+
+        try {
+            const { data } = await instance.get(
+                '/_apis/connectionData?connectOptions=IncludeServices&api-version=7.1-preview',
+            );
+
+            const descriptorFromConnection =
+                data?.authenticatedUser?.subjectDescriptor ??
+                data?.authenticatedUser?.descriptor;
+
+            if (descriptorFromConnection) {
+                return descriptorFromConnection;
+            }
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Failed to fetch connectionData while resolving Azure descriptor',
+                context: AzureReposService.name,
+                serviceName: 'AzureReposService getCurrentUser',
+                error,
+                metadata: { orgName },
+            });
+        }
+
+        if (profile?.id) {
+            try {
+                const { data } = await instance.get(
+                    `/_apis/graph/descriptors/${profile.id}?api-version=7.1-preview.1`,
+                );
+                return data?.value;
+            } catch (error) {
+                this.logger.warn({
+                    message:
+                        'Failed to map Azure storage key to descriptor for current user',
+                    context: AzureReposService.name,
+                    serviceName: 'AzureReposService getCurrentUser',
+                    error,
+                    metadata: { orgName },
+                });
+            }
+        }
+
+        return undefined;
+    }
+
     async createWebhook(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<void> {
@@ -2292,6 +2411,9 @@ export class AzureReposService
         filters?: {
             period?: { startDate?: string; endDate?: string };
             prStatus?: string;
+            repositoryId?: string;
+            limit?: number;
+            skipFiles?: boolean;
         };
     }): Promise<PullRequestWithFiles[] | null> {
         try {
@@ -2299,6 +2421,13 @@ export class AzureReposService
             const filters = params.filters ?? {};
 
             const { prStatus } = filters;
+            const perRepoLimit = Math.min(Math.max(filters?.limit || 5, 1), 10);
+            const repoFilter = filters?.repositoryId
+                ? new Set([String(filters.repositoryId)])
+                : null;
+            const useFastPath = Boolean(
+                filters?.repositoryId || filters?.limit,
+            );
 
             const stateMap = {
                 open: AzurePRStatus.ACTIVE,
@@ -2329,6 +2458,14 @@ export class AzureReposService
 
             const reposWithPRs = await Promise.all(
                 repositories.map(async (repo) => {
+                    if (
+                        repoFilter &&
+                        !repoFilter.has(String(repo.id)) &&
+                        !repoFilter.has(String(repo.name))
+                    ) {
+                        return { repo, prs: [] };
+                    }
+
                     const prs =
                         await this.azureReposRequestHelper.getPullRequestsByRepo(
                             {
@@ -2343,7 +2480,19 @@ export class AzureReposService
                                 },
                             },
                         );
-                    return { repo, prs };
+                    let filteredPrs = prs;
+
+                    if (useFastPath) {
+                        filteredPrs = prs
+                            .sort(
+                                (a, b) =>
+                                    new Date(b.creationDate).getTime() -
+                                    new Date(a.creationDate).getTime(),
+                            )
+                            .slice(0, perRepoLimit);
+                    }
+
+                    return { repo, prs: filteredPrs };
                 }),
             );
 
@@ -2353,6 +2502,24 @@ export class AzureReposService
                 reposWithPRs.map(async ({ repo, prs }) => {
                     const prsWithDiffs = await Promise.all(
                         prs.map(async (pr) => {
+                            if (useFastPath && filters?.skipFiles) {
+                                const prWithFileChanges: PullRequestWithFiles =
+                                    {
+                                        id: pr.pullRequestId,
+                                        pull_number: pr.pullRequestId,
+                                        state: pr.status,
+                                        title: pr.title,
+                                        repository: {
+                                            id: repo.id,
+                                            name: repo.name,
+                                        },
+                                        repositoryData: repo as any,
+                                        pullRequestFiles: [],
+                                    };
+
+                                return prWithFileChanges;
+                            }
+
                             const iterations =
                                 await this.azureReposRequestHelper.getIterations(
                                     {
@@ -2524,6 +2691,11 @@ export class AzureReposService
             visibility?: 'all' | 'public' | 'private';
             language?: string;
         };
+        options?: {
+            includePullRequestMetrics?: {
+                lastNDays?: number;
+            };
+        };
     }): Promise<Repositories[]> {
         try {
             const { organizationAndTeamData } = params;
@@ -2573,20 +2745,11 @@ export class AzureReposService
                 }),
             );
 
-            const repositories = projectsWithRepos.reduce<Repositories[]>(
-                (acc, { project, repositories }) => {
-                    repositories.forEach((repo) => {
-                        acc.push(
-                            this.transformRepo(
-                                repo,
-                                project,
-                                integrationConfig,
-                            ),
-                        );
-                    });
-                    return acc;
-                },
-                [],
+            const repositories: Repositories[] = projectsWithRepos.flatMap(
+                ({ project, repositories }) =>
+                    repositories.map((repo) =>
+                        this.transformRepo(repo, project, integrationConfig),
+                    ),
             );
 
             return repositories;
@@ -2625,6 +2788,7 @@ export class AzureReposService
                 id: project?.id,
                 name: project?.name ?? '',
             },
+            lastActivityAt: repo?.lastUpdateTime ?? project?.lastUpdateTime,
         };
     }
 
@@ -3440,39 +3604,84 @@ export class AzureReposService
         return `<sub>${text}</sub>\n\n`;
     }
 
+    private formatPromptForLLM(lineComment: any) {
+        let copyPrompt = '';
+        if (lineComment?.suggestion?.llmPrompt) {
+            if (lineComment.path) {
+                copyPrompt += `File ${lineComment.path}:\n\n`;
+            }
+
+            if (lineComment.start_line && lineComment.line) {
+                copyPrompt += `Line ${lineComment.start_line} to ${lineComment.line}:\n\n`;
+            } else if (lineComment.line) {
+                copyPrompt += `Line ${lineComment.line}:\n\n`;
+            }
+
+            copyPrompt += lineComment?.suggestion?.llmPrompt;
+
+            if (lineComment?.body?.improvedCode) {
+                copyPrompt +=
+                    '\n\nSuggested Code:\n\n' + lineComment?.body?.improvedCode;
+            }
+
+            copyPrompt = `\n\n<details>
+
+<summary>Prompt for LLM</summary>
+
+\`\`\`
+
+${copyPrompt}
+
+\`\`\`
+
+</details>\n\n`;
+        }
+
+        return copyPrompt;
+    }
+
     private formatBodyForAzure(
         lineComment: any,
         repository: any,
         translations: any,
+        suggestionCopyPrompt?: boolean,
     ) {
         const severityShield = lineComment?.suggestion
             ? getSeverityLevelShield(lineComment.suggestion.severity)
             : '';
-        const codeBlock = this.formatCodeBlock(
-            repository?.language?.toLowerCase(),
-            lineComment?.body?.improvedCode,
-        );
+        const codeBlock = lineComment?.body?.improvedCode
+            ? this.formatCodeBlock(
+                  repository?.language?.toLowerCase(),
+                  lineComment?.body?.improvedCode,
+              )
+            : '';
         const suggestionContent = lineComment?.body?.suggestionContent || '';
         const actionStatement = lineComment?.body?.actionStatement
             ? `${lineComment.body.actionStatement}\n\n`
             : '';
 
-        const badges = [
-            getCodeReviewBadge(),
-            lineComment?.suggestion
-                ? getLabelShield(lineComment.suggestion.label)
-                : '',
-            severityShield,
-        ].join(' ');
+        const badges =
+            [
+                getCodeReviewBadge(),
+                lineComment?.suggestion
+                    ? getLabelShield(lineComment.suggestion.label)
+                    : '',
+                severityShield,
+            ].join(' ') + '\n\n';
 
         const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;
         const thumbsDownBlock = `\`\`\`\n👎\n\`\`\`\n`;
 
+        const copyPrompt = suggestionCopyPrompt
+            ? this.formatPromptForLLM(lineComment)
+            : '';
+
         return [
             badges,
-            codeBlock,
             suggestionContent,
             actionStatement,
+            codeBlock,
+            copyPrompt,
             this.formatSub(translations.talkToKody),
             this.formatSub(translations.feedback) +
                 '<!-- kody-codereview -->&#8203;\n&#8203;',
@@ -3698,6 +3907,7 @@ export class AzureReposService
         includeFooter?: boolean;
         language?: string;
         organizationAndTeamData: OrganizationAndTeamData;
+        suggestionCopyPrompt?: boolean;
     }): Promise<string> {
         const {
             suggestion,
@@ -3705,6 +3915,7 @@ export class AzureReposService
             includeHeader = true,
             includeFooter = true,
             language,
+            suggestionCopyPrompt = true,
         } = params;
 
         let commentBody = '';
@@ -3727,17 +3938,21 @@ export class AzureReposService
         }
 
         // BODY - Conteúdo principal
-        if (suggestion?.improvedCode) {
-            const lang = repository?.language?.toLowerCase() || 'javascript';
-            commentBody += `\`\`\`${lang}\n${suggestion.improvedCode}\n\`\`\`\n\n`;
-        }
-
         if (suggestion?.suggestionContent) {
             commentBody += `${suggestion.suggestionContent}\n\n`;
         }
 
         if (suggestion?.clusteringInformation?.actionStatement) {
             commentBody += `${suggestion.clusteringInformation.actionStatement}\n\n`;
+        }
+
+        if (suggestion?.improvedCode) {
+            const lang = repository?.language?.toLowerCase() || 'javascript';
+            commentBody += `\`\`\`${lang}\n${suggestion.improvedCode}\n\`\`\`\n\n`;
+        }
+
+        if (suggestionCopyPrompt) {
+            commentBody += this.formatPromptForLLM(suggestion);
         }
 
         // FOOTER - Interação/Feedback

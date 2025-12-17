@@ -1,17 +1,17 @@
-import { Injectable, Inject } from '@nestjs/common';
-import { REQUEST } from '@nestjs/core';
-import { Request } from 'express';
-import {
-    ICodeReviewSettingsLogService,
-    CODE_REVIEW_SETTINGS_LOG_SERVICE_TOKEN,
-} from '@/ee/codeReviewSettingsLog/domain/codeReviewSettingsLog/contracts/codeReviewSettingsLog.service.contract';
-import { CodeReviewSettingsLogEntity } from '@/ee/codeReviewSettingsLog/domain/codeReviewSettingsLog/entities/codeReviewSettingsLog.entity';
-import { CodeReviewSettingsLogFiltersDto } from '@/core/infrastructure/http/dtos/code-review-settings-log-filters.dto';
-import { AuthorizationService } from '@/core/infrastructure/adapters/services/permissions/authorization.service';
 import {
     Action,
     ResourceType,
 } from '@/core/domain/permissions/enums/permissions.enum';
+import { AuthorizationService } from '@/core/infrastructure/adapters/services/permissions/authorization.service';
+import { CodeReviewSettingsLogFiltersDto } from '@/core/infrastructure/http/dtos/code-review-settings-log-filters.dto';
+import {
+    CODE_REVIEW_SETTINGS_LOG_SERVICE_TOKEN,
+    ICodeReviewSettingsLogService,
+} from '@/ee/codeReviewSettingsLog/domain/codeReviewSettingsLog/contracts/codeReviewSettingsLog.service.contract';
+import { CodeReviewSettingsLogEntity } from '@/ee/codeReviewSettingsLog/domain/codeReviewSettingsLog/entities/codeReviewSettingsLog.entity';
+import { Inject, Injectable } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import { Request } from 'express';
 
 export interface FindCodeReviewSettingsLogsResponse {
     logs: CodeReviewSettingsLogEntity[];
@@ -89,11 +89,11 @@ export class FindCodeReviewSettingsLogsUseCase {
         const logs = await this.codeReviewSettingsLogService.find(filter);
 
         const assignedRepositoryIds =
-            await this.authorizationService.getRepositoryScope(
-                this.request.user,
-                Action.Read,
-                ResourceType.Logs,
-            );
+            await this.authorizationService.getRepositoryScope({
+                user: this.request.user,
+                action: Action.Read,
+                resource: ResourceType.Logs,
+            });
 
         let filteredLogs = logs;
         if (assignedRepositoryIds !== null) {

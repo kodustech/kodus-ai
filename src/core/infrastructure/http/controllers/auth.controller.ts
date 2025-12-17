@@ -1,15 +1,29 @@
+import { ConfirmEmailUseCase } from '@/core/application/use-cases/auth/confirm-email.use-case';
+import { ForgotPasswordUseCase } from '@/core/application/use-cases/auth/forgotPasswordUseCase';
 import { LoginUseCase } from '@/core/application/use-cases/auth/login.use-case';
 import { LogoutUseCase } from '@/core/application/use-cases/auth/logout.use-case';
-import { RefreshTokenUseCase } from '@/core/application/use-cases/auth/refresh-toke.use-case';
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
-import { SignUpDTO } from '../dtos/create-user-organization.dto';
 import { OAuthLoginUseCase } from '@/core/application/use-cases/auth/oauth-login.use-case';
-import { CreateUserOrganizationOAuthDto } from '../dtos/create-user-organization-oauth.dto';
-import { ForgotPasswordUseCase } from '@/core/application/use-cases/auth/forgotPasswordUseCase';
+import { RefreshTokenUseCase } from '@/core/application/use-cases/auth/refresh-toke.use-case';
+import { ResendEmailUseCase } from '@/core/application/use-cases/auth/resend-email.use-case';
 import { ResetPasswordUseCase } from '@/core/application/use-cases/auth/resetPasswordUseCase';
 import { SignUpUseCase } from '@/core/application/use-cases/auth/signup.use-case';
-import { ConfirmEmailUseCase } from '@/core/application/use-cases/auth/confirm-email.use-case';
-import { ResendEmailUseCase } from '@/core/application/use-cases/auth/resend-email.use-case';
+import { SSOCheckUseCase } from '@/core/application/use-cases/auth/sso-check.use-case';
+import { SSOLoginUseCase } from '@/core/application/use-cases/auth/sso-login.use-case';
+import {
+    Body,
+    Controller,
+    Get,
+    Param,
+    Post,
+    Query,
+    Req,
+    Res,
+    UseGuards,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { Request, Response } from 'express';
+import { CreateUserOrganizationOAuthDto } from '../dtos/create-user-organization-oauth.dto';
+import { SignUpDTO } from '../dtos/create-user-organization.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -23,6 +37,8 @@ export class AuthController {
         private readonly resetPasswordUseCase: ResetPasswordUseCase,
         private readonly confirmEmailUseCase: ConfirmEmailUseCase,
         private readonly resendEmailUseCase: ResendEmailUseCase,
+        private readonly ssoLoginUseCase: SSOLoginUseCase,
+        private readonly ssoCheckUseCase: SSOCheckUseCase,
     ) {}
 
     @Post('login')
@@ -77,5 +93,49 @@ export class AuthController {
             refreshToken,
             authProvider,
         );
+    }
+
+    @Get('sso/check')
+    async checkSSO(@Query('domain') domain: string) {
+        return await this.ssoCheckUseCase.execute(domain);
+    }
+
+    @Get('sso/login/:organizationId')
+    @UseGuards(AuthGuard('saml'))
+    async ssoLogin() {
+        // Handled in the guard
+    }
+
+    @Post('sso/saml/callback/:organizationId')
+    @UseGuards(AuthGuard('saml'))
+    async ssoCallback(
+        @Req() req: Request,
+        @Res() res: Response,
+        @Param('organizationId') organizationId: string,
+    ) {
+        const { accessToken, refreshToken } =
+            await this.ssoLoginUseCase.execute(req.user, organizationId);
+
+        const frontendUrl = process.env.API_FRONTEND_URL;
+
+        if (!frontendUrl) {
+            throw new Error('Frontend URL not found');
+        }
+
+        const payload = JSON.stringify({ accessToken, refreshToken });
+
+        res.cookie('sso_handoff', payload, {
+            httpOnly: false,
+            secure: process.env.API_NODE_ENV !== 'development',
+            sameSite: 'lax',
+            path: '/',
+            maxAge: 15 * 1000,
+            domain:
+                process.env.API_NODE_ENV !== 'development'
+                    ? '.kodus.io'
+                    : undefined,
+        });
+
+        return res.redirect(`${frontendUrl}/sso-callback`);
     }
 }

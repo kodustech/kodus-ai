@@ -67,6 +67,7 @@ kodyRulesGeneratorEnabled: false
 customMessages:
     globalSettings:
         hideComments: false # github only
+        suggestionCopyPrompt: true # not available for bitbucket
 
     startReviewMessage:
         status: 'every_push' # every_push | only_when_opened | off
@@ -101,6 +102,24 @@ customMessages:
             - **Request a Review:** Ask Kody to review your PR manually by adding a comment with the \`@kody start-review\` command at the root of your PR.
 
             - **Provide Feedback:** Help Kody learn and improve by reacting to its comments with a 👍 for helpful suggestions or a 👎 if improvements are needed.
+
+            </details>
+
+            <details>
+            <summary>Providing Context (Files & MCPs)</summary>
+
+            Add these hints in your PR description (or a comment) to unlock deeper checks:
+
+            - **Ticket / Acceptance Criteria:** \`Refs: ABC-123\` (Linear/Jira/Asana/ClickUp/Trello) or a direct ticket link.
+            - **Bugfix Validation:** a Sentry/Datadog/Bugsnag event link (or paste the stack trace/error message).
+            - **Endpoint Risk:** mention the route (e.g., \`POST /api/payments\`) or controller/action name.
+            - **Attach a repo file as context:** use an explicit marker like \`@file:docs/guide.mdx#L10-L50\` (replace with your real path).
+            - **API Contract Docs:** include \`@file:openapi.yaml\` or \`@file:swagger.json\` when changing routes/schemas.
+            - **Definition of Done / Standards:** include \`@file:DOD.md\` or \`@file:CONTRIBUTING.md\` if your repo has them.
+            - **Design System Source of Truth:** include \`@file:ui/index.ts\` (replace with your DS entrypoint path).
+            - **Feature Flags:** include the flag key/name and \`@file:flags.ts\` / \`@file:config.json\` (and optionally the PostHog flag name).
+            - **Edge/CDN Rules:** link the Cloudflare rule/zone or describe the intended redirect/header behavior.
+            - **Attach an MCP tool output:** use \`@mcp<provider|tool>\` (replace with an installed MCP provider + tool, e.g., \`@mcp<sentry|events.search>\`).
 
             </details>
 

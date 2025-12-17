@@ -196,15 +196,18 @@ export class CommentManagerService implements ICommentManagerService {
 
                 let userPrompt = '';
 
-                if (isCommitRun && summaryConfig?.behaviourForNewCommits === BehaviourForNewCommits.REPLACE) {
+                if (
+                    isCommitRun &&
+                    summaryConfig?.behaviourForNewCommits ===
+                    BehaviourForNewCommits.REPLACE
+                ) {
                     userPrompt = `
                     This is the updated pull request summary:
                     <pullRequestSummaryContext>${updatedPR?.body || 'No pull request summary'}</pullRequestSummaryContext>
                     Use this summary to concatenate the existing pull request summary with the new changed files context:`;
                 }
 
-                const fallbackProvider = LLMModelProvider.OPENAI_GPT_4O
-                    ;
+                const fallbackProvider = LLMModelProvider.OPENAI_GPT_4O;
                 userPrompt += `<changedFilesContext>${JSON.stringify(baseContext?.changedFiles, null, 2) || 'No files changed'}</changedFilesContext>`;
 
                 const promptRunner = new BYOKPromptRunnerService(
@@ -710,6 +713,7 @@ export class CommentManagerService implements ICommentManagerService {
         lineComments: Comment[],
         language: string,
         dryRun: CodeReviewPipelineContext['dryRun'],
+        suggestionCopyPrompt?: boolean,
     ): Promise<{
         lastAnalyzedCommit: any;
         commits: any[];
@@ -777,6 +781,7 @@ export class CommentManagerService implements ICommentManagerService {
                                 lineComment: comment,
                                 language,
                                 dryRun,
+                                suggestionCopyPrompt,
                             },
                             dryRun?.enabled ? PlatformType.INTERNAL : undefined,
                         );
@@ -1330,6 +1335,7 @@ ${reviewOptions}
         repository: { name: string; id: string; language: string },
         prLevelSuggestions: ISuggestionByPR[],
         language: string,
+        suggestionCopyPrompt?: boolean,
         dryRun?: CodeReviewPipelineContext['dryRun'],
     ): Promise<{ commentResults: Array<CommentResult> }> {
         try {
@@ -1371,6 +1377,7 @@ ${reviewOptions}
                                 includeFooter: false, // PR-level NÃO inclui footer de interação
                                 language,
                                 organizationAndTeamData,
+                                suggestionCopyPrompt,
                             },
                             dryRun?.enabled ? PlatformType.INTERNAL : undefined,
                         );

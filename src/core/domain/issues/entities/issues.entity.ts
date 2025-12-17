@@ -30,6 +30,10 @@ export class IssuesEntity implements Entity<IIssue> {
         gitId: string;
         username: string;
     };
+    public kodyRule?: {
+        number?: string;
+        title?: string;
+    };
 
     constructor(issue: IIssue) {
         this.uuid = issue.uuid;
@@ -47,6 +51,7 @@ export class IssuesEntity implements Entity<IIssue> {
         this.updatedAt = issue.updatedAt;
         this.owner = issue.owner;
         this.reporter = issue.reporter;
+        this.kodyRule = issue.kodyRule;
     }
 
     public static create(issue: IIssue): IssuesEntity {
@@ -70,6 +75,7 @@ export class IssuesEntity implements Entity<IIssue> {
             updatedAt: this.updatedAt,
             owner: this.owner,
             reporter: this.reporter,
+            kodyRule: this.kodyRule,
         };
     }
 
@@ -90,6 +96,7 @@ export class IssuesEntity implements Entity<IIssue> {
             updatedAt: this.updatedAt,
             owner: this.owner,
             reporter: this.reporter,
+            kodyRule: this.kodyRule,
         };
     }
 }

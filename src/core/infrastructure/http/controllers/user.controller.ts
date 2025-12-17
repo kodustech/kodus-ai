@@ -11,6 +11,7 @@ import {
     UseGuards,
 } from '@nestjs/common';
 
+import { UserRequest } from '@/config/types/http/user-request.type';
 import { AcceptUserInvitationUseCase } from '@/core/application/use-cases/user/accept-user-invitation.use-case';
 import { CheckUserWithEmailUserUseCase } from '@/core/application/use-cases/user/check-user-email.use-case';
 import { JoinOrganizationUseCase } from '@/core/application/use-cases/user/join-organization.use-case';
@@ -40,9 +41,7 @@ export class UsersController {
         private readonly updateAnotherUserUseCase: UpdateAnotherUserUseCase,
 
         @Inject(REQUEST)
-        private readonly request: Request & {
-            user: { organization: { uuid: string }; uuid: string };
-        },
+        private readonly request: UserRequest,
     ) {}
 
     @Get('/email')
@@ -68,14 +67,24 @@ export class UsersController {
 
     @Post('/join-organization')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Create, ResourceType.UserSettings))
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Create,
+            resource: ResourceType.UserSettings,
+        }),
+    )
     public async joinOrganization(@Body() body: JoinOrganizationDto) {
         return await this.joinOrganizationUseCase.execute(body);
     }
 
     @Patch('/:targetUserId')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Update, ResourceType.UserSettings))
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Update,
+            resource: ResourceType.UserSettings,
+        }),
+    )
     public async updateAnother(
         @Body() body: UpdateAnotherUserDto,
         @Param('targetUserId') targetUserId: string,
@@ -85,15 +94,21 @@ export class UsersController {
         }
 
         const userId = this.request.user?.uuid;
+        const organizationId = this.request.user?.organization?.uuid;
 
         if (!userId) {
             throw new Error('User not found in request');
+        }
+
+        if (!organizationId) {
+            throw new Error('Organization not found in request');
         }
 
         return await this.updateAnotherUserUseCase.execute(
             userId,
             targetUserId,
             body,
+            organizationId,
         );
     }
 }

@@ -74,4 +74,14 @@ export interface IKodyRulesService extends IKodyRulesRepository {
     ): Promise<{
         total: number;
     }>;
+
+    getRecommendedRulesByMCP(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<LibraryKodyRule[]>;
+
+    getRecommendedRulesBySuggestions(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId: string,
+        repoLanguage?: string,
+    ): Promise<LibraryKodyRule[]>;
 }

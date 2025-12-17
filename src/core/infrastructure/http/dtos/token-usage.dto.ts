@@ -1,17 +1,6 @@
-import { BadRequestException } from '@nestjs/common';
-import { Transform } from 'class-transformer';
-import {
-    IsBoolean,
-    IsISO8601,
-    IsNumber,
-    IsOptional,
-    IsString,
-} from 'class-validator';
+import { IsISO8601, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class TokenUsageQueryDto {
-    @IsString()
-    organizationId: string;
-
     @IsISO8601()
     startDate: string; // ISO date string
 

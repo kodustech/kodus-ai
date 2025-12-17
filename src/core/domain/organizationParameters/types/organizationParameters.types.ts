@@ -6,4 +6,5 @@ export type OrganizationParametersAutoJoinConfig = {
 export type OrganizationParametersAutoAssignConfig = {
     enabled: boolean;
     ignoredUsers: string[];
+    allowedUsers?: string[];
 };

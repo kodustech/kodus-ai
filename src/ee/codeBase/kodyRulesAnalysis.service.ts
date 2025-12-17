@@ -1,16 +1,37 @@
-import { Inject, Injectable } from '@nestjs/common';
 import {
-    FileChangeContext,
-    AnalysisContext,
     AIAnalysisResult,
+    AnalysisContext,
+    CodeReviewConfig,
     CodeSuggestion,
+    FileChangeContext,
     ReviewModeResponse,
     ReviewOptions,
     SuggestionControlConfig,
-    CodeReviewConfig,
 } from '@/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@/config/types/general/organizationAndTeamData';
-import { tryParseJSONObject } from '@/shared/utils/transforms/json';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@/core/domain/codeBase/contracts/CodeBaseConfigService.contract';
+import { IKodyRulesAnalysisService } from '@/core/domain/codeBase/contracts/KodyRulesAnalysisService.contract';
+import { KODY_RULES_SERVICE_TOKEN } from '@/core/domain/kodyRules/contracts/kodyRules.service.contract';
+import {
+    IKodyRule,
+    KodyRulesScope,
+} from '@/core/domain/kodyRules/interfaces/kodyRules.interface';
+import type { ContextAugmentationsMap } from '@/core/infrastructure/adapters/services/context/code-review-context-pack.service';
+import {
+    getAugmentationsFromPack,
+    getOverridesFromPack,
+} from '@/core/infrastructure/adapters/services/context/code-review-context.utils';
+import { FileContextAugmentationService } from '@/core/infrastructure/adapters/services/context/file-context-augmentation.service';
+import { ExternalReferenceLoaderService } from '@/core/infrastructure/adapters/services/kodyRules/externalReferenceLoader.service';
+import { KodyRuleDependencyService } from '@/core/infrastructure/adapters/services/kodyRules/kodyRulesDependency.service';
+import { ObservabilityService } from '@/core/infrastructure/adapters/services/logger/observability.service';
+import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logger/pino.service';
+import { BYOKPromptRunnerService } from '@/shared/infrastructure/services/tokenTracking/byokPromptRunner.service';
+import { LabelType } from '@/shared/utils/codeManagement/labels';
+import { SeverityLevel } from '@/shared/utils/enums/severityLevel.enum';
 import {
     KodyRulesClassifierSchema,
     kodyRulesClassifierSchema,
@@ -26,44 +47,22 @@ import {
     prompt_kodyrules_updatestdsuggestions_system,
     prompt_kodyrules_updatestdsuggestions_user,
 } from '@/shared/utils/langchainCommon/prompts/kodyRules';
-import {
-    IKodyRule,
-    KodyRulesScope,
-} from '@/core/domain/kodyRules/interfaces/kodyRules.interface';
-import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logger/pino.service';
-import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
-import { KodyRulesService } from '../kodyRules/service/kodyRules.service';
-import { KODY_RULES_SERVICE_TOKEN } from '@/core/domain/kodyRules/contracts/kodyRules.service.contract';
-import { LabelType } from '@/shared/utils/codeManagement/labels';
-import { SeverityLevel } from '@/shared/utils/enums/severityLevel.enum';
-import { IKodyRulesAnalysisService } from '@/core/domain/codeBase/contracts/KodyRulesAnalysisService.contract';
-import {
-    LLMModelProvider,
-    PromptRunnerService,
-    ParserType,
-    PromptRole,
-    BYOKConfig,
-} from '@kodus/kodus-common/llm';
-import { KodyRulesValidationService } from '../kodyRules/service/kody-rules-validation.service';
-import {
-    CODE_BASE_CONFIG_SERVICE_TOKEN,
-    ICodeBaseConfigService,
-} from '@/core/domain/codeBase/contracts/CodeBaseConfigService.contract';
-import { ObservabilityService } from '@/core/infrastructure/adapters/services/logger/observability.service';
-import { BYOKPromptRunnerService } from '@/shared/infrastructure/services/tokenTracking/byokPromptRunner.service';
-import { ExternalReferenceLoaderService } from '@/core/infrastructure/adapters/services/kodyRules/externalReferenceLoader.service';
-import type { ContextAugmentationsMap } from '@/core/infrastructure/adapters/services/context/code-review-context-pack.service';
-import {
-    getAugmentationsFromPack,
-    getOverridesFromPack,
-} from '@/core/infrastructure/adapters/services/context/code-review-context.utils';
+import { tryParseJSONObject } from '@/shared/utils/transforms/json';
 import type {
     ContextDependency,
     ContextPack,
 } from '@context-os-core/interfaces';
-import { FileContextAugmentationService } from '@/core/infrastructure/adapters/services/context/file-context-augmentation.service';
-import { ContextReferenceService } from '@/core/infrastructure/adapters/services/context/context-reference.service';
-import { KodyRuleDependencyService } from '@/core/infrastructure/adapters/services/kodyRules/kodyRulesDependency.service';
+import {
+    BYOKConfig,
+    LLMModelProvider,
+    ParserType,
+    PromptRole,
+    PromptRunnerService,
+} from '@kodus/kodus-common/llm';
+import { Inject, Injectable } from '@nestjs/common';
+import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
+import { KodyRulesValidationService } from '../kodyRules/service/kody-rules-validation.service';
+import { KodyRulesService } from '../kodyRules/service/kodyRules.service';
 
 interface KodyRulesExtendedContext {
     pullRequest: any;
@@ -1224,6 +1223,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
                 severity?: string;
                 violatedKodyRulesIds?: string[];
                 brokenKodyRulesIds?: string[];
+                llmPrompt?: string;
             }>;
         }
 
@@ -1279,6 +1279,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
                             Number(suggestion.relevantLinesEnd) || undefined,
                         label: suggestion.label,
                         severity: suggestion.severity,
+                        llmPrompt: suggestion.llmPrompt,
                     };
 
                     // "Has violated" means a standard suggestion violates a kody rule, so we silently fix it.

@@ -65,13 +65,19 @@ export class PullRequestMessagesModel extends CoreDocument {
                 default: false,
                 required: false,
             },
+            suggestionCopyPrompt: {
+                type: Boolean,
+                default: true,
+                required: false,
+            },
         },
         _id: false,
         required: false,
-        default: { hideComments: false },
+        default: { hideComments: false, suggestionCopyPrompt: true },
     })
     globalSettings: {
         hideComments: boolean;
+        suggestionCopyPrompt: boolean;
     };
 }
 

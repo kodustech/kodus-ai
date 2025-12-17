@@ -18,7 +18,10 @@ export class IntegrationConfigController {
 
     @Get('/get-integration-configs-by-integration-category')
     @UseGuards(PolicyGuard)
-    @CheckPolicies(checkPermissions(Action.Read, ResourceType.GitSettings))
+    @CheckPolicies(checkPermissions({
+        action: Action.Read,
+        resource: ResourceType.GitSettings
+    }))
     public async getIntegrationConfigsByIntegrationCategory(
         @Query('integrationCategory') integrationCategory: string,
         @Query('teamId') teamId: string,
