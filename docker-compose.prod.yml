@@ -28,4 +28,4 @@ volumes:
 
 networks:
     shared-network:
-        external: true
+        external: false
