@@ -31,7 +31,6 @@ services:
     db_postgres:
         image: pgvector/pgvector:pg16
         container_name: db_postgres
-        ports: ['5432:5432']
         environment:
             POSTGRES_USER: ${API_PG_DB_USERNAME}
             POSTGRES_PASSWORD: ${API_PG_DB_PASSWORD}
@@ -55,7 +54,6 @@ services:
     db_mongodb:
         image: mongo:8
         container_name: mongodb
-        ports: ['27017:27017']
         environment:
             MONGO_INITDB_ROOT_USERNAME: ${API_MG_DB_USERNAME}
             MONGO_INITDB_ROOT_PASSWORD: ${API_MG_DB_PASSWORD}
@@ -83,7 +81,7 @@ volumes:
 networks:
     kodus-backend-services:
         driver: bridge
-        name: kodus-backend-services
-        external: true
+        name: kodus-backend-services-dev-small
+        external: false
     shared-network:
-        external: true
+        external: false
