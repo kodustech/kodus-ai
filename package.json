@@ -5,7 +5,7 @@
     "author": "",
     "license": "UNLICENSED",
     "scripts": {
-        "setup": "./scripts/setup.sh",
+        "setup./scripts/setup.sh",
         "dev:health-check": "./scripts/health-check.sh",
         "dev:first-run": "yarn setup",
         "dev:stop": "yarn docker:down",
