@@ -1341,12 +1341,12 @@
     "@anthropic-ai/sdk" "^0.71.0"
     zod "^3.25.76 || ^4"
 
-"@langchain/classic@1.0.13":
-  version "1.0.13"
-  resolved "https://registry.npmjs.org/@langchain/classic/-/classic-1.0.13.tgz#839e4440c6ec2448c3bc0b96cb4aa1b46b1597bc"
-  integrity sha512-n8enK0+D9bOB6vCr31uetDulwWNtFpFLMVwmKoe0sJJGfMU7vJN73uc9tEBmMpTxL2nfb+fZrXmttYHaq2XvIg==
+"@langchain/classic@1.0.17":
+  version "1.0.17"
+  resolved "https://registry.yarnpkg.com/@langchain/classic/-/classic-1.0.17.tgz#90359a8a0d600ab7613316a4f284f136005b97fb"
+  integrity sha512-GgcmDILxl26E0Oo09Q/fotJB3EZrTnU4MuJGR2zQXPMZnZ1CCQqyecXjKDRdI6sZkfc8Kxg+ezT+0kIMtKV10A==
   dependencies:
-    "@langchain/openai" "1.2.4"
+    "@langchain/openai" "1.2.7"
     "@langchain/textsplitters" "1.0.1"
     handlebars "^4.7.8"
     js-yaml "^4.1.1"
@@ -1358,13 +1358,13 @@
   optionalDependencies:
     langsmith ">=0.4.0 <1.0.0"
 
-"@langchain/community@1.1.10":
-  version "1.1.10"
-  resolved "https://registry.npmjs.org/@langchain/community/-/community-1.1.10.tgz#db1159c8aa3f8b83c6270927e047f5cd8e0b8e4e"
-  integrity sha512-uXGHkd3GJsbDt6n6Yv077QR9ULqG2GrO7t2dwIu3eVkt0bM9d/LFp9OAIQZiYOEWz/nKwvb4III/TUmnYt+1eA==
+"@langchain/community@1.1.14":
+  version "1.1.14"
+  resolved "https://registry.yarnpkg.com/@langchain/community/-/community-1.1.14.tgz#2a89cead15f03251178be47a5aae1ea58ae53657"
+  integrity sha512-Jb64jqkjwocfK04RYW8oP9Z0VO3E1LfSlOx5QK3g7LJI7zQN8o1QzVvfXWigKQRuvMYue+X7DkunLaiEx/mohA==
   dependencies:
-    "@langchain/classic" "1.0.13"
-    "@langchain/openai" "1.2.4"
+    "@langchain/classic" "1.0.17"
+    "@langchain/openai" "1.2.7"
     binary-extensions "^2.2.0"
     flat "^5.0.2"
     js-yaml "^4.1.1"
@@ -1417,6 +1417,15 @@
   dependencies:
     js-tiktoken "^1.0.12"
     openai "^6.16.0"
+    zod "^3.25.76 || ^4"
+
+"@langchain/openai@1.2.7":
+  version "1.2.7"
+  resolved "https://registry.yarnpkg.com/@langchain/openai/-/openai-1.2.7.tgz#0eb2c1a5831b96bdffc9eb5ff670431fff8eeabb"
+  integrity sha512-vR9zoF0/EZ03X0Tc6woIEWRDSDSr2l64n+MQCW8NduScJtBJs5r/Ng3Lrp2bjtJQywEMQoOhcrV2DMmAIPWgnw==
+  dependencies:
+    js-tiktoken "^1.0.12"
+    openai "^6.18.0"
     zod "^3.25.76 || ^4"
 
 "@langchain/textsplitters@1.0.1":
@@ -8978,6 +8987,11 @@ openai@^6.16.0:
   version "6.16.0"
   resolved "https://registry.npmjs.org/openai/-/openai-6.16.0.tgz#53661d9f6307dc7523e89637ff7c6ccd0be16c67"
   integrity sha512-fZ1uBqjFUjXzbGc35fFtYKEOxd20kd9fDpFeqWtsOZWiubY8CZ1NAlXHW3iathaFvqmNtCWMIsosCuyeI7Joxg==
+
+openai@^6.18.0:
+  version "6.21.0"
+  resolved "https://registry.yarnpkg.com/openai/-/openai-6.21.0.tgz#ab6b73211546ef973cdd91a8af327b313578b29e"
+  integrity sha512-26dQFi76dB8IiN/WKGQOV+yKKTTlRCxQjoi2WLt0kMcH8pvxVyvfdBDkld5GTl7W1qvBpwVOtFcsqktj3fBRpA==
 
 openapi-types@^12.1.3:
   version "12.1.3"
