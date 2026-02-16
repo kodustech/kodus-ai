@@ -57,7 +57,7 @@
         "lucide-react": "^0.563.0",
         "markdown-to-jsx": "^8.0.0",
         "next": "^15.5.10",
-        "next-auth": "^5.0.0-beta.29",
+        "next-auth": "^5.0.0-beta.30",
         "nuqs": "^2.8.6",
         "passport-saml-metadata": "^5.0.0",
         "posthog-node": "^5.24.2",
