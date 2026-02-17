@@ -644,6 +644,10 @@ export class ChatWithKodyFromGitUseCase {
                 },
             });
 
+        const commentsMap = new Map<any, Comment>(
+            allComments?.map((c) => [c.id, c]) || [],
+        );
+
         const commentId = this.getCommentId(params);
         const comment =
             params.platformType !== PlatformType.AZURE_REPOS
@@ -659,11 +663,7 @@ export class ChatWithKodyFromGitUseCase {
         }
 
         if (
-            this.shouldIgnoreComment(
-                comment,
-                allComments || [],
-                params.platformType,
-            )
+            this.shouldIgnoreComment(comment, commentsMap, params.platformType)
         ) {
             this.logger.log({
                 message:
@@ -1318,7 +1318,7 @@ export class ChatWithKodyFromGitUseCase {
 
     private shouldIgnoreComment(
         comment: any,
-        allComments: any[],
+        commentsMap: Map<any, Comment>,
         platformType: PlatformType,
     ): boolean {
         if (this.isKodyComment(comment, platformType)) {
@@ -1331,7 +1331,7 @@ export class ChatWithKodyFromGitUseCase {
 
         const parentComment = this.getParentComment(
             comment,
-            allComments,
+            commentsMap,
             platformType,
         );
 
@@ -1344,7 +1344,7 @@ export class ChatWithKodyFromGitUseCase {
 
     private getParentComment(
         comment: Comment,
-        allComments: Comment[],
+        commentsMap: Map<any, Comment>,
         platformType: PlatformType,
     ): Comment | undefined {
         switch (platformType) {
@@ -1353,24 +1353,22 @@ export class ChatWithKodyFromGitUseCase {
                 if (!comment.in_reply_to_id) {
                     return undefined;
                 }
-                return allComments.find(
-                    (c) => c.id === comment.in_reply_to_id,
-                );
+                return commentsMap.get(comment.in_reply_to_id);
 
             case PlatformType.BITBUCKET:
                 if (!comment.parent?.id) {
                     return undefined;
                 }
-                return allComments.find((c) => c.id === comment.parent.id);
+                return commentsMap.get(comment.parent.id);
 
             case PlatformType.AZURE_REPOS:
                 if (
                     comment.thread &&
-                    Array.isArray(comment.thread.comments) &&
-                    comment.thread.comments.length > 0
+                    Array.isArray(comment.thread.replies) &&
+                    comment.thread.replies.length > 0
                 ) {
                     // For Azure, we treat the thread starter as the parent
-                    return comment.thread.comments[0];
+                    return comment.thread.replies[0];
                 }
                 return undefined;
 
