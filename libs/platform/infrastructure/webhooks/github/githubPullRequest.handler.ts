@@ -37,7 +37,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
         private readonly eventEmitter: EventEmitter2,
         private readonly enqueueCodeReviewJobUseCase: EnqueueCodeReviewJobUseCase,
         private readonly enqueueImplementationCheckUseCase: EnqueueImplementationCheckUseCase,
-    ) {}
+    ) { }
 
     public canHandle(params: IWebhookEventParams): boolean {
         // Verify if the event is from GitHub
@@ -480,7 +480,8 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                     event === 'issue_comment') &&
                 !hasMarker &&
                 !isStartCommand &&
-                isKodyMentionNonReview(comment.body)
+                (isKodyMentionNonReview(comment.body) ||
+                    payload?.comment?.in_reply_to_id)
             ) {
                 this.chatWithKodyFromGitUseCase.execute(params);
                 return;

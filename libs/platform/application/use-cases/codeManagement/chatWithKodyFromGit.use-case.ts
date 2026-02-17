@@ -156,7 +156,7 @@ export class ChatWithKodyFromGitUseCase {
         private readonly codeManagementService: CodeManagementService,
         private readonly conversationAgentUseCase: ConversationAgentUseCase,
         private readonly businessRulesValidationAgentUseCase: BusinessRulesValidationAgentUseCase,
-    ) {}
+    ) { }
 
     async execute(params: WebhookParams): Promise<void> {
         this.logger.log({
@@ -299,6 +299,13 @@ export class ChatWithKodyFromGitUseCase {
                 return CommandType.BUSINESS_LOGIC_INVALID_CONTEXT;
             }
 
+            if (
+                commandType === CommandType.UNKNOWN &&
+                params.payload?.comment?.in_reply_to_id
+            ) {
+                return CommandType.CONVERSATION;
+            }
+
             return commandType;
         }
 
@@ -336,6 +343,13 @@ export class ChatWithKodyFromGitUseCase {
                 return CommandType.BUSINESS_LOGIC_INVALID_CONTEXT;
             }
 
+            if (
+                commandType === CommandType.UNKNOWN &&
+                params.payload?.comment?.parent?.id
+            ) {
+                return CommandType.CONVERSATION;
+            }
+
             return commandType;
         }
 
@@ -352,6 +366,13 @@ export class ChatWithKodyFromGitUseCase {
                 isSuggestion
             ) {
                 return CommandType.BUSINESS_LOGIC_INVALID_CONTEXT;
+            }
+
+            if (
+                commandType === CommandType.UNKNOWN &&
+                params.payload?.resource?.comment?.parentCommentId > 0
+            ) {
+                return CommandType.CONVERSATION;
             }
 
             return commandType;
@@ -372,20 +393,20 @@ export class ChatWithKodyFromGitUseCase {
             params.platformType === PlatformType.GITLAB
                 ? params.payload?.object_attributes?.note || ''
                 : params.platformType === PlatformType.BITBUCKET
-                  ? params.payload?.comment?.content?.raw || ''
-                  : params.platformType === PlatformType.AZURE_REPOS
-                    ? params.payload?.resource?.comment?.content || ''
-                    : params.payload?.comment?.body ||
-                      params.payload?.issue?.body ||
-                      '';
+                    ? params.payload?.comment?.content?.raw || ''
+                    : params.platformType === PlatformType.AZURE_REPOS
+                        ? params.payload?.resource?.comment?.content || ''
+                        : params.payload?.comment?.body ||
+                        params.payload?.issue?.body ||
+                        '';
         const issueId =
             params.platformType === PlatformType.GITLAB
                 ? params?.payload?.object_attributes?.noteable_id
                 : params.platformType === PlatformType.BITBUCKET
-                  ? params?.payload?.pullrequest?.id
-                  : params.platformType === PlatformType.AZURE_REPOS
-                    ? params?.payload?.resource?.pullRequest?.pullRequestId
-                    : params?.payload?.issue?.id;
+                    ? params?.payload?.pullrequest?.id
+                    : params.platformType === PlatformType.AZURE_REPOS
+                        ? params?.payload?.resource?.pullRequest?.pullRequestId
+                        : params?.payload?.issue?.id;
 
         const thread = createThreadId(
             {
@@ -628,16 +649,22 @@ export class ChatWithKodyFromGitUseCase {
             params.platformType !== PlatformType.AZURE_REPOS
                 ? allComments?.find((c) => c.id === commentId)
                 : this.getReviewThreadByCommentId(
-                      commentId,
-                      allComments,
-                      params,
-                  );
+                    commentId,
+                    allComments,
+                    params,
+                );
 
         if (!comment) {
             return;
         }
 
-        if (this.shouldIgnoreComment(comment, params.platformType)) {
+        if (
+            this.shouldIgnoreComment(
+                comment,
+                allComments || [],
+                params.platformType,
+            )
+        ) {
             this.logger.log({
                 message:
                     'Comment made by Kody or does not mention Kody/Kodus. Ignoring.',
@@ -897,10 +924,10 @@ export class ChatWithKodyFromGitUseCase {
             params.platformType !== PlatformType.AZURE_REPOS
                 ? allComments?.find((c) => c.id === commentId)
                 : this.getReviewThreadByCommentId(
-                      commentId,
-                      allComments,
-                      params,
-                  );
+                    commentId,
+                    allComments,
+                    params,
+                );
 
         if (!comment) {
             this.logger.warn({
@@ -1291,12 +1318,65 @@ export class ChatWithKodyFromGitUseCase {
 
     private shouldIgnoreComment(
         comment: any,
+        allComments: any[],
         platformType: PlatformType,
     ): boolean {
-        return (
-            this.isKodyComment(comment, platformType) ||
-            !this.mentionsKody(comment)
+        if (this.isKodyComment(comment, platformType)) {
+            return true;
+        }
+
+        if (this.mentionsKody(comment)) {
+            return false;
+        }
+
+        const parentComment = this.getParentComment(
+            comment,
+            allComments,
+            platformType,
         );
+
+        if (parentComment && this.isKodyComment(parentComment, platformType)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private getParentComment(
+        comment: Comment,
+        allComments: Comment[],
+        platformType: PlatformType,
+    ): Comment | undefined {
+        switch (platformType) {
+            case PlatformType.GITHUB:
+            case PlatformType.GITLAB:
+                if (!comment.in_reply_to_id) {
+                    return undefined;
+                }
+                return allComments.find(
+                    (c) => c.id === comment.in_reply_to_id,
+                );
+
+            case PlatformType.BITBUCKET:
+                if (!comment.parent?.id) {
+                    return undefined;
+                }
+                return allComments.find((c) => c.id === comment.parent.id);
+
+            case PlatformType.AZURE_REPOS:
+                if (
+                    comment.thread &&
+                    Array.isArray(comment.thread.comments) &&
+                    comment.thread.comments.length > 0
+                ) {
+                    // For Azure, we treat the thread starter as the parent
+                    return comment.thread.comments[0];
+                }
+                return undefined;
+
+            default:
+                return undefined;
+        }
     }
 
     private getOriginalKodyComment(
