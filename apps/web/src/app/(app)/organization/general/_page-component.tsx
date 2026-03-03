@@ -25,6 +25,7 @@ import {
     OrganizationParametersConfigKey,
     Timezone,
 } from "@services/parameters/types";
+import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 import { Save } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { publicDomainsSet } from "src/core/utils/email";
@@ -98,6 +99,13 @@ export const GeneralOrganizationSettingsPage = (props: {
 }) => {
     const router = useRouter();
     const userDomain = props.email.split("@")[1];
+    const subscription = useSubscriptionStatus();
+
+    const isTrialUser =
+        subscription.status === "trial-active" ||
+        subscription.status === "trial-expiring";
+
+    const canConfigureMaxFiles = props.isByokEnabled && !isTrialUser;
 
     const form = useForm<SettingsFormData>({
         mode: "onChange",
@@ -365,7 +373,7 @@ export const GeneralOrganizationSettingsPage = (props: {
                                                         }
                                                     }}
                                                     disabled={
-                                                        !props.isByokEnabled
+                                                        !canConfigureMaxFiles
                                                     }
                                                     className="mt-3 w-40"
                                                 />
@@ -373,24 +381,34 @@ export const GeneralOrganizationSettingsPage = (props: {
                                             <FormControl.Error>
                                                 {fieldState.error?.message}
                                             </FormControl.Error>
-                                            {!props.isByokEnabled && (
+                                            {!canConfigureMaxFiles && (
                                                 <FormControl.Helper className="mt-2">
-                                                    This setting is only
-                                                    configurable when{" "}
-                                                    <Link
-                                                        href="/organization/byok"
-                                                        className="text-primary-light hover:underline">
-                                                        BYOK mode
-                                                    </Link>{" "}
-                                                    is enabled.{" "}
-                                                    <Link
-                                                        href="https://docs.kodus.io/how_to_use/en/byok#byok-bring-your-own-key"
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-primary-light hover:underline">
-                                                        Learn more
-                                                    </Link>
-                                                    .
+                                                    {isTrialUser ? (
+                                                        <>
+                                                            This setting is not
+                                                            available during
+                                                            trial period.
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            This setting is only
+                                                            configurable when{" "}
+                                                            <Link
+                                                                href="/organization/byok"
+                                                                className="text-primary-light hover:underline">
+                                                                BYOK mode
+                                                            </Link>{" "}
+                                                            is enabled.{" "}
+                                                            <Link
+                                                                href="https://docs.kodus.io/how_to_use/en/byok#byok-bring-your-own-key"
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-primary-light hover:underline">
+                                                                Learn more
+                                                            </Link>
+                                                            .
+                                                        </>
+                                                    )}
                                                 </FormControl.Helper>
                                             )}
                                         </>
