@@ -88,6 +88,19 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 draft.codeReviewConfig.byokConfig = byokConfig?.configValue;
             });
 
+            const maxFilesConfig =
+                await this.organizationParametersService.findByKey(
+                    OrganizationParametersKey.CODE_REVIEW_MAX_FILES,
+                    context.organizationAndTeamData,
+                );
+
+            if (maxFilesConfig?.configValue != null) {
+                context = this.updateContext(context, (draft) => {
+                    draft.codeReviewConfig.maxFilesToAnalyze =
+                        maxFilesConfig.configValue;
+                });
+            }
+
             const cadenceResult = await this.evaluateReviewCadence(context);
 
             if (!cadenceResult.shouldProcess) {

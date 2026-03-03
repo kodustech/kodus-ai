@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@components/ui/button";
 import { Card, CardHeader } from "@components/ui/card";
 import { FormControl } from "@components/ui/form-control";
@@ -30,6 +31,8 @@ import { publicDomainsSet } from "src/core/utils/email";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 import { z } from "zod";
 
+const DEFAULT_MAX_FILES = 500;
+
 const timezoneOptions = [
     { value: Timezone.NEW_YORK, title: "New York" },
     { value: Timezone.SAO_PAULO, title: "São Paulo" },
@@ -43,6 +46,7 @@ const createSettingsSchema = (userDomain: string) =>
                 enabled: z.boolean(),
                 domains: z.array(z.string()),
             }),
+            maxFiles: z.number().min(1).max(10000),
         })
         .superRefine((data, ctx) => {
             if (data.autoJoinConfig.enabled) {
@@ -89,6 +93,8 @@ export const GeneralOrganizationSettingsPage = (props: {
     email: string;
     timezone: Timezone;
     autoJoinConfig: OrganizationParametersAutoJoinConfig;
+    maxFiles: number;
+    isByokEnabled: boolean;
 }) => {
     const router = useRouter();
     const userDomain = props.email.split("@")[1];
@@ -99,6 +105,7 @@ export const GeneralOrganizationSettingsPage = (props: {
         defaultValues: {
             timezone: props.timezone,
             autoJoinConfig: props.autoJoinConfig,
+            maxFiles: props.maxFiles,
         },
     });
 
@@ -130,6 +137,15 @@ export const GeneralOrganizationSettingsPage = (props: {
                         createOrUpdateOrganizationParameter(
                             OrganizationParametersConfigKey.AUTO_JOIN_CONFIG,
                             data.autoJoinConfig,
+                        ),
+                    );
+                }
+
+                if (data.maxFiles !== props.maxFiles) {
+                    promises.push(
+                        createOrUpdateOrganizationParameter(
+                            OrganizationParametersConfigKey.CODE_REVIEW_MAX_FILES,
+                            data.maxFiles,
                         ),
                     );
                 }
@@ -303,6 +319,82 @@ export const GeneralOrganizationSettingsPage = (props: {
                                             </>
                                         );
                                     }}
+                                />
+                            </FormControl.Root>
+                        </CardHeader>
+                    </Card>
+
+                    <Card color="lv1" className="w-md">
+                        <CardHeader>
+                            <FormControl.Root className="flex flex-col">
+                                <FormControl.Label className="mb-0 text-base font-bold">
+                                    Max Files per Review
+                                </FormControl.Label>
+                                <FormControl.Helper className="mt-0 mb-5">
+                                    Maximum number of files to analyze per code
+                                    review. Default is 500.
+                                </FormControl.Helper>
+
+                                <Controller
+                                    name="maxFiles"
+                                    control={control}
+                                    render={({ field, fieldState }) => (
+                                        <>
+                                            <FormControl.Input>
+                                                <Input
+                                                    type="number"
+                                                    placeholder={`${DEFAULT_MAX_FILES}`}
+                                                    error={fieldState.error}
+                                                    value={field.value}
+                                                    onChange={(e) => {
+                                                        const value = parseInt(
+                                                            e.target.value,
+                                                            10,
+                                                        );
+                                                        if (!isNaN(value)) {
+                                                            field.onChange(
+                                                                value,
+                                                            );
+                                                        } else if (
+                                                            e.target.value ===
+                                                            ""
+                                                        ) {
+                                                            field.onChange(
+                                                                DEFAULT_MAX_FILES,
+                                                            );
+                                                        }
+                                                    }}
+                                                    disabled={
+                                                        !props.isByokEnabled
+                                                    }
+                                                    className="mt-3 w-40"
+                                                />
+                                            </FormControl.Input>
+                                            <FormControl.Error>
+                                                {fieldState.error?.message}
+                                            </FormControl.Error>
+                                            {!props.isByokEnabled && (
+                                                <FormControl.Helper className="mt-2">
+                                                    This setting is only
+                                                    configurable when{" "}
+                                                    <Link
+                                                        href="/organization/byok"
+                                                        className="text-primary-light hover:underline">
+                                                        BYOK mode
+                                                    </Link>{" "}
+                                                    is enabled.{" "}
+                                                    <Link
+                                                        href="https://docs.kodus.io/how_to_use/en/byok#byok-bring-your-own-key"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-primary-light hover:underline">
+                                                        Learn more
+                                                    </Link>
+                                                    .
+                                                </FormControl.Helper>
+                                            )}
+                                        </>
+                                    )}
                                 />
                             </FormControl.Root>
                         </CardHeader>

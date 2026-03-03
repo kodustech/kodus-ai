@@ -101,6 +101,7 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
             filesToProcess,
             filesToAnalyze,
             ignorePaths,
+            context,
         );
 
         if (!validation.canProceed) {
@@ -168,7 +169,12 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
         filesToProcess: FileChange[],
         filteredFiles: FileChange[],
         ignorePaths: string[],
+        context: CodeReviewPipelineContext,
     ): IStageValidationResult {
+        const maxFilesToAnalyze =
+            context.codeReviewConfig?.maxFilesToAnalyze ??
+            this.maxFilesToAnalyze;
+
         if (!filesToProcess || filesToProcess.length === 0) {
             return {
                 canProceed: false,
@@ -200,19 +206,19 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
             };
         }
 
-        if (filteredFiles.length > this.maxFilesToAnalyze) {
+        if (filteredFiles.length > maxFilesToAnalyze) {
             return {
                 canProceed: false,
                 details: {
                     reasonCode: AutomationMessage.TOO_MANY_FILES,
                     message: StageMessageHelper.skippedWithReason(
                         PipelineReasons.FILES.TOO_MANY,
-                        `Count: ${filteredFiles.length}, Limit: ${this.maxFilesToAnalyze}`,
+                        `Count: ${filteredFiles.length}, Limit: ${maxFilesToAnalyze}`,
                     ),
-                    technicalReason: `Count: ${filteredFiles.length}, Limit: ${this.maxFilesToAnalyze}`,
+                    technicalReason: `Count: ${filteredFiles.length}, Limit: ${maxFilesToAnalyze}`,
                     metadata: {
                         count: filteredFiles.length,
-                        limit: this.maxFilesToAnalyze,
+                        limit: maxFilesToAnalyze,
                     },
                 },
             };

@@ -18,6 +18,7 @@ export enum OrganizationParametersConfigKey {
     BYOK_CONFIG = "byok_config",
     COCKPIT_METRICS_VISIBILITY = "cockpit_metrics_visibility",
     AUTO_LICENSE_ASSIGNMENT = "auto_license_assignment",
+    CODE_REVIEW_MAX_FILES = "code_review_max_files",
 }
 
 export enum BoardPriorityType {
