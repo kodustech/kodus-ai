@@ -79,6 +79,10 @@ import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReview
 import { getLabelShield } from '@libs/common/utils/codeManagement/labels';
 import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
 import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import {
     isFileMatchingGlob,
     isFileMatchingGlobCaseInsensitive,
 } from '@libs/common/utils/glob-utils';
@@ -109,6 +113,8 @@ export class AzureReposService implements Omit<
 
         private readonly azureReposRequestHelper: AzureReposRequestHelper,
         private readonly configService: ConfigService,
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
         private readonly mcpManagerService?: MCPManagerService,
     ) {}
 
@@ -1109,11 +1115,20 @@ export class AzureReposService implements Omit<
                 TranslationsCategory.ReviewComment,
             );
 
+            // Check if fine-tuning is enabled for this repository
+            const fineTuningConfig =
+                await this.codeBaseConfigService.getKodyFineTuningConfigParameter(
+                    organizationAndTeamData,
+                    repository.id,
+                );
+            const fineTuningEnabled = fineTuningConfig.enabled;
+
             const bodyFormatted = this.formatBodyForAzure(
                 lineComment,
                 repository,
                 translations,
                 suggestionCopyPrompt,
+                fineTuningEnabled,
             );
 
             const thread =
@@ -3688,6 +3703,7 @@ ${copyPrompt}
         repository: any,
         translations: any,
         suggestionCopyPrompt?: boolean,
+        fineTuningEnabled?: boolean,
     ) {
         const severityShield = lineComment?.suggestion
             ? getSeverityLevelShield(lineComment.suggestion.severity)
@@ -3719,6 +3735,12 @@ ${copyPrompt}
             ? this.formatPromptForLLM(lineComment)
             : '';
 
+        const enableFeedback = fineTuningEnabled ?? true;
+        const feedbackFooter = enableFeedback
+            ? this.formatSub(translations.feedback) +
+              '<!-- kody-codereview -->&#8203;\n&#8203;'
+            : '';
+
         return [
             badges,
             suggestionContent,
@@ -3726,8 +3748,7 @@ ${copyPrompt}
             codeBlock,
             copyPrompt,
             this.formatSub(translations.talkToKody),
-            this.formatSub(translations.feedback) +
-                '<!-- kody-codereview -->&#8203;\n&#8203;',
+            feedbackFooter,
             thumbsUpBlock,
             thumbsDownBlock,
         ]
@@ -3915,9 +3936,9 @@ ${copyPrompt}
         }
     }
 
-    formatReviewCommentBody(params: {
+    async formatReviewCommentBody(params: {
         suggestion: any;
-        repository: { name: string; language: string };
+        repository: { name: string; id: string; language: string };
         includeHeader?: boolean;
         includeFooter?: boolean;
         language?: string;
@@ -3931,6 +3952,7 @@ ${copyPrompt}
             includeFooter = true,
             language,
             suggestionCopyPrompt = true,
+            organizationAndTeamData,
         } = params;
 
         let commentBody = '';
@@ -3973,11 +3995,20 @@ ${copyPrompt}
             );
 
             commentBody += this.formatSub(translations.talkToKody) + '\n';
-            commentBody += this.formatSub(translations.feedback) + '\n\n';
 
-            const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;
-            const thumbsDownBlock = `\`\`\`\n👎\n\`\`\`\n`;
-            commentBody += thumbsUpBlock + thumbsDownBlock;
+            // Check if fine-tuning is enabled
+            const fineTuningConfig =
+                await this.codeBaseConfigService.getKodyFineTuningConfigParameter(
+                    organizationAndTeamData,
+                    repository.id,
+                );
+            if (fineTuningConfig.enabled) {
+                commentBody += this.formatSub(translations.feedback) + '\n\n';
+
+                const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;
+                const thumbsDownBlock = `\`\`\`\n👎\n\`\`\`\n`;
+                commentBody += thumbsUpBlock + thumbsDownBlock;
+            }
         }
 
         return Promise.resolve(commentBody.trim());

@@ -7,6 +7,7 @@ import { IntegrationCoreModule } from '@libs/integrations/modules/integrations-c
 import { AzureReposService } from '../infrastructure/adapters/services/azureRepos/azureRepos.service';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
 import { AzureReposRequestHelper } from '../infrastructure/adapters/services/azureRepos/azure-repos-request-helper';
+import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 
 @Module({
     imports: [
@@ -14,6 +15,7 @@ import { AzureReposRequestHelper } from '../infrastructure/adapters/services/azu
         forwardRef(() => AuthIntegrationModule),
         forwardRef(() => IntegrationCoreModule),
         forwardRef(() => IntegrationConfigCoreModule),
+        forwardRef(() => CodebaseModule),
         forwardRef(() => McpCoreModule),
     ],
     providers: [AzureReposService, AzureReposRequestHelper],

@@ -49,6 +49,7 @@ import { addSearchParamsToUrl } from "src/core/utils/url";
 
 import { SelectRepositoriesDropdown } from "./dropdown";
 import { ExampleSection } from "./examples";
+import { useFineTuningEnabled } from "@services/fineTuning/hooks";
 
 export const KodyRuleLibraryItemModal = ({
     rule,
@@ -64,6 +65,9 @@ export const KodyRuleLibraryItemModal = ({
     const router = useRouter();
     const { organizationId } = useAuth();
     const queryClient = useQueryClient();
+    const { enabled: fineTuningEnabled } = useFineTuningEnabled(
+        typeof repositoryId === "string" ? repositoryId : undefined,
+    );
     const [positiveCount, setPositiveCount] = useState(rule.positiveCount ?? 0);
     const [negativeCount, setNegativeCount] = useState(rule.negativeCount ?? 0);
     const [userFeedback, setUserFeedback] = useState<FeedbackType | null>(
@@ -252,47 +256,49 @@ export const KodyRuleLibraryItemModal = ({
                         />
                     </DialogTitle>
 
-                    <div className="flex items-center gap-1">
-                        <Button
-                            size="md"
-                            variant="cancel"
-                            onClick={() => sendFeedback("positive")}
-                            disabled={isFeedbackActionInProgress}
-                            className={cn(
-                                "-my-2 gap-1.5 px-2 transition-colors",
-                                userFeedback === "positive" &&
-                                    "border-green-500/20 bg-green-500/10 text-green-500",
-                            )}
-                            rightIcon={
-                                isFeedbackActionInProgress ? (
-                                    <Spinner className="size-2.5" />
-                                ) : (
-                                    <ThumbsUp className="size-3" />
-                                )
-                            }>
-                            {positiveCount > 0 ? positiveCount : null}
-                        </Button>
+                    {fineTuningEnabled && (
+                        <div className="flex items-center gap-1">
+                            <Button
+                                size="md"
+                                variant="cancel"
+                                onClick={() => sendFeedback("positive")}
+                                disabled={isFeedbackActionInProgress}
+                                className={cn(
+                                    "-my-2 gap-1.5 px-2 transition-colors",
+                                    userFeedback === "positive" &&
+                                        "border-green-500/20 bg-green-500/10 text-green-500",
+                                )}
+                                rightIcon={
+                                    isFeedbackActionInProgress ? (
+                                        <Spinner className="size-2.5" />
+                                    ) : (
+                                        <ThumbsUp className="size-3" />
+                                    )
+                                }>
+                                {positiveCount > 0 ? positiveCount : null}
+                            </Button>
 
-                        <Button
-                            size="md"
-                            variant="cancel"
-                            onClick={() => sendFeedback("negative")}
-                            disabled={isFeedbackActionInProgress}
-                            className={cn(
-                                "-my-2 gap-1.5 px-2 transition-colors",
-                                userFeedback === "negative" &&
-                                    "border-red-500/20 bg-red-500/10 text-red-500",
-                            )}
-                            rightIcon={
-                                isFeedbackActionInProgress ? (
-                                    <Spinner className="size-2.5" />
-                                ) : (
-                                    <ThumbsDown className="size-3" />
-                                )
-                            }>
-                            {negativeCount > 0 ? negativeCount : null}
-                        </Button>
-                    </div>
+                            <Button
+                                size="md"
+                                variant="cancel"
+                                onClick={() => sendFeedback("negative")}
+                                disabled={isFeedbackActionInProgress}
+                                className={cn(
+                                    "-my-2 gap-1.5 px-2 transition-colors",
+                                    userFeedback === "negative" &&
+                                        "border-red-500/20 bg-red-500/10 text-red-500",
+                                )}
+                                rightIcon={
+                                    isFeedbackActionInProgress ? (
+                                        <Spinner className="size-2.5" />
+                                    ) : (
+                                        <ThumbsDown className="size-3" />
+                                    )
+                                }>
+                                {negativeCount > 0 ? negativeCount : null}
+                            </Button>
+                        </div>
+                    )}
                 </DialogHeader>
 
                 <div className="-mx-6 overflow-auto px-6">

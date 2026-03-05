@@ -23,6 +23,7 @@ import { PullRequestsModule } from './pull-requests.module';
 import { GetReactionsUseCase } from '../application/use-cases/codeReviewFeedback/get-reactions.use-case';
 import { SaveCodeReviewFeedbackUseCase } from '../application/use-cases/codeReviewFeedback/save-feedback.use-case';
 import { CodeReviewFeedbackConsumer } from '@libs/core/infrastructure/queue/messageBroker/consumers/codeReviewFeedback.consumer';
+import { CodebaseModule } from '../modules/codebase.module';
 
 const UseCases = [GetReactionsUseCase, SaveCodeReviewFeedbackUseCase] as const;
 
@@ -44,6 +45,7 @@ const UseCases = [GetReactionsUseCase, SaveCodeReviewFeedbackUseCase] as const;
         forwardRef(() => GithubModule),
         forwardRef(() => GitlabModule),
         forwardRef(() => PullRequestsModule),
+        forwardRef(() => CodebaseModule),
     ],
     providers: [
         ...UseCases,

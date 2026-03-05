@@ -74,6 +74,10 @@ import {
     isFileMatchingGlob,
     isFileMatchingGlobCaseInsensitive,
 } from '@libs/common/utils/glob-utils';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITLAB, 'codeManagement')
@@ -102,6 +106,8 @@ export class GitlabService implements Omit<
 
         private readonly configService: ConfigService,
         private readonly cacheService: CacheService,
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
         private readonly mcpManagerService?: MCPManagerService,
     ) {}
 
@@ -1554,6 +1560,7 @@ export class GitlabService implements Omit<
         repository: any,
         translations: any,
         suggestionCopyPrompt: boolean,
+        fineTuningEnabled?: boolean,
     ) {
         const severityShield = lineComment?.suggestion
             ? getSeverityLevelShield(lineComment.suggestion.severity)
@@ -1582,6 +1589,12 @@ export class GitlabService implements Omit<
             ? this.formatPromptForLLM(lineComment)
             : '';
 
+        const enableFeedback = fineTuningEnabled ?? true;
+        const feedbackFooter = enableFeedback
+            ? this.formatSub(translations.feedback) +
+              '<!-- kody-codereview -->&#8203;\n&#8203;'
+            : '';
+
         return [
             badges,
             suggestionContent,
@@ -1589,8 +1602,7 @@ export class GitlabService implements Omit<
             codeBlock,
             copyPrompt,
             this.formatSub(translations.talkToKody),
-            this.formatSub(translations.feedback) +
-                '<!-- kody-codereview -->&#8203;\n&#8203;',
+            feedbackFooter,
         ]
             .join('\n')
             .trim();
@@ -1630,11 +1642,20 @@ export class GitlabService implements Omit<
                 TranslationsCategory.ReviewComment,
             );
 
+            // Check if fine-tuning is enabled for this repository
+            const fineTuningConfig =
+                await this.codeBaseConfigService.getKodyFineTuningConfigParameter(
+                    organizationAndTeamData,
+                    repository.id,
+                );
+            const fineTuningEnabled = fineTuningConfig.enabled;
+
             const bodyFormatted = this.formatBodyForGitLab(
                 lineComment,
                 repository,
                 translations,
                 suggestionCopyPrompt,
+                fineTuningEnabled,
             );
 
             const discussion = await gitlabAPI.MergeRequestDiscussions.create(
@@ -3450,9 +3471,9 @@ export class GitlabService implements Omit<
         }
     }
 
-    formatReviewCommentBody(params: {
+    async formatReviewCommentBody(params: {
         suggestion: any;
-        repository: { name: string; language: string };
+        repository: { name: string; id: string; language: string };
         includeHeader?: boolean;
         includeFooter?: boolean;
         language?: string;
@@ -3466,6 +3487,7 @@ export class GitlabService implements Omit<
             includeFooter = true,
             language,
             suggestionCopyPrompt = true,
+            organizationAndTeamData,
         } = params;
 
         let commentBody = '';
@@ -3508,7 +3530,16 @@ export class GitlabService implements Omit<
             );
 
             commentBody += this.formatSub(translations.talkToKody) + '\n';
-            commentBody += this.formatSub(translations.feedback);
+
+            // Check if fine-tuning is enabled
+            const fineTuningConfig =
+                await this.codeBaseConfigService.getKodyFineTuningConfigParameter(
+                    organizationAndTeamData,
+                    repository.id,
+                );
+            if (fineTuningConfig.enabled) {
+                commentBody += this.formatSub(translations.feedback);
+            }
         }
 
         return Promise.resolve(commentBody.trim());

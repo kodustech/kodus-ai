@@ -75,6 +75,10 @@ import {
     CodeManagementConnectionStatus,
     ICodeManagementService,
 } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
 import {
     OneSentenceSummaryItem,
@@ -124,14 +128,15 @@ interface GitHubInstallationData {
 @IntegrationServiceDecorator(PlatformType.GITHUB, 'codeManagement')
 export class GithubService
     implements
-    IGithubService,
-    Omit<
-        ICodeManagementService,
-        | 'getOrganizations'
-        | 'getUserById'
-        | 'getLanguageRepository'
-        | 'createSingleIssueComment'
-    > {
+        IGithubService,
+        Omit<
+            ICodeManagementService,
+            | 'getOrganizations'
+            | 'getUserById'
+            | 'getLanguageRepository'
+            | 'createSingleIssueComment'
+        >
+{
     private readonly MAX_RETRY_ATTEMPTS = 2;
     private readonly TTL = 50 * 60 * 1000; // 50 minutes
 
@@ -148,8 +153,10 @@ export class GithubService
         private readonly integrationConfigService: IIntegrationConfigService,
         private readonly cacheService: CacheService,
         private readonly configService: ConfigService,
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
         private readonly mcpManagerService?: MCPManagerService,
-    ) { }
+    ) {}
 
     private async handleIntegration(
         integration: any,
@@ -2517,11 +2524,11 @@ export class GithubService
                         const files = filters?.skipFiles
                             ? []
                             : await this.getPullRequestFiles(
-                                octokit,
-                                githubAuthDetail.org,
-                                repo,
-                                pullRequest?.number,
-                            );
+                                  octokit,
+                                  githubAuthDetail.org,
+                                  repo,
+                                  pullRequest?.number,
+                              );
                         return {
                             id: pullRequest.id,
                             pull_number: pullRequest?.number,
@@ -2815,7 +2822,9 @@ ${copyPrompt}
         translations: any,
         suggestionCopyPrompt: boolean,
         isCommittableSuggestion?: boolean,
+        fineTuningEnabled?: boolean,
     ) {
+        const enableFeedback = fineTuningEnabled ?? true;
         const improvedCode = isCommittableSuggestion
             ? lineComment?.suggestion?.validatedData?.code
             : lineComment?.body?.improvedCode;
@@ -2823,7 +2832,7 @@ ${copyPrompt}
         const language = isCommittableSuggestion
             ? 'suggestion'
             : lineComment?.suggestion?.language?.toLowerCase() ||
-            repository?.language?.toLowerCase();
+              repository?.language?.toLowerCase();
 
         const severityShield = lineComment?.suggestion
             ? getSeverityLevelShield(lineComment.suggestion.severity)
@@ -2852,12 +2861,17 @@ ${copyPrompt}
 
         const experimentalWarning = isCommittableSuggestion
             ? `
-<details>
-<summary>Warning</summary>
+ <details>
+ <summary>Warning</summary>
 
-This is an experimental feature that generates committable changes. Review the diff before applying. Results may be incorrect.
-</details>
-`
+ This is an experimental feature that generates committable changes. Review the diff before applying. Results may be incorrect.
+ </details>
+ `
+            : '';
+
+        const feedbackFooter = enableFeedback
+            ? this.formatSub(translations.feedback) +
+              '<!-- kody-codereview -->&#8203;\n&#8203;'
             : '';
 
         return [
@@ -2868,8 +2882,7 @@ This is an experimental feature that generates committable changes. Review the d
             experimentalWarning,
             copyPrompt,
             this.formatSub(translations.talkToKody),
-            this.formatSub(translations.feedback) +
-            '<!-- kody-codereview -->&#8203;\n&#8203;',
+            feedbackFooter,
         ]
             .join('\n')
             .trim();
@@ -2913,12 +2926,21 @@ This is an experimental feature that generates committable changes. Review the d
             ? validatedData.lineEnd
             : lineComment.line;
 
+        // Check if fine-tuning is enabled for this repository
+        const fineTuningConfig =
+            await this.codeBaseConfigService.getKodyFineTuningConfigParameter(
+                organizationAndTeamData,
+                repository.id,
+            );
+        const fineTuningEnabled = fineTuningConfig.enabled;
+
         const bodyFormatted = this.formatBodyForGitHub(
             lineComment,
             repository,
             translations,
             suggestionCopyPrompt,
             isCommittableSuggestion,
+            fineTuningEnabled,
         );
 
         try {
@@ -3099,13 +3121,13 @@ This is an experimental feature that generates committable changes. Review the d
                         // So we need one of them to actually mark the thread as resolved and the other to match the id we saved in the database.
                         return firstComment
                             ? {
-                                id: firstComment.id, // Used to actually resolve the thread
-                                threadId: reviewThread.id,
-                                isResolved: reviewThread.isResolved,
-                                isOutdated: reviewThread.isOutdated,
-                                fullDatabaseId: firstComment.fullDatabaseId, // The REST API id, used to match comments saved in the database.
-                                body: firstComment.body,
-                            }
+                                  id: firstComment.id, // Used to actually resolve the thread
+                                  threadId: reviewThread.id,
+                                  isResolved: reviewThread.isResolved,
+                                  isOutdated: reviewThread.isOutdated,
+                                  fullDatabaseId: firstComment.fullDatabaseId, // The REST API id, used to match comments saved in the database.
+                                  body: firstComment.body,
+                              }
                             : null;
                     })
                     .filter((comment) => comment !== null);
@@ -3711,12 +3733,12 @@ This is an experimental feature that generates committable changes. Review the d
         organizationAndTeamData: OrganizationAndTeamData;
         commentId: string;
         reason?:
-        | 'ABUSE'
-        | 'OFF_TOPIC'
-        | 'OUTDATED'
-        | 'RESOLVED'
-        | 'DUPLICATE'
-        | 'SPAM';
+            | 'ABUSE'
+            | 'OFF_TOPIC'
+            | 'OUTDATED'
+            | 'RESOLVED'
+            | 'DUPLICATE'
+            | 'SPAM';
     }): Promise<any | null> {
         try {
             const {
@@ -4101,15 +4123,15 @@ This is an experimental feature that generates committable changes. Review the d
                 reactions: {
                     thumbsUp: isOAuth
                         ? Math.max(
-                            0,
-                            comment.reactions[GitHubReaction.THUMBS_UP] - 1,
-                        )
+                              0,
+                              comment.reactions[GitHubReaction.THUMBS_UP] - 1,
+                          )
                         : comment.reactions[GitHubReaction.THUMBS_UP],
                     thumbsDown: isOAuth
                         ? Math.max(
-                            0,
-                            comment.reactions[GitHubReaction.THUMBS_DOWN] - 1,
-                        )
+                              0,
+                              comment.reactions[GitHubReaction.THUMBS_DOWN] - 1,
+                          )
                         : comment.reactions[GitHubReaction.THUMBS_DOWN],
                 },
                 comment: {
@@ -5054,13 +5076,13 @@ This is an experimental feature that generates committable changes. Review the d
                         // So we need one of them to actually mark the thread as resolved and the other to match the id we saved in the database.
                         return firstComment
                             ? {
-                                id: firstComment.id, // Used to actually resolve the thread
-                                threadId: reviewThread.id,
-                                isResolved: reviewThread.isResolved,
-                                isOutdated: reviewThread.isOutdated,
-                                fullDatabaseId: firstComment.fullDatabaseId, // The REST API id, used to match comments saved in the database.
-                                body: firstComment.body,
-                            }
+                                  id: firstComment.id, // Used to actually resolve the thread
+                                  threadId: reviewThread.id,
+                                  isResolved: reviewThread.isResolved,
+                                  isOutdated: reviewThread.isOutdated,
+                                  fullDatabaseId: firstComment.fullDatabaseId, // The REST API id, used to match comments saved in the database.
+                                  body: firstComment.body,
+                              }
                             : null;
                     })
                     .filter((comment) => comment !== null);
@@ -5087,11 +5109,11 @@ This is an experimental feature that generates committable changes. Review the d
                     // So we need one of them to actually mark the thread as resolved and the other to match the id we saved in the database.
                     return firstComment
                         ? {
-                            id: firstComment.id, // Used to actually resolve the thread
-                            reviewId: review.id,
-                            fullDatabaseId: firstComment.fullDatabaseId, // The REST API id, used to match comments saved in the database.
-                            body: firstComment.body,
-                        }
+                              id: firstComment.id, // Used to actually resolve the thread
+                              reviewId: review.id,
+                              fullDatabaseId: firstComment.fullDatabaseId, // The REST API id, used to match comments saved in the database.
+                              body: firstComment.body,
+                          }
                         : null;
                 })
                 .filter((comment) => comment !== null);
@@ -5642,9 +5664,9 @@ This is an experimental feature that generates committable changes. Review the d
     }
     //#endregion
 
-    formatReviewCommentBody(params: {
+    async formatReviewCommentBody(params: {
         suggestion: any;
-        repository: { name: string; language: string };
+        repository: { name: string; id: string; language: string };
         includeHeader?: boolean;
         includeFooter?: boolean;
         language?: string;
@@ -5653,10 +5675,12 @@ This is an experimental feature that generates committable changes. Review the d
     }): Promise<string> {
         const {
             suggestion,
+            repository,
             includeHeader = true,
             includeFooter = true,
             language,
             suggestionCopyPrompt = true,
+            organizationAndTeamData,
         } = params;
 
         let commentBody = '';
@@ -5699,9 +5723,18 @@ This is an experimental feature that generates committable changes. Review the d
             );
 
             commentBody += this.formatSub(translations.talkToKody) + '\n';
-            commentBody +=
-                this.formatSub(translations.feedback) +
-                '<!-- kody-codereview -->&#8203;\n&#8203;';
+
+            // Check if fine-tuning is enabled for this repository
+            const fineTuningConfig =
+                await this.codeBaseConfigService.getKodyFineTuningConfigParameter(
+                    organizationAndTeamData,
+                    repository.id,
+                );
+            if (fineTuningConfig.enabled) {
+                commentBody +=
+                    this.formatSub(translations.feedback) +
+                    '<!-- kody-codereview -->&#8203;\n&#8203;';
+            }
         }
 
         return Promise.resolve(commentBody.trim());

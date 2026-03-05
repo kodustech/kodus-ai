@@ -120,7 +120,10 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                     organizationAndTeamData.organizationId,
                 ),
                 this.getReviewModeConfigParameter(organizationAndTeamData),
-                this.getKodyFineTuningConfigParameter(organizationAndTeamData),
+                this.getKodyFineTuningConfigParameter(
+                    organizationAndTeamData,
+                    repository.id,
+                ),
             ]);
 
             const mergedConfigs = await this.getMergedCodeReviewConfigs(
@@ -631,8 +634,9 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         return ReviewModeConfig.HEAVY_MODE;
     }
 
-    private async getKodyFineTuningConfigParameter(
+    async getKodyFineTuningConfigParameter(
         organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId?: string,
     ): Promise<KodyFineTuningConfig> {
         const kodyFineTuningConfig =
             await this.organizationParametersService.findByKey(
@@ -640,14 +644,40 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 organizationAndTeamData,
             );
 
-        const enableService =
+        const orgEnabled =
             kodyFineTuningConfig?.configValue?.enabled !== undefined
                 ? kodyFineTuningConfig.configValue.enabled
                 : true;
 
-        return {
-            enabled: enableService,
-        };
+        if (!orgEnabled) {
+            return { enabled: false };
+        }
+
+        if (repositoryId) {
+            const parameters = await this.parametersService.findOne({
+                configKey: ParametersKey.CODE_REVIEW_CONFIG,
+                team: { uuid: organizationAndTeamData.teamId },
+                active: true,
+            });
+
+            if (parameters?.configValue?.repositories) {
+                const repoConfig = parameters.configValue.repositories.find(
+                    (r: any) => r.id === repositoryId,
+                );
+
+                if (
+                    repoConfig?.configs?.kodyFineTuningConfig?.enabled !==
+                    undefined
+                ) {
+                    return {
+                        enabled:
+                            repoConfig.configs.kodyFineTuningConfig.enabled,
+                    };
+                }
+            }
+        }
+
+        return { enabled: true };
     }
 
     private async getGlobalIgnorePaths(

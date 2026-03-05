@@ -10,6 +10,10 @@ import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum'
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 
 @Injectable()
 export class GetReactionsUseCase implements IUseCase {
@@ -18,6 +22,8 @@ export class GetReactionsUseCase implements IUseCase {
         private readonly codeManagementService: CodeManagementService,
         @Inject(PULL_REQUESTS_SERVICE_TOKEN)
         private readonly pullRequestService: IPullRequestsService,
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
     ) {}
 
     async execute(
@@ -39,7 +45,45 @@ export class GetReactionsUseCase implements IUseCase {
             return [];
         }
 
-        return await this.getReactions(pullRequests, organizationAndTeamData);
+        const filteredPRs = [];
+
+        for (const pr of pullRequests) {
+            const fineTuningConfig =
+                await this.codeBaseConfigService.getKodyFineTuningConfigParameter(
+                    organizationAndTeamData,
+                    pr.repository.id,
+                );
+
+            if (fineTuningConfig.enabled) {
+                filteredPRs.push(pr);
+            } else {
+                this.logger.debug({
+                    message:
+                        'Skipping PR from repository with fine-tuning disabled',
+                    context: GetReactionsUseCase.name,
+                    metadata: {
+                        prNumber: pr.number,
+                        repositoryId: pr.repository.id,
+                        repositoryName: pr.repository.name,
+                    },
+                });
+            }
+        }
+
+        if (filteredPRs.length === 0) {
+            this.logger.log({
+                message:
+                    'All PRs filtered out due to fine-tuning being disabled',
+                context: GetReactionsUseCase.name,
+                metadata: {
+                    totalPRs: pullRequests.length,
+                    organizationId: organizationAndTeamData.organizationId,
+                },
+            });
+            return [];
+        }
+
+        return await this.getReactions(filteredPRs, organizationAndTeamData);
     }
 
     private async getReactions(

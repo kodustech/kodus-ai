@@ -6,6 +6,7 @@ import { IntegrationConfigCoreModule } from '@libs/integrations/modules/config-c
 import { IntegrationCoreModule } from '@libs/integrations/modules/integrations-core.module';
 import { GitlabService } from '../infrastructure/adapters/services/gitlab.service';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
+import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 
 @Module({
     imports: [
@@ -13,6 +14,7 @@ import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
         forwardRef(() => IntegrationCoreModule),
         forwardRef(() => IntegrationConfigCoreModule),
         forwardRef(() => GlobalCacheModule),
+        forwardRef(() => CodebaseModule),
         forwardRef(() => McpCoreModule),
     ],
     providers: [GitlabService],

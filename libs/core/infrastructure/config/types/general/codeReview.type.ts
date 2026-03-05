@@ -416,7 +416,7 @@ export type KodusConfigFile = DeepPartial<
 };
 
 export type KodyFineTuningConfig = {
-    enabled: boolean;
+    enabled?: boolean;
 };
 
 export type ReviewCadence = {

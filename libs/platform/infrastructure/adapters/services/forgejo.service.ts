@@ -34,6 +34,10 @@ import {
     getTranslationsForLanguageByCategory,
     TranslationsCategory,
 } from '@libs/common/utils/translations/translations';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 
 import {
     IIntegrationService,
@@ -136,6 +140,8 @@ export class ForgejoService implements Omit<
         private readonly authIntegrationService: IAuthIntegrationService,
 
         private readonly configService: ConfigService,
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
     ) {}
 
     private createForgejoClient(authDetail: ForgejoAuthDetail): Client {
@@ -2278,7 +2284,7 @@ export class ForgejoService implements Omit<
 
     async createReviewComment(params: {
         organizationAndTeamData: OrganizationAndTeamData;
-        repository: { name: string; language?: string };
+        repository: { name: string; id: string; language?: string };
         prNumber: number;
         lineComment: any;
         commit?: { sha: string };
@@ -2305,11 +2311,20 @@ export class ForgejoService implements Omit<
                 TranslationsCategory.ReviewComment,
             );
 
+            // Check if fine-tuning is enabled for this repository
+            const fineTuningConfig =
+                await this.codeBaseConfigService.getKodyFineTuningConfigParameter(
+                    params.organizationAndTeamData,
+                    params.repository.id,
+                );
+            const fineTuningEnabled = fineTuningConfig.enabled;
+
             const bodyFormatted = this.formatBodyForForgejo(
                 lineComment,
                 params.repository,
                 translations,
                 suggestionCopyPrompt || false,
+                fineTuningEnabled,
             );
 
             const endLine = lineComment.line;
@@ -2388,6 +2403,7 @@ export class ForgejoService implements Omit<
         repository: any,
         translations: any,
         suggestionCopyPrompt: boolean,
+        fineTuningEnabled?: boolean,
     ): string {
         const improvedCode = lineComment?.body?.improvedCode;
         const language =
@@ -2424,6 +2440,12 @@ export class ForgejoService implements Omit<
         const formatSub = (text: string) =>
             text ? `<sub>${text}</sub>\n` : '';
 
+        const enableFeedback = fineTuningEnabled ?? true;
+        const feedbackFooter = enableFeedback
+            ? formatSub(translations?.feedback || '') +
+              '<!-- kody-codereview -->&#8203;\n&#8203;'
+            : '';
+
         return [
             badges,
             suggestionContent,
@@ -2431,8 +2453,7 @@ export class ForgejoService implements Omit<
             codeBlock,
             copyPrompt,
             formatSub(translations?.talkToKody || ''),
-            formatSub(translations?.feedback || '') +
-                '<!-- kody-codereview -->&#8203;\n&#8203;',
+            feedbackFooter,
         ]
             .filter(Boolean)
             .join('\n')
@@ -2447,7 +2468,7 @@ export class ForgejoService implements Omit<
 
     async formatReviewCommentBody(params: {
         suggestion: any;
-        repository: { name: string; language: string };
+        repository: { name: string; id: string; language: string };
         includeHeader?: boolean;
         includeFooter?: boolean;
         language?: string;
@@ -2459,11 +2480,20 @@ export class ForgejoService implements Omit<
             TranslationsCategory.ReviewComment,
         );
 
+        // Check if fine-tuning is enabled for this repository
+        const fineTuningConfig =
+            await this.codeBaseConfigService.getKodyFineTuningConfigParameter(
+                params.organizationAndTeamData,
+                params.repository.id,
+            );
+        const fineTuningEnabled = fineTuningConfig.enabled;
+
         return this.formatBodyForForgejo(
             { suggestion: params.suggestion, body: params.suggestion },
             params.repository,
             translations,
             params.suggestionCopyPrompt || false,
+            fineTuningEnabled,
         );
     }
 

@@ -370,6 +370,10 @@ class CodeReviewConfigWithoutLLMProviderDto {
     kodyRulesGeneratorEnabled?: boolean;
 
     @IsOptional()
+    @IsBoolean()
+    kodyFineTuningEnabled?: boolean;
+
+    @IsOptional()
     @ValidateNested()
     @Type(() => ReviewCadenceDto)
     reviewCadence?: ReviewCadenceDto;

@@ -41,6 +41,10 @@ import {
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import { IntegrationEntity } from '@libs/integrations/domain/integrations/entities/integration.entity';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import { ICodeManagementService } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
@@ -96,6 +100,8 @@ export class BitbucketService implements Omit<
 
         private readonly configService: ConfigService,
         private readonly cacheService: CacheService,
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
         private readonly mcpManagerService?: MCPManagerService,
     ) {}
 
@@ -1784,7 +1790,11 @@ export class BitbucketService implements Omit<
         return `\`\`\`${language}\n${code}\n\`\`\``;
     }
 
-    private formatBodyForBitbucket(lineComment: any, repository: any) {
+    private formatBodyForBitbucket(
+        lineComment: any,
+        repository: any,
+        fineTuningEnabled?: boolean,
+    ) {
         const codeBlock = lineComment?.body?.improvedCode
             ? this.formatCodeBlock(
                   repository?.language?.toLowerCase(),
@@ -1808,7 +1818,10 @@ export class BitbucketService implements Omit<
         const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;
         const thumbsDownBlock = `\`\`\`\n👎\n\`\`\`\n`;
 
-        const footer = `Was this suggestion helpful? reply with 👍 or 👎 to help Kody learn from this interaction.\n`;
+        const enableFeedback = fineTuningEnabled ?? true;
+        const footer = enableFeedback
+            ? `Was this suggestion helpful? reply with 👍 or 👎 to help Kody learn from this interaction.\n`
+            : '';
 
         return [
             header,
@@ -1856,9 +1869,18 @@ export class BitbucketService implements Omit<
             const bitbucketAPI =
                 this.instanceBitbucketApi(bitbucketAuthDetails);
 
+            // Check if fine-tuning is enabled for this repository
+            const fineTuningConfig =
+                await this.codeBaseConfigService.getKodyFineTuningConfigParameter(
+                    organizationAndTeamData,
+                    repository.id,
+                );
+            const fineTuningEnabled = fineTuningConfig.enabled;
+
             const bodyFormatted = this.formatBodyForBitbucket(
                 lineComment,
                 repository,
+                fineTuningEnabled,
             );
 
             // added ts-ignore because _body expects a type property but Bitbucket rejects it
@@ -4285,9 +4307,9 @@ export class BitbucketService implements Omit<
         }
     }
 
-    formatReviewCommentBody(params: {
+    async formatReviewCommentBody(params: {
         suggestion: any;
-        repository: { name: string; language: string };
+        repository: { name: string; id: string; language: string };
         includeHeader?: boolean;
         includeFooter?: boolean;
         language?: string;
@@ -4298,6 +4320,7 @@ export class BitbucketService implements Omit<
             repository,
             includeHeader = true,
             includeFooter = true,
+            organizationAndTeamData,
         } = params;
 
         let commentBody = '';
@@ -4326,9 +4349,17 @@ export class BitbucketService implements Omit<
 
         // FOOTER - Interação/Feedback (formato Bitbucket)
         if (includeFooter) {
-            commentBody +=
-                'Was this suggestion helpful? reply with 👍 or 👎 to help Kody learn from this interaction.\n\n';
-            commentBody += `\`\`\`\n👍\n\`\`\`\n\n\`\`\`\n👎\n\`\`\``;
+            // Check if fine-tuning is enabled
+            const fineTuningConfig =
+                await this.codeBaseConfigService.getKodyFineTuningConfigParameter(
+                    organizationAndTeamData,
+                    repository.id,
+                );
+            if (fineTuningConfig.enabled) {
+                commentBody +=
+                    'Was this suggestion helpful? reply with 👍 or 👎 to help Kody learn from this interaction.\n\n';
+                commentBody += `\`\`\`\n👍\n\`\`\`\n\n\`\`\`\n👎\n\`\`\``;
+            }
         }
 
         return Promise.resolve(commentBody.trim());

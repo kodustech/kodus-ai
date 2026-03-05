@@ -24,6 +24,7 @@ import { Button } from "../button";
 import { Link } from "../link";
 import { Separator } from "../separator";
 import { Spinner } from "../spinner";
+import { useFineTuningEnabled } from "@services/fineTuning/hooks";
 
 export const KodyRuleLibraryItem = ({
     rule,
@@ -39,6 +40,7 @@ export const KodyRuleLibraryItem = ({
     showSuggestionsButton?: boolean;
 }) => {
     const { userId } = useAuth();
+    const { enabled: fineTuningEnabled } = useFineTuningEnabled(repositoryId);
     const [positiveCount, setPositiveCount] = useState(rule.positiveCount ?? 0);
     const [negativeCount, setNegativeCount] = useState(rule.negativeCount ?? 0);
     const [userFeedback, setUserFeedback] = useState<FeedbackType | null>(
@@ -170,7 +172,7 @@ export const KodyRuleLibraryItem = ({
                         />
                     )}
 
-                    {showLikeButton && (
+                    {showLikeButton && fineTuningEnabled && (
                         <div className="flex items-center gap-1">
                             <Button
                                 size="sm"

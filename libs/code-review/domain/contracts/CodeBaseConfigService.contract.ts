@@ -2,6 +2,7 @@ import {
     CodeReviewConfig,
     FileChange,
     KodusConfigFile,
+    KodyFineTuningConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
@@ -39,6 +40,11 @@ export interface ICodeBaseConfigService {
         directoryPath?: string;
         defaultBranch?: string;
     }): Promise<KodusConfigFile | undefined>;
+
+    getKodyFineTuningConfigParameter(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId?: string,
+    ): Promise<KodyFineTuningConfig>;
 
     getE2BIpAddress(): Promise<string | null>;
 }

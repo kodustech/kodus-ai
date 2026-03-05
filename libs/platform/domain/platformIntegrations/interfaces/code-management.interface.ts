@@ -209,7 +209,7 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
 
     formatReviewCommentBody(params: {
         suggestion: any;
-        repository: { name: string; language: string };
+        repository: { name: string; id: string; language: string };
         includeHeader?: boolean;
         includeFooter?: boolean;
         language?: string;

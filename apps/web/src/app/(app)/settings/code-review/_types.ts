@@ -90,6 +90,7 @@ export type CodeReviewGlobalConfig = {
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive: boolean;
     kodyRulesGeneratorEnabled?: boolean;
+    kodyFineTuningEnabled?: boolean;
     runOnDraft: boolean;
     codeReviewVersion?: "legacy" | "v2";
     ideRulesSyncEnabled: boolean;

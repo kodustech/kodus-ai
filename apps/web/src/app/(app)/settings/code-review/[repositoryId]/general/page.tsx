@@ -35,6 +35,7 @@ import { AutomatedReviewActive } from "./_components/automated-review-active";
 import { BaseBranches } from "./_components/base-branches";
 import { CrossfileDependenciesAnalysis } from "./_components/crossfile-dependencies-analysis";
 import { EnableCommittableSuggestions } from "./_components/enable-committable-suggestions";
+import { FineTuningToggle } from "./_components/fine-tuning-toggle";
 import { IgnorePaths } from "./_components/ignore-paths";
 import { IgnoredTitleKeywords } from "./_components/ignored-title-keywords";
 import { IsRequestChangesActive } from "./_components/is-request-changes-active";
@@ -228,6 +229,7 @@ export default function General() {
                 </AsyncBoundary>
                 <RunOnDraft />
                 <ShowStatusFeedback />
+                {repositoryId !== "global" && <FineTuningToggle />}
                 <AsyncBoundary errorVariant="minimal">
                     <EnableCommittableSuggestions />
                 </AsyncBoundary>

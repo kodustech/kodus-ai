@@ -50,6 +50,7 @@ import { generateQueryKey } from "src/core/utils/reactQuery";
 
 import { SeverityLevelSelect } from "./severity-level-select";
 import { StatusSelect } from "./status-select";
+import { useFineTuningEnabled } from "@services/fineTuning/hooks";
 
 export const IssueDetailsRightSheet = ({
     issues,
@@ -62,6 +63,7 @@ export const IssueDetailsRightSheet = ({
 
     const query = useIssue(peek);
     const issue = query.data;
+    const { enabled: fineTuningEnabled } = useFineTuningEnabled(issue?.repository?.id);
 
     const currentIssueIndex = useMemo(
         () => issues.findIndex((i) => i.uuid === peek),
@@ -295,50 +297,52 @@ export const IssueDetailsRightSheet = ({
                 <Separator />
 
                 <SheetFooter className="mt-4">
-                    <Card className="text-sm" color="lv1">
-                        <CardHeader className="flex flex-row items-center justify-between gap-6 py-4">
-                            <p>Team feedback from PR reactions</p>
+                    {fineTuningEnabled && (
+                        <Card className="text-sm" color="lv1">
+                            <CardHeader className="flex flex-row items-center justify-between gap-6 py-4">
+                                <p>Team feedback from PR reactions</p>
 
-                            <div className="flex items-center gap-1">
-                                <Badge
-                                    size="xs"
-                                    variant="helper"
-                                    className="pointer-events-none min-w-16"
-                                    leftIcon={
-                                        <ThumbsUpIcon className="text-success mr-1" />
-                                    }>
-                                    {issue.reactions.thumbsUp}
-                                </Badge>
+                                <div className="flex items-center gap-1">
+                                    <Badge
+                                        size="xs"
+                                        variant="helper"
+                                        className="pointer-events-none min-w-16"
+                                        leftIcon={
+                                            <ThumbsUpIcon className="text-success mr-1" />
+                                        }>
+                                        {issue.reactions.thumbsUp}
+                                    </Badge>
 
-                                <Badge
-                                    size="xs"
-                                    variant="helper"
-                                    className="pointer-events-none min-w-16"
-                                    leftIcon={
-                                        <ThumbsDownIcon className="text-danger mr-1" />
-                                    }>
-                                    {issue.reactions.thumbsDown}
-                                </Badge>
-                            </div>
-                        </CardHeader>
+                                    <Badge
+                                        size="xs"
+                                        variant="helper"
+                                        className="pointer-events-none min-w-16"
+                                        leftIcon={
+                                            <ThumbsDownIcon className="text-danger mr-1" />
+                                        }>
+                                        {issue.reactions.thumbsDown}
+                                    </Badge>
+                                </div>
+                            </CardHeader>
 
-                        <Progress
-                            data-value={issue.reactions.thumbsUp}
-                            data-max={
-                                issue.reactions.thumbsUp +
-                                issue.reactions.thumbsDown
-                            }
-                            className={cn(
-                                "h-1",
-                                "[--progress-background:var(--color-danger)]",
-                                "[--progress-foreground:var(--color-success)]",
+                            <Progress
+                                data-value={issue.reactions.thumbsUp}
+                                data-max={
+                                    issue.reactions.thumbsUp +
+                                    issue.reactions.thumbsDown
+                                }
+                                className={cn(
+                                    "h-1",
+                                    "[--progress-background:var(--color-danger)]",
+                                    "[--progress-foreground:var(--color-success)]",
 
-                                !issue.reactions.thumbsUp &&
-                                    !issue.reactions.thumbsDown &&
-                                    "[--progress-background:var(--color-card-lv3)]",
-                            )}
-                        />
-                    </Card>
+                                    !issue.reactions.thumbsUp &&
+                                        !issue.reactions.thumbsDown &&
+                                        "[--progress-background:var(--color-card-lv3)]",
+                                )}
+                            />
+                        </Card>
+                    )}
                 </SheetFooter>
             </SheetContent>
         </Sheet>
