@@ -2,12 +2,12 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { isAxiosError } from "axios";
 import { Button } from "@components/ui/button";
 import { FormControl } from "@components/ui/form-control";
 import { Input } from "@components/ui/input";
 import { toast } from "@components/ui/toaster/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { isAxiosError } from "axios";
 import { CheckIcon } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { confirmEmail } from "src/lib/auth/fetchers";
@@ -16,10 +16,11 @@ import { z } from "zod";
 const confirmEmailFormSchema = z.object({
     token: z
         .string({
-            error: (issue) => issue.input === undefined ? "Token is required" : undefined
+            error: (issue) =>
+                issue.input === undefined ? "Token is required" : undefined,
         })
         .min(1, {
-            error: "Token is required"
+            error: "Token is required",
         }),
 });
 

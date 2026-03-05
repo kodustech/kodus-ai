@@ -1,0 +1,14 @@
+description: "Safeguard - discard (Sonnet) - should DISCARD suggestions"
+
+providers:
+  - id: anthropic:claude-sonnet-4-20250514
+    config:
+      temperature: 0
+      max_tokens: 16384
+
+prompts:
+  - file://prompt-loader.js
+
+tests: file://datasets/discard-quick20.json
+
+outputPath: ./results/discard-sonnet-output.json

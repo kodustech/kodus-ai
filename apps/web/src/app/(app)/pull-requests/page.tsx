@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+
 import { PullRequestsPageClient } from "./_components/page.client";
 
 export const metadata: Metadata = {

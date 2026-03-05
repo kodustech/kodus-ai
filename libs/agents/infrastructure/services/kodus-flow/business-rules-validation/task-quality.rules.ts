@@ -1,4 +1,10 @@
-import { TaskQuality } from './types';
+import {
+    BusinessLogicEligibility,
+    PrDiffStatus,
+    TaskContextNormalized,
+    TaskContextStatus,
+    TaskQuality,
+} from './types';
 
 const ANALYZABLE_TASK_QUALITIES: ReadonlySet<TaskQuality> = new Set([
     'PARTIAL',
@@ -23,6 +29,85 @@ export function canProceedWithBusinessRulesAnalysis(
     return ANALYZABLE_TASK_QUALITIES.has(normalizeTaskQuality(taskQuality));
 }
 
+export function hasUsablePullRequestDiff(prDiff: string | undefined): boolean {
+    return typeof prDiff === 'string' && prDiff.trim().length > 0;
+}
+
+export function classifyTaskContextStatus(input: {
+    taskQuality: TaskQuality | undefined;
+    taskContext?: string;
+    taskContextNormalized?: TaskContextNormalized;
+}): TaskContextStatus {
+    const quality = normalizeTaskQuality(input.taskQuality);
+    if (quality === 'EMPTY') {
+        return 'missing';
+    }
+
+    if (quality === 'MINIMAL') {
+        return 'weak';
+    }
+
+    const description =
+        input.taskContextNormalized?.description ?? input.taskContext ?? '';
+    if (looksLikeStructuredMetadata(description)) {
+        return 'weak';
+    }
+
+    return 'usable';
+}
+
+export function classifyPrDiffStatus(prDiff: string | undefined): PrDiffStatus {
+    return hasUsablePullRequestDiff(prDiff) ? 'usable' : 'missing';
+}
+
+export function buildBusinessLogicEligibility(input: {
+    taskQuality: TaskQuality | undefined;
+    taskContext?: string;
+    taskContextNormalized?: TaskContextNormalized;
+    prDiff?: string;
+}): BusinessLogicEligibility {
+    const taskContextStatus = classifyTaskContextStatus({
+        taskQuality: input.taskQuality,
+        taskContext: input.taskContext,
+        taskContextNormalized: input.taskContextNormalized,
+    });
+    const prDiffStatus = classifyPrDiffStatus(input.prDiff);
+
+    if (taskContextStatus === 'missing') {
+        return {
+            mode: 'limitation_response',
+            reason: 'task_context_missing',
+            taskContextStatus,
+            prDiffStatus,
+        };
+    }
+
+    if (taskContextStatus === 'weak') {
+        return {
+            mode: 'limitation_response',
+            reason: 'task_context_weak',
+            taskContextStatus,
+            prDiffStatus,
+        };
+    }
+
+    if (prDiffStatus === 'missing') {
+        return {
+            mode: 'limitation_response',
+            reason: 'pr_diff_missing',
+            taskContextStatus,
+            prDiffStatus,
+        };
+    }
+
+    return {
+        mode: 'full_analysis',
+        reason: 'analysis_ready',
+        taskContextStatus,
+        prDiffStatus,
+    };
+}
+
 export function getTaskContextMissingInfoMessage(
     taskQuality: TaskQuality | undefined,
 ): string {
@@ -33,7 +118,25 @@ export function getTaskContextMissingInfoMessage(
     if (quality === 'EMPTY') {
         return buildEmptyContextMessage();
     }
-    return '';
+    return buildWeakContextMessage();
+}
+
+export function getPullRequestDiffMissingInfoMessage(): string {
+    return `## 🤔 Need Pull Request Diff
+
+I found enough task context to understand the expected behavior, but I couldn't load the pull request diff. Without the actual code changes, I can't validate whether the implementation matches the business requirements.
+
+### 🔍 What I need to validate:
+- The files and code paths changed in this PR
+- The exact implementation compared to the task requirements
+- Any regressions or missing business-rule coverage
+
+### 💡 How to fix it:
+- Ensure the PR diff tool is available and returns the patch content
+- Retry the validation after the pull request diff is fetched successfully
+
+### ⚠️ Important:
+Business rules validation requires both the task context and the code diff.`;
 }
 
 export const TASK_QUALITY_CLASSIFICATION_GUIDE =
@@ -81,4 +184,38 @@ I found a task linked to this PR, but it only contains minimal information (titl
 
 ### ⚠️ Important:
 A task title alone is not sufficient to determine whether the implementation is correct or complete.`;
+}
+
+function buildWeakContextMessage(): string {
+    return `## 🤔 Limited Task Context
+
+I found task-related information for this pull request, but the available context is still too weak or too ambiguous to support a reliable business rules validation.
+
+### 🔍 What I still need to validate:
+- Explicit business requirements or acceptance criteria
+- Expected behavior and scope boundaries
+- Enough detail to compare intended behavior against the PR diff
+
+### 💡 How to improve the task context:
+- Link the canonical Jira/Linear/GitHub issue instead of only a smart link or metadata card
+- Add a clear task description and acceptance criteria
+- Include the expected behavior directly in the PR description when the task is incomplete
+
+### ⚠️ Important:
+Without grounded requirement details, any business-rules finding would be speculative.`;
+}
+
+function looksLikeStructuredMetadata(value: string): boolean {
+    const trimmed = value.trim();
+    if (!(trimmed.startsWith('{') || trimmed.startsWith('['))) {
+        return false;
+    }
+
+    return (
+        trimmed.includes('"inlineCard"') ||
+        trimmed.includes('"blockCard"') ||
+        trimmed.includes('"application"') ||
+        trimmed.includes('"attrs"') ||
+        trimmed.includes('"url"')
+    );
 }

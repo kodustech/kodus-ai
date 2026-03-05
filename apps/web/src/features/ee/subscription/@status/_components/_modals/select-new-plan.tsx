@@ -33,8 +33,7 @@ import { CurrencyHelpers } from "src/core/utils/currency";
 import { addSearchParamsToUrl } from "src/core/utils/url";
 
 import { createCheckoutSessionAction } from "../../../_actions/create-checkout-session";
-import type { getPlans } from "../../../_services/billing/fetch";
-import { migrateToFree } from "../../../_services/billing/fetch";
+import { migrateToFree, type getPlans } from "../../../_services/billing/fetch";
 import type { Plan } from "../../../_services/billing/types";
 
 export const NewPlanSelectionModal = ({
@@ -131,14 +130,16 @@ const FreePlan = ({ plan }: { plan: Plan }) => {
             } else {
                 toast({
                     title: "Migration failed",
-                    description: result?.message || "Failed to migrate to free plan",
+                    description:
+                        result?.message || "Failed to migrate to free plan",
                     variant: "danger",
                 });
             }
         } catch (error) {
             toast({
                 title: "Error",
-                description: "An unexpected error occurred while migrating to free plan",
+                description:
+                    "An unexpected error occurred while migrating to free plan",
                 variant: "danger",
             });
             console.error("Migration error:", error);
@@ -156,14 +157,12 @@ const FreePlan = ({ plan }: { plan: Plan }) => {
                 </CardDescription>
             </CardHeader>
 
-            <CardContent className="flex-none pb-4 pt-0">
+            <CardContent className="flex-none pt-0 pb-4">
                 <div>
                     <Heading variant="h2" className="text-primary-light">
                         Free
                     </Heading>
-                    <span className="text-text-secondary text-sm">
-                        &nbsp;
-                    </span>
+                    <span className="text-text-secondary text-sm">&nbsp;</span>
                 </div>
             </CardContent>
 
@@ -220,16 +219,19 @@ const TeamsPlan = ({ plan }: { plan: Plan }) => {
                 </CardDescription>
             </CardHeader>
 
-            <CardContent className="flex-none pb-4 pt-0">
+            <CardContent className="flex-none pt-0 pb-4">
                 <div>
-                    <Heading variant="h2" className="text-primary-light tabular-nums">
+                    <Heading
+                        variant="h2"
+                        className="text-primary-light tabular-nums">
                         {CurrencyHelpers.format({
                             currency: planPricing.currency,
                             amount: planPricing.amount,
                             maximumFractionDigits: 0,
                         })}
                         <span className="text-text-secondary">
-                            {" "}+ AI tokens
+                            {" "}
+                            + AI tokens
                         </span>
                     </Heading>
                     <span className="text-text-secondary text-sm">
@@ -316,14 +318,12 @@ const EnterprisePlan = ({ plan }: { plan: Plan }) => {
                 </CardDescription>
             </CardHeader>
 
-            <CardContent className="flex-none pb-4 pt-0">
+            <CardContent className="flex-none pt-0 pb-4">
                 <div>
                     <Heading variant="h2" className="text-primary-light">
                         Custom
                     </Heading>
-                    <span className="text-text-secondary text-sm">
-                        &nbsp;
-                    </span>
+                    <span className="text-text-secondary text-sm">&nbsp;</span>
                 </div>
             </CardContent>
 

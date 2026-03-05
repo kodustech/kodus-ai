@@ -9,6 +9,7 @@ export enum KodyRuleInheritanceOrigin {
 export type KodyRule = {
     uuid?: string;
     status: KodyRulesStatus;
+    type?: KodyRulesType;
     title: string;
     rule: string;
     path: string;
@@ -18,6 +19,10 @@ export type KodyRule = {
     directoryId?: string;
     sourcePath?: string;
     origin: KodyRulesOrigin;
+    requestType?: KodyRuleRequestType;
+    targetRuleUuid?: string;
+    resolvedAt?: string;
+    resolvedBy?: string;
     examples: KodyRulesExample[];
     inheritance?: {
         inheritable?: boolean;
@@ -128,7 +133,18 @@ export enum KodyRulesStatus {
     ACTIVE = "active",
     REJECTED = "rejected",
     PENDING = "pending",
+    APPLIED = "applied",
     DELETED = "deleted",
+}
+
+export enum KodyRulesType {
+    STANDARD = "standard",
+    MEMORY = "memory",
+}
+
+export enum KodyRuleRequestType {
+    MEMORY_CREATE = "memory_create",
+    MEMORY_UPDATE = "memory_update",
 }
 
 export type KodyRuleSuggestion = {

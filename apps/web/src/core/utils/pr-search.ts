@@ -3,7 +3,7 @@
  */
 
 export interface SearchParams {
-    type: 'number' | 'title';
+    type: "number" | "title";
     value: string;
 }
 
@@ -13,8 +13,8 @@ export interface SearchParams {
  * @returns Object with search type and cleaned value
  */
 export function detectSearchType(input: string): SearchParams {
-    if (!input || input.trim() === '') {
-        return { type: 'title', value: '' };
+    if (!input || input.trim() === "") {
+        return { type: "title", value: "" };
     }
 
     const trimmedInput = input.trim();
@@ -26,15 +26,15 @@ export function detectSearchType(input: string): SearchParams {
     if (match) {
         // It's a number - extract just the digits
         return {
-            type: 'number',
-            value: match[1] // The captured group without #
+            type: "number",
+            value: match[1], // The captured group without #
         };
     }
 
     // It's a title search
     return {
-        type: 'title',
-        value: trimmedInput
+        type: "title",
+        value: trimmedInput,
     };
 }
 
@@ -48,20 +48,20 @@ export function detectSearchType(input: string): SearchParams {
 export function buildSearchParams(
     input: string,
     teamId: string,
-    repositoryId?: string
+    repositoryId?: string,
 ): Record<string, unknown> {
     const searchParams = detectSearchType(input);
-    
+
     const params: Record<string, unknown> = {
         teamId,
     };
 
-    if (repositoryId && repositoryId !== 'global') {
+    if (repositoryId && repositoryId !== "global") {
         params.repositoryId = repositoryId;
     }
 
     if (searchParams.value) {
-        if (searchParams.type === 'number') {
+        if (searchParams.type === "number") {
             params.number = searchParams.value;
         } else {
             params.title = searchParams.value;

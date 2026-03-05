@@ -1,0 +1,14 @@
+description: "Rationale Enrichment eval — tests the enrichRationales() step"
+
+# Production uses CEREBRAS_GLM_47 (primary) + GEMINI_3_FLASH_PREVIEW (fallback).
+# For eval we use Gemini 2.0 Flash (cheap, fast, available via API key).
+providers:
+  - id: google:gemini-2.0-flash
+    config:
+      temperature: 0
+      response_mime_type: application/json
+
+prompts:
+  - file://enrichment-prompt-loader.js
+
+tests: file://datasets/enrichment-tests.json

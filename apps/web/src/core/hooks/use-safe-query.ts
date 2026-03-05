@@ -1,9 +1,11 @@
-import { useFetch } from "src/core/utils/reactQuery";
-import type { AxiosRequestConfig } from "axios";
 import type { UseQueryOptions } from "@tanstack/react-query";
+import type { AxiosRequestConfig } from "axios";
+import { useFetch } from "src/core/utils/reactQuery";
 
-interface UseSafeQueryOptions<T>
-    extends Omit<UseQueryOptions<T, Error>, "queryKey" | "queryFn"> {
+interface UseSafeQueryOptions<T> extends Omit<
+    UseQueryOptions<T, Error>,
+    "queryKey" | "queryFn"
+> {
     fallbackData?: T;
 }
 

@@ -114,7 +114,9 @@ describe('FileReviewContextPreparation (EE)', () => {
 
             const result = await (service as any).determineReviewMode(options);
 
-            expect(mockAiAnalysisService.selectReviewMode).not.toHaveBeenCalled();
+            expect(
+                mockAiAnalysisService.selectReviewMode,
+            ).not.toHaveBeenCalled();
             expect(result).toBe(ReviewModeResponse.HEAVY_MODE);
         });
     });

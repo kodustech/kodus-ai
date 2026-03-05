@@ -2,9 +2,17 @@
 
 import * as React from "react";
 import { Editor } from "@tiptap/react";
-import { RichTextEditor } from "./rich-text-editor";
+
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "./command";
 import { Popover, PopoverAnchor, PopoverContent } from "./popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./command";
+import { RichTextEditor } from "./rich-text-editor";
 
 export type MentionGroupItem = {
     value: string;
@@ -29,56 +37,79 @@ type Props = {
     className?: string;
     placeholder?: string;
     saveFormat?: "json" | "text";
-    formatInsertByType?: Partial<Record<string, (item: MentionGroupItem) => string>>;
+    formatInsertByType?: Partial<
+        Record<string, (item: MentionGroupItem) => string>
+    >;
     disabled?: boolean;
     showToolbar?: boolean;
     headerSlot?: React.ReactNode;
     toolbarExtraActions?: React.ReactNode;
 };
 
-export const RichTextEditorWithMentions = React.forwardRef<RichTextEditorWithMentionsRef, Props>(function RichTextEditorWithMentions(props, ref) {
-    const { value, onChangeAction: onChange, className, placeholder, groups, saveFormat = "json", formatInsertByType, disabled, showToolbar, headerSlot, toolbarExtraActions } = props;
+export const RichTextEditorWithMentions = React.forwardRef<
+    RichTextEditorWithMentionsRef,
+    Props
+>(function RichTextEditorWithMentions(props, ref) {
+    const {
+        value,
+        onChangeAction: onChange,
+        className,
+        placeholder,
+        groups,
+        saveFormat = "json",
+        formatInsertByType,
+        disabled,
+        showToolbar,
+        headerSlot,
+        toolbarExtraActions,
+    } = props;
     const [open, setOpen] = React.useState(false);
     const [query, setQuery] = React.useState("");
     const [triggerPos, setTriggerPos] = React.useState<number | null>(null);
     const [viewStack, setViewStack] = React.useState<MentionGroup[][]>([]);
-    const [childSearchGroups, setChildSearchGroups] = React.useState<MentionGroup[] | null>(null);
+    const [childSearchGroups, setChildSearchGroups] = React.useState<
+        MentionGroup[] | null
+    >(null);
 
     const editorRef = React.useRef<HTMLDivElement | null>(null);
     const editorInstanceRef = React.useRef<Editor | null>(null);
 
-    React.useImperativeHandle(ref, () => ({
-        insertText: (text: string) => {
-            const editor = editorInstanceRef.current;
-            if (editor) {
-                editor.chain().focus().insertContent(text).run();
-            } else {
-                const currentValue = typeof value === "string" ? value : "";
-                onChange(`${currentValue}${text}`);
-            }
-        },
-        insertMCPMention: (app: string, tool: string) => {
-            const editor = editorInstanceRef.current;
-            if (editor) {
-                editor
-                    .chain()
-                    .focus()
-                    .insertContent({
-                        type: "mcpMention",
-                        attrs: { app, tool },
-                    })
-                    .insertContent(" ")
-                    .run();
-            } else {
-                const currentValue = typeof value === "string" ? value : "";
-                onChange(`${currentValue}@mcp<${app}|${tool}> `);
-            }
-        },
-        getEditor: () => editorInstanceRef.current,
-        focus: () => {
-            editorInstanceRef.current?.chain().focus().run();
-        },
-    }), [value, onChange]);
+    React.useImperativeHandle(
+        ref,
+        () => ({
+            insertText: (text: string) => {
+                const editor = editorInstanceRef.current;
+                if (editor) {
+                    editor.chain().focus().insertContent(text).run();
+                } else {
+                    const currentValue = typeof value === "string" ? value : "";
+                    onChange(`${currentValue}${text}`);
+                }
+            },
+            insertMCPMention: (app: string, tool: string) => {
+                const editor = editorInstanceRef.current;
+                if (editor) {
+                    editor
+                        .chain()
+                        .focus()
+                        .insertContent({
+                            type: "mcpMention",
+                            attrs: { app, tool },
+                        })
+                        .insertContent(" ")
+                        .run();
+                } else {
+                    const currentValue = typeof value === "string" ? value : "";
+                    onChange(`${currentValue}@mcp<${app}|${tool}> `);
+                }
+            },
+            getEditor: () => editorInstanceRef.current,
+            focus: () => {
+                editorInstanceRef.current?.chain().focus().run();
+            },
+        }),
+        [value, onChange],
+    );
 
     const groupsRef = React.useRef(groups);
     React.useEffect(() => {
@@ -102,139 +133,157 @@ export const RichTextEditorWithMentions = React.forwardRef<RichTextEditorWithMen
 
     const listRef = React.useRef<HTMLDivElement | null>(null);
 
-    const handleListWheel = React.useCallback((event: React.WheelEvent<HTMLDivElement>) => {
-        if (!listRef.current) return;
+    const handleListWheel = React.useCallback(
+        (event: React.WheelEvent<HTMLDivElement>) => {
+            if (!listRef.current) return;
 
-        event.preventDefault();
-        event.stopPropagation();
+            event.preventDefault();
+            event.stopPropagation();
 
-        listRef.current.scrollBy({ top: event.deltaY, behavior: "auto" });
-    }, []);
+            listRef.current.scrollBy({ top: event.deltaY, behavior: "auto" });
+        },
+        [],
+    );
 
-    const insertToken = React.useCallback((item: MentionGroupItem) => {
-        const editor = editorInstanceRef.current;
+    const insertToken = React.useCallback(
+        (item: MentionGroupItem) => {
+            const editor = editorInstanceRef.current;
 
-        if (!editor) {
-            const byType = (item.type && formatInsertByType?.[item.type]) || ((it: MentionGroupItem) => `@mcp<${it.label}>`);
-            const token = byType(item);
-            const cur = typeof value === "string" ? value : "";
-            const afterAtPos = triggerPos ?? cur.length;
-            let atPos = afterAtPos - 1;
-            while (atPos >= 0 && cur[atPos] !== "@") {
-                atPos--;
+            if (!editor) {
+                const byType =
+                    (item.type && formatInsertByType?.[item.type]) ||
+                    ((it: MentionGroupItem) => `@mcp<${it.label}>`);
+                const token = byType(item);
+                const cur = typeof value === "string" ? value : "";
+                const afterAtPos = triggerPos ?? cur.length;
+                let atPos = afterAtPos - 1;
+                while (atPos >= 0 && cur[atPos] !== "@") {
+                    atPos--;
+                }
+                if (atPos < 0 || cur[atPos] !== "@") {
+                    const before = cur.slice(0, afterAtPos);
+                    const after = cur.slice(afterAtPos);
+                    onChange(`${before}${token} `);
+                } else {
+                    const before = cur.slice(0, atPos);
+                    const after = cur.slice(afterAtPos);
+                    onChange(`${before}${token} `);
+                }
+                setOpen(false);
+                setQuery("");
+                setTriggerPos(null);
+                setViewStack([]);
+                setChildSearchGroups(null);
+                return;
             }
-            if (atPos < 0 || cur[atPos] !== "@") {
-                const before = cur.slice(0, afterAtPos);
-                const after = cur.slice(afterAtPos);
-                onChange(`${before}${token} `);
+
+            const byType =
+                (item.type && formatInsertByType?.[item.type]) ||
+                ((it: MentionGroupItem) => {
+                    const rawApp = String(it?.meta?.appName ?? "");
+                    const app = rawApp
+                        .toLowerCase()
+                        .replace(/\bmcp\b/g, "")
+                        .replace(/[^a-z0-9]+/g, "_")
+                        .replace(/^_+|_+$/g, "");
+                    const tool = String(it.label).toLowerCase();
+                    return { app, tool };
+                });
+
+            if (item.type === "mcp" && item.meta?.appName) {
+                const rawApp = String(item.meta.appName);
+                const app = rawApp
+                    .toLowerCase()
+                    .replace(/\bmcp\b/g, "")
+                    .replace(/[^a-z0-9]+/g, "_")
+                    .replace(/^_+|_+$/g, "");
+                const tool = String(item.label).toLowerCase();
+
+                const { state } = editor;
+                const { selection } = state;
+                let pos = selection.$from.pos;
+
+                let foundPos = pos;
+                const $pos = state.doc.resolve(pos);
+                let searchPos = $pos.pos;
+                let found = false;
+
+                for (let i = 0; i < 50 && searchPos > 0; i++) {
+                    const char = state.doc.textBetween(
+                        searchPos - 1,
+                        searchPos,
+                    );
+                    if (char === "@") {
+                        foundPos = searchPos - 1;
+                        found = true;
+                        break;
+                    }
+                    searchPos--;
+                }
+
+                if (found) {
+                    editor
+                        .chain()
+                        .focus()
+                        .setTextSelection({ from: foundPos, to: pos })
+                        .deleteSelection()
+                        .insertContent({
+                            type: "mcpMention",
+                            attrs: { app, tool },
+                        })
+                        .insertContent(" ")
+                        .run();
+                } else {
+                    editor
+                        .chain()
+                        .focus()
+                        .insertContent({
+                            type: "mcpMention",
+                            attrs: { app, tool },
+                        })
+                        .insertContent(" ")
+                        .run();
+                }
             } else {
-                const before = cur.slice(0, atPos);
-                const after = cur.slice(afterAtPos);
-                onChange(`${before}${token} `);
+                const byTypeString =
+                    (item.type && formatInsertByType?.[item.type]) ||
+                    ((it: MentionGroupItem) => `@${it.label}`);
+                const token = byTypeString(item);
+
+                const { state } = editor;
+                const { selection } = state;
+                const pos = selection.$from.pos;
+                let foundPos = pos;
+                const $pos = state.doc.resolve(pos);
+                let searchPos = $pos.pos;
+                let found = false;
+                for (let i = 0; i < 50 && searchPos > 0; i++) {
+                    const char = state.doc.textBetween(
+                        searchPos - 1,
+                        searchPos,
+                    );
+                    if (char === "@") {
+                        foundPos = searchPos - 1;
+                        found = true;
+                        break;
+                    }
+                    searchPos--;
+                }
+                const chain = editor.chain().focus();
+                if (found) {
+                    chain.setTextSelection({ from: foundPos, to: pos });
+                }
+                chain.insertContent(`${token} `).run();
             }
+
             setOpen(false);
             setQuery("");
             setTriggerPos(null);
             setViewStack([]);
             setChildSearchGroups(null);
-            return;
-        }
-
-        const byType = (item.type && formatInsertByType?.[item.type]) || ((it: MentionGroupItem) => {
-            const rawApp = String(it?.meta?.appName ?? "");
-            const app = rawApp
-                .toLowerCase()
-                .replace(/\bmcp\b/g, "")
-                .replace(/[^a-z0-9]+/g, "_")
-                .replace(/^_+|_+$/g, "");
-            const tool = String(it.label).toLowerCase();
-            return { app, tool };
-        });
-
-        if (item.type === "mcp" && item.meta?.appName) {
-            const rawApp = String(item.meta.appName);
-            const app = rawApp
-                .toLowerCase()
-                .replace(/\bmcp\b/g, "")
-                .replace(/[^a-z0-9]+/g, "_")
-                .replace(/^_+|_+$/g, "");
-            const tool = String(item.label).toLowerCase();
-
-            const { state } = editor;
-            const { selection } = state;
-            let pos = selection.$from.pos;
-
-            let foundPos = pos;
-            const $pos = state.doc.resolve(pos);
-            let searchPos = $pos.pos;
-            let found = false;
-
-            for (let i = 0; i < 50 && searchPos > 0; i++) {
-                const char = state.doc.textBetween(searchPos - 1, searchPos);
-                if (char === "@") {
-                    foundPos = searchPos - 1;
-                    found = true;
-                    break;
-                }
-                searchPos--;
-            }
-
-            if (found) {
-                editor
-                    .chain()
-                    .focus()
-                    .setTextSelection({ from: foundPos, to: pos })
-                    .deleteSelection()
-                    .insertContent({
-                        type: "mcpMention",
-                        attrs: { app, tool },
-                    })
-                    .insertContent(" ")
-                    .run();
-            } else {
-                editor
-                    .chain()
-                    .focus()
-                    .insertContent({
-                        type: "mcpMention",
-                        attrs: { app, tool },
-                    })
-                    .insertContent(" ")
-                    .run();
-            }
-        } else {
-            const byTypeString = (item.type && formatInsertByType?.[item.type]) || ((it: MentionGroupItem) => `@${it.label}`);
-            const token = byTypeString(item);
-
-            const { state } = editor;
-            const { selection } = state;
-            const pos = selection.$from.pos;
-            let foundPos = pos;
-            const $pos = state.doc.resolve(pos);
-            let searchPos = $pos.pos;
-            let found = false;
-            for (let i = 0; i < 50 && searchPos > 0; i++) {
-                const char = state.doc.textBetween(searchPos - 1, searchPos);
-                if (char === "@") {
-                    foundPos = searchPos - 1;
-                    found = true;
-                    break;
-                }
-                searchPos--;
-            }
-            const chain = editor.chain().focus();
-            if (found) {
-                chain.setTextSelection({ from: foundPos, to: pos });
-            }
-            chain.insertContent(`${token} `).run();
-        }
-
-        setOpen(false);
-        setQuery("");
-        setTriggerPos(null);
-        setViewStack([]);
-        setChildSearchGroups(null);
-    }, [value, triggerPos, onChange, formatInsertByType]);
+        },
+        [value, triggerPos, onChange, formatInsertByType],
+    );
 
     const currentGroups = React.useMemo(() => {
         return viewStack.length ? viewStack[viewStack.length - 1] : groups;
@@ -262,7 +311,8 @@ export const RichTextEditorWithMentions = React.forwardRef<RichTextEditorWithMen
 
             for (const group of currentGroups) {
                 for (const item of group.items) {
-                    if (!item.children || abortController.signal.aborted) continue;
+                    if (!item.children || abortController.signal.aborted)
+                        continue;
 
                     loaders.push(
                         (async () => {
@@ -273,7 +323,11 @@ export const RichTextEditorWithMentions = React.forwardRef<RichTextEditorWithMen
                                 if (abortController.signal.aborted) return null;
 
                                 const matchedItems = children.flatMap((g) =>
-                                    g.items.filter((it) => it.label.toLowerCase().includes(searchQuery)),
+                                    g.items.filter((it) =>
+                                        it.label
+                                            .toLowerCase()
+                                            .includes(searchQuery),
+                                    ),
                                 );
                                 if (matchedItems.length === 0) return null;
                                 return {
@@ -291,8 +345,12 @@ export const RichTextEditorWithMentions = React.forwardRef<RichTextEditorWithMen
             const results = await Promise.all(loaders);
 
             if (active && !abortController.signal.aborted) {
-                const filteredResults = results.filter(Boolean) as MentionGroup[];
-                setChildSearchGroups(filteredResults.length ? filteredResults : null);
+                const filteredResults = results.filter(
+                    Boolean,
+                ) as MentionGroup[];
+                setChildSearchGroups(
+                    filteredResults.length ? filteredResults : null,
+                );
             }
         };
 
@@ -306,17 +364,20 @@ export const RichTextEditorWithMentions = React.forwardRef<RichTextEditorWithMen
     }, [query, viewStack.length]);
 
     return (
-        <Popover open={open} modal={false} onOpenChange={(o) => {
-            if (o) {
-                setOpen(true);
-            } else {
-                setOpen(false);
-                setQuery("");
-                setViewStack([]);
-                setChildSearchGroups(null);
-            }
-        }}>
-            <div className="relative w-full flex flex-col gap-2">
+        <Popover
+            open={open}
+            modal={false}
+            onOpenChange={(o) => {
+                if (o) {
+                    setOpen(true);
+                } else {
+                    setOpen(false);
+                    setQuery("");
+                    setViewStack([]);
+                    setChildSearchGroups(null);
+                }
+            }}>
+            <div className="relative flex w-full flex-col gap-2">
                 {headerSlot}
                 <PopoverAnchor asChild>
                     <div />
@@ -336,10 +397,13 @@ export const RichTextEditorWithMentions = React.forwardRef<RichTextEditorWithMen
                     toolbarExtraActions={toolbarExtraActions}
                 />
             </div>
-            <PopoverContent className="p-0 w-80 max-h-[min(60vh,28rem)] flex flex-col overflow-hidden" align="start" sideOffset={8}>
+            <PopoverContent
+                className="flex max-h-[min(60vh,28rem)] w-80 flex-col overflow-hidden p-0"
+                align="start"
+                sideOffset={8}>
                 <Command className="flex h-full flex-col overflow-hidden">
                     {viewStack.length > 0 && (
-                        <div className="flex items-center gap-2 px-3 py-2 text-xs text-text-secondary shrink-0">
+                        <div className="text-text-secondary flex shrink-0 items-center gap-2 px-3 py-2 text-xs">
                             <span>Root</span>
                             {viewStack.map((g, idx) => (
                                 <React.Fragment key={idx}>
@@ -359,54 +423,71 @@ export const RichTextEditorWithMentions = React.forwardRef<RichTextEditorWithMen
                         }}
                     />
                     <CommandList
-                        className="flex-1 min-h-0 overflow-y-auto"
+                        className="min-h-0 flex-1 overflow-y-auto"
                         style={{ maxHeight: "18rem" }}
                         ref={(node) => {
                             listRef.current = node;
                         }}
-                        onWheel={handleListWheel}
-                    >
+                        onWheel={handleListWheel}>
                         <CommandEmpty>No results.</CommandEmpty>
                         {React.useMemo(() => {
-                            const groupsToRender = childSearchGroups ?? currentGroups;
-                            return groupsToRender.map((g) => {
-                                const filteredItems = g.items.filter((it) =>
-                                    it.label.toLowerCase().includes(query.toLowerCase()),
-                                );
-                                if (filteredItems.length === 0) return null;
+                            const groupsToRender =
+                                childSearchGroups ?? currentGroups;
+                            return groupsToRender
+                                .map((g) => {
+                                    const filteredItems = g.items.filter((it) =>
+                                        it.label
+                                            .toLowerCase()
+                                            .includes(query.toLowerCase()),
+                                    );
+                                    if (filteredItems.length === 0) return null;
 
-                                return (
-                                    <CommandGroup key={g.groupLabel} heading={g.groupLabel}>
-                                        {filteredItems.map((it) => (
-                                            <CommandItem
-                                                key={it.value}
-                                                value={it.label}
-                                                onSelect={async () => {
-                                                    if (it.children) {
-                                                        const next = await it.children();
-                                                        setViewStack((s) => [...s, next]);
-                                                        setQuery("");
-                                                    } else {
-                                                        insertToken(it);
-                                                    }
-                                                }}
-                                            >
-                                                <span className="truncate">{it.label}</span>
-                                            </CommandItem>
-                                        ))}
-                                    </CommandGroup>
-                                );
-                            }).filter(Boolean);
-                        }, [childSearchGroups, currentGroups, query, insertToken])}
+                                    return (
+                                        <CommandGroup
+                                            key={g.groupLabel}
+                                            heading={g.groupLabel}>
+                                            {filteredItems.map((it) => (
+                                                <CommandItem
+                                                    key={it.value}
+                                                    value={it.label}
+                                                    onSelect={async () => {
+                                                        if (it.children) {
+                                                            const next =
+                                                                await it.children();
+                                                            setViewStack(
+                                                                (s) => [
+                                                                    ...s,
+                                                                    next,
+                                                                ],
+                                                            );
+                                                            setQuery("");
+                                                        } else {
+                                                            insertToken(it);
+                                                        }
+                                                    }}>
+                                                    <span className="truncate">
+                                                        {it.label}
+                                                    </span>
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    );
+                                })
+                                .filter(Boolean);
+                        }, [
+                            childSearchGroups,
+                            currentGroups,
+                            query,
+                            insertToken,
+                        ])}
                     </CommandList>
                 </Command>
                 {canGoBack && (
-                    <div className="flex items-center justify-end border-t px-3 py-2 shrink-0 bg-card-lv1/40">
+                    <div className="bg-card-lv1/40 flex shrink-0 items-center justify-end border-t px-3 py-2">
                         <button
                             type="button"
-                            className="text-xs text-text-secondary hover:underline"
-                            onClick={goBack}
-                        >
+                            className="text-text-secondary text-xs hover:underline"
+                            onClick={goBack}>
                             ← Back
                         </button>
                     </div>

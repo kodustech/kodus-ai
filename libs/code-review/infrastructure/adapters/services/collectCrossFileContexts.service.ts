@@ -6,7 +6,7 @@ import {
     PromptRole,
     PromptRunnerService,
 } from '@kodus/kodus-common/llm';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import {
@@ -14,19 +14,25 @@ import {
     CrossFileContextPlannerSchemaType,
     prompt_cross_file_context_planner,
 } from '@libs/common/utils/langchainCommon/prompts/codeReviewCrossFileContextPlanner';
+import {
+    CrossFileContextSufficiencySchema,
+    CrossFileContextSufficiencySchemaType,
+    CrossFileContextSufficiencyPayload,
+    prompt_cross_file_context_sufficiency,
+} from '@libs/common/utils/langchainCommon/prompts/codeReviewCrossFileContextSufficiency';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
 import { TokenChunkingService } from '@libs/core/infrastructure/services/tokenChunking/tokenChunking.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import {
-    WarpGrepClient,
-    WarpGrepResult,
-} from '@morphllm/morphsdk';
+    CODEBASE_SEARCH_SERVICE_TOKEN,
+    CodebaseSearchService,
+} from './codebaseSearch.service';
 
 /**
  * Remote command executors for sandbox environments.
- * Mirrors the RemoteCommands interface from @morphllm/morphsdk/tools/warp-grep.
+ * Abstracts shell commands executed in remote sandbox environments (E2B).
  */
 export interface RemoteCommands {
     grep: (pattern: string, path: string, glob?: string) => Promise<string>;
@@ -36,12 +42,14 @@ export interface RemoteCommands {
 
 //#region Constants
 const MAX_PLANNER_QUERIES = 16;
+const MAX_SUFFICIENCY_QUERIES = 5;
 const MAX_TOTAL_CONTEXTS = 60;
 const MAX_PER_FILE_CHARS = 8000;
 const MAX_TOTAL_CHARS = 200_000;
 const CONTEXT_WINDOW_SMALL = 25;
 const CONTEXT_WINDOW_SINGLE_LINE = 40;
 const MIN_SNIPPET_LINES = 5;
+const SEARCH_CONCURRENCY = 10;
 //#endregion
 
 //#region Types
@@ -81,6 +89,11 @@ interface CollectContextsParams {
 }
 
 type PlannerQuery = CrossFileContextPlannerSchemaType['queries'][number];
+
+interface SearchExecutionResult {
+    snippets: CrossFileContextSnippet[];
+    queryResultMap: Map<string, boolean>;
+}
 //#endregion
 
 @Injectable()
@@ -94,6 +107,8 @@ export class CollectCrossFileContextsService {
         private readonly observabilityService: ObservabilityService,
         private readonly tokenChunkingService: TokenChunkingService,
         private readonly configService: ConfigService,
+        @Inject(CODEBASE_SEARCH_SERVICE_TOKEN)
+        private readonly codebaseSearchService: CodebaseSearchService,
     ) {}
 
     async collectContexts(
@@ -150,12 +165,12 @@ export class CollectCrossFileContextsService {
             },
         });
 
-        // 2. Execute search queries via WarpGrep
+        // 2. Execute search queries via CodebaseSearchService
         const changedFilePaths = new Set(
             changedFiles.map((f) => f.filename),
         );
 
-        const searchResults = await this.executeSearchQueries(
+        const searchExecution = await this.executeSearchQueries(
             plannerQueries,
             remoteCommands,
             changedFilePaths,
@@ -164,7 +179,7 @@ export class CollectCrossFileContextsService {
             prNumber,
         );
 
-        if (!searchResults.length) {
+        if (!searchExecution.snippets.length) {
             this.logger.log({
                 message: `No search results found for PR#${prNumber}`,
                 context: CollectCrossFileContextsService.name,
@@ -179,25 +194,36 @@ export class CollectCrossFileContextsService {
 
         // 3. Expand context windows for small snippets
         const expandedSnippets = await this.expandContextWindows(
-            searchResults,
+            searchExecution.snippets,
             remoteCommands,
         );
 
-        // 4. Execute hop 2 for high-risk queries
-        const hop2Snippets = await this.executeHop2(
-            expandedSnippets,
-            remoteCommands,
-            changedFilePaths,
-            repoRoot,
-            organizationAndTeamData,
-            prNumber,
-        );
-
-        const allSnippets = [...expandedSnippets, ...hop2Snippets];
+        const allSnippets = expandedSnippets;
         const totalSnippetsBeforeDedup = allSnippets.length;
 
         // 5. Deduplicate and rank
-        const finalContexts = this.deduplicateAndRank(allSnippets);
+        let finalContexts = this.deduplicateAndRank(allSnippets);
+        let totalSearches = plannerQueries.length;
+
+        // 6. Sufficiency feedback loop (max 1 iteration)
+        const sufficiencyResult = await this.runSufficiencyLoop({
+            changedFiles,
+            plannerQueries,
+            currentContexts: finalContexts,
+            queryResultMap: searchExecution.queryResultMap,
+            remoteCommands,
+            changedFilePaths,
+            repoRoot,
+            byokConfig,
+            organizationAndTeamData,
+            prNumber,
+            language,
+        });
+
+        if (sufficiencyResult) {
+            finalContexts = sufficiencyResult.mergedContexts;
+            totalSearches += sufficiencyResult.additionalSearchCount;
+        }
 
         this.logger.log({
             message: `Cross-file context collection completed for PR#${prNumber}`,
@@ -213,6 +239,7 @@ export class CollectCrossFileContextsService {
                 })),
                 totalSnippetsBeforeDedup,
                 finalContexts: finalContexts.length,
+                sufficiencyLoopRan: !!sufficiencyResult,
                 snippetFiles: finalContexts.map((c) => ({
                     file: c.filePath,
                     symbol: c.relatedSymbol,
@@ -225,7 +252,7 @@ export class CollectCrossFileContextsService {
         return {
             contexts: finalContexts,
             plannerQueries,
-            totalSearches: plannerQueries.length,
+            totalSearches,
             totalSnippetsBeforeDedup,
         };
     }
@@ -259,16 +286,15 @@ export class CollectCrossFileContextsService {
             // Chunk diff items by token limits
             const byokMaxInputTokens = byokConfig?.main?.maxInputTokens;
 
-            const chunkingResult =
-                this.tokenChunkingService.chunkDataByTokens({
-                    model: effectiveModel,
-                    data: fileDiffItems,
-                    usagePercentage: 50,
-                    defaultMaxTokens: 64000,
-                    ...(byokMaxInputTokens && byokMaxInputTokens > 0
-                        ? { overrideMaxTokens: byokMaxInputTokens }
-                        : {}),
-                });
+            const chunkingResult = this.tokenChunkingService.chunkDataByTokens({
+                model: effectiveModel,
+                data: fileDiffItems,
+                usagePercentage: 50,
+                defaultMaxTokens: 64000,
+                ...(byokMaxInputTokens && byokMaxInputTokens > 0
+                    ? { overrideMaxTokens: byokMaxInputTokens }
+                    : {}),
+            });
 
             this.logger.log({
                 message: `Planner chunked ${fileDiffItems.length} files into ${chunkingResult.totalChunks} batch(es) for PR#${prNumber}`,
@@ -327,9 +353,10 @@ export class CollectCrossFileContextsService {
                 return [];
             }
 
-            // Deduplicate across batches and apply global cap
+            // Deduplicate across batches, validate, and apply global cap
             const deduped = this.deduplicatePlannerQueries(allQueries);
-            return deduped.slice(0, MAX_PLANNER_QUERIES);
+            const validated = this.validatePlannerQueries(deduped, prNumber);
+            return validated.slice(0, MAX_PLANNER_QUERIES);
         } catch (error) {
             this.logger.error({
                 message: `Planner LLM failed for PR#${prNumber}`,
@@ -351,7 +378,7 @@ export class CollectCrossFileContextsService {
     ): Promise<CrossFileContextPlannerSchemaType['queries']> {
         const payload = { diffSummary, changedFilenames, language };
 
-        const provider = LLMModelProvider.CEREBRAS_GPT_OSS_120B;
+        const provider = LLMModelProvider.GEMINI_3_FLASH_PREVIEW;
         const fallbackProvider = LLMModelProvider.GEMINI_2_5_FLASH;
 
         const promptRunner = new BYOKPromptRunnerService(
@@ -391,21 +418,17 @@ export class CollectCrossFileContextsService {
                 runName,
             });
 
-        const { result } =
-            await this.observabilityService.runLLMInSpan({
-                spanName,
-                runName,
-                attrs: spanAttrs,
-                exec: (callbacks) =>
-                    builder.addCallbacks(callbacks).execute(),
-            });
+        const { result } = await this.observabilityService.runLLMInSpan({
+            spanName,
+            runName,
+            attrs: spanAttrs,
+            exec: (callbacks) => builder.addCallbacks(callbacks).execute(),
+        });
 
         return (result as CrossFileContextPlannerSchemaType)?.queries ?? [];
     }
 
-    private deduplicatePlannerQueries(
-        queries: PlannerQuery[],
-    ): PlannerQuery[] {
+    private deduplicatePlannerQueries(queries: PlannerQuery[]): PlannerQuery[] {
         const riskRank: Record<string, number> = {
             high: 3,
             medium: 2,
@@ -429,6 +452,81 @@ export class CollectCrossFileContextsService {
 
         return Array.from(seen.values());
     }
+
+    /**
+     * Filters out low-quality planner queries that waste search budget.
+     * Catches common LLM mistakes: log strings, generic names, private symbols.
+     */
+    private validatePlannerQueries(
+        queries: PlannerQuery[],
+        prNumber: number,
+    ): PlannerQuery[] {
+        // Patterns that indicate log/comment strings, not code symbols
+        const LOG_STRING_PATTERNS = [
+            /^\[.*\]$/,            // [TIMING], [ERROR], etc.
+            /^\[.*\]/,             // [TIMING] PR#...
+            /^logger\./,           // logger.log, logger.warn
+            /^console\./,          // console.log
+            /error occurred/i,
+            /failed to/i,
+        ];
+
+        // Generic parameter names that match hundreds of files
+        const GENERIC_NAMES = new Set([
+            'config', 'options', 'params', 'context', 'data', 'result',
+            'error', 'response', 'request', 'callback', 'handler',
+            'value', 'item', 'input', 'output', 'args',
+        ]);
+
+        // Private/internal symbols unlikely to have external consumers
+        const PRIVATE_PATTERNS = [
+            /^(private|#)/,              // private keyword or # prefix
+            /^_[a-z]/,                   // _privateMethod convention
+            /^(MAX_|MIN_|DEFAULT_)/,     // Constants
+        ];
+
+        const kept: PlannerQuery[] = [];
+        const rejected: string[] = [];
+
+        for (const query of queries) {
+            const symbol = query.symbolName || '';
+
+            // Reject log/comment strings
+            if (LOG_STRING_PATTERNS.some((p) => p.test(symbol))) {
+                rejected.push(`${symbol} (log/comment string)`);
+                continue;
+            }
+
+            // Reject generic parameter names (only when symbol is the whole pattern)
+            if (GENERIC_NAMES.has(symbol.toLowerCase())) {
+                rejected.push(`${symbol} (generic name)`);
+                continue;
+            }
+
+            // Reject private/internal symbols
+            if (PRIVATE_PATTERNS.some((p) => p.test(symbol))) {
+                rejected.push(`${symbol} (private/internal)`);
+                continue;
+            }
+
+            // Reject patterns that are just log strings wrapped in regex
+            if (/\[TIMING\]|\[ERROR\]|\[WARN\]|\[INFO\]|\[DEBUG\]/.test(query.pattern)) {
+                rejected.push(`${query.pattern} (log tag pattern)`);
+                continue;
+            }
+
+            kept.push(query);
+        }
+
+        if (rejected.length > 0) {
+            this.logger.log({
+                message: `Rejected ${rejected.length} low-quality planner queries for PR#${prNumber}: ${rejected.join(', ')}`,
+                context: CollectCrossFileContextsService.name,
+            });
+        }
+
+        return kept;
+    }
     //#endregion
 
     //#region Search Execution
@@ -439,97 +537,93 @@ export class CollectCrossFileContextsService {
         repoRoot: string,
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
-    ): Promise<CrossFileContextSnippet[]> {
-        const allSnippets: CrossFileContextSnippet[] = [];
+    ): Promise<SearchExecutionResult> {
+        const queryResultMap = new Map<string, boolean>();
 
-        const client = new WarpGrepClient({ morphApiKey: this.configService.get<string>('API_MORPHLLM_API_KEY') ?? '' });
-
-        for (const query of queries) {
-            try {
-                this.logger.log({
-                    message: `Executing search query for PR#${prNumber}: "${query.pattern}" (symbol: ${query.symbolName}, glob: ${query.fileGlob || '*'})`,
-                    context: CollectCrossFileContextsService.name,
-                    metadata: {
-                        organizationAndTeamData,
-                        prNumber,
-                        pattern: query.pattern,
-                        symbolName: query.symbolName,
-                        fileGlob: query.fileGlob,
-                        riskLevel: query.riskLevel,
-                        repoRoot,
-                    },
-                });
-
-                const result: WarpGrepResult = await client.execute({
-                    query: query.pattern,
+        const tasks = queries.map((query) => async () => {
+            this.logger.log({
+                message: `Executing search query for PR#${prNumber}: "${query.pattern}" (symbol: ${query.symbolName}, glob: ${query.fileGlob || '*'})`,
+                context: CollectCrossFileContextsService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    prNumber,
+                    pattern: query.pattern,
+                    symbolName: query.symbolName,
+                    fileGlob: query.fileGlob,
+                    riskLevel: query.riskLevel,
                     repoRoot,
-                    remoteCommands,
-                    includes: query.fileGlob ? [query.fileGlob] : undefined,
-                    excludes: [
-                        'node_modules',
-                        '.git',
-                        'dist',
-                        'build',
-                        '*.min.js',
-                        '*.map',
-                    ],
-                    debug: true,
-                });
+                },
+            });
 
-                this.logger.log({
-                    message: `Search result for PR#${prNumber} pattern "${query.pattern}": success=${result.success}, contexts=${result.contexts?.length ?? 0}`,
-                    context: CollectCrossFileContextsService.name,
-                    metadata: {
-                        organizationAndTeamData,
-                        prNumber,
-                        pattern: query.pattern,
-                        success: result.success,
-                        contextsCount: result.contexts?.length ?? 0,
-                        contextFiles: result.contexts?.map((c) => c.file) ?? [],
-                    },
-                });
+            const result = await this.codebaseSearchService.search({
+                query: query.pattern,
+                remoteCommands,
+                includes: query.fileGlob ? [query.fileGlob] : undefined,
+                excludes: [
+                    'node_modules',
+                    '.git',
+                    'dist',
+                    'build',
+                    '*.min.js',
+                    '*.map',
+                ],
+            });
 
-                if (!result.success || !result.contexts?.length) {
-                    continue;
-                }
+            this.logger.log({
+                message: `Search result for PR#${prNumber} pattern "${query.pattern}": success=${result.success}, contexts=${result.contexts?.length ?? 0}`,
+                context: CollectCrossFileContextsService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    prNumber,
+                    pattern: query.pattern,
+                    success: result.success,
+                    contextsCount: result.contexts?.length ?? 0,
+                    contextFiles: result.contexts?.map((c) => c.file) ?? [],
+                },
+            });
 
-                for (const ctx of result.contexts) {
-                    // Filter out files that are already in the PR
-                    if (changedFilePaths.has(ctx.file)) {
-                        this.logger.log({
-                            message: `Filtering out changed file from cross-file results: ${ctx.file}`,
-                            context: CollectCrossFileContextsService.name,
-                        });
-                        continue;
-                    }
+            return { query, result };
+        });
 
-                    allSnippets.push({
-                        filePath: ctx.file,
-                        content: ctx.content,
-                        rationale: query.rationale,
-                        relevanceScore: this.getBaseScore(query.riskLevel),
-                        relatedSymbol: query.symbolName,
-                        relationship: `consumer of ${query.symbolName || query.pattern}`,
-                        hop: 1,
-                        riskLevel: query.riskLevel,
-                        targetFiles: [query.sourceFile],
-                    });
-                }
-            } catch (error) {
-                this.logger.warn({
-                    message: `Search query failed for pattern "${query.pattern}" on PR#${prNumber}`,
-                    context: CollectCrossFileContextsService.name,
-                    error,
-                    metadata: {
-                        organizationAndTeamData,
-                        prNumber,
-                        pattern: query.pattern,
-                    },
+        const results = await this.runWithConcurrency(tasks, SEARCH_CONCURRENCY);
+
+        const allSnippets: CrossFileContextSnippet[] = [];
+        for (const outcome of results) {
+            if (outcome.status === 'rejected') continue;
+            const { query, result } = outcome.value;
+
+            if (!result.success || !result.contexts?.length) {
+                queryResultMap.set(query.pattern, false);
+                continue;
+            }
+
+            queryResultMap.set(query.pattern, true);
+
+            for (const ctx of result.contexts) {
+                if (changedFilePaths.has(ctx.file)) continue;
+
+                allSnippets.push({
+                    filePath: ctx.file,
+                    content: ctx.content,
+                    rationale: query.rationale,
+                    relevanceScore: this.getBaseScore(query.riskLevel),
+                    relatedSymbol: query.symbolName,
+                    relationship: `consumer of ${query.symbolName || query.pattern}`,
+                    hop: 1,
+                    riskLevel: query.riskLevel,
+                    targetFiles: [query.sourceFile],
                 });
             }
         }
 
-        return allSnippets;
+        // Mark failed tasks
+        for (const query of queries) {
+            if (!queryResultMap.has(query.pattern)) {
+                queryResultMap.set(query.pattern, false);
+            }
+        }
+
+        return { snippets: allSnippets, queryResultMap };
     }
     //#endregion
 
@@ -538,65 +632,59 @@ export class CollectCrossFileContextsService {
         snippets: CrossFileContextSnippet[],
         remoteCommands: RemoteCommands,
     ): Promise<CrossFileContextSnippet[]> {
-        const expanded: CrossFileContextSnippet[] = [];
+        const tasks = snippets.map((snippet) => async () => {
+            const lineCount = snippet.content.split('\n').length;
 
-        for (const snippet of snippets) {
-            try {
-                const lineCount = snippet.content.split('\n').length;
+            if (lineCount >= MIN_SNIPPET_LINES) {
+                return snippet;
+            }
 
-                if (lineCount >= MIN_SNIPPET_LINES) {
-                    expanded.push(snippet);
-                    continue;
-                }
+            // Skip expansion if we don't have actual line position info
+            // Without it, we'd read wrong lines from the file
+            if (!snippet.startLine || !snippet.endLine) {
+                return snippet;
+            }
 
-                // Skip expansion if we don't have actual line position info
-                // Without it, we'd read wrong lines from the file
-                if (!snippet.startLine || !snippet.endLine) {
-                    expanded.push(snippet);
-                    continue;
-                }
+            const window =
+                lineCount <= 1
+                    ? CONTEXT_WINDOW_SINGLE_LINE
+                    : CONTEXT_WINDOW_SMALL;
 
-                const window =
-                    lineCount <= 1
-                        ? CONTEXT_WINDOW_SINGLE_LINE
-                        : CONTEXT_WINDOW_SMALL;
+            const startLine = Math.max(
+                1,
+                (snippet.startLine || 1) - window,
+            );
+            const endLine =
+                (snippet.endLine || lineCount) + window;
 
-                const startLine = Math.max(
-                    1,
-                    (snippet.startLine || 1) - window,
+            const expandedContent = await remoteCommands.read(
+                snippet.filePath,
+                startLine,
+                endLine,
+            );
+
+            if (expandedContent) {
+                const trimmed = expandedContent.substring(
+                    0,
+                    MAX_PER_FILE_CHARS,
                 );
-                const endLine =
-                    (snippet.endLine || lineCount) + window;
 
-                const expandedContent = await remoteCommands.read(
-                    snippet.filePath,
+                return {
+                    ...snippet,
+                    content: trimmed,
                     startLine,
                     endLine,
-                );
-
-                if (expandedContent) {
-                    // Enforce per-file char limit
-                    const trimmed = expandedContent.substring(
-                        0,
-                        MAX_PER_FILE_CHARS,
-                    );
-
-                    expanded.push({
-                        ...snippet,
-                        content: trimmed,
-                        startLine,
-                        endLine,
-                    });
-                } else {
-                    expanded.push(snippet);
-                }
-            } catch {
-                // Keep the original snippet if expansion fails
-                expanded.push(snippet);
+                };
             }
-        }
 
-        return expanded;
+            return snippet;
+        });
+
+        const results = await this.runWithConcurrency(tasks, SEARCH_CONCURRENCY);
+
+        return results.map((r, i) =>
+            r.status === 'fulfilled' ? r.value : snippets[i],
+        );
     }
     //#endregion
 
@@ -619,78 +707,67 @@ export class CollectCrossFileContextsService {
         }
 
         try {
-            const client = new WarpGrepClient({ morphApiKey: this.configService.get<string>('API_MORPHLLM_API_KEY') ?? '' });
-
             // Extract function names only from high-risk hop 1 snippets
             const hop1FunctionNames = new Set<string>();
             const funcToTargetFiles = new Map<string, Set<string>>();
             for (const snippet of highRiskSnippets) {
-                const funcNames =
-                    this.extractFunctionNames(snippet.content);
+                const funcNames = this.extractFunctionNames(snippet.content);
                 for (const name of funcNames) {
                     hop1FunctionNames.add(name);
-                    const existing = funcToTargetFiles.get(name) || new Set<string>();
-                    snippet.targetFiles?.forEach(f => existing.add(f));
+                    const existing =
+                        funcToTargetFiles.get(name) || new Set<string>();
+                    snippet.targetFiles?.forEach((f) => existing.add(f));
                     funcToTargetFiles.set(name, existing);
                 }
             }
 
             // For each function found in hop 1, search for its callers
-            const hop1FilePaths = new Set(
-                hop1Snippets.map((s) => s.filePath),
-            );
+            const hop1FilePaths = new Set(hop1Snippets.map((s) => s.filePath));
             const excludedPaths = new Set([
                 ...changedFilePaths,
                 ...hop1FilePaths,
             ]);
 
-            for (const funcName of hop1FunctionNames) {
-                if (!funcName || funcName.length < 3) continue;
+            const validFuncNames = [...hop1FunctionNames].filter(
+                (n) => n && n.length >= 3 && !this.isGenericFunctionName(n),
+            );
 
-                try {
-                    const result = await client.execute({
-                        query: funcName,
-                        repoRoot,
-                        remoteCommands,
-                        excludes: [
-                            'node_modules',
-                            '.git',
-                            'dist',
-                            'build',
-                        ],
-                    });
+            const tasks = validFuncNames.map((funcName) => async () => {
+                const result = await this.codebaseSearchService.search({
+                    query: funcName,
+                    remoteCommands,
+                    excludes: [
+                        'node_modules',
+                        '.git',
+                        'dist',
+                        'build',
+                    ],
+                });
 
-                    if (!result.success || !result.contexts?.length) {
-                        continue;
-                    }
+                if (!result.success || !result.contexts?.length) {
+                    return [];
+                }
 
-                    for (const ctx of result.contexts) {
-                        if (excludedPaths.has(ctx.file)) continue;
+                return result.contexts
+                    .filter((ctx) => !excludedPaths.has(ctx.file))
+                    .map((ctx) => ({
+                        filePath: ctx.file,
+                        content: ctx.content,
+                        rationale: `Hop 2: caller of ${funcName} found in hop 1 results`,
+                        relevanceScore:
+                            this.getBaseScore('high') - 10,
+                        relatedSymbol: funcName,
+                        relationship: `indirect consumer (hop 2) of ${funcName}`,
+                        hop: 2 as const,
+                        riskLevel: 'high' as const,
+                        targetFiles: [...(funcToTargetFiles.get(funcName) || [])],
+                    }));
+            });
 
-                        hop2Snippets.push({
-                            filePath: ctx.file,
-                            content: ctx.content,
-                            rationale: `Hop 2: caller of ${funcName} found in hop 1 results`,
-                            relevanceScore:
-                                this.getBaseScore('high') - 10,
-                            relatedSymbol: funcName,
-                            relationship: `indirect consumer (hop 2) of ${funcName}`,
-                            hop: 2,
-                            riskLevel: 'high',
-                            targetFiles: [...(funcToTargetFiles.get(funcName) || [])],
-                        });
-                    }
-                } catch (error) {
-                    this.logger.warn({
-                        message: `Hop 2 search failed for function "${funcName}" on PR#${prNumber}`,
-                        context: CollectCrossFileContextsService.name,
-                        error,
-                        metadata: {
-                            organizationAndTeamData,
-                            prNumber,
-                            funcName,
-                        },
-                    });
+            const results = await this.runWithConcurrency(tasks, SEARCH_CONCURRENCY);
+            for (const outcome of results) {
+                if (outcome.status === 'fulfilled') {
+                    hop2Snippets.push(...outcome.value);
                 }
             }
         } catch (error) {
@@ -722,9 +799,7 @@ export class CollectCrossFileContextsService {
         const merged: CrossFileContextSnippet[] = [];
         for (const [, fileSnippets] of byFile) {
             // Sort by relevance score desc, keep the best
-            fileSnippets.sort(
-                (a, b) => b.relevanceScore - a.relevanceScore,
-            );
+            fileSnippets.sort((a, b) => b.relevanceScore - a.relevanceScore);
 
             const snippetsForThisFile: CrossFileContextSnippet[] = [];
             let totalChars = 0;
@@ -780,10 +855,266 @@ export class CollectCrossFileContextsService {
     }
     //#endregion
 
+    //#region Sufficiency Loop
+    private async runSufficiencyLoop(params: {
+        changedFiles: FileChange[];
+        plannerQueries: PlannerQuery[];
+        currentContexts: CrossFileContextSnippet[];
+        queryResultMap: Map<string, boolean>;
+        remoteCommands: RemoteCommands;
+        changedFilePaths: Set<string>;
+        repoRoot: string;
+        byokConfig?: BYOKConfig;
+        organizationAndTeamData: OrganizationAndTeamData;
+        prNumber: number;
+        language: string;
+    }): Promise<{
+        mergedContexts: CrossFileContextSnippet[];
+        additionalSearchCount: number;
+    } | null> {
+        const {
+            changedFiles,
+            plannerQueries,
+            currentContexts,
+            queryResultMap,
+            remoteCommands,
+            changedFilePaths,
+            repoRoot,
+            byokConfig,
+            organizationAndTeamData,
+            prNumber,
+            language,
+        } = params;
+
+        // Skip gate: if all planner queries found results, no check needed
+        const allQueriesFoundResults = plannerQueries.every(
+            (q) => queryResultMap.get(q.pattern) === true,
+        );
+
+        if (allQueriesFoundResults) {
+            this.logger.log({
+                message: `Skipping sufficiency check for PR#${prNumber}: all ${plannerQueries.length} queries found results`,
+                context: CollectCrossFileContextsService.name,
+                metadata: { organizationAndTeamData, prNumber },
+            });
+            return null;
+        }
+
+        // Evaluate sufficiency
+        const sufficiencyResult = await this.evaluateSufficiency(
+            changedFiles,
+            plannerQueries,
+            currentContexts,
+            queryResultMap,
+            language,
+            byokConfig,
+            organizationAndTeamData,
+            prNumber,
+        );
+
+        if (!sufficiencyResult) {
+            return null;
+        }
+
+        if (
+            sufficiencyResult.sufficient ||
+            !sufficiencyResult.additionalQueries?.length
+        ) {
+            this.logger.log({
+                message: `Sufficiency check passed for PR#${prNumber}: context is sufficient`,
+                context: CollectCrossFileContextsService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    prNumber,
+                    gaps: sufficiencyResult.gaps,
+                },
+            });
+            return null;
+        }
+
+        // Execute additional queries (capped)
+        const additionalQueries = sufficiencyResult.additionalQueries.slice(
+            0,
+            MAX_SUFFICIENCY_QUERIES,
+        );
+
+        this.logger.log({
+            message: `Sufficiency loop: executing ${additionalQueries.length} additional queries for PR#${prNumber}`,
+            context: CollectCrossFileContextsService.name,
+            metadata: {
+                organizationAndTeamData,
+                prNumber,
+                gaps: sufficiencyResult.gaps,
+                additionalQueries: additionalQueries.map((q) => ({
+                    symbol: q.symbolName,
+                    pattern: q.pattern,
+                    risk: q.riskLevel,
+                })),
+            },
+        });
+
+        const additionalSearch = await this.executeSearchQueries(
+            additionalQueries,
+            remoteCommands,
+            changedFilePaths,
+            repoRoot,
+            organizationAndTeamData,
+            prNumber,
+        );
+
+        if (!additionalSearch.snippets.length) {
+            this.logger.log({
+                message: `Sufficiency loop: no additional results found for PR#${prNumber}`,
+                context: CollectCrossFileContextsService.name,
+                metadata: { organizationAndTeamData, prNumber },
+            });
+            return null;
+        }
+
+        // Expand context windows for new snippets
+        const expandedAdditional = await this.expandContextWindows(
+            additionalSearch.snippets,
+            remoteCommands,
+        );
+
+        // Merge with existing contexts and re-deduplicate
+        const mergedContexts = this.deduplicateAndRank([
+            ...currentContexts,
+            ...expandedAdditional,
+        ]);
+
+        this.logger.log({
+            message: `Sufficiency loop completed for PR#${prNumber}: ${expandedAdditional.length} new snippets, ${mergedContexts.length} total after dedup`,
+            context: CollectCrossFileContextsService.name,
+            metadata: {
+                organizationAndTeamData,
+                prNumber,
+                newSnippets: expandedAdditional.length,
+                mergedTotal: mergedContexts.length,
+                previousTotal: currentContexts.length,
+            },
+        });
+
+        return {
+            mergedContexts,
+            additionalSearchCount: additionalQueries.length,
+        };
+    }
+
+    private async evaluateSufficiency(
+        changedFiles: FileChange[],
+        plannerQueries: PlannerQuery[],
+        currentContexts: CrossFileContextSnippet[],
+        queryResultMap: Map<string, boolean>,
+        language: string,
+        byokConfig: BYOKConfig | undefined,
+        organizationAndTeamData: OrganizationAndTeamData,
+        prNumber: number,
+    ): Promise<CrossFileContextSufficiencySchemaType | null> {
+        try {
+            // Build diff summary (same truncation as planner)
+            const diffSummary = changedFiles
+                .map((f) => {
+                    const diff = f.patchWithLinesStr || f.patch || '';
+                    const truncated =
+                        diff.length > 2000
+                            ? diff.substring(0, 2000) + '\n... (truncated)'
+                            : diff;
+                    return `### ${f.filename}\n${truncated}`;
+                })
+                .join('\n\n');
+
+            const payload: CrossFileContextSufficiencyPayload = {
+                changedFilenames: changedFiles.map((f) => f.filename),
+                diffSummary,
+                language,
+                originalQueries: plannerQueries.map((q) => ({
+                    symbolName: q.symbolName,
+                    pattern: q.pattern,
+                    riskLevel: q.riskLevel,
+                    rationale: q.rationale,
+                    sourceFile: q.sourceFile,
+                    foundResults: queryResultMap.get(q.pattern) ?? false,
+                })),
+                collectedSnippetsSummary: currentContexts.map((s) => ({
+                    filePath: s.filePath,
+                    relatedSymbol: s.relatedSymbol,
+                    rationale: s.rationale,
+                    riskLevel: s.riskLevel,
+                    hop: s.hop,
+                })),
+            };
+
+            const provider = LLMModelProvider.CEREBRAS_GPT_OSS_120B;
+            const fallbackProvider = LLMModelProvider.GEMINI_3_FLASH_PREVIEW;
+
+            const promptRunner = new BYOKPromptRunnerService(
+                this.promptRunnerService,
+                provider,
+                fallbackProvider,
+                byokConfig,
+            );
+
+            const runName = 'crossFileContextSufficiency';
+            const spanName = `${CollectCrossFileContextsService.name}::${runName}`;
+            const spanAttrs = {
+                organizationId: organizationAndTeamData?.organizationId,
+                prNumber,
+                type: promptRunner.executeMode,
+            };
+
+            const builder = promptRunner
+                .builder()
+                .setParser(
+                    ParserType.ZOD,
+                    CrossFileContextSufficiencySchema as any,
+                )
+                .setLLMJsonMode(true)
+                .setPayload(payload)
+                .addPrompt({
+                    prompt: prompt_cross_file_context_sufficiency,
+                    role: PromptRole.SYSTEM,
+                })
+                .addPrompt({
+                    prompt: 'Evaluate whether the collected cross-file context is sufficient. Return the response in the specified JSON format.',
+                    role: PromptRole.USER,
+                })
+                .setTemperature(0)
+                .addTags([
+                    'crossFileContextSufficiency',
+                    `model:${provider}`,
+                ])
+                .setRunName(runName)
+                .addMetadata({
+                    organizationAndTeamData,
+                    prNumber,
+                    runName,
+                });
+
+            const { result } =
+                await this.observabilityService.runLLMInSpan({
+                    spanName,
+                    runName,
+                    attrs: spanAttrs,
+                    exec: (callbacks) =>
+                        builder.addCallbacks(callbacks).execute(),
+                });
+
+            return (result as CrossFileContextSufficiencySchemaType) ?? null;
+        } catch (error) {
+            this.logger.warn({
+                message: `Sufficiency evaluation failed for PR#${prNumber} — continuing without it`,
+                context: CollectCrossFileContextsService.name,
+                error,
+                metadata: { organizationAndTeamData, prNumber },
+            });
+            return null;
+        }
+    }
+    //#endregion
+
     //#region Utilities
-    private getBaseScore(
-        riskLevel: 'low' | 'medium' | 'high',
-    ): number {
+    private getBaseScore(riskLevel: 'low' | 'medium' | 'high'): number {
         switch (riskLevel) {
             case 'high':
                 return 80;
@@ -826,6 +1157,67 @@ export class CollectCrossFileContextsService {
         return [...new Set(names)];
     }
 
+    /**
+     * Filters out function names that are too generic to produce useful hop 2 results.
+     * These names match thousands of files in any codebase and produce mostly noise.
+     */
+    private isGenericFunctionName(name: string): boolean {
+        const genericNames = new Set([
+            'constructor',
+            'execute',
+            'run',
+            'get',
+            'set',
+            'init',
+            'setup',
+            'create',
+            'update',
+            'delete',
+            'remove',
+            'find',
+            'handle',
+            'process',
+            'call',
+            'apply',
+            'bind',
+            'start',
+            'stop',
+            'close',
+            'open',
+            'read',
+            'write',
+            'send',
+            'receive',
+            'load',
+            'save',
+            'parse',
+            'format',
+            'validate',
+            'transform',
+            'resolve',
+            'reject',
+            'then',
+            'map',
+            'filter',
+            'reduce',
+            'forEach',
+            'push',
+            'pop',
+            'shift',
+            'toString',
+            'valueOf',
+            'compile',
+            'build',
+            'render',
+            'mount',
+            'unmount',
+            'test',
+            'describe',
+            'expect',
+        ]);
+        return genericNames.has(name);
+    }
+
     private isCommonKeyword(name: string): boolean {
         const keywords = new Set([
             'if',
@@ -865,7 +1257,41 @@ export class CollectCrossFileContextsService {
         // Check if one contains a significant portion of the other
         const shorter = a.length < b.length ? a : b;
         const longer = a.length >= b.length ? a : b;
-        return longer.includes(shorter.substring(0, Math.min(200, shorter.length)));
+        return longer.includes(
+            shorter.substring(0, Math.min(200, shorter.length)),
+        );
+    }
+    //#endregion
+
+    //#region Concurrency
+    /**
+     * Runs async tasks with bounded concurrency, returning PromiseSettledResult[].
+     */
+    private async runWithConcurrency<T>(
+        tasks: (() => Promise<T>)[],
+        concurrency: number,
+    ): Promise<PromiseSettledResult<T>[]> {
+        const results: PromiseSettledResult<T>[] = new Array(tasks.length);
+        let idx = 0;
+
+        const run = async () => {
+            while (idx < tasks.length) {
+                const i = idx++;
+                try {
+                    results[i] = {
+                        status: 'fulfilled',
+                        value: await tasks[i](),
+                    };
+                } catch (reason) {
+                    results[i] = { status: 'rejected', reason };
+                }
+            }
+        };
+
+        await Promise.all(
+            Array.from({ length: Math.min(concurrency, tasks.length) }, run),
+        );
+        return results;
     }
     //#endregion
 }

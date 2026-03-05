@@ -4,8 +4,7 @@ import { pathToApiUrl } from "src/core/utils/helpers";
 import type { SkillInstructions, SkillMeta } from "./types";
 
 export const SKILLS_PATHS = {
-    GET_META: (skillName: string) =>
-        pathToApiUrl(`/skills/${skillName}/meta`),
+    GET_META: (skillName: string) => pathToApiUrl(`/skills/${skillName}/meta`),
     GET_INSTRUCTIONS: (skillName: string) =>
         pathToApiUrl(`/skills/${skillName}/instructions`),
 };

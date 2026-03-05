@@ -12,6 +12,9 @@ export const getOrganizationName = () =>
     authorizedFetch<string>(ORGANIZATIONS_PATHS.ORGANIZATION_NAME);
 
 export const getOrganizationLanguage = (teamId: string) =>
-    authorizedFetch<{ language: string }>(ORGANIZATIONS_PATHS.ORGANIZATION_LANGUAGE, {
-        params: { teamId },
-    });
+    authorizedFetch<{ language: string }>(
+        ORGANIZATIONS_PATHS.ORGANIZATION_LANGUAGE,
+        {
+            params: { teamId },
+        },
+    );

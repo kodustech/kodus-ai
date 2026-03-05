@@ -130,9 +130,7 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
                 !byokConfig.fallback.apiKey &&
                 !existingConfig?.fallback?.apiKey
             ) {
-                throw new Error(
-                    'apiKey is required for fallback BYOK config',
-                );
+                throw new Error('apiKey is required for fallback BYOK config');
             }
             encryptedFallback = {
                 ...byokConfig.fallback,

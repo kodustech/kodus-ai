@@ -60,8 +60,8 @@ export default function AssignReposModal({ userId }: { userId: string }) {
                 const assignedRepoIds = await getAssignedRepos(userId);
                 const assignedIdsSet = new Set(assignedRepoIds);
 
-                const initiallySelected = safeArray(allRepositories).filter((repo) =>
-                    assignedIdsSet.has(repo.id),
+                const initiallySelected = safeArray(allRepositories).filter(
+                    (repo) => assignedIdsSet.has(repo.id),
                 );
 
                 if (isMounted) {
@@ -160,33 +160,35 @@ export default function AssignReposModal({ userId }: { userId: string }) {
                                         No repository found.
                                     </CommandEmpty>
                                     <CommandGroup>
-                                        {safeArray(allRepositories).map((repository) => (
-                                            <CommandItem
-                                                key={repository.id}
-                                                value={`${repository.organizationName}/${repository.name}`}
-                                                onSelect={() =>
-                                                    handleToggleRepository(
-                                                        repository,
-                                                    )
-                                                }>
-                                                <div className="flex w-full items-center justify-between">
-                                                    <span className="truncate">
-                                                        <span className="text-text-secondary">
-                                                            {
-                                                                repository.organizationName
-                                                            }
-                                                            /
+                                        {safeArray(allRepositories).map(
+                                            (repository) => (
+                                                <CommandItem
+                                                    key={repository.id}
+                                                    value={`${repository.organizationName}/${repository.name}`}
+                                                    onSelect={() =>
+                                                        handleToggleRepository(
+                                                            repository,
+                                                        )
+                                                    }>
+                                                    <div className="flex w-full items-center justify-between">
+                                                        <span className="truncate">
+                                                            <span className="text-text-secondary">
+                                                                {
+                                                                    repository.organizationName
+                                                                }
+                                                                /
+                                                            </span>
+                                                            {repository.name}
                                                         </span>
-                                                        {repository.name}
-                                                    </span>
-                                                    {selectedRepoIds.has(
-                                                        repository.id,
-                                                    ) && (
-                                                        <Check className="text-primary-light -mr-2 size-5" />
-                                                    )}
-                                                </div>
-                                            </CommandItem>
-                                        ))}
+                                                        {selectedRepoIds.has(
+                                                            repository.id,
+                                                        ) && (
+                                                            <Check className="text-primary-light -mr-2 size-5" />
+                                                        )}
+                                                    </div>
+                                                </CommandItem>
+                                            ),
+                                        )}
                                     </CommandGroup>
                                 </CommandList>
                             </Command>

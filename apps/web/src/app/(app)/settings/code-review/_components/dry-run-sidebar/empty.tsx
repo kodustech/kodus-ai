@@ -8,8 +8,8 @@ export const EmptyState = () => (
         <div className="space-y-1">
             <h3 className="text-lg font-semibold">Ready to test?</h3>
             <p className="text-text-tertiary max-w-sm text-sm">
-                Select a closed Pull Request above and run a test to see
-                exactly how Kodus will review code with your current settings.
+                Select a closed Pull Request above and run a test to see exactly
+                how Kodus will review code with your current settings.
             </p>
         </div>
     </div>

@@ -1,0 +1,10 @@
+{
+    "providerType": "jira",
+    "capability": "task.context.read",
+    "tools": [
+        "getJiraIssue",
+        "searchJiraIssuesUsingJql",
+        "search",
+        "fetch"
+    ]
+}

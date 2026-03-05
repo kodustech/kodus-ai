@@ -1,0 +1,591 @@
+[
+    {
+        "input": "@kody we prefer using the :has() selector instead of JavaScript for these CSS cases.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "prefer CSS :has() over JavaScript for these CSS cases"
+        }
+    },
+    {
+        "input": "@kody the `core` domain is special and should always include infrastructure classes, even if the domain name is missing.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "core domain should always include infrastructure classes even if domain name is missing"
+        }
+    },
+    {
+        "input": "@kody we haven't stabilized our API yet, so let it fail fast and loud instead of using defensive guards.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "allow fail fast for unstable API instead of defensive guards"
+        }
+    },
+    {
+        "input": "@kody in this project, we never use an ORM for domain entities.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "never use ORM for domain entities in this project"
+        }
+    },
+    {
+        "input": "@kody this is a game system, so the 'private key' represents in-game access, not actual financial assets.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "in this game system private key means in-game access, not financial assets"
+        }
+    },
+    {
+        "input": "@kody our architecture requires Kodak to publish a message to the SNS topic first, so we use feature flags to handle the transition.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "publish message to SNS topic first as per architecture; use feature flags for transition"
+        }
+    },
+    {
+        "input": "@kody the duplicate mutation is by design for API flexibility, both share the same rate limiting implementation.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "duplicate mutation is intentional for API flexibility and shares same rate limiting"
+        }
+    },
+    {
+        "input": "@kody we use UUIDs for all our database IDs, so a strict string comparison is completely safe here.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "use UUIDs for all database IDs"
+        }
+    },
+    {
+        "input": "@kody we always use dependency injection instead of global mocks in our test files.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "always use dependency injection instead of global mocks in tests"
+        }
+    },
+    {
+        "input": "@kody we use a shared parameter group for all production clusters by design.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "use shared parameter group for all production clusters by design"
+        }
+    },
+    {
+        "input": "@kody o projeto não utiliza ORM e por regra de negócio as entidades não devem ter propriedades nulas por padrão.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "o projeto não utiliza ORM e entidades não devem ter propriedades nulas por padrão"
+        }
+    },
+    {
+        "input": "@kody no nosso sistema, grupos do WhatsApp possuem um ID específico gerado por eles, então eles sempre são tratados como numbers.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "grupos do WhatsApp possuem ID específico e são tratados como numbers"
+        }
+    },
+    {
+        "input": "@kody a API da SEFAZ Bahia funciona de forma síncrona agora, então não precisamos tratar de forma assíncrona.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "API da SEFAZ Bahia é síncrona, não precisa de tratamento assíncrono"
+        }
+    },
+    {
+        "input": "@kody a gente sempre usa o helper sanitize junto com o j para evitar XSS nas views do Rails.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "sempre usar helper sanitize com j para evitar XSS nas views Rails"
+        }
+    },
+    {
+        "input": "@kody a tabela service_access_management já possui index, então a gente prefere usar NOT EXISTS ao invés de LEFT JOIN por questão de legibilidade.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "preferir NOT EXISTS em vez de LEFT JOIN para service_access_management"
+        }
+    },
+    {
+        "input": "@kody nós usamos a classe CodeManagementInterface como abstração para todos os serviços de git, então precisamos manter esse padrão de implementação.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "usar CodeManagementInterface como abstração para serviços de git"
+        }
+    },
+    {
+        "input": "@kody o endpoint não é público, ele funciona apenas para clientes do usuário logado, então não há risco de expor dados abertamente.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "private endpoint only for logged-in user's clients, no risk of open data exposure"
+        }
+    },
+    {
+        "input": "@kody nós garantimos a integridade via banco, então todo produto cadastrado sempre terá um preço associado, o INNER JOIN é intencional.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "garantimos integridade via banco, todo produto tem preço, usar INNER JOIN é intencional"
+        }
+    },
+    {
+        "input": "@kody a duplicação aqui é intencional para evitar problemas de contexto com o before_action que poderia gerar um DoubleRenderError.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "intentional duplication to avoid DoubleRenderError with before_action context"
+        }
+    },
+    {
+        "input": "@kody fila com mode sequential não utiliza o prefetch na nossa configuração, apenas as de mode concurrent.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "fila mode sequential não usa prefetch; apenas mode concurrent usa"
+        }
+    },
+    {
+        "input": "@kody los criterios se usan solo para validar el IF si le pego a un endpoint o al otro, no para pasarlos como parámetro.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "Criteria is used only for IF validation to determine which endpoint is hit, not as a parameter to be passed."
+        }
+    },
+    {
+        "input": "@kody si la variable de entorno no existe debe fallar en el arranque, no queremos que la app levante con un valor inválido o por defecto.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "falhar no arranque se variável de ambiente não existir"
+        }
+    },
+    {
+        "input": "@kody esto se resuelve en la configuración, nunca asignamos una cadena vacía si no hay variable de entorno.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "nunca atribuir string vazia quando variável de ambiente não existe"
+        }
+    },
+    {
+        "input": "@kody please remember that we never commit `.env` files to the repository.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "never commit .env files to the repository"
+        }
+    },
+    {
+        "input": "@kody make a note: always use `React.FC` when defining functional components in this project.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "always use React.FC when defining functional components"
+        }
+    },
+    {
+        "input": "@kody save this to your memory: our primary database is PostgreSQL, not MySQL.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "primary database is PostgreSQL, not MySQL"
+        }
+    },
+    {
+        "input": "@kody remember, we don't use the default export in TypeScript files, only named exports.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "use named exports only in TypeScript files"
+        }
+    },
+    {
+        "input": "@kody memorize this rule: all new components must have a corresponding `.test.tsx` file.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "all new components must have a corresponding .test.tsx file"
+        }
+    },
+    {
+        "input": "@kody from now on, remember that we use `styled-components` for styling, not CSS modules.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "use styled-components instead of CSS modules"
+        }
+    },
+    {
+        "input": "@kody add this to your memory: the maximum line length for our linter is 120 characters.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "maximum linter line length is 120 characters"
+        }
+    },
+    {
+        "input": "@kody please remember to never suggest `eval()` under any circumstances.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "never suggest eval()"
+        }
+    },
+    {
+        "input": "@kody store this preference: we enforce strict null checks in all our TypeScript configurations.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "enforce strict null checks in TypeScript configuration"
+        }
+    },
+    {
+        "input": "@kody lembre-se que neste projeto nós sempre utilizamos `async/await` ao invés de `.then()`.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "usar async/await ao invés de .then()"
+        }
+    },
+    {
+        "input": "@kody grave essa informação: todas as rotas da API devem ser prefixadas com `/api/v1`.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "API routes must be prefixed with /api/v1"
+        }
+    },
+    {
+        "input": "@kody anota aí para o futuro: não usamos Redux neste projeto, o gerenciamento de estado global é feito com Zustand.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "do not use Redux; use Zustand for global state"
+        }
+    },
+    {
+        "input": "@kody por favor, lembre-se de nunca sugerir alterações no arquivo `package-lock.json` manualmente.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "never suggest manual edits to package-lock.json"
+        }
+    },
+    {
+        "input": "@kody guarde na memória: o deploy de produção acontece automaticamente ao fazer merge na branch `main`.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "production deploy happens automatically on merge to main branch"
+        }
+    },
+    {
+        "input": "@kody memorize esta regra: variáveis de ambiente expostas no frontend devem sempre começar com `NEXT_PUBLIC_`.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "frontend-exposed environment variables must start with NEXT_PUBLIC_"
+        }
+    },
+    {
+        "input": "@kody recuerda que siempre debemos manejar las excepciones globales en el componente `ErrorBoundary`.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "global exceptions should be handled by ErrorBoundary"
+        }
+    },
+    {
+        "input": "@kody guarda esto en tu memoria: la autenticación se realiza siempre mediante tokens JWT enviados en los headers.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "authentication is done via JWT tokens in headers"
+        }
+    },
+    {
+        "input": "@kody haz una nota mental: no usamos la librería Lodash aquí, preferimos usar los métodos nativos de los arrays de JavaScript.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "prefer native JavaScript array methods over Lodash"
+        }
+    },
+    {
+        "input": "@kody recuerda, para manipular fechas siempre utilizamos la librería `date-fns` en lugar de `moment.js`.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "use date-fns instead of moment.js for date handling"
+        }
+    },
+    {
+        "input": "@kody por favor recuerda que los nombres de las tablas en nuestra base de datos siempre van en plural y snake_case.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "database table names should be plural and snake_case"
+        }
+    },
+    {
+        "input": "@kody do you remember what we decided about the database schema yesterday?",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody I prefer to just hardcode it for this specific test so we can move on.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "allow hardcoding values in tests for expediency when appropriate"
+        }
+    },
+    {
+        "input": "@kody I can't remember the exact syntax for the `reduce` function.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody remember to close the database connection after you run this specific script.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "close database connection after running this specific script"
+        }
+    },
+    {
+        "input": "@kody what are the coding standards we usually prefer?",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody we prefer doing the deployment on Fridays, right?",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody for this specific component, we don't use the standard padding.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "this specific component does not use standard padding"
+        }
+    },
+    {
+        "input": "@kody we generally use AWS for everything, but for this tiny project let's just use Vercel.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "prefer AWS for everything except this tiny project where we use Vercel"
+        }
+    },
+    {
+        "input": "@kody remember that bug we spent three hours trying to fix last week?",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody eu não lembro qual foi a branch que eu criei para essa feature.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody você lembra se já rodamos as migrations de produção ontem?",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody apenas dessa vez, eu prefiro que você me explique passo a passo em vez de dar o código.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody nós preferimos usar o padrão Factory aqui, ou acha melhor um Builder?",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody recuerda revisar el log de errores antes de responder a este mensaje.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody no recuerdo la contraseña de la base de datos de staging.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody prefiero usar `console.log` aquí solo para debugear rápido este problema.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody ¿recuerdas por qué decidimos quitar esta función en el PR anterior?",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody guarda este archivo temporalmente mientras revisamos el otro controlador.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody can you summarize the PR in 3 bullet points?",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody thanks, that helped a lot 🙌",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody what does this error mean? \"Cannot read properties of undefined\"",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody please rewrite this comment to be more polite for the PR discussion.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody can you translate this review note to Portuguese?",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody I only need a quick answer: should we squash or rebase this branch?",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody list the repositories available for this team so I can choose one.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody fetch all open pull requests created this week by jairo.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody show me commit history for the api repository on branch main.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody get PR #128 details from repository kodus-ai.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody retrieve the full diff for PR #128 so we can review all changes.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody list active Kody Rules at the organization level.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody create a Kody issue for this bug in src/auth/token.ts with severity high.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody remember this only for today: skip flaky tests while we finish the release.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody save this in memory just for this PR: ignore the linter warning in this file.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody memorize this temporary hotfix until we deploy tomorrow morning.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody make a mental note to ping João tomorrow about the staging outage.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody store this in memory: the staging token is abc123 (we will rotate it later).",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody remember to rerun this script once after lunch and then forget it.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody, in this microservice, we strictly follow the 'Hexagonal Architecture'. Business logic must stay in the `domain` layer and have zero dependencies on the `infrastructure` layer.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "Follow Hexagonal Architecture: domain layer must have zero dependencies on infrastructure layer."
+        }
+    },
+    {
+        "input": "@kody, for the payment processing module, never use floating-point numbers for currency. Always use the `Money` value object or integers representing cents.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "Never use floats for currency; use Money value object or integer cents."
+        }
+    },
+    {
+        "input": "@kody, we are currently migrating from AWS SDK v2 to v3. If you see v2 imports in new PRs, flag them as blockers.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "Block AWS SDK v2 imports; require migration to v3 for new code."
+        }
+    },
+    {
+        "input": "@kody, don't worry about the lack of unit tests for the `LegacyConnector` class; it's scheduled for deletion next month.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "Exclude LegacyConnector class from unit test requirements as it is deprecated."
+        }
+    },
+    {
+        "input": "@kody, when reviewing SQL, prioritize `EXISTS` over `COUNT(*)` for existence checks. Our DBA found it performs significantly better on our Postgres clusters.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "Prefer EXISTS over COUNT(*) for existence checks for Postgres performance."
+        }
+    },
+    {
+        "input": "@kody, for this specific refactor, please ignore the cyclomatic complexity warnings. I'll fix them in a separate ticket.",
+        "shouldCreateMemory": false,
+        "explanation": "Transient instruction for a specific PR/moment, not a long-term rule."
+    },
+    {
+        "input": "@kody, memorize this: any function that interacts with the `UserStore` must be wrapped in our internal `withAuditLog` HOC for SOC2 compliance.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "Wrap UserStore interactions in withAuditLog HOC for SOC2 compliance."
+        }
+    },
+    {
+        "input": "@kody, we use a custom 'Internal-' prefix for all our custom headers. Never use standard 'X-' prefixes.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "Use 'Internal-' prefix for custom headers instead of 'X-'."
+        }
+    },
+    {
+        "input": "@kody, for the next 2 hours, please focus only on finding potential race conditions in this PR.",
+        "shouldCreateMemory": false
+    },
+    {
+        "input": "@kody, note that we favor composition over inheritance in our React components. If you see deep inheritance chains, suggest a refactor using hooks.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "Favor composition over inheritance; suggest hooks to replace deep inheritance."
+        }
+    },
+    {
+        "input": "@kody, please remember that we use `camelCase` for JSON keys in the API, but `snake_case` for database columns.",
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "Use camelCase for API JSON keys and snake_case for database columns."
+        }
+    }
+]

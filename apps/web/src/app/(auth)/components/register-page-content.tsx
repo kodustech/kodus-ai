@@ -123,9 +123,7 @@ const GetStarted = () => {
 
             <p className="text-text-secondary text-center text-xs">
                 By creating an account, you agree to our{" "}
-                <Link
-                    target="_blank"
-                    href="https://kodus.io/en/terms-of-use/">
+                <Link target="_blank" href="https://kodus.io/en/terms-of-use/">
                     Terms of Service
                 </Link>{" "}
                 and{" "}
@@ -413,17 +411,18 @@ const formSchema = z
             .string()
             .trim()
             .min(1, {
-                error: "Enter your name"
+                error: "Enter your name",
             })
             .regex(/^[\p{L}\s'-]+$/u, {
-                error: "Name can only contain letters, spaces, hyphens and apostrophes"
+                error: "Name can only contain letters, spaces, hyphens and apostrophes",
             }),
-        email: z.email({
-                        error: "Invalid email address"
-                    })
-                    .min(1, {
-                        error: "Enter your email"
-                    })
+        email: z
+            .email({
+                error: "Invalid email address",
+            })
+            .min(1, {
+                error: "Enter your email",
+            })
             .refine(
                 (email) => {
                     const [, domain] = email.split("@");
@@ -440,7 +439,7 @@ const formSchema = z
                     );
                 },
                 {
-                    error: "Please use a corporate email address"
+                    error: "Please use a corporate email address",
                 },
             )
             .refine(async (email) => {
@@ -454,16 +453,18 @@ const formSchema = z
             }, "The email is already in use"),
         password: z
             .string({
-                error: (issue) => issue.input === undefined ? "Enter a password" : undefined
+                error: (issue) =>
+                    issue.input === undefined ? "Enter a password" : undefined,
             })
             .min(8, {
-                error: "Invalid password"
+                error: "Invalid password",
             })
             .regex(/^(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).+$/, {
-                error: "Password must include at least 1 uppercase letter, 1 number, and 1 special character"
+                error: "Password must include at least 1 uppercase letter, 1 number, and 1 special character",
             }),
         confirmPassword: z.string({
-            error: (issue) => issue.input === undefined ? "Confirm your password" : undefined
+            error: (issue) =>
+                issue.input === undefined ? "Confirm your password" : undefined,
         }),
     })
 

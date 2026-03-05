@@ -3,7 +3,7 @@
 import { IssueSeverityLevelBadge } from "@components/system/issue-severity-level-badge";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader } from "@components/ui/card";
+import { Card, CardContent, CardHeader } from "@components/ui/card";
 import { Heading } from "@components/ui/heading";
 import { Link } from "@components/ui/link";
 import { magicModal } from "@components/ui/magic-modal";
@@ -14,26 +14,29 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
-import { Callout } from "@radix-ui/themes";
-import type { KodyRuleWithInheritanceDetails } from "@services/kodyRules/types";
+import {
+    KodyRulesType,
+    type KodyRuleWithInheritanceDetails,
+} from "@services/kodyRules/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { EditIcon, EyeIcon, InfoIcon, TrashIcon } from "lucide-react";
+import { EditIcon, EyeIcon, TrashIcon } from "lucide-react";
+import { SuggestionsModal } from "src/app/(app)/library/kody-rules/_components/suggestions-modal";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
-import { cn } from "src/core/utils/components";
 import { addSearchParamsToUrl } from "src/core/utils/url";
 
 import { DeleteKodyRuleConfirmationModal } from "../../../_components/delete-confirmation-modal";
 import { useCodeReviewRouteParams } from "../../../../_hooks";
 import { ExternalReferencesDisplay } from "../../pr-summary/_components/external-references-display";
-import { SuggestionsModal } from "src/app/(app)/library/kody-rules/_components/suggestions-modal";
 
 export const KodyRuleItem = ({
     rule,
+    tab,
     onAnyChange,
     showSuggestionsButton = false,
 }: {
     rule: KodyRuleWithInheritanceDetails;
+    tab: "review-rules" | "memories";
     onAnyChange: () => void;
     showSuggestionsButton?: boolean;
 }) => {
@@ -52,13 +55,18 @@ export const KodyRuleItem = ({
 
     const isInherited = !!rule.inherited;
     const isExcluded = isInherited && !!rule.excluded;
+    const isMemory =
+        (rule.type ?? KodyRulesType.STANDARD) === KodyRulesType.MEMORY;
+    const entityLabel = isMemory ? "memory" : "rule";
 
     return (
         <Card>
             <CardHeader className="flex-row items-start justify-between gap-10">
                 <div className="-mb-2 flex flex-col gap-2">
                     <div className="flex flex-wrap items-center gap-2">
-                        <IssueSeverityLevelBadge severity={rule.severity} />
+                        {!isMemory && (
+                            <IssueSeverityLevelBadge severity={rule.severity} />
+                        )}
 
                         {rule.sourcePath && (
                             <Badge
@@ -82,8 +90,8 @@ export const KodyRuleItem = ({
 
                                 <TooltipContent>
                                     <p>
-                                        This rule is inherited and cannot be
-                                        edited or deleted here.
+                                        This {entityLabel} is inherited and
+                                        cannot be edited or deleted here.
                                     </p>
                                     <p>
                                         Click the eye icon to view its details
@@ -106,8 +114,8 @@ export const KodyRuleItem = ({
 
                                 <TooltipContent>
                                     <p>
-                                        This rule is inherited but disabled for
-                                        this scope.
+                                        This {entityLabel} is inherited but
+                                        disabled for this scope.
                                     </p>
                                     <p>
                                         Click the eye icon to view its details
@@ -125,13 +133,17 @@ export const KodyRuleItem = ({
 
                 <div className="flex items-center gap-2">
                     {showSuggestionsButton && rule.uuid && (
-                        <SuggestionsModal ruleId={rule.uuid} ruleTitle={rule.title} variant="icon" />
+                        <SuggestionsModal
+                            ruleId={rule.uuid}
+                            ruleTitle={rule.title}
+                            variant="icon"
+                        />
                     )}
 
                     <Link
                         href={addSearchParamsToUrl(
                             `/settings/code-review/${repositoryId}/kody-rules/${rule.uuid}`,
-                            { directoryId, teamId },
+                            { directoryId, teamId, tab },
                         )}>
                         <Button
                             decorative
@@ -172,11 +184,15 @@ export const KodyRuleItem = ({
                         <div className="flex flex-row">
                             <Section.Root className="flex-1">
                                 <Section.Header>
-                                    <Section.Title>Path:</Section.Title>
+                                    <Section.Title>
+                                        {isMemory ? "Applies to:" : "Path:"}
+                                    </Section.Title>
                                 </Section.Header>
 
                                 <Section.Content>
-                                    {rule.path || "all files (default)"}
+                                    {isMemory
+                                        ? "All prompts and conversations"
+                                        : rule.path || "all files (default)"}
                                 </Section.Content>
                             </Section.Root>
 
@@ -201,22 +217,28 @@ export const KodyRuleItem = ({
                                 </>
                             )}
 
-                            <Separator
-                                orientation="vertical"
-                                className="bg-card-lv2 mx-4"
-                            />
+                            {!isMemory && (
+                                <>
+                                    <Separator
+                                        orientation="vertical"
+                                        className="bg-card-lv2 mx-4"
+                                    />
 
-                            <Section.Root className="flex-1 shrink">
-                                <Section.Header>
-                                    <Section.Title>Scope:</Section.Title>
-                                </Section.Header>
+                                    <Section.Root className="flex-1 shrink">
+                                        <Section.Header>
+                                            <Section.Title>
+                                                Scope:
+                                            </Section.Title>
+                                        </Section.Header>
 
-                                <Section.Content>
-                                    {rule.scope === "pull-request"
-                                        ? "Pull-request"
-                                        : "File"}
-                                </Section.Content>
-                            </Section.Root>
+                                        <Section.Content>
+                                            {rule.scope === "pull-request"
+                                                ? "Pull-request"
+                                                : "File"}
+                                        </Section.Content>
+                                    </Section.Root>
+                                </>
+                            )}
                         </div>
 
                         <Separator className="bg-card-lv2 my-3" />
@@ -230,11 +252,13 @@ export const KodyRuleItem = ({
                                 {rule.rule}
                             </Section.Content>
 
-                            <ExternalReferencesDisplay 
+                            <ExternalReferencesDisplay
                                 externalReferences={{
                                     references: rule.externalReferences || [],
                                     syncErrors: rule.syncErrors || [],
-                                    processingStatus: rule.referenceProcessingStatus || "completed"
+                                    processingStatus:
+                                        rule.referenceProcessingStatus ||
+                                        "completed",
                                 }}
                                 compact
                             />

@@ -13,7 +13,7 @@
  *
  * Datasets should contain examples with:
  *   Input:  { changedFiles: FileChange[] (with diffs), changedFilenames: string[] }
- *   Output: { expectedSymbols: string[], expectedRiskLevels: Record<string, string>, knownConsumerFiles?: string[] }
+ *   Output: { expectedSymbols: string[], expectedUpstreamSymbols?: string[], expectedRiskLevels: Record<string, string>, knownConsumerFiles?: string[] }
  */
 
 import * as dotenv from 'dotenv';
@@ -272,7 +272,7 @@ function queryValidityEvaluator(args: {
 }
 
 /**
- * False Positive Rate: queries without match in expectedSymbols.
+ * False Positive Rate: queries without match in expectedSymbols or expectedUpstreamSymbols.
  * Target: <= 30% (score = 1 - falsePositiveRate)
  */
 function falsePositiveRateEvaluator(args: {
@@ -281,20 +281,22 @@ function falsePositiveRateEvaluator(args: {
 }): EvaluationResult {
     const queries = ((args.outputs?.queries ?? []) as PlannerQuery[]);
     const expected = ((args.referenceOutputs?.expectedSymbols ?? []) as string[]);
+    const expectedUpstream = ((args.referenceOutputs?.expectedUpstreamSymbols ?? []) as string[]);
+    const allExpected = [...expected, ...expectedUpstream];
 
     if (queries.length === 0) {
         return { key: 'false_positive_rate', score: 1.0, comment: 'No queries generated.' };
     }
 
-    const expectedLower = new Set(expected.map((s) => s.toLowerCase()));
+    const allExpectedLower = new Set(allExpected.map((s) => s.toLowerCase()));
     let falsePositives = 0;
 
     for (const q of queries) {
         const sym = q.symbolName?.toLowerCase();
-        const patternMatchesExpected = expected.some((s) =>
+        const patternMatchesExpected = allExpected.some((s) =>
             q.pattern.toLowerCase().includes(s.toLowerCase()),
         );
-        if (!sym || (!expectedLower.has(sym) && !patternMatchesExpected)) {
+        if (!sym || (!allExpectedLower.has(sym) && !patternMatchesExpected)) {
             falsePositives++;
         }
     }
@@ -307,6 +309,95 @@ function falsePositiveRateEvaluator(args: {
         key: 'false_positive_rate',
         score,
         comment: `${falsePositives}/${queries.length} queries are false positives (rate: ${(falsePositiveRate * 100).toFixed(1)}%).`,
+    };
+}
+
+/**
+ * Upstream Coverage: % of expectedUpstreamSymbols found in generated queries.
+ * Target: >= 50%
+ */
+function upstreamCoverageEvaluator(args: {
+    outputs?: Record<string, unknown>;
+    referenceOutputs?: Record<string, unknown>;
+}): EvaluationResult {
+    const queries = ((args.outputs?.queries ?? []) as PlannerQuery[]);
+    const expectedUpstream = ((args.referenceOutputs?.expectedUpstreamSymbols ?? []) as string[]);
+
+    if (expectedUpstream.length === 0) {
+        return { key: 'upstream_coverage', score: 1.0, comment: 'No expected upstream symbols defined.' };
+    }
+
+    const queriedSymbols = new Set(
+        queries
+            .map((q) => q.symbolName?.toLowerCase())
+            .filter(Boolean),
+    );
+    const queryPatterns = queries.map((q) => q.pattern.toLowerCase());
+
+    let matched = 0;
+    for (const sym of expectedUpstream) {
+        const lower = sym.toLowerCase();
+        if (
+            queriedSymbols.has(lower) ||
+            queryPatterns.some((p) => p.includes(lower))
+        ) {
+            matched++;
+        }
+    }
+
+    const score = matched / expectedUpstream.length;
+    return {
+        key: 'upstream_coverage',
+        score,
+        comment: `${matched}/${expectedUpstream.length} expected upstream symbols covered (${(score * 100).toFixed(1)}%).`,
+    };
+}
+
+/**
+ * Category Coverage: checks if queries cover multiple search categories via
+ * heuristic keywords in query rationale text.
+ * Categories: consumer/caller, symmetric/counterpart, test/spec, config/limit, upstream/dependency
+ * Score = categoriesFound / 4 (excluding the triggering category itself).
+ * Target: >= 50%
+ */
+function categoryCoverageEvaluator(args: {
+    outputs?: Record<string, unknown>;
+}): EvaluationResult {
+    const queries = ((args.outputs?.queries ?? []) as PlannerQuery[]);
+
+    if (queries.length === 0) {
+        return { key: 'category_coverage', score: 0, comment: 'No queries generated.' };
+    }
+
+    const allRationales = queries
+        .map((q) => (q.rationale ?? '').toLowerCase())
+        .join(' ');
+    const allSymbols = queries
+        .map((q) => `${q.symbolName ?? ''} ${q.pattern ?? ''}`.toLowerCase())
+        .join(' ');
+    const combined = `${allRationales} ${allSymbols}`;
+
+    const categoryKeywords: [string, string[]][] = [
+        ['consumer', ['consumer', 'caller', 'call site', 'usage', 'invocation', 'import']],
+        ['symmetric', ['symmetric', 'counterpart', 'sibling', 'related', 'mirror', 'write', 'read', 'get', 'set']],
+        ['test', ['test', 'spec', 'assert', 'expect', 'mock', 'fixture', 'describe', 'it(']],
+        ['config', ['config', 'limit', 'threshold', 'constant', 'env', 'setting', 'max_', 'min_']],
+        ['upstream', ['upstream', 'dependency', 'depend', 'import', 'require', 'from', 'provider', 'inject']],
+    ];
+
+    const found = new Set<string>();
+    for (const [category, keywords] of categoryKeywords) {
+        if (keywords.some((kw) => combined.includes(kw))) {
+            found.add(category);
+        }
+    }
+
+    // Score out of 4 (we expect at least some category diversity)
+    const score = Math.min(found.size / 4, 1.0);
+    return {
+        key: 'category_coverage',
+        score,
+        comment: `${found.size}/5 categories detected: ${Array.from(found).join(', ')} (score=${(score * 100).toFixed(1)}%).`,
     };
 }
 
@@ -406,6 +497,8 @@ const THRESHOLDS = {
     risk_accuracy: 0.6,
     query_validity: 1.0,
     false_positive_rate: 0.7, // score >= 0.7 means FP rate <= 30%
+    upstream_coverage: 0.5,
+    category_coverage: 0.5,
 };
 
 async function main() {
@@ -431,6 +524,8 @@ async function main() {
         riskAccuracyEvaluator as unknown as EvaluatorT,
         queryValidityEvaluator as unknown as EvaluatorT,
         falsePositiveRateEvaluator as unknown as EvaluatorT,
+        upstreamCoverageEvaluator as unknown as EvaluatorT,
+        categoryCoverageEvaluator as unknown as EvaluatorT,
     ];
 
     const results = await evaluate(plannerTarget, {

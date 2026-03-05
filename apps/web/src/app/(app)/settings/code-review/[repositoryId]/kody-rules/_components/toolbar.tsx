@@ -20,12 +20,14 @@ type KodyRulesToolbarProps = {
     filterQuery: string;
     onFilterQueryChange: (query: string) => void;
     isDisabled: boolean;
+    entityLabel?: "rules" | "memories";
 } & FilterPopoverContentProps;
 
 export const KodyRulesToolbar = ({
     filterQuery,
     onFilterQueryChange,
     isDisabled,
+    entityLabel = "rules",
     visibleScopes,
     onVisibleScopesChange,
     isRepoView,
@@ -38,9 +40,13 @@ export const KodyRulesToolbar = ({
                 value={filterQuery}
                 leftIcon={<SearchIcon />}
                 onChange={(e) => onFilterQueryChange(e.target.value)}
-                placeholder="Search for titles, paths or instructions"
+                placeholder={
+                    entityLabel === "memories"
+                        ? "Search for titles or instructions"
+                        : "Search for titles, paths or instructions"
+                }
                 disabled={isDisabled}
-                className="flex-grow"
+                className="grow"
             />
             <Popover>
                 <PopoverTrigger asChild>
@@ -78,6 +84,7 @@ type FilterPopoverContentProps = {
     onVisibleScopesChange: (scopes: VisibleScopes) => void;
     isRepoView: boolean; // Viewing a repository (not a directory within it)
     isGlobalView: boolean; // Viewing the global config
+    entityLabel?: "rules" | "memories";
 };
 
 export const FilterPopoverContent = ({
@@ -85,11 +92,12 @@ export const FilterPopoverContent = ({
     onVisibleScopesChange,
     isRepoView,
     isGlobalView,
+    entityLabel = "rules",
 }: FilterPopoverContentProps) => {
     if (isGlobalView) {
         return (
             <p className="text-text-secondary text-sm">
-                Global rules do not inherit from other scopes.
+                Global {entityLabel} do not inherit from other scopes.
             </p>
         );
     }
@@ -110,7 +118,7 @@ export const FilterPopoverContent = ({
                     View Options
                 </h4>
                 <p className="text-text-secondary text-sm">
-                    Show or hide rules from different scopes.
+                    Show or hide {entityLabel} from different scopes.
                 </p>
             </div>
             <div className="grid gap-2">

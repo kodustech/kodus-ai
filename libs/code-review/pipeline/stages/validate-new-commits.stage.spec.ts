@@ -171,7 +171,9 @@ describe('ValidateNewCommitsStage', () => {
                 dataExecution: { lastAnalyzedCommit: 'sha-1' },
             },
         );
-        mockAutomationExecutionService.hasStageWithStatus.mockResolvedValue(true);
+        mockAutomationExecutionService.hasStageWithStatus.mockResolvedValue(
+            true,
+        );
 
         const oldCommit = { sha: 'sha-1' };
         mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
@@ -182,7 +184,9 @@ describe('ValidateNewCommitsStage', () => {
 
         expect(result.statusInfo?.status).not.toBe(AutomationStatus.SKIPPED);
         expect(result.pipelineMetadata?.forceFullRerun).toBe(true);
-        expect(mockAutomationExecutionService.hasStageWithStatus).toHaveBeenCalledWith(
+        expect(
+            mockAutomationExecutionService.hasStageWithStatus,
+        ).toHaveBeenCalledWith(
             'exec-1',
             ['PRLevelReviewStage', 'FileAnalysisStage'],
             [AutomationStatus.PARTIAL_ERROR, AutomationStatus.ERROR],

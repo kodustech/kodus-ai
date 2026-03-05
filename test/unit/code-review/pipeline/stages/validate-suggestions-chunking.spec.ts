@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ValidateSuggestionsStage } from '@libs/code-review/pipeline/stages/validate-suggestions.stage';
 import { AST_ANALYSIS_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/ASTAnalysisService.contract';
-import { CodeSuggestion, FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    CodeSuggestion,
+    FileChange,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 // Mock logger
 jest.mock('@kodus/flow', () => ({
@@ -134,25 +137,17 @@ describe('ValidateSuggestionsStage – maxInputTokens file skip', () => {
 
     describe('when maxInputTokens is 0 or null', () => {
         it('should treat maxInputTokens=0 as not configured', async () => {
-            const files = [
-                makeFile('big.ts', generateContent(50000, 'big')),
-            ];
+            const files = [makeFile('big.ts', generateContent(50000, 'big'))];
             const suggestions = [makeSuggestion('s1', 'big.ts')];
 
-            await stageAny.prepareValidationCandidates(
-                suggestions,
-                files,
-                0,
-            );
+            await stageAny.prepareValidationCandidates(suggestions, files, 0);
 
             // File should NOT be skipped
             expect(applyEdit).toHaveBeenCalledTimes(1);
         });
 
         it('should treat maxInputTokens=null as not configured', async () => {
-            const files = [
-                makeFile('big.ts', generateContent(50000, 'big')),
-            ];
+            const files = [makeFile('big.ts', generateContent(50000, 'big'))];
             const suggestions = [makeSuggestion('s1', 'big.ts')];
 
             await stageAny.prepareValidationCandidates(

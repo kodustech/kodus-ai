@@ -69,7 +69,11 @@ const McpProviderLogo = ({
             {Icon ? (
                 <Icon className={iconClasses} />
             ) : (
-                <span className={cn("text-text-secondary font-semibold", textClasses)}>
+                <span
+                    className={cn(
+                        "text-text-secondary font-semibold",
+                        textClasses,
+                    )}>
                     {getProviderInitials(provider)}
                 </span>
             )}
@@ -141,7 +145,10 @@ export const McpProvidersBadge = ({
                             <div
                                 key={provider}
                                 className="bg-card-lv3 flex items-center gap-1.5 rounded-full py-1 pr-2.5 pl-1.5">
-                                <McpProviderLogo provider={provider} size="sm" />
+                                <McpProviderLogo
+                                    provider={provider}
+                                    size="sm"
+                                />
                                 <span className="text-text-primary text-xs font-medium">
                                     {provider}
                                 </span>

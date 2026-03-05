@@ -1,0 +1,232 @@
+[
+  {
+    "description": "mq-001-tests-di-over-global-mocks (should-call)",
+    "vars": {
+      "caseId": "mq-001-tests-di-over-global-mocks",
+      "conversation": "@kody replying to your review on this test: here we always keep dependency injection, not global mocks, even if it's shorter.",
+      "contextSnippets": "[\n  {\n    \"id\": \"snippet-1\",\n    \"source\": \"apps/api/src/auth/auth.service.spec.ts\",\n    \"language\": \"typescript\",\n    \"code\": \"describe('AuthService', () => {\\n  let service: AuthService;\\n\\n  beforeEach(async () => {\\n    const moduleRef = await Test.createTestingModule({\\n      providers: [\\n        AuthService,\\n        { provide: UserRepo, useValue: createUserRepoStub() },\\n      ],\\n    }).compile();\\n\\n    service = moduleRef.get(AuthService);\\n  });\\n\\n  it('returns token', async () => {\\n    const token = await service.login('u', 'p');\\n    expect(token).toBeDefined();\\n  });\\n});\\n\\nfunction buildJwtPayload(userId: string) {\\n  return { sub: userId, scope: ['api'] };\\n}\"\n  }\n]",
+      "shouldCreateMemory": "true",
+      "expectedTriggerType": "implicit",
+      "expectedRule": "always use dependency injection instead of global mocks in tests",
+      "expectedReason": "",
+      "expectedToolName": "KODUS_CREATE_MEMORY",
+      "additionalInformation": "{\n  \"gitUser\": {\n    \"id\": 900001,\n    \"username\": \"dataset-user-1\"\n  },\n  \"userQuestion\": \"@kody replying to your review on this test: here we always keep dependency injection, not global mocks, even if it's shorter.\",\n  \"repository\": {\n    \"id\": \"repo-apps\",\n    \"name\": \"apps\",\n    \"defaultBranch\": \"main\"\n  },\n  \"pullRequestDescription\": \"A pull request\",\n  \"platformType\": \"github\",\n  \"pullRequest\": {\n    \"pullRequestNumber\": 1001,\n    \"headRef\": \"feature/foo-1\",\n    \"baseRef\": \"main\"\n  },\n  \"codeManagementContext\": {\n    \"originalComment\": {\n      \"suggestionCommentId\": \"kody-suggestion-1\",\n      \"suggestionFilePath\": \"apps/api/src/auth/auth.service.spec.ts\",\n      \"suggestionText\": \"Consider adjusting this implementation.\\n\\ndescribe('AuthService', () => {\\n  let service: AuthService;\\n\\n  beforeEach(async () => {\\n    const moduleRef = await Test.createTestingModule({\\n      providers: [\\n        AuthService,\\n        { provide: UserRepo, useValue: createUserRepoStub() },\\n      ],\\n    }).compile();\\n\\n    service = moduleRef.get(AuthService);\\n  });\\n\\n  it('returns token', async () => {\\n    const token = await service.login('u', 'p');\\n    expect(token).toBeDefined();\\n  });\\n});\\n\\nfunction buildJwtPayload(userId: string) {\\n  return { sub: userId, scope: ['api'] };\\n}\",\n      \"diffHunk\": \"describe('AuthService', () => {\\n  let service: AuthService;\\n\\n  beforeEach(async () => {\\n    const moduleRef = await Test.createTestingModule({\\n      providers: [\\n        AuthService,\\n        { provide: UserRepo, useValue: createUserRepoStub() },\\n      ],\\n    }).compile();\\n\\n    service = moduleRef.get(AuthService);\\n  });\\n\\n  it('returns token', async () => {\\n    const token = await service.login('u', 'p');\\n    expect(token).toBeDefined();\\n  });\\n});\\n\\nfunction buildJwtPayload(userId: string) {\\n  return { sub: userId, scope: ['api'] };\\n}\"\n    },\n    \"othersReplies\": []\n  }\n}",
+      "threadId": "mq-thread-1",
+      "sessionId": "mq-session-1",
+      "correlationId": "mq-correlation-1"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://memory-quality-llm-judge-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "mq-002-postgres-primary-db (should-call)",
+    "vars": {
+      "caseId": "mq-002-postgres-primary-db",
+      "conversation": "@kody on this DB config suggestion, please remember our standard: PostgreSQL is our primary database, not MySQL.",
+      "contextSnippets": "[\n  {\n    \"id\": \"snippet-1\",\n    \"source\": \"libs/core/src/database/connection.factory.ts\",\n    \"language\": \"typescript\",\n    \"code\": \"export class ConnectionFactory {\\n  static build(env: NodeJS.ProcessEnv) {\\n    if (env.API_PG_DB_HOST) return new PostgresConnection(env);\\n    if (env.MYSQL_HOST) return new MysqlConnection(env);\\n    throw new Error('No supported DB configured');\\n  }\\n}\\n\\nexport class HealthProbe {\\n  ping() {\\n    return { ok: true, ts: Date.now() };\\n  }\\n}\"\n  }\n]",
+      "shouldCreateMemory": "true",
+      "expectedTriggerType": "explicit",
+      "expectedRule": "primary database is PostgreSQL, not MySQL",
+      "expectedReason": "",
+      "expectedToolName": "KODUS_CREATE_MEMORY",
+      "additionalInformation": "{\n  \"gitUser\": {\n    \"id\": 900002,\n    \"username\": \"dataset-user-2\"\n  },\n  \"userQuestion\": \"@kody on this DB config suggestion, please remember our standard: PostgreSQL is our primary database, not MySQL.\",\n  \"repository\": {\n    \"id\": \"repo-libs\",\n    \"name\": \"libs\",\n    \"defaultBranch\": \"main\"\n  },\n  \"pullRequestDescription\": \"A pull request\",\n  \"platformType\": \"github\",\n  \"pullRequest\": {\n    \"pullRequestNumber\": 1002,\n    \"headRef\": \"feature/foo-2\",\n    \"baseRef\": \"main\"\n  },\n  \"codeManagementContext\": {\n    \"originalComment\": {\n      \"suggestionCommentId\": \"kody-suggestion-2\",\n      \"suggestionFilePath\": \"libs/core/src/database/connection.factory.ts\",\n      \"suggestionText\": \"Consider adjusting this implementation.\\n\\nexport class ConnectionFactory {\\n  static build(env: NodeJS.ProcessEnv) {\\n    if (env.API_PG_DB_HOST) return new PostgresConnection(env);\\n    if (env.MYSQL_HOST) return new MysqlConnection(env);\\n    throw new Error('No supported DB configured');\\n  }\\n}\\n\\nexport class HealthProbe {\\n  ping() {\\n    return { ok: true, ts: Date.now() };\\n  }\\n}\",\n      \"diffHunk\": \"export class ConnectionFactory {\\n  static build(env: NodeJS.ProcessEnv) {\\n    if (env.API_PG_DB_HOST) return new PostgresConnection(env);\\n    if (env.MYSQL_HOST) return new MysqlConnection(env);\\n    throw new Error('No supported DB configured');\\n  }\\n}\\n\\nexport class HealthProbe {\\n  ping() {\\n    return { ok: true, ts: Date.now() };\\n  }\\n}\"\n    },\n    \"othersReplies\": []\n  }\n}",
+      "threadId": "mq-thread-2",
+      "sessionId": "mq-session-2",
+      "correlationId": "mq-correlation-2"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://memory-quality-llm-judge-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "mq-005-sql-exists-over-count (should-call)",
+    "vars": {
+      "caseId": "mq-005-sql-exists-over-count",
+      "conversation": "@kody on your SQL suggestion in this file, please remember we prefer EXISTS over COUNT(*) for existence checks.",
+      "contextSnippets": "[\n  {\n    \"id\": \"snippet-1\",\n    \"source\": \"libs/code-review/src/sql/checks.ts\",\n    \"language\": \"typescript\",\n    \"code\": \"export function buildExistsQuery(table: string, where: string) {\\n  return `SELECT EXISTS (SELECT 1 FROM ${table} WHERE ${where})`;\\n}\\n\\nexport function buildCountQuery(table: string, where: string) {\\n  return `SELECT COUNT(*) FROM ${table} WHERE ${where}`;\\n}\\n\\nexport function explain(query: string) {\\n  return `EXPLAIN ANALYZE ${query}`;\\n}\"\n  }\n]",
+      "shouldCreateMemory": "true",
+      "expectedTriggerType": "explicit",
+      "expectedRule": "prefer EXISTS over COUNT(*) for SQL existence checks",
+      "expectedReason": "",
+      "expectedToolName": "KODUS_CREATE_MEMORY",
+      "additionalInformation": "{\n  \"gitUser\": {\n    \"id\": 900003,\n    \"username\": \"dataset-user-3\"\n  },\n  \"userQuestion\": \"@kody on your SQL suggestion in this file, please remember we prefer EXISTS over COUNT(*) for existence checks.\",\n  \"repository\": {\n    \"id\": \"repo-libs\",\n    \"name\": \"libs\",\n    \"defaultBranch\": \"main\"\n  },\n  \"pullRequestDescription\": \"A pull request\",\n  \"platformType\": \"github\",\n  \"pullRequest\": {\n    \"pullRequestNumber\": 1003,\n    \"headRef\": \"feature/foo-3\",\n    \"baseRef\": \"main\"\n  },\n  \"codeManagementContext\": {\n    \"originalComment\": {\n      \"suggestionCommentId\": \"kody-suggestion-3\",\n      \"suggestionFilePath\": \"libs/code-review/src/sql/checks.ts\",\n      \"suggestionText\": \"Consider adjusting this implementation.\\n\\nexport function buildExistsQuery(table: string, where: string) {\\n  return `SELECT EXISTS (SELECT 1 FROM ${table} WHERE ${where})`;\\n}\\n\\nexport function buildCountQuery(table: string, where: string) {\\n  return `SELECT COUNT(*) FROM ${table} WHERE ${where}`;\\n}\\n\\nexport function explain(query: string) {\\n  return `EXPLAIN ANALYZE ${query}`;\\n}\",\n      \"diffHunk\": \"export function buildExistsQuery(table: string, where: string) {\\n  return `SELECT EXISTS (SELECT 1 FROM ${table} WHERE ${where})`;\\n}\\n\\nexport function buildCountQuery(table: string, where: string) {\\n  return `SELECT COUNT(*) FROM ${table} WHERE ${where}`;\\n}\\n\\nexport function explain(query: string) {\\n  return `EXPLAIN ANALYZE ${query}`;\\n}\"\n    },\n    \"othersReplies\": []\n  }\n}",
+      "threadId": "mq-thread-3",
+      "sessionId": "mq-session-3",
+      "correlationId": "mq-correlation-3"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://memory-quality-llm-judge-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "mq-007-hexagonal-domain-boundary (should-call)",
+    "vars": {
+      "caseId": "mq-007-hexagonal-domain-boundary",
+      "conversation": "@kody about your review in this domain service: we are strict hexagonal here, domain must not depend on infrastructure classes.",
+      "contextSnippets": "[\n  {\n    \"id\": \"snippet-1\",\n    \"source\": \"libs/payments/src/domain/payment.service.ts\",\n    \"language\": \"typescript\",\n    \"code\": \"import { PaymentGatewayHttpClient } from '../infrastructure/payment-gateway.http';\\n\\nexport class PaymentService {\\n  constructor(private readonly gateway: PaymentGatewayHttpClient) {}\\n\\n  async capture(input: CaptureInput) {\\n    return await this.gateway.capture(input);\\n  }\\n}\\n\\nexport class PaymentPolicy {\\n  canRefund(status: string) {\\n    return status === 'captured';\\n  }\\n}\"\n  }\n]",
+      "shouldCreateMemory": "true",
+      "expectedTriggerType": "implicit",
+      "expectedRule": "domain layer must have zero dependencies on infrastructure layer",
+      "expectedReason": "",
+      "expectedToolName": "KODUS_CREATE_MEMORY",
+      "additionalInformation": "{\n  \"gitUser\": {\n    \"id\": 900004,\n    \"username\": \"dataset-user-4\"\n  },\n  \"userQuestion\": \"@kody about your review in this domain service: we are strict hexagonal here, domain must not depend on infrastructure classes.\",\n  \"repository\": {\n    \"id\": \"repo-libs\",\n    \"name\": \"libs\",\n    \"defaultBranch\": \"main\"\n  },\n  \"pullRequestDescription\": \"A pull request\",\n  \"platformType\": \"github\",\n  \"pullRequest\": {\n    \"pullRequestNumber\": 1004,\n    \"headRef\": \"feature/foo-4\",\n    \"baseRef\": \"main\"\n  },\n  \"codeManagementContext\": {\n    \"originalComment\": {\n      \"suggestionCommentId\": \"kody-suggestion-4\",\n      \"suggestionFilePath\": \"libs/payments/src/domain/payment.service.ts\",\n      \"suggestionText\": \"Consider adjusting this implementation.\\n\\nimport { PaymentGatewayHttpClient } from '../infrastructure/payment-gateway.http';\\n\\nexport class PaymentService {\\n  constructor(private readonly gateway: PaymentGatewayHttpClient) {}\\n\\n  async capture(input: CaptureInput) {\\n    return await this.gateway.capture(input);\\n  }\\n}\\n\\nexport class PaymentPolicy {\\n  canRefund(status: string) {\\n    return status === 'captured';\\n  }\\n}\",\n      \"diffHunk\": \"import { PaymentGatewayHttpClient } from '../infrastructure/payment-gateway.http';\\n\\nexport class PaymentService {\\n  constructor(private readonly gateway: PaymentGatewayHttpClient) {}\\n\\n  async capture(input: CaptureInput) {\\n    return await this.gateway.capture(input);\\n  }\\n}\\n\\nexport class PaymentPolicy {\\n  canRefund(status: string) {\\n    return status === 'captured';\\n  }\\n}\"\n    },\n    \"othersReplies\": []\n  }\n}",
+      "threadId": "mq-thread-4",
+      "sessionId": "mq-session-4",
+      "correlationId": "mq-correlation-4"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://memory-quality-llm-judge-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "mq-008-next-public-prefix (should-call)",
+    "vars": {
+      "caseId": "mq-008-next-public-prefix",
+      "conversation": "@kody on this env-variable review comment, memorize this rule: frontend-exposed env vars must start with NEXT_PUBLIC_.",
+      "contextSnippets": "[\n  {\n    \"id\": \"snippet-1\",\n    \"source\": \"apps/web/src/env.ts\",\n    \"language\": \"typescript\",\n    \"code\": \"export function readPublicEnv() {\\n  return {\\n    apiUrl: process.env.NEXT_PUBLIC_API_URL,\\n    sentryDsn: process.env.NEXT_PUBLIC_SENTRY_DSN,\\n  };\\n}\\n\\nexport function readServerEnv() {\\n  return {\\n    apiSecret: process.env.API_SECRET_KEY,\\n  };\\n}\"\n  }\n]",
+      "shouldCreateMemory": "true",
+      "expectedTriggerType": "explicit",
+      "expectedRule": "frontend-exposed environment variables must start with NEXT_PUBLIC_",
+      "expectedReason": "",
+      "expectedToolName": "KODUS_CREATE_MEMORY",
+      "additionalInformation": "{\n  \"gitUser\": {\n    \"id\": 900005,\n    \"username\": \"dataset-user-5\"\n  },\n  \"userQuestion\": \"@kody on this env-variable review comment, memorize this rule: frontend-exposed env vars must start with NEXT_PUBLIC_.\",\n  \"repository\": {\n    \"id\": \"repo-apps\",\n    \"name\": \"apps\",\n    \"defaultBranch\": \"main\"\n  },\n  \"pullRequestDescription\": \"A pull request\",\n  \"platformType\": \"github\",\n  \"pullRequest\": {\n    \"pullRequestNumber\": 1005,\n    \"headRef\": \"feature/foo-5\",\n    \"baseRef\": \"main\"\n  },\n  \"codeManagementContext\": {\n    \"originalComment\": {\n      \"suggestionCommentId\": \"kody-suggestion-5\",\n      \"suggestionFilePath\": \"apps/web/src/env.ts\",\n      \"suggestionText\": \"Consider adjusting this implementation.\\n\\nexport function readPublicEnv() {\\n  return {\\n    apiUrl: process.env.NEXT_PUBLIC_API_URL,\\n    sentryDsn: process.env.NEXT_PUBLIC_SENTRY_DSN,\\n  };\\n}\\n\\nexport function readServerEnv() {\\n  return {\\n    apiSecret: process.env.API_SECRET_KEY,\\n  };\\n}\",\n      \"diffHunk\": \"export function readPublicEnv() {\\n  return {\\n    apiUrl: process.env.NEXT_PUBLIC_API_URL,\\n    sentryDsn: process.env.NEXT_PUBLIC_SENTRY_DSN,\\n  };\\n}\\n\\nexport function readServerEnv() {\\n  return {\\n    apiSecret: process.env.API_SECRET_KEY,\\n  };\\n}\"\n    },\n    \"othersReplies\": []\n  }\n}",
+      "threadId": "mq-thread-5",
+      "sessionId": "mq-session-5",
+      "correlationId": "mq-correlation-5"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://memory-quality-llm-judge-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "mq-009-no-lodash-prefer-native (should-call)",
+    "vars": {
+      "caseId": "mq-009-no-lodash-prefer-native",
+      "conversation": "@kody replying to your refactor suggestion in this util: we avoid lodash here, please stick to native array methods.",
+      "contextSnippets": "[\n  {\n    \"id\": \"snippet-1\",\n    \"source\": \"libs/shared/src/collections.ts\",\n    \"language\": \"typescript\",\n    \"code\": \"import _ from 'lodash';\\n\\nexport function firstActive(users: User[]) {\\n  return _.find(users, (user) => user.active);\\n}\\n\\nexport function names(users: User[]) {\\n  return users.map((user) => user.name);\\n}\"\n  }\n]",
+      "shouldCreateMemory": "true",
+      "expectedTriggerType": "implicit",
+      "expectedRule": "prefer native JavaScript array methods over Lodash",
+      "expectedReason": "",
+      "expectedToolName": "KODUS_CREATE_MEMORY",
+      "additionalInformation": "{\n  \"gitUser\": {\n    \"id\": 900006,\n    \"username\": \"dataset-user-6\"\n  },\n  \"userQuestion\": \"@kody replying to your refactor suggestion in this util: we avoid lodash here, please stick to native array methods.\",\n  \"repository\": {\n    \"id\": \"repo-libs\",\n    \"name\": \"libs\",\n    \"defaultBranch\": \"main\"\n  },\n  \"pullRequestDescription\": \"A pull request\",\n  \"platformType\": \"github\",\n  \"pullRequest\": {\n    \"pullRequestNumber\": 1006,\n    \"headRef\": \"feature/foo-6\",\n    \"baseRef\": \"main\"\n  },\n  \"codeManagementContext\": {\n    \"originalComment\": {\n      \"suggestionCommentId\": \"kody-suggestion-6\",\n      \"suggestionFilePath\": \"libs/shared/src/collections.ts\",\n      \"suggestionText\": \"Consider adjusting this implementation.\\n\\nimport _ from 'lodash';\\n\\nexport function firstActive(users: User[]) {\\n  return _.find(users, (user) => user.active);\\n}\\n\\nexport function names(users: User[]) {\\n  return users.map((user) => user.name);\\n}\",\n      \"diffHunk\": \"import _ from 'lodash';\\n\\nexport function firstActive(users: User[]) {\\n  return _.find(users, (user) => user.active);\\n}\\n\\nexport function names(users: User[]) {\\n  return users.map((user) => user.name);\\n}\"\n    },\n    \"othersReplies\": []\n  }\n}",
+      "threadId": "mq-thread-6",
+      "sessionId": "mq-session-6",
+      "correlationId": "mq-correlation-6"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://memory-quality-llm-judge-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "mq-010-date-fns-over-moment (should-call)",
+    "vars": {
+      "caseId": "mq-010-date-fns-over-moment",
+      "conversation": "@kody for this date formatting suggestion, remember our project standard is date-fns, not moment.js.",
+      "contextSnippets": "[\n  {\n    \"id\": \"snippet-1\",\n    \"source\": \"apps/web/src/utils/date.ts\",\n    \"language\": \"typescript\",\n    \"code\": \"import moment from 'moment';\\n\\nexport function formatDate(value: Date) {\\n  return moment(value).format('YYYY-MM-DD');\\n}\\n\\nexport function isWeekend(value: Date) {\\n  const day = value.getDay();\\n  return day === 0 || day === 6;\\n}\"\n  }\n]",
+      "shouldCreateMemory": "true",
+      "expectedTriggerType": "explicit",
+      "expectedRule": "use date-fns instead of moment.js for date handling",
+      "expectedReason": "",
+      "expectedToolName": "KODUS_CREATE_MEMORY",
+      "additionalInformation": "{\n  \"gitUser\": {\n    \"id\": 900007,\n    \"username\": \"dataset-user-7\"\n  },\n  \"userQuestion\": \"@kody for this date formatting suggestion, remember our project standard is date-fns, not moment.js.\",\n  \"repository\": {\n    \"id\": \"repo-apps\",\n    \"name\": \"apps\",\n    \"defaultBranch\": \"main\"\n  },\n  \"pullRequestDescription\": \"A pull request\",\n  \"platformType\": \"github\",\n  \"pullRequest\": {\n    \"pullRequestNumber\": 1007,\n    \"headRef\": \"feature/foo-7\",\n    \"baseRef\": \"main\"\n  },\n  \"codeManagementContext\": {\n    \"originalComment\": {\n      \"suggestionCommentId\": \"kody-suggestion-7\",\n      \"suggestionFilePath\": \"apps/web/src/utils/date.ts\",\n      \"suggestionText\": \"Consider adjusting this implementation.\\n\\nimport moment from 'moment';\\n\\nexport function formatDate(value: Date) {\\n  return moment(value).format('YYYY-MM-DD');\\n}\\n\\nexport function isWeekend(value: Date) {\\n  const day = value.getDay();\\n  return day === 0 || day === 6;\\n}\",\n      \"diffHunk\": \"import moment from 'moment';\\n\\nexport function formatDate(value: Date) {\\n  return moment(value).format('YYYY-MM-DD');\\n}\\n\\nexport function isWeekend(value: Date) {\\n  const day = value.getDay();\\n  return day === 0 || day === 6;\\n}\"\n    },\n    \"othersReplies\": []\n  }\n}",
+      "threadId": "mq-thread-7",
+      "sessionId": "mq-session-7",
+      "correlationId": "mq-correlation-7"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://memory-quality-llm-judge-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "mq-011-no-default-export-ts (should-call)",
+    "vars": {
+      "caseId": "mq-011-no-default-export-ts",
+      "conversation": "@kody on this module export review, keep this as a rule for next suggestions: we don't use default exports in TypeScript files.",
+      "contextSnippets": "[\n  {\n    \"id\": \"snippet-1\",\n    \"source\": \"libs/core/src/logger/index.ts\",\n    \"language\": \"typescript\",\n    \"code\": \"class Logger {\\n  info(message: string) {\\n    console.log(message);\\n  }\\n}\\n\\nexport default new Logger();\\n\\nexport function formatLog(message: string) {\\n  return `[app] ${message}`;\\n}\"\n  }\n]",
+      "shouldCreateMemory": "true",
+      "expectedTriggerType": "implicit",
+      "expectedRule": "use named exports only in TypeScript files",
+      "expectedReason": "",
+      "expectedToolName": "KODUS_CREATE_MEMORY",
+      "additionalInformation": "{\n  \"gitUser\": {\n    \"id\": 900008,\n    \"username\": \"dataset-user-8\"\n  },\n  \"userQuestion\": \"@kody on this module export review, keep this as a rule for next suggestions: we don't use default exports in TypeScript files.\",\n  \"repository\": {\n    \"id\": \"repo-libs\",\n    \"name\": \"libs\",\n    \"defaultBranch\": \"main\"\n  },\n  \"pullRequestDescription\": \"A pull request\",\n  \"platformType\": \"github\",\n  \"pullRequest\": {\n    \"pullRequestNumber\": 1008,\n    \"headRef\": \"feature/foo-8\",\n    \"baseRef\": \"main\"\n  },\n  \"codeManagementContext\": {\n    \"originalComment\": {\n      \"suggestionCommentId\": \"kody-suggestion-8\",\n      \"suggestionFilePath\": \"libs/core/src/logger/index.ts\",\n      \"suggestionText\": \"Consider adjusting this implementation.\\n\\nclass Logger {\\n  info(message: string) {\\n    console.log(message);\\n  }\\n}\\n\\nexport default new Logger();\\n\\nexport function formatLog(message: string) {\\n  return `[app] ${message}`;\\n}\",\n      \"diffHunk\": \"class Logger {\\n  info(message: string) {\\n    console.log(message);\\n  }\\n}\\n\\nexport default new Logger();\\n\\nexport function formatLog(message: string) {\\n  return `[app] ${message}`;\\n}\"\n    },\n    \"othersReplies\": []\n  }\n}",
+      "threadId": "mq-thread-8",
+      "sessionId": "mq-session-8",
+      "correlationId": "mq-correlation-8"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://memory-quality-llm-judge-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "mq-014-api-v1-route-prefix (should-call)",
+    "vars": {
+      "caseId": "mq-014-api-v1-route-prefix",
+      "conversation": "@kody from this route review, save this convention: all API routes should be prefixed with /api/v1.",
+      "contextSnippets": "[\n  {\n    \"id\": \"snippet-1\",\n    \"source\": \"apps/api/src/orders/orders.controller.ts\",\n    \"language\": \"typescript\",\n    \"code\": \"@Controller('orders')\\nexport class OrdersController {\\n  @Get()\\n  async list() {\\n    return await this.ordersService.list();\\n  }\\n}\\n\\n@Controller('health')\\nexport class HealthController {\\n  @Get()\\n  check() {\\n    return { ok: true };\\n  }\\n}\"\n  }\n]",
+      "shouldCreateMemory": "true",
+      "expectedTriggerType": "explicit",
+      "expectedRule": "API routes must be prefixed with /api/v1",
+      "expectedReason": "",
+      "expectedToolName": "KODUS_CREATE_MEMORY",
+      "additionalInformation": "{\n  \"gitUser\": {\n    \"id\": 900009,\n    \"username\": \"dataset-user-9\"\n  },\n  \"userQuestion\": \"@kody from this route review, save this convention: all API routes should be prefixed with /api/v1.\",\n  \"repository\": {\n    \"id\": \"repo-apps\",\n    \"name\": \"apps\",\n    \"defaultBranch\": \"main\"\n  },\n  \"pullRequestDescription\": \"A pull request\",\n  \"platformType\": \"github\",\n  \"pullRequest\": {\n    \"pullRequestNumber\": 1009,\n    \"headRef\": \"feature/foo-9\",\n    \"baseRef\": \"main\"\n  },\n  \"codeManagementContext\": {\n    \"originalComment\": {\n      \"suggestionCommentId\": \"kody-suggestion-9\",\n      \"suggestionFilePath\": \"apps/api/src/orders/orders.controller.ts\",\n      \"suggestionText\": \"Consider adjusting this implementation.\\n\\n@Controller('orders')\\nexport class OrdersController {\\n  @Get()\\n  async list() {\\n    return await this.ordersService.list();\\n  }\\n}\\n\\n@Controller('health')\\nexport class HealthController {\\n  @Get()\\n  check() {\\n    return { ok: true };\\n  }\\n}\",\n      \"diffHunk\": \"@Controller('orders')\\nexport class OrdersController {\\n  @Get()\\n  async list() {\\n    return await this.ordersService.list();\\n  }\\n}\\n\\n@Controller('health')\\nexport class HealthController {\\n  @Get()\\n  check() {\\n    return { ok: true };\\n  }\\n}\"\n    },\n    \"othersReplies\": []\n  }\n}",
+      "threadId": "mq-thread-9",
+      "sessionId": "mq-session-9",
+      "correlationId": "mq-correlation-9"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://memory-quality-llm-judge-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "mq-015-jwt-in-headers (should-call)",
+    "vars": {
+      "caseId": "mq-015-jwt-in-headers",
+      "conversation": "@kody replying to your auth suggestion here: remember that we authenticate with JWT tokens in request headers.",
+      "contextSnippets": "[\n  {\n    \"id\": \"snippet-1\",\n    \"source\": \"apps/api/src/auth/jwt-auth.guard.ts\",\n    \"language\": \"typescript\",\n    \"code\": \"export function extractToken(req: Request) {\\n  const auth = req.headers.authorization || '';\\n  if (!auth.startsWith('Bearer ')) return null;\\n  return auth.replace('Bearer ', '');\\n}\\n\\nexport class JwtAuthGuard {\\n  canActivate(req: Request) {\\n    return Boolean(extractToken(req));\\n  }\\n}\"\n  }\n]",
+      "shouldCreateMemory": "true",
+      "expectedTriggerType": "implicit",
+      "expectedRule": "authentication is done via JWT tokens in headers",
+      "expectedReason": "",
+      "expectedToolName": "KODUS_CREATE_MEMORY",
+      "additionalInformation": "{\n  \"gitUser\": {\n    \"id\": 900010,\n    \"username\": \"dataset-user-10\"\n  },\n  \"userQuestion\": \"@kody replying to your auth suggestion here: remember that we authenticate with JWT tokens in request headers.\",\n  \"repository\": {\n    \"id\": \"repo-apps\",\n    \"name\": \"apps\",\n    \"defaultBranch\": \"main\"\n  },\n  \"pullRequestDescription\": \"A pull request\",\n  \"platformType\": \"github\",\n  \"pullRequest\": {\n    \"pullRequestNumber\": 1010,\n    \"headRef\": \"feature/foo-10\",\n    \"baseRef\": \"main\"\n  },\n  \"codeManagementContext\": {\n    \"originalComment\": {\n      \"suggestionCommentId\": \"kody-suggestion-10\",\n      \"suggestionFilePath\": \"apps/api/src/auth/jwt-auth.guard.ts\",\n      \"suggestionText\": \"Consider adjusting this implementation.\\n\\nexport function extractToken(req: Request) {\\n  const auth = req.headers.authorization || '';\\n  if (!auth.startsWith('Bearer ')) return null;\\n  return auth.replace('Bearer ', '');\\n}\\n\\nexport class JwtAuthGuard {\\n  canActivate(req: Request) {\\n    return Boolean(extractToken(req));\\n  }\\n}\",\n      \"diffHunk\": \"export function extractToken(req: Request) {\\n  const auth = req.headers.authorization || '';\\n  if (!auth.startsWith('Bearer ')) return null;\\n  return auth.replace('Bearer ', '');\\n}\\n\\nexport class JwtAuthGuard {\\n  canActivate(req: Request) {\\n    return Boolean(extractToken(req));\\n  }\\n}\"\n    },\n    \"othersReplies\": []\n  }\n}",
+      "threadId": "mq-thread-10",
+      "sessionId": "mq-session-10",
+      "correlationId": "mq-correlation-10"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://memory-quality-llm-judge-assertion.js"
+      }
+    ]
+  }
+]

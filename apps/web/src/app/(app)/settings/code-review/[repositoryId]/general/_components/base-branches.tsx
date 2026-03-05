@@ -270,7 +270,10 @@ export const BaseBranches = () => {
                                 </Tooltip>
                             </div>
 
-                            <OverrideIndicatorForm fieldName="baseBranches" className="mb-2" />
+                            <OverrideIndicatorForm
+                                fieldName="baseBranches"
+                                className="mb-2"
+                            />
                         </div>
 
                         <FormControl.Input>

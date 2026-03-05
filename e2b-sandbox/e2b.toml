@@ -1,0 +1,16 @@
+# This is a config for E2B sandbox template.
+# You can use template ID (e6rhbiwvqthdda1vo2pr) or template name (kodus-sandbox) to create a sandbox:
+
+# Python SDK
+# from e2b import Sandbox, AsyncSandbox
+# sandbox = Sandbox.create("kodus-sandbox") # Sync sandbox
+# sandbox = await AsyncSandbox.create("kodus-sandbox") # Async sandbox
+
+# JS SDK
+# import { Sandbox } from 'e2b'
+# const sandbox = await Sandbox.create('kodus-sandbox')
+
+team_id = "ee8cce53-1f23-40d2-942e-380fbffc3bda"
+dockerfile = "e2b.Dockerfile"
+template_name = "kodus-sandbox"
+template_id = "e6rhbiwvqthdda1vo2pr"

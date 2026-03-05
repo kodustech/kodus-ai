@@ -23,16 +23,18 @@ const resetPassFormSchema = z
     .object({
         password: z
             .string({
-                error: (issue) => issue.input === undefined ? "Enter a password" : undefined
+                error: (issue) =>
+                    issue.input === undefined ? "Enter a password" : undefined,
             })
             .min(8, {
-                error: "Invalid password"
+                error: "Invalid password",
             })
             .regex(/^(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).+$/, {
-                error: "Password must include at least 1 uppercase letter, 1 number, and 1 special character"
+                error: "Password must include at least 1 uppercase letter, 1 number, and 1 special character",
             }),
         confirmPassword: z.string({
-            error: (issue) => issue.input === undefined ? "Confirm your password" : undefined
+            error: (issue) =>
+                issue.input === undefined ? "Confirm your password" : undefined,
         }),
     })
     .superRefine(({ confirmPassword, password }, ctx) => {
@@ -147,18 +149,13 @@ function ResetPasswordForm() {
                                         type="button"
                                         className="-mr-2"
                                         onClick={() =>
-                                            setTypePassword(
-                                                (
-                                                    typePassword,
-                                                ) =>
-                                                    typePassword ===
-                                                        "password"
-                                                        ? "text"
-                                                        : "password",
+                                            setTypePassword((typePassword) =>
+                                                typePassword === "password"
+                                                    ? "text"
+                                                    : "password",
                                             )
                                         }>
-                                        {typePassword ===
-                                            "password" ? (
+                                        {typePassword === "password" ? (
                                             <EyeClosed />
                                         ) : (
                                             <Eye />
@@ -173,38 +170,36 @@ function ResetPasswordForm() {
                         </FormControl.Error>
 
                         <FormControl.Helper className="mt-2 flex flex-col gap-1">
-                            <span>
-                                Password must have at least:
-                            </span>
+                            <span>Password must have at least:</span>
                             <div className="flex flex-row flex-wrap gap-1">
-                                {Object.values(
-                                    passwordRules,
-                                ).map((rule, index) => (
-                                    <div
-                                        key={index}
-                                        className={cn(
-                                            "flex items-center gap-1 rounded-full px-2 py-1",
-                                            "border border-[#6A57A433]",
-                                            rule.valid &&
-                                            "border-success/20",
-                                        )}>
-                                        <div className="w-3 text-center">
-                                            {rule.valid ? (
-                                                <CheckIcon className="text-success size-3" />
-                                            ) : (
-                                                <span>•</span>
-                                            )}
-                                        </div>
-
-                                        <span
+                                {Object.values(passwordRules).map(
+                                    (rule, index) => (
+                                        <div
+                                            key={index}
                                             className={cn(
+                                                "flex items-center gap-1 rounded-full px-2 py-1",
+                                                "border border-[#6A57A433]",
                                                 rule.valid &&
-                                                "text-success-foreground",
+                                                    "border-success/20",
                                             )}>
-                                            {rule.text}
-                                        </span>
-                                    </div>
-                                ))}
+                                            <div className="w-3 text-center">
+                                                {rule.valid ? (
+                                                    <CheckIcon className="text-success size-3" />
+                                                ) : (
+                                                    <span>•</span>
+                                                )}
+                                            </div>
+
+                                            <span
+                                                className={cn(
+                                                    rule.valid &&
+                                                        "text-success-foreground",
+                                                )}>
+                                                {rule.text}
+                                            </span>
+                                        </div>
+                                    ),
+                                )}
                             </div>
                         </FormControl.Helper>
                     </FormControl.Root>
@@ -252,11 +247,7 @@ function ResetPasswordForm() {
                 className="w-full"
                 disabled={!formIsValid}
                 rightIcon={<LogInIcon />}
-                loading={
-                    formIsLoading ||
-                    formIsSubmitting ||
-                    formIsValidating
-                }>
+                loading={formIsLoading || formIsSubmitting || formIsValidating}>
                 Reset Password
             </Button>
         </form>

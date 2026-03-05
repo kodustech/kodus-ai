@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useCallback, useState, useEffect } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { atomDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { cn } from "src/core/utils/components";
@@ -40,15 +40,15 @@ export function CodeInputSimple({
     return (
         <div
             className={cn(
-                "relative w-full rounded-lg overflow-hidden ring-1 ring-card-lv3",
-                "focus-within:ring-primary/30 focus-within:ring-2 transition-all duration-200",
+                "ring-card-lv3 relative w-full overflow-hidden rounded-lg ring-1",
+                "focus-within:ring-primary/30 transition-all duration-200 focus-within:ring-2",
                 "bg-card-lv2",
-                className
+                className,
             )}>
             {/* Highlight Background */}
             <div
                 ref={highlightRef}
-                className="absolute inset-0 pointer-events-none overflow-auto rounded-lg"
+                className="pointer-events-none absolute inset-0 overflow-auto rounded-lg"
                 style={{
                     padding: "12px",
                     fontFamily: "Fira Code, Monaco, monospace",
@@ -105,11 +105,12 @@ export function CodeInputSimple({
                 disabled={disabled}
                 placeholder={placeholder}
                 className={cn(
-                    "relative w-full outline-none resize-none",
-                    "rounded-lg placeholder:text-text-placeholder/30",
-                    "caret-white selection:bg-primary/50 selection:text-white",
+                    "relative w-full resize-none outline-none",
+                    "placeholder:text-text-placeholder/30 rounded-lg",
+                    "selection:bg-primary/50 caret-white selection:text-white",
                     "font-mono text-sm",
-                    disabled && "opacity-50 pointer-events-none cursor-not-allowed"
+                    disabled &&
+                        "pointer-events-none cursor-not-allowed opacity-50",
                 )}
                 style={{
                     color: "transparent",

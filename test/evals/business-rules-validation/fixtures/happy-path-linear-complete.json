@@ -1,0 +1,34 @@
+{
+  "name": "happy-path-linear-complete",
+  "input": {
+    "providerType": "linear",
+    "taskContextToolName": "searchTasks",
+    "pullRequestNumber": 140,
+    "prBody": "Implements onboarding flow updates linked to LIN-99",
+    "prDiff": "diff --git a/src/onboarding.ts b/src/onboarding.ts\n+ export function beginOnboarding() {\n+   return { started: true };\n+ }",
+    "taskContext": {
+      "id": "LIN-99",
+      "title": "Improve onboarding start",
+      "description": "Ensure new users can start onboarding without friction by exposing the entry point consistently across first-session states, preserving initialization data, and preventing broken starts when navigation happens from different surfaces in the product experience.",
+      "acceptanceCriteria": [
+        "Entry point for onboarding is visible",
+        "Start action initializes onboarding state"
+      ]
+    }
+  },
+  "expectedTrajectory": [
+    { "capability": "pr.metadata.read", "status": "success" },
+    { "capability": "pr.diff.read", "status": "success" },
+    { "capability": "task.context.read", "status": "success" },
+    { "step": "classifyTaskContext", "output": { "taskQuality": "COMPLETE" } },
+    { "step": "validateContext", "passed": true },
+    { "step": "analyzeBusinessRules", "status": "success" }
+  ],
+  "expectedOutcome": {
+    "needsMoreInfo": false,
+    "mode": "full_analysis",
+    "reason": "analysis_ready",
+    "resolvedTaskContextContains": ["LIN-99", "onboarding"],
+    "summaryContains": ["Validation summary"]
+  }
+}

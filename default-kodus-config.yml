@@ -30,6 +30,7 @@ reviewOptions:
     performance: true
     security: true
     cross_file: true
+    business_logic: true
 
 # suggestion control
 suggestionControl:
@@ -54,6 +55,7 @@ summary:
 # kody rules
 ideRulesSyncEnabled: false
 kodyRulesGeneratorEnabled: true
+llmGeneratedMemoriesRequireApproval: false
 
 # custom messages
 customMessages:

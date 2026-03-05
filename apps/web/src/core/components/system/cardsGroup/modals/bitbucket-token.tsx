@@ -110,7 +110,9 @@ export const BitbucketModal = (props: Props) => {
                         variant="primary"
                         onClick={saveToken}
                         loading={loadingSaveToken}
-                        disabled={!username || !token || !email || !!error.message}>
+                        disabled={
+                            !username || !token || !email || !!error.message
+                        }>
                         Save Token
                     </Button>
                 </DialogFooter>

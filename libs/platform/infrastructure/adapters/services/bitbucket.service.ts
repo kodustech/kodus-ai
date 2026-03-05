@@ -2078,11 +2078,11 @@ export class BitbucketService implements Omit<
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
 
-            const pullRequests = await this.getPullRequests({
+            return await this.getPullRequest({
                 organizationAndTeamData,
+                repository,
+                prNumber,
             });
-
-            return pullRequests.find((pr) => pr.id === prNumber.toString());
         } catch (error) {
             this.logger.error({
                 message: 'Error to get pull request by number',
@@ -2142,8 +2142,10 @@ export class BitbucketService implements Omit<
                         message: commit?.message,
                         created_at: commit?.date,
                         author: {
-                            id: this.sanitizeUUID(commit?.author?.user?.uuid),
-                            username: commit?.author?.user?.nickname,
+                            id: this.sanitizeUUID(
+                                commit?.author?.user?.uuid ?? '',
+                            ),
+                            username: name ?? '',
                             name,
                             email,
                             date: commit?.date,
@@ -2553,7 +2555,7 @@ export class BitbucketService implements Omit<
                     replies: comment?.replies,
                     author: {
                         id: this.sanitizeUUID(comment?.user?.uuid),
-                        username: comment?.user?.display_name,
+                        username: comment?.user?.nickname,
                         name: comment?.user?.display_name,
                     },
                 }))
@@ -2974,6 +2976,31 @@ export class BitbucketService implements Omit<
         }
     }
 
+    /**
+     * Wraps the default fetch to ensure every Response has a Content-Type
+     * header. The bitbucket npm package (v2.12.0) calls
+     * `contentType.includes(...)` without a null-check, which crashes when
+     * the Bitbucket edge proxy returns a response with no Content-Type.
+     */
+    private safeFetch(
+        url: string,
+        options: any,
+    ): Promise<any> {
+        return fetch(url, options).then((response) => {
+            if (!response.headers.get('content-type')) {
+                const patchedHeaders = new Headers(response.headers);
+                patchedHeaders.set('content-type', 'text/plain');
+
+                return new Response(response.body, {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: patchedHeaders,
+                });
+            }
+            return response;
+        });
+    }
+
     private instanceBitbucketApi(bitbucketAuthDetail: BitbucketAuthDetail) {
         try {
             const bitbucketAPI = new Bitbucket({
@@ -2982,6 +3009,9 @@ export class BitbucketService implements Omit<
                         bitbucketAuthDetail.email ??
                         bitbucketAuthDetail.username,
                     password: decrypt(bitbucketAuthDetail.appPassword),
+                },
+                request: {
+                    fetch: this.safeFetch.bind(this),
                 },
             });
 
@@ -3663,7 +3693,7 @@ export class BitbucketService implements Omit<
                 originalCommit: comment?.pullrequest?.source?.commit?.hash,
                 author: {
                     id: this.sanitizeUUID(comment?.user?.uuid),
-                    username: comment?.user?.display_name,
+                    username: comment?.user?.nickname,
                     name: comment?.user?.display_name,
                 },
             }));
@@ -3753,85 +3783,18 @@ export class BitbucketService implements Omit<
         }
     }
 
-    async getUserByUsername(params: {
+    /**
+     * Bitbucket's /2.0/users/{selected_user} endpoint only accepts
+     * account_id or {uuid}, neither of which is reliably available
+     * from the PR webhook payload. The endpoint also does not return
+     * email due to GDPR restrictions. User email for Bitbucket is
+     * already sourced from commit author raw fields instead.
+     */
+    async getUserByUsername(_params: {
         organizationAndTeamData: OrganizationAndTeamData;
         username: string;
     }): Promise<any | null> {
-        const { organizationAndTeamData, username } = params;
-
-        if (!username) {
-            return null;
-        }
-
-        const cacheKey = `bitbucket-user-${organizationAndTeamData.organizationId}-${username}`;
-
-        const cached = await this.cacheService.getFromCache<any>(cacheKey);
-        if (cached !== null) {
-            this.logger.debug({
-                message: `User data retrieved from cache`,
-                context: BitbucketService.name,
-                metadata: {
-                    username,
-                    organizationId: organizationAndTeamData.organizationId,
-                },
-            });
-            return cached;
-        }
-
-        try {
-            const bitbucketAuthDetails = await this.getAuthDetails(
-                organizationAndTeamData,
-            );
-
-            const bitbucketAPI =
-                this.instanceBitbucketApi(bitbucketAuthDetails);
-
-            const user = await bitbucketAPI.users
-                .get({
-                    selected_user: username,
-                    fields: '+values.username,+values.email',
-                })
-                .then((res) => res.data);
-
-            const userData = user ?? null;
-
-            await this.cacheService.addToCache(
-                cacheKey,
-                userData,
-                this.USER_CACHE_TTL,
-            );
-
-            return userData;
-        } catch (error: any) {
-            if (error?.response?.status === 404) {
-                this.logger.warn({
-                    message: `Bitbucket user not found: ${username}`,
-                    context: BitbucketService.name,
-                    metadata: { username, organizationAndTeamData },
-                });
-
-                // Cache null result to avoid repeated 404 calls
-                await this.cacheService.addToCache(
-                    cacheKey,
-                    null,
-                    this.USER_CACHE_TTL,
-                );
-
-                return null;
-            }
-
-            this.logger.error({
-                message: `Error retrieving user by username`,
-                context: BitbucketService.name,
-                serviceName: 'BitbucketService getUserByUsername',
-                error,
-                metadata: {
-                    username,
-                    organizationAndTeamData,
-                },
-            });
-            return null;
-        }
+        return null;
     }
 
     async getCurrentUser(params: {
@@ -3932,7 +3895,7 @@ export class BitbucketService implements Omit<
                         isResolved: comment.resolution ? true : false,
                         author: {
                             id: this.sanitizeUUID(comment?.user?.uuid) ?? '',
-                            username: comment?.user?.display_name ?? '',
+                            username: comment?.user?.nickname as string ?? '',
                             name: comment?.user?.display_name ?? '',
                         },
                     };
@@ -5256,7 +5219,10 @@ export class BitbucketService implements Omit<
                 },
             },
             user: {
-                login: pullRequest?.author?.display_name ?? '',
+                login:
+                    (pullRequest?.author as any)?.account_id ??
+                    pullRequest?.author?.uuid ??
+                    '',
                 name: pullRequest?.author?.display_name ?? '',
                 id: this.sanitizeUUID(pullRequest?.author?.uuid ?? '') ?? '',
             },

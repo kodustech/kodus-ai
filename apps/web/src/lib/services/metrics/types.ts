@@ -12,8 +12,8 @@ export interface Metric {
 }
 
 export enum NewItemsFrom {
-    TODO_COLUMN = 'todo',
-    CREATION_DATE = 'creationDate'
+    TODO_COLUMN = "todo",
+    CREATION_DATE = "creationDate",
 }
 
 export enum TeamExclusiveMetrics {

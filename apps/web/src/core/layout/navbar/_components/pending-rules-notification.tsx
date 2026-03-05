@@ -15,7 +15,7 @@ import { useAuth } from "src/core/providers/auth.provider";
 
 const PendingRulesNotificationContent = () => {
     const { role } = useAuth();
-    
+
     if (role !== UserRole.OWNER) return null;
 
     const rules = useSuspenseAllOrganizationKodyRules();

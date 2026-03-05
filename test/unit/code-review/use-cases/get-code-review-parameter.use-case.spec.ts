@@ -1,15 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { GetCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/get-code-review-parameter.use-case';
-import {
-    PARAMETERS_SERVICE_TOKEN,
-} from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
-import {
-    CODE_BASE_CONFIG_SERVICE_TOKEN,
-} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import { CODE_BASE_CONFIG_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
-import {
-    PROMPT_EXTERNAL_REFERENCE_MANAGER_SERVICE_TOKEN,
-} from '@libs/ai-engine/domain/prompt/contracts/promptExternalReferenceManager.contract';
+import { PROMPT_EXTERNAL_REFERENCE_MANAGER_SERVICE_TOKEN } from '@libs/ai-engine/domain/prompt/contracts/promptExternalReferenceManager.contract';
 
 describe('GetCodeReviewParameterUseCase', () => {
     let useCase: GetCodeReviewParameterUseCase;

@@ -1,0 +1,38 @@
+description: 'Conversation Memory Tool-Call Evaluation'
+
+providers:
+    - id: google:gemini-2.5-pro
+      config:
+          temperature: 0
+          maxOutputTokens: 32768
+    - id: anthropic:messages:claude-sonnet-4-5-20250929
+      config:
+          temperature: 0
+          max_tokens: 16384
+    - id: anthropic:messages:claude-haiku-4-5-20251001
+      config:
+          temperature: 0
+          max_tokens: 16384
+    - id: openai:gpt-5.2
+      config:
+          temperature: 0
+          max_tokens: 16384
+    - id: openai:gpt-5-mini
+      config:
+          temperature: 0
+          max_tokens: 16384
+    - id: google:gemini-3-pro-preview
+      config:
+          temperature: 0
+          maxOutputTokens: 60000
+    - id: google:gemini-3-flash-preview
+      config:
+          temperature: 0
+          maxOutputTokens: 60000
+
+prompts:
+    - file://memory-prompt-loader.js
+
+tests: file://datasets/memory-tests.json
+
+outputPath: ./results/output-memory.json

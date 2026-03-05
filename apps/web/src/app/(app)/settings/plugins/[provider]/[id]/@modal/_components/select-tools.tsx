@@ -131,7 +131,7 @@ export const SelectTools = ({
                                             className={cn(
                                                 "size-5",
                                                 tool.warning &&
-                                                "[--button-background:var(--color-warning)]",
+                                                    "[--button-background:var(--color-warning)]",
                                             )}
                                             checked={selectedTools.includes(
                                                 tool.slug,
@@ -144,7 +144,7 @@ export const SelectTools = ({
                                                 className={cn(
                                                     "text-text-primary min-h-5",
                                                     tool.warning &&
-                                                    "text-warning",
+                                                        "text-warning",
                                                 )}>
                                                 {tool.name}
 

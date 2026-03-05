@@ -253,8 +253,8 @@ export const PullRequestsFilters = ({
                                             </span>
                                             {selectedRepository ===
                                                 repo.name && (
-                                                    <CheckIcon className="text-primary-light -mr-2 size-5" />
-                                                )}
+                                                <CheckIcon className="text-primary-light -mr-2 size-5" />
+                                            )}
                                         </CommandItem>
                                     ))}
                                 </CommandGroup>

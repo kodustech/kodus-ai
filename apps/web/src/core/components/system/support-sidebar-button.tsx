@@ -46,13 +46,16 @@ export const SupportSidebarButton = () => {
             <div
                 className={cn(
                     "group relative flex flex-col items-center justify-center",
-                    "w-full py-4 px-2",
+                    "w-full px-2 py-4",
                     "text-text-tertiary",
                 )}>
-                <LifeBuoy className="size-5 mb-2" />
+                <LifeBuoy className="mb-2 size-5" />
                 <span
-                    className="text-sm font-medium tracking-tight leading-tight"
-                    style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}>
+                    className="text-sm leading-tight font-medium tracking-tight"
+                    style={{
+                        writingMode: "vertical-rl",
+                        textOrientation: "mixed",
+                    }}>
                     Support
                 </span>
             </div>
@@ -69,15 +72,18 @@ export const SupportSidebarButton = () => {
                                 data-support-button
                                 className={cn(
                                     "group relative flex flex-col items-center justify-center",
-                                    "w-full py-4 px-2",
+                                    "w-full px-2 py-4",
                                     "text-text-tertiary hover:text-text-primary",
                                     "hover:bg-background-tertiary transition-all duration-200",
                                     "cursor-pointer border-0 bg-transparent",
                                 )}>
-                                <LifeBuoy className="size-5 mb-2" />
+                                <LifeBuoy className="mb-2 size-5" />
                                 <span
-                                    className="text-sm font-medium tracking-tight leading-tight"
-                                    style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}>
+                                    className="text-sm leading-tight font-medium tracking-tight"
+                                    style={{
+                                        writingMode: "vertical-rl",
+                                        textOrientation: "mixed",
+                                    }}>
                                     Support
                                 </span>
                             </button>
@@ -94,15 +100,23 @@ export const SupportSidebarButton = () => {
                 </Tooltip>
             </TooltipProvider>
 
-            <PopoverContent align="end" side="left" sideOffset={10} className="w-52 p-0">
+            <PopoverContent
+                align="end"
+                side="left"
+                sideOffset={10}
+                className="w-52 p-0">
                 <div className="flex flex-col">
                     <NextLink
                         target="_blank"
-                        href={process.env.NEXT_PUBLIC_WEB_SUPPORT_DOCS_URL ?? process.env.WEB_SUPPORT_DOCS_URL ?? ""}
+                        href={
+                            process.env.NEXT_PUBLIC_WEB_SUPPORT_DOCS_URL ??
+                            process.env.WEB_SUPPORT_DOCS_URL ??
+                            ""
+                        }
                         className={cn(
                             "flex items-center gap-3 px-4 py-3",
                             "text-text-secondary hover:text-text-primary hover:bg-background-tertiary",
-                            "transition-colors cursor-pointer border-b border-border-primary",
+                            "border-border-primary cursor-pointer border-b transition-colors",
                         )}>
                         <FileTextIcon className="size-4" />
                         <span className="text-sm">View docs</span>
@@ -110,11 +124,16 @@ export const SupportSidebarButton = () => {
 
                     <NextLink
                         target="_blank"
-                        href={process.env.NEXT_PUBLIC_WEB_SUPPORT_DISCORD_INVITE_URL ?? process.env.WEB_SUPPORT_DISCORD_INVITE_URL ?? ""}
+                        href={
+                            process.env
+                                .NEXT_PUBLIC_WEB_SUPPORT_DISCORD_INVITE_URL ??
+                            process.env.WEB_SUPPORT_DISCORD_INVITE_URL ??
+                            ""
+                        }
                         className={cn(
                             "flex items-center gap-3 px-4 py-3",
                             "text-text-secondary hover:text-text-primary hover:bg-background-tertiary",
-                            "transition-colors cursor-pointer border-b border-border-primary",
+                            "border-border-primary cursor-pointer border-b transition-colors",
                         )}>
                         <SvgDiscord className="size-4" />
                         <span className="text-md">Our Discord</span>
@@ -122,11 +141,16 @@ export const SupportSidebarButton = () => {
 
                     <NextLink
                         target="_blank"
-                        href={process.env.NEXT_PUBLIC_WEB_SUPPORT_TALK_TO_FOUNDER_URL ?? process.env.WEB_SUPPORT_TALK_TO_FOUNDER_URL ?? ""}
+                        href={
+                            process.env
+                                .NEXT_PUBLIC_WEB_SUPPORT_TALK_TO_FOUNDER_URL ??
+                            process.env.WEB_SUPPORT_TALK_TO_FOUNDER_URL ??
+                            ""
+                        }
                         className={cn(
                             "flex items-center gap-3 px-4 py-3",
                             "text-text-secondary hover:text-text-primary hover:bg-background-tertiary",
-                            "transition-colors cursor-pointer",
+                            "cursor-pointer transition-colors",
                         )}>
                         <SvgFounder className="size-4" />
                         <span className="text-sm">Talk to a Founder</span>

@@ -211,9 +211,7 @@ export const CliKeysPage = ({
         <Page.Root>
             <Page.Header>
                 <Page.TitleContainer>
-                    <Page.Title className="text-balance">
-                        CLI keys
-                    </Page.Title>
+                    <Page.Title className="text-balance">CLI keys</Page.Title>
                     <Page.Description className="text-pretty">
                         Manage CLI access tokens for the selected workspace
                         {teamName ? ` (${teamName})` : ""}. Keys are shown only
@@ -302,7 +300,7 @@ export const CliKeysPage = ({
                     </CardHeader>
                     <CardContent>
                         {keys.length === 0 ? (
-                            <div className="text-text-secondary text-pretty text-sm">
+                            <div className="text-text-secondary text-sm text-pretty">
                                 No CLI keys yet. Generate a key to start using
                                 the CLI.
                             </div>

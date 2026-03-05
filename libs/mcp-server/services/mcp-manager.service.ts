@@ -272,14 +272,8 @@ export class MCPManagerService {
         let headers: Record<string, string> = {};
         let type: string = 'http';
         if (connection.provider === 'custom') {
-            const integration: any = await this.axiosMCPManagerService.get(
-                `mcp/integration/custom/${connection.integrationId}`,
-                {
-                    headers: this.getAuthHeaders({
-                        organizationId: connection.organizationId,
-                    }),
-                },
-            );
+            const integration =
+                await this.fetchCustomIntegrationConfig(connection);
 
             if (!integration) {
                 throw new Error(
@@ -336,5 +330,20 @@ export class MCPManagerService {
             timeout: 60_000,
             allowedTools: connection.allowedTools,
         };
+    }
+
+    private async fetchCustomIntegrationConfig(
+        connection: MCPItem,
+    ): Promise<MCPIntegrationInterface | undefined> {
+        const headers = {
+            headers: this.getAuthHeaders({
+                organizationId: connection.organizationId,
+            }),
+        };
+
+        return (await this.axiosMCPManagerService.get(
+            `mcp/integration/custom/${connection.integrationId}/connection-config`,
+            headers,
+        )) as MCPIntegrationInterface | undefined;
     }
 }

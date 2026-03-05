@@ -1,0 +1,45 @@
+{
+  "name": "scope-mismatch-jira-complete",
+  "input": {
+    "pullRequestNumber": 401,
+    "prBody": "This pull request focuses on extension cleanup and stronger typing in command handlers.",
+    "prDiff": "diff --git a/src/extension.ts b/src/extension.ts\nindex 123..456 100644\n--- a/src/extension.ts\n+++ b/src/extension.ts\n@@ -4,13 +4,10 @@\n-export function activate(context: ExtensionContext) {\n-  console.log('Kodus Development Tools is now active!');\n+export async function activate(context: ExtensionContext) {\n@@ -24,7 +21,7 @@\n-  const welcomeCommand = vscode.commands.registerCommand('kodus-extension.welcome', () => {\n+  const welcomeCommand = vscode.commands.registerCommand('kodus-extension.welcome', async () => {\n",
+    "userQuestion": "@kody -v business-logic https://kodustech.atlassian.net/jira/software/c/projects/KC/boards/2?selectedIssue=KC-1441",
+    "taskContext": {
+      "id": "KC-1441",
+      "title": "Kody rules por time",
+      "description": "Atualmente as kodyRules são cadastradas somente com organizationId. Quando temos 2 workspace(team) configurado, fica imprevisível de qual time ele vai buscar a configuração de billing. Ao tentar cadastrar uma nova regra ele deu status invalid para licença por causa do status errado do billing.",
+      "acceptanceCriteria": [
+        "Kody rules must be scoped by team, not only organization",
+        "Billing and license resolution must use the correct team context",
+        "The rule creation flow must work when teams have different subscription states"
+      ]
+    },
+    "providerType": "jira",
+    "taskContextToolName": "getJiraIssue"
+  },
+  "expectedTrajectory": [
+    { "capability": "pr.metadata.read", "status": "success" },
+    { "capability": "pr.diff.read", "status": "success" },
+    { "capability": "task.context.read", "status": "success" },
+    { "step": "classifyTaskContext", "output": { "taskQuality": "COMPLETE" } },
+    { "step": "validateContext", "passed": true },
+    { "step": "analyzeBusinessRules", "status": "success" }
+  ],
+  "expectedOutcome": {
+    "needsMoreInfo": false,
+    "mode": "full_analysis",
+    "reason": "analysis_ready",
+    "taskContextStatus": "usable",
+    "prDiffStatus": "usable",
+    "summaryText": "## Business Rules Validation\n\n**Status:** Issues Found\n**Confidence:** medium\n\n### Findings\n\n#### MUST_FIX: Scope mismatch between task and PR diff\n**Requirement:** \"Kody rules must be scoped by team, not only organization\"\n**Missing in code:** No evidence in this PR diff of changes related to kodyRules, teamId, or billing/license resolution by team.\n**Suggested action:** Update the PR with the implementation for the task scope, or link the correct task if this PR is unrelated.\n",
+    "summaryContains": [
+      "scope mismatch",
+      "No evidence in this PR diff"
+    ],
+    "resolvedTaskContextContains": [
+      "KC-1441",
+      "billing"
+    ]
+  }
+}

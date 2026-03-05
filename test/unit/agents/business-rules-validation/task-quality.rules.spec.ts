@@ -1,4 +1,5 @@
 import {
+    buildBusinessLogicEligibility,
     canProceedWithBusinessRulesAnalysis,
     getTaskContextMissingInfoMessage,
     normalizeTaskQuality,
@@ -34,6 +35,41 @@ describe('task-quality.rules', () => {
         );
         expect(TASK_QUALITY_ANALYZER_POLICY).toContain(
             'PARTIAL => proceed with full gap analysis',
+        );
+    });
+
+    it('builds limitation eligibility when task context is weak', () => {
+        expect(
+            buildBusinessLogicEligibility({
+                taskQuality: 'MINIMAL',
+                prDiff: 'diff --git a/file.ts b/file.ts',
+                taskContext: 'KC-1441',
+            }),
+        ).toEqual(
+            expect.objectContaining({
+                mode: 'limitation_response',
+                reason: 'task_context_weak',
+                taskContextStatus: 'weak',
+                prDiffStatus: 'usable',
+            }),
+        );
+    });
+
+    it('builds full-analysis eligibility when task context and diff are usable', () => {
+        expect(
+            buildBusinessLogicEligibility({
+                taskQuality: 'COMPLETE',
+                prDiff: 'diff --git a/file.ts b/file.ts',
+                taskContext:
+                    'Task with description and acceptance criteria for checkout flow.',
+            }),
+        ).toEqual(
+            expect.objectContaining({
+                mode: 'full_analysis',
+                reason: 'analysis_ready',
+                taskContextStatus: 'usable',
+                prDiffStatus: 'usable',
+            }),
         );
     });
 });

@@ -7,7 +7,7 @@ const exampleExternalReferences = {
         {
             filePath: "README.md",
             repositoryName: "task-api-example",
-        }
+        },
     ],
     syncErrors: [],
     processingStatus: "completed" as const,
@@ -22,11 +22,11 @@ const exampleWithErrors = {
         {
             filePath: "CONTRIBUTING.md",
             repositoryName: "my-project",
-        }
+        },
     ],
     syncErrors: [
         "Failed to fetch content from repository 'old-repo'",
-        "File 'docs/old-guide.md' was deleted"
+        "File 'docs/old-guide.md' was deleted",
     ],
     processingStatus: "failed" as const,
 };
@@ -39,35 +39,45 @@ const exampleProcessing = {
 
 export function ExternalReferencesTestPage() {
     return (
-        <div className="p-6 space-y-6">
+        <div className="space-y-6 p-6">
             <div>
-                <h1 className="text-2xl font-bold mb-4">External References Display Examples</h1>
-                
-                <div className="space-y-6 max-w-md">
+                <h1 className="mb-4 text-2xl font-bold">
+                    External References Display Examples
+                </h1>
+
+                <div className="max-w-md space-y-6">
                     <div>
-                        <h2 className="text-sm font-semibold mb-2">Completed with 1 reference</h2>
-                        <ExternalReferencesDisplay 
+                        <h2 className="mb-2 text-sm font-semibold">
+                            Completed with 1 reference
+                        </h2>
+                        <ExternalReferencesDisplay
                             externalReferences={exampleExternalReferences}
                         />
                     </div>
 
                     <div>
-                        <h2 className="text-sm font-semibold mb-2">Failed with 2 references and errors</h2>
-                        <ExternalReferencesDisplay 
+                        <h2 className="mb-2 text-sm font-semibold">
+                            Failed with 2 references and errors
+                        </h2>
+                        <ExternalReferencesDisplay
                             externalReferences={exampleWithErrors}
                         />
                     </div>
 
                     <div>
-                        <h2 className="text-sm font-semibold mb-2">Processing status</h2>
-                        <ExternalReferencesDisplay 
+                        <h2 className="mb-2 text-sm font-semibold">
+                            Processing status
+                        </h2>
+                        <ExternalReferencesDisplay
                             externalReferences={exampleProcessing}
                         />
                     </div>
 
                     <div>
-                        <h2 className="text-sm font-semibold mb-2">No references (hidden)</h2>
-                        <ExternalReferencesDisplay 
+                        <h2 className="mb-2 text-sm font-semibold">
+                            No references (hidden)
+                        </h2>
+                        <ExternalReferencesDisplay
                             externalReferences={undefined}
                         />
                     </div>

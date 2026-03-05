@@ -12,12 +12,16 @@ export default async function KodyRuleDetailPage({
     searchParams,
 }: {
     params: Promise<{ repositoryId: string; id: string }>;
-    searchParams: Promise<{ directoryId: string; teamId: string }>;
+    searchParams: Promise<{
+        directoryId: string;
+        teamId: string;
+        tab?: "review-rules" | "memories" | "configuration";
+    }>;
 }) {
     try {
         // Await params first (Next.js 15 requirement)
         const { repositoryId, id } = await params;
-        const { directoryId, teamId } = await searchParams;
+        const { directoryId, teamId, tab } = await searchParams;
 
         const kodyRules = await getKodyRulesByRepositoryId(
             repositoryId,
@@ -39,7 +43,7 @@ export default async function KodyRuleDetailPage({
         if (!rule) {
             const url = addSearchParamsToUrl(
                 `/settings/code-review/${repositoryId}/kody-rules`,
-                { directoryId },
+                { directoryId, tab },
             );
             redirect(url);
         }

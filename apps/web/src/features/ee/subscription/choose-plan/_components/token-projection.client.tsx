@@ -58,7 +58,8 @@ export function TokenProjectionBanner({
     projection: TokenProjection;
     simulatorModels: SimulatorModel[];
 }) {
-    const [selectedModelId, setSelectedModelId] = useState<string>(TRIAL_MODEL_ID);
+    const [selectedModelId, setSelectedModelId] =
+        useState<string>(TRIAL_MODEL_ID);
     const [isExpanded, setIsExpanded] = useState(false);
 
     const hasPerDev = projection.uniqueDevelopers > 0;
@@ -133,7 +134,7 @@ export function TokenProjectionBanner({
                             </span>
                         </p>
                         <div className="text-text-primary flex items-center gap-1 text-sm font-medium">
-                            <span className="text-primary-light tabular-nums font-semibold">
+                            <span className="text-primary-light font-semibold tabular-nums">
                                 {costs.monthly}
                             </span>
                             <span className="text-text-tertiary">/month</span>
@@ -149,7 +150,7 @@ export function TokenProjectionBanner({
                                     <TooltipContent
                                         side="top"
                                         className="max-w-72 p-3">
-                                        <p className="text-text-secondary text-pretty text-sm leading-relaxed">
+                                        <p className="text-text-secondary text-sm leading-relaxed text-pretty">
                                             Calculated from your average daily
                                             token usage (
                                             <span className="text-text-primary font-medium">
@@ -197,29 +198,29 @@ export function TokenProjectionBanner({
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="max-h-64 overflow-y-auto">
-                                            {Object.entries(modelsByProvider).map(
-                                                ([provider, models]) => (
-                                                    <div key={provider}>
-                                                        <div className="text-text-tertiary px-2 py-1.5 text-xs font-medium">
-                                                            {provider}
-                                                        </div>
-                                                        {models.map((model) => (
-                                                            <SelectItem
-                                                                key={model.id}
-                                                                value={model.id}>
-                                                                {model.name}
-                                                                {model.id ===
-                                                                    TRIAL_MODEL_ID && (
-                                                                    <span className="text-text-tertiary ml-2">
-                                                                        (used in
-                                                                        trial)
-                                                                    </span>
-                                                                )}
-                                                            </SelectItem>
-                                                        ))}
+                                            {Object.entries(
+                                                modelsByProvider,
+                                            ).map(([provider, models]) => (
+                                                <div key={provider}>
+                                                    <div className="text-text-tertiary px-2 py-1.5 text-xs font-medium">
+                                                        {provider}
                                                     </div>
-                                                ),
-                                            )}
+                                                    {models.map((model) => (
+                                                        <SelectItem
+                                                            key={model.id}
+                                                            value={model.id}>
+                                                            {model.name}
+                                                            {model.id ===
+                                                                TRIAL_MODEL_ID && (
+                                                                <span className="text-text-tertiary ml-2">
+                                                                    (used in
+                                                                    trial)
+                                                                </span>
+                                                            )}
+                                                        </SelectItem>
+                                                    ))}
+                                                </div>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -252,11 +253,13 @@ export function TokenProjectionBanner({
                                                         Per developer
                                                     </p>
                                                 </div>
-                                                <p className="text-text-primary tabular-nums text-lg font-semibold">
+                                                <p className="text-text-primary text-lg font-semibold tabular-nums">
                                                     {costs.perDev}
                                                 </p>
                                                 <p className="text-text-tertiary text-xs">
-                                                    {projection.uniqueDevelopers}{" "}
+                                                    {
+                                                        projection.uniqueDevelopers
+                                                    }{" "}
                                                     devs · ~
                                                     {Math.round(
                                                         projection.uniquePRs /
@@ -277,12 +280,12 @@ export function TokenProjectionBanner({
                                                         Per pull request
                                                     </p>
                                                 </div>
-                                                <p className="text-text-primary tabular-nums text-lg font-semibold">
+                                                <p className="text-text-primary text-lg font-semibold tabular-nums">
                                                     {costs.perPR}
                                                 </p>
                                                 <p className="text-text-tertiary text-xs">
-                                                    ~{projection.monthlyPRs} PRs/mo
-                                                    estimated
+                                                    ~{projection.monthlyPRs}{" "}
+                                                    PRs/mo estimated
                                                 </p>
                                             </div>
                                         )}
@@ -295,7 +298,7 @@ export function TokenProjectionBanner({
                         <div className="bg-card-lv1 flex items-center justify-between gap-4 px-5 py-3">
                             <div className="flex items-center gap-2">
                                 <SparklesIcon className="text-text-tertiary size-4 shrink-0" />
-                                <p className="text-text-tertiary text-pretty text-xs">
+                                <p className="text-text-tertiary text-xs text-pretty">
                                     AI costs are paid directly to providers.
                                 </p>
                             </div>
@@ -346,7 +349,8 @@ export function TokenProjectionEmptyState({
                                 </>
                             ) : (
                                 <span className="text-text-tertiary">
-                                    Let Kody review a few PRs to see your estimated cost
+                                    Let Kody review a few PRs to see your
+                                    estimated cost
                                 </span>
                             )}
                         </p>

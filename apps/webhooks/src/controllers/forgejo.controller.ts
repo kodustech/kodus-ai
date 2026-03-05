@@ -18,7 +18,7 @@ export class ForgejoController {
 
     constructor(
         private readonly enqueueWebhookUseCase: EnqueueWebhookUseCase,
-    ) { }
+    ) {}
 
     @Post('/webhook')
     handleWebhook(@Req() req: Request, @Res() res: Response) {

@@ -8,5 +8,9 @@ export interface ICliDeviceRepository {
     countByOrganizationId(organizationId: string): Promise<number>;
     create(data: Partial<ICliDevice>): Promise<CliDeviceEntity | undefined>;
     updateLastSeen(uuid: string, userAgent?: string): Promise<void>;
-    updateTokenHash(uuid: string, tokenHash: string, userAgent?: string): Promise<void>;
+    updateTokenHash(
+        uuid: string,
+        tokenHash: string,
+        userAgent?: string,
+    ): Promise<void>;
 }

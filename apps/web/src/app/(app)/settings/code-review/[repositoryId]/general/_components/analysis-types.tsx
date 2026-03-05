@@ -12,12 +12,12 @@ import {
 } from "@services/parameters/hooks";
 import type { CodeReviewLabel } from "@services/parameters/types";
 import { Controller, useFormContext } from "react-hook-form";
-import { safeArray } from "src/core/utils/safe-array";
-import { useCurrentConfigLevel } from "src/app/(app)/settings/_hooks";
 import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
+import { useCurrentConfigLevel } from "src/app/(app)/settings/_hooks";
+import { safeArray } from "src/core/utils/safe-array";
 
-import { FormattedConfigLevel, type CodeReviewFormType } from "../../../_types";
 import { OverrideIndicatorForm } from "../../../_components/override";
+import { FormattedConfigLevel, type CodeReviewFormType } from "../../../_types";
 
 interface CheckboxCardOption {
     value: string;

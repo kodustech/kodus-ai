@@ -25,7 +25,7 @@ import { z } from "zod";
 
 const tokenFormSchema = z.object({
     token: z.string().min(1, {
-        error: "Enter a Token"
+        error: "Enter a Token",
     }),
 });
 
@@ -97,8 +97,8 @@ export const GithubTokenModal = (props: {
                         <DialogDescription></DialogDescription>
                     </DialogHeader>
 
-                    <div className="my-4 flex flex-col gap-3 rounded-xl border border-informative/20 bg-informative/5 p-4">
-                        <p className="text-sm text-text-secondary">
+                    <div className="border-informative/20 bg-informative/5 my-4 flex flex-col gap-3 rounded-xl border p-4">
+                        <p className="text-text-secondary text-sm">
                             Reviews will be posted from the token owner's
                             account:
                         </p>

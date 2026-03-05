@@ -232,6 +232,8 @@ export class ChatWithKodyFromGitUseCase {
                     pullRequestNumber,
                     pullRequestDescription,
                     organizationAndTeamData,
+                    headRef,
+                    baseRef,
                 );
             }
 
@@ -269,10 +271,17 @@ export class ChatWithKodyFromGitUseCase {
     private isRelevantAction(params: WebhookParams): boolean {
         const action = params.payload?.action;
         const eventType = params.payload?.event_type;
+        const allowedActions = new Set(['created', 'edited']);
+        const allowedEventTypes = new Set([
+            'note',
+            'note_edited',
+            'comment_created',
+            'comment_updated',
+        ]);
 
         if (
-            (action && action !== 'created') ||
-            (!action && eventType && eventType !== 'note')
+            (action && !allowedActions.has(action)) ||
+            (!action && eventType && !allowedEventTypes.has(eventType))
         ) {
             return false;
         }
@@ -366,6 +375,8 @@ export class ChatWithKodyFromGitUseCase {
         pullRequestNumber: number,
         pullRequestDescription: string,
         organizationAndTeamData: OrganizationAndTeamData,
+        headRef?: string,
+        baseRef?: string,
     ): Promise<void> {
         const sender = this.getSender(params);
         const commentBody =
@@ -459,10 +470,15 @@ export class ChatWithKodyFromGitUseCase {
 
         const prepareContext = {
             userQuestion: commentBody,
-            pullRequestNumber,
+            pullRequest: {
+                pullRequestNumber,
+                headRef,
+                baseRef,
+            },
             repository,
             pullRequestDescription,
             platformType: params.platformType,
+            customInstructions: this.extractCustomInstructions(params),
         };
 
         const response = await this.businessRulesValidationAgentUseCase.execute(
@@ -742,6 +758,7 @@ export class ChatWithKodyFromGitUseCase {
             headRef,
             baseRef,
             defaultBranch,
+            customInstructions: this.extractCustomInstructions(params),
         });
 
         const thread = createThreadId(
@@ -1503,6 +1520,7 @@ export class ChatWithKodyFromGitUseCase {
         headRef,
         baseRef,
         defaultBranch,
+        customInstructions,
     }: {
         comment?: Comment;
         originalKodyComment?: Comment;
@@ -1515,6 +1533,7 @@ export class ChatWithKodyFromGitUseCase {
         headRef?: string;
         baseRef?: string;
         defaultBranch?: string;
+        customInstructions?: string;
     }): any {
         const userQuestion =
             comment.body.trim() === '@kody'
@@ -1530,6 +1549,7 @@ export class ChatWithKodyFromGitUseCase {
             },
             pullRequestDescription,
             platformType,
+            customInstructions,
             pullRequest: {
                 pullRequestNumber,
                 headRef: headRef,
@@ -1744,5 +1764,57 @@ export class ChatWithKodyFromGitUseCase {
             });
         }
         return gitUser;
+    }
+
+    private extractCustomInstructions(
+        params: WebhookParams,
+    ): string | undefined {
+        const payload = params.payload;
+        const candidates: unknown[] = [
+            payload?.customInstructions,
+            payload?.custom_instructions,
+            payload?.kody?.customInstructions,
+            payload?.kody?.custom_instructions,
+            payload?.configuration?.customInstructions,
+            payload?.configuration?.custom_instructions,
+            payload?.summary?.customInstructions,
+            payload?.codeReviewConfig?.summary?.customInstructions,
+            payload?.codeReview?.summary?.customInstructions,
+        ];
+
+        for (const candidate of candidates) {
+            const normalized = this.normalizeCustomInstructions(candidate);
+            if (normalized) {
+                return normalized;
+            }
+        }
+
+        return undefined;
+    }
+
+    private normalizeCustomInstructions(value: unknown): string | undefined {
+        if (typeof value === 'string' && value.trim().length > 0) {
+            return value.trim();
+        }
+
+        if (!value || typeof value !== 'object') {
+            return undefined;
+        }
+
+        const record = value as Record<string, unknown>;
+        const directTextCandidates = [
+            record.text,
+            record.value,
+            record.content,
+            record.body,
+            record.instructions,
+        ];
+        for (const candidate of directTextCandidates) {
+            if (typeof candidate === 'string' && candidate.trim().length > 0) {
+                return candidate.trim();
+            }
+        }
+
+        return undefined;
     }
 }

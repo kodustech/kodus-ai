@@ -2,9 +2,7 @@
 
 import React, { useState } from "react";
 import AutoComplete from "@components/system/autoComplete";
-import {
-    getRepositories,
-} from "@services/codeManagement/fetch";
+import { getRepositories } from "@services/codeManagement/fetch";
 
 import styles from "./styles.module.css";
 
@@ -15,9 +13,9 @@ export default function AzureReposRepositoriesSelector({
     setSelectedRepositories,
 }: {
     teamId: any;
-    organizationSelected: any,
-    selectedRepositories: any,
-    setSelectedRepositories: any,
+    organizationSelected: any;
+    selectedRepositories: any;
+    setSelectedRepositories: any;
 }): React.ReactNode {
     const [repositories, setRepositories] = React.useState<any[]>([]);
     const [originalRepositories, setOriginalRepositories] = useState<any[]>([]);
@@ -26,7 +24,8 @@ export default function AzureReposRepositoriesSelector({
     React.useEffect(() => {
         const fetchData = async () => {
             setIsLoading(true);
-            const data: any[] = await getRepositories(teamId, organizationSelected);
+            const response = await getRepositories(teamId, organizationSelected);
+            const data = Array.isArray(response) ? response : [];
 
             setOriginalRepositories(data);
 
@@ -50,7 +49,7 @@ export default function AzureReposRepositoriesSelector({
                         return {
                             label: repository.name,
                             value: repository.id,
-                            project: repository?.project
+                            project: repository?.project,
                         };
                     }),
             );
@@ -73,8 +72,7 @@ export default function AzureReposRepositoriesSelector({
                 onChange={setRepository}
                 value={selectedRepositories}
                 isMulti={true}
-                isLoading={isLoading}
-            ></AutoComplete>
+                isLoading={isLoading}></AutoComplete>
         </div>
     );
 }

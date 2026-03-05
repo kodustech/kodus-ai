@@ -25,7 +25,7 @@ const ADDITIONAL_FILTER_FIELDS: Record<
         meta: {
             name: "Kody Rule ID",
             filters: {
-                is: true,
+                "is": true,
                 "is-not": true,
             },
             filtersValueInputType: "text",

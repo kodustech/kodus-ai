@@ -1,0 +1,34 @@
+{
+  "name": "happy-path-jira-complete",
+  "input": {
+    "pullRequestNumber": 100,
+    "prBody": "Implements user authentication flow as described in PROJ-123",
+    "prDiff": "diff --git a/src/auth.ts b/src/auth.ts\n+ export async function login(email, password) {\n+   return { token: 'jwt-token' };\n+ }",
+    "taskContext": {
+      "id": "PROJ-123",
+      "title": "Implement user authentication",
+      "description": "Add login/logout flow with JWT tokens",
+      "acceptanceCriteria": [
+        "User can login with email/password",
+        "JWT token is returned on success",
+        "Invalid credentials return 401",
+        "Logout invalidates the token"
+      ]
+    }
+  },
+  "expectedTrajectory": [
+    { "capability": "pr.metadata.read", "status": "success" },
+    { "capability": "pr.diff.read", "status": "success" },
+    { "capability": "task.context.read", "status": "success" },
+    { "step": "classifyTaskContext", "output": { "taskQuality": "COMPLETE" } },
+    { "step": "validateContext", "passed": true },
+    { "step": "analyzeBusinessRules", "status": "success" }
+  ],
+  "expectedOutcome": {
+    "needsMoreInfo": false,
+    "mode": "full_analysis",
+    "reason": "analysis_ready",
+    "resolvedTaskContextContains": ["PROJ-123", "authentication"],
+    "summaryContains": ["Validation summary"]
+  }
+}

@@ -1,30 +1,28 @@
 "use client";
 
 import { Badge } from "@components/ui/badge";
-import { 
+import {
     Tooltip,
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
-import { 
-    AlertTriangle,
-    CheckCircle, 
-    Clock,
-    XCircle
-} from "lucide-react";
+import { AlertTriangle, CheckCircle, Clock, XCircle } from "lucide-react";
+
 import type { ExternalReferencesData } from "../[repositoryId]/pr-summary/_components/external-references-display";
 
 interface ExternalReferencesBadgeProps {
     externalReferences?: ExternalReferencesData;
 }
 
-export function ExternalReferencesBadge({ externalReferences }: ExternalReferencesBadgeProps) {
+export function ExternalReferencesBadge({
+    externalReferences,
+}: ExternalReferencesBadgeProps) {
     if (!externalReferences) {
         return null;
     }
 
     const { references, syncErrors, processingStatus } = externalReferences;
-    
+
     if (references.length === 0 && syncErrors.length === 0) {
         return null;
     }
@@ -59,16 +57,15 @@ export function ExternalReferencesBadge({ externalReferences }: ExternalReferenc
         return (
             <Tooltip>
                 <TooltipTrigger asChild>
-                    <Badge 
-                        variant="destructive" 
-                        className="gap-1 cursor-pointer"
-                    >
+                    <Badge
+                        variant="destructive"
+                        className="cursor-pointer gap-1">
                         <AlertTriangle className="h-3 w-3" />
                         {syncErrors.length}
                     </Badge>
                 </TooltipTrigger>
                 <TooltipContent>
-                    <div className="text-xs space-y-1">
+                    <div className="space-y-1 text-xs">
                         <p className="font-semibold">Sync Errors:</p>
                         {syncErrors.slice(0, 3).map((error, idx) => (
                             <p key={idx}>{error}</p>
@@ -85,19 +82,23 @@ export function ExternalReferencesBadge({ externalReferences }: ExternalReferenc
     return (
         <Tooltip>
             <TooltipTrigger asChild>
-                <Badge 
-                    variant="outline" 
-                    className={`gap-1 cursor-pointer border ${getStatusColor(processingStatus)}`}
-                >
+                <Badge
+                    variant="outline"
+                    className={`cursor-pointer gap-1 border ${getStatusColor(processingStatus)}`}>
                     {getStatusIcon(processingStatus)}
                     {references.length}
                 </Badge>
             </TooltipTrigger>
             <TooltipContent>
-                <div className="text-xs space-y-1">
-                    <p className="font-semibold">{references.length} Reference{references.length > 1 ? 's' : ''}</p>
+                <div className="space-y-1 text-xs">
+                    <p className="font-semibold">
+                        {references.length} Reference
+                        {references.length > 1 ? "s" : ""}
+                    </p>
                     {references.map((ref, idx) => (
-                        <p key={idx}>{ref.filePath} ({ref.repositoryName})</p>
+                        <p key={idx}>
+                            {ref.filePath} ({ref.repositoryName})
+                        </p>
                     ))}
                 </div>
             </TooltipContent>

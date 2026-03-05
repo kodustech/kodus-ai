@@ -27,6 +27,7 @@ import { createLogger } from '@kodus/flow';
 @Injectable()
 export class PullRequestsService implements IPullRequestsService {
     private readonly logger = createLogger(PullRequestsService.name);
+    private static readonly SAVE_TIMEOUT_MS = 180_000; // 3 min
 
     constructor(
         @Inject(PULL_REQUESTS_REPOSITORY_TOKEN)
@@ -34,6 +35,26 @@ export class PullRequestsService implements IPullRequestsService {
 
         private readonly codeManagement: CodeManagementService,
     ) {}
+
+    private withTimeout<T>(
+        promise: Promise<T>,
+        timeoutMs: number,
+        label: string,
+    ): Promise<T> {
+        let timeoutId: NodeJS.Timeout | undefined;
+        const timeout = new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(
+                () =>
+                    reject(
+                        new Error(`Timeout after ${timeoutMs}ms in ${label}`),
+                    ),
+                timeoutMs,
+            );
+        });
+        return Promise.race([promise, timeout]).finally(() => {
+            if (timeoutId) clearTimeout(timeoutId);
+        });
+    }
 
     getNativeCollection() {
         throw new Error('Method not implemented.');
@@ -400,149 +421,177 @@ export class PullRequestsService implements IPullRequestsService {
         prLevelSuggestions?: ISuggestionByPR[],
     ): Promise<IPullRequests | null> {
         try {
-            const organizationId = organizationAndTeamData?.organizationId;
-
-            if (!organizationId) {
-                this.logger.error({
-                    message: `organizationId is missing in organizationAndTeamData for PR #${pullRequest?.number}`,
-                    context: PullRequestsService.name,
-                    metadata: {
-                        organizationAndTeamData,
-                        repositoryName: repository?.name,
-                        pullRequestNumber: pullRequest?.number,
-                    },
-                });
-                return null;
-            }
-
-            const enrichedPullRequest = {
-                ...pullRequest,
-                organizationId,
-                commits,
-            };
-
-            // Sometimes gitlab sends an array of ids instead of assignees and reviewers
-            const shouldGetAssigneesFromIds =
-                !enrichedPullRequest.assignees &&
-                enrichedPullRequest.assignee_ids;
-            if (shouldGetAssigneesFromIds) {
-                const foundAssignees = await this.getUsers(
-                    organizationAndTeamData,
-                    enrichedPullRequest.assignee_ids,
-                );
-                enrichedPullRequest.assignees = foundAssignees;
-            }
-
-            const shouldGetReviewersFromIds =
-                (!enrichedPullRequest.reviewers ||
-                    !enrichedPullRequest.requested_reviewers) &&
-                enrichedPullRequest.reviewer_ids;
-            if (shouldGetReviewersFromIds) {
-                const foundReviewers = await this.getUsers(
-                    organizationAndTeamData,
-                    enrichedPullRequest.reviewer_ids,
-                );
-                enrichedPullRequest.reviewers = foundReviewers;
-            }
-
-            const existingPR =
-                await this.pullRequestsRepository.findByNumberAndRepositoryName(
-                    pullRequest?.number,
-                    repository.name,
-                    organizationAndTeamData,
-                );
-
-            if (!existingPR) {
-                return this.handleInitialPullRequest(
-                    enrichedPullRequest,
+            return await this.withTimeout(
+                this.aggregateAndSaveInternal(
+                    pullRequest,
                     repository,
                     changedFiles,
                     prioritizedSuggestions,
                     unusedSuggestions,
                     platformType,
                     organizationAndTeamData,
+                    commits,
                     prLevelSuggestions,
-                );
-            }
-
-            await this.update(existingPR, {
-                status: await this.identifyPullRequestStatus(pullRequest),
-                merged: this.extractMergedStatus(pullRequest),
-                updatedAt: new Date().toISOString(),
-                closedAt: this.extractClosedAt(pullRequest),
-                user: await this.extractUser(
-                    pullRequest.user,
-                    organizationAndTeamData,
-                    platformType,
-                    pullRequest?.number,
                 ),
-                reviewers: await this.extractUsers(
-                    (pullRequest.reviewers ||
-                        pullRequest?.requested_reviewers) ??
-                        enrichedPullRequest.reviewers,
-                    organizationAndTeamData,
-                    platformType,
-                    pullRequest?.number,
-                ),
-                assignees: await this.extractUsers(
-                    (pullRequest.assignees || pullRequest?.participants) ??
-                        enrichedPullRequest.assignees,
-                    organizationAndTeamData,
-                    platformType,
-                    pullRequest?.number,
-                ),
-                commits: enrichedPullRequest.commits,
-                isDraft: enrichedPullRequest.isDraft ?? false,
-                repository: {
-                    id:
-                        repository.id?.toString() ||
-                        existingPR.repository?.id ||
-                        '',
-                    name: repository.name || existingPR.repository?.name || '',
-                    fullName:
-                        this.extractRepoFullName(pullRequest) ||
-                        existingPR.repository?.fullName ||
-                        '',
-                    language:
-                        repository.language ||
-                        existingPR.repository?.language ||
-                        '',
-                    url: repository.url || existingPR.repository?.url || '',
-                    createdAt:
-                        existingPR.repository?.createdAt ||
-                        new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                },
-            });
-
-            if (prLevelSuggestions && prLevelSuggestions.length > 0) {
-                await this.addPrLevelSuggestions(
-                    pullRequest.number,
-                    repository.name,
-                    prLevelSuggestions,
-                    organizationAndTeamData,
-                );
-            }
-
-            return this.handleExistingPullRequest(
-                enrichedPullRequest,
-                repository,
-                changedFiles,
-                prioritizedSuggestions,
-                unusedSuggestions,
-                organizationAndTeamData,
+                PullRequestsService.SAVE_TIMEOUT_MS,
+                `aggregateAndSaveDataStructure (PR#${pullRequest?.number})`,
             );
         } catch (error) {
-            this.logger.log({
-                message: `Failed to aggregate and save code review data for PR#${pullRequest?.number}`,
+            this.logger.error({
+                message: `Timeout or error in aggregateAndSaveDataStructure for PR#${pullRequest?.number}`,
                 context: PullRequestsService.name,
                 error: error,
                 metadata: {
                     pullRequestNumber: pullRequest?.number,
                     repositoryName: repository?.name,
+                    timeoutMs: PullRequestsService.SAVE_TIMEOUT_MS,
                 },
             });
+            return null;
         }
+    }
+
+    private async aggregateAndSaveInternal(
+        pullRequest: any,
+        repository: any,
+        changedFiles: Array<any>,
+        prioritizedSuggestions: Array<ISuggestion>,
+        unusedSuggestions: Array<ISuggestion>,
+        platformType: PlatformType,
+        organizationAndTeamData: OrganizationAndTeamData,
+        commits: ICommit[],
+        prLevelSuggestions?: ISuggestionByPR[],
+    ): Promise<IPullRequests | null> {
+        const organizationId = organizationAndTeamData?.organizationId;
+
+        if (!organizationId) {
+            this.logger.error({
+                message: `organizationId is missing in organizationAndTeamData for PR #${pullRequest?.number}`,
+                context: PullRequestsService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryName: repository?.name,
+                    pullRequestNumber: pullRequest?.number,
+                },
+            });
+            return null;
+        }
+
+        const enrichedPullRequest = {
+            ...pullRequest,
+            organizationId,
+            commits,
+        };
+
+        // Sometimes gitlab sends an array of ids instead of assignees and reviewers
+        const shouldGetAssigneesFromIds =
+            !enrichedPullRequest.assignees && enrichedPullRequest.assignee_ids;
+        if (shouldGetAssigneesFromIds) {
+            const foundAssignees = await this.getUsers(
+                organizationAndTeamData,
+                enrichedPullRequest.assignee_ids,
+            );
+            enrichedPullRequest.assignees = foundAssignees;
+        }
+
+        const shouldGetReviewersFromIds =
+            (!enrichedPullRequest.reviewers ||
+                !enrichedPullRequest.requested_reviewers) &&
+            enrichedPullRequest.reviewer_ids;
+        if (shouldGetReviewersFromIds) {
+            const foundReviewers = await this.getUsers(
+                organizationAndTeamData,
+                enrichedPullRequest.reviewer_ids,
+            );
+            enrichedPullRequest.reviewers = foundReviewers;
+        }
+
+        const existingPR =
+            await this.pullRequestsRepository.findByNumberAndRepositoryName(
+                pullRequest?.number,
+                repository.name,
+                organizationAndTeamData,
+            );
+
+        if (!existingPR) {
+            return this.handleInitialPullRequest(
+                enrichedPullRequest,
+                repository,
+                changedFiles,
+                prioritizedSuggestions,
+                unusedSuggestions,
+                platformType,
+                organizationAndTeamData,
+                prLevelSuggestions,
+            );
+        }
+
+        await this.update(existingPR, {
+            status: await this.identifyPullRequestStatus(pullRequest),
+            merged: this.extractMergedStatus(pullRequest),
+            updatedAt: new Date().toISOString(),
+            closedAt: this.extractClosedAt(pullRequest),
+            user: await this.extractUser(
+                pullRequest.user,
+                organizationAndTeamData,
+                platformType,
+                pullRequest?.number,
+            ),
+            reviewers: await this.extractUsers(
+                (pullRequest.reviewers || pullRequest?.requested_reviewers) ??
+                    enrichedPullRequest.reviewers,
+                organizationAndTeamData,
+                platformType,
+                pullRequest?.number,
+            ),
+            assignees: await this.extractUsers(
+                (pullRequest.assignees || pullRequest?.participants) ??
+                    enrichedPullRequest.assignees,
+                organizationAndTeamData,
+                platformType,
+                pullRequest?.number,
+            ),
+            commits: enrichedPullRequest.commits,
+            isDraft: enrichedPullRequest.isDraft ?? false,
+            repository: {
+                id:
+                    repository.id?.toString() ||
+                    existingPR.repository?.id ||
+                    '',
+                name: repository.name || existingPR.repository?.name || '',
+                fullName:
+                    this.extractRepoFullName(pullRequest) ||
+                    existingPR.repository?.fullName ||
+                    '',
+                language:
+                    repository.language ||
+                    existingPR.repository?.language ||
+                    '',
+                url: repository.url || existingPR.repository?.url || '',
+                createdAt:
+                    existingPR.repository?.createdAt ||
+                    new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            },
+        });
+
+        if (prLevelSuggestions && prLevelSuggestions.length > 0) {
+            await this.addPrLevelSuggestions(
+                pullRequest.number,
+                repository.name,
+                prLevelSuggestions,
+                organizationAndTeamData,
+            );
+        }
+
+        return this.handleExistingPullRequest(
+            enrichedPullRequest,
+            repository,
+            changedFiles,
+            prioritizedSuggestions,
+            unusedSuggestions,
+            organizationAndTeamData,
+        );
     }
 
     private async initializeCodeReviewStructure(
@@ -967,10 +1016,7 @@ export class PullRequestsService implements IPullRequestsService {
              */
             if (data?.role) {
                 const usernameForLookup =
-                    data?.login ||
-                    data?.username ||
-                    data?.nickname ||
-                    '';
+                    data?.login || data?.username || data?.nickname || '';
                 // Only call getUserByUsername if we have a non-empty username
                 const completeUser = usernameForLookup
                     ? await this.codeManagement.getUserByUsername(

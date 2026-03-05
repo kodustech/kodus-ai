@@ -5,11 +5,12 @@
 
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { environment } from '@libs/ee/configs/environment';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import {
     IKodyRule,
     KodyRulesStatus,
+    KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { Injectable } from '@nestjs/common';
 
@@ -96,9 +97,12 @@ export class KodyRulesValidationService {
         rules: Partial<IKodyRule>[] = [],
         repositoryId: string,
         directoryId?: string,
-    ): Partial<IKodyRule>[] {
+    ): {
+        standardRules: Partial<IKodyRule>[];
+        memoryRules: Partial<IKodyRule>[];
+    } {
         if (!rules?.length) {
-            return [];
+            return { standardRules: [], memoryRules: [] };
         }
 
         const repositoryRules: Partial<IKodyRule>[] = [];
@@ -143,7 +147,20 @@ export class KodyRulesValidationService {
             'asc',
         );
 
-        return orderedRules;
+        const [standardRules, memoryRules] = orderedRules.reduce(
+            (acc, rule) => {
+                if (rule.type === KodyRulesType.MEMORY) {
+                    acc[1].push(rule);
+                } else {
+                    acc[0].push(rule);
+                }
+                return acc;
+            },
+            [[], []] as [Partial<IKodyRule>[], Partial<IKodyRule>[]],
+        );
+
+        // Memory rules should be last in the list, so they are applied after all standard rules.
+        return { standardRules, memoryRules };
     }
 
     /**
@@ -220,6 +237,38 @@ export class KodyRulesValidationService {
             // Pass the folder-specific matching strategy
             (rule, normalizedFolder) =>
                 this.isFolderPathMatch(rule, normalizedFolder),
+        );
+    }
+
+    getMemoryRulesForContext(
+        path: string | null,
+        kodyRules: Partial<IKodyRule>[],
+        filters: {
+            directoryId?: string;
+            repositoryId?: string;
+            useInclude?: boolean;
+            useExclude?: boolean;
+        },
+    ): Partial<IKodyRule>[] {
+        if (!kodyRules?.length) {
+            return [];
+        }
+
+        const activeMemoryRules = kodyRules.filter(
+            (rule) =>
+                rule?.type === KodyRulesType.MEMORY &&
+                rule?.status === KodyRulesStatus.ACTIVE,
+        );
+
+        const normalizedFilters = {
+            ...filters,
+            directoryId: filters.repositoryId ? filters.directoryId : undefined,
+        };
+
+        return this.getKodyRulesForFolder(
+            path,
+            activeMemoryRules,
+            normalizedFilters,
         );
     }
 

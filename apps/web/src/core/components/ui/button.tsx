@@ -96,7 +96,8 @@ const buttonVariants = cva(
 );
 
 interface ButtonProps
-    extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    extends
+        React.ButtonHTMLAttributes<HTMLButtonElement>,
         Required<VariantProps<typeof buttonVariants>> {
     loading?: boolean;
     active?: boolean;

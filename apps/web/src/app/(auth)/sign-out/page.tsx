@@ -19,7 +19,7 @@ function SignOutContent() {
     useEffect(() => {
         const redirectToSignInPage = async () => {
             let callbackUrl = "/sign-in";
-            
+
             // Add reason to callback URL if present
             if (reason) {
                 callbackUrl += `?reason=${reason}`;
@@ -63,8 +63,7 @@ export default function App() {
                     <Spinner />
                     <Heading variant="h3">Disconnecting...</Heading>
                 </Page.Root>
-            }
-        >
+            }>
             <SignOutContent />
         </Suspense>
     );

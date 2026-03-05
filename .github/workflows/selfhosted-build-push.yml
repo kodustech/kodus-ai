@@ -167,11 +167,30 @@ jobs:
                     --set *.platform=linux/amd64,linux/arm64 \
                     --push
 
+    notify-discord:
+        name: Notify Discord
+        needs:
+            - create-release
+            - build-and-push
+        if: always() && needs.create-release.result == 'success'
+        runs-on: ubuntu-latest
+        environment: production
+        steps:
+            - name: Check Discord webhook configuration
+              id: discord-webhook
+              run: |
+                  if [ -n "${{ secrets.DISCORD_WEBHOOK_SELFHOSTED }}" ]; then
+                    echo "configured=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "configured=false" >> "$GITHUB_OUTPUT"
+                    echo "DISCORD_WEBHOOK_SELFHOSTED is not configured for the production environment."
+                  fi
+
             - name: Notify Discord on Success
-              if: success()
+              if: steps.discord-webhook.outputs.configured == 'true' && needs.build-and-push.result == 'success'
               uses: sarisia/actions-status-discord@v1.15.3
               with:
-                  webhook: ${{ vars.DISCORD_WEBHOOK_SELFHOSTED }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_SELFHOSTED }}
                   content: ":tada: New Self-Hosted Release `${{ needs.create-release.outputs.release_tag }}` published!"
                   title: "Self-Hosted Release"
                   description: "Docker images built and pushed to GHCR. Git tag ensured on GitHub."
@@ -179,11 +198,12 @@ jobs:
                   color: 0x00FF00
 
             - name: Notify Discord on Failure
-              if: failure()
+              if: steps.discord-webhook.outputs.configured == 'true' && needs.build-and-push.result != 'success'
               uses: sarisia/actions-status-discord@v1.15.3
               with:
-                  webhook: ${{ vars.DISCORD_WEBHOOK_SELFHOSTED }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_SELFHOSTED }}
                   content: ":x: Failed to publish self-hosted release `${{ needs.create-release.outputs.release_tag }}`."
                   title: "Self-Hosted Release Failed"
+                  description: "The self-hosted release workflow did not complete successfully. Check the workflow logs for details."
                   username: "GitHub Actions"
                   color: 0xFF0000

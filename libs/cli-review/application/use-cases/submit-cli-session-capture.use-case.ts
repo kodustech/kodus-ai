@@ -90,7 +90,8 @@ export class SubmitCliSessionCaptureUseCase implements IUseCase {
                         context: SubmitCliSessionCaptureUseCase.name,
                         metadata: {
                             dedupKey,
-                            organizationId: organizationAndTeamData.organizationId,
+                            organizationId:
+                                organizationAndTeamData.organizationId,
                             teamId: organizationAndTeamData.teamId,
                             branch: input.branch,
                             orgRepo: input.orgRepo,

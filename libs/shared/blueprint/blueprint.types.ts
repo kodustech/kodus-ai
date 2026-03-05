@@ -7,6 +7,7 @@
  *
  * No NestJS or @kodus/flow dependencies — pure TypeScript.
  */
+import type { ZodType } from 'zod';
 
 // ─── Context ─────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ export interface BlueprintContext {
 export interface DeterministicStep<T extends BlueprintContext> {
     type: 'deterministic';
     name: string;
+    contract?: BlueprintStepContract;
     /** Receives current context, returns updated context */
     fn: (ctx: T) => Promise<T>;
 }
@@ -52,6 +54,7 @@ export interface DeterministicStep<T extends BlueprintContext> {
 export interface GateStep<T extends BlueprintContext> {
     type: 'gate';
     name: string;
+    contract?: BlueprintStepContract;
     /** Returns true to continue, false to short-circuit */
     condition: (ctx: T) => boolean;
     /**
@@ -69,6 +72,7 @@ export interface GateStep<T extends BlueprintContext> {
 export interface LLMStep {
     type: 'llm';
     name: string;
+    contract?: BlueprintStepContract;
     /** Skill name — resolved to SKILL.md body by the caller's runLLMStep */
     skill: string;
     /** @kodus/flow agent identifier used in createAgent() / callAgent() */
@@ -82,6 +86,7 @@ export interface LLMStep {
 export interface FormatStep<T extends BlueprintContext> {
     type: 'format';
     name: string;
+    contract?: BlueprintStepContract;
     fn: (ctx: T) => T;
 }
 
@@ -92,8 +97,14 @@ export interface FormatStep<T extends BlueprintContext> {
 export interface ParallelStep {
     type: 'parallel';
     name: string;
+    contract?: BlueprintStepContract;
     /** Skill names to execute concurrently */
     skills: string[];
+}
+
+export interface BlueprintStepContract {
+    input?: ZodType;
+    output?: ZodType;
 }
 
 export type BlueprintStep<T extends BlueprintContext> =

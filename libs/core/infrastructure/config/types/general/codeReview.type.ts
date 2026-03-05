@@ -29,7 +29,10 @@ import {
     GetImpactAnalysisResponse,
     TaskStatus,
 } from '@libs/ee/kodyAST/interfaces/code-ast-analysis.interface';
-import { CrossFileContextSnippet } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import {
+    CrossFileContextSnippet,
+    RemoteCommands,
+} from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { IClusterizedSuggestion } from '@libs/kodyFineTuning/domain/interfaces/kodyFineTuning.interface';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { OrganizationAndTeamData } from './organizationAndTeamData';
@@ -132,6 +135,8 @@ export type AnalysisContext<TPullRequest = any> = {
     augmentationsByFile?: Record<string, ContextAugmentationsMap>;
     /** Cross-file context snippets relevant to the current file under review. */
     crossFileSnippets?: CrossFileContextSnippet[];
+    /** Remote commands for safeguard agent verification (from E2B sandbox) */
+    remoteCommands?: RemoteCommands;
 };
 
 export type ASTAnalysisResult = {
@@ -334,11 +339,13 @@ export type CodeReviewConfig = {
     languageResultPrompt: string;
     llmProvider?: LLMModelProvider;
     kodyRules?: Partial<IKodyRule>[];
+    kodyMemoryRules?: Partial<IKodyRule>[];
     suggestionControl?: SuggestionControlConfig;
     pullRequestApprovalActive: boolean;
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive?: boolean;
     kodyRulesGeneratorEnabled?: boolean;
+    llmGeneratedMemoriesRequireApproval?: boolean;
     reviewModeConfig?: ReviewModeConfig;
     ideRulesSyncEnabled?: boolean;
     kodyFineTuningConfig?: KodyFineTuningConfig;

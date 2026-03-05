@@ -44,8 +44,8 @@ export const IsRequestChangesActive = () => {
                             <div className="flex flex-col gap-1">
                                 <div className="flex flex-row items-center gap-2">
                                     <Heading variant="h3">
-                                        Enable changing status of Review to 'Request
-                                        Changes'
+                                        Enable changing status of Review to
+                                        'Request Changes'
                                     </Heading>
 
                                     <OverrideIndicatorForm fieldName="isRequestChangesActive" />

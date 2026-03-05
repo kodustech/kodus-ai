@@ -1,0 +1,202 @@
+[
+    {
+        "id": "mq-001-tests-di-over-global-mocks",
+        "input": {
+            "role": "user",
+            "content": "@kody replying to your review on this test: here we always keep dependency injection, not global mocks, even if it's shorter."
+        },
+        "contextSnippets": [
+            {
+                "id": "snippet-1",
+                "source": "apps/api/src/auth/auth.service.spec.ts",
+                "language": "typescript",
+                "code": "describe('AuthService', () => {\n  let service: AuthService;\n\n  beforeEach(async () => {\n    const moduleRef = await Test.createTestingModule({\n      providers: [\n        AuthService,\n        { provide: UserRepo, useValue: createUserRepoStub() },\n      ],\n    }).compile();\n\n    service = moduleRef.get(AuthService);\n  });\n\n  it('returns token', async () => {\n    const token = await service.login('u', 'p');\n    expect(token).toBeDefined();\n  });\n});\n\nfunction buildJwtPayload(userId: string) {\n  return { sub: userId, scope: ['api'] };\n}"
+            }
+        ],
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "always use dependency injection instead of global mocks in tests"
+        }
+    },
+    {
+        "id": "mq-002-postgres-primary-db",
+        "input": {
+            "role": "user",
+            "content": "@kody on this DB config suggestion, please remember our standard: PostgreSQL is our primary database, not MySQL."
+        },
+        "contextSnippets": [
+            {
+                "id": "snippet-1",
+                "source": "libs/core/src/database/connection.factory.ts",
+                "language": "typescript",
+                "code": "export class ConnectionFactory {\n  static build(env: NodeJS.ProcessEnv) {\n    if (env.API_PG_DB_HOST) return new PostgresConnection(env);\n    if (env.MYSQL_HOST) return new MysqlConnection(env);\n    throw new Error('No supported DB configured');\n  }\n}\n\nexport class HealthProbe {\n  ping() {\n    return { ok: true, ts: Date.now() };\n  }\n}"
+            }
+        ],
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "primary database is PostgreSQL, not MySQL"
+        }
+    },
+    {
+        "id": "mq-005-sql-exists-over-count",
+        "input": {
+            "role": "user",
+            "content": "@kody on your SQL suggestion in this file, please remember we prefer EXISTS over COUNT(*) for existence checks."
+        },
+        "contextSnippets": [
+            {
+                "id": "snippet-1",
+                "source": "libs/code-review/src/sql/checks.ts",
+                "language": "typescript",
+                "code": "export function buildExistsQuery(table: string, where: string) {\n  return `SELECT EXISTS (SELECT 1 FROM ${table} WHERE ${where})`;\n}\n\nexport function buildCountQuery(table: string, where: string) {\n  return `SELECT COUNT(*) FROM ${table} WHERE ${where}`;\n}\n\nexport function explain(query: string) {\n  return `EXPLAIN ANALYZE ${query}`;\n}"
+            }
+        ],
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "prefer EXISTS over COUNT(*) for SQL existence checks"
+        }
+    },
+    {
+        "id": "mq-007-hexagonal-domain-boundary",
+        "input": {
+            "role": "user",
+            "content": "@kody about your review in this domain service: we are strict hexagonal here, domain must not depend on infrastructure classes."
+        },
+        "contextSnippets": [
+            {
+                "id": "snippet-1",
+                "source": "libs/payments/src/domain/payment.service.ts",
+                "language": "typescript",
+                "code": "import { PaymentGatewayHttpClient } from '../infrastructure/payment-gateway.http';\n\nexport class PaymentService {\n  constructor(private readonly gateway: PaymentGatewayHttpClient) {}\n\n  async capture(input: CaptureInput) {\n    return await this.gateway.capture(input);\n  }\n}\n\nexport class PaymentPolicy {\n  canRefund(status: string) {\n    return status === 'captured';\n  }\n}"
+            }
+        ],
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "domain layer must have zero dependencies on infrastructure layer"
+        }
+    },
+    {
+        "id": "mq-008-next-public-prefix",
+        "input": {
+            "role": "user",
+            "content": "@kody on this env-variable review comment, memorize this rule: frontend-exposed env vars must start with NEXT_PUBLIC_."
+        },
+        "contextSnippets": [
+            {
+                "id": "snippet-1",
+                "source": "apps/web/src/env.ts",
+                "language": "typescript",
+                "code": "export function readPublicEnv() {\n  return {\n    apiUrl: process.env.NEXT_PUBLIC_API_URL,\n    sentryDsn: process.env.NEXT_PUBLIC_SENTRY_DSN,\n  };\n}\n\nexport function readServerEnv() {\n  return {\n    apiSecret: process.env.API_SECRET_KEY,\n  };\n}"
+            }
+        ],
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "frontend-exposed environment variables must start with NEXT_PUBLIC_"
+        }
+    },
+    {
+        "id": "mq-009-no-lodash-prefer-native",
+        "input": {
+            "role": "user",
+            "content": "@kody replying to your refactor suggestion in this util: we avoid lodash here, please stick to native array methods."
+        },
+        "contextSnippets": [
+            {
+                "id": "snippet-1",
+                "source": "libs/shared/src/collections.ts",
+                "language": "typescript",
+                "code": "import _ from 'lodash';\n\nexport function firstActive(users: User[]) {\n  return _.find(users, (user) => user.active);\n}\n\nexport function names(users: User[]) {\n  return users.map((user) => user.name);\n}"
+            }
+        ],
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "prefer native JavaScript array methods over Lodash"
+        }
+    },
+    {
+        "id": "mq-010-date-fns-over-moment",
+        "input": {
+            "role": "user",
+            "content": "@kody for this date formatting suggestion, remember our project standard is date-fns, not moment.js."
+        },
+        "contextSnippets": [
+            {
+                "id": "snippet-1",
+                "source": "apps/web/src/utils/date.ts",
+                "language": "typescript",
+                "code": "import moment from 'moment';\n\nexport function formatDate(value: Date) {\n  return moment(value).format('YYYY-MM-DD');\n}\n\nexport function isWeekend(value: Date) {\n  const day = value.getDay();\n  return day === 0 || day === 6;\n}"
+            }
+        ],
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "use date-fns instead of moment.js for date handling"
+        }
+    },
+    {
+        "id": "mq-011-no-default-export-ts",
+        "input": {
+            "role": "user",
+            "content": "@kody on this module export review, keep this as a rule for next suggestions: we don't use default exports in TypeScript files."
+        },
+        "contextSnippets": [
+            {
+                "id": "snippet-1",
+                "source": "libs/core/src/logger/index.ts",
+                "language": "typescript",
+                "code": "class Logger {\n  info(message: string) {\n    console.log(message);\n  }\n}\n\nexport default new Logger();\n\nexport function formatLog(message: string) {\n  return `[app] ${message}`;\n}"
+            }
+        ],
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "use named exports only in TypeScript files"
+        }
+    },
+    {
+        "id": "mq-014-api-v1-route-prefix",
+        "input": {
+            "role": "user",
+            "content": "@kody from this route review, save this convention: all API routes should be prefixed with /api/v1."
+        },
+        "contextSnippets": [
+            {
+                "id": "snippet-1",
+                "source": "apps/api/src/orders/orders.controller.ts",
+                "language": "typescript",
+                "code": "@Controller('orders')\nexport class OrdersController {\n  @Get()\n  async list() {\n    return await this.ordersService.list();\n  }\n}\n\n@Controller('health')\nexport class HealthController {\n  @Get()\n  check() {\n    return { ok: true };\n  }\n}"
+            }
+        ],
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "explicit",
+            "rule": "API routes must be prefixed with /api/v1"
+        }
+    },
+    {
+        "id": "mq-015-jwt-in-headers",
+        "input": {
+            "role": "user",
+            "content": "@kody replying to your auth suggestion here: remember that we authenticate with JWT tokens in request headers."
+        },
+        "contextSnippets": [
+            {
+                "id": "snippet-1",
+                "source": "apps/api/src/auth/jwt-auth.guard.ts",
+                "language": "typescript",
+                "code": "export function extractToken(req: Request) {\n  const auth = req.headers.authorization || '';\n  if (!auth.startsWith('Bearer ')) return null;\n  return auth.replace('Bearer ', '');\n}\n\nexport class JwtAuthGuard {\n  canActivate(req: Request) {\n    return Boolean(extractToken(req));\n  }\n}"
+            }
+        ],
+        "shouldCreateMemory": true,
+        "expected": {
+            "triggerType": "implicit",
+            "rule": "authentication is done via JWT tokens in headers"
+        }
+    }
+]

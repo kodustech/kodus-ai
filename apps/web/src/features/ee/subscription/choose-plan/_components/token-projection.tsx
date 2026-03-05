@@ -1,17 +1,19 @@
+import { Card, CardContent } from "@components/ui/card";
 import {
     getDailyTokenUsage,
     getTokenUsageByDeveloper,
     getTokenUsageByPR,
 } from "@services/usage/fetch";
 import type { ModelPricingInfo } from "@services/usage/types";
-import { differenceInDays, subDays, format } from "date-fns";
+import { differenceInDays, format, subDays } from "date-fns";
 import { TrendingUpIcon } from "lucide-react";
-import { Card, CardContent } from "@components/ui/card";
 import { isBYOKSubscriptionPlan } from "src/features/ee/byok/_utils";
 
+import {
+    fetchModelPricingFromModelsDev,
+    type SimulatorModel,
+} from "../_services/models";
 import { validateOrganizationLicense } from "../../_services/billing/fetch";
-import { fetchModelPricingFromModelsDev } from "../_services/models";
-import type { SimulatorModel } from "../_services/models";
 import {
     TokenProjectionBanner,
     TokenProjectionEmptyState,
@@ -128,7 +130,10 @@ async function computeTokenProjection(
             return {
                 projection: null,
                 daysUsed,
-                progress: { current: uniquePRs, required: MIN_PRS_FOR_PROJECTION },
+                progress: {
+                    current: uniquePRs,
+                    required: MIN_PRS_FOR_PROJECTION,
+                },
             };
         }
 
@@ -152,10 +157,12 @@ async function computeTokenProjection(
         }
 
         // Compute cost for each model's pricing → range from cheapest to most expensive
-        const modelCosts = Object.entries(pricingMap).map(([model, pricing]) => ({
-            model,
-            cost: computeCost(pricing),
-        }));
+        const modelCosts = Object.entries(pricingMap).map(
+            ([model, pricing]) => ({
+                model,
+                cost: computeCost(pricing),
+            }),
+        );
 
         modelCosts.sort((a, b) => a.cost - b.cost);
 
@@ -166,7 +173,10 @@ async function computeTokenProjection(
             return {
                 projection: null,
                 daysUsed,
-                progress: { current: uniquePRs, required: MIN_PRS_FOR_PROJECTION },
+                progress: {
+                    current: uniquePRs,
+                    required: MIN_PRS_FOR_PROJECTION,
+                },
             };
         }
 
@@ -175,7 +185,10 @@ async function computeTokenProjection(
             return {
                 projection: null,
                 daysUsed,
-                progress: { current: uniquePRs, required: MIN_PRS_FOR_PROJECTION },
+                progress: {
+                    current: uniquePRs,
+                    required: MIN_PRS_FOR_PROJECTION,
+                },
             };
         }
 
@@ -245,7 +258,7 @@ export function TokenProjectionSkeleton() {
                     <div className="bg-primary-dark flex size-9 shrink-0 animate-pulse items-center justify-center rounded-full">
                         <TrendingUpIcon className="text-primary-light size-4" />
                     </div>
-                    <div className="flex-1 min-w-0 space-y-2">
+                    <div className="min-w-0 flex-1 space-y-2">
                         <div className="bg-card-lv1 h-3 w-32 animate-pulse rounded" />
                         <div className="bg-card-lv1 h-5 w-48 animate-pulse rounded" />
                     </div>

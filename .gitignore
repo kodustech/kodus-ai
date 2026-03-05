@@ -119,6 +119,8 @@ specs
 .cursor
 .claude
 .codex
+.agents
+skills-lock.json
 
 # Eval results
 evals/promptfoo/results/

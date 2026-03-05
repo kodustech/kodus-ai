@@ -1,0 +1,10 @@
+{
+    "providerType": "linear",
+    "capability": "task.context.read",
+    "tools": [
+        "LINEAR_GET_LINEAR_ISSUE",
+        "LINEAR_LIST_LINEAR_ISSUES",
+        "LINEAR_LIST_LINEAR_PROJECTS",
+        "LINEAR_LIST_LINEAR_TEAMS"
+    ]
+}

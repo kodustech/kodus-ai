@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class MarketingSurvey1771438580377 implements MigrationInterface {
-    name = 'MarketingSurvey1771438580377'
+    name = 'MarketingSurvey1771438580377';
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`
@@ -22,5 +22,4 @@ export class MarketingSurvey1771438580377 implements MigrationInterface {
             ALTER TABLE "profiles" DROP COLUMN "referralSource"
         `);
     }
-
 }

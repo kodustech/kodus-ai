@@ -1,0 +1,15 @@
+description: "Cross-File Context Sufficiency Evaluator"
+
+providers:
+  - id: google:gemini-2.5-flash
+    config:
+      temperature: 0
+      maxOutputTokens: 8192
+      response_mime_type: application/json
+
+prompts:
+  - file://sufficiency-prompt-loader.js
+
+tests: file://datasets/sufficiency-tests.json
+
+outputPath: ./results/sufficiency-output.json

@@ -178,7 +178,8 @@ export class ASTContentFormatterService {
                 context: ASTContentFormatterService.name,
                 metadata: {
                     batchSize: batch.length,
-                    organizationId: context.organizationAndTeamData?.organizationId,
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
                 },
             });
             return emptyResult;
@@ -218,7 +219,8 @@ export class ASTContentFormatterService {
                 context: ASTContentFormatterService.name,
                 metadata: {
                     filesCount: files.length,
-                    organizationId: context.organizationAndTeamData?.organizationId,
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
                 },
             });
             return { taskId: null };

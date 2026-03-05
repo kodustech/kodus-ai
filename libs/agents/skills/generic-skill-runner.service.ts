@@ -3,6 +3,7 @@ import {
     createOrchestration,
     LLMAdapter,
     MCPAdapter,
+    MCPServerConfig,
     PlannerType,
     Thread,
 } from '@kodus/flow';
@@ -17,17 +18,24 @@ import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service
 import {
     McpConnectionUnavailableError,
     RequiredMcpPreflightError,
-    SkillInputContractViolationError,
-    SkillOutputContractViolationError,
 } from './skill.errors';
 import { resolveCapabilityTools } from './skill-capabilities';
+import { BoundedMap } from './runtime/bounded-map';
 import {
     SkillExecutionPolicy,
     SkillFetcherPolicy,
+    SkillInstructionsLoadOptions,
     SkillLoaderService,
     SkillMeta,
     SkillRequiredMcp,
 } from './skill-loader.service';
+import {
+    AgentCallOptions,
+    SkillCapabilityRuntimeConfig,
+    SkillFetcherRuntime,
+    ToolExecutionResponse,
+    ToolCaller,
+} from './runtime/skill-runtime.types';
 
 export interface SkillFetcherResult {
     raw: string;
@@ -41,6 +49,8 @@ export interface SkillRunInput {
     analyzerPrompt: string;
 }
 
+export type { SkillCapabilityRuntimeConfig } from './runtime/skill-runtime.types';
+
 type ResolvedExecutionPolicy = Required<
     Pick<
         SkillExecutionPolicy,
@@ -53,6 +63,20 @@ type ResolvedExecutionPolicy = Required<
     >
 >;
 
+export type SkillResolvedExecutionPolicy = ResolvedExecutionPolicy;
+
+interface McpConnectionMetadata {
+    connection?: {
+        id?: string;
+        serverName?: string;
+        appName?: string;
+    };
+}
+
+type McpConnection = MCPServerConfig & {
+    metadata?: McpConnectionMetadata;
+};
+
 /**
  * Shared infrastructure for the fetcher+analyzer pattern used by all PR-level skills.
  *
@@ -62,14 +86,14 @@ type ResolvedExecutionPolicy = Required<
  *
  * GenericSkillRunnerService handles:
  *  - MCP adapter creation (from SKILL.md allowed-tools)
- *  - Fetcher orchestration (with MCP tools, maxIterations: 4)
+ *  - Fetcher orchestration (with MCP tools; fetcher agent initialized lazily on demand)
  *  - Analyzer orchestration (instructions from SKILL.md, no tools, maxIterations: 1)
  */
 @Injectable()
 export class GenericSkillRunnerService {
     private readonly logger = new Logger(GenericSkillRunnerService.name);
-    private readonly instructionsCache = new Map<string, string>();
-    private readonly metaCache = new Map<string, SkillMeta>();
+    private readonly instructionsCache = new BoundedMap<string, string>(128);
+    private readonly metaCache = new BoundedMap<string, SkillMeta>(64);
 
     constructor(
         private readonly skillLoaderService: SkillLoaderService,
@@ -86,7 +110,7 @@ export class GenericSkillRunnerService {
         skillName: string,
         llmAdapter: LLMAdapter,
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<SDKOrchestrator> {
+    ): Promise<SkillFetcherRuntime> {
         const startedAt = Date.now();
         try {
             const meta = this.getSkillMeta(skillName);
@@ -97,16 +121,31 @@ export class GenericSkillRunnerService {
                 fetcherPolicy,
             );
             const requiredTools = this.resolveRequiredTools(meta, skillName);
-            const mcpManagerServers =
-                await this.mcpManagerService?.getConnections(
-                    organizationAndTeamData,
+            if (!this.mcpManagerService) {
+                this.logger.warn(
+                    `[GenericSkillRunner] MCPManagerService is unavailable for skill '${skillName}'.`,
                 );
+            }
+            const mcpManagerServers = this.mcpManagerService
+                ? await this.mcpManagerService.getConnections(
+                      organizationAndTeamData,
+                  )
+                : [];
             const availableProviders =
                 this.getAvailableProviders(mcpManagerServers);
+            const allProviderTypes =
+                this.resolveAllProviderTypes(mcpManagerServers);
+            const providerType =
+                allProviderTypes.length > 0 ? allProviderTypes[0] : 'external';
+            const requiredProviderHints = this.resolveRequiredProviderHints(
+                meta.requiredMcps,
+            );
 
             this.preflightRequiredMcps(
                 skillName,
                 meta.requiredMcps,
+                requiredProviderHints,
+                availableProviders,
                 mcpManagerServers,
             );
 
@@ -114,6 +153,7 @@ export class GenericSkillRunnerService {
                 skillName,
                 requiredTools,
                 fetcherPolicy,
+                requiredProviderHints,
                 mcpManagerServers,
             );
             this.metricsCollector?.recordGauge(
@@ -194,20 +234,68 @@ export class GenericSkillRunnerService {
                 }
             }
 
-            await orchestration.createAgent({
-                name: `kodus-${skillName}-fetcher`,
-                identity: {
-                    goal: `Fetch all relevant context for the ${skillName} skill using available tools. Return structured JSON with the gathered data.`,
-                    description: `Context fetcher for ${skillName}.`,
-                    language: 'en-US',
-                },
-                maxIterations: executionPolicy.fetcherMaxIterations,
-                timeout: executionPolicy.fetcherTimeoutMs,
-                plannerOptions: { type: PlannerType.REACT },
-            });
+            let fetcherAgentInitialized = false;
+            const ensureFetcherAgent = async (): Promise<void> => {
+                if (fetcherAgentInitialized) {
+                    return;
+                }
+                await orchestration.createAgent({
+                    name: `kodus-${skillName}-fetcher`,
+                    identity: {
+                        goal: `Fetch all relevant context for the ${skillName} skill using available tools. Return structured JSON with the gathered data.`,
+                        description: `Context fetcher for ${skillName}.`,
+                        language: 'en-US',
+                    },
+                    maxIterations: executionPolicy.fetcherMaxIterations,
+                    timeout: executionPolicy.fetcherTimeoutMs,
+                    plannerOptions: { type: PlannerType.REACT },
+                });
+                fetcherAgentInitialized = true;
+            };
 
+            const toolCaller: ToolCaller = {
+                callTool: async (toolName, args) =>
+                    this.normalizeToolExecutionResponse(
+                        await orchestration.callTool(toolName, args),
+                    ),
+                callAgent: async (agentName, prompt, options) => {
+                    await ensureFetcherAgent();
+                    return this.normalizeToolExecutionResponse(
+                        await orchestration.callAgent(
+                            agentName,
+                            prompt,
+                            options as AgentCallOptions,
+                        ),
+                    );
+                },
+                getRegisteredTools: () => orchestration.getRegisteredTools(),
+                getToolsForLLM: () => {
+                    const getter = (
+                        orchestration as unknown as {
+                            getToolsForLLM?: () => Array<{
+                                name?: string;
+                                parameters?: unknown;
+                            }>;
+                        }
+                    ).getToolsForLLM;
+                    return typeof getter === 'function'
+                        ? getter.call(orchestration)
+                        : [];
+                },
+            };
+
+            const capabilityRuntime = this.getCapabilityRuntimeConfig(
+                skillName,
+                {
+                    providerType,
+                    allProviderTypes,
+                },
+            );
             this.recordSetupMetric(skillName, 'fetcher', 'success', startedAt);
-            return orchestration;
+            return {
+                toolCaller,
+                capabilityRuntime,
+            };
         } catch (error) {
             this.recordSetupMetric(skillName, 'fetcher', 'failed', startedAt);
             throw error;
@@ -217,10 +305,19 @@ export class GenericSkillRunnerService {
     /**
      * Creates a ready-to-use analyzer orchestration for a skill.
      * Loads instructions from SKILL.md (body + references).
+     *
+     * @deprecated Use `getExecutionPolicy()` + direct LLM adapter calls instead.
+     * The production path (BusinessRulesValidationAgentProvider.runAnalyzer) no longer
+     * calls this method — it uses getExecutionPolicy() with withTimeout and retry.
+     * Kept for backward compatibility with existing tests.
      */
     async createAnalyzerOrchestration(
         skillName: string,
         llmAdapter: LLMAdapter,
+        options?: {
+            organizationAndTeamData?: OrganizationAndTeamData;
+            customInstructions?: string;
+        },
     ): Promise<SDKOrchestrator> {
         const startedAt = Date.now();
         try {
@@ -231,7 +328,12 @@ export class GenericSkillRunnerService {
                 meta.executionPolicy,
                 fetcherPolicy,
             );
-            const instructions = this.getSkillInstructions(skillName);
+            const instructions = this.getSkillInstructions(skillName, {
+                organizationId:
+                    options?.organizationAndTeamData?.organizationId,
+                teamId: options?.organizationAndTeamData?.teamId,
+                customInstructions: options?.customInstructions,
+            });
 
             const orchestration = await createOrchestration({
                 tenantId: `kodus-skill-analyzer-${skillName}`,
@@ -263,44 +365,58 @@ export class GenericSkillRunnerService {
         }
     }
 
-    validateInputContract(
+    getCapabilityRuntimeConfig(
         skillName: string,
-        context: unknown,
-    ): void {
+        options?: {
+            providerType?: string;
+            allProviderTypes?: string[];
+        },
+    ): SkillCapabilityRuntimeConfig {
         const meta = this.getSkillMeta(skillName);
-        const requiredFields = meta.contracts?.input?.requiredContextFields ?? [];
-
-        if (!requiredFields.length) {
-            return;
-        }
-
-        const contextRecord = this.asRecord(context);
-        const missingFields = requiredFields.filter(
-            (path) => this.readPath(contextRecord, path) === undefined,
-        );
-        if (missingFields.length > 0) {
-            throw new SkillInputContractViolationError(skillName, missingFields);
-        }
+        return {
+            capabilities: meta.capabilities ?? [],
+            allowedTools: meta.allowedTools ?? [],
+            capabilityToolMap: meta.capabilityToolMap,
+            capabilityDefinitions: meta.capabilityDefinitions,
+            fetcherPolicy: this.resolveFetcherPolicy(meta.fetcherPolicy),
+            providerType: options?.providerType ?? 'external',
+            allProviderTypes: options?.allProviderTypes,
+            contracts: meta.contracts,
+        };
     }
 
-    validateOutputContract(
+    getAnalyzerInstructions(
         skillName: string,
-        output: unknown,
-    ): void {
+        options?: SkillInstructionsLoadOptions,
+    ): string {
+        const baseInstructions = this.getSkillInstructions(skillName, options);
+        const references = this.skillLoaderService.listReferences(skillName);
+        if (!references.length) {
+            return baseInstructions;
+        }
+
+        const referenceContent = references
+            .map((fileName) =>
+                this.skillLoaderService.loadReference(skillName, fileName),
+            )
+            .filter(
+                (content): content is string =>
+                    typeof content === 'string' && content.trim().length > 0,
+            )
+            .map((content) => content.trim())
+            .join('\n\n---\n\n');
+
+        if (!referenceContent.length) {
+            return baseInstructions;
+        }
+
+        return `${baseInstructions}\n\n---\n\n## Reference Material\n\n${referenceContent}`;
+    }
+
+    getExecutionPolicy(skillName: string): SkillResolvedExecutionPolicy {
         const meta = this.getSkillMeta(skillName);
-        const requiredFields = meta.contracts?.output?.requiredFields ?? [];
-
-        if (!requiredFields.length) {
-            return;
-        }
-
-        const outputRecord = this.asRecord(output);
-        const missingFields = requiredFields.filter(
-            (path) => this.readPath(outputRecord, path) === undefined,
-        );
-        if (missingFields.length > 0) {
-            throw new SkillOutputContractViolationError(skillName, missingFields);
-        }
+        const fetcherPolicy = this.resolveFetcherPolicy(meta.fetcherPolicy);
+        return this.resolveExecutionPolicy(meta.executionPolicy, fetcherPolicy);
     }
 
     // ─── Private helpers ──────────────────────────────────────────────────────
@@ -312,32 +428,62 @@ export class GenericSkillRunnerService {
         }
 
         const meta =
-            this.skillLoaderService.loadSkillMetaFromFilesystem(skillName) ?? {};
+            this.skillLoaderService.loadSkillMetaFromFilesystem(skillName) ??
+            {};
         this.metaCache.set(skillName, meta);
         return meta;
     }
 
-    private getSkillInstructions(skillName: string): string {
-        const cached = this.instructionsCache.get(skillName);
+    private getSkillInstructions(
+        skillName: string,
+        options?: SkillInstructionsLoadOptions,
+    ): string {
+        const cacheKey = this.buildInstructionsCacheKey(skillName, options);
+        const cached = this.instructionsCache.get(cacheKey);
         if (cached) {
             return cached;
         }
 
-        const instructions = this.skillLoaderService.loadInstructions(skillName);
-        this.instructionsCache.set(skillName, instructions);
+        const instructions = this.skillLoaderService.loadInstructions(
+            skillName,
+            options,
+        );
+        this.instructionsCache.set(cacheKey, instructions);
         return instructions;
+    }
+
+    private buildInstructionsCacheKey(
+        skillName: string,
+        options?: SkillInstructionsLoadOptions,
+    ): string {
+        const organizationId = options?.organizationId?.trim() || '-';
+        const teamId = options?.teamId?.trim() || '-';
+        const customInstructions = options?.customInstructions?.trim();
+        const customInstructionsKey = customInstructions
+            ? `custom:${this.hashCacheSegment(customInstructions)}`
+            : 'custom:-';
+
+        return `${skillName}|org:${organizationId}|team:${teamId}|${customInstructionsKey}`;
+    }
+
+    private hashCacheSegment(value: string): string {
+        let hash = 0;
+        for (let i = 0; i < value.length; i += 1) {
+            hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+        }
+        return `${value.length}-${hash.toString(16)}`;
     }
 
     private preflightRequiredMcps(
         skillName: string,
         requiredMcps: SkillRequiredMcp[] | undefined,
-        mcpManagerServers: any[] | undefined,
-    ) {
+        requiredProviderHints: string[],
+        availableProviders: string[],
+        mcpManagerServers: McpConnection[] | undefined,
+    ): void {
         if (!requiredMcps?.length) {
             return;
         }
-
-        const availableProviders = this.getAvailableProviders(mcpManagerServers);
 
         const externalConnections = (mcpManagerServers ?? []).filter(
             (server) =>
@@ -360,13 +506,39 @@ export class GenericSkillRunnerService {
                 availableProviders,
             );
         }
+        if (!requiredProviderHints.length) {
+            return;
+        }
+
+        const matchingExternalConnections = externalConnections.filter(
+            (server) =>
+                this.serverMatchesRequiredHints(server, requiredProviderHints),
+        );
+
+        if (!matchingExternalConnections.length) {
+            this.logger.warn(
+                `[GenericSkillRunner] No connected external MCP provider matches required hints for skill '${skillName}'. Required hints: ${requiredProviderHints.join(
+                    ', ',
+                )}. Available providers: ${
+                    availableProviders.length
+                        ? availableProviders.join(', ')
+                        : 'none'
+                }`,
+            );
+            throw new RequiredMcpPreflightError(
+                skillName,
+                requiredMcps,
+                availableProviders,
+            );
+        }
     }
 
     private createMCPAdapter(
         skillName: string,
         requiredTools: string[] | undefined,
         fetcherPolicy: Required<SkillFetcherPolicy>,
-        mcpManagerServers: any[] | undefined,
+        requiredProviderHints: string[],
+        mcpManagerServers: McpConnection[] | undefined,
     ): MCPAdapter | null {
         if (!mcpManagerServers?.length) {
             this.logger.warn(
@@ -375,7 +547,9 @@ export class GenericSkillRunnerService {
             return null;
         }
 
-        const resolvedRequiredTools = requiredTools?.length ? requiredTools : [];
+        const resolvedRequiredTools = requiredTools?.length
+            ? requiredTools
+            : [];
         const hasRequiredTools = this.hasRequiredKodusTools(
             mcpManagerServers,
             resolvedRequiredTools,
@@ -385,7 +559,13 @@ export class GenericSkillRunnerService {
         const filteredServers = mcpManagerServers
             .filter((server) => {
                 if (server.provider !== 'kodusmcp') {
-                    return true;
+                    if (!requiredProviderHints.length) {
+                        return true;
+                    }
+                    return this.serverMatchesRequiredHints(
+                        server,
+                        requiredProviderHints,
+                    );
                 }
                 if (!resolvedRequiredTools.length) {
                     return true;
@@ -437,12 +617,133 @@ export class GenericSkillRunnerService {
         });
     }
 
-    private getAvailableProviders(mcpManagerServers: any[] | undefined): string[] {
+    private resolveRequiredProviderHints(
+        requiredMcps: SkillRequiredMcp[] | undefined,
+    ): string[] {
+        if (!requiredMcps?.length) {
+            return [];
+        }
+
+        const hints = new Set<string>();
+        for (const requiredMcp of requiredMcps) {
+            const examples = requiredMcp.examples;
+            if (!examples) {
+                continue;
+            }
+            for (const token of examples.split(',')) {
+                const normalized = this.normalizeProviderToken(token);
+                if (normalized) {
+                    hints.add(normalized);
+                }
+            }
+        }
+
+        return [...hints];
+    }
+
+    private providerMatchesRequiredHints(
+        provider: unknown,
+        requiredHints: string[],
+    ): boolean {
+        if (!requiredHints.length) {
+            return true;
+        }
+        const normalizedProvider = this.normalizeProviderToken(provider);
+        if (!normalizedProvider) {
+            return false;
+        }
+
+        return requiredHints.some(
+            (hint) =>
+                normalizedProvider === hint ||
+                normalizedProvider.includes(hint) ||
+                hint.includes(normalizedProvider),
+        );
+    }
+
+    private serverMatchesRequiredHints(
+        server: McpConnection,
+        requiredHints: string[],
+    ): boolean {
+        if (!requiredHints.length) {
+            return true;
+        }
+
+        return this.getServerProviderAliases(server).some((alias) =>
+            this.providerMatchesRequiredHints(alias, requiredHints),
+        );
+    }
+
+    private getServerProviderAliases(server: McpConnection): string[] {
+        const metadataConnection = server?.metadata?.connection;
+        const aliases = [
+            server?.provider,
+            server?.name,
+            metadataConnection?.id,
+            metadataConnection?.serverName,
+            metadataConnection?.appName,
+        ];
+
+        return [
+            ...new Set(aliases.filter((alias) => typeof alias === 'string')),
+        ];
+    }
+
+    private normalizeProviderToken(value: unknown): string {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '');
+    }
+
+    private getAvailableProviders(
+        mcpManagerServers: McpConnection[] | undefined,
+    ): string[] {
         return (mcpManagerServers ?? []).map((server) =>
             typeof server?.provider === 'string'
                 ? server.provider
                 : 'unknown-provider',
         );
+    }
+
+    private resolveAllProviderTypes(
+        mcpManagerServers: McpConnection[] | undefined,
+    ): string[] {
+        const seen = new Set<string>();
+        const result: string[] = [];
+
+        for (const server of mcpManagerServers ?? []) {
+            for (const providerType of this.resolveServerProviderTypes(
+                server,
+            )) {
+                if (!seen.has(providerType)) {
+                    seen.add(providerType);
+                    result.push(providerType);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private resolveServerProviderTypes(server: McpConnection): string[] {
+        const aliases = this.getServerProviderAliases(server)
+            .map((alias) => this.normalizeProviderToken(alias))
+            .filter((alias) => alias.length > 0 && alias !== 'kodusmcp');
+
+        if (!aliases.length) {
+            return [];
+        }
+
+        const genericProviders = new Set(['custom', 'external']);
+        const specificAliases = aliases.filter(
+            (alias) => !genericProviders.has(alias),
+        );
+
+        return [...new Set(specificAliases.length ? specificAliases : aliases)];
     }
 
     private resolveFetcherPolicy(
@@ -475,7 +776,11 @@ export class GenericSkillRunnerService {
     private resolveRequiredTools(meta: SkillMeta, skillName: string): string[] {
         const explicitTools = meta.allowedTools ?? [];
         const { tools: capabilityTools, unknownCapabilities } =
-            resolveCapabilityTools(meta.capabilities);
+            resolveCapabilityTools(
+                meta.capabilities,
+                meta.capabilityToolMap,
+                meta.capabilityDefinitions,
+            );
 
         if (unknownCapabilities.length > 0) {
             this.logger.warn(
@@ -488,40 +793,41 @@ export class GenericSkillRunnerService {
         return [...new Set([...explicitTools, ...capabilityTools])];
     }
 
-    private validateSkillSchema(meta: SkillMeta, skillName: string): void {
-        const apiVersion = meta.apiVersion ?? 'skills.kodus.ai/v1';
-        const kind = meta.kind ?? 'Skill';
-
-        const supportedVersions = new Set(['skills.kodus.ai/v1']);
-        if (!supportedVersions.has(apiVersion)) {
-            this.logger.warn(
-                `[GenericSkillRunner] Skill '${skillName}' uses unsupported apiVersion '${apiVersion}'. Falling back to compatibility mode.`,
-            );
+    private normalizeToolExecutionResponse(
+        response: unknown,
+    ): ToolExecutionResponse {
+        if (response && typeof response === 'object') {
+            const maybeResult = (response as Record<string, unknown>).result;
+            if (maybeResult !== undefined) {
+                return { result: maybeResult };
+            }
         }
 
-        if (kind !== 'Skill') {
-            this.logger.warn(
-                `[GenericSkillRunner] Skill '${skillName}' has unexpected kind '${kind}'. Expected 'Skill'.`,
-            );
-        }
+        return { result: response };
     }
 
-    private readPath(input: Record<string, unknown>, path: string): unknown {
-        if (!path.trim().length) {
-            return undefined;
+    private validateSkillSchema(meta: SkillMeta, skillName: string): void {
+        if (!meta.name?.trim()) {
+            this.logger.warn(
+                `[GenericSkillRunner] Skill '${skillName}' is missing frontmatter 'name' (Agent Skills required field).`,
+            );
         }
 
-        return path.split('.').reduce<unknown>((acc, key) => {
-            if (!acc || typeof acc !== 'object') {
-                return undefined;
-            }
+        if (!meta.description?.trim()) {
+            this.logger.warn(
+                `[GenericSkillRunner] Skill '${skillName}' is missing frontmatter 'description' (Agent Skills required field).`,
+            );
+        }
 
-            return (acc as Record<string, unknown>)[key];
-        }, input);
+        if (meta.name && meta.name !== skillName) {
+            this.logger.warn(
+                `[GenericSkillRunner] Skill name mismatch. folder='${skillName}', frontmatter='${meta.name}'.`,
+            );
+        }
     }
 
     private hasRequiredKodusTools(
-        servers: any[] | undefined,
+        servers: McpConnection[] | undefined,
         requiredTools: string[],
         fetcherPolicy: Required<SkillFetcherPolicy>,
     ): boolean {
@@ -549,13 +855,6 @@ export class GenericSkillRunnerService {
         return requiredTools.some((tool) => kodusTools.has(tool));
     }
 
-    private asRecord(value: unknown): Record<string, unknown> {
-        if (!value || typeof value !== 'object') {
-            return {};
-        }
-        return value as Record<string, unknown>;
-    }
-
     private recordSetupMetric(
         skillName: string,
         stage: 'fetcher' | 'analyzer',
@@ -568,6 +867,10 @@ export class GenericSkillRunnerService {
             Date.now() - startedAt,
             labels,
         );
-        this.metricsCollector?.recordCounter('kodus_skill_setup_total', 1, labels);
+        this.metricsCollector?.recordCounter(
+            'kodus_skill_setup_total',
+            1,
+            labels,
+        );
     }
 }

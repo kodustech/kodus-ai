@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { Metadata } from "next";
+import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
 import { FormControl } from "@components/ui/form-control";
 import { SvgKodus } from "@components/ui/icons/SvgKodus";
@@ -16,12 +17,11 @@ import { sendForgotPasswordMail } from "src/lib/auth/fetchers";
 import { z } from "zod";
 
 import AuthPageHeader from "../components/auth-page-header";
-import { useRouter } from "next/navigation";
 
 const forgotPasswordFormSchema = z.object({
     email: z.email({
-            error: "Please use a valid email address"
-        }),
+        error: "Please use a valid email address",
+    }),
 });
 
 type ForgotPasswordFormSchema = z.infer<typeof forgotPasswordFormSchema>;
@@ -37,7 +37,6 @@ export default function ForgotPasswordPage() {
         try {
             await sendForgotPasswordMail(data.email);
             router.push("/forgot-password/email-sent");
-            
         } catch (error) {
             toast({
                 title: "Error",

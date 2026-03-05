@@ -13,9 +13,9 @@ function SettingsLoadingSkeleton() {
     return (
         <div className="flex flex-1 flex-row overflow-hidden">
             <div className="bg-card-lv1 w-64 px-6 py-6">
-                <Skeleton className="h-8 w-full mb-4" />
-                <Skeleton className="h-8 w-full mb-4" />
-                <Skeleton className="h-8 w-full mb-4" />
+                <Skeleton className="mb-4 h-8 w-full" />
+                <Skeleton className="mb-4 h-8 w-full" />
+                <Skeleton className="mb-4 h-8 w-full" />
             </div>
             <div className="flex-1 p-6">
                 <Skeleton className="h-48 w-full" />

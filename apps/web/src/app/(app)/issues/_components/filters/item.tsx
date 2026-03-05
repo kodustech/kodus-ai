@@ -96,10 +96,7 @@ export const FilterItem = ({
                     ];
 
                     if (operator === "is" || operator === "is-not") {
-                        value =
-                            nextFieldInputType === "text"
-                                ? ""
-                                : values[0];
+                        value = nextFieldInputType === "text" ? "" : values[0];
                     } else if (
                         operator === "contains" ||
                         operator === "does-not-contain"

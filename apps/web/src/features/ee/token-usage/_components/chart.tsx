@@ -205,7 +205,9 @@ export const Chart = ({
                         top: 10,
                         bottom: isTiltedDate ? 50 : 30,
                     }}
-                    containerComponent={<VictoryContainer responsive={false} />}>
+                    containerComponent={
+                        <VictoryContainer responsive={false} />
+                    }>
                     <VictoryAxis
                         tickFormat={getTickFormat}
                         style={{
@@ -252,7 +254,10 @@ export const Chart = ({
                     <VictoryStack
                         style={{
                             data: {
-                                width: Math.min(24, chartWidth / chartData.length / 2),
+                                width: Math.min(
+                                    24,
+                                    chartWidth / chartData.length / 2,
+                                ),
                             },
                         }}>
                         <VictoryBar
@@ -286,7 +291,12 @@ export const Chart = ({
                                         fontFamily: "system-ui, sans-serif",
                                     }}
                                     cornerRadius={6}
-                                    flyoutPadding={{ top: 6, bottom: 6, left: 10, right: 10 }}
+                                    flyoutPadding={{
+                                        top: 6,
+                                        bottom: 6,
+                                        left: 10,
+                                        right: 10,
+                                    }}
                                 />
                             }
                         />
@@ -320,7 +330,12 @@ export const Chart = ({
                                         fontFamily: "system-ui, sans-serif",
                                     }}
                                     cornerRadius={6}
-                                    flyoutPadding={{ top: 6, bottom: 6, left: 10, right: 10 }}
+                                    flyoutPadding={{
+                                        top: 6,
+                                        bottom: 6,
+                                        left: 10,
+                                        right: 10,
+                                    }}
                                 />
                             }
                         />
@@ -355,7 +370,12 @@ export const Chart = ({
                                         fontFamily: "system-ui, sans-serif",
                                     }}
                                     cornerRadius={6}
-                                    flyoutPadding={{ top: 6, bottom: 6, left: 10, right: 10 }}
+                                    flyoutPadding={{
+                                        top: 6,
+                                        bottom: 6,
+                                        left: 10,
+                                        right: 10,
+                                    }}
                                 />
                             }
                         />
@@ -390,7 +410,12 @@ export const Chart = ({
                                         fontFamily: "system-ui, sans-serif",
                                     }}
                                     cornerRadius={6}
-                                    flyoutPadding={{ top: 6, bottom: 6, left: 10, right: 10 }}
+                                    flyoutPadding={{
+                                        top: 6,
+                                        bottom: 6,
+                                        left: 10,
+                                        right: 10,
+                                    }}
                                 />
                             }
                         />

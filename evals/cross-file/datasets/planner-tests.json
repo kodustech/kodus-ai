@@ -1,0 +1,202 @@
+[
+  {
+    "description": "Example 1: src/payments/refund.service.ts",
+    "vars": {
+      "diffSummary": "### src/payments/refund.service.ts\n@@ -0,0 +1,42 @@\n+import { Injectable } from '@nestjs/common';\n+import { db } from '../database';\n+import { transaction } from '../database';\n+import { RefundRequest, RefundResult } from './refund.types';\n+\n+@Injectable()\n+export class RefundService {\n+  async processRefund(request: RefundRequest): Promise<RefundResult> {\n+    return transaction(async (trx) => {\n+      const order = await db('orders')\n+        .where('id', request.orderId)\n+        .transacting(trx)\n+        .first();\n+\n+      if (!order) {\n+        throw new Error(`Order ${request.orderId} not found`);\n+      }\n+\n+      if (order.status !== 'completed') {\n+        throw new Error(`Order ${request.orderId} is not refundable`);\n+      }\n+\n+      const refund = await db('refunds')\n+        .insert({\n+          orderId: request.orderId,\n+          amount: request.amount ?? order.total,\n+          reason: request.reason,\n+          status: 'pending',\n+        })\n+        .transacting(trx)\n+        .returning('*');\n+\n+      await db('orders')\n+        .where('id', request.orderId)\n+        .update({ status: 'refunded' })\n+        .transacting(trx);\n+\n+      return {\n+        refundId: refund[0].id,\n+        status: 'pending',\n+        amount: refund[0].amount,\n+      };\n+    });\n+  }\n+}",
+      "changedFilenames": "[\n  \"src/payments/refund.service.ts\"\n]",
+      "expectedSymbols": "[]",
+      "expectedUpstreamSymbols": "[\"db\",\"transaction\"]",
+      "expectedRiskLevels": "{}"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://planner-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://planner-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 2: src/orders/create-order.service.ts",
+    "vars": {
+      "diffSummary": "### src/orders/create-order.service.ts\n@@ -1,8 +1,9 @@\n import { Injectable } from '@nestjs/common';\n import { OrderRepository } from './order.repository';\n+import { validateOrder } from '../validators/order.validator';\n import { Order, CreateOrderDto } from './order.types';\n \n @Injectable()\n export class CreateOrderService {\n-  async createOrder(dto: CreateOrderDto): Promise<Order> {\n+  async createOrder(dto: CreateOrderDto, userId: string): Promise<Order> {\n+    await validateOrder(dto);\n     const order = await this.orderRepository.create({\n       ...dto,\n+      userId,\n       status: 'pending',\n       createdAt: new Date(),\n     });\n     return order;\n   }\n }",
+      "changedFilenames": "[\n  \"src/orders/create-order.service.ts\"\n]",
+      "expectedSymbols": "[\"createOrder\"]",
+      "expectedUpstreamSymbols": "[\"validateOrder\"]",
+      "expectedRiskLevels": "{\"createOrder\":\"high\"}"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://planner-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://planner-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 3: packages/deploy/src/pipeline.ts",
+    "vars": {
+      "diffSummary": "### packages/deploy/src/pipeline.ts\n@@ -1,6 +1,7 @@\n import { Logger } from '@nestjs/common';\n+import { BuildConfig } from '@myorg/build-tools';\n import { DeployTarget } from './targets';\n \n export class DeployPipeline {\n   private logger = new Logger(DeployPipeline.name);\n+  private buildConfig: BuildConfig;\n \n-  async run(target: DeployTarget): Promise<void> {\n+  async run(target: DeployTarget, config: BuildConfig): Promise<void> {\n+    this.buildConfig = config;\n+    const script = config.toScript();\n+    this.logger.log(`Deploying with script: ${script.slice(0, 100)}...`);\n     await this.deploy(target);\n   }\n \n   private async deploy(target: DeployTarget): Promise<void> {\n+    const envVars = this.buildConfig.toScript();\n     // ... deployment logic\n   }\n }",
+      "changedFilenames": "[\n  \"packages/deploy/src/pipeline.ts\"\n]",
+      "expectedSymbols": "[\"DeployPipeline\"]",
+      "expectedUpstreamSymbols": "[\"BuildConfig\",\"toScript\"]",
+      "expectedRiskLevels": "{\"DeployPipeline\":\"high\"}"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://planner-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://planner-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 4: src/cache/user-cache.service.ts",
+    "vars": {
+      "diffSummary": "### src/cache/user-cache.service.ts\n@@ -1,6 +1,7 @@\n import { Injectable, Logger } from '@nestjs/common';\n import { RedisService } from '../redis/redis.service';\n+import { CacheKeyBuilder } from '../redis/cache-key-builder';\n \n @Injectable()\n export class UserCacheService {\n   private logger = new Logger(UserCacheService.name);\n \n-  async warmCache(userId: string): Promise<void> {\n-    const key = `user:${userId}:profile`;\n+  async warmCache(userId: string, options?: { ttl?: number }): Promise<void> {\n+    const key = CacheKeyBuilder.build('user', userId, 'profile');\n     const userData = await this.fetchUserData(userId);\n-    await this.redis.set(key, JSON.stringify(userData), 'EX', 3600);\n+    await this.redis.set(key, JSON.stringify(userData), 'EX', options?.ttl ?? 3600);\n     this.logger.log(`Warmed cache for user ${userId}`);\n   }\n \n   async invalidateCache(userId: string): Promise<void> {\n-    const key = `user:${userId}:profile`;\n+    const key = CacheKeyBuilder.build('user', userId, 'profile');\n     await this.redis.del(key);\n   }\n }",
+      "changedFilenames": "[\n  \"src/cache/user-cache.service.ts\"\n]",
+      "expectedSymbols": "[\"warmCache\"]",
+      "expectedUpstreamSymbols": "[\"CacheKeyBuilder\"]",
+      "expectedRiskLevels": "{\"warmCache\":\"medium\"}"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://planner-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://planner-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 5: test/unit/auth/hash-password.spec.ts",
+    "vars": {
+      "diffSummary": "### test/unit/auth/hash-password.spec.ts\n@@ -1,14 +1,20 @@\n import { hashPassword, verifyPassword } from '../../../src/auth/hash-password';\n \n describe('hashPassword', () => {\n   it('should hash a password', async () => {\n     const hash = await hashPassword('mysecret');\n     expect(hash).toBeDefined();\n     expect(hash).not.toBe('mysecret');\n+    expect(hash).toMatch(/^\\$2[aby]\\$\\d{2}\\$/);\n   });\n \n+  it('should produce different hashes for same input', async () => {\n+    const hash1 = await hashPassword('mysecret');\n+    const hash2 = await hashPassword('mysecret');\n+    expect(hash1).not.toBe(hash2);\n+  });\n+\n   it('should verify a correct password', async () => {\n     const hash = await hashPassword('mysecret');\n     const isValid = await verifyPassword('mysecret', hash);\n     expect(isValid).toBe(true);\n   });\n });",
+      "changedFilenames": "[\n  \"test/unit/auth/hash-password.spec.ts\"\n]",
+      "expectedSymbols": "[\"hashPassword\"]",
+      "expectedUpstreamSymbols": "[]",
+      "expectedRiskLevels": "{\"hashPassword\":\"medium\"}"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://planner-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://planner-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 6: src/rate-limiter/config.ts",
+    "vars": {
+      "diffSummary": "### src/rate-limiter/config.ts\n@@ -1,5 +1,6 @@\n+import { parseEnvInt } from '../utils/env-parser';\n \n-export const MAX_REQUESTS_PER_MINUTE = 100;\n+export const MAX_REQUESTS_PER_MINUTE = parseEnvInt('MAX_REQUESTS_PER_MINUTE', 500);\n export const WINDOW_SIZE_MS = 60_000;\n export const BLOCK_DURATION_MS = 300_000;\n-export const MAX_RETRY_AFTER_SECONDS = 60;\n+export const MAX_RETRY_AFTER_SECONDS = 120;",
+      "changedFilenames": "[\n  \"src/rate-limiter/config.ts\"\n]",
+      "expectedSymbols": "[\"MAX_REQUESTS_PER_MINUTE\"]",
+      "expectedUpstreamSymbols": "[\"parseEnvInt\"]",
+      "expectedRiskLevels": "{\"MAX_REQUESTS_PER_MINUTE\":\"high\"}"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://planner-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://planner-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 7: src/auth/roles.ts",
+    "vars": {
+      "diffSummary": "### src/auth/roles.ts\n@@ -1,8 +1,9 @@\n+import { BaseModel } from '../models/base.model';\n \n-export enum UserRole {\n+export enum Role {\n   ADMIN = 'admin',\n   USER = 'user',\n   MODERATOR = 'moderator',\n+  VIEWER = 'viewer',\n }\n \n-export type RoleCheck = (role: UserRole) => boolean;\n+export type RoleCheck = (role: Role) => boolean;\n \n-export function hasRole(userRole: UserRole, required: UserRole): boolean {\n+export function hasRole(userRole: Role, required: Role): boolean {\n   const hierarchy: Record<string, number> = {\n     admin: 3,\n     moderator: 2,\n     user: 1,\n+    viewer: 0,\n   };\n   return (hierarchy[userRole] ?? 0) >= (hierarchy[required] ?? 0);\n }",
+      "changedFilenames": "[\n  \"src/auth/roles.ts\"\n]",
+      "expectedSymbols": "[\"UserRole\",\"Role\"]",
+      "expectedUpstreamSymbols": "[\"BaseModel\"]",
+      "expectedRiskLevels": "{\"UserRole\":\"high\",\"Role\":\"high\"}"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://planner-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://planner-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 8: src/webhooks/payment-captured.handler.ts",
+    "vars": {
+      "diffSummary": "### src/webhooks/payment-captured.handler.ts\n@@ -0,0 +1,38 @@\n+import { Injectable, Logger } from '@nestjs/common';\n+import { PaymentEvent } from '../events/payment-event.types';\n+import { WebhookDelivery } from '../events/webhook-delivery';\n+import { OrderService } from '../orders/order.service';\n+\n+@Injectable()\n+export class PaymentCapturedHandler {\n+  private logger = new Logger(PaymentCapturedHandler.name);\n+\n+  constructor(\n+    private readonly orderService: OrderService,\n+    private readonly webhookDelivery: WebhookDelivery,\n+  ) {}\n+\n+  async handle(event: PaymentEvent): Promise<void> {\n+    if (event.type !== 'payment.captured') {\n+      this.logger.warn(`Unexpected event type: ${event.type}`);\n+      return;\n+    }\n+\n+    this.logger.log(`Processing payment.captured for order ${event.orderId}`);\n+\n+    await this.orderService.markAsPaid(event.orderId, {\n+      paymentId: event.paymentId,\n+      amount: event.amount,\n+      capturedAt: new Date(),\n+    });\n+\n+    await this.webhookDelivery.dispatch({\n+      topic: 'order.paid',\n+      payload: {\n+        orderId: event.orderId,\n+        paymentId: event.paymentId,\n+        amount: event.amount,\n+      },\n+    });\n+\n+    this.logger.log(`Completed payment.captured for order ${event.orderId}`);\n+  }\n+}",
+      "changedFilenames": "[\n  \"src/webhooks/payment-captured.handler.ts\"\n]",
+      "expectedSymbols": "[\"PaymentCapturedHandler\",\"markAsPaid\",\"order.paid\"]",
+      "expectedUpstreamSymbols": "[\"PaymentEvent\",\"WebhookDelivery\"]",
+      "expectedRiskLevels": "{\"PaymentCapturedHandler\":\"high\"}"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://planner-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://planner-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 9: scripts/migrate-users.ts",
+    "vars": {
+      "diffSummary": "### scripts/migrate-users.ts\n@@ -0,0 +1,45 @@\n+import { DatabaseClient } from '../src/database/client';\n+import { MigrationLogger } from '../src/database/migration-logger';\n+import { UserSchema } from '../src/users/user.schema';\n+\n+async function main() {\n+  const db = new DatabaseClient({\n+    host: process.env.DB_HOST ?? 'localhost',\n+    port: Number(process.env.DB_PORT ?? 5432),\n+    database: process.env.DB_NAME ?? 'app',\n+  });\n+\n+  const logger = new MigrationLogger('migrate-users');\n+\n+  try {\n+    await db.connect();\n+    logger.info('Connected to database');\n+\n+    const users = await db.query('SELECT * FROM users_legacy');\n+    logger.info(`Found ${users.length} users to migrate`);\n+\n+    let migrated = 0;\n+    let skipped = 0;\n+\n+    for (const user of users) {\n+      const parsed = UserSchema.safeParse({\n+        email: user.email,\n+        name: user.full_name,\n+        role: user.role ?? 'user',\n+        createdAt: user.created_at,\n+      });\n+\n+      if (!parsed.success) {\n+        logger.warn(`Skipping user ${user.id}: ${parsed.error.message}`);\n+        skipped++;\n+        continue;\n+      }\n+\n+      await db.query('INSERT INTO users (email, name, role, created_at) VALUES ($1, $2, $3, $4)', [\n+        parsed.data.email, parsed.data.name, parsed.data.role, parsed.data.createdAt,\n+      ]);\n+      migrated++;\n+    }\n+\n+    logger.info(`Migration complete: ${migrated} migrated, ${skipped} skipped`);\n+  } finally {\n+    await db.disconnect();\n+  }\n+}\n+\n+main().catch(console.error);",
+      "changedFilenames": "[\n  \"scripts/migrate-users.ts\"\n]",
+      "expectedSymbols": "[]",
+      "expectedUpstreamSymbols": "[\"DatabaseClient\",\"MigrationLogger\",\"UserSchema\"]",
+      "expectedRiskLevels": "{}"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://planner-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://planner-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 10: src/analytics/metrics.controller.ts",
+    "vars": {
+      "diffSummary": "### src/analytics/metrics.controller.ts\n@@ -0,0 +1,32 @@\n+import { Controller, Get, Query } from '@nestjs/common';\n+import { MetricsQuery, MetricsResponse } from './metrics.types';\n+import { AnalyticsService } from './analytics.service';\n+\n+@Controller('metrics')\n+export class MetricsController {\n+  constructor(private readonly analyticsService: AnalyticsService) {}\n+\n+  @Get()\n+  async getMetrics(@Query() query: MetricsQuery): Promise<MetricsResponse> {\n+    const startDate = query.startDate\n+      ? new Date(query.startDate)\n+      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);\n+    const endDate = query.endDate\n+      ? new Date(query.endDate)\n+      : new Date();\n+\n+    const result = await this.analyticsService.query({\n+      metrics: query.metrics ?? ['pageViews', 'uniqueVisitors'],\n+      startDate,\n+      endDate,\n+      granularity: query.granularity ?? 'day',\n+      filters: query.filters,\n+    });\n+\n+    return {\n+      data: result.data,\n+      metadata: {\n+        queriedAt: new Date().toISOString(),\n+        granularity: query.granularity ?? 'day',\n+      },\n+    };\n+  }\n+}",
+      "changedFilenames": "[\n  \"src/analytics/metrics.controller.ts\"\n]",
+      "expectedSymbols": "[\"MetricsController\",\"AnalyticsService\"]",
+      "expectedUpstreamSymbols": "[\"MetricsQuery\",\"MetricsResponse\"]",
+      "expectedRiskLevels": "{\"MetricsController\":\"medium\"}"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://planner-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://planner-coverage-assertion.js"
+      }
+    ]
+  }
+]

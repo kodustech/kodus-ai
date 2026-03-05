@@ -84,7 +84,7 @@ export default auth(async (req) => {
     const normalizedStatus = user?.status
         ? String(user.status).toLowerCase()
         : undefined;
-    
+
     // Block removed or inactive users
     if (
         normalizedStatus === UserStatus.REMOVED ||

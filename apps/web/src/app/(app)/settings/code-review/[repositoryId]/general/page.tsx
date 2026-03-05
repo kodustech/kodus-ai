@@ -18,10 +18,9 @@ import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { DownloadIcon, SaveIcon } from "lucide-react";
 import { FormProvider, useFormContext } from "react-hook-form";
+import { AsyncBoundary } from "src/core/components/async-boundary";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
-
-import { AsyncBoundary } from "src/core/components/async-boundary";
 
 import { CodeReviewPagesBreadcrumb } from "../../_components/breadcrumb";
 import GeneratingConfig from "../../_components/generating-config";

@@ -33,14 +33,14 @@ export const Redirect = ({
     const { status } = subscriptionStatus;
 
     if (status === "expired") {
-        const hasStripeCustomerId = 
-            subscriptionStatus.stripeCustomerId && 
+        const hasStripeCustomerId =
+            subscriptionStatus.stripeCustomerId &&
             subscriptionStatus.stripeCustomerId.trim().length > 0;
 
         if (hasStripeCustomerId) {
             return <Expired members={members} />;
         }
-        
+
         return <Trial members={members} forceShow />;
     }
 

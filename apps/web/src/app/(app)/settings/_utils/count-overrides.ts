@@ -1,7 +1,12 @@
-import type { FormattedCodeReviewConfig, IFormattedConfigProperty } from "../code-review/_types";
-import { FormattedConfigLevel } from "../code-review/_types";
+import {
+    FormattedConfigLevel,
+    type FormattedCodeReviewConfig,
+    type IFormattedConfigProperty,
+} from "../code-review/_types";
 
-function isFormattedConfigProperty(value: any): value is IFormattedConfigProperty<any> {
+function isFormattedConfigProperty(
+    value: any,
+): value is IFormattedConfigProperty<any> {
     return (
         value &&
         typeof value === "object" &&
@@ -11,7 +16,11 @@ function isFormattedConfigProperty(value: any): value is IFormattedConfigPropert
     );
 }
 
-function countOverridesRecursive(obj: any, targetLevel: FormattedConfigLevel, path = ""): number {
+function countOverridesRecursive(
+    obj: any,
+    targetLevel: FormattedConfigLevel,
+    path = "",
+): number {
     if (!obj || typeof obj !== "object") {
         return 0;
     }
@@ -19,15 +28,17 @@ function countOverridesRecursive(obj: any, targetLevel: FormattedConfigLevel, pa
     if (isFormattedConfigProperty(obj)) {
         const propertyLevel = obj.level as FormattedConfigLevel;
         const overriddenLevel = obj.overriddenLevel as FormattedConfigLevel;
-        
-        const hasOverride = obj.overriddenValue !== undefined || obj.overriddenLevel !== undefined;
-        
+
+        const hasOverride =
+            obj.overriddenValue !== undefined ||
+            obj.overriddenLevel !== undefined;
+
         if (!hasOverride) {
             return 0;
         }
 
-        const isGlobalOverridingDefault = 
-            propertyLevel === FormattedConfigLevel.GLOBAL && 
+        const isGlobalOverridingDefault =
+            propertyLevel === FormattedConfigLevel.GLOBAL &&
             overriddenLevel === FormattedConfigLevel.DEFAULT;
 
         if (isGlobalOverridingDefault) {
@@ -35,22 +46,27 @@ function countOverridesRecursive(obj: any, targetLevel: FormattedConfigLevel, pa
         }
 
         const isTargetLevel = propertyLevel === targetLevel;
-        
-        
+
         return isTargetLevel ? 1 : 0;
     }
 
     let count = 0;
     for (const key in obj) {
         if (obj.hasOwnProperty(key)) {
-            count += countOverridesRecursive(obj[key], targetLevel, path ? `${path}.${key}` : key);
+            count += countOverridesRecursive(
+                obj[key],
+                targetLevel,
+                path ? `${path}.${key}` : key,
+            );
         }
     }
 
     return count;
 }
 
-export function countConfigOverrides(config: FormattedCodeReviewConfig, level: FormattedConfigLevel = FormattedConfigLevel.GLOBAL): number {
+export function countConfigOverrides(
+    config: FormattedCodeReviewConfig,
+    level: FormattedConfigLevel = FormattedConfigLevel.GLOBAL,
+): number {
     return countOverridesRecursive(config, level);
 }
-

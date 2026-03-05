@@ -8,10 +8,7 @@ import { SVGProps } from "react";
  * Source: https://codeberg.org/forgejo/meta/src/branch/readme/branding
  */
 export const SvgForgejo = (props: SVGProps<SVGSVGElement>) => (
-    <svg
-        viewBox="0 0 212 212"
-        xmlns="http://www.w3.org/2000/svg"
-        {...props}>
+    <svg viewBox="0 0 212 212" xmlns="http://www.w3.org/2000/svg" {...props}>
         <g transform="translate(6,6)">
             <path
                 d="M58 168 v-98 a50 50 0 0 1 50-50 h20"

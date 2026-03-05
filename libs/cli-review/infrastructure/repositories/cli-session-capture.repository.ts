@@ -20,7 +20,9 @@ export class CliSessionCaptureRepository {
         private readonly cliSessionCaptureModel: Model<CliSessionCaptureModel>,
     ) {}
 
-    async create(data: Partial<CliSessionCaptureModel>): Promise<CliSessionCaptureModel> {
+    async create(
+        data: Partial<CliSessionCaptureModel>,
+    ): Promise<CliSessionCaptureModel> {
         return this.cliSessionCaptureModel.create(data);
     }
 

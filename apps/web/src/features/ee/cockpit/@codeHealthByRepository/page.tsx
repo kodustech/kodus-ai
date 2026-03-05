@@ -3,8 +3,8 @@ import { DataTable } from "@components/ui/data-table";
 import { getCodeHealthSuggestionsByRepository } from "src/features/ee/cockpit/_services/analytics/code-health/fetch";
 
 import { CockpitNoDataPlaceholder } from "../_components/no-data-placeholder";
-import { getSelectedDateRange } from "../_helpers/get-selected-date-range";
 import { extractApiData } from "../_helpers/api-data-extractor";
+import { getSelectedDateRange } from "../_helpers/get-selected-date-range";
 import { columns } from "./_components/columns";
 
 export default async function CodeHealthByRepository() {

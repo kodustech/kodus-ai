@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { KodyRulesLimitPopover } from "@components/system/kody-rules-limit-popover";
 import { Button } from "@components/ui/button";
 import { SvgKodyRulesDiscovery } from "@components/ui/icons/SvgKodyRulesDiscovery";
@@ -8,8 +9,8 @@ import { Link } from "@components/ui/link";
 import { magicModal } from "@components/ui/magic-modal";
 import { Page } from "@components/ui/page";
 import { PopoverTrigger } from "@components/ui/popover";
-import { Separator } from "@components/ui/separator";
 import { Skeleton } from "@components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { KODY_RULES_PATHS } from "@services/kodyRules";
 import {
     useKodyRulesLimits,
@@ -17,7 +18,9 @@ import {
     useSuspenseKodyRulesByRepositoryId,
 } from "@services/kodyRules/hooks";
 import {
+    KodyRuleRequestType,
     KodyRulesStatus,
+    KodyRulesType,
     KodyRuleWithInheritanceDetails,
     type KodyRule,
 } from "@services/kodyRules/types";
@@ -34,6 +37,7 @@ import { CodeReviewPagesBreadcrumb } from "../../../_components/breadcrumb";
 import { GenerateRulesOptions } from "../../../_components/generate-rules-options";
 import GeneratingConfig from "../../../_components/generating-config";
 import { KodyRuleAddOrUpdateItemModal } from "../../../_components/modal";
+import { PendingMemoriesModal } from "../../../_components/pending-memories-modal";
 import { PendingKodyRulesModal } from "../../../_components/pending-rules-modal";
 import {
     useFullCodeReviewConfig,
@@ -41,12 +45,24 @@ import {
 } from "../../../../_components/context";
 import { useCodeReviewRouteParams } from "../../../../_hooks";
 import { KodyRulesEmptyState } from "./empty";
+import { GeneratedMemoriesApprovalSetting } from "./generated-memories-approval";
 import { KodyRulesList } from "./list";
 import { KodyRulesToolbar, type VisibleScopes } from "./toolbar";
+
+type KodyRulesTab = "review-rules" | "memories" | "configuration";
+
+const TAB_QUERY_PARAM = "tab";
+const DEFAULT_TAB: KodyRulesTab = "review-rules";
+
+const getRuleType = (rule: Pick<KodyRule, "type">) =>
+    rule.type ?? KodyRulesType.STANDARD;
 
 const KodyRulesPageContent = () => {
     const platformConfig = usePlatformConfig();
     const config = useFullCodeReviewConfig();
+    const pathname = usePathname();
+    const router = useRouter();
+    const searchParams = useSearchParams();
     const { repositoryId, directoryId } = useCodeReviewRouteParams();
     const queryClient = useQueryClient();
     const { teamId } = useSelectedTeamId();
@@ -72,7 +88,9 @@ const KodyRulesPageContent = () => {
         directoryId,
     });
 
-    const { activeRules: kodyRules, pendingRules } = safeArray(scopeKodyRules).reduce<{
+    const { activeRules: kodyRules, pendingRules } = safeArray(
+        scopeKodyRules,
+    ).reduce<{
         activeRules: KodyRule[];
         pendingRules: KodyRule[];
     }>(
@@ -90,22 +108,15 @@ const KodyRulesPageContent = () => {
         { activeRules: [], pendingRules: [] },
     );
 
-    const repositoryOnlyRules = useMemo(() => {
-        if (directoryId) return [];
-        if (repositoryId === "global") return [];
-
-        return kodyRules.filter((rule) => !rule.directoryId);
-    }, [kodyRules, directoryId, repositoryId]);
-
-    const directoryOnlyRules = useMemo(() => {
-        if (!directoryId) return [];
-        if (repositoryId === "global") return [];
-
-        return kodyRules.filter((rule) => rule.directoryId === directoryId);
-    }, [kodyRules, directoryId, repositoryId]);
-
     const isGlobalView = repositoryId === "global";
     const isRepoView = !isGlobalView && !directoryId;
+
+    const activeTabSearchParam = searchParams.get(TAB_QUERY_PARAM);
+    const activeTab: KodyRulesTab =
+        activeTabSearchParam === "memories" ||
+        activeTabSearchParam === "configuration"
+            ? activeTabSearchParam
+            : DEFAULT_TAB;
 
     const [filterQuery, setFilterQuery] = useState("");
     const [visibleScopes, setVisibleScopes] = useState<VisibleScopes>({
@@ -116,22 +127,51 @@ const KodyRulesPageContent = () => {
         disabled: true,
     });
 
-    const rulesToDisplay = useMemo(() => {
+    const getRulesViewState = (ruleType: KodyRulesType) => {
+        const activeRulesByType = kodyRules.filter(
+            (rule) => getRuleType(rule) === ruleType,
+        );
+        const inheritedGlobalRulesByType = inheritedGlobalRules.filter(
+            (rule) => getRuleType(rule) === ruleType,
+        );
+        const inheritedRepoRulesByType = inheritedRepoRules.filter(
+            (rule) => getRuleType(rule) === ruleType,
+        );
+        const inheritedDirectoryRulesByType = inheritedDirectoryRules.filter(
+            (rule) => getRuleType(rule) === ruleType,
+        );
+
+        const repositoryOnlyRules =
+            directoryId || repositoryId === "global"
+                ? []
+                : activeRulesByType.filter((rule) => !rule.directoryId);
+
+        const directoryOnlyRules =
+            !directoryId || repositoryId === "global"
+                ? []
+                : activeRulesByType.filter(
+                      (rule) => rule.directoryId === directoryId,
+                  );
+
         const sourceRuleSets = [] as (
             | KodyRule
             | KodyRuleWithInheritanceDetails
         )[][];
+
         if (isGlobalView) {
-            // When in global view, kodyRules array contains only global rules
-            sourceRuleSets.push(kodyRules);
+            sourceRuleSets.push(activeRulesByType);
         } else if (isRepoView) {
             if (visibleScopes.self) sourceRuleSets.push(repositoryOnlyRules);
-            if (visibleScopes.global) sourceRuleSets.push(inheritedGlobalRules);
+            if (visibleScopes.global)
+                sourceRuleSets.push(inheritedGlobalRulesByType);
         } else {
             if (visibleScopes.self) sourceRuleSets.push(directoryOnlyRules);
-            if (visibleScopes.dir) sourceRuleSets.push(inheritedDirectoryRules);
-            if (visibleScopes.repo) sourceRuleSets.push(inheritedRepoRules);
-            if (visibleScopes.global) sourceRuleSets.push(inheritedGlobalRules);
+            if (visibleScopes.dir)
+                sourceRuleSets.push(inheritedDirectoryRulesByType);
+            if (visibleScopes.repo)
+                sourceRuleSets.push(inheritedRepoRulesByType);
+            if (visibleScopes.global)
+                sourceRuleSets.push(inheritedGlobalRulesByType);
         }
 
         const combinedRules = sourceRuleSets.flat();
@@ -153,27 +193,106 @@ const KodyRulesPageContent = () => {
         }
         const uniqueRules = Array.from(uniqueRulesMap.values());
 
-        if (!filterQuery) return uniqueRules;
-
         const filterQueryLowercase = filterQuery.toLowerCase();
-        return uniqueRules.filter(
-            (rule) =>
-                rule.title.toLowerCase().includes(filterQueryLowercase) ||
-                rule.path?.toLowerCase().includes(filterQueryLowercase) ||
-                rule.rule.toLowerCase().includes(filterQueryLowercase),
-        );
-    }, [
-        visibleScopes,
-        filterQuery,
-        isGlobalView,
-        isRepoView,
-        kodyRules,
-        directoryOnlyRules,
-        repositoryOnlyRules,
-        inheritedGlobalRules,
-        inheritedRepoRules,
-        inheritedDirectoryRules,
-    ]);
+        const rulesToDisplay = !filterQuery
+            ? uniqueRules
+            : uniqueRules.filter((rule) => {
+                  return (
+                      rule.title.toLowerCase().includes(filterQueryLowercase) ||
+                      rule.path?.toLowerCase().includes(filterQueryLowercase) ||
+                      rule.rule.toLowerCase().includes(filterQueryLowercase)
+                  );
+              });
+
+        const hasAnyRulesInSystem =
+            activeRulesByType.length > 0 ||
+            inheritedGlobalRulesByType.length > 0 ||
+            inheritedRepoRulesByType.length > 0 ||
+            inheritedDirectoryRulesByType.length > 0;
+
+        return { rulesToDisplay, hasAnyRulesInSystem };
+    };
+
+    const reviewRulesState = useMemo(
+        () => getRulesViewState(KodyRulesType.STANDARD),
+        [
+            visibleScopes,
+            filterQuery,
+            isGlobalView,
+            isRepoView,
+            kodyRules,
+            inheritedGlobalRules,
+            inheritedRepoRules,
+            inheritedDirectoryRules,
+            directoryId,
+            repositoryId,
+        ],
+    );
+
+    const memoriesState = useMemo(
+        () => getRulesViewState(KodyRulesType.MEMORY),
+        [
+            visibleScopes,
+            filterQuery,
+            isGlobalView,
+            isRepoView,
+            kodyRules,
+            inheritedGlobalRules,
+            inheritedRepoRules,
+            inheritedDirectoryRules,
+            directoryId,
+            repositoryId,
+        ],
+    );
+
+    const pendingReviewRules = useMemo(
+        () =>
+            pendingRules.filter(
+                (rule) => getRuleType(rule) === KodyRulesType.STANDARD,
+            ),
+        [pendingRules],
+    );
+
+    const pendingMemoryUpdates = useMemo(
+        () =>
+            pendingRules.filter(
+                (rule) =>
+                    rule.requestType === KodyRuleRequestType.MEMORY_UPDATE,
+            ),
+        [pendingRules],
+    );
+
+    const pendingMemoryCreations = useMemo(
+        () =>
+            pendingRules.filter(
+                (rule) =>
+                    rule.requestType !== KodyRuleRequestType.MEMORY_UPDATE,
+            ),
+        [pendingRules],
+    );
+
+    const handleTabChange = (tab: string) => {
+        if (
+            tab !== "review-rules" &&
+            tab !== "memories" &&
+            tab !== "configuration"
+        ) {
+            return;
+        }
+
+        const params = new URLSearchParams(searchParams.toString());
+        if (tab === DEFAULT_TAB) {
+            params.delete(TAB_QUERY_PARAM);
+        } else {
+            params.set(TAB_QUERY_PARAM, tab);
+        }
+
+        const nextUrl = params.toString()
+            ? `${pathname}?${params.toString()}`
+            : pathname;
+
+        router.replace(nextUrl);
+    };
 
     const refreshRulesList = async () => {
         await queryClient.resetQueries({
@@ -189,26 +308,73 @@ const KodyRulesPageContent = () => {
         });
     };
 
-    const addNewEmptyRule = async () => {
+    const addNewEmptyRule = async (ruleType: KodyRulesType) => {
+        if (activeTab === "configuration") return;
+
         const directory = config.repositories
             .find((r) => r.id === repositoryId)
             ?.directories?.find((d) => d.id === directoryId);
+
         const response = await magicModal.show(() => (
             <KodyRuleAddOrUpdateItemModal
                 repositoryId={repositoryId}
                 directory={directory}
                 canEdit={canEdit}
+                ruleType={ruleType}
             />
         ));
+
         if (response) await refreshRulesList();
     };
 
-    const showPendingRules = async () => {
+    const showPendingRules = async (
+        rules: KodyRule[],
+        entityLabel: "rules" | "memories",
+    ) => {
         const response = await magicModal.show(() => (
-            <PendingKodyRulesModal pendingRules={pendingRules} />
+            <PendingKodyRulesModal
+                pendingRules={rules}
+                entityLabel={entityLabel}
+            />
         ));
         if (response) refreshRulesList();
     };
+
+    const showPendingMemories = async () => {
+        const activeMemories = kodyRules.filter(
+            (rule) => getRuleType(rule) === KodyRulesType.MEMORY,
+        );
+
+        const response = await magicModal.show(() => (
+            <PendingMemoriesModal
+                pendingNewMemories={pendingMemoryCreations}
+                pendingUpdates={pendingMemoryUpdates}
+                activeMemories={activeMemories}
+            />
+        ));
+
+        if (response) refreshRulesList();
+    };
+
+    const activeRuleType =
+        activeTab === "memories"
+            ? KodyRulesType.MEMORY
+            : KodyRulesType.STANDARD;
+
+    const currentEntityLabel = activeTab === "memories" ? "memory" : "rule";
+
+    const headerDescription =
+        "Review Rules run in the dedicated code review stage. Memories are injected across prompts and conversations to provide persistent context.";
+
+    const showHeaderActions = activeTab !== "configuration";
+
+    const canShowDiscovery = activeTab === "review-rules";
+
+    const pendingMemoriesCount =
+        pendingMemoryCreations.length + pendingMemoryUpdates.length;
+
+    const pendingEntityLabel: "rules" | "memories" =
+        activeTab === "memories" ? "memories" : "rules";
 
     if (
         platformConfig.kodyLearningStatus ===
@@ -216,14 +382,6 @@ const KodyRulesPageContent = () => {
     ) {
         return <GeneratingConfig />;
     }
-
-    const hasAnyRulesInSystem =
-        kodyRules.length > 0 ||
-        inheritedGlobalRules.length > 0 ||
-        inheritedRepoRules.length > 0 ||
-        inheritedDirectoryRules.length > 0;
-    const isToolbarDisabled = !hasAnyRulesInSystem;
-    const hasRulesToDisplay = rulesToDisplay.length > 0;
 
     return (
         <Page.Root>
@@ -233,96 +391,181 @@ const KodyRulesPageContent = () => {
             <Page.Header>
                 <Page.TitleContainer>
                     <Page.Title>Kody Rules</Page.Title>
-                    <Page.Description>
-                        Set up automated rules and guidelines for your code
-                        reviews.
-                    </Page.Description>
+                    <Page.Description>{headerDescription}</Page.Description>
                 </Page.TitleContainer>
-                <div className="flex flex-col gap-2">
-                    <Page.HeaderActions>
-                        <Link href="/library/kody-rules/featured">
-                            <Button
-                                size="md"
-                                decorative
-                                variant="secondary"
-                                leftIcon={<SvgKodyRulesDiscovery />}>
-                                Discovery
-                            </Button>
-                        </Link>
-
-                        {kodyRulesLimits.canAddMoreRules ? (
-                            <Button
-                                size="md"
-                                type="button"
-                                variant="primary"
-                                leftIcon={<PlusIcon />}
-                                disabled={!canEdit}
-                                onClick={addNewEmptyRule}>
-                                New rule
-                            </Button>
-                        ) : (
-                            <KodyRulesLimitPopover
-                                limit={kodyRulesLimits.limit}>
-                                <PopoverTrigger asChild>
+                {showHeaderActions && (
+                    <div className="flex flex-col gap-2">
+                        <Page.HeaderActions className="justify-end">
+                            {canShowDiscovery && (
+                                <Link href="/library/kody-rules/featured">
                                     <Button
                                         size="md"
-                                        type="button"
-                                        variant="primary"
-                                        leftIcon={<PlusIcon />}
-                                        disabled={!canEdit}>
-                                        New rule
+                                        decorative
+                                        variant="secondary"
+                                        leftIcon={<SvgKodyRulesDiscovery />}>
+                                        Discovery
                                     </Button>
-                                </PopoverTrigger>
-                            </KodyRulesLimitPopover>
-                        )}
-                    </Page.HeaderActions>
-                    {pendingRules.length > 0 && (
-                        <div className="flex justify-end">
-                            <Button
-                                size="md"
-                                variant="helper"
-                                className="border-e-primary-light rounded-e-none border-e-4"
-                                leftIcon={<BellRing />}
-                                onClick={showPendingRules}>
-                                Check out new rules!
-                            </Button>
+                                </Link>
+                            )}
+
+                            {kodyRulesLimits.canAddMoreRules ? (
+                                <Button
+                                    size="md"
+                                    type="button"
+                                    variant="primary"
+                                    leftIcon={<PlusIcon />}
+                                    disabled={!canEdit}
+                                    onClick={() =>
+                                        addNewEmptyRule(activeRuleType)
+                                    }>
+                                    New {currentEntityLabel}
+                                </Button>
+                            ) : (
+                                <KodyRulesLimitPopover
+                                    limit={kodyRulesLimits.limit}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            size="md"
+                                            type="button"
+                                            variant="primary"
+                                            leftIcon={<PlusIcon />}
+                                            disabled={!canEdit}>
+                                            New {currentEntityLabel}
+                                        </Button>
+                                    </PopoverTrigger>
+                                </KodyRulesLimitPopover>
+                            )}
+                        </Page.HeaderActions>
+
+                        <div className="flex justify-end gap-2">
+                            {activeTab === "memories"
+                                ? pendingMemoriesCount > 0 && (
+                                      <Button
+                                          size="md"
+                                          variant="helper"
+                                          className="border-e-primary-light rounded-e-none border-e-4"
+                                          leftIcon={<BellRing />}
+                                          onClick={showPendingMemories}>
+                                          Review pending memories
+                                      </Button>
+                                  )
+                                : pendingReviewRules.length > 0 && (
+                                      <Button
+                                          size="md"
+                                          variant="helper"
+                                          className="border-e-primary-light rounded-e-none border-e-4"
+                                          leftIcon={<BellRing />}
+                                          onClick={() =>
+                                              showPendingRules(
+                                                  pendingReviewRules,
+                                                  pendingEntityLabel,
+                                              )
+                                          }>
+                                          Check out new {pendingEntityLabel}!
+                                      </Button>
+                                  )}
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </Page.Header>
             <Page.Content>
-                {isRepoView && (
-                    <>
-                        <Suspense fallback={<Skeleton className="h-15" />}>
-                            <GenerateRulesOptions />
-                        </Suspense>
-                        <div className="w-md self-center">
-                            <Separator />
+                <Tabs value={activeTab} onValueChange={handleTabChange}>
+                    <TabsList>
+                        <TabsTrigger value="review-rules">
+                            Review Rules
+                        </TabsTrigger>
+                        <TabsTrigger value="memories">Memories</TabsTrigger>
+                        <TabsTrigger value="configuration">
+                            Configuration
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="review-rules" className="mt-4">
+                        <div className="flex flex-col gap-4">
+                            <p className="text-text-secondary text-sm">
+                                Review Rules run in the code review pipeline and
+                                generate review feedback based on changed files
+                                or PR-level context.
+                            </p>
+                            <KodyRulesToolbar
+                                filterQuery={filterQuery}
+                                onFilterQueryChange={setFilterQuery}
+                                entityLabel="rules"
+                                visibleScopes={visibleScopes}
+                                onVisibleScopesChange={setVisibleScopes}
+                                isDisabled={
+                                    !reviewRulesState.hasAnyRulesInSystem
+                                }
+                                isRepoView={isRepoView}
+                                isGlobalView={isGlobalView}
+                            />
+                            {!reviewRulesState.rulesToDisplay.length ? (
+                                <KodyRulesEmptyState
+                                    canEdit={canEdit}
+                                    entityLabel="rule"
+                                    onAddNewRule={() =>
+                                        addNewEmptyRule(KodyRulesType.STANDARD)
+                                    }
+                                />
+                            ) : (
+                                <KodyRulesList
+                                    rules={reviewRulesState.rulesToDisplay}
+                                    tab="review-rules"
+                                    onAnyChange={refreshRulesList}
+                                />
+                            )}
                         </div>
-                    </>
-                )}
-                <div className="flex flex-col gap-4">
-                    <KodyRulesToolbar
-                        filterQuery={filterQuery}
-                        onFilterQueryChange={setFilterQuery}
-                        visibleScopes={visibleScopes}
-                        onVisibleScopesChange={setVisibleScopes}
-                        isDisabled={isToolbarDisabled}
-                        isRepoView={isRepoView}
-                        isGlobalView={isGlobalView}
-                    />
-                    {!hasRulesToDisplay ? (
-                        <KodyRulesEmptyState
-                            canEdit={canEdit}
-                            onAddNewRule={addNewEmptyRule}
-                        />
-                    ) : (
-                        <KodyRulesList
-                            rules={rulesToDisplay}
-                            onAnyChange={refreshRulesList}
-                        />
-                    )}
-                </div>
+                    </TabsContent>
+
+                    <TabsContent value="memories" className="mt-4">
+                        <div className="flex flex-col gap-4">
+                            <p className="text-text-secondary text-sm">
+                                Memories are persistent contextual instructions
+                                injected across generation, safeguard, and
+                                conversation prompts.
+                            </p>
+                            <KodyRulesToolbar
+                                filterQuery={filterQuery}
+                                onFilterQueryChange={setFilterQuery}
+                                entityLabel="memories"
+                                visibleScopes={visibleScopes}
+                                onVisibleScopesChange={setVisibleScopes}
+                                isDisabled={!memoriesState.hasAnyRulesInSystem}
+                                isRepoView={isRepoView}
+                                isGlobalView={isGlobalView}
+                            />
+                            {!memoriesState.rulesToDisplay.length ? (
+                                <KodyRulesEmptyState
+                                    canEdit={canEdit}
+                                    entityLabel="memory"
+                                    showDiscovery={false}
+                                    onAddNewRule={() =>
+                                        addNewEmptyRule(KodyRulesType.MEMORY)
+                                    }
+                                />
+                            ) : (
+                                <KodyRulesList
+                                    rules={memoriesState.rulesToDisplay}
+                                    tab="memories"
+                                    onAnyChange={refreshRulesList}
+                                />
+                            )}
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent value="configuration" className="mt-4">
+                        <div className="flex flex-col gap-4">
+                            <GeneratedMemoriesApprovalSetting />
+
+                            {isRepoView && (
+                                <Suspense
+                                    fallback={<Skeleton className="h-15" />}>
+                                    <GenerateRulesOptions />
+                                </Suspense>
+                            )}
+                        </div>
+                    </TabsContent>
+                </Tabs>
             </Page.Content>
         </Page.Root>
     );

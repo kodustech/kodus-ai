@@ -11,7 +11,7 @@ export const MentionTrigger = Extension.create<MentionTriggerOptions>({
 
     addOptions() {
         return {
-            onTrigger: () => { },
+            onTrigger: () => {},
         };
     },
 
@@ -27,4 +27,3 @@ export const MentionTrigger = Extension.create<MentionTriggerOptions>({
         };
     },
 });
-

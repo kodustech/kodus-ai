@@ -16,7 +16,7 @@ const limit = limitArg ? parseInt(limitArg.split('=')[1], 10) : Infinity;
 
 const DATASET_BASE = path.join(__dirname, 'safeguard_datasets');
 const DATASET_TYPES = ['no_changes', 'discard', 'update'];
-const LANGUAGES = ['tsjs', 'tsjs_crossfile', 'react', 'react_crossfile', 'java', 'java_crossfile', 'python', 'python_crossfile', 'ruby', 'ruby_crossfile'];
+const LANGUAGES = ['tsjs', 'tsjs_crossfile', 'react', 'react_crossfile', 'java', 'java_crossfile', 'python', 'python_crossfile', 'ruby', 'ruby_crossfile', 'false_positives'];
 
 // Resolve which dataset types to load
 const datasetTypes = dataset === 'all'
@@ -72,18 +72,17 @@ The snippets below are **real code from the repository** — callers, consumers,
 
 /**
  * Format cross-file snippets into the codebase context block.
- * Supports both field naming conventions:
- *   - Analyze datasets: { path, language, snippet }
- *   - Legacy format:    { filePath, content, rationale, relatedSymbol }
+ * Matches production format from codeReviewSafeguard.ts / llmAnalysis.service.ts.
  */
 function formatCodebaseContext(snippets) {
     if (!snippets || !snippets.length) return '';
 
     const snippetLines = snippets.map(s => {
-        const filePath = s.path || s.filePath || 'unknown';
-        const code = s.snippet || s.content || '';
-        const lang = s.language || '';
-        return `#### ${filePath}${lang ? ` (${lang})` : ''}\n\`\`\`\n${code}\n\`\`\``;
+        const filePath = s.filePath || s.path || 'unknown';
+        const code = s.content || s.snippet || '';
+        const symbolTag = s.relatedSymbol ? ` (symbol: ${s.relatedSymbol})` : '';
+        const rationaleBlock = s.rationale ? `\n**Rationale:** ${s.rationale}` : '';
+        return `#### ${filePath}${symbolTag}${rationaleBlock}\n\`\`\`\n${code}\n\`\`\``;
     });
 
     return `\n\n<codebaseContext>\n${CROSS_FILE_PREAMBLE}\n${snippetLines.join('\n\n')}\n</codebaseContext>`;

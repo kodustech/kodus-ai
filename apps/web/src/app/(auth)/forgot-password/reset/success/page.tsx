@@ -15,7 +15,7 @@ export default function EmailSentPage() {
                     <Heading variant="h2" className="text-center">
                         Password successfully reset
                     </Heading>
-                        <p className="text-text-secondary text-center text-sm">
+                    <p className="text-text-secondary text-center text-sm">
                         You can now log in with your new password
                     </p>
                     <Link

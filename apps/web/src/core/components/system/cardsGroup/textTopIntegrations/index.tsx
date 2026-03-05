@@ -11,7 +11,7 @@ const textTopObject = {
 const TextTopIntegrations = ({
     serviceType,
 }: {
-    serviceType: "codeManagement"
+    serviceType: "codeManagement";
 }): React.ReactNode => {
     const textObject = textTopObject[serviceType];
     return (

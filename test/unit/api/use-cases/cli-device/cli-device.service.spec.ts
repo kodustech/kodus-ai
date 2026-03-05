@@ -326,12 +326,10 @@ describe('CliDeviceService', () => {
                     {
                         provide: ConfigService,
                         useValue: {
-                            get: jest.fn(
-                                (key: string, defaultVal?: string) => {
-                                    if (key === 'CLI_DEVICE_LIMIT') return '3';
-                                    return defaultVal;
-                                },
-                            ),
+                            get: jest.fn((key: string, defaultVal?: string) => {
+                                if (key === 'CLI_DEVICE_LIMIT') return '3';
+                                return defaultVal;
+                            }),
                         },
                     },
                 ],
@@ -384,9 +382,7 @@ describe('CliDeviceService', () => {
             });
 
             expect(result.deviceToken).toBeDefined();
-            expect(
-                mockRepository.countByOrganizationId,
-            ).not.toHaveBeenCalled();
+            expect(mockRepository.countByOrganizationId).not.toHaveBeenCalled();
         });
     });
 
@@ -400,9 +396,7 @@ describe('CliDeviceService', () => {
             });
 
             expect(result.deviceToken).toBeDefined();
-            expect(
-                mockRepository.countByOrganizationId,
-            ).not.toHaveBeenCalled();
+            expect(mockRepository.countByOrganizationId).not.toHaveBeenCalled();
         });
     });
 });

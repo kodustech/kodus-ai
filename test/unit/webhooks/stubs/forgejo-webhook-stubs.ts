@@ -214,7 +214,8 @@ export const forgejoIssueCommentPayload = {
     },
     comment: {
         id: 8,
-        html_url: 'https://git.example.com/kodustech/kodus-ai/pulls/3#issuecomment-8',
+        html_url:
+            'https://git.example.com/kodustech/kodus-ai/pulls/3#issuecomment-8',
         pull_request_url: 'https://git.example.com/kodustech/kodus-ai/pulls/3',
         issue_url: '',
         user: {

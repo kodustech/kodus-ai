@@ -43,20 +43,33 @@ const NoItemsViewMore = () => (
 
 type KodyRulesEmptyStateProps = {
     canEdit: boolean;
+    entityLabel?: "rule" | "memory";
+    showDiscovery?: boolean;
     onAddNewRule: () => void;
 };
 
 export const KodyRulesEmptyState = ({
     canEdit,
+    entityLabel = "rule",
+    showDiscovery = true,
     onAddNewRule,
 }: KodyRulesEmptyStateProps) => {
+    const title =
+        entityLabel === "memory"
+            ? "Start capturing memories 🧠"
+            : "Start with Discovery 🚀";
+
+    const description =
+        entityLabel === "memory"
+            ? "No memories yet? Capture persistent team context by clicking on New Memory."
+            : "No rules yet? Import best practices or create your own by clicking on New Rule.";
+
     return (
         <div className="mt-4 flex min-h-[540px] flex-col gap-2">
             <div className="flex flex-col gap-1">
-                <Heading variant="h2">Start with Discovery 🚀</Heading>
+                <Heading variant="h2">{title}</Heading>
                 <p className="text-text-secondary text-sm">
-                    <strong>No rules yet?</strong> Import best practices or
-                    create your own by clicking on{" "}
+                    <strong>{description}</strong>{" "}
                     <Link
                         href=""
                         disabled={!canEdit}
@@ -64,28 +77,30 @@ export const KodyRulesEmptyState = ({
                             ev.preventDefault();
                             onAddNewRule();
                         }}>
-                        New Rule
+                        New {entityLabel === "memory" ? "Memory" : "Rule"}
                     </Link>
                     .
                 </p>
             </div>
-            <div className="mt-4 grid h-full grid-cols-2 gap-2">
-                <Suspense
-                    fallback={
-                        <>
-                            {new Array(3).fill(null).map((_, index) => (
-                                <Card
-                                    key={index}
-                                    className="h-full flex-1 items-center justify-center">
-                                    <Spinner />
-                                </Card>
-                            ))}
-                        </>
-                    }>
-                    <NoItems />
-                </Suspense>
-                <NoItemsViewMore />
-            </div>
+            {showDiscovery && (
+                <div className="mt-4 grid h-full grid-cols-2 gap-2">
+                    <Suspense
+                        fallback={
+                            <>
+                                {new Array(3).fill(null).map((_, index) => (
+                                    <Card
+                                        key={index}
+                                        className="h-full flex-1 items-center justify-center">
+                                        <Spinner />
+                                    </Card>
+                                ))}
+                            </>
+                        }>
+                        <NoItems />
+                    </Suspense>
+                    <NoItemsViewMore />
+                </div>
+            )}
         </div>
     );
 };

@@ -163,9 +163,7 @@ export const SelectPullRequest = (props: {
                                                         <span className="text-text-secondary line-clamp-2">
                                                             <strong className="mr-2 font-mono">
                                                                 #
-                                                                {
-                                                                    pr.pull_number
-                                                                }
+                                                                {pr.pull_number}
                                                             </strong>
 
                                                             {pr.title}
@@ -173,9 +171,7 @@ export const SelectPullRequest = (props: {
                                                         {lastActivity && (
                                                             <span className="text-text-tertiary text-xs">
                                                                 Last activity{" "}
-                                                                {
-                                                                    lastActivity
-                                                                }
+                                                                {lastActivity}
                                                             </span>
                                                         )}
                                                     </span>

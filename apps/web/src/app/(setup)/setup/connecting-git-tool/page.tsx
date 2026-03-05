@@ -149,8 +149,7 @@ export default function App() {
                                     Azure Repos
                                 </div>
                             </TabsTrigger>
-                            <TabsTrigger
-                                value={GIT_INTEGRATIONS_KEY.FORGEJO}>
+                            <TabsTrigger value={GIT_INTEGRATIONS_KEY.FORGEJO}>
                                 <div className="flex flex-row items-center gap-2">
                                     <SvgForgejo className="size-5" />
                                     Forgejo

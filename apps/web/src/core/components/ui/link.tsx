@@ -7,7 +7,7 @@ export const Link = ({
     disabled,
     noHoverUnderline,
     ...props
-}: React.ComponentProps<typeof NextLink> & { 
+}: React.ComponentProps<typeof NextLink> & {
     disabled?: boolean;
     noHoverUnderline?: boolean;
 }) => {

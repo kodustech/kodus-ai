@@ -14,9 +14,10 @@ jest.mock('@libs/ee/configs/environment', () => ({
 }));
 
 describe('JoinOrganizationUseCase', () => {
-    const mockedSendConfirmationEmail = sendConfirmationEmail as jest.MockedFunction<
-        typeof sendConfirmationEmail
-    >;
+    const mockedSendConfirmationEmail =
+        sendConfirmationEmail as jest.MockedFunction<
+            typeof sendConfirmationEmail
+        >;
 
     let originalCloudMode: boolean;
 

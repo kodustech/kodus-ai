@@ -1,8 +1,16 @@
 "use client";
 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@components/ui/table";
-import { cn } from "src/core/utils/components";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@components/ui/table";
 import { useCodeReviewConfig } from "src/app/(app)/settings/_components/context";
+import { cn } from "src/core/utils/components";
+
 import { ReviewCadenceType } from "../../../_types";
 
 /* Match @variable-name, @variable_name, @variableName */
@@ -45,8 +53,8 @@ const ReviewCadencePreview = () => {
     const cadenceType =
         automationEnabled === false
             ? ReviewCadenceType.MANUAL
-            : config?.reviewCadence?.type?.value ??
-              ReviewCadenceType.AUTOMATIC;
+            : (config?.reviewCadence?.type?.value ??
+              ReviewCadenceType.AUTOMATIC);
     const cadenceCopy =
         REVIEW_CADENCE_COPY[cadenceType] ??
         REVIEW_CADENCE_COPY[ReviewCadenceType.AUTOMATIC];

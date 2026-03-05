@@ -25,6 +25,14 @@ export class SkillMetaDto {
     @ApiProperty({ type: [String], required: false })
     allowedTools?: string[];
 
+    @ApiProperty({
+        type: [String],
+        required: false,
+        description:
+            'Abstract capabilities declared by the skill (e.g., pr.diff.read, task.context.read).',
+    })
+    capabilities?: string[];
+
     @ApiProperty({ type: [SkillRequiredMcpDto], required: false })
     requiredMcps?: SkillRequiredMcpDto[];
 }
@@ -35,7 +43,9 @@ export class SkillMetaResponseDto extends ApiResponseBaseDto {
 }
 
 export class SkillInstructionsDto {
-    @ApiProperty({ description: 'Compiled instructions from SKILL.md + references.' })
+    @ApiProperty({
+        description: 'Compiled instructions from SKILL.md + references.',
+    })
     instructions: string;
 }
 

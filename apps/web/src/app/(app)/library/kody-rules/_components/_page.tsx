@@ -69,7 +69,6 @@ const MCP_OPTIONS = [
     { value: "sentry", title: "Sentry" },
 ] as const;
 
-
 const mapTeamLanguageToFilterLanguage = (
     teamLanguage?: string,
 ): FindLibraryKodyRulesFilters["language"] | undefined => {
@@ -957,7 +956,8 @@ export const KodyRulesLibrary = ({
                             </section>
                         ) : (
                             <>
-                                {(recommendedRules.length > 0 || isRecommendedLoading) && (
+                                {(recommendedRules.length > 0 ||
+                                    isRecommendedLoading) && (
                                     <section className="border-card-lv3 bg-card-lv1 rounded-xl border p-6">
                                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                             <div className="flex items-start gap-3">
@@ -969,7 +969,8 @@ export const KodyRulesLibrary = ({
                                                         Recommended for you
                                                     </Heading>
                                                     <p className="text-text-secondary text-sm">
-                                                        Personalized rules based on your preferences.
+                                                        Personalized rules based
+                                                        on your preferences.
                                                     </p>
                                                 </div>
                                             </div>

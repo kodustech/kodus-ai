@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import {
     Command,
@@ -26,6 +27,13 @@ import { Controller, useFormContext } from "react-hook-form";
 import { ArrayHelpers } from "src/core/utils/array";
 
 import type { EditKeyForm } from "../_types";
+import catalog from "../../../../_data/curated-models.json";
+import {
+    getAnnotationForModel,
+    type CuratedModelsCatalog,
+} from "../../../../_data/curated-models.types";
+
+const annotations = (catalog as CuratedModelsCatalog).annotations;
 
 export const ByokModelSelect = () => {
     const form = useFormContext<EditKeyForm>();
@@ -60,11 +68,7 @@ export const ByokModelSelect = () => {
 // Exported lightweight manual input for external fallbacks
 export const ByokManualModelInput = () => <ModelInput />;
 
-const ModelInput = ({
-    onBackToSelect,
-}: {
-    onBackToSelect?: () => void;
-}) => {
+const ModelInput = ({ onBackToSelect }: { onBackToSelect?: () => void }) => {
     const form = useFormContext<EditKeyForm>();
     const provider = form.watch("provider");
     const baseURL = form.watch("baseURL");
@@ -112,11 +116,7 @@ const ModelInput = ({
     );
 };
 
-const ModelSelect = ({
-    onUseManual,
-}: {
-    onUseManual?: () => void;
-}) => {
+const ModelSelect = ({ onUseManual }: { onUseManual?: () => void }) => {
     const form = useFormContext<EditKeyForm>();
     const [open, setOpen] = useState(false);
     const provider = form.watch("provider");
@@ -191,24 +191,52 @@ const ModelSelect = ({
                         <CommandEmpty>No model found.</CommandEmpty>
 
                         {ArrayHelpers.sortAlphabetically(models, "name").map(
-                            (r) => (
-                                <CommandItem
-                                    key={r.id}
-                                    value={r.id}
-                                    onSelect={(v) => {
-                                        form.reset({
-                                            model: v,
-                                            provider,
-                                            apiKey: "",
-                                            baseURL: null,
-                                        });
+                            (r) => {
+                                const annotation = getAnnotationForModel(
+                                    annotations,
+                                    provider,
+                                    r.id,
+                                );
 
-                                        resetErrorBoundary();
-                                        setOpen(false);
-                                    }}>
-                                    <span>{r.name}</span>
-                                </CommandItem>
-                            ),
+                                return (
+                                    <CommandItem
+                                        key={r.id}
+                                        value={r.id}
+                                        onSelect={(v) => {
+                                            form.reset({
+                                                model: v,
+                                                provider,
+                                                apiKey: "",
+                                                baseURL: null,
+                                            });
+
+                                            resetErrorBoundary();
+                                            setOpen(false);
+                                        }}>
+                                        <span className="flex items-center gap-2">
+                                            {r.name}
+                                            {annotation?.badge === "tested" && (
+                                                <Badge
+                                                    variant="success"
+                                                    size="xs">
+                                                    Tested
+                                                </Badge>
+                                            )}
+                                            {annotation?.badge ===
+                                                "untested" && (
+                                                <span className="text-warning text-xs">
+                                                    {annotation.note}
+                                                </span>
+                                            )}
+                                            {annotation?.badge === "legacy" && (
+                                                <span className="text-text-tertiary text-xs">
+                                                    {annotation.note}
+                                                </span>
+                                            )}
+                                        </span>
+                                    </CommandItem>
+                                );
+                            },
                         )}
 
                         {/* Allow user to switch to manual input */}

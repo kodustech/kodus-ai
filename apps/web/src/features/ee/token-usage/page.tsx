@@ -18,8 +18,8 @@ import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team
 import { isFeatureEnabled } from "src/core/utils/posthog-server-side";
 import { isBYOKSubscriptionPlan } from "src/features/ee/byok/_utils";
 import { getSelectedDateRange } from "src/features/ee/cockpit/_helpers/get-selected-date-range";
-import { fetchModelPricingFromModelsDev } from "src/features/ee/subscription/choose-plan/_services/models";
 import { validateOrganizationLicense } from "src/features/ee/subscription/_services/billing/fetch";
+import { fetchModelPricingFromModelsDev } from "src/features/ee/subscription/choose-plan/_services/models";
 
 import { TokenUsagePageClient } from "./_components/page.client";
 

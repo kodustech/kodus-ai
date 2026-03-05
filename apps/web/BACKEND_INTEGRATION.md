@@ -15,10 +15,11 @@ Copie o arquivo `src/core/utils/tiptap-json-to-text.ts` para seu backend. A fun�
 ### 2. Uso no Backend
 
 ```typescript
-import { convertTiptapJSONToText } from './utils/tiptap-json-to-text';
+import { convertTiptapJSONToText } from "./utils/tiptap-json-to-text";
 
 // Quando receber o prompt do banco de dados (vem como JSON string):
-const promptFromDB = '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Analyze "},{"type":"mcpMention","attrs":{"app":"kodus","tool":"kodus_list_commits"}},{"type":"text","text":" for bugs"}]}]}';
+const promptFromDB =
+    '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Analyze "},{"type":"mcpMention","attrs":{"app":"kodus","tool":"kodus_list_commits"}},{"type":"text","text":" for bugs"}]}]}';
 
 // Converter para texto antes de enviar ao LLM:
 const promptText = convertTiptapJSONToText(promptFromDB);
@@ -33,39 +34,40 @@ sendToLLM(promptText);
 Aplique a conversão **ANTES de enviar para o LLM**:
 
 - **Campos de prompt que usam o RichTextEditor:**
-  - `v2PromptOverrides.generation.main.value`
-  - `v2PromptOverrides.categories.descriptions.*.value`
-  - `v2PromptOverrides.severity.flags.*.value`
+    - `v2PromptOverrides.generation.main.value`
+    - `v2PromptOverrides.categories.descriptions.*.value`
+    - `v2PromptOverrides.severity.flags.*.value`
 
 ### 4. Exemplo prático
 
 ```typescript
 // Exemplo: Endpoint que processa code review
 async function processCodeReview(config: CodeReviewConfig) {
-  // Converter prompts antes de usar
-  const mainPrompt = convertTiptapJSONToText(
-    config.v2PromptOverrides?.generation?.main?.value
-  );
-  
-  const bugPrompt = convertTiptapJSONToText(
-    config.v2PromptOverrides?.categories?.descriptions?.bug?.value
-  );
-  
-  // Agora pode construir o prompt final para o LLM
-  const fullPrompt = `
+    // Converter prompts antes de usar
+    const mainPrompt = convertTiptapJSONToText(
+        config.v2PromptOverrides?.generation?.main?.value,
+    );
+
+    const bugPrompt = convertTiptapJSONToText(
+        config.v2PromptOverrides?.categories?.descriptions?.bug?.value,
+    );
+
+    // Agora pode construir o prompt final para o LLM
+    const fullPrompt = `
     ${mainPrompt}
     
     When analyzing for bugs:
     ${bugPrompt}
   `;
-  
-  return await sendToLLM(fullPrompt);
+
+    return await sendToLLM(fullPrompt);
 }
 ```
 
 ### 5. Compatibilidade
 
 A função funciona com:
+
 - ✅ JSON string: `'{"type":"doc",...}'`
 - ✅ JSON object: `{ type: "doc", ... }`
 - ✅ Texto puro: `"hello world"` (retorna como está)
@@ -74,11 +76,13 @@ A função funciona com:
 ### 6. Formato dos tokens MCP
 
 Os tokens são preservados no formato:
+
 ```
 @mcp<app_name|tool_name>
 ```
 
 Exemplo:
+
 - `@mcp<kodus|kodus_list_commits>`
 - `@mcp<jira|search_issues>`
 
@@ -87,7 +91,9 @@ Exemplo:
 Se preferir, você pode usar esta versão simplificada no backend:
 
 ```typescript
-function convertTiptapJSONToText(content: string | object | null | undefined): string {
+function convertTiptapJSONToText(
+    content: string | object | null | undefined,
+): string {
     if (!content) return "";
 
     if (typeof content === "string") {
@@ -131,4 +137,3 @@ function convertTiptapJSONToText(content: string | object | null | undefined): s
 - ✅ **SEMPRE** converta usando `convertTiptapJSONToText()` antes de enviar
 - ✅ Os tokens `@mcp<app|tool>` são preservados no texto final
 - ✅ A função é idempotente (pode chamar várias vezes sem problema)
-

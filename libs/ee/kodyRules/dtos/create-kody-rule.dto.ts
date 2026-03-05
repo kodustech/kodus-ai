@@ -3,15 +3,18 @@ import {
     IKodyRuleReferenceSyncError,
     IKodyRulesExample,
     KodyRuleProcessingStatus,
+    KodyRuleRequestType,
     KodyRulesOrigin,
     KodyRulesScope,
     KodyRulesStatus,
+    KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
-import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
     IsArray,
     IsBoolean,
+    IsDate,
     IsEnum,
     IsNotEmpty,
     IsOptional,
@@ -84,6 +87,15 @@ export class CreateKodyRuleDto {
         example: '1e6f6a92-5b4b-4b7d-9c31-4f55f4e9cbd1',
     })
     uuid?: string;
+
+    @IsNotEmpty()
+    @IsEnum(KodyRulesType)
+    @ApiProperty({
+        enum: KodyRulesType,
+        enumName: 'KodyRulesType',
+        example: KodyRulesType.STANDARD,
+    })
+    type: KodyRulesType;
 
     @IsNotEmpty()
     @IsString()
@@ -188,4 +200,38 @@ export class CreateKodyRuleDto {
     @IsOptional()
     @IsString()
     ruleHash?: string;
+
+    @IsOptional()
+    @IsEnum(KodyRuleRequestType)
+    @ApiPropertyOptional({
+        enum: KodyRuleRequestType,
+        enumName: 'KodyRuleRequestType',
+    })
+    requestType?: KodyRuleRequestType;
+
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({
+        format: 'uuid',
+        description:
+            'When this rule is a pending request, target rule to update',
+    })
+    targetRuleUuid?: string;
+
+    @IsOptional()
+    @ApiPropertyOptional({
+        type: String,
+        format: 'date-time',
+    })
+    @Type(() => Date)
+    @IsDate()
+    resolvedAt?: Date;
+
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({
+        description:
+            'User id/email/system identifier that resolved the request',
+    })
+    resolvedBy?: string;
 }

@@ -168,11 +168,10 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             let accumulatedExecutions = 0;
             let totalExecutions = 0;
             let hasMoreExecutions = true;
-            const authorPolicyConfig =
-                await this.getCompiledAuthorPolicyConfig(
-                    authorPolicy,
-                    organizationAndTeamData,
-                );
+            const authorPolicyConfig = await this.getCompiledAuthorPolicyConfig(
+                authorPolicy,
+                organizationAndTeamData,
+            );
 
             // If filtering by title, fetch PR numbers from MongoDB first
             let prFilters:
@@ -247,7 +246,10 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 // PERF: Fetch PR basics first so author-policy filtering can reduce
                 // downstream heavy queries (suggestion aggregation + code review logs).
                 const pullRequestsList = await this.pullRequestsService
-                    .findManyByNumbersAndRepositoryIds(prCriteria, organizationId)
+                    .findManyByNumbersAndRepositoryIds(
+                        prCriteria,
+                        organizationId,
+                    )
                     .catch((error) => {
                         this.logger.error({
                             message: 'Error bulk fetching pull requests',
@@ -263,7 +265,9 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 const allFetchedPrKeys = new Set<string>();
                 pullRequestsList.forEach((pr) => {
                     if (pr.repository?.id && pr.number) {
-                        allFetchedPrKeys.add(`${pr.repository.id}_${pr.number}`);
+                        allFetchedPrKeys.add(
+                            `${pr.repository.id}_${pr.number}`,
+                        );
                     }
                 });
 
@@ -293,7 +297,10 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 ) {
                     accumulatedExecutions += executionsBatch.length;
 
-                    if (initialSkip + accumulatedExecutions >= totalExecutions) {
+                    if (
+                        initialSkip + accumulatedExecutions >=
+                        totalExecutions
+                    ) {
                         hasMoreExecutions = false;
                     }
 
@@ -322,42 +329,48 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                     : executionsBatch.map((execution) => execution.uuid);
 
                 // PERF: Fetch counts and timeline only for PRs that passed author policy.
-                const [suggestionCountsMap, codeReviewsList] = await Promise.all([
-                    this.pullRequestsService
-                        .findSuggestionCountsByNumbersAndRepositoryIds(
-                            filteredPrCriteria,
-                            organizationId,
-                        )
-                        .catch((error) => {
-                            this.logger.error({
-                                message: 'Error fetching suggestion counts',
-                                context: GetEnrichedPullRequestsUseCase.name,
-                                error,
-                                metadata: {
-                                    organizationId,
+                const [suggestionCountsMap, codeReviewsList] =
+                    await Promise.all([
+                        this.pullRequestsService
+                            .findSuggestionCountsByNumbersAndRepositoryIds(
+                                filteredPrCriteria,
+                                organizationId,
+                            )
+                            .catch((error) => {
+                                this.logger.error({
+                                    message: 'Error fetching suggestion counts',
+                                    context:
+                                        GetEnrichedPullRequestsUseCase.name,
+                                    error,
+                                    metadata: {
+                                        organizationId,
+                                    },
+                                });
+                                return new Map<
+                                    string,
+                                    { sent: number; filtered: number }
+                                >();
+                            }),
+                        this.codeReviewExecutionService
+                            .findManyByAutomationExecutionIds(
+                                filteredExecutionUuids,
+                                {
+                                    visibility: StageVisibility.PRIMARY,
                                 },
-                            });
-                            return new Map<
-                                string,
-                                { sent: number; filtered: number }
-                            >();
-                        }),
-                    this.codeReviewExecutionService
-                        .findManyByAutomationExecutionIds(filteredExecutionUuids, {
-                            visibility: StageVisibility.PRIMARY,
-                        })
-                        .catch((error) => {
-                            this.logger.error({
-                                message: 'Error bulk fetching code reviews',
-                                context: GetEnrichedPullRequestsUseCase.name,
-                                error,
-                                metadata: {
-                                    organizationId,
-                                },
-                            });
-                            return [];
-                        }),
-                ]);
+                            )
+                            .catch((error) => {
+                                this.logger.error({
+                                    message: 'Error bulk fetching code reviews',
+                                    context:
+                                        GetEnrichedPullRequestsUseCase.name,
+                                    error,
+                                    metadata: {
+                                        organizationId,
+                                    },
+                                });
+                                return [];
+                            }),
+                    ]);
 
                 // Map results for O(1) access
                 const prMap = new Map<string, IPullRequests>();

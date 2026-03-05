@@ -14,7 +14,10 @@ export const compileAuthorPolicyConfig = (
     configValue: AuthorPolicyConfigValue,
 ): CompiledAuthorPolicyConfig => {
     const ignoredUsers = new Set(
-        (Array.isArray(configValue?.ignoredUsers) ? configValue.ignoredUsers : [])
+        (Array.isArray(configValue?.ignoredUsers)
+            ? configValue.ignoredUsers
+            : []
+        )
             .map((id) => String(id).trim())
             .filter(Boolean),
     );
@@ -46,10 +49,7 @@ export const isAuthorExcludedByPolicy = (
         return false;
     }
 
-    if (
-        config.allowedUsers &&
-        !config.allowedUsers.has(normalizedAuthorId)
-    ) {
+    if (config.allowedUsers && !config.allowedUsers.has(normalizedAuthorId)) {
         return true;
     }
 

@@ -32,9 +32,12 @@ export const SearchReplace = Extension.create<SearchReplaceOptions>({
                     },
                     apply(tr, value, oldState, newState) {
                         const meta = tr.getMeta(SearchReplacePluginKey);
-                        const searchTerm = meta?.searchTerm ?? extension.options.searchTerm;
-                        const caseSensitive = meta?.caseSensitive ?? extension.options.caseSensitive;
-                        
+                        const searchTerm =
+                            meta?.searchTerm ?? extension.options.searchTerm;
+                        const caseSensitive =
+                            meta?.caseSensitive ??
+                            extension.options.caseSensitive;
+
                         if (!searchTerm || searchTerm.length === 0) {
                             return DecorationSet.empty;
                         }
@@ -49,9 +52,14 @@ export const SearchReplace = Extension.create<SearchReplaceOptions>({
                             if (node.isText) {
                                 const text = node.text || "";
                                 let match;
-                                const regexCopy = new RegExp(regex.source, regex.flags);
+                                const regexCopy = new RegExp(
+                                    regex.source,
+                                    regex.flags,
+                                );
 
-                                while ((match = regexCopy.exec(text)) !== null) {
+                                while (
+                                    (match = regexCopy.exec(text)) !== null
+                                ) {
                                     const from = pos + match.index;
                                     const to = from + match[0].length;
                                     decorations.push(
@@ -77,21 +85,30 @@ export const SearchReplace = Extension.create<SearchReplaceOptions>({
 
     addCommands() {
         return {
-            setSearchTerm: (searchTerm: string, caseSensitive = false) => ({ tr, dispatch }) => {
-                if (dispatch) {
-                    const newTr = tr.setMeta(SearchReplacePluginKey, { searchTerm, caseSensitive });
-                    dispatch(newTr);
-                }
-                return true;
-            },
-            clearSearch: () => ({ tr, dispatch }) => {
-                if (dispatch) {
-                    const newTr = tr.setMeta(SearchReplacePluginKey, { searchTerm: "", caseSensitive: false });
-                    dispatch(newTr);
-                }
-                return true;
-            },
+            setSearchTerm:
+                (searchTerm: string, caseSensitive = false) =>
+                ({ tr, dispatch }) => {
+                    if (dispatch) {
+                        const newTr = tr.setMeta(SearchReplacePluginKey, {
+                            searchTerm,
+                            caseSensitive,
+                        });
+                        dispatch(newTr);
+                    }
+                    return true;
+                },
+            clearSearch:
+                () =>
+                ({ tr, dispatch }) => {
+                    if (dispatch) {
+                        const newTr = tr.setMeta(SearchReplacePluginKey, {
+                            searchTerm: "",
+                            caseSensitive: false,
+                        });
+                        dispatch(newTr);
+                    }
+                    return true;
+                },
         };
     },
 });
-

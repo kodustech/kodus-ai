@@ -1,38 +1,48 @@
 import { redirect } from "next/navigation";
 import { Badge } from "@components/ui/badge";
 import { Page } from "@components/ui/page";
+import { getIntegrationConfig } from "@services/integrations/integrationConfig/fetch";
+import { getConnections } from "@services/setup/fetch";
+import { ErrorCard } from "src/core/components/ui/error-card";
 import {
     Tabs,
     TabsContent,
     TabsList,
     TabsTrigger,
 } from "src/core/components/ui/tabs";
-import { getIntegrationConfig } from "@services/integrations/integrationConfig/fetch";
-import { getConnections } from "@services/setup/fetch";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
 import { getCurrentPathnameOnServerComponents } from "src/core/utils/headers";
 import { safeArray } from "src/core/utils/safe-array";
-import { ErrorCard } from "src/core/components/ui/error-card";
-import { getAutoLicenseAssignmentConfig } from "src/lib/services/organizationParameters/fetch";
-
 import { getOrganizationMembers } from "src/features/ee/subscription/_services/billing/fetch";
+import { getAutoLicenseAssignmentConfig } from "src/lib/services/organizationParameters/fetch";
 
 import { GitProviders } from "./_components/_providers";
 import { GitConnectedProvider } from "./_components/connected-provider";
-import { GitRepositoriesTable } from "./_components/table";
 import { IgnoredUsersCard } from "./_components/ignored-users-card";
+import { GitRepositoriesTable } from "./_components/table";
 
 export default async function GitSettings() {
     const teamId = await getGlobalSelectedTeamId();
 
     let connectionsResult: Awaited<ReturnType<typeof getConnections>> = [];
-    let connectedRepositories: Awaited<ReturnType<typeof getIntegrationConfig>> = [];
-    let autoLicenseAssignmentConfig: Awaited<ReturnType<typeof getAutoLicenseAssignmentConfig>> | null = null;
-    let organizationMembersRaw: Awaited<ReturnType<typeof getOrganizationMembers>> = [];
+    let connectedRepositories: Awaited<
+        ReturnType<typeof getIntegrationConfig>
+    > = [];
+    let autoLicenseAssignmentConfig: Awaited<
+        ReturnType<typeof getAutoLicenseAssignmentConfig>
+    > | null = null;
+    let organizationMembersRaw: Awaited<
+        ReturnType<typeof getOrganizationMembers>
+    > = [];
     let connectionsError = false;
 
     try {
-        [connectionsResult, connectedRepositories, autoLicenseAssignmentConfig, organizationMembersRaw] = await Promise.all([
+        [
+            connectionsResult,
+            connectedRepositories,
+            autoLicenseAssignmentConfig,
+            organizationMembersRaw,
+        ] = await Promise.all([
             getConnections(teamId),
             getIntegrationConfig({ teamId }),
             getAutoLicenseAssignmentConfig().catch(() => null),
@@ -101,7 +111,9 @@ export default async function GitSettings() {
                             className="flex items-center gap-2">
                             PR author filters
                             {hasFilters && (
-                                <Badge className="h-2 w-2 min-w-2 rounded-full ml-2" ><b>!</b></Badge>
+                                <Badge className="ml-2 h-2 w-2 min-w-2 rounded-full">
+                                    <b>!</b>
+                                </Badge>
                             )}
                         </TabsTrigger>
                         <div className="flex-1" />

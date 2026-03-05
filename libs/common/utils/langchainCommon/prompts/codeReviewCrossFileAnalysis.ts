@@ -4,7 +4,7 @@ import { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general
 
 import { SeverityLevel } from '../../enums/severityLevel.enum';
 import { getDefaultKodusConfigFile } from '../../validateCodeReviewConfigFile';
-import { getTextOrDefault } from './prompt.helpers';
+import { getTextOrDefault, sanitizePromptText } from './prompt.helpers';
 
 export interface CrossFileContextForPrompt {
     filePath: string;
@@ -27,6 +27,98 @@ export interface CrossFileAnalysisPayload {
         'categories'
     >;
     crossFileContexts?: CrossFileContextForPrompt[];
+    memories?: Array<{
+        title?: string;
+        rule?: string;
+    }>;
+    externalReferences?: unknown[];
+    externalReferenceErrors?: unknown[] | string;
+}
+
+function formatSyncErrors(errors: unknown[] | string | undefined): string {
+    if (!errors) {
+        return '';
+    }
+
+    const normalized = Array.isArray(errors) ? errors : [errors];
+    const formatted = normalized
+        .map((error) => {
+            if (!error) {
+                return null;
+            }
+            if (typeof error === 'string') {
+                return `- ${error}`;
+            }
+            if (typeof error === 'object') {
+                const message =
+                    typeof (error as Record<string, unknown>).message ===
+                    'string'
+                        ? ((error as Record<string, unknown>).message as string)
+                        : 'Unknown reference error';
+                return `- ${message}`;
+            }
+            return null;
+        })
+        .filter((line): line is string => Boolean(line));
+
+    if (!formatted.length) {
+        return '';
+    }
+
+    return `### Source: System Messages\n**Reference issues detected:**\n${formatted.join('\n')}`;
+}
+
+function formatReferenceSection(references: unknown[] | undefined): string {
+    if (!Array.isArray(references) || !references.length) {
+        return '';
+    }
+
+    return (references as Array<Record<string, unknown>>)
+        .map((ref) => {
+            const lineRangeInfo = ref.lineRange
+                ? ` (lines ${(ref.lineRange as Record<string, unknown>).start}-${(ref.lineRange as Record<string, unknown>).end})`
+                : '';
+            const header = `### Source: File - ${ref.filePath}${lineRangeInfo}`;
+            return `${header}\n${ref.content}`;
+        })
+        .join('\n\n');
+}
+
+function appendExternalContext(basePrompt: string, sections: string[]): string {
+    const contextBlocks = sections.filter((section) => section?.trim().length);
+
+    if (!contextBlocks.length) {
+        return basePrompt;
+    }
+
+    return `${basePrompt}\n\n## External Context & Injected Knowledge\n\nThe following information is provided to ground your analysis in the broader system reality. Use this as your source of truth.\n\n---\n\n${contextBlocks.join('\n\n---\n\n')}`;
+}
+
+function formatMemoriesSection(
+    memories: CrossFileAnalysisPayload['memories'],
+): string {
+    if (!Array.isArray(memories) || !memories.length) {
+        return '';
+    }
+
+    const formattedMemories = memories
+        .map((memory) => {
+            const title = getTextOrDefault(memory?.title, '').trim();
+            const rule = getTextOrDefault(memory?.rule, '').trim();
+
+            if (!title || !rule) {
+                return null;
+            }
+
+            return `- Title: ${sanitizePromptText(title)}\n  Rule: ${sanitizePromptText(rule)}`;
+        })
+        .filter((entry): entry is string => Boolean(entry));
+
+    if (!formattedMemories.length) {
+        return '';
+    }
+
+    return `## Memories\n\nAdditional context from past learnings in Kody Rules format.\n\n${formattedMemories.join('\n\n')}`;
 }
 
 export const CrossFileAnalysisSchema = z.object({
@@ -78,8 +170,9 @@ export const prompt_codereview_cross_file_analysis = (
         overrides?.generation?.main,
         defaultGeneration?.main,
     );
+    const memoriesBlock = formatMemoriesSection(payload?.memories);
 
-    return `You are Kody PR-Reviewer, a senior engineer specialized in understanding and reviewing code, with deep knowledge of how LLMs function. You are **context-aware** and prioritize **developer intent** over rigid rule-following.
+    const basePrompt = `You are Kody PR-Reviewer, a senior engineer specialized in understanding and reviewing code, with deep knowledge of how LLMs function. You are **context-aware** and prioritize **developer intent** over rigid rule-following.
 
 # Cross-File Code Analysis
 Analyze the following PR files for patterns that require multiple file context: duplicate implementations, inconsistent error handling, configuration drift, interface inconsistencies, and redundant operations.
@@ -97,7 +190,9 @@ ${JSON.stringify(
     2,
 )}
 
-${payload?.crossFileContexts?.length ? `## Retrieved Cross-File Context
+${
+    payload?.crossFileContexts?.length
+        ? `## Retrieved Cross-File Context
 
 The following code snippets were retrieved from files OUTSIDE this PR that consume or depend on the changed code. Use these to detect real breakage, inconsistencies, or missed updates.
 
@@ -117,7 +212,9 @@ ${ctx.content}
 - **PRIORITIZE** real breakage detected in the retrieved snippets (e.g., callers using removed parameters, consumers expecting old return types)
 - Issues backed by retrieved context evidence should be rated at least **HIGH** severity
 - Do not re-report issues that are already visible in the PR diff alone — focus on cross-file impact revealed by the retrieved context
-` : ''}
+`
+        : ''
+}
 ## Analysis Focus
 
 Look for cross-file issues that require multiple file context **AND represent an unintentional oversight**:
@@ -158,6 +255,10 @@ Look for cross-file issues that require multiple file context **AND represent an
     - Duplicate logic wrapped in feature flag conditionals (e.g., \`if (flags.v2_enabled) ... else ...\`). This is a temporary and valid state.
 
 ## Analysis Instructions
+
+0. **Memory Compliance Pre-check (CRITICAL):**
+    - If a **Memories** section is present in external context, evaluate every memory rule against the changed files before any other analysis step.
+    - Treat applicable memory rules as high-priority signals and report their violations with concrete cross-file evidence.
 
 1.  **Exhaustive Cross-Reference (CRITICAL):**
     - You MUST compare **every file against every other file** in the input.
@@ -269,4 +370,15 @@ Generate suggestions in JSON format:
 - **Language: All suggestions and feedback must be provided in ${payload?.language || 'en-US'} language**
 - **Current date: ${new Date().toLocaleDateString('en-GB')}**
 `;
+
+    const referenceSection = formatReferenceSection(
+        payload?.externalReferences,
+    );
+    const referenceErrors = formatSyncErrors(payload?.externalReferenceErrors);
+
+    return appendExternalContext(basePrompt, [
+        memoriesBlock,
+        referenceSection,
+        referenceErrors,
+    ]);
 };

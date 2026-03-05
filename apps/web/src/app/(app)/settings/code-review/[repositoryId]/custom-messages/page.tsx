@@ -236,7 +236,7 @@ function CustomMessagesContent() {
                                 setGlobalSettings((prev) => ({
                                     ...prev,
                                     hideComments: {
-                                        ...prev.hideComments,
+                                        ...(prev.hideComments ?? {}),
                                         value,
                                     },
                                 }));
@@ -245,7 +245,7 @@ function CustomMessagesContent() {
                                 setGlobalSettings((prev) => ({
                                     ...prev,
                                     hideComments: {
-                                        ...prev.hideComments,
+                                        ...(prev.hideComments ?? {}),
                                         value: initialState.globalSettings
                                             ?.hideComments?.value,
                                     },
@@ -265,7 +265,7 @@ function CustomMessagesContent() {
                                 setGlobalSettings((prev) => ({
                                     ...prev,
                                     suggestionCopyPrompt: {
-                                        ...prev.suggestionCopyPrompt,
+                                        ...(prev.suggestionCopyPrompt ?? {}),
                                         value,
                                     },
                                 }));
@@ -274,7 +274,7 @@ function CustomMessagesContent() {
                                 setGlobalSettings((prev) => ({
                                     ...prev,
                                     suggestionCopyPrompt: {
-                                        ...prev.suggestionCopyPrompt,
+                                        ...(prev.suggestionCopyPrompt ?? {}),
                                         value: initialState.globalSettings
                                             ?.suggestionCopyPrompt?.value,
                                     },

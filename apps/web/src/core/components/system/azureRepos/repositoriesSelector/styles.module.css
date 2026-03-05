@@ -25,7 +25,7 @@
 }
 
 .viewing {
-    @apply mb-4 mt-8 tracking-[0.1em] text-[#DFD8F5];
+    @apply mt-8 mb-4 tracking-[0.1em] text-[#DFD8F5];
     font-family: "Roboto Mono", monospace;
 }
 
@@ -55,7 +55,7 @@
 }
 
 .checkbox {
-    @apply h-[25px] w-[25px] rounded-[5px] border-2 border-brand-purple/20 bg-[#382A41]/40 transition-all duration-150 data-[state=checked]:border-brand-purple/60 data-[state=checked]:bg-[#382a41];
+    @apply border-brand-purple/20 data-[state=checked]:border-brand-purple/60 h-[25px] w-[25px] rounded-[5px] border-2 bg-[#382A41]/40 transition-all duration-150 data-[state=checked]:bg-[#382a41];
 }
 
 .repositoryCol {
@@ -67,5 +67,5 @@
 }
 
 .repositoryVisibility {
-    @apply flex h-[30px] items-center justify-center rounded-[5px] border border-brand-purple/20 bg-[#292031] px-2 text-[13px] font-medium text-[#DFD8F5];
+    @apply border-brand-purple/20 flex h-[30px] items-center justify-center rounded-[5px] border bg-[#292031] px-2 text-[13px] font-medium text-[#DFD8F5];
 }

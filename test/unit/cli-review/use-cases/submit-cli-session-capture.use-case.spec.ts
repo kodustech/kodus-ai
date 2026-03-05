@@ -84,12 +84,16 @@ describe('SubmitCliSessionCaptureUseCase', () => {
 
         const persisted = mockRepository.create.mock.calls[0][0];
         expect(persisted.captureId).toBe(result.id);
-        expect(persisted.organizationId).toBe(organizationAndTeamData.organizationId);
+        expect(persisted.organizationId).toBe(
+            organizationAndTeamData.organizationId,
+        );
         expect(persisted.teamId).toBe(organizationAndTeamData.teamId);
         expect(persisted.branch).toBe(captureInput.branch);
         expect(persisted.signals).toEqual(captureInput.signals);
         expect(persisted.rawPayload).toEqual(captureInput);
-        expect(persisted.capturedAt.toISOString()).toBe(captureInput.capturedAt);
+        expect(persisted.capturedAt.toISOString()).toBe(
+            captureInput.capturedAt,
+        );
         expect(persisted.dedupKey).toMatch(/^[a-f0-9]{64}$/);
 
         expect(mockClassifyUseCase.execute).toHaveBeenCalledWith(result.id);

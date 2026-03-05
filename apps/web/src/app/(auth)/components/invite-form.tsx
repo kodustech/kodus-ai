@@ -21,23 +21,25 @@ const formSchema = z
             .string()
             .trim()
             .min(1, {
-                error: "Enter your name"
+                error: "Enter your name",
             })
             .regex(/^[\p{L}\s'-]+$/u, {
-                error: "Name can only contain letters, spaces, hyphens and apostrophes"
+                error: "Name can only contain letters, spaces, hyphens and apostrophes",
             }),
         password: z
             .string({
-                error: (issue) => issue.input === undefined ? "Enter a password" : undefined
+                error: (issue) =>
+                    issue.input === undefined ? "Enter a password" : undefined,
             })
             .min(8, {
-                error: "Invalid password"
+                error: "Invalid password",
             })
             .regex(/^(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).+$/, {
-                error: "Password must include at least 1 uppercase letter, 1 number, and 1 special character"
+                error: "Password must include at least 1 uppercase letter, 1 number, and 1 special character",
             }),
         confirmPassword: z.string({
-            error: (issue) => issue.input === undefined ? "Confirm your password" : undefined
+            error: (issue) =>
+                issue.input === undefined ? "Confirm your password" : undefined,
         }),
     })
     .superRefine(({ confirmPassword, password }, ctx) => {

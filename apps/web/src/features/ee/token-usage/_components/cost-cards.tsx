@@ -37,7 +37,10 @@ function getAverageLabel(xAccessor: string): string {
 
 function formatModelName(model: string): string {
     return model
-        .replace(/^(openai\/|anthropic\/|google\/|meta-llama\/|mistralai\/)/, "")
+        .replace(
+            /^(openai\/|anthropic\/|google\/|meta-llama\/|mistralai\/)/,
+            "",
+        )
         .replace(/-\d{8}$/, "")
         .replace(/:free$/, "");
 }
@@ -65,8 +68,10 @@ export const CostCards = ({
             : 0;
     const avgOutput =
         modelCount > 0
-            ? validPricing.reduce((acc, p) => acc + p.pricing.completion * M, 0) /
-              modelCount
+            ? validPricing.reduce(
+                  (acc, p) => acc + p.pricing.completion * M,
+                  0,
+              ) / modelCount
             : 0;
 
     // For single model, show its pricing directly
@@ -88,8 +93,10 @@ export const CostCards = ({
                         <BadgeDollarSignIcon className="text-success size-6" />
                     </div>
                     <div className="space-y-0.5">
-                        <p className="text-text-secondary text-sm">Total Cost</p>
-                        <p className="text-text-primary tabular-nums text-2xl font-semibold">
+                        <p className="text-text-secondary text-sm">
+                            Total Cost
+                        </p>
+                        <p className="text-text-primary text-2xl font-semibold tabular-nums">
                             {formatCurrency(totalCost)}
                         </p>
                     </div>
@@ -104,7 +111,7 @@ export const CostCards = ({
                         <p className="text-text-secondary text-sm">
                             {getAverageLabel(xAccessor)}
                         </p>
-                        <p className="text-text-primary tabular-nums text-2xl font-semibold">
+                        <p className="text-text-primary text-2xl font-semibold tabular-nums">
                             {formatCurrency(averageCost)}
                         </p>
                     </div>
@@ -139,12 +146,22 @@ export const CostCards = ({
                                                         key={model}
                                                         className="flex items-center justify-between gap-4 text-xs">
                                                         <span className="text-text-secondary truncate">
-                                                            {formatModelName(model)}
+                                                            {formatModelName(
+                                                                model,
+                                                            )}
                                                         </span>
-                                                        <span className="text-text-primary tabular-nums whitespace-nowrap">
-                                                            ${(info.pricing.prompt * M).toFixed(2)}
-                                                            /
-                                                            ${(info.pricing.completion * M).toFixed(2)}
+                                                        <span className="text-text-primary whitespace-nowrap tabular-nums">
+                                                            $
+                                                            {(
+                                                                info.pricing
+                                                                    .prompt * M
+                                                            ).toFixed(2)}
+                                                            / $
+                                                            {(
+                                                                info.pricing
+                                                                    .completion *
+                                                                M
+                                                            ).toFixed(2)}
                                                         </span>
                                                     </div>
                                                 ))}
@@ -156,7 +173,7 @@ export const CostCards = ({
                         </div>
                         {modelCount > 0 ? (
                             <>
-                                <p className="text-text-primary tabular-nums text-2xl font-semibold">
+                                <p className="text-text-primary text-2xl font-semibold tabular-nums">
                                     ${displayInput}
                                     <span className="text-text-tertiary text-lg font-normal">
                                         {" / "}

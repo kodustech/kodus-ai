@@ -3,11 +3,11 @@
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { DataTableColumnHeader } from "@components/ui/data-table";
+import type { UserLog } from "@services/userLogs/types";
+import type { ColumnDef } from "@tanstack/react-table";
 import { formatDistanceToNow } from "date-fns";
 import { enUS } from "date-fns/locale";
 import { EyeIcon } from "lucide-react";
-import type { ColumnDef } from "@tanstack/react-table";
-import type { UserLog } from "@services/userLogs/types";
 
 import { LogDetailsModal } from "./log-details-modal";
 
@@ -54,11 +54,7 @@ export const columns: ColumnDef<UserLog>[] = [
         cell: ({ row }) => {
             const userInfo = row.getValue("_userInfo") as UserLog["_userInfo"];
 
-            return (
-                <div className="font-medium">
-                    {userInfo.userEmail}
-                </div>
-            );
+            return <div className="font-medium">{userInfo.userEmail}</div>;
         },
         enableSorting: true,
         enableHiding: false,
@@ -69,9 +65,11 @@ export const columns: ColumnDef<UserLog>[] = [
             <DataTableColumnHeader column={column} title="Description" />
         ),
         cell: ({ row }) => {
-            const changedData = row.getValue("_changedData") as UserLog["_changedData"];
+            const changedData = row.getValue(
+                "_changedData",
+            ) as UserLog["_changedData"];
             const firstChange = changedData[0];
-            
+
             return (
                 <div className="max-w-md truncate">
                     {firstChange?.description || "No description"}
@@ -88,9 +86,11 @@ export const columns: ColumnDef<UserLog>[] = [
             <DataTableColumnHeader column={column} title="Action Description" />
         ),
         cell: ({ row }) => {
-            const changedData = row.getValue("_changedData") as UserLog["_changedData"];
+            const changedData = row.getValue(
+                "_changedData",
+            ) as UserLog["_changedData"];
             const firstChange = changedData[0];
-            
+
             return (
                 <div className="max-w-md truncate">
                     {firstChange?.actionDescription || "No action description"}
@@ -108,9 +108,7 @@ export const columns: ColumnDef<UserLog>[] = [
         cell: ({ row }) => {
             const level = row.getValue("_configLevel") as string;
             return (
-                <Badge
-                    variant="helper"
-                    className="capitalize">
+                <Badge variant="helper" className="capitalize">
                     {level}
                 </Badge>
             );
@@ -126,7 +124,7 @@ export const columns: ColumnDef<UserLog>[] = [
         cell: ({ row }) => {
             const date = row.getValue("_createdAt") as string;
             return (
-                <div className="text-sm text-muted-foreground">
+                <div className="text-muted-foreground text-sm">
                     {formatDistanceToNow(new Date(date), {
                         addSuffix: true,
                         locale: enUS,
@@ -145,10 +143,7 @@ export const columns: ColumnDef<UserLog>[] = [
 
             return (
                 <LogDetailsModal log={log}>
-                    <Button
-                        size="sm"
-                        variant="helper"
-                        className="h-8 w-8 p-0">
+                    <Button size="sm" variant="helper" className="h-8 w-8 p-0">
                         <EyeIcon className="h-4 w-4" />
                     </Button>
                 </LogDetailsModal>
@@ -157,4 +152,4 @@ export const columns: ColumnDef<UserLog>[] = [
         enableSorting: false,
         enableHiding: false,
     },
-]; 
+];

@@ -1,5 +1,6 @@
 import {
     CodeReviewConfig,
+    CodeReviewConfigWithoutLLMProvider,
     FileChange,
     KodusConfigFile,
     KodyFineTuningConfig,
@@ -16,6 +17,15 @@ export interface ICodeBaseConfigService {
         repository: { name: string; id: string },
         preliminaryFiles: FileChange[],
     ): Promise<CodeReviewConfig>;
+
+    getSimpleConfig(
+        organizationAndTeamData: OrganizationAndTeamData,
+        params: {
+            repositoryId?: string;
+            directoryId?: string;
+            preliminaryFiles?: FileChange[];
+        },
+    ): Promise<CodeReviewConfigWithoutLLMProvider>;
 
     getCodeManagementAuthenticationPlatform(
         organizationAndTeamData: OrganizationAndTeamData,

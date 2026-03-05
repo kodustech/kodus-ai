@@ -39,9 +39,7 @@ export const LimitationTypeField = () => {
                             Limitation type
                         </FormControl.Label>
 
-                        <OverrideIndicatorForm
-                            fieldName="suggestionControl.limitationType"
-                        />
+                        <OverrideIndicatorForm fieldName="suggestionControl.limitationType" />
                     </div>
 
                     <FormControl.Input>

@@ -27,12 +27,11 @@ jest.mock('@kodus/flow', () => ({
  * Generate a file with a patch of approximately `tokenCount` tokens.
  * estimateTokens uses Math.ceil(text.length / 3.5), so we need ~tokenCount * 3.5 chars.
  */
-function makeFile(
-    filename: string,
-    patchTokens: number,
-): Partial<FileChange> {
+function makeFile(filename: string, patchTokens: number): Partial<FileChange> {
     const charCount = Math.floor(patchTokens * 3.5);
-    const patch = `${filename}_` + 'x'.repeat(Math.max(0, charCount - filename.length - 1));
+    const patch =
+        `${filename}_` +
+        'x'.repeat(Math.max(0, charCount - filename.length - 1));
     return {
         filename,
         patch,
@@ -41,7 +40,8 @@ function makeFile(
 }
 
 // A short system prompt for tests (~200 chars ≈ 58 tokens)
-const SHORT_PROMPT = 'Analyze the code changes and generate a PR summary. Respond concisely. This is a test prompt that simulates the real system prompt used in production.';
+const SHORT_PROMPT =
+    'Analyze the code changes and generate a PR summary. Respond concisely. This is a test prompt that simulates the real system prompt used in production.';
 const SHORT_PREFIX = '';
 
 // ---------------------------------------------------------------------------
@@ -496,10 +496,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
     describe('with maxInputTokens, files need 2 chunks', () => {
         it('should make 2 chunk calls + 1 consolidation call', async () => {
             // Each file ≈ 2000 tokens, budget allows ~1 file per chunk
-            const files = [
-                makeFile('a.ts', 2000),
-                makeFile('b.ts', 2000),
-            ];
+            const files = [makeFile('a.ts', 2000), makeFile('b.ts', 2000)];
 
             const byokConfig = {
                 main: {
@@ -591,10 +588,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                 },
             );
 
-            const files = [
-                makeFile('a.ts', 2000),
-                makeFile('b.ts', 2000),
-            ];
+            const files = [makeFile('a.ts', 2000), makeFile('b.ts', 2000)];
 
             const byokConfig = {
                 main: {
@@ -631,10 +625,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                 },
             );
 
-            const files = [
-                makeFile('a.ts', 2000),
-                makeFile('b.ts', 2000),
-            ];
+            const files = [makeFile('a.ts', 2000), makeFile('b.ts', 2000)];
 
             const byokConfig = {
                 main: {

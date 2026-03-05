@@ -78,7 +78,9 @@ export default function CardConnection({
                             size="sm"
                             variant="primary"
                             disabled={disabled || isDisabled}
-                            leftIcon={isSetupComplete ? <EditIcon /> : <PlugIcon />}
+                            leftIcon={
+                                isSetupComplete ? <EditIcon /> : <PlugIcon />
+                            }
                             onClick={() => editIntegration(title)}>
                             {isSetupComplete ? "Edit" : "Connect"}
                         </Button>

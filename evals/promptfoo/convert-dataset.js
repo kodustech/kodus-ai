@@ -27,18 +27,25 @@ const ALL_DATASETS = {
     java_crossfile: 'java_crossfile.jsonl',
     ruby: 'ruby.jsonl',
     ruby_crossfile: 'ruby_crossfile.jsonl',
+    false_positives: 'false_positives.jsonl',
 };
 
 // Filter by --dataset-type
 function filterByDatasetType(datasets) {
-    if (datasetType === 'all') return datasets;
+    if (datasetType === 'all') {
+        // 'all' excludes false_positives (opt-in only)
+        return Object.fromEntries(Object.entries(datasets).filter(([key]) => key !== 'false_positives'));
+    }
     if (datasetType === 'normal') {
-        return Object.fromEntries(Object.entries(datasets).filter(([key]) => !key.endsWith('_crossfile')));
+        return Object.fromEntries(Object.entries(datasets).filter(([key]) => !key.endsWith('_crossfile') && key !== 'false_positives'));
     }
     if (datasetType === 'crossfile') {
         return Object.fromEntries(Object.entries(datasets).filter(([key]) => key.endsWith('_crossfile')));
     }
-    console.error(`Unknown dataset-type: ${datasetType}. Options: normal, crossfile, all`);
+    if (datasetType === 'false_positives') {
+        return { false_positives: datasets.false_positives };
+    }
+    console.error(`Unknown dataset-type: ${datasetType}. Options: normal, crossfile, false_positives, all`);
     process.exit(1);
 }
 
@@ -68,13 +75,21 @@ const lines = files.flatMap(file => {
 // (prompt_codereview_system_gemini_v2, lines 1447-1453)
 const CROSS_FILE_INSTRUCTIONS = `### Codebase Context (REAL CODE — treat as visible evidence)
 
-The snippets below are **actual code from the repository** (not hypothetical). They show callers, consumers, or dependents of the code being changed in this PR.
+The snippets below are **actual code from the repository** (not hypothetical). They show callers, consumers, upstream dependencies, or infrastructure used by the code being changed in this PR.
 
 **You MUST check for broken contracts between the diff and these snippets:**
 - A caller passing a string literal (event name, key, enum value) that no longer exists in the mapping/config changed by the diff
 - A consumer relying on a return type, enum value, event name, or config key that the diff renames, changes, or removes
 - A caller passing arguments that no longer match the new function signature
 - A mapping/config that references identifiers renamed or deleted in the diff
+
+**EQUALLY IMPORTANT — use snippets to DISCARD false concerns:**
+These snippets are your source of truth about how the surrounding codebase works. Before reporting ANY issue, check whether a snippet already answers or refutes your concern. If a snippet provides evidence that your concern is already handled — by any mechanism visible in the snippet — you MUST discard the suggestion. Do NOT ignore snippet evidence to justify a finding.
+
+Examples of when to discard:
+- A snippet shows a wrapper function already sanitizes input → do not report injection in the inner function
+- A snippet shows an ORM enforces constraints at the DB level → do not report missing validation in application code
+- A snippet shows retry/backoff logic around a network call → do not report unhandled transient failures in the caller
 
 **PRIORITY: Runtime-breaking bugs (wrong string literal, removed enum value, renamed key) take absolute priority over type-narrowing or type-safety improvements.** If a snippet shows code that WILL throw an error or silently fail at runtime, ALWAYS report it as a bug — even if you also see type-level improvements to suggest. Do NOT report type improvements instead of a runtime bug.
 
@@ -135,20 +150,18 @@ const tests = lines.map((line, index) => {
         relevantLinesEnd: s.relevantLinesEnd,
     }));
 
-    return {
-        description: `Example ${index + 1}: ${inputs.filePath || 'unknown'}`,
-        vars: {
-            // Variables matching the exact Kodus prompt user template
-            fileContent: escapeTemplatePatterns(inputs.fileContent || ''),
-            patchWithLinesStr: escapeTemplatePatterns(inputs.patchWithLinesStr || ''),
-            prSummary: escapeTemplatePatterns(prSummary),
-            // Cross-file context (empty string when no snippets, full section when present)
-            crossFileContext: escapeTemplatePatterns(crossFileContext),
-            // Reference data for assertions (not used in prompt template)
-            referenceBugs: JSON.stringify(referenceBugs),
-            referenceCodeSuggestions: JSON.stringify(codeSuggestions, null, 2),
-        },
-        assert: [
+    // Use different assertions for false-positive trap cases
+    const isFalsePositive = data.metadata?.categories?.includes('false_positive_trap');
+
+    const assertions = isFalsePositive
+        ? [
+            // False-positive precision: 0 suggestions = 1.0, more = lower score
+            {
+                type: 'javascript',
+                value: 'file://false-positive-assertion.js',
+            },
+        ]
+        : [
             // Production parser check - uses same logic as LLMResponseProcessor.processResponse()
             {
                 type: 'javascript',
@@ -164,7 +177,22 @@ const tests = lines.map((line, index) => {
                 type: 'javascript',
                 value: 'file://line-accuracy-assertion.js',
             }
-        ]
+        ];
+
+    return {
+        description: `Example ${index + 1}: ${inputs.filePath || 'unknown'}`,
+        vars: {
+            // Variables matching the exact Kodus prompt user template
+            fileContent: escapeTemplatePatterns(inputs.fileContent || ''),
+            patchWithLinesStr: escapeTemplatePatterns(inputs.patchWithLinesStr || ''),
+            prSummary: escapeTemplatePatterns(prSummary),
+            // Cross-file context (empty string when no snippets, full section when present)
+            crossFileContext: escapeTemplatePatterns(crossFileContext),
+            // Reference data for assertions (not used in prompt template)
+            referenceBugs: JSON.stringify(referenceBugs),
+            referenceCodeSuggestions: JSON.stringify(codeSuggestions, null, 2),
+        },
+        assert: assertions,
     };
 });
 

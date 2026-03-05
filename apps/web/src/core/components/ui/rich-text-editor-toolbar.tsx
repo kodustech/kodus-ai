@@ -2,9 +2,23 @@
 
 import * as React from "react";
 import { Editor } from "@tiptap/react";
-import { Bold, Italic, Code, Code2, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Link, Minus } from "lucide-react";
-import { Button } from "./button";
+import {
+    Bold,
+    Code,
+    Code2,
+    Heading1,
+    Heading2,
+    Heading3,
+    Italic,
+    Link,
+    List,
+    ListOrdered,
+    Minus,
+    Quote,
+} from "lucide-react";
 import { cn } from "src/core/utils/components";
+
+import { Button } from "./button";
 
 type RichTextEditorToolbarProps = {
     editor: Editor | null;
@@ -12,13 +26,17 @@ type RichTextEditorToolbarProps = {
     extraActions?: React.ReactNode;
 };
 
-export function RichTextEditorToolbar({ editor, className, extraActions }: RichTextEditorToolbarProps) {
+export function RichTextEditorToolbar({
+    editor,
+    className,
+    extraActions,
+}: RichTextEditorToolbarProps) {
     if (!editor) return null;
 
     return (
         <div
             className={cn(
-                "flex flex-wrap items-center gap-1 rounded-lg border border-card-lv3 bg-card-lv2 p-1",
+                "border-card-lv3 bg-card-lv2 flex flex-wrap items-center gap-1 rounded-lg border p-1",
                 className,
             )}>
             {/* Text Formatting */}
@@ -64,18 +82,28 @@ export function RichTextEditorToolbar({ editor, className, extraActions }: RichT
                 <Code className="size-4" />
             </Button>
 
-            <div className="mx-1 h-4 w-px bg-card-lv3" />
+            <div className="bg-card-lv3 mx-1 h-4 w-px" />
 
             {/* Headings */}
             <Button
                 type="button"
                 variant="cancel"
                 size="icon-sm"
-                onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-                disabled={!editor.can().chain().focus().toggleHeading({ level: 1 }).run()}
+                onClick={() =>
+                    editor.chain().focus().toggleHeading({ level: 1 }).run()
+                }
+                disabled={
+                    !editor
+                        .can()
+                        .chain()
+                        .focus()
+                        .toggleHeading({ level: 1 })
+                        .run()
+                }
                 className={cn(
                     "h-7 w-7",
-                    editor.isActive("heading", { level: 1 }) && "bg-primary/10 text-primary",
+                    editor.isActive("heading", { level: 1 }) &&
+                        "bg-primary/10 text-primary",
                 )}
                 title="Heading 1">
                 <Heading1 className="size-4" />
@@ -85,11 +113,21 @@ export function RichTextEditorToolbar({ editor, className, extraActions }: RichT
                 type="button"
                 variant="cancel"
                 size="icon-sm"
-                onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-                disabled={!editor.can().chain().focus().toggleHeading({ level: 2 }).run()}
+                onClick={() =>
+                    editor.chain().focus().toggleHeading({ level: 2 }).run()
+                }
+                disabled={
+                    !editor
+                        .can()
+                        .chain()
+                        .focus()
+                        .toggleHeading({ level: 2 })
+                        .run()
+                }
                 className={cn(
                     "h-7 w-7",
-                    editor.isActive("heading", { level: 2 }) && "bg-primary/10 text-primary",
+                    editor.isActive("heading", { level: 2 }) &&
+                        "bg-primary/10 text-primary",
                 )}
                 title="Heading 2">
                 <Heading2 className="size-4" />
@@ -99,17 +137,27 @@ export function RichTextEditorToolbar({ editor, className, extraActions }: RichT
                 type="button"
                 variant="cancel"
                 size="icon-sm"
-                onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-                disabled={!editor.can().chain().focus().toggleHeading({ level: 3 }).run()}
+                onClick={() =>
+                    editor.chain().focus().toggleHeading({ level: 3 }).run()
+                }
+                disabled={
+                    !editor
+                        .can()
+                        .chain()
+                        .focus()
+                        .toggleHeading({ level: 3 })
+                        .run()
+                }
                 className={cn(
                     "h-7 w-7",
-                    editor.isActive("heading", { level: 3 }) && "bg-primary/10 text-primary",
+                    editor.isActive("heading", { level: 3 }) &&
+                        "bg-primary/10 text-primary",
                 )}
                 title="Heading 3">
                 <Heading3 className="size-4" />
             </Button>
 
-            <div className="mx-1 h-4 w-px bg-card-lv3" />
+            <div className="bg-card-lv3 mx-1 h-4 w-px" />
 
             {/* Lists */}
             <Button
@@ -117,10 +165,13 @@ export function RichTextEditorToolbar({ editor, className, extraActions }: RichT
                 variant="cancel"
                 size="icon-sm"
                 onClick={() => editor.chain().focus().toggleBulletList().run()}
-                disabled={!editor.can().chain().focus().toggleBulletList().run()}
+                disabled={
+                    !editor.can().chain().focus().toggleBulletList().run()
+                }
                 className={cn(
                     "h-7 w-7",
-                    editor.isActive("bulletList") && "bg-primary/10 text-primary",
+                    editor.isActive("bulletList") &&
+                        "bg-primary/10 text-primary",
                 )}
                 title="Bullet List">
                 <List className="size-4" />
@@ -131,16 +182,19 @@ export function RichTextEditorToolbar({ editor, className, extraActions }: RichT
                 variant="cancel"
                 size="icon-sm"
                 onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                disabled={!editor.can().chain().focus().toggleOrderedList().run()}
+                disabled={
+                    !editor.can().chain().focus().toggleOrderedList().run()
+                }
                 className={cn(
                     "h-7 w-7",
-                    editor.isActive("orderedList") && "bg-primary/10 text-primary",
+                    editor.isActive("orderedList") &&
+                        "bg-primary/10 text-primary",
                 )}
                 title="Ordered List">
                 <ListOrdered className="size-4" />
             </Button>
 
-            <div className="mx-1 h-4 w-px bg-card-lv3" />
+            <div className="bg-card-lv3 mx-1 h-4 w-px" />
 
             {/* Blockquote & Code Block */}
             <Button
@@ -148,10 +202,13 @@ export function RichTextEditorToolbar({ editor, className, extraActions }: RichT
                 variant="cancel"
                 size="icon-sm"
                 onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                disabled={!editor.can().chain().focus().toggleBlockquote().run()}
+                disabled={
+                    !editor.can().chain().focus().toggleBlockquote().run()
+                }
                 className={cn(
                     "h-7 w-7",
-                    editor.isActive("blockquote") && "bg-primary/10 text-primary",
+                    editor.isActive("blockquote") &&
+                        "bg-primary/10 text-primary",
                 )}
                 title="Blockquote">
                 <Quote className="size-4" />
@@ -165,13 +222,14 @@ export function RichTextEditorToolbar({ editor, className, extraActions }: RichT
                 disabled={!editor.can().chain().focus().toggleCodeBlock().run()}
                 className={cn(
                     "h-7 w-7",
-                    editor.isActive("codeBlock") && "bg-primary/10 text-primary",
+                    editor.isActive("codeBlock") &&
+                        "bg-primary/10 text-primary",
                 )}
                 title="Code Block (⌘⌥C)">
                 <Code2 className="size-4" />
             </Button>
 
-            <div className="mx-1 h-4 w-px bg-card-lv3" />
+            <div className="bg-card-lv3 mx-1 h-4 w-px" />
 
             {/* Link & Horizontal Rule */}
             <Button
@@ -184,7 +242,9 @@ export function RichTextEditorToolbar({ editor, className, extraActions }: RichT
                         editor.chain().focus().setLink({ href: url }).run();
                     }
                 }}
-                disabled={!editor.can().chain().focus().setLink({ href: "" }).run()}
+                disabled={
+                    !editor.can().chain().focus().setLink({ href: "" }).run()
+                }
                 className={cn(
                     "h-7 w-7",
                     editor.isActive("link") && "bg-primary/10 text-primary",
@@ -198,7 +258,9 @@ export function RichTextEditorToolbar({ editor, className, extraActions }: RichT
                 variant="cancel"
                 size="icon-sm"
                 onClick={() => editor.chain().focus().setHorizontalRule().run()}
-                disabled={!editor.can().chain().focus().setHorizontalRule().run()}
+                disabled={
+                    !editor.can().chain().focus().setHorizontalRule().run()
+                }
                 className="h-7 w-7"
                 title="Horizontal Rule">
                 <Minus className="size-4" />
@@ -207,11 +269,10 @@ export function RichTextEditorToolbar({ editor, className, extraActions }: RichT
             {extraActions && (
                 <>
                     <div className="flex-1" />
-                    <div className="mx-1 h-4 w-px bg-card-lv3" />
+                    <div className="bg-card-lv3 mx-1 h-4 w-px" />
                     {extraActions}
                 </>
             )}
         </div>
     );
 }
-

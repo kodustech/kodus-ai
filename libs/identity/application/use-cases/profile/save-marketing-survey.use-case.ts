@@ -16,7 +16,8 @@ export class SaveMarketingSurveyUseCase implements IUseCase {
         userId: string,
         data: { referralSource?: string; primaryGoal?: string },
     ): Promise<void> {
-        const updatePayload: { referralSource?: string; primaryGoal?: string } = {};
+        const updatePayload: { referralSource?: string; primaryGoal?: string } =
+            {};
 
         if (data.referralSource !== undefined) {
             updatePayload.referralSource = data.referralSource;

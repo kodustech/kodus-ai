@@ -2,8 +2,8 @@ import { CardContent } from "@components/ui/card";
 import { getDeveloperActivity } from "src/features/ee/cockpit/_services/analytics/productivity/fetch";
 
 import { CockpitNoDataPlaceholder } from "../_components/no-data-placeholder";
-import { getSelectedDateRange } from "../_helpers/get-selected-date-range";
 import { extractApiData } from "../_helpers/api-data-extractor";
+import { getSelectedDateRange } from "../_helpers/get-selected-date-range";
 import { TableNoSSR } from "./_components/table.no-ssr";
 
 export default async function TeamActivityChart() {

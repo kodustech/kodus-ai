@@ -24,4 +24,4 @@ export interface UserLogsResponse {
     page: number;
     limit: number;
     totalPages: number;
-} 
+}

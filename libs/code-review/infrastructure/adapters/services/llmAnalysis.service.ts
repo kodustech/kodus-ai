@@ -17,11 +17,14 @@ import { ContextAugmentationsMap } from '@libs/ai-engine/infrastructure/adapters
 import { LLMResponseProcessor } from '@libs/ai-engine/infrastructure/adapters/services/llmResponseProcessor.transform';
 import { IAIAnalysisService } from '@libs/code-review/domain/contracts/AIAnalysisService.contract';
 import {
+    CrossFileContextSnippet,
+    RemoteCommands,
+} from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import {
     prompt_codeReviewSafeguard_system,
     prompt_validateImplementedSuggestions,
 } from '@libs/common/utils/langchainCommon/prompts';
 import { SAFEGUARD_CROSS_FILE_CONTEXT_PREAMBLE } from '@libs/common/utils/langchainCommon/prompts/codeReviewSafeguard';
-import { CrossFileContextSnippet } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import {
     prompt_codereview_system_gemini,
     prompt_codereview_system_gemini_v2,
@@ -40,7 +43,9 @@ import {
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
+import { SafeguardPipelineService } from './safeguardPipeline.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
+import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 export const LLM_ANALYSIS_SERVICE_TOKEN = Symbol.for('LLMAnalysisService');
 
@@ -48,59 +53,20 @@ export const LLM_ANALYSIS_SERVICE_TOKEN = Symbol.for('LLMAnalysisService');
 export class LLMAnalysisService implements IAIAnalysisService {
     private readonly logger = createLogger(LLMAnalysisService.name);
     private readonly llmResponseProcessor: LLMResponseProcessor;
+    private readonly safeguardPipeline: SafeguardPipelineService;
 
     constructor(
         private readonly promptRunnerService: PromptRunnerService,
         private readonly observability: ObservabilityService,
     ) {
         this.llmResponseProcessor = new LLMResponseProcessor();
+        this.safeguardPipeline = new SafeguardPipelineService(
+            promptRunnerService,
+            observability,
+        );
     }
 
     //#region Helper Functions
-    // Creates the prefix for the prompt cache (every prompt that uses file or codeDiff must start with this)
-    private preparePrefixChainForCache(context: {
-        patchWithLinesStr: string;
-        fileContent: string;
-        relevantContent: string;
-        language: string;
-        filePath: string;
-        suggestions?: CodeSuggestion[];
-        reviewMode: ReviewModeResponse;
-        crossFileSnippets?: CrossFileContextSnippet[];
-    }) {
-        if (!context?.patchWithLinesStr) {
-            throw new Error('Required context parameters are missing');
-        }
-
-        let crossFileBlock = '';
-        if (context.crossFileSnippets?.length) {
-            const snippetLines = context.crossFileSnippets.map(
-                (s) =>
-                    `#### ${s.filePath}${s.relatedSymbol ? ` (symbol: ${s.relatedSymbol})` : ''}\n**Rationale:** ${s.rationale}\n\`\`\`\n${s.content}\n\`\`\``,
-            );
-            crossFileBlock = `\n\n<codebaseContext>\n${SAFEGUARD_CROSS_FILE_CONTEXT_PREAMBLE}\n${snippetLines.join('\n\n')}\n</codebaseContext>`;
-        }
-
-        return `
-## Context
-
-<fileContent>
-    ${context.relevantContent || context.fileContent}
-</fileContent>
-
-<codeDiff>
-    ${context.patchWithLinesStr}
-</codeDiff>
-
-<filePath>
-    ${context.filePath}
-</filePath>
-
-<suggestionsContext>
-${JSON.stringify(context?.suggestions) || 'No suggestions provided'}
-</suggestionsContext>${crossFileBlock}`;
-    }
-
     //#endregion
 
     //#region Analyze Code with AI
@@ -262,8 +228,16 @@ ${JSON.stringify(context?.suggestions) || 'No suggestions provided'}
                                 existingCode: z.string().optional(),
                                 improvedCode: z.string(),
                                 oneSentenceSummary: z.string().optional(),
-                                relevantLinesStart: z.coerce.number().int().positive().optional(),
-                                relevantLinesEnd: z.coerce.number().int().positive().optional(),
+                                relevantLinesStart: z.coerce
+                                    .number()
+                                    .int()
+                                    .positive()
+                                    .optional(),
+                                relevantLinesEnd: z.coerce
+                                    .number()
+                                    .int()
+                                    .positive()
+                                    .optional(),
                                 label: z.string(),
                                 severity: z.string().optional(),
                                 rankScore: z.number().optional(),
@@ -391,6 +365,7 @@ ${JSON.stringify(context?.suggestions) || 'No suggestions provided'}
             } as ContextAugmentationsMap,
             contextPack: context?.sharedContextPack as ContextPack | undefined,
             crossFileSnippets: context?.crossFileSnippets,
+            memories: context?.codeReviewConfig?.kodyMemoryRules || [],
         };
 
         return baseContext;
@@ -604,9 +579,11 @@ ${JSON.stringify(context?.suggestions) || 'No suggestions provided'}
         reviewMode: ReviewModeResponse,
         byokConfig: BYOKConfig,
         crossFileSnippets?: CrossFileContextSnippet[],
+        remoteCommands?: RemoteCommands,
+        memories?: Array<Partial<IKodyRule>>,
+        externalReferences?: unknown[],
+        externalReferenceErrors?: unknown[] | string,
     ): Promise<ISafeguardResponse> {
-        const runName = 'filterSuggestionsSafeGuard';
-
         suggestions?.forEach((suggestion) => {
             if (
                 suggestion &&
@@ -619,164 +596,23 @@ ${JSON.stringify(context?.suggestions) || 'No suggestions provided'}
             }
         });
 
-        const provider = LLMModelProvider.GEMINI_2_5_PRO;
-        const fallbackProvider = LLMModelProvider.NOVITA_DEEPSEEK_V3;
-
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            provider,
-            fallbackProvider,
-            byokConfig,
-        );
-
-        const payload = {
-            fileContent: file?.fileContent,
-            relevantContent,
-            patchWithLinesStr: codeDiff,
-            language: file?.language,
-            filePath: file?.filename,
-            suggestions,
-            languageResultPrompt,
-            reviewMode,
-            crossFileSnippets,
-        };
-
-        const spanName = `${LLMAnalysisService.name}::${runName}`;
-        const spanAttrs = {
-            type: promptRunner.executeMode,
-            organizationId: organizationAndTeamData?.organizationId,
-            prNumber,
-            file: { filePath: file?.filename },
-        };
-
         try {
-            const schema = z.object({
-                codeSuggestions: z.array(
-                    z.object({
-                        id: z.string(),
-                        suggestionContent: z.string(),
-                        existingCode: z.string(),
-                        improvedCode: z.string().nullable(),
-                        oneSentenceSummary: z.string(),
-                        relevantLinesStart: z.coerce.number().int().positive().optional(),
-                        relevantLinesEnd: z.coerce.number().int().positive().optional(),
-                        label: z.string().optional(),
-                        action: z.string(),
-                        reason: z.string().optional(),
-                    }),
-                ),
+            return await this.safeguardPipeline.execute({
+                organizationAndTeamData,
+                prNumber,
+                file,
+                relevantContent,
+                codeDiff,
+                suggestions,
+                languageResultPrompt,
+                reviewMode,
+                byokConfig,
+                crossFileSnippets,
+                remoteCommands,
+                memories,
+                externalReferences,
+                externalReferenceErrors,
             });
-
-            const { result: filteredSuggestionsRaw } =
-                await this.observability.runLLMInSpan({
-                    spanName,
-                    runName,
-                    attrs: spanAttrs,
-                    exec: async (callbacks) => {
-                        return await promptRunner
-                            .builder()
-                            .setParser(ParserType.ZOD, schema as any, {
-                                provider: LLMModelProvider.OPENAI_GPT_4O_MINI,
-                                fallbackProvider:
-                                    LLMModelProvider.OPENAI_GPT_4O,
-                            })
-                            .setLLMJsonMode(true)
-                            .setPayload(payload)
-                            .addPrompt({
-                                prompt: prompt_codeReviewSafeguard_system,
-                                role: PromptRole.SYSTEM,
-                            })
-                            .addPrompt({
-                                prompt: this.preparePrefixChainForCache(
-                                    payload,
-                                ),
-                                role: PromptRole.USER,
-                            })
-                            .addMetadata({
-                                organizationId:
-                                    organizationAndTeamData?.organizationId,
-                                teamId: organizationAndTeamData?.teamId,
-                                pullRequestId: prNumber,
-                                reviewMode,
-                                model: byokConfig?.main?.model,
-                                fallbackModel: byokConfig?.fallback?.model,
-                                provider:
-                                    byokConfig?.main?.provider || provider,
-                                fallbackProvider:
-                                    byokConfig?.fallback?.provider ||
-                                    fallbackProvider,
-                                runName,
-                            })
-                            .setTemperature(0)
-                            .addCallbacks(callbacks)
-                            .setRunName(runName)
-                            .setMaxReasoningTokens(5000)
-                            .execute();
-                    },
-                });
-
-            const parsedSuggestions = schema.safeParse(filteredSuggestionsRaw);
-            const filteredSuggestions = parsedSuggestions.success
-                ? parsedSuggestions.data
-                : undefined;
-
-            if (!filteredSuggestions) {
-                const message = `No response from safeguard for PR#${prNumber}`;
-                this.logger.warn({
-                    message,
-                    context: LLMAnalysisService.name,
-                    metadata: {
-                        organizationAndTeamData,
-                        prNumber,
-                        file: file?.filename,
-                    },
-                });
-                throw new Error(message);
-            }
-
-            // Filter and update suggestions
-            const suggestionsToUpdate =
-                filteredSuggestions?.codeSuggestions?.filter(
-                    (s) => s.action === 'update',
-                );
-            const suggestionsToDiscard = new Set(
-                filteredSuggestions?.codeSuggestions
-                    ?.filter((s) => s.action === 'discard')
-                    .map((s) => s.id),
-            );
-
-            const filteredAndMappedSuggestions = suggestions
-                ?.filter(
-                    (suggestion) => !suggestionsToDiscard.has(suggestion.id),
-                )
-                ?.map((suggestion) => {
-                    const updatedSuggestion = suggestionsToUpdate?.find(
-                        (s) => s.id === suggestion.id,
-                    );
-
-                    if (!updatedSuggestion) {
-                        return suggestion;
-                    }
-
-                    return {
-                        ...suggestion,
-                        suggestionContent: updatedSuggestion?.suggestionContent,
-                        existingCode: updatedSuggestion?.existingCode,
-                        improvedCode: updatedSuggestion?.improvedCode,
-                        oneSentenceSummary:
-                            updatedSuggestion?.oneSentenceSummary,
-                        relevantLinesStart:
-                            updatedSuggestion?.relevantLinesStart || undefined,
-                        relevantLinesEnd: updatedSuggestion?.relevantLinesEnd || undefined,
-                    };
-                });
-
-            return {
-                suggestions: filteredAndMappedSuggestions,
-                codeReviewModelUsed: {
-                    safeguard: byokConfig?.main?.provider || provider,
-                },
-            };
         } catch (error) {
             this.logger.error({
                 message: `Error during suggestions safe guard analysis for PR#${prNumber}`,

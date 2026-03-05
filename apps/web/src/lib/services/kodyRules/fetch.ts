@@ -7,6 +7,7 @@ import type {
     KodyRule,
     KodyRuleBucket,
     KodyRulesStatus,
+    KodyRulesType,
     KodyRuleSuggestion,
     LibraryRule,
     PaginatedResponse,
@@ -184,12 +185,13 @@ export const fastSyncIDERules = async (
 export const getKodyRulesByRepositoryId = async (
     repositoryId: string,
     directoryId?: string,
+    type?: KodyRulesType,
     tags?: string[],
 ) => {
     const rules = await authorizedFetch<Array<KodyRule>>(
         KODY_RULES_PATHS.FIND_BY_ORGANIZATION_ID_AND_FILTER,
         {
-            params: { repositoryId, directoryId },
+            params: { repositoryId, directoryId, type },
             next: { tags },
         },
     );
@@ -197,9 +199,10 @@ export const getKodyRulesByRepositoryId = async (
     return rules;
 };
 
-export const getAllOrganizationKodyRules = async () => {
+export const getAllOrganizationKodyRules = async (type?: KodyRulesType) => {
     const rules = await authorizedFetch<Array<KodyRule>>(
         KODY_RULES_PATHS.FIND_BY_ORGANIZATION_ID_AND_FILTER,
+        { params: { type } },
     );
     return rules;
 };
@@ -236,6 +239,33 @@ export const changeStatusKodyRules = async (
     const response = await axiosAuthorized.post<any>(
         KODY_RULES_PATHS.CHANGE_STATUS_KODY_RULES,
         { ruleIds, status },
+    );
+
+    return response.data as KodyRule[];
+};
+
+export const applyPendingKodyRules = async (ruleIds: string[]) => {
+    const response = await axiosAuthorized.post<any>(
+        KODY_RULES_PATHS.APPLY_PENDING_KODY_RULES,
+        { ruleIds },
+    );
+
+    return response.data as KodyRule[];
+};
+
+export const discardPendingKodyRules = async (ruleIds: string[]) => {
+    const response = await axiosAuthorized.post<any>(
+        KODY_RULES_PATHS.DISCARD_PENDING_KODY_RULES,
+        { ruleIds },
+    );
+
+    return response.data as KodyRule[];
+};
+
+export const convertPendingUpdatesToMemories = async (ruleIds: string[]) => {
+    const response = await axiosAuthorized.post<any>(
+        KODY_RULES_PATHS.CONVERT_PENDING_UPDATES_TO_MEMORIES,
+        { ruleIds },
     );
 
     return response.data as KodyRule[];
@@ -279,9 +309,7 @@ export const getKodyRuleSuggestions = async (ruleId: string) => {
     return suggestions || [];
 };
 
-export const getRecommendedKodyRules = async (params?: {
-    limit?: number;
-}) => {
+export const getRecommendedKodyRules = async (params?: { limit?: number }) => {
     const queryParams = new URLSearchParams();
     if (params?.limit) {
         queryParams.append("limit", params.limit.toString());
@@ -290,7 +318,7 @@ export const getRecommendedKodyRules = async (params?: {
     const url = queryParams.toString()
         ? `${KODY_RULES_PATHS.FIND_RECOMMENDED_KODY_RULES}?${queryParams.toString()}`
         : KODY_RULES_PATHS.FIND_RECOMMENDED_KODY_RULES;
-    
+
     const rules = await authorizedFetch<LibraryRule[]>(url);
     return rules || [];
 };

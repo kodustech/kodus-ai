@@ -56,10 +56,10 @@ export default function AzureRepos() {
 
             const repos =
                 repoConfig &&
-                    Array.isArray(repoConfig?.configValue) &&
-                    repoConfig.configValue.every(
-                        (repo) => typeof repo === "object" && repo !== null,
-                    )
+                Array.isArray(repoConfig?.configValue) &&
+                repoConfig.configValue.every(
+                    (repo) => typeof repo === "object" && repo !== null,
+                )
                     ? (repoConfig.configValue as Repository[])
                     : [];
 

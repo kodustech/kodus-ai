@@ -10,7 +10,7 @@ import {
 } from "@components/ui/popover";
 import { Separator } from "@components/ui/separator";
 import { formatDate, isEqual, parseISO, subMonths, subWeeks } from "date-fns";
-import { ptBR, enUS } from "date-fns/locale";
+import { enUS, ptBR } from "date-fns/locale";
 import { CalendarIcon } from "lucide-react";
 import { type PropsRange } from "react-day-picker";
 
@@ -77,25 +77,33 @@ export const DateRangeFilter = ({
     initialRange,
     ...props
 }: Props) => {
-    const [selectedRange, setSelectedRange] = useState<DateRangeString | null>(() => {
-        if (initialRange) {
-            return initialRange;
-        }
-        return null;
-    });
+    const [selectedRange, setSelectedRange] = useState<DateRangeString | null>(
+        () => {
+            if (initialRange) {
+                return initialRange;
+            }
+            return null;
+        },
+    );
 
-    const label = selectedRange ? ranges.find(
-        (r) =>
-            isEqual(selectedRange.from!, r.range.from) &&
-            isEqual(selectedRange.to!, r.range.to),
-    )?.label : undefined;
+    const label = selectedRange
+        ? ranges.find(
+              (r) =>
+                  isEqual(selectedRange.from!, r.range.from) &&
+                  isEqual(selectedRange.to!, r.range.to),
+          )?.label
+        : undefined;
 
-    const from = selectedRange ? formatDate(parseISO(selectedRange.from), "dd/LLL/y", {
-        locale: enUS,
-    }) : '';
-    const to = selectedRange ? formatDate(parseISO(selectedRange.to), "dd/LLL/y", {
-        locale: enUS,
-    }) : '';
+    const from = selectedRange
+        ? formatDate(parseISO(selectedRange.from), "dd/LLL/y", {
+              locale: enUS,
+          })
+        : "";
+    const to = selectedRange
+        ? formatDate(parseISO(selectedRange.to), "dd/LLL/y", {
+              locale: enUS,
+          })
+        : "";
 
     const handleRangeChange = (range: DateRangeString) => {
         setSelectedRange(range);
@@ -161,8 +169,8 @@ export const DateRangeFilter = ({
                             to: d?.to
                                 ? dateToString(d?.to)
                                 : d?.from
-                                    ? dateToString(d.from)
-                                    : defaultItem.range.to,
+                                  ? dateToString(d.from)
+                                  : defaultItem.range.to,
                         };
 
                         handleRangeChange(range);
@@ -179,8 +187,8 @@ export const DateRangeFilter = ({
                             className="w-full"
                             variant={
                                 selectedRange &&
-                                    isEqual(selectedRange.from!, r.range.from) &&
-                                    isEqual(selectedRange.to!, r.range.to)
+                                isEqual(selectedRange.from!, r.range.from) &&
+                                isEqual(selectedRange.to!, r.range.to)
                                     ? "primary-dark"
                                     : "helper"
                             }
@@ -197,4 +205,4 @@ export const DateRangeFilter = ({
             </PopoverContent>
         </Popover>
     );
-}; 
+};

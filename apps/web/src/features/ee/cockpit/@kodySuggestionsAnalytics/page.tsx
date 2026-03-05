@@ -1,7 +1,7 @@
 import { CardContent } from "@components/ui/card";
 
-import { getKodySuggestionsAnalytics } from "../_services/analytics/productivity/fetch";
 import { extractApiData } from "../_helpers/api-data-extractor";
+import { getKodySuggestionsAnalytics } from "../_services/analytics/productivity/fetch";
 import { Chart } from "./_components/chart";
 import NoData from "./_components/no-data";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { GitTokenDocs } from "@components/system/git-token-docs";
 import { Button } from "@components/ui/button";
 import {
@@ -18,7 +18,11 @@ import { AxiosError } from "axios";
 import { Save } from "lucide-react";
 
 type Props = {
-    onSaveAction: (token: string, username: string, email: string) => Promise<void>;
+    onSaveAction: (
+        token: string,
+        username: string,
+        email: string,
+    ) => Promise<void>;
 };
 
 export const BitbucketModal = (props: Props) => {
@@ -31,8 +35,7 @@ export const BitbucketModal = (props: Props) => {
         setError({ message: "" });
     }, [token, username, email]);
 
-    const canSubmit =
-        !!username && !!token && !!email && !error.message;
+    const canSubmit = !!username && !!token && !!email && !error.message;
 
     const [saveToken, { loading: loadingSaveToken }] = useAsyncAction(
         async () => {
@@ -61,9 +64,7 @@ export const BitbucketModal = (props: Props) => {
     return (
         <Dialog open onOpenChange={() => magicModal.hide()}>
             <DialogContent>
-                <form
-                    className="flex flex-col gap-4"
-                    onSubmit={handleSubmit}>
+                <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
                     <DialogHeader>
                         <DialogTitle>
                             <span>Bitbucket</span> - New Integration

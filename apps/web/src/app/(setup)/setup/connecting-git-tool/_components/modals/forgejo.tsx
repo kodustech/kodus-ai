@@ -101,13 +101,11 @@ export const ForgejoTokenModal = (props: {
             <DialogContent>
                 <form onSubmit={form.handleSubmit(submit)}>
                     <DialogHeader>
-                        <DialogTitle>
-                            Forgejo Personal Access Token
-                        </DialogTitle>
+                        <DialogTitle>Forgejo Personal Access Token</DialogTitle>
                         <DialogDescription></DialogDescription>
                     </DialogHeader>
 
-                    <div className="my-4 flex flex-col gap-3 rounded-xl border border-informative/20 bg-informative/5 p-4">
+                    <div className="border-informative/20 bg-informative/5 my-4 flex flex-col gap-3 rounded-xl border p-4">
                         <p className="text-text-secondary text-sm">
                             Reviews will be posted from the token owner's
                             account:
@@ -149,8 +147,7 @@ export const ForgejoTokenModal = (props: {
                                             </FormControl.Input>
 
                                             <FormControl.Helper>
-                                                The URL of your Forgejo
-                                                instance
+                                                The URL of your Forgejo instance
                                             </FormControl.Helper>
 
                                             <FormControl.Error>
@@ -199,16 +196,17 @@ export const ForgejoTokenModal = (props: {
                                     (required for authentication)
                                 </li>
                                 <li>
-                                    <code>organization read</code> - Read user organization profile
-                                    (required for authentication)
+                                    <code>organization read</code> - Read user
+                                    organization profile (required for
+                                    authentication)
                                 </li>
                                 <li>
-                                    <code>repository read:write</code> - Read and write access
-                                    to repositories
+                                    <code>repository read:write</code> - Read
+                                    and write access to repositories
                                 </li>
                                 <li>
-                                    <code>issue read:write</code> - Create and update
-                                    pull request comments
+                                    <code>issue read:write</code> - Create and
+                                    update pull request comments
                                 </li>
                             </ul>
                         </div>

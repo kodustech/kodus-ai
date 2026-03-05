@@ -189,13 +189,15 @@ export const SelectRepositoriesModal = (props: {
                     <DialogFooter>
                         {props.selectedRepositories.length > 0 &&
                             !loadingSaveRepositories && (
-                            <Button
-                                size="md"
-                                variant="cancel"
-                                onClick={() => router.push("/settings/git")}>
-                                Cancel
-                            </Button>
-                        )}
+                                <Button
+                                    size="md"
+                                    variant="cancel"
+                                    onClick={() =>
+                                        router.push("/settings/git")
+                                    }>
+                                    Cancel
+                                </Button>
+                            )}
 
                         <Button
                             size="md"

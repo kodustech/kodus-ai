@@ -1,279 +1,406 @@
-import { SDKOrchestrator } from '@kodus/flow/dist/orchestration';
+import { z } from 'zod';
 
+import {
+    CapabilityExecutionTrace,
+    CapabilityExecutionHooks,
+    SkillCapabilityRuntimeConfig,
+    ToolCaller,
+} from '@libs/agents/skills/runtime/skill-runtime.types';
+import { asRecord } from '@libs/agents/skills/runtime/value-utils';
 import { BlueprintStep } from '@libs/shared/blueprint/blueprint.types';
 
-import { BusinessRulesContext, TaskQuality } from './types';
+import { BusinessRulesContext } from './types';
 import {
-    canProceedWithBusinessRulesAnalysis,
+    buildBusinessLogicEligibility,
+    getPullRequestDiffMissingInfoMessage,
     getTaskContextMissingInfoMessage,
 } from './task-quality.rules';
+import {
+    SKILL_NAME,
+    classifyTaskQualityFromSources,
+    createBusinessRulesBlueprintTooling,
+    resolvePullRequestDescription,
+    resolveTaskContext,
+} from './blueprint.tooling';
 
-const SKILL_NAME = 'business-rules-validation';
-const PR_METADATA_TOOL = 'KODUS_GET_PULL_REQUEST';
-const PR_DIFF_TOOL = 'KODUS_GET_PULL_REQUEST_DIFF';
+const baseContextSchema = z.looseObject({
+    organizationAndTeamData: z.looseObject({
+        organizationId: z.string().min(1),
+        teamId: z.string().min(1),
+    }),
+    userLanguage: z.string().min(1),
+});
+
+const hasPrBodySchema = z.looseObject({
+    prBody: z.string(),
+});
+
+const hasPrDiffSchema = z.looseObject({
+    prDiff: z.string(),
+});
+
+const hasTaskContextSchema = z.looseObject({
+    taskContext: z.string(),
+});
+
+const taskQualitySchema = z.enum(['EMPTY', 'MINIMAL', 'PARTIAL', 'COMPLETE']);
+
+const hasTaskQualitySchema = z.looseObject({
+    taskQuality: taskQualitySchema,
+});
+
+const validateContextInputSchema = z.looseObject({
+    taskQuality: taskQualitySchema,
+    prDiff: z.string(),
+});
+
+const analyzeBusinessRulesInputSchema = z.looseObject({
+    taskQuality: taskQualitySchema,
+    prDiff: z.string().trim().min(1),
+});
+
+const validationResultPayloadSchema = z.looseObject({
+    needsMoreInfo: z.boolean(),
+    missingInfo: z.string().optional(),
+    summary: z.string(),
+    mode: z.enum(['full_analysis', 'limitation_response']).optional(),
+    reason: z
+        .enum([
+            'analysis_ready',
+            'task_context_missing',
+            'task_context_weak',
+            'pr_diff_missing',
+            'analyzer_failure',
+            'parser_fallback',
+        ])
+        .optional(),
+    taskContextStatus: z.enum(['missing', 'weak', 'usable']).optional(),
+    prDiffStatus: z.enum(['missing', 'usable']).optional(),
+    confidence: z.enum(['low', 'medium', 'high']).optional(),
+});
+
+const analysisEligibilitySchema = z.looseObject({
+    analysisEligibility: z.looseObject({
+        mode: z.enum(['full_analysis', 'limitation_response']),
+        reason: z.enum([
+            'analysis_ready',
+            'task_context_missing',
+            'task_context_weak',
+            'pr_diff_missing',
+            'analyzer_failure',
+            'parser_fallback',
+        ]),
+        taskContextStatus: z.enum(['missing', 'weak', 'usable']),
+        prDiffStatus: z.enum(['missing', 'usable']),
+    }),
+});
+
+const baseValidationResultSchema = z.looseObject({
+    validationResult: validationResultPayloadSchema,
+    formattedResponse: z.string(),
+});
 
 /**
  * Business Rules Validation Blueprint — factory function.
  *
- * Receives the fetcher orchestration as a dependency so every step
- * has real implementations — no placeholder functions replaced at runtime.
- *
- * Steps:
- * 1. fetchPullRequestMetadata (deterministic) — fetch PR body/title from MCP when available
- * 2. fetchPullRequestDiff     (deterministic) — fetch PR diff from MCP (no LLM)
- * 3. resolveTaskContext       (deterministic) — resolve task context from pre-fetched input
- * 4. classifyTaskContext      (deterministic) — classify task quality
- * 5. validateContext          (gate)          — short-circuits if task quality is EMPTY or MINIMAL
- * 6. analyzeBusinessRules     (llm)           — analyzer agent with SKILL.md instructions (handled by runLLMStep)
+ * Keeps skill orchestration declarative while shared runtime modules
+ * handle capability resolution, deterministic MCP execution and payload parsing.
  */
 export function createBusinessRulesBlueprint(
-    fetcher: SDKOrchestrator,
+    fetcher: ToolCaller,
+    capabilityRuntime: SkillCapabilityRuntimeConfig,
+    hooks?: CapabilityExecutionHooks<BusinessRulesContext>,
 ): BlueprintStep<BusinessRulesContext>[] {
+    const requiredInputPaths =
+        capabilityRuntime.contracts?.input?.requiredContextFields;
+    const requiredOutputPaths = normalizeOutputRequiredPaths(
+        capabilityRuntime.contracts?.output?.requiredFields,
+    );
+
+    const taskContextInputSchema = withRequiredPaths(
+        baseContextSchema,
+        requiredInputPaths,
+    );
+    const hasValidationResultSchema = withRequiredPaths(
+        baseValidationResultSchema,
+        requiredOutputPaths,
+    );
+    const gateOutputSchema = z.union([
+        hasTaskQualitySchema.and(analysisEligibilitySchema),
+        hasTaskQualitySchema
+            .and(analysisEligibilitySchema)
+            .and(hasValidationResultSchema),
+    ]);
+
+    const tooling = createBusinessRulesBlueprintTooling(
+        fetcher,
+        capabilityRuntime,
+        hooks,
+    );
+
     return [
         {
             type: 'deterministic',
             name: 'fetchPullRequestMetadata',
+            contract: {
+                input: taskContextInputSchema,
+                output: hasPrBodySchema,
+            },
             fn: async (ctx): Promise<BusinessRulesContext> => {
-                const prBody =
-                    (await resolvePullRequestBody(fetcher, ctx)) ??
-                    resolvePullRequestDescription(ctx);
+                const cachedPrBody = resolvePullRequestDescription(ctx);
+                if (cachedPrBody.trim().length > 0) {
+                    return {
+                        ...ctx,
+                        prBody: cachedPrBody,
+                    };
+                }
+
+                const metadata = await tooling.fetchPullRequestBody(ctx);
+                const prBody = metadata.value ?? cachedPrBody;
 
                 return {
                     ...ctx,
                     prBody,
+                    capabilityExecutionTrace: appendCapabilityTraces(
+                        ctx,
+                        metadata.traces,
+                    ),
                 };
             },
         },
         {
             type: 'deterministic',
             name: 'fetchPullRequestDiff',
+            contract: {
+                input: taskContextInputSchema,
+                output: hasPrDiffSchema,
+            },
             fn: async (ctx): Promise<BusinessRulesContext> => {
-                const prDiff = await resolvePullRequestDiff(fetcher, ctx);
-
+                const diff = await tooling.fetchPullRequestDiff(ctx);
                 return {
                     ...ctx,
-                    prDiff,
+                    prDiff: diff.value,
+                    analysisEligibility:
+                        ctx.taskQuality !== undefined
+                            ? buildBusinessLogicEligibility({
+                                  taskQuality: ctx.taskQuality,
+                                  taskContext: ctx.taskContext,
+                                  taskContextNormalized:
+                                      ctx.taskContextNormalized,
+                                  prDiff: diff.value,
+                              })
+                            : ctx.analysisEligibility,
+                    capabilityExecutionTrace: appendCapabilityTraces(
+                        ctx,
+                        diff.traces,
+                    ),
                 };
             },
         },
         {
             type: 'deterministic',
-            name: 'resolveTaskContext',
+            name: 'fetchTaskContextFromMcp',
+            contract: {
+                input: taskContextInputSchema,
+                output: hasTaskContextSchema,
+            },
             fn: async (ctx): Promise<BusinessRulesContext> => {
-                const taskContext = resolveTaskContext(ctx);
+                const fallbackTaskContext = resolveTaskContext(ctx);
+                if (fallbackTaskContext.trim().length > 0) {
+                    return {
+                        ...ctx,
+                        taskContext: fallbackTaskContext,
+                    };
+                }
+
+                const fetched = await tooling.fetchTaskContext(ctx);
+                const taskContext =
+                    fetched.value &&
+                    (fetched.value.title || fetched.value.description)
+                        ? formatNormalizedTaskContext(fetched.value)
+                        : fallbackTaskContext;
 
                 return {
                     ...ctx,
                     taskContext,
+                    taskContextNormalized: fetched.value,
+                    capabilityExecutionTrace: appendCapabilityTraces(
+                        ctx,
+                        fetched.traces,
+                    ),
                 };
             },
         },
         {
             type: 'deterministic',
             name: 'classifyTaskContext',
-            fn: async (ctx): Promise<BusinessRulesContext> => ({
-                ...ctx,
-                taskQuality: classifyTaskQuality(ctx.taskContext ?? ''),
-            }),
+            contract: {
+                input: hasTaskContextSchema,
+                output: hasTaskQualitySchema.and(analysisEligibilitySchema),
+            },
+            fn: async (ctx): Promise<BusinessRulesContext> => {
+                const taskQuality = classifyTaskQualityFromSources({
+                    taskContext: ctx.taskContext,
+                    taskContextNormalized: ctx.taskContextNormalized,
+                });
+                return {
+                    ...ctx,
+                    taskQuality,
+                    analysisEligibility: buildBusinessLogicEligibility({
+                        taskQuality,
+                        taskContext: ctx.taskContext,
+                        taskContextNormalized: ctx.taskContextNormalized,
+                        prDiff: ctx.prDiff,
+                    }),
+                };
+            },
         },
         {
             type: 'gate',
             name: 'validateContext',
+            contract: {
+                input: validateContextInputSchema,
+                output: gateOutputSchema,
+            },
             condition: (ctx) =>
-                canProceedWithBusinessRulesAnalysis(ctx.taskQuality),
+                (
+                    ctx.analysisEligibility ??
+                    buildBusinessLogicEligibility({
+                        taskQuality: ctx.taskQuality,
+                        taskContext: ctx.taskContext,
+                        taskContextNormalized: ctx.taskContextNormalized,
+                        prDiff: ctx.prDiff,
+                    })
+                ).mode === 'full_analysis',
             onFail: (ctx): BusinessRulesContext => {
-                const missingInfo = getTaskContextMissingInfoMessage(
-                    ctx.taskQuality,
-                );
+                const analysisEligibility =
+                    ctx.analysisEligibility ??
+                    buildBusinessLogicEligibility({
+                        taskQuality: ctx.taskQuality,
+                        taskContext: ctx.taskContext,
+                        taskContextNormalized: ctx.taskContextNormalized,
+                        prDiff: ctx.prDiff,
+                    });
+                const missingInfo =
+                    analysisEligibility.reason === 'pr_diff_missing'
+                        ? getPullRequestDiffMissingInfoMessage()
+                        : getTaskContextMissingInfoMessage(ctx.taskQuality);
                 return {
                     ...ctx,
+                    analysisEligibility,
                     validationResult: {
                         needsMoreInfo: true,
+                        mode: 'limitation_response',
+                        reason: analysisEligibility.reason,
+                        taskContextStatus:
+                            analysisEligibility.taskContextStatus,
+                        prDiffStatus: analysisEligibility.prDiffStatus,
+                        confidence: 'low',
                         missingInfo,
-                        summary: '',
+                        summary: missingInfo,
                     },
-                    formattedResponse: missingInfo,
                 };
             },
         },
         {
             type: 'llm',
             name: 'analyzeBusinessRules',
+            contract: {
+                input: analyzeBusinessRulesInputSchema,
+                output: hasValidationResultSchema,
+            },
             skill: SKILL_NAME,
             agentName: `kodus-${SKILL_NAME}-analyzer`,
         },
     ];
 }
 
-// ─── Fetcher helpers ──────────────────────────────────────────────────────────
+function normalizeOutputRequiredPaths(
+    requiredFields: string[] | undefined,
+): string[] | undefined {
+    if (!requiredFields?.length) {
+        return requiredFields;
+    }
 
-function resolvePullRequestNumber(
+    return requiredFields.map((field) =>
+        field.includes('.') ? field : `validationResult.${field}`,
+    );
+}
+
+function withRequiredPaths<TSchema extends z.ZodTypeAny>(
+    schema: TSchema,
+    requiredPaths: string[] | undefined,
+): TSchema {
+    if (!requiredPaths?.length) {
+        return schema;
+    }
+
+    const normalizedPaths = requiredPaths
+        .map((path) => path.trim())
+        .filter((path) => path.length > 0);
+    if (!normalizedPaths.length) {
+        return schema;
+    }
+
+    return schema.superRefine((value, refinementCtx) => {
+        const source = asRecord(value);
+        for (const path of normalizedPaths) {
+            if (readDotPath(source, path) !== undefined) {
+                continue;
+            }
+
+            refinementCtx.addIssue({
+                code: 'custom',
+                path: path.split('.').filter((segment) => segment.length > 0),
+                message: 'Required by skill contract',
+            });
+        }
+    }) as TSchema;
+}
+
+function readDotPath(input: Record<string, unknown>, path: string): unknown {
+    return path.split('.').reduce<unknown>((acc, key) => {
+        if (!acc || typeof acc !== 'object') {
+            return undefined;
+        }
+
+        return (acc as Record<string, unknown>)[key];
+    }, input);
+}
+
+function appendCapabilityTraces(
     ctx: BusinessRulesContext,
-): number | undefined {
-    const direct = ctx.prepareContext?.pullRequestNumber;
-    if (typeof direct === 'number') {
-        return direct;
-    }
-    const nested = ctx.prepareContext?.pullRequest?.pullRequestNumber;
-    if (typeof nested === 'number') {
-        return nested;
-    }
-    return undefined;
+    traces: CapabilityExecutionTrace[],
+): CapabilityExecutionTrace[] {
+    return [...(ctx.capabilityExecutionTrace ?? []), ...traces];
 }
 
-function resolveRepositoryId(ctx: BusinessRulesContext): string | undefined {
-    const repositoryId = ctx.prepareContext?.repository?.id;
-    return typeof repositoryId === 'string' ? repositoryId : undefined;
-}
+function formatNormalizedTaskContext(
+    payload: NonNullable<BusinessRulesContext['taskContextNormalized']>,
+): string {
+    const sections: string[] = [];
 
-function resolveRepositoryName(ctx: BusinessRulesContext): string | undefined {
-    const repositoryName = ctx.prepareContext?.repository?.name;
-    return typeof repositoryName === 'string' ? repositoryName : undefined;
-}
-
-function resolvePullRequestDescription(ctx: BusinessRulesContext): string {
-    const description = ctx.prepareContext?.pullRequestDescription;
-    return typeof description === 'string' ? description : '';
-}
-
-function resolveTaskContext(ctx: BusinessRulesContext): string {
-    const taskContext = ctx.prepareContext?.taskContext;
-    return typeof taskContext === 'string' ? taskContext : '';
-}
-
-function classifyTaskQuality(taskContext: string): TaskQuality {
-    const normalized = taskContext.trim();
-    if (!normalized.length) {
-        return 'EMPTY';
+    if (payload.id) {
+        sections.push(`Task ID: ${payload.id}`);
     }
-    if (normalized.length < 80) {
-        return 'MINIMAL';
+    if (payload.title) {
+        sections.push(`Title: ${payload.title}`);
     }
-    if (normalized.length < 260) {
-        return 'PARTIAL';
+    if (payload.description) {
+        sections.push(`Description:\n${payload.description}`);
     }
-    return 'COMPLETE';
-}
-
-async function resolvePullRequestDiff(
-    fetcher: SDKOrchestrator,
-    ctx: BusinessRulesContext,
-): Promise<string> {
-    const organizationId = ctx.organizationAndTeamData?.organizationId;
-    const teamId = ctx.organizationAndTeamData?.teamId;
-    const repositoryId = resolveRepositoryId(ctx);
-    const prNumber = resolvePullRequestNumber(ctx);
-
-    if (
-        typeof organizationId !== 'string' ||
-        typeof teamId !== 'string' ||
-        typeof repositoryId !== 'string' ||
-        typeof prNumber !== 'number'
-    ) {
-        return '';
+    if (payload.acceptanceCriteria?.length) {
+        sections.push(
+            `Acceptance Criteria:\n${payload.acceptanceCriteria
+                .map((item) => `- ${item}`)
+                .join('\n')}`,
+        );
+    }
+    if (payload.links?.length) {
+        sections.push(
+            `Links:\n${payload.links.map((item) => `- ${item}`).join('\n')}`,
+        );
     }
 
-    const registeredTools = getRegisteredToolNames(fetcher);
-    if (!registeredTools.includes(PR_DIFF_TOOL)) {
-        return '';
-    }
-
-    const toolResult = await fetcher.callTool(PR_DIFF_TOOL, {
-        organizationId,
-        teamId,
-        repositoryId,
-        repositoryName: resolveRepositoryName(ctx),
-        prNumber,
-    });
-
-    return extractDiffFromToolResult(toolResult.result);
-}
-
-async function resolvePullRequestBody(
-    fetcher: SDKOrchestrator,
-    ctx: BusinessRulesContext,
-): Promise<string | undefined> {
-    const organizationId = ctx.organizationAndTeamData?.organizationId;
-    const teamId = ctx.organizationAndTeamData?.teamId;
-    const repositoryId = resolveRepositoryId(ctx);
-    const repositoryName = resolveRepositoryName(ctx) ?? repositoryId;
-    const prNumber = resolvePullRequestNumber(ctx);
-
-    if (
-        typeof organizationId !== 'string' ||
-        typeof teamId !== 'string' ||
-        typeof repositoryId !== 'string' ||
-        typeof repositoryName !== 'string' ||
-        typeof prNumber !== 'number'
-    ) {
-        return undefined;
-    }
-
-    const registeredTools = getRegisteredToolNames(fetcher);
-    if (!registeredTools.includes(PR_METADATA_TOOL)) {
-        return undefined;
-    }
-
-    const toolResult = await fetcher.callTool(PR_METADATA_TOOL, {
-        organizationId,
-        teamId,
-        repository: {
-            id: repositoryId,
-            name: repositoryName,
-        },
-        prNumber,
-    });
-
-    return extractPrBodyFromToolResult(toolResult.result);
-}
-
-function extractDiffFromToolResult(payload: unknown): string {
-    const root = asRecord(payload);
-    const nestedResult = asRecord(root.result);
-
-    const directData = root.data;
-    if (typeof directData === 'string') {
-        return directData;
-    }
-
-    const nestedData = nestedResult.data;
-    if (typeof nestedData === 'string') {
-        return nestedData;
-    }
-
-    return '';
-}
-
-function extractPrBodyFromToolResult(payload: unknown): string | undefined {
-    const root = asRecord(payload);
-    const nestedResult = asRecord(root.result);
-
-    const directData = asRecord(root.data);
-    const nestedData = asRecord(nestedResult.data);
-
-    if (typeof directData.body === 'string') {
-        return directData.body;
-    }
-    if (typeof nestedData.body === 'string') {
-        return nestedData.body;
-    }
-    if (typeof directData.message === 'string') {
-        return directData.message;
-    }
-    if (typeof nestedData.message === 'string') {
-        return nestedData.message;
-    }
-
-    return undefined;
-}
-
-function getRegisteredToolNames(fetcher: SDKOrchestrator): string[] {
-    return fetcher.getRegisteredTools().map((tool) => tool.name ?? '');
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-    if (!value || typeof value !== 'object') {
-        return {};
-    }
-    return value as Record<string, unknown>;
+    return sections.join('\n\n');
 }

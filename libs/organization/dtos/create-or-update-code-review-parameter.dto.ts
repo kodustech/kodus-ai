@@ -374,6 +374,10 @@ class CodeReviewConfigWithoutLLMProviderDto {
     kodyFineTuningEnabled?: boolean;
 
     @IsOptional()
+    @IsBoolean()
+    llmGeneratedMemoriesRequireApproval?: boolean;
+
+    @IsOptional()
     @ValidateNested()
     @Type(() => ReviewCadenceDto)
     reviewCadence?: ReviewCadenceDto;

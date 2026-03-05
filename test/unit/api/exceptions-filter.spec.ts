@@ -68,7 +68,10 @@ describe('ExceptionsFilter', () => {
     describe('Standard HttpException', () => {
         it('returns correct statusCode, error, and message', () => {
             const { mockContext, status, json } = makeContext();
-            const exception = new HttpException('Not Found', HttpStatus.NOT_FOUND);
+            const exception = new HttpException(
+                'Not Found',
+                HttpStatus.NOT_FOUND,
+            );
 
             filter.catch(exception, mockContext);
 

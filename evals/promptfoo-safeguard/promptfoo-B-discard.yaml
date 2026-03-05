@@ -1,0 +1,10 @@
+description: "Approach B - discard"
+providers:
+  - id: google:gemini-2.5-pro
+    config:
+      temperature: 0
+      maxOutputTokens: 16384
+prompts:
+  - file://prompt-loader-B.js
+tests: file://datasets/discard-quick20.json
+outputPath: ./results/B-discard-output.json

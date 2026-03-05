@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { GitTokenDocs } from "@components/system/git-token-docs";
 import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
@@ -103,10 +103,11 @@ export const GithubModal = (props: Props) => {
                                 <AlertDescription>
                                     <div className="flex flex-col gap-1">
                                         <span>
-                                            Unlike OAuth, reviews will be published using
-                                            your profile - not Kody's.
+                                            Unlike OAuth, reviews will be
+                                            published using your profile - not
+                                            Kody's.
                                         </span>
-                                        <span className="font-semibold text-destructive">
+                                        <span className="text-destructive font-semibold">
                                             GitHub Checks/PR status won't be
                                             available with PAT tokens.
                                         </span>

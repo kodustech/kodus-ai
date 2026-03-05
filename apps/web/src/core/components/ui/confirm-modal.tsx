@@ -40,20 +40,19 @@ export const ConfirmModal = ({
                 </DialogHeader>
 
                 <DialogFooter>
-                    <Button 
-                        size="md" 
-                        variant="cancel" 
+                    <Button
+                        size="md"
+                        variant="cancel"
                         onClick={onCancel}
-                        disabled={loading}
-                    >
+                        disabled={loading}>
                         {cancelText}
                     </Button>
                     <Button
                         size="md"
                         variant={variant}
                         loading={loading}
-                        onClick={onConfirm}
-                    >
+                        disabled={loading}
+                        onClick={onConfirm}>
                         {confirmText}
                     </Button>
                 </DialogFooter>

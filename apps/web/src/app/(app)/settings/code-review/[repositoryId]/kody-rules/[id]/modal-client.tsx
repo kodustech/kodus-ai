@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { KODY_RULES_PATHS } from "@services/kodyRules";
 import { useSuspenseKodyRulesByRepositoryId } from "@services/kodyRules/hooks";
 import { usePermission } from "@services/permissions/hooks";
@@ -23,6 +23,7 @@ export function KodyRuleModalClient({
     directoryId?: string;
 }) {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const config = useFullCodeReviewConfig();
     const queryClient = useQueryClient();
     const scopeRules = useSuspenseKodyRulesByRepositoryId(
@@ -50,10 +51,12 @@ export function KodyRuleModalClient({
     );
 
     const handleClose = async () => {
+        const tab = searchParams.get("tab") ?? undefined;
+
         await queryClient.invalidateQueries({
             predicate: (query) =>
                 query.queryKey[0] ===
-                KODY_RULES_PATHS.FIND_BY_ORGANIZATION_ID_AND_FILTER ||
+                    KODY_RULES_PATHS.FIND_BY_ORGANIZATION_ID_AND_FILTER ||
                 query.queryKey[0] === KODY_RULES_PATHS.GET_INHERITED_RULES ||
                 query.queryKey[0] === KODY_RULES_PATHS.FIND_BY_ORGANIZATION_ID,
         });
@@ -61,7 +64,7 @@ export function KodyRuleModalClient({
         router.push(
             addSearchParamsToUrl(
                 `/settings/code-review/${repositoryId}/kody-rules`,
-                { directoryId },
+                { directoryId, tab },
             ),
         );
     };
@@ -76,6 +79,7 @@ export function KodyRuleModalClient({
             onClose={handleClose}
             directory={directory}
             repositoryId={repositoryId}
+            ruleType={hydratedRule.type}
             canEdit={canEdit}
         />
     );

@@ -2,9 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 
 import { PlatformType } from '@libs/core/domain/enums';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
-import {
-    PARAMETERS_SERVICE_TOKEN,
-} from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import {
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
     IOrganizationParametersService,
@@ -177,8 +175,12 @@ describe('ValidatePrerequisitesStage', () => {
             ParametersKey.CODE_REVIEW_CONFIG,
             context.organizationAndTeamData,
         );
-        expect(mockCodeManagementService.addReactionToPR).not.toHaveBeenCalled();
-        expect(mockCodeManagementService.createIssueComment).not.toHaveBeenCalled();
+        expect(
+            mockCodeManagementService.addReactionToPR,
+        ).not.toHaveBeenCalled();
+        expect(
+            mockCodeManagementService.createIssueComment,
+        ).not.toHaveBeenCalled();
     });
 
     it('should not add no-subscription comment when show status feedback is disabled', async () => {
@@ -202,8 +204,12 @@ describe('ValidatePrerequisitesStage', () => {
 
         await stage.execute(context);
 
-        expect(mockCodeManagementService.createIssueComment).not.toHaveBeenCalled();
-        expect(mockCodeManagementService.addReactionToPR).not.toHaveBeenCalled();
+        expect(
+            mockCodeManagementService.createIssueComment,
+        ).not.toHaveBeenCalled();
+        expect(
+            mockCodeManagementService.addReactionToPR,
+        ).not.toHaveBeenCalled();
     });
 
     it('should mark notification as handled for early skips when show status feedback is disabled', async () => {

@@ -18,7 +18,7 @@ export default function SettingsError({
 
     return (
         <Page.Root>
-            <Page.Content className="flex flex-col items-center justify-center min-h-[50vh] gap-6">
+            <Page.Content className="flex min-h-[50vh] flex-col items-center justify-center gap-6">
                 <div className="bg-danger/10 rounded-full p-4">
                     <AlertCircle className="text-danger size-8" />
                 </div>

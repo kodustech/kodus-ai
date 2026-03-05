@@ -43,7 +43,7 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
         private readonly eventEmitter: EventEmitter2,
         private readonly enqueueCodeReviewJobUseCase: EnqueueCodeReviewJobUseCase,
         private readonly enqueueImplementationCheckUseCase: EnqueueImplementationCheckUseCase,
-    ) { }
+    ) {}
 
     public canHandle(params: IWebhookEventParams): boolean {
         if (params.platformType !== PlatformType.FORGEJO) {

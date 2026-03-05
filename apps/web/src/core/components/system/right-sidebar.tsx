@@ -10,14 +10,14 @@ export const RightSidebar = ({ children }: RightSidebarProps) => {
     return (
         <aside
             className={cn(
-                "fixed right-0 top-0 bottom-0 z-50",
+                "fixed top-0 right-0 bottom-0 z-50",
                 "flex h-screen flex-col items-center justify-start",
-                "bg-background-secondary border-l border-border-primary",
+                "bg-background-secondary border-border-primary border-l",
                 "gap-1 py-4",
                 "w-[60px]",
                 "pointer-events-none",
             )}>
-            <div className="flex flex-col items-center gap-1 pointer-events-auto">
+            <div className="pointer-events-auto flex flex-col items-center gap-1">
                 {children}
             </div>
         </aside>
@@ -34,7 +34,11 @@ export const RightSidebarItem = ({
     className,
 }: RightSidebarItemProps) => {
     return (
-        <div className={cn("flex items-center justify-center w-full", className)}>
+        <div
+            className={cn(
+                "flex w-full items-center justify-center",
+                className,
+            )}>
             {children}
         </div>
     );

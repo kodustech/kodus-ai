@@ -1,0 +1,87 @@
+[
+  {
+    "description": "Enrichment Ex1: src/auth/ApiKeyValidator.ts",
+    "vars": {
+      "diffSummary": "## file: 'src/auth/ApiKeyValidator.ts'\n\n@@ -0,0 +1,31 @@\n__new hunk__\n1 +import crypto from 'crypto';\n2 +import { db } from '../database';\n3 +\n4 +/**\n5 + * API keys are stored as SHA-256 hashes.\n6 + * On creation we hash the raw key and store it.\n7 + * On validation we hash the incoming key and look it up.\n8 + */\n9 +export class ApiKeyValidator {\n10 +    private hash(key: string): string {\n11 +        return crypto.createHash('sha256').update(key).digest('hex');\n12 +    }\n13 +\n14 +    async crea\n... (truncated)",
+      "snippetDescriptions": "[0] File: src/database/index.ts | Symbol: db.query | Original rationale: Upstream dependency — find db module to understand query interface used by ApiKeyValidator\nCode:\nimport { Pool } from 'pg';\n\nconst pool = new Pool({ connectionString: process.env.DATABASE_URL });\n\nexport const db = {\n  /**\n   * Execute a parameterized query. The `params` array is bound\n   * to $1, $2, ... placeholders by the pg driver — no manual\n   * escaping is needed or desired.\n   */\n  async query<T = any>(sql: string, params?: unknown[]): Promise<T> {\n    const result = await pool.query(sql, params);\n    return result.rows[0] ?? null;\n  },\n};",
+      "snippetCount": "1",
+      "snippetFiles": "[\"src/database/index.ts\"]",
+      "snippetSymbols": "[\"db.query\"]",
+      "originalRationales": "[\"Upstream dependency — find db module to understand query interface used by ApiKeyValidator\"]"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://enrichment-parse-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Enrichment Ex2: test/deploy/buildPipeline.spec.ts",
+    "vars": {
+      "diffSummary": "## file: 'test/deploy/buildPipeline.spec.ts'\n\n@@ -0,0 +1,33 @@\n__new hunk__\n1 +import { BuildPipeline } from '../../src/deploy/BuildPipeline';\n2 +\n3 +describe('BuildPipeline', () => {\n4 +    let pipeline: BuildPipeline;\n5 +\n6 +    beforeEach(() => {\n7 +        pipeline = new BuildPipeline({ workDir: '/tmp/build' });\n8 +    });\n9 +\n10 +    it('should chain git commands with && separator', () => {\n11 +        pipeline.addStep('git fetch origin');\n12 +        pipeline.addStep('git checkout main');\n\n... (truncated)",
+      "snippetDescriptions": "[0] File: src/deploy/BuildPipeline.ts | Symbol: BuildPipeline | Original rationale: Consumer/implementation — find BuildPipeline class to verify test assertions match actual behavior\nCode:\nexport interface BuildPipelineOptions {\n    workDir: string;\n}\n\nexport class BuildPipeline {\n    private steps: string[] = [];\n    private workDir: string;\n\n    constructor(options: BuildPipelineOptions) {\n        this.workDir = options.workDir;\n    }\n\n    addStep(command: string): void {\n        this.steps.push(command);\n    }\n\n    /**\n     * Concatenate all steps with ' && ' and prepend a cd to the\n     * working directory. Returns empty string when no steps exist.\n     */\n    toScript(): string {\n        if (this.steps.length === 0) return '';\n        return 'cd ' + this.workDir + ' && ' + this.steps.join(' && ');\n    }\n}",
+      "snippetCount": "1",
+      "snippetFiles": "[\"src/deploy/BuildPipeline.ts\"]",
+      "snippetSymbols": "[\"BuildPipeline\"]",
+      "originalRationales": "[\"Consumer/implementation — find BuildPipeline class to verify test assertions match actual behavior\"]"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://enrichment-parse-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Enrichment Ex3: src/dto/BulkImportDto.ts",
+    "vars": {
+      "diffSummary": "## file: 'src/dto/BulkImportDto.ts'\n\n@@ -11,7 +11,7 @@\n__new hunk__\n11  \n12  export class BulkImportDto {\n13      @IsArray()\n14 -    @ArrayMaxSize(100)\n15 +    @ArrayMaxSize(500)\n16      @ValidateNested({ each: true })\n17      @Type(() => ImportItemDto)\n18      items: ImportItemDto[];\n__old hunk__\n \n export class BulkImportDto {\n     @IsArray()\n     @ArrayMaxSize(100)\n     @ValidateNested({ each: true })\n     @Type(() => ImportItemDto)\n     items: ImportItemDto[];",
+      "snippetDescriptions": "[0] File: src/controllers/ImportController.ts | Symbol: BulkImportDto | Original rationale: Consumer — find controllers that import BulkImportDto to check if ArrayMaxSize change affects callers\nCode:\nimport { Controller, Post, Body, UsePipes, ValidationPipe } from '@nestjs/common';\nimport { BulkImportDto } from '../dto/BulkImportDto';\nimport { ImportService } from '../services/ImportService';\n\n@Controller('imports')\nexport class ImportController {\n    constructor(private readonly importService: ImportService) {}\n\n    @Post('bulk')\n    @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))\n    async bulkImport(@Body() dto: BulkImportDto) {\n        return this.importService.processItems(dto.items);\n    }\n}",
+      "snippetCount": "1",
+      "snippetFiles": "[\"src/controllers/ImportController.ts\"]",
+      "snippetSymbols": "[\"BulkImportDto\"]",
+      "originalRationales": "[\"Consumer — find controllers that import BulkImportDto to check if ArrayMaxSize change affects callers\"]"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://enrichment-parse-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Enrichment Ex4: test/__mocks__/e2b.ts",
+    "vars": {
+      "diffSummary": "## file: 'test/__mocks__/e2b.ts'\n\n@@ -0,0 +1,17 @@\n__new hunk__\n1 +/**\n2 + * Global mock for the e2b package.\n3 + * Only Sandbox.create is used in our test suite.\n4 + */\n5 +export const Sandbox = {\n6 +    create: jest.fn().mockResolvedValue({\n7 +        filesystem: {\n8 +            write: jest.fn().mockResolvedValue(undefined),\n9 +            read: jest.fn().mockResolvedValue('file content'),\n10 +            list: jest.fn().mockResolvedValue([]),\n11 +        },\n12 +        commands: {\n13 +      \n... (truncated)",
+      "snippetDescriptions": "[0] File: test/sandbox/sandboxRunner.spec.ts | Symbol: Sandbox | Original rationale: Consumer — find tests that import from e2b mock to verify mock interface matches usage patterns\nCode:\nimport { Sandbox } from 'e2b'; // resolved to test/__mocks__/e2b.ts by Jest moduleNameMapper\nimport { SandboxRunner } from '../../src/sandbox/SandboxRunner';\n\ndescribe('SandboxRunner', () => {\n    let runner: SandboxRunner;\n\n    beforeEach(() => {\n        jest.clearAllMocks();\n        runner = new SandboxRunner();\n    });\n\n    it('should write and execute a script', async () => {\n        await runner.executeScript('console.log(\"hello\")');\n\n        const sandbox = await (Sandbox.create as jest.Mock).mock.results[0].value;\n        expect(sandbox.filesystem.write).toHaveBeenCalledWith(\n            '/tmp/script.ts',\n            expect.stringContaining('console.log')\n        );\n        expect(sandbox.commands.run).toHaveBeenCalledWith('npx tsx /tmp/script.ts');\n        expect(sandbox.close).toHaveBeenCalled();\n    });\n\n    it('should close sandbox on error', async () => {\n        const sandbox = await (Sandbox.create as jest.Mock).mock.results[0]?.value;\n        (sandbox?.commands?.run as jest.Mock)?.mockRejectedValueOnce(new Error('timeout'));\n\n        await expect(runner.executeScript('bad')).rejects.toThrow('timeout');\n    });\n});",
+      "snippetCount": "1",
+      "snippetFiles": "[\"test/sandbox/sandboxRunner.spec.ts\"]",
+      "snippetSymbols": "[\"Sandbox\"]",
+      "originalRationales": "[\"Consumer — find tests that import from e2b mock to verify mock interface matches usage patterns\"]"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://enrichment-parse-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Enrichment Ex5: src/review/SeverityNormalizer.ts",
+    "vars": {
+      "diffSummary": "## file: 'src/review/SeverityNormalizer.ts'\n\n@@ -0,0 +1,21 @@\n__new hunk__\n1 +type InputSeverity = string;\n2 +type NormalizedSeverity = 'low' | 'medium' | 'high' | 'critical';\n3 +\n4 +const SEVERITY_MAP: Record<string, NormalizedSeverity> = {\n5 +    info: 'low',\n6 +    informational: 'low',\n7 +    minor: 'low',\n8 +    low: 'low',\n9 +    moderate: 'medium',\n10 +    medium: 'medium',\n11 +    major: 'high',\n12 +    high: 'high',\n13 +    severe: 'critical',\n14 +    critical: 'critical',\n15 +    block\n... (truncated)",
+      "snippetDescriptions": "[0] File: src/review/ReviewFormatter.ts | Symbol: normalizeSeverity | Original rationale: Consumer — find callers of normalizeSeverity to verify function contract is preserved\nCode:\nimport { normalizeSeverity } from './SeverityNormalizer';\n\ninterface RawFinding {\n    message: string;\n    severity?: string;\n    line: number;\n}\n\ninterface FormattedFinding {\n    message: string;\n    severity: 'low' | 'medium' | 'high' | 'critical';\n    line: number;\n}\n\nexport function formatFindings(raw: RawFinding[]): FormattedFinding[] {\n    return raw.map(finding => ({\n        message: finding.message,\n        severity: normalizeSeverity(finding.severity ?? 'medium'),\n        line: finding.line,\n    }));\n}",
+      "snippetCount": "1",
+      "snippetFiles": "[\"src/review/ReviewFormatter.ts\"]",
+      "snippetSymbols": "[\"normalizeSeverity\"]",
+      "originalRationales": "[\"Consumer — find callers of normalizeSeverity to verify function contract is preserved\"]"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://enrichment-parse-assertion.js"
+      }
+    ]
+  }
+]

@@ -1,0 +1,14 @@
+description: "Safeguard - no_changes (Gemini 3 Flash) - should KEEP"
+
+providers:
+  - id: google:gemini-3-flash-preview
+    config:
+      temperature: 0
+      maxOutputTokens: 16384
+
+prompts:
+  - file://prompt-loader.js
+
+tests: file://datasets/nochanges-quick20.json
+
+outputPath: ./results/nochanges-gemini3flash-output.json

@@ -1,0 +1,14 @@
+description: "Safeguard - no_changes (Sonnet) - should KEEP"
+
+providers:
+  - id: anthropic:claude-sonnet-4-20250514
+    config:
+      temperature: 0
+      max_tokens: 16384
+
+prompts:
+  - file://prompt-loader.js
+
+tests: file://datasets/nochanges-quick20.json
+
+outputPath: ./results/nochanges-sonnet-output.json

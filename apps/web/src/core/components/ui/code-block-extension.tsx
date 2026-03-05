@@ -38,7 +38,7 @@ export const CodeBlock = TiptapCodeBlock.extend({
             [
                 "code",
                 {
-                    class: `block p-4 text-sm font-mono text-white whitespace-pre overflow-x-auto language-${lang}`,
+                    "class": `block p-4 text-sm font-mono text-white whitespace-pre overflow-x-auto language-${lang}`,
                     "data-language": lang,
                 },
                 0,
@@ -46,4 +46,3 @@ export const CodeBlock = TiptapCodeBlock.extend({
         ];
     },
 });
-

@@ -1,3 +1,4 @@
+import { Button } from "@components/ui/button";
 import {
     Collapsible,
     CollapsibleContent,
@@ -6,7 +7,6 @@ import {
 } from "@components/ui/collapsible";
 import { FormControl } from "@components/ui/form-control";
 import { Input } from "@components/ui/input";
-import { Button } from "@components/ui/button";
 import { Controller, useFormContext } from "react-hook-form";
 
 import type { EditKeyForm } from "../_types";
@@ -54,8 +54,7 @@ export const ByokAdvancedSettings = () => {
                                             const val = e.target.value;
                                             const num = parseFloat(val);
                                             field.onChange(
-                                                val === "" ||
-                                                    Number.isNaN(num)
+                                                val === "" || Number.isNaN(num)
                                                     ? null
                                                     : num,
                                             );
@@ -98,8 +97,7 @@ export const ByokAdvancedSettings = () => {
                                             const val = e.target.value;
                                             const num = parseInt(val, 10);
                                             field.onChange(
-                                                val === "" ||
-                                                    Number.isNaN(num)
+                                                val === "" || Number.isNaN(num)
                                                     ? null
                                                     : num,
                                             );
@@ -142,8 +140,7 @@ export const ByokAdvancedSettings = () => {
                                             const val = e.target.value;
                                             const num = parseInt(val, 10);
                                             field.onChange(
-                                                val === "" ||
-                                                    Number.isNaN(num)
+                                                val === "" || Number.isNaN(num)
                                                     ? null
                                                     : num,
                                             );
@@ -186,8 +183,7 @@ export const ByokAdvancedSettings = () => {
                                             const val = e.target.value;
                                             const num = parseInt(val, 10);
                                             field.onChange(
-                                                val === "" ||
-                                                    Number.isNaN(num)
+                                                val === "" || Number.isNaN(num)
                                                     ? null
                                                     : num,
                                             );

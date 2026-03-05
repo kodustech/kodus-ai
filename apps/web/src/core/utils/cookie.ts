@@ -1,9 +1,9 @@
-import type { OptionsType } from "cookies-next/client";
 import {
     deleteCookie,
     getCookie,
     hasCookie,
     setCookie,
+    type OptionsType,
 } from "cookies-next/client";
 
 import type { LiteralUnion } from "../types";

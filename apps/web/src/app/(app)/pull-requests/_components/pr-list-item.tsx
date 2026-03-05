@@ -12,9 +12,11 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
-import type { CodeReviewTimelineItem } from "@services/pull-requests";
-import { buildPullRequestUrl } from "@services/pull-requests";
 import { useGetTimezone } from "@services/organizationParameters/hooks";
+import {
+    buildPullRequestUrl,
+    type CodeReviewTimelineItem,
+} from "@services/pull-requests";
 import { ChevronDownIcon, ExternalLinkIcon, GitBranchIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
@@ -28,11 +30,27 @@ const formatDateTime = (dateString: string, timezone: string | null) => {
     const tz = timezone || "UTC";
     try {
         const date = new Date(dateString);
-        const year = date.toLocaleString("en-CA", { timeZone: tz, year: "numeric" });
-        const month = date.toLocaleString("en-CA", { timeZone: tz, month: "2-digit" });
-        const day = date.toLocaleString("en-CA", { timeZone: tz, day: "2-digit" });
-        const hour = date.toLocaleString("en-GB", { timeZone: tz, hour: "2-digit", hour12: false });
-        const minute = date.toLocaleString("en-GB", { timeZone: tz, minute: "2-digit" });
+        const year = date.toLocaleString("en-CA", {
+            timeZone: tz,
+            year: "numeric",
+        });
+        const month = date.toLocaleString("en-CA", {
+            timeZone: tz,
+            month: "2-digit",
+        });
+        const day = date.toLocaleString("en-CA", {
+            timeZone: tz,
+            day: "2-digit",
+        });
+        const hour = date.toLocaleString("en-GB", {
+            timeZone: tz,
+            hour: "2-digit",
+            hour12: false,
+        });
+        const minute = date.toLocaleString("en-GB", {
+            timeZone: tz,
+            minute: "2-digit",
+        });
         return `${year}-${month}-${day} ${hour}:${minute.padStart(2, "0")}`;
     } catch {
         return dateString;
@@ -61,14 +79,24 @@ const formatTimeAgo = (dateString: string) => {
     return `${diffInMonths} month${diffInMonths > 1 ? "s" : ""} ago`;
 };
 
-const TimeAgoDisplay = ({ dateString, timezone }: { dateString: string; timezone: string | null }) => {
+const TimeAgoDisplay = ({
+    dateString,
+    timezone,
+}: {
+    dateString: string;
+    timezone: string | null;
+}) => {
     const [displayedTime, setDisplayedTime] = useState(dateString);
 
     useEffect(() => {
         setDisplayedTime(formatTimeAgo(dateString));
     }, [dateString]);
 
-    return <>{displayedTime} · {formatDateTime(dateString, timezone)}</>;
+    return (
+        <>
+            {displayedTime} · {formatDateTime(dateString, timezone)}
+        </>
+    );
 };
 
 const formatDuration = (start: string, end?: string | null) => {
@@ -403,7 +431,10 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                 </TableCell>
                 <TableCell className="w-32">
                     <span className="text-text-tertiary text-sm tabular-nums">
-                        <TimeAgoDisplay dateString={latest.createdAt} timezone={timezone} />
+                        <TimeAgoDisplay
+                            dateString={latest.createdAt}
+                            timezone={timezone}
+                        />
                     </span>
                 </TableCell>
                 <TableCell className="w-20 text-center">
@@ -474,10 +505,12 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                                 item.metadata &&
                                                 typeof item.metadata ===
                                                     "object" &&
-                                                (item.metadata as Record<
-                                                    string,
-                                                    any
-                                                >).visibility === "secondary",
+                                                (
+                                                    item.metadata as Record<
+                                                        string,
+                                                        any
+                                                    >
+                                                ).visibility === "secondary",
                                         );
                                     const isDebugVisible =
                                         debugVisibleByExecution[executionKey] ??
@@ -490,10 +523,12 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                                       item.metadata &&
                                                       typeof item.metadata ===
                                                           "object" &&
-                                                      (item.metadata as Record<
-                                                          string,
-                                                          any
-                                                      >).visibility ===
+                                                      (
+                                                          item.metadata as Record<
+                                                              string,
+                                                              any
+                                                          >
+                                                      ).visibility ===
                                                           "secondary"
                                                   ),
                                           );
@@ -531,7 +566,7 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                                         className={cn(
                                                             "text-text-tertiary size-4 shrink-0 transition-transform duration-200",
                                                             !isReviewCollapsed &&
-                                                                "rotate-180 text-text-secondary",
+                                                                "text-text-secondary rotate-180",
                                                         )}
                                                     />
                                                     <span className="text-text-primary text-sm font-semibold tabular-nums">
@@ -603,7 +638,9 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                                                         size: "xs",
                                                                     },
                                                                 )}
-                                                                onClick={(event) => {
+                                                                onClick={(
+                                                                    event,
+                                                                ) => {
                                                                     event.stopPropagation();
                                                                     toggleDebugVisibility(
                                                                         executionKey,
@@ -710,35 +747,44 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                                                                 </p>
                                                                                 {stageInfo.duration &&
                                                                                     !isAutomationStart && (
-                                                                                    <p className="text-text-tertiary text-xs tabular-nums">
-                                                                                        {item.status ===
-                                                                                        "in_progress"
-                                                                                            ? "Elapsed: "
-                                                                                            : "Duration: "}
-                                                                                        {
-                                                                                            stageInfo.duration
-                                                                                        }
-                                                                                    </p>
-                                                                                )}
+                                                                                        <p className="text-text-tertiary text-xs tabular-nums">
+                                                                                            {item.status ===
+                                                                                            "in_progress"
+                                                                                                ? "Elapsed: "
+                                                                                                : "Duration: "}
+                                                                                            {
+                                                                                                stageInfo.duration
+                                                                                            }
+                                                                                        </p>
+                                                                                    )}
                                                                                 {item.createdAt &&
                                                                                     !isAutomationStart && (
-                                                                                    <p className="text-text-tertiary text-xs tabular-nums">
-                                                                                        Started: {formatDateTime(item.createdAt, timezone)}
-                                                                                    </p>
-                                                                                )}
+                                                                                        <p className="text-text-tertiary text-xs tabular-nums">
+                                                                                            Started:{" "}
+                                                                                            {formatDateTime(
+                                                                                                item.createdAt,
+                                                                                                timezone,
+                                                                                            )}
+                                                                                        </p>
+                                                                                    )}
                                                                                 {item.status ===
                                                                                     "partial_error" &&
-                                                                                    stageInfo.partialErrors
+                                                                                    stageInfo
+                                                                                        .partialErrors
                                                                                         .length >
                                                                                         0 && (
                                                                                         <details className="text-warning/90 mt-2 text-xs">
                                                                                             <summary className="cursor-pointer">
-                                                                                                View failed files (
+                                                                                                View
+                                                                                                failed
+                                                                                                files
+                                                                                                (
                                                                                                 {
                                                                                                     stageInfo
                                                                                                         .partialErrors
                                                                                                         .length
                                                                                                 }
+
                                                                                                 )
                                                                                             </summary>
                                                                                             <ul className="mt-2 space-y-1 pl-4">

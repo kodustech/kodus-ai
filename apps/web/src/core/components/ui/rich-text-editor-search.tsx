@@ -3,16 +3,20 @@
 import * as React from "react";
 import { Editor } from "@tiptap/react";
 import { Search, X } from "lucide-react";
+import { cn } from "src/core/utils/components";
+
 import { Button } from "./button";
 import { Input } from "./input";
-import { cn } from "src/core/utils/components";
 
 type RichTextEditorSearchProps = {
     editor: Editor | null;
     className?: string;
 };
 
-export function RichTextEditorSearch({ editor, className }: RichTextEditorSearchProps) {
+export function RichTextEditorSearch({
+    editor,
+    className,
+}: RichTextEditorSearchProps) {
     const [searchTerm, setSearchTerm] = React.useState("");
     const [isOpen, setIsOpen] = React.useState(false);
     const inputRef = React.useRef<HTMLInputElement>(null);
@@ -50,10 +54,10 @@ export function RichTextEditorSearch({ editor, className }: RichTextEditorSearch
     return (
         <div
             className={cn(
-                "flex items-center gap-2 rounded-lg border border-card-lv3 bg-card-lv2 p-2",
+                "border-card-lv3 bg-card-lv2 flex items-center gap-2 rounded-lg border p-2",
                 className,
             )}>
-            <Search className="size-4 text-text-secondary" />
+            <Search className="text-text-secondary size-4" />
             <Input
                 ref={inputRef}
                 value={searchTerm}
@@ -78,4 +82,3 @@ export function RichTextEditorSearch({ editor, className }: RichTextEditorSearch
         </div>
     );
 }
-

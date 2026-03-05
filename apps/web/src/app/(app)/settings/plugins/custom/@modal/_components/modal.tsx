@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Avatar, AvatarImage } from "@components/ui/avatar";
 import { Button } from "@components/ui/button";
 import { Checkbox } from "@components/ui/checkbox";
@@ -42,8 +44,6 @@ import {
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { ImageOff, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { AwaitedReturnType } from "src/core/types";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
@@ -79,19 +79,19 @@ const authSchema = z.discriminatedUnion("authMethod", [
         apiKey: z.string().trim().min(1, "API Key is required"),
         apiKeyHeader: z.string().trim().min(1, "Header Name is required"),
     }),
-    z.object({
-        authMethod: z.literal(CUSTOM_MCP_AUTH_METHODS.OAUTH2),
-        clientId: z.string().optional(),
-        clientSecret: z.string().optional(),
-        oauthScopes: z.array(z.string()).optional(),
-        dynamicRegistration: z.boolean().optional(),
-    }).refine(
-        (data) => data.dynamicRegistration || data.clientId,
-        {
-            message: "Client ID is required when dynamic registration is disabled",
+    z
+        .object({
+            authMethod: z.literal(CUSTOM_MCP_AUTH_METHODS.OAUTH2),
+            clientId: z.string().optional(),
+            clientSecret: z.string().optional(),
+            oauthScopes: z.array(z.string()).optional(),
+            dynamicRegistration: z.boolean().optional(),
+        })
+        .refine((data) => data.dynamicRegistration || data.clientId, {
+            message:
+                "Client ID is required when dynamic registration is disabled",
             path: ["clientId"],
-        },
-    ),
+        }),
 ]);
 
 const addCustomPluginSchema = z
@@ -1012,7 +1012,8 @@ export const AddCustomPluginModal = ({
                                             render={({ field, fieldState }) => (
                                                 <FormControl.Root>
                                                     <FormControl.Label>
-                                                        Scopes (Comma-separated, Optional)
+                                                        Scopes (Comma-separated,
+                                                        Optional)
                                                     </FormControl.Label>
                                                     <FormControl.Input>
                                                         <Input
@@ -1021,14 +1022,36 @@ export const AddCustomPluginModal = ({
                                                             disabled={
                                                                 !canPerformAction
                                                             }
-                                                            value={Array.isArray(field.value) ? field.value.join(', ') : ''}
+                                                            value={
+                                                                Array.isArray(
+                                                                    field.value,
+                                                                )
+                                                                    ? field.value.join(
+                                                                          ", ",
+                                                                      )
+                                                                    : ""
+                                                            }
                                                             onChange={(e) => {
-                                                                const value = e.target.value;
-                                                                const scopes = value
-                                                                    .split(',')
-                                                                    .map(s => s.trim())
-                                                                    .filter(Boolean);
-                                                                field.onChange(scopes);
+                                                                const value =
+                                                                    e.target
+                                                                        .value;
+                                                                const scopes =
+                                                                    value
+                                                                        .split(
+                                                                            ",",
+                                                                        )
+                                                                        .map(
+                                                                            (
+                                                                                s,
+                                                                            ) =>
+                                                                                s.trim(),
+                                                                        )
+                                                                        .filter(
+                                                                            Boolean,
+                                                                        );
+                                                                field.onChange(
+                                                                    scopes,
+                                                                );
                                                             }}
                                                         />
                                                     </FormControl.Input>

@@ -489,8 +489,10 @@ describe('ProcessFilesReview', () => {
                             ...ctx,
                             fileChangeContext: {
                                 file: f,
-                                relevantContent: f.astFormattedContent || f.fileContent,
-                                patchWithLinesStr: '@@ -1,3 +1,3 @@\n-old\n+new',
+                                relevantContent:
+                                    f.astFormattedContent || f.fileContent,
+                                patchWithLinesStr:
+                                    '@@ -1,3 +1,3 @@\n-old\n+new',
                                 hasRelevantContent: !!f.astFormattedContent,
                             },
                             tasks: {
@@ -532,12 +534,7 @@ describe('ProcessFilesReview', () => {
             const context = createBatchContext();
             const tasks = { astAnalysis: { taskId: 'task-1' } };
 
-            await (stage as any).processSingleBatch(
-                [file],
-                context,
-                0,
-                tasks,
-            );
+            await (stage as any).processSingleBatch([file], context, 0, tasks);
 
             // prepareFileContext should have received the file WITH astFormattedContent
             expect(capturedFile).not.toBeNull();
@@ -562,7 +559,8 @@ describe('ProcessFilesReview', () => {
                             fileChangeContext: {
                                 file: f,
                                 relevantContent: f.fileContent,
-                                patchWithLinesStr: '@@ -1,3 +1,3 @@\n-old\n+new',
+                                patchWithLinesStr:
+                                    '@@ -1,3 +1,3 @@\n-old\n+new',
                                 hasRelevantContent: false,
                             },
                             tasks: {
@@ -604,12 +602,7 @@ describe('ProcessFilesReview', () => {
             const context = createBatchContext();
             const tasks = { astAnalysis: { taskId: 'task-1' } };
 
-            await (stage as any).processSingleBatch(
-                [file],
-                context,
-                0,
-                tasks,
-            );
+            await (stage as any).processSingleBatch([file], context, 0, tasks);
 
             // File should NOT have astFormattedContent
             expect(capturedFile).not.toBeNull();
@@ -641,8 +634,10 @@ describe('ProcessFilesReview', () => {
                             ...ctx,
                             fileChangeContext: {
                                 file: f,
-                                relevantContent: f.astFormattedContent || f.fileContent,
-                                patchWithLinesStr: '@@ -1,3 +1,3 @@\n-old\n+new',
+                                relevantContent:
+                                    f.astFormattedContent || f.fileContent,
+                                patchWithLinesStr:
+                                    '@@ -1,3 +1,3 @@\n-old\n+new',
                                 hasRelevantContent: !!f.astFormattedContent,
                             },
                             tasks: {
@@ -685,12 +680,7 @@ describe('ProcessFilesReview', () => {
             const context = createBatchContext();
             const tasks = { astAnalysis: { taskId: 'task-1' } };
 
-            await (stage as any).processSingleBatch(
-                batch,
-                context,
-                0,
-                tasks,
-            );
+            await (stage as any).processSingleBatch(batch, context, 0, tasks);
 
             // After processSingleBatch, astFormattedContent must be deleted from all files
             expect(file1.astFormattedContent).toBeUndefined();

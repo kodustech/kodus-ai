@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { GitTokenDocs } from "@components/system/git-token-docs";
 import { Button } from "@components/ui/button";
 import {
@@ -59,9 +59,7 @@ export const AzureReposModal = (props: Props) => {
     return (
         <Dialog open onOpenChange={() => magicModal.hide()}>
             <DialogContent>
-                <form
-                    className="flex flex-col gap-4"
-                    onSubmit={handleSubmit}>
+                <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
                     <DialogHeader>
                         <DialogTitle>
                             <span>Azure Repos</span> - New Integration

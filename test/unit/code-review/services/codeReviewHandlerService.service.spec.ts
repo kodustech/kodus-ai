@@ -182,7 +182,9 @@ describe('CodeReviewHandlerService - skip feedback control', () => {
             'execution-id',
         );
 
-        expect(mockCodeManagement.removeReactionsFromPR).toHaveBeenCalledTimes(1);
+        expect(mockCodeManagement.removeReactionsFromPR).toHaveBeenCalledTimes(
+            1,
+        );
         expect(mockCodeManagement.addReactionToPR).toHaveBeenCalledTimes(1);
     });
 
@@ -209,7 +211,9 @@ describe('CodeReviewHandlerService - skip feedback control', () => {
             'execution-id',
         );
 
-        expect(mockCodeManagement.removeReactionsFromPR).toHaveBeenCalledTimes(1);
+        expect(mockCodeManagement.removeReactionsFromPR).toHaveBeenCalledTimes(
+            1,
+        );
         expect(mockCodeManagement.addReactionToPR).toHaveBeenCalledTimes(1);
     });
 });

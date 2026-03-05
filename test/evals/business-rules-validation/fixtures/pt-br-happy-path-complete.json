@@ -1,0 +1,45 @@
+{
+  "name": "pt-br-happy-path-complete",
+  "input": {
+    "pullRequestNumber": 402,
+    "prBody": "Implementa o fluxo de onboarding descrito em APP-789.",
+    "prDiff": "diff --git a/src/onboarding.ts b/src/onboarding.ts\n+ export function startOnboarding(userId: string) {\n+   return { started: true, userId };\n+ }\n+ export function completeChecklist() {\n+   return ['profile', 'workspace'];\n+ }\n",
+    "userQuestion": "@kody -v business-logic APP-789",
+    "userLanguage": "pt-BR",
+    "taskContext": {
+      "id": "APP-789",
+      "title": "Melhorar fluxo de onboarding",
+      "description": "Adicionar início de onboarding e checklist inicial para novos usuários. O fluxo deve permitir que o usuário veja claramente os primeiros passos, mantenha o estado inicial de progresso, apresente os itens obrigatórios do checklist e deixe evidente quais ações são necessárias antes da conclusão. A experiência deve permanecer previsível para novos usuários e fácil de validar no diff.",
+      "acceptanceCriteria": [
+        "Usuário pode iniciar o onboarding",
+        "Checklist inicial é retornado para novos usuários"
+      ]
+    },
+    "providerType": "jira",
+    "taskContextToolName": "getJiraIssue"
+  },
+  "expectedTrajectory": [
+    { "capability": "pr.metadata.read", "status": "success" },
+    { "capability": "pr.diff.read", "status": "success" },
+    { "capability": "task.context.read", "status": "success" },
+    { "step": "classifyTaskContext", "output": { "taskQuality": "COMPLETE" } },
+    { "step": "validateContext", "passed": true },
+    { "step": "analyzeBusinessRules", "status": "success" }
+  ],
+  "expectedOutcome": {
+    "needsMoreInfo": false,
+    "mode": "full_analysis",
+    "reason": "analysis_ready",
+    "taskContextStatus": "usable",
+    "prDiffStatus": "usable",
+    "summaryText": "## Validação de Regras de Negócio\n\n**Status:** Sem bloqueios identificados\n**Confidence:** medium\n\n### Requirements Verified\n- O fluxo de onboarding está representado neste diff.\n",
+    "summaryContains": [
+      "Validação de Regras de Negócio",
+      "onboarding"
+    ],
+    "resolvedTaskContextContains": [
+      "APP-789",
+      "onboarding"
+    ]
+  }
+}

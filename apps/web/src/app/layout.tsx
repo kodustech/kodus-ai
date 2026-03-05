@@ -55,8 +55,6 @@ export default function RootLayout({ children }: React.PropsWithChildren) {
                         </NuqsAdapter>
                     </QueryProvider>
                 </TooltipProvider>
-
-
             </body>
         </html>
     );

@@ -10,6 +10,7 @@ import {
     TableHeader,
     TableRow,
 } from "@components/ui/table";
+
 import { PrListItem } from "./pr-list-item";
 import type { PullRequestExecutionGroup } from "./types";
 
@@ -38,24 +39,36 @@ export const PrDataTable = ({ data, loading }: PrDataTableProps) => {
     }
 
     return (
-        <TableContainer className="rounded-xl border border-card-lv3/40 bg-card-lv1/50">
+        <TableContainer className="border-card-lv3/40 bg-card-lv1/50 rounded-xl border">
             <Table className="w-full">
                 <TableHeader>
                     <TableRow className="hover:bg-transparent">
                         <TableHead className="w-8"></TableHead>
-                        <TableHead className="w-20 text-text-tertiary text-xs uppercase tracking-wide font-medium">PR</TableHead>
-                        <TableHead className="min-w-[18rem] text-text-tertiary text-xs uppercase tracking-wide font-medium">Title</TableHead>
-                        <TableHead className="w-32 text-text-tertiary text-xs uppercase tracking-wide font-medium">Repository</TableHead>
-                        <TableHead className="w-40 text-text-tertiary text-xs uppercase tracking-wide font-medium">Branch</TableHead>
-                        <TableHead className="w-40 text-text-tertiary text-xs uppercase tracking-wide font-medium">Author</TableHead>
-<TableHead className="w-20 text-center text-text-tertiary text-xs uppercase tracking-wide font-medium">
+                        <TableHead className="text-text-tertiary w-20 text-xs font-medium tracking-wide uppercase">
+                            PR
+                        </TableHead>
+                        <TableHead className="text-text-tertiary min-w-[18rem] text-xs font-medium tracking-wide uppercase">
+                            Title
+                        </TableHead>
+                        <TableHead className="text-text-tertiary w-32 text-xs font-medium tracking-wide uppercase">
+                            Repository
+                        </TableHead>
+                        <TableHead className="text-text-tertiary w-40 text-xs font-medium tracking-wide uppercase">
+                            Branch
+                        </TableHead>
+                        <TableHead className="text-text-tertiary w-40 text-xs font-medium tracking-wide uppercase">
+                            Author
+                        </TableHead>
+                        <TableHead className="text-text-tertiary w-20 text-center text-xs font-medium tracking-wide uppercase">
                             Reviews
                         </TableHead>
-                        <TableHead className="w-32 text-text-tertiary text-xs uppercase tracking-wide font-medium">Created</TableHead>
-                        <TableHead className="w-20 text-center text-text-tertiary text-xs uppercase tracking-wide font-medium">
+                        <TableHead className="text-text-tertiary w-32 text-xs font-medium tracking-wide uppercase">
+                            Created
+                        </TableHead>
+                        <TableHead className="text-text-tertiary w-20 text-center text-xs font-medium tracking-wide uppercase">
                             Suggestions
                         </TableHead>
-                        <TableHead className="w-32 text-center text-text-tertiary text-xs uppercase tracking-wide font-medium">
+                        <TableHead className="text-text-tertiary w-32 text-center text-xs font-medium tracking-wide uppercase">
                             Status
                         </TableHead>
                     </TableRow>

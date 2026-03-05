@@ -326,7 +326,10 @@ export class ExecuteCliReviewUseCase implements IUseCase {
         defaults: CodeReviewConfig,
     ): DeepPartial<CodeReviewConfig> {
         const base = defaults as DeepPartial<CodeReviewConfig>;
-        const merged = deepMerge(base, config || {}) as DeepPartial<CodeReviewConfig>;
+        const merged = deepMerge(
+            base,
+            config || {},
+        ) as DeepPartial<CodeReviewConfig>;
 
         merged.codeReviewVersion = CodeReviewVersion.v2;
 

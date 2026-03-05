@@ -31,16 +31,14 @@ export interface CodeReviewTimelineItem {
         | {
               label?: string | null;
               visibility?: string | null;
-              partialErrors?:
-                  | Array<
-                        | string
-                        | {
-                              path?: string;
-                              file?: string;
-                              message?: string;
-                          }
-                    >
-                  | null;
+              partialErrors?: Array<
+                  | string
+                  | {
+                        path?: string;
+                        file?: string;
+                        message?: string;
+                    }
+              > | null;
               cta?: {
                   label: string;
                   href: string;

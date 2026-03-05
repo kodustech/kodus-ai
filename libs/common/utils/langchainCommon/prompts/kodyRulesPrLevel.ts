@@ -2,6 +2,7 @@ import {
     AnalysisContext,
     FileChange,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { getTextOrDefault, sanitizePromptText } from './prompt.helpers';
 
 export type KodyRulesPrLevelPayload = {
     pr_title: string;
@@ -15,12 +16,129 @@ export type KodyRulesPrLevelPayload = {
     language?: string;
     externalReferencesMap?: Map<string, any[]>;
     mcpResultsMap?: Map<string, Record<string, unknown>>;
+    memories?: Array<{
+        title?: string;
+        rule?: string;
+    }>;
 };
+
+function formatMemoriesSection(
+    memories: KodyRulesPrLevelPayload['memories'],
+): string {
+    if (!Array.isArray(memories) || !memories.length) {
+        return '';
+    }
+
+    const formattedMemories = memories
+        .map((memory) => {
+            const title = getTextOrDefault(memory?.title, '').trim();
+            const rule = getTextOrDefault(memory?.rule, '').trim();
+
+            if (!title || !rule) {
+                return null;
+            }
+
+            return `- Title: ${sanitizePromptText(title)}\n  Rule: ${sanitizePromptText(rule)}`;
+        })
+        .filter((entry): entry is string => Boolean(entry));
+
+    if (!formattedMemories.length) {
+        return '';
+    }
+
+    return `## Memories\n\nAdditional context from past learnings in Kody Rules format.\n\n${formattedMemories.join('\n\n')}`;
+}
+
+function formatReferenceSection(references: unknown[] | undefined): string {
+    if (!Array.isArray(references) || !references.length) {
+        return '';
+    }
+
+    return (references as Array<Record<string, unknown>>)
+        .filter(Boolean)
+        .map((ref) => {
+            const lineRangeInfo = ref.lineRange
+                ? ` (lines ${(ref.lineRange as Record<string, unknown>).start}-${(ref.lineRange as Record<string, unknown>).end})`
+                : '';
+            const header = `### Source: File - ${ref.filePath}${lineRangeInfo}`;
+            return `${header}\n${ref.content}`;
+        })
+        .join('\n\n');
+}
+
+function formatExternalReferencesMapSection(
+    externalReferencesMap: KodyRulesPrLevelPayload['externalReferencesMap'],
+): string {
+    if (!externalReferencesMap || !externalReferencesMap.size) {
+        return '';
+    }
+
+    const sections = Array.from(externalReferencesMap.entries())
+        .map(([ruleUuid, refs]) => {
+            const referencesSection = formatReferenceSection(refs);
+            if (!referencesSection) {
+                return '';
+            }
+
+            return `### Source: Rule References - ${ruleUuid}\n\n${referencesSection}`;
+        })
+        .filter(Boolean);
+
+    return sections.join('\n\n---\n\n');
+}
+
+function formatMcpResultsSection(
+    mcpResultsMap: KodyRulesPrLevelPayload['mcpResultsMap'],
+): string {
+    if (!mcpResultsMap || !mcpResultsMap.size) {
+        return '';
+    }
+
+    const blocks = Array.from(mcpResultsMap.entries())
+        .map(([ruleUuid, data]) => {
+            const outputs = (data as Record<string, unknown>)?.outputs;
+            if (!Array.isArray(outputs) || !outputs.length) {
+                return '';
+            }
+
+            const entries = outputs
+                .map((aug: unknown, index: number) => {
+                    const output = (aug ?? {}) as Record<string, unknown>;
+                    const provider = output.provider ?? 'unknown';
+                    const toolName = output.toolName ?? 'unknown';
+                    const outputContent = output.output ?? 'No output provided';
+
+                    return `Tool Execution #${index + 1}:\nProvider: ${provider}\nTool: ${toolName}\nOutput:\n${outputContent}`;
+                })
+                .join('\n\n');
+
+            return `### Source: MCP Tools - ${ruleUuid}\n\n${entries}`;
+        })
+        .filter(Boolean);
+
+    return blocks.join('\n\n---\n\n');
+}
+
+function appendExternalContext(basePrompt: string, sections: string[]): string {
+    const contextBlocks = sections.filter((section) => section?.trim().length);
+
+    if (!contextBlocks.length) {
+        return basePrompt;
+    }
+
+    return `${basePrompt}\n\n## External Context & Injected Knowledge\n\nThe following information is provided to ground your analysis in the broader system reality. Use this as your source of truth.\n\n---\n\n${contextBlocks.join('\n\n---\n\n')}`;
+}
 
 export const prompt_kodyrules_prlevel_analyzer = (
     payload: KodyRulesPrLevelPayload,
 ) => {
-    return `# Cross-File Rule Classification System
+    const memoriesBlock = formatMemoriesSection(payload?.memories);
+    const externalReferencesSection = formatExternalReferencesMapSection(
+        payload?.externalReferencesMap,
+    );
+    const mcpSection = formatMcpResultsSection(payload?.mcpResultsMap);
+
+    const basePrompt = `# Cross-File Rule Classification System
 
 ## Your Role
 You are a code review expert specialized in identifying cross-file rule violations in Pull Requests. Your task is to analyze PR changes and determine which cross-file rules have been violated.
@@ -30,6 +148,7 @@ You are a code review expert specialized in identifying cross-file rule violatio
 - **Only output rules that have actual violations** - if no violation exists, don't include the rule
 - **Group violations intelligently** - multiple files violating the same rule should be grouped together
 - **Consider file status** - for deleted files, only flag violations when rules explicitly mention file deletion restrictions
+- **Memory rules precedence** - if a Memories section is present in external context, evaluate those rules first as high-priority guidance and surface applicable violations with concrete evidence
 
 ## Input Structure
 
@@ -68,79 +187,14 @@ You are a code review expert specialized in identifying cross-file rule violatio
   "rules": ${JSON.stringify(payload?.rules || [])}
 }
 \`\`\`
-${
-    payload?.externalReferencesMap && payload.externalReferencesMap.size > 0
-        ? `
-### External Reference Files
-${Array.from(payload.externalReferencesMap.entries())
-    .map(([ruleUuid, refs]: [string, any[]]) => {
-        const rule = payload.rules?.find((r: any) => r.uuid === ruleUuid);
-        if (!rule || !refs.length) return '';
-        return `
-Rule: ${rule.title} (${ruleUuid})
-${refs
-    .map(
-        (ref: any) => `  File: ${ref.filePath}
-  ${ref.description ? `Purpose: ${ref.description}\n  ` : ''}Content:
-${ref.content}
-`,
-    )
-    .join('\n')}`;
-    })
-    .join('\n')}
-`
-        : ''
-}
-${
-    payload?.mcpResultsMap && payload.mcpResultsMap.size > 0
-        ? `
-### External Tool Outputs
-${Array.from(payload.mcpResultsMap.entries())
-    .map(([ruleUuid, data]) => {
-        const rule = payload.rules?.find((r: any) => r.uuid === ruleUuid);
-        const outputs = (data as any)?.outputs;
-
-        if (
-            !rule ||
-            !outputs ||
-            !Array.isArray(outputs) ||
-            outputs.length === 0
-        ) {
-            return '';
-        }
-
-        return `
-Rule: ${rule.title} (${ruleUuid})
-${outputs
-    .map((aug: any, index: number) => {
-        const provider = aug?.provider ?? 'unknown';
-        const toolName = aug?.toolName ?? 'unknown';
-        let outputContent = 'No output provided';
-
-        if (aug?.output) {
-            try {
-                const parsedOutput = JSON.parse(aug.output);
-                outputContent = JSON.stringify(parsedOutput);
-            } catch (e) {
-                outputContent = aug.output;
-            }
-        }
-
-        return `  Tool Execution #${index + 1}:
-    Provider: ${provider}
-    Tool: ${toolName}
-    Output:
-${outputContent}
-`;
-    })
-    .join('\n')}`;
-    })
-    .join('\n')}
-`
-        : ''
-}
 
 ## Analysis Process
+
+### Step 0: Memory Compliance Pre-check
+If external context contains **Memories**, evaluate each memory rule against the PR changes before rule applicability checks.
+- Prioritize reporting violations that directly match applicable memory rules.
+- Do not ignore applicable memory rules due to subtlety.
+- If memory rule guidance conflicts with explicit visible code evidence, prioritize visible code evidence.
 
 ### Step 1: Rule Applicability
 For each rule, determine:
@@ -243,6 +297,12 @@ Return a JSON array containing only rules that have violations:
 ---
 
 **Now analyze the provided PR and rules to identify cross-file rule violations.**`;
+
+    return appendExternalContext(basePrompt, [
+        memoriesBlock,
+        externalReferencesSection,
+        mcpSection,
+    ]);
 };
 
 export const prompt_kodyrules_prlevel_group_rules = (payload: any) => {

@@ -1,0 +1,14 @@
+description: "Safeguard - discard (Gemini Flash) - should DISCARD"
+
+providers:
+  - id: google:gemini-2.5-flash
+    config:
+      temperature: 0
+      maxOutputTokens: 16384
+
+prompts:
+  - file://prompt-loader.js
+
+tests: file://datasets/discard-quick20.json
+
+outputPath: ./results/discard-flash-output.json

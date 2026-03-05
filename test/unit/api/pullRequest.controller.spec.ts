@@ -1,10 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import {
-    NotFoundException,
-    UnauthorizedException,
-} from '@nestjs/common';
+import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 import { PullRequestController } from '@/core/infrastructure/http/controllers/pullRequest.controller';
@@ -409,7 +406,10 @@ describe('PullRequestController', () => {
             );
 
             expect(mockPullRequestsService.findOne).toHaveBeenCalledWith(
-                expect.objectContaining({ url: PR_URL, organizationId: ORG_ID }),
+                expect.objectContaining({
+                    url: PR_URL,
+                    organizationId: ORG_ID,
+                }),
             );
             expect(result.prNumber).toBe(42);
         });
@@ -434,8 +434,9 @@ describe('PullRequestController', () => {
         });
 
         it('finds PR by repositoryId + prNumber', async () => {
-            mockPullRequestsService.findOne
-                .mockResolvedValueOnce(makePrEntity());
+            mockPullRequestsService.findOne.mockResolvedValueOnce(
+                makePrEntity(),
+            );
 
             const result = await controller.getSuggestionsByPullRequest(
                 undefined,
@@ -762,33 +763,31 @@ describe('PullRequestController', () => {
         it('returns suggestions with team key', async () => {
             mockTeamCliKeyService.validateKey.mockResolvedValue(TEAM_KEY_DATA);
 
-            const result =
-                await controller.getSuggestionsByPullRequestWithKey(
-                    PR_URL,
-                    undefined,
-                    undefined,
-                    'json',
-                    undefined,
-                    undefined,
-                    TEAM_KEY,
-                );
+            const result = await controller.getSuggestionsByPullRequestWithKey(
+                PR_URL,
+                undefined,
+                undefined,
+                'json',
+                undefined,
+                undefined,
+                TEAM_KEY,
+            );
 
             expect(result).toHaveProperty('suggestions');
             expect(result.prNumber).toBe(42);
         });
 
         it('returns suggestions with JWT', async () => {
-            const result =
-                await controller.getSuggestionsByPullRequestWithKey(
-                    PR_URL,
-                    undefined,
-                    undefined,
-                    'json',
-                    undefined,
-                    undefined,
-                    undefined,
-                    BEARER_JWT,
-                );
+            const result = await controller.getSuggestionsByPullRequestWithKey(
+                PR_URL,
+                undefined,
+                undefined,
+                'json',
+                undefined,
+                undefined,
+                undefined,
+                BEARER_JWT,
+            );
 
             expect(result).toHaveProperty('suggestions');
         });

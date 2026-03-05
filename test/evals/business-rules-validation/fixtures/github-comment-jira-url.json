@@ -1,0 +1,48 @@
+{
+  "name": "github-comment-jira-url",
+  "input": {
+    "pullRequestNumber": 132,
+    "prBody": "Refines type-safety in the extension command flow.",
+    "prDiff": "diff --git a/src/commands/prCommentCommands.ts b/src/commands/prCommentCommands.ts\nindex 123..456 100644\n--- a/src/commands/prCommentCommands.ts\n+++ b/src/commands/prCommentCommands.ts\n@@ -159,7 +167,7 @@\n-    changeGroups.forEach((change: any) => {\n+    changeGroups.forEach((change: GitChangeLike) => {\n@@ -188,7 +196,7 @@\n-function getStatusLabel(status: any): string {\n+function getStatusLabel(status: string | number | undefined): string {\n",
+    "userQuestion": "@kody -v business-logic https://kodustech.atlassian.net/jira/software/c/projects/KC/boards/2?selectedIssue=KC-1441",
+    "taskContext": {
+      "id": "KC-1441",
+      "title": "Replace any-based git change parsing with typed handling",
+      "description": "The PR should remove unsafe any usage from git change collection and preserve command behavior. The business requirement is to keep PR comment context collection stable while tightening type-safety.",
+      "acceptanceCriteria": [
+        "Git change parsing no longer relies on any",
+        "Status labels still resolve for modified, added and deleted files",
+        "PR comment validation keeps collecting changed files for review context"
+      ]
+    },
+    "providerType": "jira",
+    "taskContextToolName": "getJiraIssue"
+  },
+  "expectedTrajectory": [
+    {
+      "capability": "pr.metadata.read",
+      "status": "success"
+    },
+    {
+      "capability": "pr.diff.read",
+      "status": "success"
+    },
+    {
+      "capability": "task.context.read",
+      "status": "success"
+    },
+    {
+      "step": "validateContext",
+      "passed": true,
+      "status": "success"
+    }
+  ],
+  "expectedOutcome": {
+    "needsMoreInfo": false,
+    "mode": "full_analysis",
+    "reason": "analysis_ready",
+    "summaryContains": [
+      "Validation summary"
+    ]
+  }
+}

@@ -1,27 +1,26 @@
 import {
+    createLogger,
     createMCPAdapter,
     createOrchestration,
-    Thread,
-    PlannerType,
     LLMAdapter,
-    createLogger,
+    PlannerType,
+    Thread,
 } from '@kodus/flow';
 import { SDKOrchestrator } from '@kodus/flow/dist/orchestration';
 import { LLMModelProvider, PromptRunnerService } from '@kodus/kodus-common/llm';
-import { Injectable } from '@nestjs/common';
-import { Inject } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import {
-    PARAMETERS_SERVICE_TOKEN,
     IParametersService,
+    PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 
-import { BaseAgentProvider } from './base-agent.provider';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
+import { BaseAgentProvider } from './base-agent.provider';
 
 @Injectable()
 export class ConversationAgentProvider extends BaseAgentProvider {
@@ -162,6 +161,19 @@ export class ConversationAgentProvider extends BaseAgentProvider {
         const { organizationAndTeamData, prepareContext, thread } =
             context || ({} as any);
         try {
+            if (
+                !organizationAndTeamData ||
+                !organizationAndTeamData.organizationId
+            ) {
+                throw new Error(
+                    'Organization and team data with organizationId is required.',
+                );
+            }
+
+            if (!thread) {
+                throw new Error('thread and team data is required.');
+            }
+
             const userLanguage = await this.getLanguage(
                 organizationAndTeamData,
             );
@@ -173,21 +185,19 @@ export class ConversationAgentProvider extends BaseAgentProvider {
                 metadata: { organizationAndTeamData, thread, userLanguage },
             });
 
-            if (!organizationAndTeamData) {
-                throw new Error('Organization and team data is required ok.');
-            }
-
-            if (!thread) {
-                throw new Error('thread and team data is required.');
-            }
-
             await this.fetchBYOKConfig(organizationAndTeamData);
 
             await this.initialize(organizationAndTeamData, userLanguage);
 
+            const preparedPrompt = this.buildPromptWithMemoryBootstrap(
+                prompt,
+                prepareContext,
+                organizationAndTeamData,
+            );
+
             const result = await this.orchestration.callAgent(
                 'kodus-conversational-agent',
-                prompt,
+                preparedPrompt,
                 {
                     thread: thread,
                     userContext: {
@@ -224,6 +234,38 @@ export class ConversationAgentProvider extends BaseAgentProvider {
             });
             throw error;
         }
+    }
+
+    private buildPromptWithMemoryBootstrap(
+        prompt: string,
+        prepareContext: any,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): string {
+        const organizationId =
+            organizationAndTeamData?.organizationId?.toString() || '';
+        const teamId = organizationAndTeamData?.teamId?.toString() || '';
+        const repositoryId = prepareContext?.repository?.id?.toString() || '';
+
+        const memoryPayload = {
+            organizationId,
+            teamId,
+            ...(repositoryId ? { repositoryId } : {}),
+            limit: 20,
+        };
+
+        const instructions = [
+            'CRITICAL FIRST ACTION (MANDATORY):',
+            '- Before any reasoning, analysis, or other tool call, invoke KODUS_FIND_MEMORIES.',
+            '- Use this exact payload as your first memory lookup:',
+            JSON.stringify(memoryPayload, null, 2),
+            '- If the tool fails, is unavailable, or returns no matches, continue normally.',
+            '- If matches are found, treat them as high-priority context constraints for your response.',
+            '',
+            'USER PROMPT:',
+            prompt,
+        ].join('\n');
+
+        return instructions;
     }
 
     private async getLanguage(

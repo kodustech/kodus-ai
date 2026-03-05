@@ -57,7 +57,9 @@ describe('CommentManagerService - createLineComments retry logic', () => {
 
     beforeEach(async () => {
         mockCodeManagementService = {
-            getCommitsForPullRequestForCodeReview: jest.fn().mockResolvedValue([mockCommit]),
+            getCommitsForPullRequestForCodeReview: jest
+                .fn()
+                .mockResolvedValue([mockCommit]),
             createReviewComment: jest.fn(),
         };
 
@@ -103,7 +105,9 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 body: 'Created comment',
             };
 
-            mockCodeManagementService.createReviewComment.mockResolvedValue(mockCreatedComment);
+            mockCodeManagementService.createReviewComment.mockResolvedValue(
+                mockCreatedComment,
+            );
 
             const result = await service.createLineComments(
                 mockOrganizationAndTeamData as any,
@@ -115,9 +119,15 @@ describe('CommentManagerService - createLineComments retry logic', () => {
             );
 
             expect(result.commentResults).toHaveLength(1);
-            expect(result.commentResults[0].deliveryStatus).toBe(DeliveryStatus.SENT);
-            expect(result.commentResults[0].codeReviewFeedbackData?.commentId).toBe(123);
-            expect(mockCodeManagementService.createReviewComment).toHaveBeenCalledTimes(1);
+            expect(result.commentResults[0].deliveryStatus).toBe(
+                DeliveryStatus.SENT,
+            );
+            expect(
+                result.commentResults[0].codeReviewFeedbackData?.commentId,
+            ).toBe(123);
+            expect(
+                mockCodeManagementService.createReviewComment,
+            ).toHaveBeenCalledTimes(1);
         });
     });
 
@@ -151,11 +161,16 @@ describe('CommentManagerService - createLineComments retry logic', () => {
             );
 
             expect(result.commentResults).toHaveLength(1);
-            expect(result.commentResults[0].deliveryStatus).toBe(DeliveryStatus.SENT);
-            expect(mockCodeManagementService.createReviewComment).toHaveBeenCalledTimes(2);
+            expect(result.commentResults[0].deliveryStatus).toBe(
+                DeliveryStatus.SENT,
+            );
+            expect(
+                mockCodeManagementService.createReviewComment,
+            ).toHaveBeenCalledTimes(2);
 
             // Verify second call has start_line = line (both equal to 20)
-            const secondCall = mockCodeManagementService.createReviewComment.mock.calls[1][0];
+            const secondCall =
+                mockCodeManagementService.createReviewComment.mock.calls[1][0];
             expect(secondCall.lineComment.start_line).toBe(20);
             expect(secondCall.lineComment.line).toBe(20);
         });
@@ -192,11 +207,16 @@ describe('CommentManagerService - createLineComments retry logic', () => {
             );
 
             expect(result.commentResults).toHaveLength(1);
-            expect(result.commentResults[0].deliveryStatus).toBe(DeliveryStatus.SENT);
-            expect(mockCodeManagementService.createReviewComment).toHaveBeenCalledTimes(3);
+            expect(result.commentResults[0].deliveryStatus).toBe(
+                DeliveryStatus.SENT,
+            );
+            expect(
+                mockCodeManagementService.createReviewComment,
+            ).toHaveBeenCalledTimes(3);
 
             // Verify third call has line = start_line (both equal to 15)
-            const thirdCall = mockCodeManagementService.createReviewComment.mock.calls[2][0];
+            const thirdCall =
+                mockCodeManagementService.createReviewComment.mock.calls[2][0];
             expect(thirdCall.lineComment.start_line).toBe(15);
             expect(thirdCall.lineComment.line).toBe(15);
         });
@@ -229,8 +249,12 @@ describe('CommentManagerService - createLineComments retry logic', () => {
             );
 
             expect(result.commentResults).toHaveLength(1);
-            expect(result.commentResults[0].deliveryStatus).toBe('failed_lines_mismatch');
-            expect(mockCodeManagementService.createReviewComment).toHaveBeenCalledTimes(3);
+            expect(result.commentResults[0].deliveryStatus).toBe(
+                'failed_lines_mismatch',
+            );
+            expect(
+                mockCodeManagementService.createReviewComment,
+            ).toHaveBeenCalledTimes(3);
         });
     });
 
@@ -265,8 +289,12 @@ describe('CommentManagerService - createLineComments retry logic', () => {
             const elapsedTime = Date.now() - startTime;
 
             expect(result.commentResults).toHaveLength(1);
-            expect(result.commentResults[0].deliveryStatus).toBe(DeliveryStatus.SENT);
-            expect(mockCodeManagementService.createReviewComment).toHaveBeenCalledTimes(2);
+            expect(result.commentResults[0].deliveryStatus).toBe(
+                DeliveryStatus.SENT,
+            );
+            expect(
+                mockCodeManagementService.createReviewComment,
+            ).toHaveBeenCalledTimes(2);
 
             // Verify delay was respected (at least 450ms to account for execution time variance)
             expect(elapsedTime).toBeGreaterThanOrEqual(450);
@@ -300,8 +328,12 @@ describe('CommentManagerService - createLineComments retry logic', () => {
             );
 
             expect(result.commentResults).toHaveLength(1);
-            expect(result.commentResults[0].deliveryStatus).toBe(DeliveryStatus.SENT);
-            expect(mockCodeManagementService.createReviewComment).toHaveBeenCalledTimes(2);
+            expect(result.commentResults[0].deliveryStatus).toBe(
+                DeliveryStatus.SENT,
+            );
+            expect(
+                mockCodeManagementService.createReviewComment,
+            ).toHaveBeenCalledTimes(2);
         });
     });
 
@@ -314,7 +346,9 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 message: 'Unauthorized',
             };
 
-            mockCodeManagementService.createReviewComment.mockRejectedValueOnce(authError);
+            mockCodeManagementService.createReviewComment.mockRejectedValueOnce(
+                authError,
+            );
 
             const result = await service.createLineComments(
                 mockOrganizationAndTeamData as any,
@@ -326,8 +360,12 @@ describe('CommentManagerService - createLineComments retry logic', () => {
             );
 
             expect(result.commentResults).toHaveLength(1);
-            expect(result.commentResults[0].deliveryStatus).toBe(DeliveryStatus.FAILED);
-            expect(mockCodeManagementService.createReviewComment).toHaveBeenCalledTimes(1);
+            expect(result.commentResults[0].deliveryStatus).toBe(
+                DeliveryStatus.FAILED,
+            );
+            expect(
+                mockCodeManagementService.createReviewComment,
+            ).toHaveBeenCalledTimes(1);
         });
 
         it('should not retry on 403 Forbidden error', async () => {
@@ -338,7 +376,9 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 message: 'Forbidden',
             };
 
-            mockCodeManagementService.createReviewComment.mockRejectedValueOnce(forbiddenError);
+            mockCodeManagementService.createReviewComment.mockRejectedValueOnce(
+                forbiddenError,
+            );
 
             const result = await service.createLineComments(
                 mockOrganizationAndTeamData as any,
@@ -350,8 +390,12 @@ describe('CommentManagerService - createLineComments retry logic', () => {
             );
 
             expect(result.commentResults).toHaveLength(1);
-            expect(result.commentResults[0].deliveryStatus).toBe(DeliveryStatus.FAILED);
-            expect(mockCodeManagementService.createReviewComment).toHaveBeenCalledTimes(1);
+            expect(result.commentResults[0].deliveryStatus).toBe(
+                DeliveryStatus.FAILED,
+            );
+            expect(
+                mockCodeManagementService.createReviewComment,
+            ).toHaveBeenCalledTimes(1);
         });
 
         it('should not retry on 404 Not Found error', async () => {
@@ -362,7 +406,9 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 message: 'Not Found',
             };
 
-            mockCodeManagementService.createReviewComment.mockRejectedValueOnce(notFoundError);
+            mockCodeManagementService.createReviewComment.mockRejectedValueOnce(
+                notFoundError,
+            );
 
             const result = await service.createLineComments(
                 mockOrganizationAndTeamData as any,
@@ -374,8 +420,12 @@ describe('CommentManagerService - createLineComments retry logic', () => {
             );
 
             expect(result.commentResults).toHaveLength(1);
-            expect(result.commentResults[0].deliveryStatus).toBe(DeliveryStatus.FAILED);
-            expect(mockCodeManagementService.createReviewComment).toHaveBeenCalledTimes(1);
+            expect(result.commentResults[0].deliveryStatus).toBe(
+                DeliveryStatus.FAILED,
+            );
+            expect(
+                mockCodeManagementService.createReviewComment,
+            ).toHaveBeenCalledTimes(1);
         });
     });
 });

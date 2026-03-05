@@ -62,9 +62,10 @@ export class E2BSandboxService {
             await this.setupProxy(sandbox);
 
             // Shallow-fetch the PR ref or branch (minimal network transfer)
-            const refspec = prNumber != null
-                ? this.getPrRefspec(platform, prNumber)
-                : `refs/heads/${branch}`;
+            const refspec =
+                prNumber != null
+                    ? this.getPrRefspec(platform, prNumber)
+                    : `refs/heads/${branch}`;
             const localRef = prNumber != null ? 'pr-head' : 'cli-head';
             const authHeader = this.buildAuthHeader(platform, authToken);
 
@@ -115,7 +116,9 @@ export class E2BSandboxService {
     private async createSandbox(
         apiKey: string,
     ): Promise<{ sandbox: Sandbox; usedTemplate: boolean }> {
-        const templateId = this.configService.get<string>('API_E2B_TEMPLATE_ID');
+        const templateId = this.configService.get<string>(
+            'API_E2B_TEMPLATE_ID',
+        );
 
         if (templateId) {
             try {
@@ -144,13 +147,10 @@ export class E2BSandboxService {
         const host = this.configService.get<string>('E2B_PROXY_HOST');
         if (!host) return;
 
-        const port =
-            this.configService.get<string>('E2B_PROXY_PORT') ?? '8388';
-        const password =
-            this.configService.get<string>('E2B_PROXY_PASSWORD');
+        const port = this.configService.get<string>('E2B_PROXY_PORT') ?? '8388';
+        const password = this.configService.get<string>('E2B_PROXY_PASSWORD');
         const method =
-            this.configService.get<string>('E2B_PROXY_METHOD') ??
-            'aes-256-gcm';
+            this.configService.get<string>('E2B_PROXY_METHOD') ?? 'aes-256-gcm';
 
         if (!password) {
             throw new Error(
@@ -175,10 +175,7 @@ export class E2BSandboxService {
         );
     }
 
-    private buildAuthHeader(
-        platform: PlatformType,
-        token: string,
-    ): string {
+    private buildAuthHeader(platform: PlatformType, token: string): string {
         // Git http.extraHeader sends an Authorization header — token never embedded in URLs
         switch (platform) {
             case PlatformType.GITHUB:
@@ -192,10 +189,7 @@ export class E2BSandboxService {
         }
     }
 
-    private getPrRefspec(
-        platform: PlatformType,
-        prNumber: number,
-    ): string {
+    private getPrRefspec(platform: PlatformType, prNumber: number): string {
         switch (platform) {
             case PlatformType.GITHUB:
                 return `refs/pull/${prNumber}/head`;
@@ -217,16 +211,26 @@ export class E2BSandboxService {
                 path: string,
                 glob?: string,
             ): Promise<string> => {
-                const fullPath = this.resolvePath(path);
-                const escapedPath = fullPath.replace(/'/g, "'\\''");
+                // Validate path (same security checks as resolvePath)
+                if (path.startsWith('/')) {
+                    throw new Error('Absolute paths are not allowed');
+                }
+                if (path.includes('..')) {
+                    throw new Error(
+                        'Path traversal using ".." is not allowed',
+                    );
+                }
+                const escapedPath = path.replace(/'/g, "'\\''");
                 const globArg = glob
                     ? ` --glob '${glob.replace(/'/g, "'\\''")}'`
                     : '';
                 // Use single quotes to prevent bash from interpreting
                 // regex escape sequences (e.g. \b as backspace).
                 const escapedPattern = pattern.replace(/'/g, "'\\''");
+                // Run inside REPO_DIR so rg outputs relative paths (e.g. "./src/foo.ts")
+                // instead of absolute ones (which resolvePath rejects on read).
                 const result = await sandbox.commands.run(
-                    `rg --no-heading -n '${escapedPattern}' '${escapedPath}'${globArg}`,
+                    `cd ${REPO_DIR} && rg --no-heading -n '${escapedPattern}' '${escapedPath}'${globArg}`,
                     { timeoutMs: 30_000 },
                 );
                 return result.stdout;

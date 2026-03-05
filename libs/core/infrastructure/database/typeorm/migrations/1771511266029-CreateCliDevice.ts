@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateCliDevice1771511266029 implements MigrationInterface {
-    name = 'CreateCliDevice1771511266029'
+    name = 'CreateCliDevice1771511266029';
 
     // Disable transaction because CONCURRENTLY cannot run inside transaction
     transaction = false;
@@ -54,5 +54,4 @@ export class CreateCliDevice1771511266029 implements MigrationInterface {
             DROP TABLE "cli_devices"
         `);
     }
-
 }

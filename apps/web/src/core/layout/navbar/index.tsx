@@ -26,8 +26,6 @@ import { cn } from "src/core/utils/components";
 import { SubscriptionBadge } from "src/features/ee/subscription/_components/subscription-badge";
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
-
-
 const UserNav = dynamic(
     () =>
         import("src/core/layout/navbar/_components/user-nav").then(
@@ -56,8 +54,11 @@ const NoSSRGithubStars = dynamic(
 );
 
 const NoSSRPendingRulesNotification = dynamic(
-    () => import("./_components/pending-rules-notification").then((f) => f.PendingRulesNotification),
-    { ssr: false }
+    () =>
+        import("./_components/pending-rules-notification").then(
+            (f) => f.PendingRulesNotification,
+        ),
+    { ssr: false },
 );
 
 export const NavMenu = () => {

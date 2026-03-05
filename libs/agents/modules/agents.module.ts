@@ -12,6 +12,8 @@ import { ConversationAgentProvider } from '../infrastructure/services/kodus-flow
 import { LLMModule } from '@kodus/kodus-common/llm';
 import { SkillLoaderService } from '../skills/skill-loader.service';
 import { GenericSkillRunnerService } from '../skills/generic-skill-runner.service';
+import { CapabilityStrategyService } from '../skills/runtime/capability-strategy.service';
+import { CapabilityResourcePlanService } from '../skills/runtime/capability-resource-plan.service';
 
 @Module({
     imports: [
@@ -29,6 +31,8 @@ import { GenericSkillRunnerService } from '../skills/generic-skill-runner.servic
         ConversationAgentProvider,
         SkillLoaderService,
         GenericSkillRunnerService,
+        CapabilityStrategyService,
+        CapabilityResourcePlanService,
     ],
     exports: [
         BusinessRulesValidationAgentUseCase,
@@ -38,6 +42,8 @@ import { GenericSkillRunnerService } from '../skills/generic-skill-runner.servic
         ConversationAgentProvider,
         SkillLoaderService,
         GenericSkillRunnerService,
+        CapabilityStrategyService,
+        CapabilityResourcePlanService,
     ],
 })
 export class AgentsModule {}

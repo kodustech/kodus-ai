@@ -78,7 +78,9 @@ describe('ProcessFilesReview', () => {
                 {
                     provide: ASTContentFormatterService,
                     useValue: {
-                        fetchFormattedContent: jest.fn().mockResolvedValue(new Map()),
+                        fetchFormattedContent: jest
+                            .fn()
+                            .mockResolvedValue(new Map()),
                     },
                 },
             ],

@@ -1,16 +1,31 @@
-import { IKodyRulesRepository } from './kodyRules.repository.contract';
-import { IKodyRule, KodyRulesStatus } from '../interfaces/kodyRules.interface';
-import { KodyRulesEntity } from '../entities/kodyRules.entity';
-import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { CreateKodyRuleDto } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
+import { UserInfo } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
 import {
     BucketInfo,
     KodyRuleFilters,
     LibraryKodyRule,
 } from '@libs/core/infrastructure/config/types/general/kodyRules.type';
-import { UserInfo } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
+import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { CreateKodyRuleDto } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
+import { KodyRulesEntity } from '../entities/kodyRules.entity';
+import {
+    FindMemoriesFilters,
+    FindMemoriesResult,
+    IKodyRule,
+    IKodyRuleMemory,
+    KodyRulesStatus,
+} from '../interfaces/kodyRules.interface';
+import { IKodyRulesRepository } from './kodyRules.repository.contract';
 
 export const KODY_RULES_SERVICE_TOKEN = 'KODY_RULES_SERVICE_TOKEN';
+
+export type MemoryCreationAction = 'created' | 'updated' | 'skipped';
+
+export interface CreateOrUpdateMemoryResult {
+    rule: Partial<IKodyRule> | IKodyRule;
+    action: MemoryCreationAction;
+    requiresApproval: boolean;
+    link: string;
+}
 
 export interface IKodyRulesService extends IKodyRulesRepository {
     createOrUpdate(
@@ -78,4 +93,15 @@ export interface IKodyRulesService extends IKodyRulesRepository {
         repositoryId: string,
         repoLanguage?: string,
     ): Promise<LibraryKodyRule[]>;
+
+    createOrUpdateMemory(
+        organizationAndTeamData: OrganizationAndTeamData,
+        memory: IKodyRuleMemory,
+        userInfo?: UserInfo,
+    ): Promise<CreateOrUpdateMemoryResult | null>;
+
+    findMemories(
+        organizationAndTeamData: OrganizationAndTeamData,
+        filters?: FindMemoriesFilters,
+    ): Promise<FindMemoriesResult[]>;
 }

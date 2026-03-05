@@ -38,8 +38,8 @@ export const ShowStatusFeedback = () => {
 
                             <p className="text-text-secondary text-sm">
                                 If enabled, Kody shows status feedback (emoji
-                                reaction or comment) when a review is skipped
-                                or blocked.
+                                reaction or comment) when a review is skipped or
+                                blocked.
                             </p>
                         </div>
 

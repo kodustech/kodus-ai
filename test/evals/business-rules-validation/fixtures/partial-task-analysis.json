@@ -1,0 +1,28 @@
+{
+  "name": "partial-task-analysis",
+  "input": {
+    "pullRequestNumber": 300,
+    "prBody": "Implements onboarding changes for APP-456",
+    "prDiff": "diff --git a/src/onboarding.ts b/src/onboarding.ts\n+ export function startOnboarding() {\n+   return true;\n+ }",
+    "taskContext": {
+      "id": "APP-456",
+      "title": "Improve onboarding flow",
+      "description": "Refine onboarding behavior for first-time users"
+    }
+  },
+  "expectedTrajectory": [
+    { "capability": "pr.metadata.read", "status": "success" },
+    { "capability": "pr.diff.read", "status": "success" },
+    { "capability": "task.context.read", "status": "success" },
+    { "step": "classifyTaskContext", "output": { "taskQuality": "PARTIAL" } },
+    { "step": "validateContext", "passed": true },
+    { "step": "analyzeBusinessRules", "status": "success" }
+  ],
+  "expectedOutcome": {
+    "needsMoreInfo": false,
+    "mode": "full_analysis",
+    "reason": "analysis_ready",
+    "resolvedTaskContextContains": ["APP-456", "onboarding"],
+    "summaryContains": ["Validation summary"]
+  }
+}

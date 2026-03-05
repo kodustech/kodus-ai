@@ -20,7 +20,11 @@ import { ssoCheck, ssoLogin } from "src/lib/auth/fetchers";
 import { z } from "zod";
 
 const signInFormSchema = z.object({
-    email: z.string().email({ message: "Please use a valid email address" }),
+    email: z.string().trim().pipe(
+        z.email({
+            error: "Please use a valid email address",
+        }),
+    ),
     password: z.string(),
 });
 

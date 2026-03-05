@@ -1,14 +1,7 @@
 "use client";
 
-import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { Card, CardHeader } from "@components/ui/card";
-import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleIndicator,
-    CollapsibleTrigger,
-} from "@components/ui/collapsible";
 import { InlineCode } from "@components/ui/inline-code";
 import { Link } from "@components/ui/link";
 import { magicModal } from "@components/ui/magic-modal";
@@ -25,7 +18,6 @@ import { createOrUpdateCodeReviewParameter } from "@services/parameters/fetch";
 import { ParametersConfigKey } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { SettingsIcon } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
 import { useCodeReviewConfig } from "../../../_components/context";
@@ -37,7 +29,7 @@ export const GenerateRulesOptions = () => {
     const config = useCodeReviewConfig();
     const { teamId } = useSelectedTeamId();
     const { repositoryId } = useCodeReviewRouteParams();
-    const { resetQueries, invalidateQueries, generateQueryKey } =
+    const { invalidateQueries, generateQueryKey } =
         useReactQueryInvalidateQueries();
     const syncStatus = useSuspenseKodyRulesCheckSyncStatus({
         teamId,
@@ -63,7 +55,7 @@ export const GenerateRulesOptions = () => {
                 repositoryId,
             );
 
-            resetQueries({
+            invalidateQueries({
                 queryKey: generateQueryKey(PARAMETERS_PATHS.GET_BY_KEY, {
                     params: {
                         key: ParametersConfigKey.CODE_REVIEW_CONFIG,
@@ -78,7 +70,7 @@ export const GenerateRulesOptions = () => {
                 }),
             });
 
-            resetQueries({
+            invalidateQueries({
                 queryKey: generateQueryKey(
                     PARAMETERS_PATHS.GET_CODE_REVIEW_PARAMETER,
                     {
@@ -97,7 +89,7 @@ export const GenerateRulesOptions = () => {
                 if (response) {
                     generateKodyRules(teamId);
 
-                    resetQueries({
+                    invalidateQueries({
                         queryKey: generateQueryKey(
                             PARAMETERS_PATHS.GET_BY_KEY,
                             {
@@ -135,7 +127,7 @@ export const GenerateRulesOptions = () => {
                     repositoryId,
                 );
 
-                resetQueries({
+                invalidateQueries({
                     queryKey: generateQueryKey(PARAMETERS_PATHS.GET_BY_KEY, {
                         params: {
                             key: ParametersConfigKey.CODE_REVIEW_CONFIG,
@@ -151,7 +143,7 @@ export const GenerateRulesOptions = () => {
                     ),
                 });
 
-                resetQueries({
+                invalidateQueries({
                     queryKey: generateQueryKey(
                         PARAMETERS_PATHS.GET_CODE_REVIEW_PARAMETER,
                         {
@@ -187,120 +179,89 @@ export const GenerateRulesOptions = () => {
     ].filter(Boolean).length;
 
     return (
-        <Collapsible>
-            <CollapsibleTrigger asChild>
-                <Button
-                    size="lg"
-                    variant="helper"
-                    className="h-15 w-full"
-                    leftIcon={<SettingsIcon />}
-                    rightIcon={
-                        <div className="flex flex-1 justify-end">
-                            <CollapsibleIndicator />
+        <div className="flex flex-col gap-2">
+            <Button
+                size="lg"
+                variant="helper"
+                className="w-full justify-between p-0"
+                disabled={!canEdit}
+                onClick={() => handleIDESyncToggle()}>
+                <Card color="none" className="w-full">
+                    <CardHeader>
+                        <div className="flex items-center justify-between gap-20">
+                            <Section.Root>
+                                <Section.Header>
+                                    <Section.Title>
+                                        Auto-sync rules from repo
+                                    </Section.Title>
+                                </Section.Header>
+
+                                <Section.Content>
+                                    <Section.Description>
+                                        When enabled, Kody will automatically
+                                        import rule files{" "}
+                                        <InlineCode className="bg-card-lv1">
+                                            (.cursorrules, CLAUDE.md, etc...)
+                                        </InlineCode>{" "}
+                                        found in this repository and keep them
+                                        in sync.
+                                    </Section.Description>
+                                </Section.Content>
+                            </Section.Root>
+
+                            <Switch
+                                decorative
+                                loading={isLoadingIDESyncToggle}
+                                checked={config?.ideRulesSyncEnabled?.value}
+                            />
                         </div>
-                    }>
-                    Sync & Generate Rules
-                    {enabledCount > 0 && (
-                        <Badge active size="xs" variant="helper">
-                            {enabledCount} enabled
-                        </Badge>
-                    )}
-                </Button>
-            </CollapsibleTrigger>
-
-            <CollapsibleContent className="pb-0">
-                <Card color="lv1" className="mt-1 gap-2 p-3">
-                    <Button
-                        size="lg"
-                        variant="helper"
-                        className="w-full justify-between p-0"
-                        disabled={!canEdit}
-                        onClick={() => handleIDESyncToggle()}>
-                        <Card color="none" className="w-full">
-                            <CardHeader>
-                                <div className="flex items-center justify-between gap-20">
-                                    <Section.Root>
-                                        <Section.Header>
-                                            <Section.Title>
-                                                Auto-sync rules from repo
-                                            </Section.Title>
-                                        </Section.Header>
-
-                                        <Section.Content>
-                                            <Section.Description>
-                                                When enabled, Kody will
-                                                automatically import rule files{" "}
-                                                <InlineCode className="bg-card-lv1">
-                                                    (.cursorrules, CLAUDE.md,
-                                                    etc...)
-                                                </InlineCode>{" "}
-                                                found in this repository and
-                                                keep them in sync.
-                                            </Section.Description>
-                                        </Section.Content>
-                                    </Section.Root>
-
-                                    <Switch
-                                        decorative
-                                        loading={isLoadingIDESyncToggle}
-                                        checked={
-                                            config?.ideRulesSyncEnabled?.value
-                                        }
-                                    />
-                                </div>
-                            </CardHeader>
-                        </Card>
-                    </Button>
-
-                    <span className="text-text-secondary -mt-1 mb-2 ml-2 text-xs">
-                        <span>
-                            For a detailed list of rule files that can be
-                            scanned,{" "}
-                        </span>
-                        <Link href={process.env.WEB_RULE_FILES_DOCS ?? ""}>
-                            check the docs
-                        </Link>
-                        .
-                    </span>
-
-                    <Button
-                        size="lg"
-                        variant="helper"
-                        className="w-full justify-between p-0"
-                        disabled={!canEdit}
-                        onClick={() => handleGenerateFromPastReviewsToggle()}>
-                        <Card color="none" className="w-full">
-                            <CardHeader>
-                                <div className="flex items-center justify-between gap-20">
-                                    <Section.Root>
-                                        <Section.Header>
-                                            <Section.Title>
-                                                Generate from past reviews
-                                            </Section.Title>
-                                        </Section.Header>
-
-                                        <Section.Content className="text-text-secondary text-sm font-normal">
-                                            Kody will analyse closed PRs and
-                                            suggest rules automatically.
-                                        </Section.Content>
-                                    </Section.Root>
-
-                                    <Switch
-                                        decorative
-                                        loading={
-                                            isLoadingGenerateFromPastReviewsToggle
-                                        }
-                                        checked={
-                                            config?.kodyRulesGeneratorEnabled
-                                                ?.value
-                                        }
-                                    />
-                                </div>
-                            </CardHeader>
-                        </Card>
-                    </Button>
+                    </CardHeader>
                 </Card>
-            </CollapsibleContent>
-        </Collapsible>
+            </Button>
+
+            <span className="text-text-secondary -mt-1 mb-2 ml-2 text-xs">
+                <span>
+                    For a detailed list of rule files that can be scanned,{" "}
+                </span>
+                <Link href={process.env.WEB_RULE_FILES_DOCS ?? ""}>
+                    check the docs
+                </Link>
+                .
+            </span>
+
+            <Button
+                size="lg"
+                variant="helper"
+                className="w-full justify-between p-0"
+                disabled={!canEdit}
+                onClick={() => handleGenerateFromPastReviewsToggle()}>
+                <Card color="none" className="w-full">
+                    <CardHeader>
+                        <div className="flex items-center justify-between gap-20">
+                            <Section.Root>
+                                <Section.Header>
+                                    <Section.Title>
+                                        Generate from past reviews
+                                    </Section.Title>
+                                </Section.Header>
+
+                                <Section.Content className="text-text-secondary text-sm font-normal">
+                                    Kody will analyse closed PRs and suggest
+                                    rules automatically.
+                                </Section.Content>
+                            </Section.Root>
+
+                            <Switch
+                                decorative
+                                loading={isLoadingGenerateFromPastReviewsToggle}
+                                checked={
+                                    config?.kodyRulesGeneratorEnabled?.value
+                                }
+                            />
+                        </div>
+                    </CardHeader>
+                </Card>
+            </Button>
+        </div>
     );
 };

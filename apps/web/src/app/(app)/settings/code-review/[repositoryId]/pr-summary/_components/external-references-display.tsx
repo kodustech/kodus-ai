@@ -1,19 +1,13 @@
 "use client";
 
+import React from "react";
 import { Badge } from "@components/ui/badge";
-import { 
+import {
     Tooltip,
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
-import { 
-    AlertTriangle,
-    CheckCircle, 
-    Clock,
-    Info,
-    XCircle
-} from "lucide-react";
-import React from "react";
+import { AlertTriangle, CheckCircle, Clock, Info, XCircle } from "lucide-react";
 
 export interface ExternalReferencesData {
     references: Array<{
@@ -22,19 +16,22 @@ export interface ExternalReferencesData {
         originalText?: string;
         lineRange?: { start: number; end: number } | null;
     }>;
-    syncErrors: Array<string | {
-        fileName?: string;
-        message?: string;
-        errorType?: string;
-        attemptedPaths?: string[];
-        timestamp?: string;
-    }>;
+    syncErrors: Array<
+        | string
+        | {
+              fileName?: string;
+              message?: string;
+              errorType?: string;
+              attemptedPaths?: string[];
+              timestamp?: string;
+          }
+    >;
     processingStatus: "completed" | "processing" | "failed" | "pending";
 }
 
 export const useHighlightReferences = (
     text: string,
-    references: ExternalReferencesData["references"]
+    references: ExternalReferencesData["references"],
 ) => {
     const getHighlightedParts = React.useMemo(() => {
         if (!text || references.length === 0) {
@@ -49,9 +46,12 @@ export const useHighlightReferences = (
 
         references.forEach((ref) => {
             const patternText = ref.originalText || ref.filePath;
-            const escapedPatternText = patternText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const pattern = new RegExp(escapedPatternText, 'gi');
-            
+            const escapedPatternText = patternText.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&",
+            );
+            const pattern = new RegExp(escapedPatternText, "gi");
+
             let match;
             while ((match = pattern.exec(text)) !== null) {
                 allMatches.push({
@@ -67,13 +67,16 @@ export const useHighlightReferences = (
         const parts = [];
         let lastIndex = 0;
 
-        allMatches.forEach(match => {
+        allMatches.forEach((match) => {
             if (match.start > lastIndex) {
-                parts.push({ type: 'text', content: text.slice(lastIndex, match.start) });
+                parts.push({
+                    type: "text",
+                    content: text.slice(lastIndex, match.start),
+                });
             }
             if (match.start >= lastIndex) {
                 parts.push({
-                    type: 'reference',
+                    type: "reference",
                     content: text.slice(match.start, match.end),
                     filePath: match.ref.filePath,
                     repositoryName: match.ref.repositoryName,
@@ -83,7 +86,7 @@ export const useHighlightReferences = (
         });
 
         if (lastIndex < text.length) {
-            parts.push({ type: 'text', content: text.slice(lastIndex) });
+            parts.push({ type: "text", content: text.slice(lastIndex) });
         }
 
         return parts.length > 0 ? parts : null;
@@ -98,10 +101,10 @@ interface ExternalReferencesDisplayProps {
     compact?: boolean;
 }
 
-export function ExternalReferencesDisplay({ 
+export function ExternalReferencesDisplay({
     externalReferences,
     onProcessingChange,
-    compact = false
+    compact = false,
 }: ExternalReferencesDisplayProps) {
     if (!externalReferences) {
         return null;
@@ -110,7 +113,9 @@ export function ExternalReferencesDisplay({
     const { references, syncErrors, processingStatus } = externalReferences;
 
     React.useEffect(() => {
-        onProcessingChange?.(processingStatus === "processing" || processingStatus === "pending");
+        onProcessingChange?.(
+            processingStatus === "processing" || processingStatus === "pending",
+        );
     }, [processingStatus, onProcessingChange]);
 
     const getStatusIcon = (status: string) => {
@@ -118,11 +123,15 @@ export function ExternalReferencesDisplay({
             case "completed":
                 return <CheckCircle className="h-3.5 w-3.5 text-green-500" />;
             case "processing":
-                return <Clock className="h-3.5 w-3.5 text-blue-500 animate-spin" />;
+                return (
+                    <Clock className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                );
             case "failed":
                 return <XCircle className="h-3.5 w-3.5 text-red-500" />;
             case "pending":
-                return <Clock className="h-3.5 w-3.5 text-yellow-500 animate-spin" />;
+                return (
+                    <Clock className="h-3.5 w-3.5 animate-spin text-yellow-500" />
+                );
             default:
                 return <Info className="h-3.5 w-3.5 text-gray-500" />;
         }
@@ -130,29 +139,35 @@ export function ExternalReferencesDisplay({
 
     const hasErrors = syncErrors.length > 0;
     const hasReferences = references.length > 0;
-    const isProcessingStatus = processingStatus === "processing" || processingStatus === "pending";
+    const isProcessingStatus =
+        processingStatus === "processing" || processingStatus === "pending";
 
     if (!hasReferences && !hasErrors && !isProcessingStatus) {
         return null;
     }
 
     const getErrorMessage = (error: any) => {
-        if (typeof error === 'string') {
+        if (typeof error === "string") {
             return error;
         }
-        if (error && typeof error === 'object') {
-            const fileName = error.fileName || 'Unknown file';
-            const message = error.message || error.details || 'Unknown error';
-            const errorType = error.errorType ? ` (${error.errorType})` : '';
+        if (error && typeof error === "object") {
+            const fileName = error.fileName || "Unknown file";
+            const message = error.message || error.details || "Unknown error";
+            const errorType = error.errorType ? ` (${error.errorType})` : "";
             return `${fileName}: ${message}${errorType}`;
         }
         return String(error);
     };
 
     return (
-        <div className={compact ? "mt-1.5 flex flex-col gap-0.5" : "flex items-center gap-1 flex-wrap"}>
+        <div
+            className={
+                compact
+                    ? "mt-1.5 flex flex-col gap-0.5"
+                    : "flex flex-wrap items-center gap-1"
+            }>
             {isProcessingStatus && !hasReferences && !hasErrors && (
-                <div className="flex items-center gap-1 text-xs text-text-secondary">
+                <div className="text-text-secondary flex items-center gap-1 text-xs">
                     {getStatusIcon(processingStatus)}
                     <span>Processing references...</span>
                 </div>
@@ -161,10 +176,12 @@ export function ExternalReferencesDisplay({
             {hasReferences && compact ? (
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <div className="flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary cursor-help transition-colors">
+                        <div className="text-text-secondary hover:text-text-primary flex cursor-help items-center gap-1 text-xs transition-colors">
                             <CheckCircle className="h-3 w-3 text-green-500" />
                             <span>
-                                Found {references.length} reference{references.length > 1 ? 's' : ''}: {references.map(r => r.filePath).join(', ')}
+                                Found {references.length} reference
+                                {references.length > 1 ? "s" : ""}:{" "}
+                                {references.map((r) => r.filePath).join(", ")}
                             </span>
                         </div>
                     </TooltipTrigger>
@@ -172,11 +189,16 @@ export function ExternalReferencesDisplay({
                         <div className="space-y-1.5">
                             {references.map((ref, idx) => (
                                 <div key={idx} className="text-xs">
-                                    <p className="font-medium">{ref.filePath}</p>
-                                    <p className="text-text-secondary">{ref.repositoryName}</p>
+                                    <p className="font-medium">
+                                        {ref.filePath}
+                                    </p>
+                                    <p className="text-text-secondary">
+                                        {ref.repositoryName}
+                                    </p>
                                     {ref.lineRange && (
                                         <p className="text-text-secondary text-[10px]">
-                                            Lines {ref.lineRange.start}-{ref.lineRange.end}
+                                            Lines {ref.lineRange.start}-
+                                            {ref.lineRange.end}
                                         </p>
                                     )}
                                 </div>
@@ -187,26 +209,28 @@ export function ExternalReferencesDisplay({
             ) : !compact && hasReferences ? (
                 <div className="flex items-center gap-1 text-xs">
                     {getStatusIcon(processingStatus)}
-                    <div className="flex gap-1 flex-wrap">
+                    <div className="flex flex-wrap gap-1">
                         {references.map((ref, idx) => (
                             <Tooltip key={idx}>
                                 <TooltipTrigger asChild>
                                     <button
                                         type="button"
-                                        className="text-xs py-0 px-1.5 cursor-help rounded-md border bg-secondary text-secondary-foreground hover:opacity-80 transition-opacity inline-flex items-center"
-                                    >
+                                        className="bg-secondary text-secondary-foreground inline-flex cursor-help items-center rounded-md border px-1.5 py-0 text-xs transition-opacity hover:opacity-80">
                                         {ref.filePath}
                                     </button>
                                 </TooltipTrigger>
                                 <TooltipContent>
                                     <div className="flex flex-col gap-0.5">
-                                        <p className="font-medium">{ref.filePath}</p>
-                                        <p className="text-xs text-text-secondary">
+                                        <p className="font-medium">
+                                            {ref.filePath}
+                                        </p>
+                                        <p className="text-text-secondary text-xs">
                                             {ref.repositoryName}
                                         </p>
                                         {ref.lineRange && (
                                             <p className="text-text-secondary text-[10px]">
-                                                Lines {ref.lineRange.start}-{ref.lineRange.end}
+                                                Lines {ref.lineRange.start}-
+                                                {ref.lineRange.end}
                                             </p>
                                         )}
                                     </div>
@@ -220,29 +244,45 @@ export function ExternalReferencesDisplay({
             {hasErrors && (
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <div className="flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary cursor-help transition-colors">
+                        <div className="text-text-secondary hover:text-text-primary flex cursor-help items-center gap-1 text-xs transition-colors">
                             <AlertTriangle className="h-3 w-3 text-orange-500" />
-                            <span>{syncErrors.length} sync error{syncErrors.length > 1 ? 's' : ''}</span>
+                            <span>
+                                {syncErrors.length} sync error
+                                {syncErrors.length > 1 ? "s" : ""}
+                            </span>
                         </div>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="max-w-md">
                         <div className="space-y-2">
                             <p className="text-xs font-medium">Sync Errors:</p>
                             {syncErrors.slice(0, 3).map((error, idx) => {
-                                const isObject = typeof error === 'object' && error !== null;
+                                const isObject =
+                                    typeof error === "object" && error !== null;
                                 return (
-                                    <div key={idx} className="text-xs space-y-0.5">
-                                        <p className="font-medium text-text-primary">{getErrorMessage(error)}</p>
-                                        {isObject && (error as any).attemptedPaths && (error as any).attemptedPaths.length > 0 && (
-                                            <p className="text-text-secondary text-[10px]">
-                                                Attempted: {(error as any).attemptedPaths.join(', ')}
-                                            </p>
-                                        )}
+                                    <div
+                                        key={idx}
+                                        className="space-y-0.5 text-xs">
+                                        <p className="text-text-primary font-medium">
+                                            {getErrorMessage(error)}
+                                        </p>
+                                        {isObject &&
+                                            (error as any).attemptedPaths &&
+                                            (error as any).attemptedPaths
+                                                .length > 0 && (
+                                                <p className="text-text-secondary text-[10px]">
+                                                    Attempted:{" "}
+                                                    {(
+                                                        error as any
+                                                    ).attemptedPaths.join(", ")}
+                                                </p>
+                                            )}
                                     </div>
                                 );
                             })}
                             {syncErrors.length > 3 && (
-                                <p className="text-xs text-text-secondary italic">+{syncErrors.length - 3} more...</p>
+                                <p className="text-text-secondary text-xs italic">
+                                    +{syncErrors.length - 3} more...
+                                </p>
                             )}
                         </div>
                     </TooltipContent>

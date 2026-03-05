@@ -1,6 +1,7 @@
 "use client";
 
 import { useContext, useState } from "react";
+import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { DataTableColumnHeader } from "@components/ui/data-table";
 import {
@@ -10,7 +11,6 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@components/ui/dropdown-menu";
-import { Badge } from "@components/ui/badge";
 import { magicModal } from "@components/ui/magic-modal";
 import {
     Select,

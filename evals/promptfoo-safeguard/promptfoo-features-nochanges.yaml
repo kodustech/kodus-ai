@@ -1,0 +1,11 @@
+description: "Feature extraction + triage pipeline — no_changes dataset"
+providers:
+  - id: google:gemini-2.5-pro
+    config:
+      temperature: 0
+      maxOutputTokens: 16384
+      apiKey: ${GOOGLE_API_KEY}
+prompts:
+  - file://prompt-loader-C.js
+tests: file://datasets/safeguard-features-tests.json
+outputPath: ./results/features-nochanges-output.json

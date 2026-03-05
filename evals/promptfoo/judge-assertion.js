@@ -189,10 +189,13 @@ module.exports = async (output, context) => {
         gptReason = 'JUDGE_ERROR: ' + gptResult.reason.message;
     }
 
-    // Combined score (missing/NaN judge = 0 to prevent inflation)
-    const sScore = sonnetScores.final !== null && !isNaN(sonnetScores.final) ? sonnetScores.final : 0;
-    const gScore = gptScores.final !== null && !isNaN(gptScores.final) ? gptScores.final : 0;
-    const combined = (sScore + gScore) / 2;
+    // Combined score — average only available judges (skip missing ones)
+    const sScore = sonnetScores.final !== null && !isNaN(sonnetScores.final) ? sonnetScores.final : null;
+    const gScore = gptScores.final !== null && !isNaN(gptScores.final) ? gptScores.final : null;
+    const availableScores = [sScore, gScore].filter(s => s !== null);
+    const combined = availableScores.length > 0
+        ? availableScores.reduce((a, b) => a + b, 0) / availableScores.length
+        : 0;
 
     // Build structured reason for analyze-results.js
     const fmt = v => v !== null && !isNaN(v) ? v.toFixed(4) : 'null';

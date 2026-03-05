@@ -9,13 +9,15 @@ import { Button } from "@components/ui/button";
 import { FormControl } from "@components/ui/form-control";
 import { Heading } from "@components/ui/heading";
 import { Page } from "@components/ui/page";
-import { ToggleGroup } from "@components/ui/toggle-group";
 import { toast } from "@components/ui/toaster/use-toast";
+import { ToggleGroup } from "@components/ui/toggle-group";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { createOrUpdateRepositories } from "@services/codeManagement/fetch";
 import { useGetRepositories } from "@services/codeManagement/hooks";
-import type { Repository } from "@services/codeManagement/types";
-import { CODE_MANAGEMENT_API_PATHS } from "@services/codeManagement/types";
+import {
+    CODE_MANAGEMENT_API_PATHS,
+    type Repository,
+} from "@services/codeManagement/types";
 import { fastSyncIDERules } from "@services/kodyRules/fetch";
 import { updateAutoLicenseAllowedUsers } from "@services/organizationParameters/fetch";
 import {
@@ -38,8 +40,8 @@ import {
 import { useAuth } from "src/core/providers/auth.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { generateQueryKey } from "src/core/utils/reactQuery";
-import { captureSegmentEvent } from "src/core/utils/segment";
 import { safeArray } from "src/core/utils/safe-array";
+import { captureSegmentEvent } from "src/core/utils/segment";
 import { pluralize } from "src/core/utils/string";
 
 import { StepIndicators } from "../_components/step-indicators";
@@ -328,7 +330,7 @@ export default function App() {
 
                                         {selectedRepositories.length > 0 &&
                                             staleRepositories.length ===
-                                            selectedRepositories.length && (
+                                                selectedRepositories.length && (
                                                 <Alert
                                                     variant="alert"
                                                     className="border-alert/30 bg-alert/10 mt-3">

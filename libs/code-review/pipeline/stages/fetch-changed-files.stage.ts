@@ -61,7 +61,9 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
 
         // Reutilizar arquivos do ResolveConfigStage se disponíveis, caso contrário buscar
         let filesToProcess = context.preliminaryFiles;
-        const forceFullRerun = Boolean(context.pipelineMetadata?.forceFullRerun);
+        const forceFullRerun = Boolean(
+            context.pipelineMetadata?.forceFullRerun,
+        );
         const baseCommit = forceFullRerun
             ? undefined
             : context?.lastExecution?.lastAnalyzedCommit;
@@ -93,8 +95,8 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
             ) || [];
         const ignoredList =
             filesToProcess?.filter((file) =>
-            isFileMatchingGlob(file.filename, ignorePaths),
-        ) || [];
+                isFileMatchingGlob(file.filename, ignorePaths),
+            ) || [];
         const filesToAnalyze = filteredFiles;
 
         const validation = this.validateFiles(

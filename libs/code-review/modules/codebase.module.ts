@@ -37,6 +37,10 @@ import {
     COLLECT_CROSS_FILE_CONTEXTS_SERVICE_TOKEN,
     CollectCrossFileContextsService,
 } from '../infrastructure/adapters/services/collectCrossFileContexts.service';
+import {
+    CODEBASE_SEARCH_SERVICE_TOKEN,
+    CodebaseSearchService,
+} from '../infrastructure/adapters/services/codebaseSearch.service';
 import { E2BSandboxService } from '../infrastructure/adapters/services/e2bSandbox.service';
 import {
     CROSS_FILE_ANALYSIS_SERVICE_TOKEN,
@@ -120,6 +124,10 @@ import { GlobalCacheModule } from '@libs/core/cache/cache.module';
         {
             provide: COLLECT_CROSS_FILE_CONTEXTS_SERVICE_TOKEN,
             useClass: CollectCrossFileContextsService,
+        },
+        {
+            provide: CODEBASE_SEARCH_SERVICE_TOKEN,
+            useClass: CodebaseSearchService,
         },
         {
             provide: CROSS_FILE_ANALYSIS_SERVICE_TOKEN,

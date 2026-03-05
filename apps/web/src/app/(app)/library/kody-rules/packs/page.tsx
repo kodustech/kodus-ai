@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
-import { getLibraryKodyRulesWithFeedback, getLibraryKodyRulesBuckets } from "@services/kodyRules/fetch";
+import {
+    getLibraryKodyRulesBuckets,
+    getLibraryKodyRulesWithFeedback,
+} from "@services/kodyRules/fetch";
 
 import { KodyRulesPacksExplorer } from "./_components/_page";
 
@@ -15,14 +18,15 @@ export default async function Route() {
     ]);
 
     // Get sample rules for each bucket (rulesCount already comes from API)
-    const bucketsWithStats = buckets.map(bucket => {
-        const rulesInBucket = rulesResponse?.data?.filter(rule => 
-            rule.buckets?.includes(bucket.slug)
-        ) || [];
-        
+    const bucketsWithStats = buckets.map((bucket) => {
+        const rulesInBucket =
+            rulesResponse?.data?.filter((rule) =>
+                rule.buckets?.includes(bucket.slug),
+            ) || [];
+
         return {
             ...bucket,
-            sampleRules: rulesInBucket.slice(0, 2) // Get first 2 rules as samples
+            sampleRules: rulesInBucket.slice(0, 2), // Get first 2 rules as samples
         };
     });
 

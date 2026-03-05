@@ -1,0 +1,15 @@
+description: "Cross-File Context Planner - Search Query Generation Eval"
+
+providers:
+  - id: google:gemini-3-flash-preview
+    config:
+      temperature: 0
+      maxOutputTokens: 16384
+      response_mime_type: application/json
+
+prompts:
+  - file://planner-prompt-loader.js
+
+tests: file://datasets/planner-tests.json
+
+outputPath: ./results/planner-output.json

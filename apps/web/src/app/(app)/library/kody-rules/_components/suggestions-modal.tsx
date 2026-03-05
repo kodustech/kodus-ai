@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import {
     Dialog,
@@ -10,18 +11,29 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@components/ui/dialog";
-import { SyntaxHighlight } from "@components/ui/syntax-highlight";
-import { Badge } from "@components/ui/badge";
+import { Link } from "@components/ui/link";
 import { Separator } from "@components/ui/separator";
+import { Spinner } from "@components/ui/spinner";
+import { SyntaxHighlight } from "@components/ui/syntax-highlight";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@components/ui/tooltip";
 import { getKodyRuleSuggestions } from "@services/kodyRules/fetch";
 import type { KodyRuleSuggestion } from "@services/kodyRules/types";
 import { useQuery } from "@tanstack/react-query";
-import { MessageSquare, GitPullRequest, ExternalLink, Maximize2, Minimize2, AlertCircle, RefreshCw } from "lucide-react";
+import {
+    AlertCircle,
+    ExternalLink,
+    GitPullRequest,
+    Maximize2,
+    MessageSquare,
+    Minimize2,
+    RefreshCw,
+} from "lucide-react";
 import { cn } from "src/core/utils/components";
 import { safeArray } from "src/core/utils/safe-array";
-import { Spinner } from "@components/ui/spinner";
-import { Link } from "@components/ui/link";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@components/ui/tooltip";
 
 type SuggestionsModalProps = {
     ruleId: string;
@@ -49,7 +61,9 @@ const buildExternalPullRequestUrl = ({
         // GitHub: api.github.com for API, github.com for web
         if (hostname === "github.com" || hostname === "api.github.com") {
             if (hostname === "api.github.com") {
-                const apiMatch = url.pathname.match(/\/repos\/([^/]+)\/([^/]+)\/pulls/);
+                const apiMatch = url.pathname.match(
+                    /\/repos\/([^/]+)\/([^/]+)\/pulls/,
+                );
                 if (apiMatch) {
                     const [, owner, repo] = apiMatch;
                     return `https://github.com/${owner}/${repo}/pull/${prNumber}`;
@@ -76,7 +90,9 @@ const buildExternalPullRequestUrl = ({
         // Bitbucket: api.bitbucket.org for API, bitbucket.org for web
         if (hostname === "bitbucket.org" || hostname === "api.bitbucket.org") {
             if (hostname === "api.bitbucket.org") {
-                const apiMatch = url.pathname.match(/\/2\.0\/repositories\/([^/]+)\/([^/]+)/);
+                const apiMatch = url.pathname.match(
+                    /\/2\.0\/repositories\/([^/]+)\/([^/]+)/,
+                );
                 if (apiMatch) {
                     const [, workspace, repo] = apiMatch;
                     return `https://bitbucket.org/${workspace}/${repo}/pull-requests/${prNumber}`;
@@ -95,7 +111,9 @@ const buildExternalPullRequestUrl = ({
                 return prUrl;
             }
 
-            const pathMatch = url.pathname.match(/^\/([^/]+)\/([^/]+)\/_apis\//);
+            const pathMatch = url.pathname.match(
+                /^\/([^/]+)\/([^/]+)\/_apis\//,
+            );
             const repositoryName = repositoryFullName?.split("/").pop();
             if (pathMatch && repositoryName) {
                 const [, organization, project] = pathMatch;
@@ -113,36 +131,53 @@ const buildExternalPullRequestUrl = ({
     return `#pr-${prNumber}`;
 };
 
-export const SuggestionsModal = ({ ruleId, ruleTitle, variant = "default" }: SuggestionsModalProps) => {
+export const SuggestionsModal = ({
+    ruleId,
+    ruleTitle,
+    variant = "default",
+}: SuggestionsModalProps) => {
     const [open, setOpen] = useState(false);
-    const [viewMode, setViewMode] = useState<"detailed" | "minimal">("detailed");
+    const [viewMode, setViewMode] = useState<"detailed" | "minimal">(
+        "detailed",
+    );
 
-    const { data: suggestions = [], isLoading, isError, refetch } = useQuery<KodyRuleSuggestion[]>({
+    const {
+        data: suggestions = [],
+        isLoading,
+        isError,
+        refetch,
+    } = useQuery<KodyRuleSuggestion[]>({
         queryKey: ["kody-rule-suggestions", ruleId],
         queryFn: () => getKodyRuleSuggestions(ruleId),
         enabled: open,
     });
 
-    const groupedByPR = safeArray<KodyRuleSuggestion>(suggestions).reduce((acc, suggestion) => {
-        const key = `${suggestion.prNumber}-${suggestion.prTitle}`;
-        if (!acc[key]) {
-            acc[key] = {
-                prNumber: suggestion.prNumber,
-                prTitle: suggestion.prTitle,
-                prUrl: suggestion.prUrl,
-                repositoryFullName: suggestion.repositoryFullName,
-                suggestions: [],
-            };
-        }
-        acc[key].suggestions.push(suggestion);
-        return acc;
-    }, {} as Record<string, {
-        prNumber: number;
-        prTitle: string;
-        prUrl: string;
-        repositoryFullName: string;
-        suggestions: KodyRuleSuggestion[];
-    }>);
+    const groupedByPR = safeArray<KodyRuleSuggestion>(suggestions).reduce(
+        (acc, suggestion) => {
+            const key = `${suggestion.prNumber}-${suggestion.prTitle}`;
+            if (!acc[key]) {
+                acc[key] = {
+                    prNumber: suggestion.prNumber,
+                    prTitle: suggestion.prTitle,
+                    prUrl: suggestion.prUrl,
+                    repositoryFullName: suggestion.repositoryFullName,
+                    suggestions: [],
+                };
+            }
+            acc[key].suggestions.push(suggestion);
+            return acc;
+        },
+        {} as Record<
+            string,
+            {
+                prNumber: number;
+                prTitle: string;
+                prUrl: string;
+                repositoryFullName: string;
+                suggestions: KodyRuleSuggestion[];
+            }
+        >,
+    );
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -171,13 +206,16 @@ export const SuggestionsModal = ({ ruleId, ruleTitle, variant = "default" }: Sug
                     <p>View suggestions sent in PRs</p>
                 </TooltipContent>
             </Tooltip>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col overflow-hidden">
                 <DialogHeader>
                     <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
-                            <DialogTitle>Suggestions for {ruleTitle}</DialogTitle>
+                            <DialogTitle>
+                                Suggestions for {ruleTitle}
+                            </DialogTitle>
                             <DialogDescription>
-                                View all code suggestions sent for this rule across your pull requests
+                                View all code suggestions sent for this rule
+                                across your pull requests
                             </DialogDescription>
                         </div>
                         <Tooltip delayDuration={300}>
@@ -185,13 +223,27 @@ export const SuggestionsModal = ({ ruleId, ruleTitle, variant = "default" }: Sug
                                 <Button
                                     size="icon-sm"
                                     variant="cancel"
-                                    onClick={() => setViewMode(viewMode === "detailed" ? "minimal" : "detailed")}
+                                    onClick={() =>
+                                        setViewMode(
+                                            viewMode === "detailed"
+                                                ? "minimal"
+                                                : "detailed",
+                                        )
+                                    }
                                     className="shrink-0">
-                                    {viewMode === "detailed" ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+                                    {viewMode === "detailed" ? (
+                                        <Minimize2 className="size-4" />
+                                    ) : (
+                                        <Maximize2 className="size-4" />
+                                    )}
                                 </Button>
                             </TooltipTrigger>
                             <TooltipContent className="z-[100]">
-                                <p>{viewMode === "detailed" ? "Switch to minimal view" : "Switch to detailed view"}</p>
+                                <p>
+                                    {viewMode === "detailed"
+                                        ? "Switch to minimal view"
+                                        : "Switch to detailed view"}
+                                </p>
                             </TooltipContent>
                         </Tooltip>
                     </div>
@@ -203,8 +255,8 @@ export const SuggestionsModal = ({ ruleId, ruleTitle, variant = "default" }: Sug
                             <Spinner className="size-6" />
                         </div>
                     ) : isError ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-center gap-4">
-                            <AlertCircle className="size-12 text-danger" />
+                        <div className="flex flex-col items-center justify-center gap-4 py-12 text-center">
+                            <AlertCircle className="text-danger size-12" />
                             <p className="text-text-secondary text-sm">
                                 Failed to load suggestions
                             </p>
@@ -218,7 +270,7 @@ export const SuggestionsModal = ({ ruleId, ruleTitle, variant = "default" }: Sug
                         </div>
                     ) : suggestions.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 text-center">
-                            <MessageSquare className="size-12 text-text-secondary mb-4" />
+                            <MessageSquare className="text-text-secondary mb-4 size-12" />
                             <p className="text-text-secondary text-sm">
                                 No suggestions found for this rule yet
                             </p>
@@ -226,19 +278,23 @@ export const SuggestionsModal = ({ ruleId, ruleTitle, variant = "default" }: Sug
                     ) : (
                         <div className="space-y-6">
                             {Object.values(groupedByPR).map((group) => (
-                                <div key={`${group.prNumber}-${group.prTitle}`} className="border-card-lv2 border rounded-lg p-4 space-y-4">
+                                <div
+                                    key={`${group.prNumber}-${group.prTitle}`}
+                                    className="border-card-lv2 space-y-4 rounded-lg border p-4">
                                     <div className="flex items-start justify-between gap-4">
                                         <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <GitPullRequest className="size-4 text-text-secondary" />
-                                                <h3 className="font-semibold text-sm">
+                                            <div className="mb-1 flex items-center gap-2">
+                                                <GitPullRequest className="text-text-secondary size-4" />
+                                                <h3 className="text-sm font-semibold">
                                                     {group.prTitle}
                                                 </h3>
-                                                <Badge variant="secondary" className="h-2">
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="h-2">
                                                     #{group.prNumber}
                                                 </Badge>
                                             </div>
-                                            <p className="text-xs text-text-secondary">
+                                            <p className="text-text-secondary text-xs">
                                                 {group.repositoryFullName}
                                             </p>
                                         </div>
@@ -246,7 +302,8 @@ export const SuggestionsModal = ({ ruleId, ruleTitle, variant = "default" }: Sug
                                             href={buildExternalPullRequestUrl({
                                                 prUrl: group.prUrl,
                                                 prNumber: group.prNumber,
-                                                repositoryFullName: group.repositoryFullName,
+                                                repositoryFullName:
+                                                    group.repositoryFullName,
                                             })}
                                             target="_blank"
                                             rel="noopener noreferrer">
@@ -254,7 +311,9 @@ export const SuggestionsModal = ({ ruleId, ruleTitle, variant = "default" }: Sug
                                                 size="sm"
                                                 variant="cancel"
                                                 className="gap-2"
-                                                rightIcon={<ExternalLink className="size-3" />}>
+                                                rightIcon={
+                                                    <ExternalLink className="size-3" />
+                                                }>
                                                 View PR
                                             </Button>
                                         </Link>
@@ -264,55 +323,90 @@ export const SuggestionsModal = ({ ruleId, ruleTitle, variant = "default" }: Sug
 
                                     <div className="space-y-4">
                                         {group.suggestions.map((suggestion) => {
-                                            const existingCode = suggestion.existingCode?.trim();
-                                            const improvedCode = suggestion.improvedCode?.trim();
+                                            const existingCode =
+                                                suggestion.existingCode?.trim();
+                                            const improvedCode =
+                                                suggestion.improvedCode?.trim();
                                             const shouldShowDetailedView =
-                                                viewMode === "detailed" && (existingCode || improvedCode);
+                                                viewMode === "detailed" &&
+                                                (existingCode || improvedCode);
 
                                             return (
-                                                <div key={suggestion.id} className="space-y-3">
+                                                <div
+                                                    key={suggestion.id}
+                                                    className="space-y-3">
                                                     <div className="flex items-start justify-between gap-4">
                                                         <div className="flex-1">
-                                                            <Badge variant="secondary" className="h-2 font-mono text-xs mb-2">
-                                                                {suggestion.relevantFile} L{suggestion.relevantLinesStart}-
-                                                                {suggestion.relevantLinesEnd}
+                                                            <Badge
+                                                                variant="secondary"
+                                                                className="mb-2 h-2 font-mono text-xs">
+                                                                {
+                                                                    suggestion.relevantFile
+                                                                }{" "}
+                                                                L
+                                                                {
+                                                                    suggestion.relevantLinesStart
+                                                                }
+                                                                -
+                                                                {
+                                                                    suggestion.relevantLinesEnd
+                                                                }
                                                             </Badge>
                                                         </div>
                                                     </div>
 
-                                                    <p className="text-sm">{suggestion.suggestionContent}</p>
+                                                    <p className="text-sm">
+                                                        {
+                                                            suggestion.suggestionContent
+                                                        }
+                                                    </p>
 
                                                     {shouldShowDetailedView && (
                                                         <div className="space-y-3">
                                                             {existingCode && (
                                                                 <div>
-                                                                    <p className="text-xs font-semibold text-text-secondary mb-2">
-                                                                        Existing Code:
+                                                                    <p className="text-text-secondary mb-2 text-xs font-semibold">
+                                                                        Existing
+                                                                        Code:
                                                                     </p>
                                                                     <SyntaxHighlight
-                                                                        language={suggestion.language}
+                                                                        language={
+                                                                            suggestion.language
+                                                                        }
                                                                         className="text-xs">
-                                                                        {existingCode}
+                                                                        {
+                                                                            existingCode
+                                                                        }
                                                                     </SyntaxHighlight>
                                                                 </div>
                                                             )}
 
                                                             {improvedCode && (
                                                                 <div>
-                                                                    <p className="text-xs font-semibold text-text-secondary mb-2">
-                                                                        Improved Code:
+                                                                    <p className="text-text-secondary mb-2 text-xs font-semibold">
+                                                                        Improved
+                                                                        Code:
                                                                     </p>
                                                                     <SyntaxHighlight
-                                                                        language={suggestion.language}
+                                                                        language={
+                                                                            suggestion.language
+                                                                        }
                                                                         className="text-xs">
-                                                                        {improvedCode}
+                                                                        {
+                                                                            improvedCode
+                                                                        }
                                                                     </SyntaxHighlight>
                                                                 </div>
                                                             )}
                                                         </div>
                                                     )}
 
-                                                    {group.suggestions.indexOf(suggestion) < group.suggestions.length - 1 && (
+                                                    {group.suggestions.indexOf(
+                                                        suggestion,
+                                                    ) <
+                                                        group.suggestions
+                                                            .length -
+                                                            1 && (
                                                         <Separator className="!mt-4" />
                                                     )}
                                                 </div>

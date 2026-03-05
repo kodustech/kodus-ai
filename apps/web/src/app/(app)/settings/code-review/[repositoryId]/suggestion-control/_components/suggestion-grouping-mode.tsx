@@ -7,12 +7,12 @@ import { Heading } from "@components/ui/heading";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import { Controller, useFormContext } from "react-hook-form";
 
+import { OverrideIndicatorForm } from "../../../_components/override";
 import {
     GroupingModeSuggestions,
     type CodeReviewFormType,
 } from "../../../_types";
 import { CodeGroupingExampleCard } from "./code-grouping-example-card";
-import { OverrideIndicatorForm } from "../../../_components/override";
 
 const GroupingModeOptions = [
     {

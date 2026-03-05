@@ -1,4 +1,5 @@
 import { axiosAuthorized } from "src/core/utils/axios";
+
 import { TEAM_MEMBERS_PATHS } from ".";
 
 export const deleteTeamMember = async (uuid: string): Promise<any> => {

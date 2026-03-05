@@ -35,7 +35,9 @@ const LLMDecisionExtractionSchema = z.object({
 
 @Injectable()
 export class ClassifyCliSessionCaptureUseCase {
-    private readonly logger = createLogger(ClassifyCliSessionCaptureUseCase.name);
+    private readonly logger = createLogger(
+        ClassifyCliSessionCaptureUseCase.name,
+    );
 
     constructor(
         private readonly cliSessionCaptureRepository: CliSessionCaptureRepository,
@@ -125,21 +127,19 @@ export class ClassifyCliSessionCaptureUseCase {
         }
     }
 
-    private async extractWithLLM(
-        capture: {
-            summary?: string;
-            signals?: {
-                prompt?: string;
-                assistantMessage?: string;
-                modifiedFiles?: string[];
-                toolUses?: Array<{
-                    tool: string;
-                    filePath?: string;
-                    summary?: string;
-                }>;
-            };
-        },
-    ): Promise<CliSessionClassifiedDecision[]> {
+    private async extractWithLLM(capture: {
+        summary?: string;
+        signals?: {
+            prompt?: string;
+            assistantMessage?: string;
+            modifiedFiles?: string[];
+            toolUses?: Array<{
+                tool: string;
+                filePath?: string;
+                summary?: string;
+            }>;
+        };
+    }): Promise<CliSessionClassifiedDecision[]> {
         const promptRunner = new BYOKPromptRunnerService(
             this.promptRunnerService,
             LLMModelProvider.CEREBRAS_GLM_47,
@@ -283,7 +283,9 @@ export class ClassifyCliSessionCaptureUseCase {
             return 'architectural_decision';
         }
 
-        if (/(convention|style|naming|format|lint|folder structure)/.test(value)) {
+        if (
+            /(convention|style|naming|format|lint|folder structure)/.test(value)
+        ) {
             return 'convention';
         }
 

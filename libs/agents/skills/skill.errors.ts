@@ -2,8 +2,6 @@ export enum SkillErrorCode {
     SKILL_NOT_FOUND = 'SKILL_NOT_FOUND',
     MCP_REQUIRED_PRECHECK_FAILED = 'MCP_REQUIRED_PRECHECK_FAILED',
     MCP_CONNECTION_UNAVAILABLE = 'MCP_CONNECTION_UNAVAILABLE',
-    SKILL_INPUT_CONTRACT_VIOLATION = 'SKILL_INPUT_CONTRACT_VIOLATION',
-    SKILL_OUTPUT_CONTRACT_VIOLATION = 'SKILL_OUTPUT_CONTRACT_VIOLATION',
 }
 
 export abstract class SkillExecutionError extends Error {
@@ -124,31 +122,5 @@ export class RequiredMcpPreflightError extends SkillExecutionError {
         this.skillName = skillName;
         this.requiredMcps = normalizedRequiredMcps;
         this.availableProviders = availableProviders;
-    }
-}
-
-export class SkillInputContractViolationError extends SkillExecutionError {
-    constructor(skillName: string, missingFields: string[]) {
-        super({
-            code: SkillErrorCode.SKILL_INPUT_CONTRACT_VIOLATION,
-            skillName,
-            message: `Skill '${skillName}' input contract violated. Missing required context fields: ${missingFields.join(
-                ', ',
-            )}`,
-            metadata: { missingFields },
-        });
-    }
-}
-
-export class SkillOutputContractViolationError extends SkillExecutionError {
-    constructor(skillName: string, missingFields: string[]) {
-        super({
-            code: SkillErrorCode.SKILL_OUTPUT_CONTRACT_VIOLATION,
-            skillName,
-            message: `Skill '${skillName}' output contract violated. Missing required output fields: ${missingFields.join(
-                ', ',
-            )}`,
-            metadata: { missingFields },
-        });
     }
 }

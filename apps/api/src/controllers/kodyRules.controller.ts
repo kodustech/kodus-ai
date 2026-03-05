@@ -1,26 +1,47 @@
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import { AddLibraryKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/add-library-kody-rules.use-case';
+import { ApplyPendingKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/apply-pending-kody-rules.use-case';
 import { ChangeStatusKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/change-status-kody-rules.use-case';
 import { CheckSyncStatusUseCase } from '@libs/kodyRules/application/use-cases/check-sync-status.use-case';
+import { ConvertPendingUpdatesToMemoriesUseCase } from '@libs/kodyRules/application/use-cases/convert-pending-updates-to-memories.use-case';
 import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/create-or-update.use-case';
 import { DeleteRuleInOrganizationByIdKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/delete-rule-in-organization-by-id.use-case';
+import { FastSyncIdeRulesUseCase } from '@libs/kodyRules/application/use-cases/fast-sync-ide-rules.use-case';
 import { FindByOrganizationIdKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/find-by-organization-id.use-case';
 import { FindLibraryKodyRulesBucketsUseCase } from '@libs/kodyRules/application/use-cases/find-library-kody-rules-buckets.use-case';
 import { FindLibraryKodyRulesWithFeedbackUseCase } from '@libs/kodyRules/application/use-cases/find-library-kody-rules-with-feedback.use-case';
 import { FindLibraryKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/find-library-kody-rules.use-case';
+import { FindRecommendedKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/find-recommended-kody-rules.use-case';
 import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/find-rules-in-organization-by-filter.use-case';
 import { FindSuggestionsByRuleUseCase } from '@libs/kodyRules/application/use-cases/find-suggestions-by-rule.use-case';
 import { GenerateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/generate-kody-rules.use-case';
 import { GetInheritedRulesKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/get-inherited-kody-rules.use-case';
 import { GetRulesLimitStatusUseCase } from '@libs/kodyRules/application/use-cases/get-rules-limit-status.use-case';
+import { ImportFastKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/import-fast-kody-rules.use-case';
 import { ResyncRulesFromIdeUseCase } from '@libs/kodyRules/application/use-cases/resync-rules-from-ide.use-case';
 import { SyncSelectedRepositoriesKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/sync-selected-repositories.use-case';
-import { FastSyncIdeRulesUseCase } from '@libs/kodyRules/application/use-cases/fast-sync-ide-rules.use-case';
-import { ImportFastKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/import-fast-kody-rules.use-case';
 import { ImportFastKodyRulesDto } from '@libs/kodyRules/dtos/import-fast-kody-rules.dto';
 import { ReviewFastKodyRulesDto } from '../dtos/review-fast-kody-rules.dto';
-import { FindRecommendedKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/find-recommended-kody-rules.use-case';
 
+import { CacheService } from '@libs/core/cache/cache.service';
+import { CreateKodyRuleDto } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
+import {
+    Action,
+    ResourceType,
+} from '@libs/identity/domain/permissions/enums/permissions.enum';
+import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
+import {
+    CheckPolicies,
+    PolicyGuard,
+} from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
+import {
+    checkPermissions,
+    checkRepoPermissions,
+} from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
+import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { AddLibraryKodyRulesDto } from '@libs/kodyRules/dtos/add-library-kody-rules.dto';
+import { ChangeStatusKodyRulesDTO } from '@libs/kodyRules/dtos/change-status-kody-rules.dto';
+import { RuleIdsDto } from '@libs/kodyRules/dtos/rule-ids.dto';
 import {
     Body,
     Controller,
@@ -32,27 +53,6 @@ import {
     UseGuards,
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
-import { AddLibraryKodyRulesDto } from '@libs/kodyRules/dtos/add-library-kody-rules.dto';
-import { ChangeStatusKodyRulesDTO } from '@libs/kodyRules/dtos/change-status-kody-rules.dto';
-import { FindLibraryKodyRulesDto } from '../dtos/find-library-kody-rules.dto';
-import { FindSuggestionsByRuleDto } from '../dtos/find-suggestions-by-rule.dto';
-import { GenerateKodyRulesDTO } from '../dtos/generate-kody-rules.dto';
-import { CacheService } from '@libs/core/cache/cache.service';
-import {
-    CheckPolicies,
-    PolicyGuard,
-} from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
-import {
-    checkPermissions,
-    checkRepoPermissions,
-} from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
-import {
-    Action,
-    ResourceType,
-} from '@libs/identity/domain/permissions/enums/permissions.enum';
-import { CreateKodyRuleDto } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
-import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
-import { FindRecommendedKodyRulesDto } from '../dtos/find-recommended-kody-rules.dto';
 import {
     ApiBearerAuth,
     ApiCreatedResponse,
@@ -62,13 +62,16 @@ import {
     ApiQuery,
     ApiTags,
 } from '@nestjs/swagger';
-import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import {
     ApiArrayResponseDto,
-    ApiObjectResponseDto,
     ApiBooleanResponseDto,
+    ApiObjectResponseDto,
 } from '../dtos/api-response.dto';
+import { FindLibraryKodyRulesDto } from '../dtos/find-library-kody-rules.dto';
+import { FindRecommendedKodyRulesDto } from '../dtos/find-recommended-kody-rules.dto';
+import { FindSuggestionsByRuleDto } from '../dtos/find-suggestions-by-rule.dto';
+import { GenerateKodyRulesDTO } from '../dtos/generate-kody-rules.dto';
 import {
     KodyRuleResponseDto,
     KodyRulesArrayResponseDto,
@@ -96,6 +99,7 @@ export class KodyRulesController {
         private readonly findRecommendedKodyRulesUseCase: FindRecommendedKodyRulesUseCase,
         private readonly addLibraryKodyRulesUseCase: AddLibraryKodyRulesUseCase,
         private readonly generateKodyRulesUseCase: GenerateKodyRulesUseCase,
+        private readonly applyPendingKodyRulesUseCase: ApplyPendingKodyRulesUseCase,
         private readonly changeStatusKodyRulesUseCase: ChangeStatusKodyRulesUseCase,
         private readonly checkSyncStatusUseCase: CheckSyncStatusUseCase,
         private readonly cacheService: CacheService,
@@ -106,6 +110,7 @@ export class KodyRulesController {
         private readonly resyncRulesFromIdeUseCase: ResyncRulesFromIdeUseCase,
         private readonly fastSyncIdeRulesUseCase: FastSyncIdeRulesUseCase,
         private readonly importFastKodyRulesUseCase: ImportFastKodyRulesUseCase,
+        private readonly convertPendingUpdatesToMemoriesUseCase: ConvertPendingUpdatesToMemoriesUseCase,
         @Inject(REQUEST)
         private readonly request: UserRequest,
     ) {}
@@ -394,6 +399,64 @@ export class KodyRulesController {
     @ApiCreatedResponse({ type: KodyRulesArrayResponseDto })
     public async changeStatusKodyRules(@Body() body: ChangeStatusKodyRulesDTO) {
         return this.changeStatusKodyRulesUseCase.execute(body);
+    }
+
+    @ApiBearerAuth('jwt')
+    @Post('/pending/apply')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Update,
+            resource: ResourceType.KodyRules,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Apply pending rules',
+        description: 'Approve one or more pending rules/memories.',
+    })
+    @ApiCreatedResponse({ type: KodyRulesArrayResponseDto })
+    public async applyPendingKodyRules(@Body() body: RuleIdsDto) {
+        return this.applyPendingKodyRulesUseCase.execute(body);
+    }
+
+    @ApiBearerAuth('jwt')
+    @Post('/pending/discard')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Update,
+            resource: ResourceType.KodyRules,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Discard pending rules',
+        description: 'Reject one or more pending rules/memories.',
+    })
+    @ApiCreatedResponse({ type: KodyRulesArrayResponseDto })
+    public async discardPendingKodyRules(@Body() body: RuleIdsDto) {
+        return this.changeStatusKodyRulesUseCase.execute({
+            ruleIds: body.ruleIds,
+            status: KodyRulesStatus.REJECTED,
+        });
+    }
+
+    @ApiBearerAuth('jwt')
+    @Post('/pending/convert-updates-to-memories')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Update,
+            resource: ResourceType.KodyRules,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Convert pending updates to new memories',
+        description:
+            'For each pending update request, create a new active memory and discard the original pending request.',
+    })
+    @ApiCreatedResponse({ type: KodyRulesArrayResponseDto })
+    public async convertPendingUpdatesToNewMemories(@Body() body: RuleIdsDto) {
+        return this.convertPendingUpdatesToMemoriesUseCase.execute(body);
     }
 
     @ApiBearerAuth('jwt')

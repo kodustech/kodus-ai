@@ -23,14 +23,18 @@ describe('AutomationExecutionService', () => {
         const { service, codeReviewExecutionService } = makeService();
 
         await expect(
-            service.hasStageWithStatus('', ['FileAnalysisStage'], [
-                AutomationStatus.PARTIAL_ERROR,
-            ]),
+            service.hasStageWithStatus(
+                '',
+                ['FileAnalysisStage'],
+                [AutomationStatus.PARTIAL_ERROR],
+            ),
         ).resolves.toBe(false);
         await expect(
-            service.hasStageWithStatus('exec-1', [], [
-                AutomationStatus.PARTIAL_ERROR,
-            ]),
+            service.hasStageWithStatus(
+                'exec-1',
+                [],
+                [AutomationStatus.PARTIAL_ERROR],
+            ),
         ).resolves.toBe(false);
         await expect(
             service.hasStageWithStatus('exec-1', ['FileAnalysisStage'], []),
@@ -57,10 +61,11 @@ describe('AutomationExecutionService', () => {
 
         expect(
             codeReviewExecutionService.existsByAutomationExecutionAndStageStatus,
-        ).toHaveBeenCalledWith('exec-1', [
-            'PRLevelReviewStage',
-            'FileAnalysisStage',
-        ], [AutomationStatus.PARTIAL_ERROR, AutomationStatus.ERROR]);
+        ).toHaveBeenCalledWith(
+            'exec-1',
+            ['PRLevelReviewStage', 'FileAnalysisStage'],
+            [AutomationStatus.PARTIAL_ERROR, AutomationStatus.ERROR],
+        );
         expect(
             codeReviewExecutionService.findManyByAutomationExecutionIds,
         ).not.toHaveBeenCalled();

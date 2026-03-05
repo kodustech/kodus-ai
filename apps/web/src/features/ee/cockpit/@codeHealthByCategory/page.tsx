@@ -3,8 +3,8 @@ import { capitalize, pluralize } from "src/core/utils/string";
 import { getCodeHealthSuggestionsByCategory } from "src/features/ee/cockpit/_services/analytics/code-health/fetch";
 
 import { CockpitNoDataPlaceholder } from "../_components/no-data-placeholder";
-import { getSelectedDateRange } from "../_helpers/get-selected-date-range";
 import { extractApiData } from "../_helpers/api-data-extractor";
+import { getSelectedDateRange } from "../_helpers/get-selected-date-range";
 
 export default async function CodeHealthByCategory() {
     const selectedDateRange = await getSelectedDateRange();

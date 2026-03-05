@@ -8,20 +8,15 @@ import {
     CrossFileContextSnippet,
     RemoteCommands,
 } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import { CODEBASE_SEARCH_SERVICE_TOKEN } from '@libs/code-review/infrastructure/adapters/services/codebaseSearch.service';
 import {
     createSampleFileChange,
     createSamplePlannerQuery,
     createSampleSnippet,
+    createSampleSufficiencyResult,
     createMockRemoteCommands,
     mockOrganizationAndTeamData,
 } from '../../../fixtures/cross-file-context.fixtures';
-
-// Mock external SDK
-jest.mock('@morphllm/morphsdk', () => ({
-    WarpGrepClient: jest.fn().mockImplementation(() => ({
-        execute: jest.fn(),
-    })),
-}));
 
 // Mock logger to silence logs during tests
 jest.mock('@kodus/flow', () => ({
@@ -39,6 +34,7 @@ describe('CollectCrossFileContextsService', () => {
     let mockPromptRunnerService: any;
     let mockObservabilityService: any;
     let mockTokenChunkingService: any;
+    let mockCodebaseSearchService: any;
 
     beforeEach(async () => {
         // Chainable builder mock (follows llmAnalysis.service.spec.ts pattern)
@@ -66,9 +62,7 @@ describe('CollectCrossFileContextsService', () => {
         };
 
         mockObservabilityService = {
-            runLLMInSpan: jest
-                .fn()
-                .mockImplementation(({ exec }) => exec([])),
+            runLLMInSpan: jest.fn().mockImplementation(({ exec }) => exec([])),
         };
 
         mockTokenChunkingService = {
@@ -77,6 +71,13 @@ describe('CollectCrossFileContextsService', () => {
                 totalChunks: 1,
                 tokenLimit: 64000,
                 tokensPerChunk: [1000],
+            }),
+        };
+
+        mockCodebaseSearchService = {
+            search: jest.fn().mockResolvedValue({
+                success: true,
+                contexts: [],
             }),
         };
 
@@ -98,6 +99,10 @@ describe('CollectCrossFileContextsService', () => {
                 {
                     provide: ConfigService,
                     useValue: { get: jest.fn() },
+                },
+                {
+                    provide: CODEBASE_SEARCH_SERVICE_TOKEN,
+                    useValue: mockCodebaseSearchService,
                 },
             ],
         }).compile();
@@ -155,7 +160,8 @@ describe('CollectCrossFileContextsService', () => {
         });
 
         it('should detect overlap and remove duplicates', () => {
-            const shared = 'export function greet(name: string) { return name; }';
+            const shared =
+                'export function greet(name: string) { return name; }';
             const snippets = [
                 createSampleSnippet({
                     filePath: 'a.ts',
@@ -192,7 +198,8 @@ describe('CollectCrossFileContextsService', () => {
         });
 
         it('should merge targetFiles when deduplicating overlapping snippets', () => {
-            const shared = 'export function greet(name: string) { return name; }';
+            const shared =
+                'export function greet(name: string) { return name; }';
             const snippets = [
                 createSampleSnippet({
                     filePath: 'a.ts',
@@ -217,7 +224,8 @@ describe('CollectCrossFileContextsService', () => {
         });
 
         it('should deduplicate targetFiles entries during merge', () => {
-            const shared = 'export function greet(name: string) { return name; }';
+            const shared =
+                'export function greet(name: string) { return name; }';
             const snippets = [
                 createSampleSnippet({
                     filePath: 'a.ts',
@@ -473,8 +481,6 @@ const greet = () => {}
     });
 
     describe('executeSearchQueries()', () => {
-        const { WarpGrepClient } = require('@morphllm/morphsdk');
-
         const executeSearch = (
             queries: any[],
             remoteCommands: RemoteCommands,
@@ -494,16 +500,13 @@ const greet = () => {}
             jest.clearAllMocks();
         });
 
-        it('should call WarpGrepClient.execute with correct params', async () => {
-            const mockExecute = jest.fn().mockResolvedValue({
+        it('should call codebaseSearchService.search with correct params', async () => {
+            mockCodebaseSearchService.search.mockResolvedValue({
                 success: true,
                 contexts: [
-                    { file: 'other.ts', content: 'import { greet }' },
+                    { file: 'other.ts', content: 'import { greet }', lines: [[1, 1]] },
                 ],
             });
-            WarpGrepClient.mockImplementation(() => ({
-                execute: mockExecute,
-            }));
 
             const query = createSamplePlannerQuery();
             const remoteCommands = createMockRemoteCommands();
@@ -515,34 +518,28 @@ const greet = () => {}
                 '.',
             );
 
-            expect(mockExecute).toHaveBeenCalledWith(
+            expect(mockCodebaseSearchService.search).toHaveBeenCalledWith(
                 expect.objectContaining({
                     query: query.pattern,
-                    repoRoot: '.',
                     remoteCommands,
                     includes: [query.fileGlob],
-                    excludes: expect.arrayContaining([
-                        'node_modules',
-                        '.git',
-                    ]),
+                    excludes: expect.arrayContaining(['node_modules', '.git']),
                 }),
             );
         });
 
         it('should filter out files already in the PR', async () => {
-            const mockExecute = jest.fn().mockResolvedValue({
+            mockCodebaseSearchService.search.mockResolvedValue({
                 success: true,
                 contexts: [
                     {
                         file: 'src/utils/greet.ts',
                         content: 'already in PR',
+                        lines: [[1, 1]],
                     },
-                    { file: 'other.ts', content: 'external file' },
+                    { file: 'other.ts', content: 'external file', lines: [[1, 1]] },
                 ],
             });
-            WarpGrepClient.mockImplementation(() => ({
-                execute: mockExecute,
-            }));
 
             const result = await executeSearch(
                 [createSamplePlannerQuery()],
@@ -551,13 +548,13 @@ const greet = () => {}
                 '.',
             );
 
-            expect(result).toHaveLength(1);
-            expect(result[0].filePath).toBe('other.ts');
+            expect(result.snippets).toHaveLength(1);
+            expect(result.snippets[0].filePath).toBe('other.ts');
         });
 
         it('should continue on individual query failure (log warn, process rest)', async () => {
             let callCount = 0;
-            const mockExecute = jest.fn().mockImplementation(() => {
+            mockCodebaseSearchService.search.mockImplementation(() => {
                 callCount++;
                 if (callCount === 1) {
                     throw new Error('ripgrep failed');
@@ -565,17 +562,14 @@ const greet = () => {}
                 return Promise.resolve({
                     success: true,
                     contexts: [
-                        { file: 'result.ts', content: 'found it' },
+                        { file: 'result.ts', content: 'found it', lines: [[1, 1]] },
                     ],
                 });
             });
-            WarpGrepClient.mockImplementation(() => ({
-                execute: mockExecute,
-            }));
 
             const queries = [
-                createSamplePlannerQuery({ symbolName: 'fail' }),
-                createSamplePlannerQuery({ symbolName: 'succeed' }),
+                createSamplePlannerQuery({ symbolName: 'fail', pattern: 'fail\\(' }),
+                createSamplePlannerQuery({ symbolName: 'succeed', pattern: 'succeed\\(' }),
             ];
 
             const result = await executeSearch(
@@ -585,29 +579,29 @@ const greet = () => {}
                 '.',
             );
 
-            expect(result).toHaveLength(1);
-            expect(result[0].filePath).toBe('result.ts');
+            expect(result.snippets).toHaveLength(1);
+            expect(result.snippets[0].filePath).toBe('result.ts');
+            expect(result.queryResultMap.get('fail\\(')).toBe(false);
+            expect(result.queryResultMap.get('succeed\\(')).toBe(true);
         });
 
-        it('should return empty array when all queries fail', async () => {
-            const mockExecute = jest
-                .fn()
-                .mockRejectedValue(new Error('all fail'));
-            WarpGrepClient.mockImplementation(() => ({
-                execute: mockExecute,
-            }));
+        it('should return empty result when all queries fail', async () => {
+            mockCodebaseSearchService.search.mockRejectedValue(
+                new Error('all fail'),
+            );
 
             const result = await executeSearch(
                 [
-                    createSamplePlannerQuery(),
-                    createSamplePlannerQuery({ symbolName: 'other' }),
+                    createSamplePlannerQuery({ pattern: 'greet\\(' }),
+                    createSamplePlannerQuery({ symbolName: 'other', pattern: 'other\\(' }),
                 ],
                 createMockRemoteCommands() as any,
                 new Set(),
                 '.',
             );
 
-            expect(result).toEqual([]);
+            expect(result.snippets).toEqual([]);
+            expect(result.queryResultMap.size).toBe(2);
         });
     });
 
@@ -700,8 +694,6 @@ const greet = () => {}
     });
 
     describe('executeHop2()', () => {
-        const { WarpGrepClient } = require('@morphllm/morphsdk');
-
         const executeHop2 = (
             hop1Snippets: CrossFileContextSnippet[],
             remoteCommands: RemoteCommands,
@@ -718,15 +710,12 @@ const greet = () => {}
             );
 
         it('should only process snippets with riskLevel high', async () => {
-            const mockExecute = jest.fn().mockResolvedValue({
+            mockCodebaseSearchService.search.mockResolvedValue({
                 success: true,
                 contexts: [
-                    { file: 'hop2.ts', content: 'hop2 content' },
+                    { file: 'hop2.ts', content: 'hop2 content', lines: [[1, 1]] },
                 ],
             });
-            WarpGrepClient.mockImplementation(() => ({
-                execute: mockExecute,
-            }));
 
             const snippets = [
                 createSampleSnippet({
@@ -752,7 +741,7 @@ const greet = () => {}
 
             // Only high-risk function names should trigger searches
             // "otherFunc" and "lowFunc" should NOT be searched
-            for (const call of mockExecute.mock.calls) {
+            for (const call of mockCodebaseSearchService.search.mock.calls) {
                 expect(call[0].query).not.toBe('otherFunc');
                 expect(call[0].query).not.toBe('lowFunc');
             }
@@ -775,26 +764,25 @@ const greet = () => {}
         });
 
         it('should exclude files from PR AND files from hop1', async () => {
-            const mockExecute = jest.fn().mockResolvedValue({
+            mockCodebaseSearchService.search.mockResolvedValue({
                 success: true,
                 contexts: [
-                    { file: 'src/utils/greet.ts', content: 'PR file' },
+                    { file: 'src/utils/greet.ts', content: 'PR file', lines: [[1, 1]] },
                     {
                         file: 'src/controllers/hello.controller.ts',
                         content: 'hop1 file',
+                        lines: [[1, 1]],
                     },
-                    { file: 'src/new-caller.ts', content: 'new file' },
+                    { file: 'src/new-caller.ts', content: 'new file', lines: [[1, 1]] },
                 ],
             });
-            WarpGrepClient.mockImplementation(() => ({
-                execute: mockExecute,
-            }));
 
             const hop1Snippets = [
                 createSampleSnippet({
                     filePath: 'src/controllers/hello.controller.ts',
                     riskLevel: 'high',
-                    content: 'function processRequest(data) { greet(data.name); }',
+                    content:
+                        'function processRequest(data) { greet(data.name); }',
                 }),
             ];
 
@@ -818,15 +806,12 @@ const greet = () => {}
         });
 
         it('should mark hop2 with hop: 2 and score getBaseScore("high") - 10', async () => {
-            const mockExecute = jest.fn().mockResolvedValue({
+            mockCodebaseSearchService.search.mockResolvedValue({
                 success: true,
                 contexts: [
-                    { file: 'src/hop2.ts', content: 'hop2 content' },
+                    { file: 'src/hop2.ts', content: 'hop2 content', lines: [[1, 1]] },
                 ],
             });
-            WarpGrepClient.mockImplementation(() => ({
-                execute: mockExecute,
-            }));
 
             const hop1Snippets = [
                 createSampleSnippet({
@@ -849,15 +834,12 @@ const greet = () => {}
         });
 
         it('should propagate targetFiles from hop1 to hop2 snippets', async () => {
-            const mockExecute = jest.fn().mockResolvedValue({
+            mockCodebaseSearchService.search.mockResolvedValue({
                 success: true,
                 contexts: [
-                    { file: 'src/hop2.ts', content: 'hop2 content' },
+                    { file: 'src/hop2.ts', content: 'hop2 content', lines: [[1, 1]] },
                 ],
             });
-            WarpGrepClient.mockImplementation(() => ({
-                execute: mockExecute,
-            }));
 
             const hop1Snippets = [
                 createSampleSnippet({
@@ -885,8 +867,6 @@ const greet = () => {}
     // ─────────────────────────────────────────────────────────────────────────
 
     describe('collectContexts()', () => {
-        const { WarpGrepClient } = require('@morphllm/morphsdk');
-
         const baseParams = {
             remoteCommands: createMockRemoteCommands() as any,
             changedFiles: [createSampleFileChange()],
@@ -909,21 +889,17 @@ const greet = () => {}
                 result: { queries: [plannerQuery] },
             });
 
-            // WarpGrep returns a context hit
-            const mockExecute = jest.fn().mockResolvedValue({
+            // CodebaseSearchService returns a context hit
+            mockCodebaseSearchService.search.mockResolvedValue({
                 success: true,
                 contexts: [
                     {
                         file: 'src/caller.ts',
                         content: 'import { greet } from "./greet";\ngreet("world");',
-                        startLine: 1,
-                        endLine: 2,
+                        lines: [[1, 2]],
                     },
                 ],
             });
-            WarpGrepClient.mockImplementation(() => ({
-                execute: mockExecute,
-            }));
 
             const result = await service.collectContexts(baseParams);
 
@@ -955,19 +931,236 @@ const greet = () => {}
                 result: { queries: [plannerQuery] },
             });
 
-            // WarpGrep returns no matches
-            WarpGrepClient.mockImplementation(() => ({
-                execute: jest.fn().mockResolvedValue({
-                    success: true,
-                    contexts: [],
-                }),
-            }));
+            // CodebaseSearchService returns no matches
+            mockCodebaseSearchService.search.mockResolvedValue({
+                success: true,
+                contexts: [],
+            });
 
             const result = await service.collectContexts(baseParams);
 
             expect(result.contexts).toEqual([]);
             expect(result.plannerQueries).toHaveLength(1);
             expect(result.totalSearches).toBe(1);
+        });
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Sufficiency Loop
+    // ─────────────────────────────────────────────────────────────────────────
+
+    describe('evaluateSufficiency()', () => {
+        const evaluate = (
+            changedFiles: any[],
+            plannerQueries: any[],
+            currentContexts: any[],
+            queryResultMap: Map<string, boolean>,
+            language = 'en-US',
+            byokConfig?: any,
+        ) =>
+            (service as any).evaluateSufficiency(
+                changedFiles,
+                plannerQueries,
+                currentContexts,
+                queryResultMap,
+                language,
+                byokConfig,
+                mockOrganizationAndTeamData,
+                42,
+            );
+
+        it('should call LLM and return parsed sufficiency result', async () => {
+            const suffResult = createSampleSufficiencyResult();
+
+            const builderMock = mockPromptRunnerService.builder();
+            builderMock.execute.mockResolvedValue({ result: suffResult });
+
+            const result = await evaluate(
+                [createSampleFileChange()],
+                [createSamplePlannerQuery()],
+                [createSampleSnippet()],
+                new Map([['greet\\(', true]]),
+            );
+
+            expect(result).toBeDefined();
+            expect(result.sufficient).toBe(false);
+            expect(result.gaps).toHaveLength(1);
+            expect(result.additionalQueries).toHaveLength(1);
+        });
+
+        it('should return null when LLM call fails', async () => {
+            const builderMock = mockPromptRunnerService.builder();
+            builderMock.execute.mockRejectedValue(new Error('LLM timeout'));
+
+            const result = await evaluate(
+                [createSampleFileChange()],
+                [createSamplePlannerQuery()],
+                [createSampleSnippet()],
+                new Map([['greet\\(', false]]),
+            );
+
+            expect(result).toBeNull();
+        });
+
+        it('should return sufficient=true result when LLM says so', async () => {
+            const suffResult = createSampleSufficiencyResult({
+                sufficient: true,
+                gaps: [],
+                additionalQueries: [],
+            });
+
+            const builderMock = mockPromptRunnerService.builder();
+            builderMock.execute.mockResolvedValue({ result: suffResult });
+
+            const result = await evaluate(
+                [createSampleFileChange()],
+                [createSamplePlannerQuery()],
+                [createSampleSnippet()],
+                new Map([['greet\\(', false]]),
+            );
+
+            expect(result).toBeDefined();
+            expect(result.sufficient).toBe(true);
+            expect(result.additionalQueries).toHaveLength(0);
+        });
+    });
+
+    describe('runSufficiencyLoop()', () => {
+        const runLoop = (overrides: Record<string, any> = {}) =>
+            (service as any).runSufficiencyLoop({
+                changedFiles: [createSampleFileChange()],
+                plannerQueries: [createSamplePlannerQuery()],
+                currentContexts: [createSampleSnippet()],
+                queryResultMap: new Map([['greet\\(', false]]),
+                remoteCommands: createMockRemoteCommands() as any,
+                changedFilePaths: new Set(['src/utils/greet.ts']),
+                repoRoot: '.',
+                byokConfig: undefined,
+                organizationAndTeamData: mockOrganizationAndTeamData as any,
+                prNumber: 42,
+                language: 'en-US',
+                ...overrides,
+            });
+
+        it('should skip when all planner queries found results (skip gate)', async () => {
+            const result = await runLoop({
+                queryResultMap: new Map([['greet\\(', true]]),
+            });
+
+            expect(result).toBeNull();
+            // evaluateSufficiency should NOT be called
+            expect(mockObservabilityService.runLLMInSpan).not.toHaveBeenCalled();
+        });
+
+        it('should return null when evaluateSufficiency says sufficient', async () => {
+            const suffResult = createSampleSufficiencyResult({
+                sufficient: true,
+                gaps: [],
+                additionalQueries: [],
+            });
+            const builderMock = mockPromptRunnerService.builder();
+            builderMock.execute.mockResolvedValue({ result: suffResult });
+
+            const result = await runLoop();
+
+            expect(result).toBeNull();
+        });
+
+        it('should return null when evaluateSufficiency returns no additional queries', async () => {
+            const suffResult = createSampleSufficiencyResult({
+                sufficient: false,
+                gaps: ['Missing caller'],
+                additionalQueries: [],
+            });
+            const builderMock = mockPromptRunnerService.builder();
+            builderMock.execute.mockResolvedValue({ result: suffResult });
+
+            const result = await runLoop();
+
+            expect(result).toBeNull();
+        });
+
+        it('should execute additional queries and merge results when insufficient', async () => {
+            // Sufficiency check returns additional queries
+            const suffResult = createSampleSufficiencyResult({
+                sufficient: false,
+                gaps: ['Missing consumer of validate'],
+                additionalQueries: [
+                    {
+                        pattern: 'validate\\(',
+                        rationale: 'Find callers',
+                        riskLevel: 'high' as const,
+                        symbolName: 'validate',
+                        sourceFile: 'src/validate.ts',
+                    },
+                ],
+            });
+            const builderMock = mockPromptRunnerService.builder();
+            builderMock.execute.mockResolvedValue({ result: suffResult });
+
+            // Additional search returns new context
+            mockCodebaseSearchService.search.mockResolvedValue({
+                success: true,
+                contexts: [
+                    {
+                        file: 'src/handler.ts',
+                        content: 'validate(input);\nprocess(input);',
+                        lines: [[10, 11]],
+                    },
+                ],
+            });
+
+            const result = await runLoop();
+
+            expect(result).not.toBeNull();
+            expect(result.additionalSearchCount).toBe(1);
+            expect(result.mergedContexts.length).toBeGreaterThanOrEqual(1);
+        });
+
+        it('should return null when additional search finds nothing', async () => {
+            const suffResult = createSampleSufficiencyResult();
+            const builderMock = mockPromptRunnerService.builder();
+            builderMock.execute.mockResolvedValue({ result: suffResult });
+
+            // Additional search returns empty
+            mockCodebaseSearchService.search.mockResolvedValue({
+                success: true,
+                contexts: [],
+            });
+
+            const result = await runLoop();
+
+            expect(result).toBeNull();
+        });
+
+        it('should cap additional queries at 5', async () => {
+            const suffResult = createSampleSufficiencyResult({
+                sufficient: false,
+                gaps: ['many gaps'],
+                additionalQueries: Array.from({ length: 8 }, (_, i) => ({
+                    pattern: `symbol${i}\\(`,
+                    rationale: `Find symbol${i}`,
+                    riskLevel: 'medium' as const,
+                    symbolName: `symbol${i}`,
+                    sourceFile: `src/file${i}.ts`,
+                })),
+            });
+            const builderMock = mockPromptRunnerService.builder();
+            builderMock.execute.mockResolvedValue({ result: suffResult });
+
+            mockCodebaseSearchService.search.mockResolvedValue({
+                success: true,
+                contexts: [
+                    { file: 'found.ts', content: 'code', lines: [[1, 1]] },
+                ],
+            });
+
+            const result = await runLoop();
+
+            // Should have called search at most 5 times (cap)
+            expect(mockCodebaseSearchService.search).toHaveBeenCalledTimes(5);
+            expect(result).not.toBeNull();
+            expect(result.additionalSearchCount).toBe(5);
         });
     });
 });

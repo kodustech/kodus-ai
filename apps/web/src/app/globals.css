@@ -1,258 +1,244 @@
-@import 'tailwindcss';
-@plugin 'tailwindcss-animate';
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
 
 @custom-variant children {
     & > * {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant selected {
-
-    &[data-state='checked'],
-    &[data-selected='true'],
-    &[data-state='active'],
-    &[data-state='on'] {
-        @slot
+    &[data-state="checked"],
+    &[data-selected="true"],
+    &[data-state="active"],
+    &[data-state="on"] {
+        @slot;
     }
 }
 
 @custom-variant open {
-    &[data-state='open'] {
-        @slot
+    &[data-state="open"] {
+        @slot;
     }
 }
 
 @custom-variant hover {
     &:not(:disabled):hover {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant disabled {
-
     &:disabled,
     &[disabled],
     &[data-disabled] {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant enabled {
     &:not(:disabled):not([disabled]):not([data-disabled]) {
-        @slot
+        @slot;
     }
 }
 
-
-
-
-
 @custom-variant button-hover {
-
     &:hover:not([data-disabled]):not([data-loading]) {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant button-active {
-
     &[data-active]:not([data-disabled]),
-    &[data-state='open'],
-    &[data-state='delayed-open'],
-    &[data-state='instant-open'],
+    &[data-state="open"],
+    &[data-state="delayed-open"],
+    &[data-state="instant-open"],
     &[data-state="checked"],
     &[data-selected="true"] {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant button-loading {
-
     &[data-loading] {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant button-disabled {
-
     &:not([cmdk-item])[data-disabled],
-    &[cmdk-item][data-disabled='true'] {
-        @slot
+    &[cmdk-item][data-disabled="true"] {
+        @slot;
     }
 }
 
 @custom-variant button-focused {
-
     &:focus-visible {
-        @slot
+        @slot;
     }
 }
 
-
 @custom-variant textinput-hover {
     &:hover:not([data-disabled]):not([data-loading]) {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant textinput-disabled {
     &[data-disabled]:not([data-loading]) {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant textinput-loading {
     &[data-loading] {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant textinput-active {
     &:active {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant textinput-focused {
     &:focus-visible {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant textinput-invalid {
     &[data-invalid] {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant textinput-focused-invalid {
     &:focus-visible[data-invalid] {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant switch-checked {
-    &[data-state='checked'] {
-        @slot
+    &[data-state="checked"] {
+        @slot;
     }
 }
 
 @custom-variant switch-unchecked {
-    &[data-state='unchecked'] {
-        @slot
+    &[data-state="unchecked"] {
+        @slot;
     }
 }
 
 @custom-variant switch-disabled {
     &[data-disabled]:not([data-loading]) {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant switch-loading {
     &[data-loading] {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant switch-focused {
     &:focus-visible {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant switch-hover {
     &:hover:not([data-disabled]):not([data-loading]) {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant select-content-top-side {
-    &[data-side='top'] {
-        @slot
+    &[data-side="top"] {
+        @slot;
     }
 }
 
 @custom-variant select-content-bottom-side {
-    &[data-side='bottom'] {
-        @slot
+    &[data-side="bottom"] {
+        @slot;
     }
 }
 
 @custom-variant select-content-left-side {
-    &[data-side='left'] {
-        @slot
+    &[data-side="left"] {
+        @slot;
     }
 }
 
 @custom-variant select-content-right-side {
-    &[data-side='right'] {
-        @slot
+    &[data-side="right"] {
+        @slot;
     }
 }
 
 @custom-variant select-content-open {
-    &[data-state='open'] {
-        @slot
+    &[data-state="open"] {
+        @slot;
     }
 }
 
 @custom-variant select-content-closed {
-    &[data-state='closed'] {
-        @slot
+    &[data-state="closed"] {
+        @slot;
     }
 }
 
 @custom-variant select-item-focused {
     &:focus-visible {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant select-item-selected {
-    &[data-state='checked'] {
-        @slot
+    &[data-state="checked"] {
+        @slot;
     }
 }
 
 @custom-variant select-item-disabled {
     &[data-disabled] {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant slider-disabled {
     &[data-disabled] {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant slider-focused {
     &:focus-visible {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant link-hover {
     &:hover:not([data-disabled]) {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant link-focused {
     &:focus-visible:not([data-disabled]) {
-        @slot
+        @slot;
     }
 }
 
 @custom-variant link-disabled {
     &[data-disabled] {
-        @slot
+        @slot;
     }
 }
-
-
 
 @theme {
     --color-card-lv1: #181825;
@@ -290,8 +276,8 @@
 
     --color-background: #101019;
 
-    --font-sans: 'DM Sans', sans-serif;
-    --font-mono: 'Overpass Mono', monospace;
+    --font-sans: "DM Sans", sans-serif;
+    --font-mono: "Overpass Mono", monospace;
 
     --color-brand-purple: hsl(255 30.7% 49.2%);
     --color-brand-red: hsl(0 83.7% 61.6%);
@@ -383,7 +369,6 @@
 }
 
 @layer base {
-
     /*
         The default border color has changed to `currentcolor` in Tailwind CSS v4,
         so we've added these compatibility styles to make sure everything still
@@ -402,7 +387,6 @@
 }
 
 @layer base {
-
     *,
     input,
     a,

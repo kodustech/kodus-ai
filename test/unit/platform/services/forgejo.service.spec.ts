@@ -443,7 +443,10 @@ describe('Forgejo Draft PR Detection', () => {
      * Mirrors the draft detection logic in ForgejoService.transformPullRequest()
      * Forgejo marks PRs as draft via the `draft` field or title prefixes
      */
-    function isDraftPullRequest(pr: { draft?: boolean; title?: string }): boolean {
+    function isDraftPullRequest(pr: {
+        draft?: boolean;
+        title?: string;
+    }): boolean {
         return (
             pr.draft ||
             pr.title?.toLowerCase().startsWith('wip:') ||
@@ -485,9 +488,9 @@ describe('Forgejo Draft PR Detection', () => {
     });
 
     it('should not detect regular PR as draft', () => {
-        expect(
-            isDraftPullRequest({ draft: false, title: 'Add feature' }),
-        ).toBe(false);
+        expect(isDraftPullRequest({ draft: false, title: 'Add feature' })).toBe(
+            false,
+        );
     });
 
     it('should handle case-insensitive prefixes', () => {

@@ -15,12 +15,12 @@ import {
     validateOrganizationLicense,
 } from "../_services/billing/fetch";
 import type { Plan } from "../_services/billing/types";
-import { fetchPopularModels } from "./_services/models";
-import { ChoosePlanPageClient } from "./page.client";
 import {
     TokenProjectionSection,
     TokenProjectionSkeleton,
 } from "./_components/token-projection";
+import { fetchPopularModels } from "./_services/models";
+import { ChoosePlanPageClient } from "./page.client";
 
 type PlansObject = Record<
     "free" | "teams_byok" | "enterprise",
@@ -28,19 +28,16 @@ type PlansObject = Record<
 >;
 
 function organizePlans(plans: Plan[]): PlansObject {
-    return plans.reduce(
-        (acc, current) => {
-            if (current.type === "contact") {
-                acc.enterprise = current;
-            } else if (current.id === "free_byok") {
-                acc.free = current;
-            } else if (current.id === "teams_byok") {
-                acc.teams_byok = current;
-            }
-            return acc;
-        },
-        {} as PlansObject,
-    );
+    return plans.reduce((acc, current) => {
+        if (current.type === "contact") {
+            acc.enterprise = current;
+        } else if (current.id === "free_byok") {
+            acc.free = current;
+        } else if (current.id === "teams_byok") {
+            acc.teams_byok = current;
+        }
+        return acc;
+    }, {} as PlansObject);
 }
 
 export default async function ChoosePlanPage() {

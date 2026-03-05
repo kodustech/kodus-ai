@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { MCPPluginsLimitPopover } from "@components/system/mcp-plugins-limit-popover";
 import { Avatar, AvatarImage } from "@components/ui/avatar";
 import { Badge } from "@components/ui/badge";
@@ -30,16 +32,14 @@ import {
     type getMCPPlugins,
     type getMCPPluginTools,
 } from "@services/mcp-manager/fetch";
+import { CUSTOM_MCP_SESSION_STORAGE_KEYS } from "@services/mcp-manager/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { EditIcon, PlugIcon, RefreshCwIcon, Trash } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
 import type { AwaitedReturnType } from "src/core/types";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
-import { CUSTOM_MCP_SESSION_STORAGE_KEYS } from "@services/mcp-manager/types";
 import { RequiredConfiguration } from "./required-configuration";
 import { SelectTools } from "./select-tools";
 
@@ -86,7 +86,7 @@ export const PluginModal = ({
 
     const isCustomOauthUnauthorized =
         plugin.authScheme?.toLowerCase() === "oauth2" &&
-        ['custom', 'kodusmcp'].includes(plugin.provider) &&
+        ["custom", "kodusmcp"].includes(plugin.provider) &&
         !plugin.active;
 
     const [requiredParamsValues, setRequiredParamsValues] = useState<
@@ -122,31 +122,36 @@ export const PluginModal = ({
             (plugin.requiredParams?.length || 0) &&
         Object.values(requiredParamsValues).every((v) => v.trim().length > 0);
 
-    const [authorizePlugin, {loading: isAuthorizePluginLoading}] = useAsyncAction(async () => {
-        const initializeResponse = await initializeOauthCustomMCPPlugin(plugin.provider, plugin.id);
-        if (initializeResponse && 'authUrl' in initializeResponse) {
-            sessionStorage.setItem(
-                CUSTOM_MCP_SESSION_STORAGE_KEYS.INTEGRATION_ID,
+    const [authorizePlugin, { loading: isAuthorizePluginLoading }] =
+        useAsyncAction(async () => {
+            const initializeResponse = await initializeOauthCustomMCPPlugin(
+                plugin.provider,
                 plugin.id,
             );
-            sessionStorage.setItem(
-                CUSTOM_MCP_SESSION_STORAGE_KEYS.INTEGRATION_NAME,
-                plugin.appName,
-            );
-            sessionStorage.setItem(
-                CUSTOM_MCP_SESSION_STORAGE_KEYS.PROVIDER,
-                plugin.provider,
-            );
-            
-            return router.push(initializeResponse.authUrl);
-        }
+            if (initializeResponse && "authUrl" in initializeResponse) {
+                sessionStorage.setItem(
+                    CUSTOM_MCP_SESSION_STORAGE_KEYS.INTEGRATION_ID,
+                    plugin.id,
+                );
+                sessionStorage.setItem(
+                    CUSTOM_MCP_SESSION_STORAGE_KEYS.INTEGRATION_NAME,
+                    plugin.appName,
+                );
+                sessionStorage.setItem(
+                    CUSTOM_MCP_SESSION_STORAGE_KEYS.PROVIDER,
+                    plugin.provider,
+                );
 
-        toast({
-            variant: "alert",
-            title: "Couldn't start authentication",
-            description: "Please try again or contact support if the problem persists."
-        })
-    });
+                return router.push(initializeResponse.authUrl);
+            }
+
+            toast({
+                variant: "alert",
+                title: "Couldn't start authentication",
+                description:
+                    "Please try again or contact support if the problem persists.",
+            });
+        });
 
     const [installPlugin, { loading: isInstallPluginLoading }] = useAsyncAction(
         async () => {
@@ -323,7 +328,7 @@ export const PluginModal = ({
                                         variant="primary"
                                         leftIcon={<PlugIcon />}
                                         onClick={() => {
-                                            authorizePlugin()
+                                            authorizePlugin();
                                         }}
                                         loading={isAuthorizePluginLoading}
                                         disabled={!canEdit || isDefault}>

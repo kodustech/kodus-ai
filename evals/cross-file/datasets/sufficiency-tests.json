@@ -1,0 +1,242 @@
+[
+  {
+    "description": "Example 1: src/auth/session.service.ts, src/auth/token.service.ts",
+    "vars": {
+      "changedFilenames": "[\n  \"src/auth/session.service.ts\",\n  \"src/auth/token.service.ts\"\n]",
+      "diffSummary": "### src/auth/session.service.ts\n@@ -1,18 +1,32 @@\n import { Injectable } from '@nestjs/common';\n import { TokenService } from './token.service';\n import { SessionStore } from './session.store';\n+import { UserRiskScorer } from '../security/user-risk-scorer';\n \n @Injectable()\n export class SessionService {\n-  async createSession(userId: string): Promise<string> {\n-    const token = this.tokenService.generate(userId);\n-    await this.store.save(userId, token);\n-    return token;\n+  async createSession(userId: string, metadata: SessionMetadata): Promise<SessionResult> {\n+    const riskScore = await this.riskScorer.evaluate(userId, metadata.ip, metadata.deviceFingerprint);\n+    const tokenTtl = riskScore > 0.7 ? 900 : 3600;\n+    const token = this.tokenService.generate(userId, { ttl: tokenTtl, scope: metadata.scope });\n+    await this.store.save(userId, { token, riskScore, createdAt: Date.now(), expiresAt: Date.now() + tokenTtl * 1000 });\n+    if (riskScore > 0.9) await this.notifySecurityTeam(userId, riskScore, metadata);\n+    return { token, expiresIn: tokenTtl, riskLevel: riskScore > 0.7 ? 'high' : 'normal' };\n   }\n \n-  async revokeSession(userId: string): Promise<void> {\n-    await this.store.delete(userId);\n+  async revokeSession(userId: string, reason: RevokeReason): Promise<void> {\n+    const session = await this.store.get(userId);\n+    if (session) {\n+      await this.tokenService.blacklist(session.token);\n+      await this.store.delete(userId);\n+      await this.auditLog.record('session_revoked', { userId, reason });\n+    }\n   }\n }\n\n### src/auth/token.service.ts\n@@ -3,8 +3,12 @@\n @Injectable()\n export class TokenService {\n-  generate(userId: string): string {\n-    return jwt.sign({ sub: userId }, this.secret, { expiresIn: '1h' });\n+  generate(userId: string, opts?: { ttl?: number; scope?: string[] }): string {\n+    return jwt.sign(\n+      { sub: userId, scope: opts?.scope },\n+      this.secret,\n+      { expiresIn: opts?.ttl ?? 3600 }\n+    );\n   }\n+\n+  async blacklist(token: string): Promise<void> {\n+    await this.redis.sadd('blacklisted_tokens', token);\n+    await this.redis.expire('blacklisted_tokens', 86400);\n   }\n }",
+      "language": "en-US",
+      "originalQueries": "[\n  {\n    \"symbolName\": \"createSession\",\n    \"pattern\": \"createSession\\\\(\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"Callers must pass new SessionMetadata param and handle SessionResult return\",\n    \"sourceFile\": \"src/auth/session.service.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"revokeSession\",\n    \"pattern\": \"revokeSession\\\\(\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"Callers must pass RevokeReason param\",\n    \"sourceFile\": \"src/auth/session.service.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"TokenService\",\n    \"pattern\": \"TokenService\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"generate() signature changed, new blacklist() method\",\n    \"sourceFile\": \"src/auth/token.service.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"UserRiskScorer\",\n    \"pattern\": \"UserRiskScorer\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"New dependency — need to understand its evaluate() method\",\n    \"sourceFile\": \"src/auth/session.service.ts\",\n    \"foundResults\": false\n  },\n  {\n    \"symbolName\": \"SessionStore\",\n    \"pattern\": \"SessionStore\",\n    \"riskLevel\": \"medium\",\n    \"rationale\": \"Store now saves richer session object\",\n    \"sourceFile\": \"src/auth/session.service.ts\",\n    \"foundResults\": true\n  }\n]",
+      "collectedSnippetsSummary": "[\n  {\n    \"filePath\": \"src/auth/auth.controller.ts\",\n    \"relatedSymbol\": \"createSession\",\n    \"rationale\": \"Controller calling createSession\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/auth/auth.controller.ts\",\n    \"relatedSymbol\": \"revokeSession\",\n    \"rationale\": \"Controller calling revokeSession\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/auth/session.store.ts\",\n    \"relatedSymbol\": \"SessionStore\",\n    \"rationale\": \"SessionStore implementation\",\n    \"riskLevel\": \"medium\",\n    \"hop\": 1\n  }\n]",
+      "expectedSufficient": "false",
+      "expectedMinGaps": "1",
+      "expectedQuerySymbols": "[\"UserRiskScorer\",\"riskScorer\",\"evaluate\"]",
+      "forbiddenPatterns": "[\"UserRiskScorer\"]"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 2: src/orders/order.entity.ts",
+    "vars": {
+      "changedFilenames": "[\n  \"src/orders/order.entity.ts\"\n]",
+      "diffSummary": "### src/orders/order.entity.ts\n@@ -1,15 +1,22 @@\n import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, OneToMany } from 'typeorm';\n-import { OrderStatus } from './order-status.enum';\n+import { OrderState } from './order-state.enum';\n import { User } from '../users/user.entity';\n import { OrderItem } from './order-item.entity';\n+import { PaymentRecord } from '../payments/payment-record.entity';\n \n @Entity()\n export class Order {\n   @PrimaryGeneratedColumn('uuid')\n   id: string;\n \n-  @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.PENDING })\n-  status: OrderStatus;\n+  @Column({ type: 'enum', enum: OrderState, default: OrderState.DRAFT })\n+  state: OrderState;\n+\n+  @Column({ type: 'jsonb', nullable: true })\n+  stateHistory: Array<{ from: OrderState; to: OrderState; at: Date; by: string }>;\n \n   @ManyToOne(() => User, user => user.orders)\n   user: User;\n \n   @OneToMany(() => OrderItem, item => item.order)\n   items: OrderItem[];\n+\n+  @OneToMany(() => PaymentRecord, pr => pr.order)\n+  payments: PaymentRecord[];\n }",
+      "language": "en-US",
+      "originalQueries": "[\n  {\n    \"symbolName\": \"OrderStatus\",\n    \"pattern\": \"OrderStatus\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"Renamed to OrderState — all consumers of old enum must update\",\n    \"sourceFile\": \"src/orders/order.entity.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"OrderState\",\n    \"pattern\": \"OrderState\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"New enum — need to find where it is defined and consumed\",\n    \"sourceFile\": \"src/orders/order.entity.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"Order\",\n    \"pattern\": \"Order[^I]\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"Order entity has new fields, consumers need updating\",\n    \"sourceFile\": \"src/orders/order.entity.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"PaymentRecord\",\n    \"pattern\": \"PaymentRecord\",\n    \"riskLevel\": \"medium\",\n    \"rationale\": \"New relationship — verify PaymentRecord entity exists\",\n    \"sourceFile\": \"src/orders/order.entity.ts\",\n    \"foundResults\": false\n  }\n]",
+      "collectedSnippetsSummary": "[\n  {\n    \"filePath\": \"src/orders/order-status.enum.ts\",\n    \"relatedSymbol\": \"OrderStatus\",\n    \"rationale\": \"Old enum definition file\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/orders/order.service.ts\",\n    \"relatedSymbol\": \"Order\",\n    \"rationale\": \"Service that creates and queries orders\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/orders/order.repository.ts\",\n    \"relatedSymbol\": \"Order\",\n    \"rationale\": \"Repository for Order entity\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  }\n]",
+      "expectedSufficient": "false",
+      "expectedMinGaps": "2",
+      "expectedQuerySymbols": "[\"PaymentRecord\",\"status\",\"OrderStatus\"]",
+      "forbiddenPatterns": "[\"OrderStatus\",\"PaymentRecord\"]"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 3: src/pipeline/transform.service.ts",
+    "vars": {
+      "changedFilenames": "[\n  \"src/pipeline/transform.service.ts\"\n]",
+      "diffSummary": "### src/pipeline/transform.service.ts\n@@ -2,22 +2,38 @@\n import { Injectable, Logger } from '@nestjs/common';\n import { PipelineStep } from './pipeline-step.interface';\n+import { TransformResult, TransformError } from './transform.types';\n import { MetricsCollector } from '../observability/metrics-collector';\n \n @Injectable()\n export class TransformService implements PipelineStep {\n   private logger = new Logger(TransformService.name);\n \n-  async execute(input: Buffer): Promise<Buffer> {\n-    const parsed = JSON.parse(input.toString());\n-    const transformed = this.applyRules(parsed);\n-    return Buffer.from(JSON.stringify(transformed));\n+  async execute(input: Buffer): Promise<TransformResult> {\n+    try {\n+      const parsed = JSON.parse(input.toString());\n+      const validated = await this.validate(parsed);\n+      if (!validated.ok) return { success: false, errors: validated.errors };\n+      const transformed = this.applyRules(validated.data);\n+      const serialized = this.serialize(transformed);\n+      this.metrics.recordTransform(serialized.length, Date.now() - start);\n+      return { success: true, data: serialized, stats: { inputSize: input.length, outputSize: serialized.length } };\n+    } catch (error) {\n+      this.metrics.recordError('transform', error);\n+      return { success: false, errors: [{ code: 'TRANSFORM_FAILED', message: error.message }] };\n+    }\n   }\n \n-  private applyRules(data: any): any {\n-    // transformation logic\n-    return data;\n+  private async validate(data: unknown): Promise<{ ok: boolean; data?: any; errors?: TransformError[] }> {\n+    // validation logic with schema registry\n+  }\n+\n+  private serialize(data: any): Buffer {\n+    return Buffer.from(JSON.stringify(data));\n   }\n }",
+      "language": "en-US",
+      "originalQueries": "[\n  {\n    \"symbolName\": \"TransformService\",\n    \"pattern\": \"TransformService\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"execute() now returns TransformResult instead of Buffer — callers must handle the new shape\",\n    \"sourceFile\": \"src/pipeline/transform.service.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"PipelineStep\",\n    \"pattern\": \"PipelineStep\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"Interface may need updating since execute() return type changed\",\n    \"sourceFile\": \"src/pipeline/transform.service.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"TransformResult\",\n    \"pattern\": \"TransformResult\",\n    \"riskLevel\": \"medium\",\n    \"rationale\": \"New type — verify definition\",\n    \"sourceFile\": \"src/pipeline/transform.service.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"MetricsCollector\",\n    \"pattern\": \"MetricsCollector\",\n    \"riskLevel\": \"medium\",\n    \"rationale\": \"New usage of recordTransform and recordError methods\",\n    \"sourceFile\": \"src/pipeline/transform.service.ts\",\n    \"foundResults\": true\n  }\n]",
+      "collectedSnippetsSummary": "[\n  {\n    \"filePath\": \"src/pipeline/pipeline.orchestrator.ts\",\n    \"relatedSymbol\": \"TransformService\",\n    \"rationale\": \"Orchestrator that chains pipeline steps including TransformService\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/pipeline/pipeline-step.interface.ts\",\n    \"relatedSymbol\": \"PipelineStep\",\n    \"rationale\": \"Interface definition for pipeline steps\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/pipeline/transform.types.ts\",\n    \"relatedSymbol\": \"TransformResult\",\n    \"rationale\": \"Type definitions for TransformResult and TransformError\",\n    \"riskLevel\": \"medium\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/observability/metrics-collector.ts\",\n    \"relatedSymbol\": \"MetricsCollector\",\n    \"rationale\": \"MetricsCollector implementation with recordTransform\",\n    \"riskLevel\": \"medium\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/pipeline/load.service.ts\",\n    \"relatedSymbol\": \"PipelineStep\",\n    \"rationale\": \"Another step implementing PipelineStep interface\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  }\n]",
+      "expectedSufficient": "true",
+      "expectedMinGaps": "0",
+      "expectedQuerySymbols": "[]",
+      "forbiddenPatterns": "[]"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 4: src/billing/invoice.service.ts, src/billing/invoice.types.ts",
+    "vars": {
+      "changedFilenames": "[\n  \"src/billing/invoice.service.ts\",\n  \"src/billing/invoice.types.ts\"\n]",
+      "diffSummary": "### src/billing/invoice.service.ts\n@@ -3,16 +3,28 @@\n import { Injectable } from '@nestjs/common';\n import { InvoiceRepository } from './invoice.repository';\n-import { TaxCalculator } from '../tax/tax-calculator';\n+import { TaxEngine } from '../tax/tax-engine';\n import { CurrencyConverter } from '../currency/currency-converter';\n+import { InvoiceValidator } from './invoice-validator';\n \n @Injectable()\n export class InvoiceService {\n-  async createInvoice(customerId: string, items: LineItem[]): Promise<Invoice> {\n-    const subtotal = items.reduce((sum, i) => sum + i.amount, 0);\n-    const tax = this.taxCalc.compute(subtotal, 'US');\n-    return this.repo.create({ customerId, items, subtotal, tax, total: subtotal + tax });\n+  async createInvoice(customerId: string, items: LineItem[], opts: InvoiceOptions): Promise<Invoice> {\n+    await this.validator.validateLineItems(items);\n+    const subtotal = items.reduce((sum, i) => sum + i.amount * i.quantity, 0);\n+    const discount = this.applyDiscount(subtotal, opts.discountCode);\n+    const taxableAmount = subtotal - discount;\n+    const taxResult = await this.taxEngine.calculate({ amount: taxableAmount, country: opts.country, state: opts.state });\n+    const total = taxableAmount + taxResult.taxAmount;\n+    const converted = opts.currency !== 'USD' ? await this.currencyConverter.convert(total, 'USD', opts.currency) : total;\n+    return this.repo.create({ customerId, items, subtotal, discount, tax: taxResult, total: converted, currency: opts.currency });\n   }\n+\n+  private applyDiscount(subtotal: number, code?: string): number {\n+    if (!code) return 0;\n+    // discount logic\n+  }\n }\n\n### src/billing/invoice.types.ts\n@@ -1,6 +1,12 @@\n-export interface LineItem { description: string; amount: number; }\n+export interface LineItem { description: string; amount: number; quantity: number; taxCode?: string; }\n+export interface InvoiceOptions { country: string; state?: string; currency: string; discountCode?: string; }\n export interface Invoice {\n   id: string; customerId: string; items: LineItem[];\n-  subtotal: number; tax: number; total: number;\n+  subtotal: number; discount: number; tax: TaxResult; total: number; currency: string;\n }",
+      "language": "en-US",
+      "originalQueries": "[\n  {\n    \"symbolName\": \"createInvoice\",\n    \"pattern\": \"createInvoice\\\\(\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"Signature changed — new opts param, new return shape\",\n    \"sourceFile\": \"src/billing/invoice.service.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"TaxCalculator\",\n    \"pattern\": \"TaxCalculator\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"Replaced by TaxEngine — old consumers may still reference it\",\n    \"sourceFile\": \"src/billing/invoice.service.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"TaxEngine\",\n    \"pattern\": \"TaxEngine\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"New dependency — need calculate() implementation\",\n    \"sourceFile\": \"src/billing/invoice.service.ts\",\n    \"foundResults\": false\n  },\n  {\n    \"symbolName\": \"InvoiceValidator\",\n    \"pattern\": \"InvoiceValidator\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"New dependency — need validateLineItems() implementation\",\n    \"sourceFile\": \"src/billing/invoice.service.ts\",\n    \"foundResults\": false\n  },\n  {\n    \"symbolName\": \"LineItem\",\n    \"pattern\": \"LineItem\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"Added quantity and taxCode fields — all consumers need updating\",\n    \"sourceFile\": \"src/billing/invoice.types.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"CurrencyConverter\",\n    \"pattern\": \"CurrencyConverter\",\n    \"riskLevel\": \"medium\",\n    \"rationale\": \"Now used for non-USD conversions\",\n    \"sourceFile\": \"src/billing/invoice.service.ts\",\n    \"foundResults\": true\n  }\n]",
+      "collectedSnippetsSummary": "[\n  {\n    \"filePath\": \"src/billing/billing.controller.ts\",\n    \"relatedSymbol\": \"createInvoice\",\n    \"rationale\": \"Controller calling createInvoice\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/tax/tax-calculator.ts\",\n    \"relatedSymbol\": \"TaxCalculator\",\n    \"rationale\": \"Old TaxCalculator being replaced\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/billing/invoice.repository.ts\",\n    \"relatedSymbol\": \"Invoice\",\n    \"rationale\": \"Repository that persists Invoice\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/checkout/checkout.service.ts\",\n    \"relatedSymbol\": \"createInvoice\",\n    \"rationale\": \"Checkout service that creates invoices during purchase\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/currency/currency-converter.ts\",\n    \"relatedSymbol\": \"CurrencyConverter\",\n    \"rationale\": \"CurrencyConverter.convert implementation\",\n    \"riskLevel\": \"medium\",\n    \"hop\": 1\n  }\n]",
+      "expectedSufficient": "false",
+      "expectedMinGaps": "2",
+      "expectedQuerySymbols": "[\"TaxEngine\",\"InvoiceValidator\",\"taxEngine\",\"invoiceValidator\"]",
+      "forbiddenPatterns": "[\"TaxEngine\",\"InvoiceValidator\"]"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 5: src/messaging/queue-consumer.ts",
+    "vars": {
+      "changedFilenames": "[\n  \"src/messaging/queue-consumer.ts\"\n]",
+      "diffSummary": "### src/messaging/queue-consumer.ts\n@@ -1,20 +1,35 @@\n import { Injectable, Logger } from '@nestjs/common';\n import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } from '@aws-sdk/client-sqs';\n+import { DeadLetterQueue } from './dead-letter-queue';\n+import { MessageDeserializer } from './message-deserializer';\n \n @Injectable()\n export class QueueConsumer {\n   private logger = new Logger(QueueConsumer.name);\n-  private handlers = new Map<string, (body: string) => Promise<void>>();\n+  private handlers = new Map<string, (msg: ParsedMessage) => Promise<void>>();\n \n-  async poll(): Promise<void> {\n+  async poll(batchSize = 10): Promise<PollResult> {\n+    let processed = 0, failed = 0;\n     const resp = await this.sqs.send(new ReceiveMessageCommand({\n       QueueUrl: this.queueUrl,\n-      MaxNumberOfMessages: 10,\n+      MaxNumberOfMessages: batchSize,\n       WaitTimeSeconds: 20,\n+      MessageAttributeNames: ['All'],\n     }));\n     for (const msg of resp.Messages ?? []) {\n-      const handler = this.handlers.get(msg.Body);\n-      if (handler) await handler(msg.Body!);\n-      await this.sqs.send(new DeleteMessageCommand({ QueueUrl: this.queueUrl, ReceiptHandle: msg.ReceiptHandle! }));\n+      try {\n+        const parsed = this.deserializer.parse(msg);\n+        const handler = this.handlers.get(parsed.type);\n+        if (!handler) { await this.dlq.send(msg, 'NO_HANDLER'); failed++; continue; }\n+        await handler(parsed);\n+        await this.sqs.send(new DeleteMessageCommand({ QueueUrl: this.queueUrl, ReceiptHandle: msg.ReceiptHandle! }));\n+        processed++;\n+      } catch (error) {\n+        this.logger.error(`Failed to process message ${msg.MessageId}: ${error.message}`);\n+        await this.dlq.send(msg, error.message);\n+        failed++;\n+      }\n     }\n+    return { processed, failed, total: resp.Messages?.length ?? 0 };\n   }\n }",
+      "language": "en-US",
+      "originalQueries": "[\n  {\n    \"symbolName\": \"QueueConsumer\",\n    \"pattern\": \"QueueConsumer\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"poll() return type changed, handler signature changed\",\n    \"sourceFile\": \"src/messaging/queue-consumer.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"poll\",\n    \"pattern\": \"\\\\.poll\\\\(\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"Callers must handle new PollResult return and optional batchSize\",\n    \"sourceFile\": \"src/messaging/queue-consumer.ts\",\n    \"foundResults\": false\n  },\n  {\n    \"symbolName\": \"DeadLetterQueue\",\n    \"pattern\": \"DeadLetterQueue\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"New dependency — need implementation\",\n    \"sourceFile\": \"src/messaging/queue-consumer.ts\",\n    \"foundResults\": false\n  },\n  {\n    \"symbolName\": \"MessageDeserializer\",\n    \"pattern\": \"MessageDeserializer\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"New dependency — need parse() implementation\",\n    \"sourceFile\": \"src/messaging/queue-consumer.ts\",\n    \"foundResults\": false\n  },\n  {\n    \"symbolName\": \"handlers\",\n    \"pattern\": \"handlers\\\\.set\\\\(\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"Handler registration changed — handlers now receive ParsedMessage not string\",\n    \"sourceFile\": \"src/messaging/queue-consumer.ts\",\n    \"foundResults\": true\n  }\n]",
+      "collectedSnippetsSummary": "[\n  {\n    \"filePath\": \"src/messaging/consumer.module.ts\",\n    \"relatedSymbol\": \"QueueConsumer\",\n    \"rationale\": \"Module registering QueueConsumer as provider\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/messaging/order-handler.ts\",\n    \"relatedSymbol\": \"handlers\",\n    \"rationale\": \"Handler registered via handlers.set for order events\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  }\n]",
+      "expectedSufficient": "false",
+      "expectedMinGaps": "3",
+      "expectedQuerySymbols": "[\"DeadLetterQueue\",\"MessageDeserializer\",\"poll\"]",
+      "forbiddenPatterns": "[\"DeadLetterQueue\",\"MessageDeserializer\",\"\\\\.poll\\\\(\"]"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 6: src/search/indexer.service.ts",
+    "vars": {
+      "changedFilenames": "[\n  \"src/search/indexer.service.ts\"\n]",
+      "diffSummary": "### src/search/indexer.service.ts\n@@ -2,14 +2,24 @@\n import { Injectable, Logger } from '@nestjs/common';\n import { ElasticClient } from '../elastic/elastic.client';\n import { DocumentMapper } from './document-mapper';\n+import { IndexingStrategy } from './indexing-strategy';\n \n @Injectable()\n export class IndexerService {\n   private logger = new Logger(IndexerService.name);\n \n-  async indexDocument(doc: RawDocument): Promise<void> {\n-    const mapped = this.mapper.toElasticDoc(doc);\n-    await this.elastic.index(this.indexName, mapped);\n+  async indexDocument(doc: RawDocument): Promise<IndexResult> {\n+    const strategy = IndexingStrategy.forDocType(doc.type);\n+    const mapped = this.mapper.toElasticDoc(doc, strategy.fieldMappings);\n+    const enriched = await strategy.enrich(mapped);\n+    await this.elastic.index(strategy.indexName, enriched);\n+    return { id: enriched.id, index: strategy.indexName, version: enriched._version };\n   }\n \n-  async bulkIndex(docs: RawDocument[]): Promise<void> {\n-    const mapped = docs.map(d => this.mapper.toElasticDoc(d));\n-    await this.elastic.bulk(this.indexName, mapped);\n+  async bulkIndex(docs: RawDocument[]): Promise<BulkIndexResult> {\n+    const grouped = Map.groupBy(docs, d => IndexingStrategy.forDocType(d.type).indexName);\n+    const results: IndexResult[] = [];\n+    for (const [indexName, groupDocs] of grouped) {\n+      const strategy = IndexingStrategy.forDocType(groupDocs[0].type);\n+      const mapped = await Promise.all(groupDocs.map(async d => strategy.enrich(this.mapper.toElasticDoc(d, strategy.fieldMappings))));\n+      await this.elastic.bulk(indexName, mapped);\n+      results.push(...mapped.map(m => ({ id: m.id, index: indexName, version: m._version })));\n+    }\n+    return { indexed: results.length, results };\n   }\n }",
+      "language": "en-US",
+      "originalQueries": "[\n  {\n    \"symbolName\": \"indexDocument\",\n    \"pattern\": \"indexDocument\\\\(\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"Return type changed from void to IndexResult\",\n    \"sourceFile\": \"src/search/indexer.service.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"bulkIndex\",\n    \"pattern\": \"bulkIndex\\\\(\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"Return type changed from void to BulkIndexResult\",\n    \"sourceFile\": \"src/search/indexer.service.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"IndexingStrategy\",\n    \"pattern\": \"IndexingStrategy\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"New class — need forDocType, enrich, fieldMappings implementation\",\n    \"sourceFile\": \"src/search/indexer.service.ts\",\n    \"foundResults\": false\n  },\n  {\n    \"symbolName\": \"DocumentMapper\",\n    \"pattern\": \"toElasticDoc\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"toElasticDoc() now takes second param fieldMappings\",\n    \"sourceFile\": \"src/search/indexer.service.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"ElasticClient\",\n    \"pattern\": \"ElasticClient\",\n    \"riskLevel\": \"medium\",\n    \"rationale\": \"elastic.index and elastic.bulk still used same way\",\n    \"sourceFile\": \"src/search/indexer.service.ts\",\n    \"foundResults\": true\n  }\n]",
+      "collectedSnippetsSummary": "[\n  {\n    \"filePath\": \"src/search/search.controller.ts\",\n    \"relatedSymbol\": \"indexDocument\",\n    \"rationale\": \"Controller that triggers indexing via POST endpoint\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/search/document-mapper.ts\",\n    \"relatedSymbol\": \"DocumentMapper\",\n    \"rationale\": \"DocumentMapper.toElasticDoc implementation\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/search/reindex.job.ts\",\n    \"relatedSymbol\": \"bulkIndex\",\n    \"rationale\": \"Cron job that calls bulkIndex for reindexing\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/elastic/elastic.client.ts\",\n    \"relatedSymbol\": \"ElasticClient\",\n    \"rationale\": \"ElasticClient.index and .bulk implementations\",\n    \"riskLevel\": \"medium\",\n    \"hop\": 1\n  }\n]",
+      "expectedSufficient": "false",
+      "expectedMinGaps": "1",
+      "expectedQuerySymbols": "[\"IndexingStrategy\",\"forDocType\",\"enrich\",\"fieldMappings\"]",
+      "forbiddenPatterns": "[\"IndexingStrategy\"]"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 7: src/notifications/dispatcher.ts, src/notifications/channel.interface.ts",
+    "vars": {
+      "changedFilenames": "[\n  \"src/notifications/dispatcher.ts\",\n  \"src/notifications/channel.interface.ts\"\n]",
+      "diffSummary": "### src/notifications/dispatcher.ts\n@@ -1,12 +1,25 @@\n import { Injectable, Logger } from '@nestjs/common';\n-import { NotificationChannel } from './channel.interface';\n+import { NotificationChannel, ChannelPriority } from './channel.interface';\n+import { UserPreferences } from '../users/user-preferences';\n \n @Injectable()\n export class NotificationDispatcher {\n   private channels: NotificationChannel[] = [];\n \n-  async dispatch(userId: string, message: string): Promise<void> {\n-    for (const channel of this.channels) {\n-      await channel.send(userId, message);\n+  async dispatch(userId: string, notification: NotificationPayload): Promise<DispatchResult> {\n+    const prefs = await this.userPrefs.getForUser(userId);\n+    const eligible = this.channels\n+      .filter(ch => prefs.enabledChannels.includes(ch.type))\n+      .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));\n+\n+    const results: ChannelResult[] = [];\n+    for (const channel of eligible) {\n+      try {\n+        await channel.send(userId, notification);\n+        results.push({ channel: channel.type, success: true });\n+        if (notification.exclusive) break;\n+      } catch (error) {\n+        results.push({ channel: channel.type, success: false, error: error.message });\n+      }\n     }\n+    return { sent: results.filter(r => r.success).length, total: eligible.length, results };\n   }\n }\n\n### src/notifications/channel.interface.ts\n@@ -1,4 +1,7 @@\n export interface NotificationChannel {\n-  send(userId: string, message: string): Promise<void>;\n+  type: string;\n+  priority?: ChannelPriority;\n+  send(userId: string, notification: NotificationPayload): Promise<void>;\n }\n+export type ChannelPriority = 'critical' | 'high' | 'normal' | 'low';",
+      "language": "en-US",
+      "originalQueries": "[\n  {\n    \"symbolName\": \"NotificationChannel\",\n    \"pattern\": \"NotificationChannel\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"Interface changed — all implementors must add type, update send() signature\",\n    \"sourceFile\": \"src/notifications/channel.interface.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"dispatch\",\n    \"pattern\": \"dispatch\\\\(\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"dispatch() signature changed — callers must pass NotificationPayload\",\n    \"sourceFile\": \"src/notifications/dispatcher.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"UserPreferences\",\n    \"pattern\": \"UserPreferences\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"New dependency — need getForUser() implementation\",\n    \"sourceFile\": \"src/notifications/dispatcher.ts\",\n    \"foundResults\": false\n  },\n  {\n    \"symbolName\": \"send\",\n    \"pattern\": \"implements NotificationChannel\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"All classes implementing NotificationChannel must update\",\n    \"sourceFile\": \"src/notifications/channel.interface.ts\",\n    \"foundResults\": true\n  }\n]",
+      "collectedSnippetsSummary": "[\n  {\n    \"filePath\": \"src/notifications/email-channel.ts\",\n    \"relatedSymbol\": \"NotificationChannel\",\n    \"rationale\": \"EmailChannel implements NotificationChannel\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/notifications/sms-channel.ts\",\n    \"relatedSymbol\": \"NotificationChannel\",\n    \"rationale\": \"SmsChannel implements NotificationChannel\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/webhooks/webhook.service.ts\",\n    \"relatedSymbol\": \"dispatch\",\n    \"rationale\": \"Webhook service calling dispatch after events\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  }\n]",
+      "expectedSufficient": "false",
+      "expectedMinGaps": "1",
+      "expectedQuerySymbols": "[\"UserPreferences\",\"getForUser\",\"userPrefs\"]",
+      "forbiddenPatterns": "[\"UserPreferences\"]"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 8: src/cache/cache-manager.ts",
+    "vars": {
+      "changedFilenames": "[\n  \"src/cache/cache-manager.ts\"\n]",
+      "diffSummary": "### src/cache/cache-manager.ts\n@@ -1,18 +1,32 @@\n import { Injectable, Logger } from '@nestjs/common';\n import { RedisService } from '../redis/redis.service';\n+import { CachePolicy } from './cache-policy';\n+import { CacheSerializer } from './cache-serializer';\n \n @Injectable()\n export class CacheManager {\n   private logger = new Logger(CacheManager.name);\n \n-  async get<T>(key: string): Promise<T | null> {\n-    const raw = await this.redis.get(key);\n-    return raw ? JSON.parse(raw) : null;\n+  async get<T>(key: string, policy?: CachePolicy): Promise<CacheResult<T>> {\n+    const effectiveKey = policy?.namespace ? `${policy.namespace}:${key}` : key;\n+    const raw = await this.redis.get(effectiveKey);\n+    if (!raw) return { hit: false, data: null, stale: false };\n+    const entry = this.serializer.deserialize<CacheEntry<T>>(raw);\n+    const isStale = policy?.maxAge ? (Date.now() - entry.storedAt > policy.maxAge) : false;\n+    if (isStale && policy?.staleWhileRevalidate) {\n+      this.revalidateInBackground(effectiveKey, policy);\n+      return { hit: true, data: entry.data, stale: true };\n+    }\n+    return { hit: true, data: entry.data, stale: false };\n   }\n \n-  async set<T>(key: string, value: T, ttl = 3600): Promise<void> {\n-    await this.redis.set(key, JSON.stringify(value), 'EX', ttl);\n+  async set<T>(key: string, value: T, policy?: CachePolicy): Promise<void> {\n+    const effectiveKey = policy?.namespace ? `${policy.namespace}:${key}` : key;\n+    const entry: CacheEntry<T> = { data: value, storedAt: Date.now(), version: policy?.version ?? 1 };\n+    const serialized = this.serializer.serialize(entry);\n+    const ttl = policy?.ttl ?? 3600;\n+    await this.redis.set(effectiveKey, serialized, 'EX', ttl);\n   }\n \n-  async invalidate(key: string): Promise<void> {\n-    await this.redis.del(key);\n+  async invalidate(pattern: string, policy?: CachePolicy): Promise<number> {\n+    const effectivePattern = policy?.namespace ? `${policy.namespace}:${pattern}` : pattern;\n+    const keys = await this.redis.keys(effectivePattern);\n+    if (keys.length === 0) return 0;\n+    await this.redis.del(...keys);\n+    return keys.length;\n   }\n }",
+      "language": "en-US",
+      "originalQueries": "[\n  {\n    \"symbolName\": \"CacheManager\",\n    \"pattern\": \"CacheManager\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"All three methods changed signature — get/set/invalidate\",\n    \"sourceFile\": \"src/cache/cache-manager.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"get\",\n    \"pattern\": \"cacheManager\\\\.get\\\\(\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"get() returns CacheResult<T> instead of T|null, takes optional policy\",\n    \"sourceFile\": \"src/cache/cache-manager.ts\",\n    \"foundResults\": false\n  },\n  {\n    \"symbolName\": \"set\",\n    \"pattern\": \"cacheManager\\\\.set\\\\(\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"set() takes CachePolicy instead of ttl number\",\n    \"sourceFile\": \"src/cache/cache-manager.ts\",\n    \"foundResults\": false\n  },\n  {\n    \"symbolName\": \"invalidate\",\n    \"pattern\": \"cacheManager\\\\.invalidate\\\\(\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"invalidate() now returns count and takes policy\",\n    \"sourceFile\": \"src/cache/cache-manager.ts\",\n    \"foundResults\": false\n  },\n  {\n    \"symbolName\": \"CachePolicy\",\n    \"pattern\": \"CachePolicy\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"New type — need definition\",\n    \"sourceFile\": \"src/cache/cache-manager.ts\",\n    \"foundResults\": false\n  },\n  {\n    \"symbolName\": \"CacheSerializer\",\n    \"pattern\": \"CacheSerializer\",\n    \"riskLevel\": \"medium\",\n    \"rationale\": \"New dependency — serialize/deserialize implementation\",\n    \"sourceFile\": \"src/cache/cache-manager.ts\",\n    \"foundResults\": false\n  }\n]",
+      "collectedSnippetsSummary": "[\n  {\n    \"filePath\": \"src/cache/cache.module.ts\",\n    \"relatedSymbol\": \"CacheManager\",\n    \"rationale\": \"Module that provides CacheManager\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  }\n]",
+      "expectedSufficient": "false",
+      "expectedMinGaps": "3",
+      "expectedQuerySymbols": "[\"CachePolicy\",\"CacheSerializer\",\"get\",\"set\",\"invalidate\"]",
+      "forbiddenPatterns": "[\"cacheManager\\\\.get\\\\(\",\"cacheManager\\\\.set\\\\(\",\"cacheManager\\\\.invalidate\\\\(\",\"CachePolicy\",\"CacheSerializer\"]"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 9: src/auth/permission-checker.ts",
+    "vars": {
+      "changedFilenames": "[\n  \"src/auth/permission-checker.ts\"\n]",
+      "diffSummary": "### src/auth/permission-checker.ts\n@@ -1,14 +1,22 @@\n import { Injectable } from '@nestjs/common';\n import { PermissionRepository } from './permission.repository';\n import { RoleHierarchy } from './role-hierarchy';\n+import { FeatureFlagService } from '../feature-flags/feature-flag.service';\n \n @Injectable()\n export class PermissionChecker {\n-  async hasPermission(userId: string, resource: string, action: string): Promise<boolean> {\n-    const userRole = await this.permRepo.getUserRole(userId);\n-    return this.roleHierarchy.check(userRole, resource, action);\n+  async hasPermission(userId: string, resource: string, action: string, context?: PermContext): Promise<boolean> {\n+    const [userRole, permissions] = await Promise.all([\n+      this.permRepo.getUserRole(userId),\n+      this.permRepo.getDirectPermissions(userId),\n+    ]);\n+    const directAllow = permissions.some(p => p.resource === resource && p.action === action);\n+    if (directAllow) return true;\n+    const roleAllow = this.roleHierarchy.check(userRole, resource, action);\n+    if (!roleAllow) return false;\n+    if (context?.featureFlag) {\n+      return this.featureFlags.isEnabled(context.featureFlag, { userId, role: userRole });\n+    }\n+    return true;\n   }\n }",
+      "language": "en-US",
+      "originalQueries": "[\n  {\n    \"symbolName\": \"hasPermission\",\n    \"pattern\": \"hasPermission\\\\(\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"New optional PermContext param, now checks direct permissions and feature flags\",\n    \"sourceFile\": \"src/auth/permission-checker.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"PermissionRepository\",\n    \"pattern\": \"getDirectPermissions\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"New method called on PermissionRepository — verify it exists\",\n    \"sourceFile\": \"src/auth/permission-checker.ts\",\n    \"foundResults\": false\n  },\n  {\n    \"symbolName\": \"FeatureFlagService\",\n    \"pattern\": \"FeatureFlagService\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"New dependency — need isEnabled() implementation\",\n    \"sourceFile\": \"src/auth/permission-checker.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"RoleHierarchy\",\n    \"pattern\": \"RoleHierarchy\",\n    \"riskLevel\": \"medium\",\n    \"rationale\": \"Still used via .check() — verify compatibility\",\n    \"sourceFile\": \"src/auth/permission-checker.ts\",\n    \"foundResults\": true\n  }\n]",
+      "collectedSnippetsSummary": "[\n  {\n    \"filePath\": \"src/auth/auth.guard.ts\",\n    \"relatedSymbol\": \"hasPermission\",\n    \"rationale\": \"Guard that calls hasPermission on every request\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/auth/permission.repository.ts\",\n    \"relatedSymbol\": \"PermissionRepository\",\n    \"rationale\": \"Repository implementation — has getUserRole but need to verify getDirectPermissions\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/feature-flags/feature-flag.service.ts\",\n    \"relatedSymbol\": \"FeatureFlagService\",\n    \"rationale\": \"FeatureFlagService.isEnabled implementation\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/auth/role-hierarchy.ts\",\n    \"relatedSymbol\": \"RoleHierarchy\",\n    \"rationale\": \"RoleHierarchy.check implementation\",\n    \"riskLevel\": \"medium\",\n    \"hop\": 1\n  },\n  {\n    \"filePath\": \"src/admin/admin.guard.ts\",\n    \"relatedSymbol\": \"hasPermission\",\n    \"rationale\": \"Admin guard also calling hasPermission\",\n    \"riskLevel\": \"high\",\n    \"hop\": 1\n  }\n]",
+      "expectedSufficient": "false",
+      "expectedMinGaps": "1",
+      "expectedQuerySymbols": "[\"getDirectPermissions\"]",
+      "forbiddenPatterns": "[\"getDirectPermissions\"]"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-coverage-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "Example 10: src/api/middleware/cors.middleware.ts",
+    "vars": {
+      "changedFilenames": "[\n  \"src/api/middleware/cors.middleware.ts\"\n]",
+      "diffSummary": "### src/api/middleware/cors.middleware.ts\n@@ -1,12 +1,14 @@\n import { Injectable, NestMiddleware } from '@nestjs/common';\n import { Request, Response, NextFunction } from 'express';\n+import { CorsConfig } from '../../config/cors.config';\n \n @Injectable()\n export class CorsMiddleware implements NestMiddleware {\n   use(req: Request, res: Response, next: NextFunction) {\n-    res.header('Access-Control-Allow-Origin', '*');\n-    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE');\n-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');\n+    const config = CorsConfig.forOrigin(req.headers.origin);\n+    res.header('Access-Control-Allow-Origin', config.origin);\n+    res.header('Access-Control-Allow-Methods', config.methods.join(','));\n+    res.header('Access-Control-Allow-Headers', config.headers.join(','));\n+    res.header('Access-Control-Max-Age', String(config.maxAge));\n     if (req.method === 'OPTIONS') { res.sendStatus(204); return; }\n     next();\n   }\n }",
+      "language": "en-US",
+      "originalQueries": "[\n  {\n    \"symbolName\": \"CorsMiddleware\",\n    \"pattern\": \"CorsMiddleware\",\n    \"riskLevel\": \"medium\",\n    \"rationale\": \"Middleware implementation changed but interface is same\",\n    \"sourceFile\": \"src/api/middleware/cors.middleware.ts\",\n    \"foundResults\": true\n  },\n  {\n    \"symbolName\": \"CorsConfig\",\n    \"pattern\": \"CorsConfig\",\n    \"riskLevel\": \"high\",\n    \"rationale\": \"New dependency — need forOrigin() implementation to understand CORS behavior\",\n    \"sourceFile\": \"src/api/middleware/cors.middleware.ts\",\n    \"foundResults\": false\n  }\n]",
+      "collectedSnippetsSummary": "[\n  {\n    \"filePath\": \"src/api/app.module.ts\",\n    \"relatedSymbol\": \"CorsMiddleware\",\n    \"rationale\": \"Module registering CorsMiddleware\",\n    \"riskLevel\": \"medium\",\n    \"hop\": 1\n  }\n]",
+      "expectedSufficient": "false",
+      "expectedMinGaps": "1",
+      "expectedQuerySymbols": "[\"CorsConfig\",\"forOrigin\"]",
+      "forbiddenPatterns": "[\"CorsConfig\"]"
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-parse-assertion.js"
+      },
+      {
+        "type": "javascript",
+        "value": "file://sufficiency-coverage-assertion.js"
+      }
+    ]
+  }
+]

@@ -8,7 +8,6 @@ import {
     forgejoPullRequestReviewCommentPayload,
 } from '../stubs/forgejo-webhook-stubs';
 
-
 describe('ForgejoController', () => {
     let controller: ForgejoController;
     let enqueueWebhookUseCase: jest.Mocked<EnqueueWebhookUseCase>;

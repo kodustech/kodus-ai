@@ -1,6 +1,6 @@
 "use client";
 
-import { Node, mergeAttributes } from "@tiptap/core";
+import { mergeAttributes, Node } from "@tiptap/core";
 
 export interface MCPMentionOptions {
     HTMLAttributes: Record<string, any>;
@@ -71,54 +71,34 @@ export const MCPMention = Node.create<MCPMentionOptions>({
                     "data-type": "mcp-mention",
                     "data-app": app,
                     "data-tool": tool,
-                    role: "button",
+                    "role": "button",
                     "aria-label": `MCP tool: ${app} - ${tool}. Press Delete or Backspace to remove.`,
-                    tabindex: "-1",
-                    class: "group inline-flex items-center gap-1 rounded-md bg-primary/15 px-2 py-1 ring-1 ring-primary/30 whitespace-nowrap transition-all duration-150 hover:bg-primary/20 hover:ring-primary/40",
-                    style: "display:inline-flex;flex-shrink:0;vertical-align:baseline;",
-                    contenteditable: "false",
+                    "tabindex": "-1",
+                    "class":
+                        "group inline-flex items-center gap-1 rounded-md bg-primary/15 px-2 py-1 ring-1 ring-primary/30 whitespace-nowrap transition-all duration-150 hover:bg-primary/20 hover:ring-primary/40",
+                    "style":
+                        "display:inline-flex;flex-shrink:0;vertical-align:baseline;",
+                    "contenteditable": "false",
                 },
                 this.options.HTMLAttributes,
                 HTMLAttributes,
             ),
-            [
-                "span",
-                { class: "text-text-secondary font-medium" },
-                "mcp",
-            ],
-            [
-                "span",
-                { class: "text-text-secondary/70" },
-                "<",
-            ],
-            [
-                "span",
-                { class: "text-primary-light font-semibold" },
-                app,
-            ],
-            [
-                "span",
-                { class: "text-text-secondary/70" },
-                "|",
-            ],
-            [
-                "span",
-                { class: "text-accent font-bold" },
-                tool,
-            ],
-            [
-                "span",
-                { class: "text-text-secondary/70" },
-                ">",
-            ],
+            ["span", { class: "text-text-secondary font-medium" }, "mcp"],
+            ["span", { class: "text-text-secondary/70" }, "<"],
+            ["span", { class: "text-primary-light font-semibold" }, app],
+            ["span", { class: "text-text-secondary/70" }, "|"],
+            ["span", { class: "text-accent font-bold" }, tool],
+            ["span", { class: "text-text-secondary/70" }, ">"],
             [
                 "button",
                 {
-                    type: "button",
+                    "type": "button",
                     "data-remove-mention": "true",
                     "aria-label": "Remove",
-                    class: "ml-0.5 -mr-0.5 rounded px-0.5 py-0 text-xs font-medium text-red-400/80 hover:text-red-400 hover:bg-red-400/20 opacity-0 group-hover:opacity-100 transition-all duration-150 active:scale-95",
-                    style: "outline:none;border:none;background:transparent;cursor:pointer;",
+                    "class":
+                        "ml-0.5 -mr-0.5 rounded px-0.5 py-0 text-xs font-medium text-red-400/80 hover:text-red-400 hover:bg-red-400/20 opacity-0 group-hover:opacity-100 transition-all duration-150 active:scale-95",
+                    "style":
+                        "outline:none;border:none;background:transparent;cursor:pointer;",
                 },
                 "×",
             ],
@@ -138,4 +118,3 @@ export const MCPMention = Node.create<MCPMentionOptions>({
         } as any;
     },
 });
-

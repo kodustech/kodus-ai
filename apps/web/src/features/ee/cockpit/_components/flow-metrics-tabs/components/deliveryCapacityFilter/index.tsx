@@ -26,7 +26,7 @@ export function DeliveryCapacityFilter({
                         )}>
                         <div>
                             <h3 className="text-sm font-bold">To do</h3>
-                            <span className="text-gray-400 text-xs">
+                            <span className="text-xs text-gray-400">
                                 Count "new items" as items added to the "To do"
                                 column.
                             </span>
@@ -41,7 +41,7 @@ export function DeliveryCapacityFilter({
                         )}>
                         <div>
                             <h3 className="text-sm font-bold">Creation date</h3>
-                            <span className="text-gray-400 text-xs">
+                            <span className="text-xs text-gray-400">
                                 Filter "new items" by creation date.
                             </span>
                         </div>

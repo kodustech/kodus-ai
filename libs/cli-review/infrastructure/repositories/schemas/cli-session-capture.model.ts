@@ -153,8 +153,9 @@ export class CliSessionCaptureModel extends CoreDocument {
     classificationSource?: string | null;
 }
 
-export const CliSessionCaptureSchema =
-    SchemaFactory.createForClass(CliSessionCaptureModel);
+export const CliSessionCaptureSchema = SchemaFactory.createForClass(
+    CliSessionCaptureModel,
+);
 
 CliSessionCaptureSchema.index(
     { dedupKey: 1 },

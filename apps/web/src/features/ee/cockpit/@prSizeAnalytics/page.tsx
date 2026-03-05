@@ -7,9 +7,9 @@ import {
     TooltipTrigger,
 } from "@components/ui/tooltip";
 import { formatISO, subWeeks } from "date-fns";
+import { extractApiData } from "src/features/ee/cockpit/_helpers/api-data-extractor";
 import { getPRSizeAnalytics } from "src/features/ee/cockpit/_services/analytics/productivity/fetch";
 import { getPercentageDiff } from "src/features/ee/cockpit/_services/analytics/utils";
-import { extractApiData } from "src/features/ee/cockpit/_helpers/api-data-extractor";
 
 import { InsightsBadge } from "../_components/insights-badge";
 import { PercentageDiff } from "../_components/percentage-diff";
@@ -54,13 +54,15 @@ export default async function PRSizeAnalytics() {
     if (
         !data?.currentPeriod ||
         !data?.previousPeriod ||
-        (data.currentPeriod.totalPRs === 0 && data.previousPeriod.totalPRs === 0)
+        (data.currentPeriod.totalPRs === 0 &&
+            data.previousPeriod.totalPRs === 0)
     ) {
         return <NoData />;
     }
 
     const [badge] = Object.entries(comparisonParameters).find(
-        ([, { compareFn }]) => compareFn(data?.currentPeriod?.averagePRSize ?? 0),
+        ([, { compareFn }]) =>
+            compareFn(data?.currentPeriod?.averagePRSize ?? 0),
     ) ?? ["need-focus"];
 
     return (

@@ -1,6 +1,6 @@
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
-
 import { getAutoLicenseAssignmentConfig } from "src/lib/services/organizationParameters/fetch";
+
 import {
     getOrganizationMembers,
     getUsersWithLicense,
@@ -12,16 +12,20 @@ import { LicensesPageClient } from "./_components/page.client";
 export default async function SubscriptionTabs() {
     const teamId = await getGlobalSelectedTeamId();
 
-    const [organizationMembersRaw, usersWithLicense, license, autoLicenseAssignmentConfig] =
-        await Promise.all([
-            getOrganizationMembers({ teamId }).catch(() => []),
-            getUsersWithLicense({ teamId }).catch(() => []),
-            validateOrganizationLicense({ teamId }).catch(() => ({
-                valid: false,
-                subscriptionStatus: "inactive" as const,
-            })),
-            getAutoLicenseAssignmentConfig().catch(() => null),
-        ]);
+    const [
+        organizationMembersRaw,
+        usersWithLicense,
+        license,
+        autoLicenseAssignmentConfig,
+    ] = await Promise.all([
+        getOrganizationMembers({ teamId }).catch(() => []),
+        getUsersWithLicense({ teamId }).catch(() => []),
+        validateOrganizationLicense({ teamId }).catch(() => ({
+            valid: false,
+            subscriptionStatus: "inactive" as const,
+        })),
+        getAutoLicenseAssignmentConfig().catch(() => null),
+    ]);
 
     const organizationMembers = Array.isArray(organizationMembersRaw)
         ? organizationMembersRaw

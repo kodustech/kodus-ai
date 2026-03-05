@@ -206,10 +206,11 @@ export class GetCodeReviewParameterUseCase {
                 );
 
                 // Buscar e adicionar referências externas do nível repositório
-                const repoConfigKey = this.promptReferenceManager.buildConfigKey(
-                    organizationAndTeamData,
-                    repo.id,
-                );
+                const repoConfigKey =
+                    this.promptReferenceManager.buildConfigKey(
+                        organizationAndTeamData,
+                        repo.id,
+                    );
                 formattedRepoFileConfig =
                     await this.enrichConfigWithExternalReferences(
                         formattedRepoFileConfig,
@@ -221,17 +222,19 @@ export class GetCodeReviewParameterUseCase {
                 for (const dir of repo.directories || []) {
                     try {
                         const directoryFile =
-                            await this.codeBaseConfigService.getKodusConfigFile({
-                                organizationAndTeamData,
-                                repository,
-                                directoryPath: dir.path,
-                                overrideConfig:
-                                    dir.configs
-                                        ?.kodusConfigFileOverridesWebPreferences ??
-                                    repo.configs
-                                        ?.kodusConfigFileOverridesWebPreferences ??
-                                    false,
-                            });
+                            await this.codeBaseConfigService.getKodusConfigFile(
+                                {
+                                    organizationAndTeamData,
+                                    repository,
+                                    directoryPath: dir.path,
+                                    overrideConfig:
+                                        dir.configs
+                                            ?.kodusConfigFileOverridesWebPreferences ??
+                                        repo.configs
+                                            ?.kodusConfigFileOverridesWebPreferences ??
+                                        false,
+                                },
+                            );
 
                         const formattedDirConfig = this.formatLevel(
                             formattedRepoFileConfig,

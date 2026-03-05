@@ -52,12 +52,8 @@ export const SelectRepositories = (props: {
 
     const sortedRepositories = useMemo(() => {
         return [...repositories].sort((a, b) => {
-            const aTime = a.lastActivityAt
-                ? Date.parse(a.lastActivityAt)
-                : 0;
-            const bTime = b.lastActivityAt
-                ? Date.parse(b.lastActivityAt)
-                : 0;
+            const aTime = a.lastActivityAt ? Date.parse(a.lastActivityAt) : 0;
+            const bTime = b.lastActivityAt ? Date.parse(b.lastActivityAt) : 0;
 
             if (bTime !== aTime) return bTime - aTime;
 
@@ -146,41 +142,49 @@ export const SelectRepositories = (props: {
                         }
 
                         return 0;
-                    }}
-                >
+                    }}>
                     <CommandInput
                         placeholder="Search repository..."
                         onValueChange={setSearch}
                     />
 
-                    {(filteredUnselected.length > 0 || filteredSelected.length > 0) && (
+                    {(filteredUnselected.length > 0 ||
+                        filteredSelected.length > 0) && (
                         <div className="flex justify-end gap-3 border-b px-3 py-1.5">
                             {filteredSelected.length > 0 && (
                                 <button
                                     type="button"
-                                    className="text-text-secondary hover:text-text-primary text-xs font-medium cursor-pointer"
+                                    className="text-text-secondary hover:text-text-primary cursor-pointer text-xs font-medium"
                                     onClick={() => {
-                                        const idsToRemove = new Set(filteredSelected.map((r) => r.id));
-                                        onChangeSelectedRepositories(
-                                            selectedRepositories.filter((r) => !idsToRemove.has(r.id)),
+                                        const idsToRemove = new Set(
+                                            filteredSelected.map((r) => r.id),
                                         );
-                                    }}
-                                >
-                                    Clear selection{search ? ` (${filteredSelected.length})` : ""}
+                                        onChangeSelectedRepositories(
+                                            selectedRepositories.filter(
+                                                (r) => !idsToRemove.has(r.id),
+                                            ),
+                                        );
+                                    }}>
+                                    Clear selection
+                                    {search
+                                        ? ` (${filteredSelected.length})`
+                                        : ""}
                                 </button>
                             )}
                             {filteredUnselected.length > 0 && (
                                 <button
                                     type="button"
-                                    className="text-primary-light hover:text-primary-dark text-xs font-medium cursor-pointer"
+                                    className="text-primary-light hover:text-primary-dark cursor-pointer text-xs font-medium"
                                     onClick={() => {
                                         onChangeSelectedRepositories([
                                             ...selectedRepositories,
                                             ...filteredUnselected,
                                         ]);
-                                    }}
-                                >
-                                    Select all{search ? ` (${filteredUnselected.length})` : ""}
+                                    }}>
+                                    Select all
+                                    {search
+                                        ? ` (${filteredUnselected.length})`
+                                        : ""}
                                 </button>
                             )}
                         </div>

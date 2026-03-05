@@ -7,8 +7,8 @@ import {
     IContextReferenceService,
 } from '@libs/ai-engine/domain/contextReference/contracts/context-reference.service.contract';
 import {
-    KODY_RULES_SERVICE_TOKEN,
     IKodyRulesService,
+    KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 
 import { enrichRulesWithContextReferences } from './utils/enrich-rules-with-context-references.util';

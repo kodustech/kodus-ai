@@ -26,19 +26,39 @@ export class CliDeviceEntity implements Entity<ICliDevice> {
         this._updatedAt = data.updatedAt;
     }
 
-    public static create(data: ICliDevice | Partial<ICliDevice>): CliDeviceEntity {
+    public static create(
+        data: ICliDevice | Partial<ICliDevice>,
+    ): CliDeviceEntity {
         return new CliDeviceEntity(data);
     }
 
-    public get uuid() { return this._uuid; }
-    public get deviceId() { return this._deviceId; }
-    public get deviceTokenHash() { return this._deviceTokenHash; }
-    public get organization() { return this._organization; }
-    public get user() { return this._user; }
-    public get lastSeenAt() { return this._lastSeenAt; }
-    public get userAgent() { return this._userAgent; }
-    public get createdAt() { return this._createdAt; }
-    public get updatedAt() { return this._updatedAt; }
+    public get uuid() {
+        return this._uuid;
+    }
+    public get deviceId() {
+        return this._deviceId;
+    }
+    public get deviceTokenHash() {
+        return this._deviceTokenHash;
+    }
+    public get organization() {
+        return this._organization;
+    }
+    public get user() {
+        return this._user;
+    }
+    public get lastSeenAt() {
+        return this._lastSeenAt;
+    }
+    public get userAgent() {
+        return this._userAgent;
+    }
+    public get createdAt() {
+        return this._createdAt;
+    }
+    public get updatedAt() {
+        return this._updatedAt;
+    }
 
     public toObject(): ICliDevice {
         return {

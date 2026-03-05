@@ -1,8 +1,47 @@
 import {
     BlueprintContext,
+    BlueprintStepContract,
     BlueprintResult,
     BlueprintRunnerOptions,
 } from './blueprint.types';
+
+export class BlueprintStepContractViolationError extends Error {
+    constructor(
+        readonly stepName: string,
+        readonly stage: 'input' | 'output',
+        readonly details: string,
+    ) {
+        super(
+            `[blueprint] Step '${stepName}' failed ${stage} contract validation: ${details}`,
+        );
+        this.name = 'BlueprintStepContractViolationError';
+    }
+}
+
+function validateContract<T extends BlueprintContext>(
+    stepName: string,
+    stage: 'input' | 'output',
+    contract: BlueprintStepContract | undefined,
+    ctx: T,
+): T {
+    const schema = stage === 'input' ? contract?.input : contract?.output;
+    if (!schema) {
+        return ctx;
+    }
+
+    const parsed = schema.safeParse(ctx);
+    if (!parsed.success) {
+        const details = parsed.error.issues
+            .map(
+                (issue) =>
+                    `${issue.path.join('.') || '<root>'}: ${issue.message}`,
+            )
+            .join('; ');
+        throw new BlueprintStepContractViolationError(stepName, stage, details);
+    }
+
+    return parsed.data as T;
+}
 
 /**
  * runBlueprint — Execute a skill blueprint against an initial context.
@@ -44,8 +83,11 @@ export async function runBlueprint<T extends BlueprintContext>(
         log?.log(`[blueprint] running step: ${step.name} (${step.type})`);
 
         try {
+            ctx = validateContract(step.name, 'input', step.contract, ctx);
+
             if (step.type === 'deterministic') {
                 ctx = await step.fn(ctx);
+                ctx = validateContract(step.name, 'output', step.contract, ctx);
                 completedSteps.push(step.name);
                 emitMetric('success');
             } else if (step.type === 'gate') {
@@ -55,17 +97,30 @@ export async function runBlueprint<T extends BlueprintContext>(
                         `[blueprint] gate '${step.name}' failed — short-circuiting`,
                     );
                     ctx = step.onFail(ctx);
+                    ctx = validateContract(
+                        step.name,
+                        'output',
+                        step.contract,
+                        ctx,
+                    );
                     emitMetric('skipped');
-                    return { context: ctx, completedSteps, skippedAt: step.name };
+                    return {
+                        context: ctx,
+                        completedSteps,
+                        skippedAt: step.name,
+                    };
                 }
+                ctx = validateContract(step.name, 'output', step.contract, ctx);
                 completedSteps.push(step.name);
                 emitMetric('success');
             } else if (step.type === 'llm') {
                 ctx = await options.runLLMStep(step, ctx);
+                ctx = validateContract(step.name, 'output', step.contract, ctx);
                 completedSteps.push(step.name);
                 emitMetric('success');
             } else if (step.type === 'format') {
                 ctx = step.fn(ctx);
+                ctx = validateContract(step.name, 'output', step.contract, ctx);
                 completedSteps.push(step.name);
                 emitMetric('success');
             } else if (step.type === 'parallel') {

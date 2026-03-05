@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { redirect, usePathname } from "next/navigation";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
@@ -23,15 +22,16 @@ import {
     SidebarMenuSub,
     SidebarMenuSubItem,
 } from "@components/ui/sidebar";
+import { getMCPPlugins } from "@services/mcp-manager/fetch";
+import { MCPServiceUnavailableError } from "@services/mcp-manager/utils";
 import {
     useSuspenseGetDefaultCodeReviewParameter,
     useSuspenseGetFormattedCodeReviewParameter,
     useSuspenseGetParameterPlatformConfigs,
 } from "@services/parameters/hooks";
-import { getMCPPlugins } from "@services/mcp-manager/fetch";
-import { MCPServiceUnavailableError } from "@services/mcp-manager/utils";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
+import { useQuery } from "@tanstack/react-query";
 import { FEATURE_FLAGS } from "src/core/config/feature-flags";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { safeArray } from "src/core/utils/safe-array";
@@ -236,7 +236,9 @@ export const SettingsLayout = ({ children }: React.PropsWithChildren) => {
                                                         <Badge
                                                             variant="primary-dark"
                                                             className="h-5 min-w-5 rounded-full px-1.5 text-[10px] font-medium">
-                                                            {globalOverrideCount}
+                                                            {
+                                                                globalOverrideCount
+                                                            }
                                                         </Badge>
                                                     )
                                                 }>
@@ -252,7 +254,8 @@ export const SettingsLayout = ({ children }: React.PropsWithChildren) => {
                                                             const active =
                                                                 repositoryId ===
                                                                     "global" &&
-                                                                pageName === href;
+                                                                pageName ===
+                                                                    href;
 
                                                             return (
                                                                 <SidebarMenuSubItem
@@ -268,7 +271,9 @@ export const SettingsLayout = ({ children }: React.PropsWithChildren) => {
                                                                                 active
                                                                             }
                                                                             className="min-h-auto w-full justify-start px-0 py-2">
-                                                                            {label}
+                                                                            {
+                                                                                label
+                                                                            }
                                                                         </Button>
                                                                     </Link>
                                                                 </SidebarMenuSubItem>

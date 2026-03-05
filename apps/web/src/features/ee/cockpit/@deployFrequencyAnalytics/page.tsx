@@ -7,9 +7,9 @@ import {
     TooltipTrigger,
 } from "@components/ui/tooltip";
 import { formatISO, subWeeks } from "date-fns";
+import { extractApiData } from "src/features/ee/cockpit/_helpers/api-data-extractor";
 import { getDeployFrequencyAnalytics } from "src/features/ee/cockpit/_services/analytics/productivity/fetch";
 import { getPercentageDiff } from "src/features/ee/cockpit/_services/analytics/utils";
-import { extractApiData } from "src/features/ee/cockpit/_helpers/api-data-extractor";
 
 import { InsightsBadge } from "../_components/insights-badge";
 import { CockpitNoDataPlaceholder } from "../_components/no-data-placeholder";

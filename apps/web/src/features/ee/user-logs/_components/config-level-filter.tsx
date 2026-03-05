@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import {
     DropdownMenu,
@@ -7,7 +8,6 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@components/ui/dropdown-menu";
-import { Badge } from "@components/ui/badge";
 import { ChevronDownIcon } from "lucide-react";
 
 type ConfigLevel = "all" | "main" | "global" | "repository";
@@ -24,8 +24,11 @@ const levels = [
     { value: "repository" as const, label: "Repository" },
 ];
 
-export const ConfigLevelFilter = ({ selectedLevel, onLevelChange }: ConfigLevelFilterProps) => {
-    const currentLevel = levels.find(level => level.value === selectedLevel);
+export const ConfigLevelFilter = ({
+    selectedLevel,
+    onLevelChange,
+}: ConfigLevelFilterProps) => {
+    const currentLevel = levels.find((level) => level.value === selectedLevel);
 
     return (
         <DropdownMenu>
@@ -55,4 +58,4 @@ export const ConfigLevelFilter = ({ selectedLevel, onLevelChange }: ConfigLevelF
             </DropdownMenuContent>
         </DropdownMenu>
     );
-}; 
+};

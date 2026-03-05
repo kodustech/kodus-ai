@@ -5,23 +5,23 @@ import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
 import { Heading } from "@components/ui/heading";
 import { Page } from "@components/ui/page";
+import { ScrollArea } from "@components/ui/scroll-area";
+import { saveMarketingSurvey } from "@services/users/fetch";
 import {
     ArrowRight,
+    BookOpen,
+    Clock,
     Globe,
     Megaphone,
     MessageCircle,
     Search,
+    Shield,
     Sparkles,
+    Target,
     Users,
     Zap,
-    Shield,
-    Clock,
-    BookOpen,
-    Target,
 } from "lucide-react";
-import { ScrollArea } from "@components/ui/scroll-area";
 import { cn } from "src/core/utils/components";
-import { saveMarketingSurvey } from "@services/users/fetch";
 
 import { StepIndicators } from "../_components/step-indicators";
 
@@ -183,7 +183,7 @@ export default function MarketingSurveyPage() {
     const canContinue = selectedSource && selectedGoal;
 
     return (
-        <Page.Root className="mx-auto flex min-h-screen max-h-screen flex-col gap-6 overflow-hidden p-6 lg:flex-row lg:gap-6">
+        <Page.Root className="mx-auto flex max-h-screen min-h-screen flex-col gap-6 overflow-hidden p-6 lg:flex-row lg:gap-6">
             <div className="bg-card-lv1 flex w-full flex-col justify-center gap-10 rounded-3xl p-8 lg:max-w-none lg:flex-10 lg:p-12">
                 <div className="flex-1 space-y-6 overflow-hidden">
                     <h1 className="text-2xl font-bold">

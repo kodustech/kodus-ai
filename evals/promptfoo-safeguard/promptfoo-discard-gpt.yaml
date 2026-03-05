@@ -1,0 +1,14 @@
+description: "Safeguard - discard (GPT-4o) - should DISCARD suggestions"
+
+providers:
+  - id: openai:gpt-4o
+    config:
+      temperature: 0
+      max_tokens: 16384
+
+prompts:
+  - file://prompt-loader.js
+
+tests: file://datasets/discard-quick20.json
+
+outputPath: ./results/discard-gpt-output.json

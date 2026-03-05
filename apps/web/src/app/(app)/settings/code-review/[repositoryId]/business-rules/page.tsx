@@ -4,10 +4,10 @@ import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
 import { Link } from "@components/ui/link";
 import { Page } from "@components/ui/page";
-import { useQuery } from "@tanstack/react-query";
 import { getMCPPlugins } from "@services/mcp-manager/fetch";
 import { MCP_CONNECTION_STATUS } from "@services/mcp-manager/types";
 import { useGetSkillMeta } from "@services/skills/hooks";
+import { useQuery } from "@tanstack/react-query";
 import { AlertTriangleIcon, CheckCircleIcon, PlugIcon } from "lucide-react";
 
 import { CodeReviewPagesBreadcrumb } from "../../_components/breadcrumb";
@@ -67,7 +67,9 @@ export default function BusinessRules() {
                                     <>
                                         {" "}
                                         Connect a{" "}
-                                        <strong>{requiredMcps[0].label}</strong>{" "}
+                                        <strong>
+                                            {requiredMcps[0].label}
+                                        </strong>{" "}
                                         plugin
                                         {requiredMcps[0].examples && (
                                             <> ({requiredMcps[0].examples})</>
@@ -78,7 +80,10 @@ export default function BusinessRules() {
                             </p>
 
                             <Link href="/settings/plugins">
-                                <Button size="sm" variant="secondary" leftIcon={<PlugIcon />}>
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    leftIcon={<PlugIcon />}>
                                     Connect a plugin
                                 </Button>
                             </Link>
@@ -91,8 +96,8 @@ export default function BusinessRules() {
                         <CheckCircleIcon className="size-4" />
                         <AlertTitle>Plugin connected</AlertTitle>
                         <AlertDescription>
-                            A task management plugin is connected. Business Rules
-                            Validation is ready to use.
+                            A task management plugin is connected. Business
+                            Rules Validation is ready to use.
                         </AlertDescription>
                     </Alert>
                 )}
@@ -119,7 +124,7 @@ export default function BusinessRules() {
                         <p className="text-text-secondary text-sm">
                             Trigger it automatically on every PR review, or
                             on-demand by commenting{" "}
-                            <code className="bg-card-lv2 rounded px-1 py-0.5 text-xs font-mono">
+                            <code className="bg-card-lv2 rounded px-1 py-0.5 font-mono text-xs">
                                 @kody -v business-logic
                             </code>{" "}
                             in the main PR conversation.

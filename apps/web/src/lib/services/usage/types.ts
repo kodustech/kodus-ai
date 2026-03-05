@@ -32,8 +32,7 @@ export interface UsageByDeveloperResultContract extends BaseUsageContract {
     developer: string;
 }
 
-export interface DailyUsageByDeveloperResultContract
-    extends UsageByDeveloperResultContract {
+export interface DailyUsageByDeveloperResultContract extends UsageByDeveloperResultContract {
     date: string; // YYYY-MM-DD
 }
 

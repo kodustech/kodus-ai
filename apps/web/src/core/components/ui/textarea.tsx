@@ -3,8 +3,7 @@ import { cn } from "src/core/utils/components";
 
 import { Spinner } from "./spinner";
 
-interface TextareaProps
-    extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
     error?: unknown;
     loading?: boolean;
     leftIcon?: React.ReactNode;

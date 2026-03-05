@@ -91,6 +91,7 @@ export type CodeReviewGlobalConfig = {
     isRequestChangesActive: boolean;
     kodyRulesGeneratorEnabled?: boolean;
     kodyFineTuningEnabled?: boolean;
+    llmGeneratedMemoriesRequireApproval?: boolean;
     runOnDraft: boolean;
     codeReviewVersion?: "legacy" | "v2";
     ideRulesSyncEnabled: boolean;

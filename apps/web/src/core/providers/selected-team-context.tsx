@@ -12,7 +12,7 @@ const TeamContext = createContext<{
     setTeamId: (teamId: string) => void;
 }>({
     teamId: undefined,
-    setTeamId: () => { },
+    setTeamId: () => {},
 });
 
 export const useSelectedTeamId = () => {

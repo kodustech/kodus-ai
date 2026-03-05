@@ -1,10 +1,4 @@
-import {
-    Controller,
-    Get,
-    Inject,
-    Param,
-    UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Inject, Param, UseGuards } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import {
     ApiBearerAuth,
@@ -49,7 +43,7 @@ export class SkillsController {
     @ApiOperation({
         summary: 'Get skill platform metadata',
         description:
-            'Return platform-owned metadata from the SKILL.md frontmatter — allowed tools and required MCP plugin categories.',
+            'Return platform-owned metadata from the SKILL.md frontmatter — capabilities, allowed tools and required MCP plugin categories.',
     })
     @ApiOkResponse({ type: SkillMetaResponseDto })
     @UseGuards(PolicyGuard)
@@ -79,6 +73,8 @@ export class SkillsController {
         }),
     )
     public getInstructions(@Param('skillName') skillName: string) {
-        return { instructions: this.skillLoaderService.loadInstructions(skillName) };
+        return {
+            instructions: this.skillLoaderService.loadInstructions(skillName),
+        };
     }
 }

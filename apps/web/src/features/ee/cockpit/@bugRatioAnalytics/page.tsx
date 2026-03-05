@@ -51,8 +51,11 @@ export default async function BugRatioAnalytics() {
     });
     const data = extractApiData(response);
 
-    if (!data?.currentPeriod || !data?.previousPeriod ||
-        (data.currentPeriod.ratio === 0 && data.previousPeriod.ratio === 0)) {
+    if (
+        !data?.currentPeriod ||
+        !data?.previousPeriod ||
+        (data.currentPeriod.ratio === 0 && data.previousPeriod.ratio === 0)
+    ) {
         return <NoData />;
     }
 

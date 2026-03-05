@@ -91,7 +91,7 @@ export const SummaryCards = ({
                         className="group relative overflow-hidden p-4">
                         {/* Background decoration */}
                         <div
-                            className={`absolute -right-4 -top-4 size-20 rounded-full opacity-5 ${styles.bg}`}
+                            className={`absolute -top-4 -right-4 size-20 rounded-full opacity-5 ${styles.bg}`}
                         />
 
                         <div className="relative space-y-2">
@@ -122,7 +122,7 @@ export const SummaryCards = ({
                                     </Tooltip>
                                 )}
                             </div>
-                            <p className="text-text-primary tabular-nums text-2xl font-semibold">
+                            <p className="text-text-primary text-2xl font-semibold tabular-nums">
                                 {formatNumber(card.value)}
                             </p>
                         </div>

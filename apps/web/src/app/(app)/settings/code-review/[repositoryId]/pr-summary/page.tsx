@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
 import { CardHeader } from "@components/ui/card";
@@ -26,13 +27,11 @@ import { EyeIcon, Save } from "lucide-react";
 import { Controller, useFormContext } from "react-hook-form";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
-import { useState } from "react";
 
 import { CodeReviewPagesBreadcrumb } from "../../_components/breadcrumb";
 import GeneratingConfig from "../../_components/generating-config";
 import { OverrideIndicatorForm } from "../../_components/override";
 import { PRSummaryPreviewModal } from "../../_components/pr-summary-preview-modal/modal";
-import { ExternalReferencesDisplay } from "./_components/external-references-display";
 import {
     BehaviourForNewCommits,
     CodeReviewSummaryOptions,
@@ -44,6 +43,7 @@ import {
     usePlatformConfig,
 } from "../../../_components/context";
 import { useCodeReviewRouteParams } from "../../../_hooks";
+import { ExternalReferencesDisplay } from "./_components/external-references-display";
 
 const examples = [
     "Focus on security changes and performance impacts",
@@ -100,7 +100,8 @@ export default function PRSummary(props: AutomationCodeReviewConfigPageProps) {
     const canReadPrs = usePermission(Action.Read, ResourceType.PullRequests);
 
     const generatePRSummary = form.watch("summary.generatePRSummary.value");
-    const [isExternalReferencesProcessing, setIsExternalReferencesProcessing] = useState(false);
+    const [isExternalReferencesProcessing, setIsExternalReferencesProcessing] =
+        useState(false);
 
     const { resetQueries, generateQueryKey } = useReactQueryInvalidateQueries();
 
@@ -271,10 +272,10 @@ export default function PRSummary(props: AutomationCodeReviewConfigPageProps) {
                                                                 {option.name}
                                                                 {"default" in
                                                                     option && (
-                                                                        <small className="text-text-secondary ml-1">
-                                                                            (default)
-                                                                        </small>
-                                                                    )}
+                                                                    <small className="text-text-secondary ml-1">
+                                                                        (default)
+                                                                    </small>
+                                                                )}
                                                             </Heading>
 
                                                             <p className="text-text-secondary text-xs">
@@ -352,10 +353,10 @@ export default function PRSummary(props: AutomationCodeReviewConfigPageProps) {
 
                                                             {"default" in
                                                                 option && (
-                                                                    <small className="text-text-secondary ml-1">
-                                                                        (default)
-                                                                    </small>
-                                                                )}
+                                                                <small className="text-text-secondary ml-1">
+                                                                    (default)
+                                                                </small>
+                                                            )}
                                                         </Heading>
 
                                                         <p className="text-text-secondary text-xs">
@@ -435,7 +436,9 @@ export default function PRSummary(props: AutomationCodeReviewConfigPageProps) {
                                 <Textarea
                                     value={field.value}
                                     disabled={
-                                        field.disabled || !generatePRSummary || isExternalReferencesProcessing
+                                        field.disabled ||
+                                        !generatePRSummary ||
+                                        isExternalReferencesProcessing
                                     }
                                     id={field.name}
                                     className="min-h-48"
@@ -445,8 +448,15 @@ export default function PRSummary(props: AutomationCodeReviewConfigPageProps) {
                                     }
                                 />
                                 <ExternalReferencesDisplay
-                                    externalReferences={(config?.summary?.customInstructions as any)?.externalReferences}
-                                    onProcessingChange={setIsExternalReferencesProcessing}
+                                    externalReferences={
+                                        (
+                                            config?.summary
+                                                ?.customInstructions as any
+                                        )?.externalReferences
+                                    }
+                                    onProcessingChange={
+                                        setIsExternalReferencesProcessing
+                                    }
                                     compact
                                 />
                             </FormControl.Input>

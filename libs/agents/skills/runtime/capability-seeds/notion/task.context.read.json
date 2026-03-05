@@ -1,0 +1,11 @@
+{
+    "providerType": "notion",
+    "capability": "task.context.read",
+    "tools": [
+        "NOTION_FETCH_DATA",
+        "NOTION_SEARCH_NOTION_PAGE",
+        "NOTION_FETCH_ROW",
+        "NOTION_QUERY_DATABASE",
+        "NOTION_GET_PAGE_PROPERTY_ACTION"
+    ]
+}

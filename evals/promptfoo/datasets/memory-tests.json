@@ -1,0 +1,582 @@
+[
+    {
+        "description": "complex-memory-1 (should-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody in billing we never use floating-point for currency calculations. Use integer cents or our Money value object.\"\n  }\n]",
+            "shouldCreateMemory": "true",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "implicit",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "Never use floating-point for currency; use Money value object or integer cents.",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"review-api\",\n  \"snippets\": [\n    {\n      \"file\": \"libs/billing/domain/invoice.ts\",\n      \"code\": \"const total = subtotal * 1.15; // float math\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-1",
+            "sessionId": "memory-session-1",
+            "correlationId": "memory-correlation-1"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-2 (should-not-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody for this PR only, ignore flaky timeout tests so we can unblock release.\"\n  }\n]",
+            "shouldCreateMemory": "false",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"ci-api\",\n  \"snippets\": [\n    {\n      \"file\": \"test/integration/payment-timeout.spec.ts\",\n      \"code\": \"it('retries 3x', async () => { ... })\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-2",
+            "sessionId": "memory-session-2",
+            "correlationId": "memory-correlation-2"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-3 (should-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody please remember: any new queue consumer must define dead-letter exchange and max 5 retries.\"\n  }\n]",
+            "shouldCreateMemory": "true",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "explicit",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "Queue consumers must define dead-letter exchange and maximum 5 retries.",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"architecture-api\",\n  \"snippets\": [\n    {\n      \"file\": \"apps/worker/src/consumers/review.consumer.ts\",\n      \"code\": \"retryStrategy: exponentialBackoff()\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-3",
+            "sessionId": "memory-session-3",
+            "correlationId": "memory-correlation-3"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-4 (should-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody this endpoint is internal-only; all requests must include team key auth (x-team-key or Bearer kodus_*).\"\n  }\n]",
+            "shouldCreateMemory": "true",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "implicit",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "Internal endpoints must require team key authentication (x-team-key or Bearer kodus_*).",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"openapi-api\",\n  \"snippets\": [\n    {\n      \"file\": \"docs/openapi.json\",\n      \"code\": \"security: [{ teamKeyAuth: [] }]\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-4",
+            "sessionId": "memory-session-4",
+            "correlationId": "memory-correlation-4"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-5 (should-not-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody do you remember if we changed the webhook retry policy last week?\"\n  }\n]",
+            "shouldCreateMemory": "false",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"chat-history-api\",\n  \"snippets\": [\n    {\n      \"file\": \"apps/webhooks/src/retry/retry-policy.ts\",\n      \"code\": \"maxRetries = 5\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-5",
+            "sessionId": "memory-session-5",
+            "correlationId": "memory-correlation-5"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-6 (should-not-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody don't store this as a rule, but for this file we can bypass null-check to debug quickly.\"\n  }\n]",
+            "shouldCreateMemory": "false",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"pr-diff-api\",\n  \"snippets\": [\n    {\n      \"file\": \"apps/api/src/modules/auth/login.use-case.ts\",\n      \"code\": \"if (!user) return null\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-6",
+            "sessionId": "memory-session-6",
+            "correlationId": "memory-correlation-6"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-7 (should-not-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody save this token in memory: staging token is sk_live_123_example and reuse it when needed.\"\n  }\n]",
+            "shouldCreateMemory": "false",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"secrets-api\",\n  \"snippets\": [\n    {\n      \"file\": \".env.staging\",\n      \"code\": \"STAGING_TOKEN=sk_live_123_example\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-7",
+            "sessionId": "memory-session-7",
+            "correlationId": "memory-correlation-7"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-8 (should-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"assistant\",\n    \"content\": \"I can use lodash/groupBy here to simplify this transformation.\"\n  },\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody in this repo we avoid Lodash and prefer native JS array methods for readability and bundle size.\"\n  }\n]",
+            "shouldCreateMemory": "true",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "implicit",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "Prefer native JavaScript array methods over Lodash in this repository.",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"bundle-report-api\",\n  \"snippets\": [\n    {\n      \"file\": \"apps/web/src/utils/group-prs.ts\",\n      \"code\": \"import groupBy from 'lodash/groupBy';\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-8",
+            "sessionId": "memory-session-8",
+            "correlationId": "memory-correlation-8"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-9 (should-not-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody for ticket KOD-912, skip complexity warnings in this service while I split it later.\"\n  }\n]",
+            "shouldCreateMemory": "false",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"static-analysis-api\",\n  \"snippets\": [\n    {\n      \"file\": \"libs/automation/src/orchestrator.ts\",\n      \"code\": \"function runAll() { /* complexity 19 */ }\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-9",
+            "sessionId": "memory-session-9",
+            "correlationId": "memory-correlation-9"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-10 (should-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody in this microservice we follow hexagonal architecture strictly: domain layer must never depend on infrastructure.\"\n  }\n]",
+            "shouldCreateMemory": "true",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "implicit",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "Follow hexagonal architecture: domain layer must not depend on infrastructure layer.",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"dependency-graph-api\",\n  \"snippets\": [\n    {\n      \"file\": \"libs/issues/src/domain/create-issue.use-case.ts\",\n      \"code\": \"import { TypeOrmIssueRepository } from '../infrastructure/typeorm/repo';\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-10",
+            "sessionId": "memory-session-10",
+            "correlationId": "memory-correlation-10"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-11 (should-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody we're migrating from AWS SDK v2 to v3; treat any new v2 import as blocker.\"\n  }\n]",
+            "shouldCreateMemory": "true",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "implicit",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "Block new AWS SDK v2 imports and require v3 in new code.",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"pr-diff-api\",\n  \"snippets\": [\n    {\n      \"file\": \"libs/integrations/src/aws/s3.service.ts\",\n      \"code\": \"import AWS from 'aws-sdk';\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-11",
+            "sessionId": "memory-session-11",
+            "correlationId": "memory-correlation-11"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-12 (should-not-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody rename this variable to reqCtx and move on.\"\n  }\n]",
+            "shouldCreateMemory": "false",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"pr-diff-api\",\n  \"snippets\": [\n    {\n      \"file\": \"apps/api/src/common/middleware/request-context.ts\",\n      \"code\": \"const context = getRequestContext(req);\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-12",
+            "sessionId": "memory-session-12",
+            "correlationId": "memory-correlation-12"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-13 (should-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody remember this: API payload keys are camelCase, database columns are snake_case.\"\n  }\n]",
+            "shouldCreateMemory": "true",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "explicit",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "Use camelCase for API JSON keys and snake_case for database columns.",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"schema-inspector-api\",\n  \"snippets\": [\n    {\n      \"file\": \"libs/platformData/src/entities/pull_request.entity.ts\",\n      \"code\": \"@Column({ name: 'created_at' }) createdAt: Date;\"\n    },\n    {\n      \"file\": \"apps/api/src/modules/pr/dto/pr-response.dto.ts\",\n      \"code\": \"createdAt: string;\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-13",
+            "sessionId": "memory-session-13",
+            "correlationId": "memory-correlation-13"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-14 (should-not-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody maybe we should use Redis for this... not sure yet, what do you think?\"\n  }\n]",
+            "shouldCreateMemory": "false",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"infra-catalog-api\",\n  \"snippets\": [\n    {\n      \"file\": \"docker-compose.dev.yml\",\n      \"code\": \"# redis service currently disabled\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-14",
+            "sessionId": "memory-session-14",
+            "correlationId": "memory-correlation-14"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-15 (should-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody guarde esta regra: no domínio, entidades não devem ter propriedades nulas por padrão.\"\n  }\n]",
+            "shouldCreateMemory": "true",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "explicit",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "No domínio, entidades não devem ter propriedades nulas por padrão.",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"domain-lint-api\",\n  \"snippets\": [\n    {\n      \"file\": \"libs/core/src/domain/user.entity.ts\",\n      \"code\": \"middleName: string | null\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-15",
+            "sessionId": "memory-session-15",
+            "correlationId": "memory-correlation-15"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-16 (should-not-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody remember this only for today: skip migration validation errors during deploy.\"\n  }\n]",
+            "shouldCreateMemory": "false",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"deploy-api\",\n  \"snippets\": [\n    {\n      \"file\": \"scripts/dev/deploy.sh\",\n      \"code\": \"yarn migration:run\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-16",
+            "sessionId": "memory-session-16",
+            "correlationId": "memory-correlation-16"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-17 (should-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody don't require new unit tests for LegacyConnector; it's deprecated and scheduled for removal next month.\"\n  }\n]",
+            "shouldCreateMemory": "true",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "implicit",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "Exclude LegacyConnector from new unit test requirements while it is deprecated for removal.",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"deprecation-api\",\n  \"snippets\": [\n    {\n      \"file\": \"libs/integrations/src/legacy/legacy-connector.ts\",\n      \"code\": \"@deprecated remove by 2026-03-31\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-17",
+            "sessionId": "memory-session-17",
+            "correlationId": "memory-correlation-17"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-18 (should-not-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody can you summarize why we removed the old PR synchronizer last quarter?\"\n  }\n]",
+            "shouldCreateMemory": "false",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"commit-history-api\",\n  \"snippets\": [\n    {\n      \"file\": \"libs/code-review/src/sync/old-sync.service.ts\",\n      \"code\": \"// removed in commit abc123\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-18",
+            "sessionId": "memory-session-18",
+            "correlationId": "memory-correlation-18"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-19 (should-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"assistant\",\n    \"content\": \"I can add a LEFT JOIN here to avoid missing rows.\"\n  },\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody for existence checks in Postgres we prefer EXISTS over COUNT(*) and over broad LEFT JOIN patterns for performance.\"\n  }\n]",
+            "shouldCreateMemory": "true",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "implicit",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "Prefer EXISTS over COUNT(*) (and broad LEFT JOIN patterns) for Postgres existence checks.",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"query-plan-api\",\n  \"snippets\": [\n    {\n      \"file\": \"libs/platformData/src/repositories/pr.repository.ts\",\n      \"code\": \"SELECT COUNT(*) > 0 FROM pull_requests WHERE id = $1\"\n    },\n    {\n      \"file\": \"docs/query-plans/existence-check.md\",\n      \"code\": \"EXISTS plan uses index-only scan (3ms) vs COUNT(*) (29ms)\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-19",
+            "sessionId": "memory-session-19",
+            "correlationId": "memory-correlation-19"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    },
+    {
+        "description": "complex-memory-20 (should-not-call)",
+        "vars": {
+            "conversation": "[\n  {\n    \"role\": \"user\",\n    \"content\": \"@kody make a note to ping me after lunch so I remember to rerun the seed script.\"\n  }\n]",
+            "shouldCreateMemory": "false",
+            "expectedToolName": "KODUS_CREATE_MEMORY",
+            "expectedTriggerType": "",
+            "expectedScopeLevel": "",
+            "expectedApplyDuring": "",
+            "expectedApprovalMode": "",
+            "expectedLifecycleAction": "",
+            "expectedRule": "",
+            "expectedAmbiguityLevel": "",
+            "additionalInformation": "API_CONTEXT:\n{\n  \"source\": \"ops-api\",\n  \"snippets\": [\n    {\n      \"file\": \"scripts/seed/run-seed.ts\",\n      \"code\": \"await seedDatabase()\"\n    }\n  ]\n}",
+            "threadId": "memory-thread-20",
+            "sessionId": "memory-session-20",
+            "correlationId": "memory-correlation-20"
+        },
+        "assert": [
+            {
+                "type": "javascript",
+                "value": "file://memory-tool-call-assertion.js"
+            },
+            {
+                "type": "javascript",
+                "value": "file://memory-llm-judge-assertion.js"
+            }
+        ]
+    }
+]

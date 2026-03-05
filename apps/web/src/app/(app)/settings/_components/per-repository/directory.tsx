@@ -20,9 +20,12 @@ import {
 import { cn } from "src/core/utils/components";
 
 import { useCodeReviewRouteParams } from "../../_hooks";
-import type { CodeReviewRepositoryConfig, FormattedCodeReviewConfig } from "../../code-review/_types";
-import { FormattedConfigLevel } from "../../code-review/_types";
 import { countConfigOverrides } from "../../_utils/count-overrides";
+import {
+    FormattedConfigLevel,
+    type CodeReviewRepositoryConfig,
+    type FormattedCodeReviewConfig,
+} from "../../code-review/_types";
 import { SidebarRepositoryOrDirectoryDropdown } from "./options-dropdown";
 
 export const PerDirectory = ({
@@ -42,8 +45,10 @@ export const PerDirectory = ({
     const searchParams = useSearchParams();
     const { repositoryId, pageName, directoryId } = useCodeReviewRouteParams();
     const [open, setOpen] = useState(directoryId === directory.id);
-    
-    const overrideCount = configs ? countConfigOverrides(configs, FormattedConfigLevel.DIRECTORY) : 0;
+
+    const overrideCount = configs
+        ? countConfigOverrides(configs, FormattedConfigLevel.DIRECTORY)
+        : 0;
 
     return (
         <Collapsible
@@ -70,7 +75,7 @@ export const PerDirectory = ({
                                     overrideCount > 0 && (
                                         <Badge
                                             variant="primary-dark"
-                                            className="min-w-5 h-5 rounded-full px-1.5 text-[10px] font-medium">
+                                            className="h-5 min-w-5 rounded-full px-1.5 text-[10px] font-medium">
                                             {overrideCount}
                                         </Badge>
                                     )
@@ -86,7 +91,8 @@ export const PerDirectory = ({
                         {directory.path}
                         {overrideCount > 0 && (
                             <div className="text-text-tertiary mt-1 text-xs">
-                                {overrideCount} config{overrideCount !== 1 ? "s" : ""} overridden
+                                {overrideCount} config
+                                {overrideCount !== 1 ? "s" : ""} overridden
                             </div>
                         )}
                     </TooltipContent>

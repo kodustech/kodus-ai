@@ -1,5 +1,13 @@
-import { runBlueprint } from './blueprint.runner';
-import { BlueprintContext, BlueprintStepMetric } from './blueprint.types';
+import { z } from 'zod';
+
+import {
+    BlueprintContext,
+    BlueprintStepMetric,
+} from '@libs/shared/blueprint/blueprint.types';
+import {
+    BlueprintStepContractViolationError,
+    runBlueprint,
+} from '@libs/shared/blueprint/blueprint.runner';
 
 describe('runBlueprint', () => {
     it('emits metrics for successful and skipped steps with duration', async () => {
@@ -20,7 +28,10 @@ describe('runBlueprint', () => {
                     type: 'gate',
                     name: 'validateContext',
                     condition: () => false,
-                    onFail: (ctx) => ({ ...ctx, formattedResponse: 'missing info' }),
+                    onFail: (ctx) => ({
+                        ...ctx,
+                        formattedResponse: 'missing info',
+                    }),
                 },
             ],
             runLLMStep: async (_step, ctx) => ctx,
@@ -73,5 +84,53 @@ describe('runBlueprint', () => {
             status: 'failed',
         });
         expect(metrics[0].durationMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('fails fast when step input contract is invalid', async () => {
+        await expect(
+            runBlueprint<BlueprintContext>({
+                context: {
+                    organizationAndTeamData: {},
+                    userLanguage: 'en-US',
+                },
+                steps: [
+                    {
+                        type: 'deterministic',
+                        name: 'requiresTaskContext',
+                        contract: {
+                            input: z.looseObject({
+                                taskContext: z.string().min(1),
+                            }),
+                        },
+                        fn: async (ctx) => ctx,
+                    },
+                ],
+                runLLMStep: async (_step, ctx) => ctx,
+            }),
+        ).rejects.toBeInstanceOf(BlueprintStepContractViolationError);
+    });
+
+    it('fails fast when step output contract is invalid', async () => {
+        await expect(
+            runBlueprint<BlueprintContext>({
+                context: {
+                    organizationAndTeamData: {},
+                    userLanguage: 'en-US',
+                },
+                steps: [
+                    {
+                        type: 'deterministic',
+                        name: 'producesTaskContext',
+                        contract: {
+                            output: z.looseObject({
+                                taskContext: z.string().min(1),
+                            }),
+                        },
+                        fn: async (ctx) => ({ ...ctx, taskContext: '' }),
+                    },
+                ],
+                runLLMStep: async (_step, ctx) => ctx,
+            }),
+        ).rejects.toBeInstanceOf(BlueprintStepContractViolationError);
     });
 });

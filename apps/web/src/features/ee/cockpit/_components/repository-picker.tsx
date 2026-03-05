@@ -65,7 +65,7 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
 
     const handleSelect = (repositoryFullName: string) => {
         if (!repositoryFullName) return;
-        
+
         setSelectedRepository(repositoryFullName);
         setOpen(false);
 
@@ -109,9 +109,13 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
                 if (isLoadingMoreRef.current) return;
 
                 const { scrollTop, scrollHeight, clientHeight } = listElement;
-                const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+                const distanceFromBottom =
+                    scrollHeight - scrollTop - clientHeight;
 
-                if (distanceFromBottom < 100 && displayedCount < filteredRepositories.length) {
+                if (
+                    distanceFromBottom < 100 &&
+                    displayedCount < filteredRepositories.length
+                ) {
                     isLoadingMoreRef.current = true;
 
                     requestAnimationFrame(() => {
@@ -129,7 +133,9 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
                 }
             };
 
-            listElement.addEventListener("scroll", handleScroll, { passive: true });
+            listElement.addEventListener("scroll", handleScroll, {
+                passive: true,
+            });
 
             return () => {
                 listElement.removeEventListener("scroll", handleScroll);
@@ -185,48 +191,56 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
 
                         <CommandList
                             ref={(node) => {
-                                commandListRef.current = node as HTMLDivElement | null;
+                                commandListRef.current =
+                                    node as HTMLDivElement | null;
                             }}
                             className="max-h-56 overflow-y-auto">
                             {filteredRepositories.length === 0 ? (
-                                <CommandEmpty>No repository found.</CommandEmpty>
+                                <CommandEmpty>
+                                    No repository found.
+                                </CommandEmpty>
                             ) : (
                                 <CommandGroup>
-                                {!selectedRepository && (
-                                    <CommandItem
-                                        value="all"
-                                        onSelect={() => setOpen(false)}
-                                        className="font-semibold">
-                                        <span>All repositories</span>
-                                        <Check className="text-primary-light -mr-2 size-5" />
-                                    </CommandItem>
-                                )}
-                                {selectedRepository && (
-                                    <CommandItem
-                                        value="all"
-                                        onSelect={handleClearFilter}>
-                                        <span>All repositories</span>
-                                    </CommandItem>
-                                )}
-
-                                {displayedRepositories.map((r) => {
-                                    const fullName = r.full_name || `${r.organizationName}/${r.name}` || r.name;
-                                    const displayName = fullName || "Unknown";
-
-                                    return (
+                                    {!selectedRepository && (
                                         <CommandItem
-                                            key={r.id}
-                                            value={fullName || r.id}
-                                            onSelect={() =>
-                                                handleSelect(fullName)
-                                            }>
-                                            <span>{displayName}</span>
-                                            {selectedRepository === fullName && (
-                                                <Check className="text-primary-light -mr-2 size-5" />
-                                            )}
+                                            value="all"
+                                            onSelect={() => setOpen(false)}
+                                            className="font-semibold">
+                                            <span>All repositories</span>
+                                            <Check className="text-primary-light -mr-2 size-5" />
                                         </CommandItem>
-                                    );
-                                })}
+                                    )}
+                                    {selectedRepository && (
+                                        <CommandItem
+                                            value="all"
+                                            onSelect={handleClearFilter}>
+                                            <span>All repositories</span>
+                                        </CommandItem>
+                                    )}
+
+                                    {displayedRepositories.map((r) => {
+                                        const fullName =
+                                            r.full_name ||
+                                            `${r.organizationName}/${r.name}` ||
+                                            r.name;
+                                        const displayName =
+                                            fullName || "Unknown";
+
+                                        return (
+                                            <CommandItem
+                                                key={r.id}
+                                                value={fullName || r.id}
+                                                onSelect={() =>
+                                                    handleSelect(fullName)
+                                                }>
+                                                <span>{displayName}</span>
+                                                {selectedRepository ===
+                                                    fullName && (
+                                                    <Check className="text-primary-light -mr-2 size-5" />
+                                                )}
+                                            </CommandItem>
+                                        );
+                                    })}
                                     {hasMore && (
                                         <div className="flex items-center justify-center py-2">
                                             <Spinner className="size-4" />

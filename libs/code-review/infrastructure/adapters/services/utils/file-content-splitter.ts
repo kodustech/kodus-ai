@@ -94,9 +94,7 @@ function splitAtASTMarkers(
     let current = '';
 
     for (const section of sections) {
-        const candidate = current
-            ? current + CUT_MARKER + section
-            : section;
+        const candidate = current ? current + CUT_MARKER + section : section;
 
         if (candidate.length <= maxCharsPerChunk || !current) {
             current = candidate;

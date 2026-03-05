@@ -1,0 +1,177 @@
+{
+    "version": "1.1.0",
+    "lastUpdated": "2026-03-02",
+    "models": [
+        {
+            "id": "claude-sonnet-4-5-20250929",
+            "displayName": "Claude Sonnet 4.5",
+            "provider": "anthropic",
+            "tier": "recommended",
+            "benchmarkScore": 87.1,
+            "description": "Rank #1 overall. Best coverage and cross-file detection across all tested models.",
+            "speed": "medium",
+            "contextWindow": "200K",
+            "costTier": "$$$",
+            "strengths": [
+                "Best cross-file detection (90.7%, +4.9pp above avg)",
+                "Highest coverage score (85.0%, +5.2pp above avg)"
+            ],
+            "weaknesses": ["Noise generation at 10.8% (rank #6/8)"],
+            "apiKeyUrl": "https://console.anthropic.com/settings/keys",
+            "defaults": {
+                "temperature": 0,
+                "maxOutputTokens": 16384
+            }
+        },
+        {
+            "id": "gemini-2.5-pro",
+            "displayName": "Gemini 2.5 Pro",
+            "provider": "google_gemini",
+            "tier": "recommended",
+            "benchmarkScore": 86.8,
+            "description": "Rank #2 overall. Very low noise with strong local logic detection.",
+            "speed": "medium",
+            "contextWindow": "1M",
+            "costTier": "$$",
+            "strengths": [
+                "Very low noise generation (4.3%, rank #2/8)",
+                "Strong local logic detection (86.5%, rank #3/8)"
+            ],
+            "weaknesses": ["Coverage below average (78.0%)"],
+            "apiKeyUrl": "https://aistudio.google.com/apikey",
+            "defaults": {
+                "temperature": 0,
+                "maxOutputTokens": 16384
+            }
+        },
+        {
+            "id": "claude-haiku-4-5-20251001",
+            "displayName": "Claude Haiku 4.5",
+            "provider": "anthropic",
+            "tier": "bestValue",
+            "benchmarkScore": 85.0,
+            "description": "Rank #4 overall. Highest coverage of all models with fastest response times.",
+            "speed": "fast",
+            "contextWindow": "200K",
+            "costTier": "$",
+            "strengths": [
+                "Highest coverage of all models (88.8%, +9.0pp above avg)",
+                "Fastest responses (p90: 16.7s, p99: 18.9s)"
+            ],
+            "weaknesses": ["Higher noise generation (18.8%, rank #7/8)"],
+            "apiKeyUrl": "https://console.anthropic.com/settings/keys",
+            "defaults": {
+                "temperature": 0,
+                "maxOutputTokens": 8192
+            }
+        },
+        {
+            "id": "moonshotai/kimi-k2.5",
+            "displayName": "Kimi K2.5",
+            "provider": "openrouter",
+            "tier": "bestValue",
+            "benchmarkScore": 85.0,
+            "description": "Rank #3 overall. Best local logic detection with highest pass rate.",
+            "speed": "slow",
+            "contextWindow": "256K",
+            "costTier": "$",
+            "strengths": [
+                "Best local logic detection (92.7%, +7.3pp above avg)",
+                "Highest pass rate / fewest errors (52%, 36/75)"
+            ],
+            "weaknesses": ["Highest noise generation (21.4%, rank #8/8)"],
+            "apiKeyUrl": "https://openrouter.ai/keys",
+            "defaults": {
+                "temperature": 0,
+                "maxOutputTokens": 16384
+            }
+        },
+        {
+            "id": "gemini-3-flash-preview",
+            "displayName": "Gemini 3 Flash",
+            "provider": "google_gemini",
+            "tier": "budget",
+            "benchmarkScore": 83.9,
+            "description": "Rank #6 overall. Largest context window at lowest cost.",
+            "speed": "medium",
+            "contextWindow": "1M",
+            "costTier": "$",
+            "strengths": [
+                "High pass rate (42.7%, rank #3/8)",
+                "Low noise generation (9.8%)"
+            ],
+            "weaknesses": ["Coverage below average (77.6%)"],
+            "apiKeyUrl": "https://aistudio.google.com/apikey",
+            "defaults": {
+                "temperature": 0,
+                "maxOutputTokens": 8192
+            }
+        },
+        {
+            "id": "z-ai/glm-5",
+            "displayName": "GLM-5",
+            "provider": "openrouter",
+            "tier": "budget",
+            "benchmarkScore": 83.8,
+            "description": "Rank #7 overall. Lowest noise generation of all models at low cost via OpenRouter.",
+            "speed": "slow",
+            "contextWindow": "200K",
+            "costTier": "$",
+            "strengths": [
+                "Lowest noise generation of all models (4.0%)",
+                "Low cost via OpenRouter ($0.80/$2.56 per 1M tokens)"
+            ],
+            "weaknesses": [
+                "Lowest coverage of all models (71.5%, -8.3pp below avg)"
+            ],
+            "apiKeyUrl": "https://openrouter.ai/keys",
+            "defaults": {
+                "temperature": 0,
+                "maxOutputTokens": 16384
+            }
+        },
+        {
+            "id": "gemini-3.1-pro-preview",
+            "displayName": "Gemini 3.1 Pro",
+            "provider": "google_gemini",
+            "tier": "other",
+            "benchmarkScore": 84.2,
+            "description": "Rank #5 overall. Strong local logic but weakest cross-file detection.",
+            "speed": "slow",
+            "contextWindow": "1M",
+            "costTier": "$$$",
+            "strengths": [
+                "Strong local logic (87.5%, rank #2/8)",
+                "Low noise generation (8.7%)"
+            ],
+            "weaknesses": ["Weakest cross-file detection (80.5%, last place)"],
+            "apiKeyUrl": "https://aistudio.google.com/apikey",
+            "defaults": {
+                "temperature": 0,
+                "maxOutputTokens": 16384
+            }
+        },
+        {
+            "id": "gpt-5.2",
+            "displayName": "GPT-5.2",
+            "provider": "openai",
+            "tier": "other",
+            "benchmarkScore": 83.2,
+            "description": "Rank #8 overall. Most consistent latency with low noise.",
+            "speed": "fast",
+            "contextWindow": "400K",
+            "costTier": "$$$",
+            "strengths": [
+                "Most consistent latency (p50-p99: 19s-34s)",
+                "Low noise generation (8.2%)"
+            ],
+            "weaknesses": ["Coverage well below average (74.6%, rank #7/8)"],
+            "apiKeyUrl": "https://platform.openai.com/api-keys",
+            "defaults": {
+                "temperature": 0,
+                "maxOutputTokens": 16384
+            }
+        }
+    ],
+    "annotations": {}
+}

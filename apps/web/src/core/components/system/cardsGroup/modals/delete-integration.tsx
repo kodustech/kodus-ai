@@ -25,7 +25,8 @@ export const DeleteIntegrationModal = ({
                 <DialogHeader>
                     <DialogTitle>Delete {title} integration</DialogTitle>
                     <DialogDescription>
-                        Are you sure you want to delete this integration? This action cannot be undone.
+                        Are you sure you want to delete this integration? This
+                        action cannot be undone.
                     </DialogDescription>
                 </DialogHeader>
 

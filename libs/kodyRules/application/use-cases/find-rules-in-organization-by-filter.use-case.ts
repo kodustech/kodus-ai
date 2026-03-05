@@ -109,7 +109,9 @@ export class FindRulesInOrganizationByRuleFilterKodyRulesUseCase implements IUse
             const filteredByStatus = includeDeleted
                 ? filteredRules
                 : filteredRules.filter(
-                      (rule) => rule.status !== KodyRulesStatus.DELETED,
+                      (rule) =>
+                          rule.status !== KodyRulesStatus.DELETED &&
+                          rule.status !== KodyRulesStatus.APPLIED,
                   );
 
             const rules = filteredByStatus.filter((rule) => {

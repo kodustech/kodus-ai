@@ -1,0 +1,56 @@
+name: "Self-Hosted: Send Discord Notification"
+
+on:
+    workflow_dispatch:
+        inputs:
+            release_tag:
+                description: "Self-hosted release tag (e.g. selfhosted-2.0.19)"
+                required: true
+                type: string
+            status:
+                description: "Notification status"
+                required: true
+                default: "success"
+                type: choice
+                options:
+                    - success
+                    - failure
+
+jobs:
+    notify-discord:
+        name: Notify Discord
+        runs-on: ubuntu-latest
+        environment: production
+        steps:
+            - name: Check Discord webhook configuration
+              id: discord-webhook
+              run: |
+                  if [ -n "${{ secrets.DISCORD_WEBHOOK_SELFHOSTED }}" ]; then
+                    echo "configured=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "configured=false" >> "$GITHUB_OUTPUT"
+                    echo "DISCORD_WEBHOOK_SELFHOSTED is not configured for the production environment."
+                    exit 1
+                  fi
+
+            - name: Notify Discord on Success
+              if: github.event.inputs.status == 'success'
+              uses: sarisia/actions-status-discord@v1.15.3
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_SELFHOSTED }}
+                  content: ":tada: New Self-Hosted Release `${{ github.event.inputs.release_tag }}` published!"
+                  title: "Self-Hosted Release"
+                  description: "Docker images were already built and published. This message was sent manually."
+                  username: "GitHub Actions"
+                  color: 0x00FF00
+
+            - name: Notify Discord on Failure
+              if: github.event.inputs.status == 'failure'
+              uses: sarisia/actions-status-discord@v1.15.3
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_SELFHOSTED }}
+                  content: ":x: Self-hosted release `${{ github.event.inputs.release_tag }}` requires attention."
+                  title: "Self-Hosted Release Failed"
+                  description: "This message was sent manually from the workflow dispatcher."
+                  username: "GitHub Actions"
+                  color: 0xFF0000

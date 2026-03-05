@@ -34,7 +34,8 @@ export const CustomMessagesOptionsDropdown = (props: {
                 disabled={
                     !props.canEdit ||
                     props.value.status.value === PullRequestMessageStatus.OFF ||
-                    props.value.status.value === PullRequestMessageStatus.INACTIVE
+                    props.value.status.value ===
+                        PullRequestMessageStatus.INACTIVE
                 }>
                 <Button
                     size="xs"

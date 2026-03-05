@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
-import { getLibraryKodyRulesWithFeedback, getLibraryKodyRulesBuckets } from "@services/kodyRules/fetch";
+import {
+    getLibraryKodyRulesBuckets,
+    getLibraryKodyRulesWithFeedback,
+} from "@services/kodyRules/fetch";
 import { getOrganizationLanguage } from "@services/organizations/fetch";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
 
@@ -36,17 +39,17 @@ export default async function Route({
     const [bucketRulesResponse, bucketPreviews] = await Promise.all([
         params.bucket
             ? getLibraryKodyRulesWithFeedback({
-                page: 1,
-                limit: 48,
-                buckets: [params.bucket],
-                plug_and_play: initialPlugAndPlay || undefined,
-                needMCPS: initialNeedMCPS || undefined,
-                debugLabel: initialNeedMCPS
-                    ? "server:browse:bucket:needMCPS"
-                    : initialPlugAndPlay
+                  page: 1,
+                  limit: 48,
+                  buckets: [params.bucket],
+                  plug_and_play: initialPlugAndPlay || undefined,
+                  needMCPS: initialNeedMCPS || undefined,
+                  debugLabel: initialNeedMCPS
+                      ? "server:browse:bucket:needMCPS"
+                      : initialPlugAndPlay
                         ? "server:browse:bucket:plug_and_play"
                         : undefined,
-            })
+              })
             : Promise.resolve(null),
         Promise.all(
             previewBuckets.map(async (bucket) => {

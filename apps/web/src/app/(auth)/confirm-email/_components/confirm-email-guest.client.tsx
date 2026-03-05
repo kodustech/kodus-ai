@@ -5,7 +5,6 @@ import { Link } from "@components/ui/link";
 import { Page } from "@components/ui/page";
 
 import AuthPageHeader from "../../components/auth-page-header";
-
 import { ConfirmEmailForm } from "./confirm-email-form.client";
 
 export const ConfirmEmailGuestView = () => {

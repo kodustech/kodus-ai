@@ -42,7 +42,7 @@ const checkConclusionMap = {
 export class GithubChecksService implements IChecksAdapter {
     private readonly logger = createLogger(GithubChecksService.name);
 
-    constructor(private readonly gitHubService: GithubService) { }
+    constructor(private readonly gitHubService: GithubService) {}
 
     async createCheckRun(params: CreateCheckRunParams): Promise<number | null> {
         const {
@@ -55,7 +55,6 @@ export class GithubChecksService implements IChecksAdapter {
         } = params;
 
         try {
-
             const authDetails = await this.gitHubService.getGithubAuthDetails(
                 organizationAndTeamData,
             );
