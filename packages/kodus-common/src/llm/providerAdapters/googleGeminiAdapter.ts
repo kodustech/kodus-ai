@@ -2,7 +2,7 @@ import { ChatGoogle } from '@langchain/google-gauth';
 import { resolveModelOptions } from './resolver';
 import { buildJsonModeOptions } from './jsonMode';
 import { supportsBudgetReasoning } from './capabilities';
-import { AdapterBuildParams, ProviderAdapter } from './types';
+import { AdapterBuildParams, ProviderAdapter, LLM_TIMEOUT_MS, LLM_MAX_RETRIES } from './types';
 
 export class GoogleGeminiAdapter implements ProviderAdapter {
     build(params: AdapterBuildParams): ChatGoogle {
@@ -29,6 +29,7 @@ export class GoogleGeminiAdapter implements ProviderAdapter {
                 ? { maxOutputTokens: resolved.resolvedMaxTokens }
                 : {}),
             callbacks: options?.callbacks,
+            maxRetries: LLM_MAX_RETRIES,
             ...buildJsonModeOptions('google_gemini', options?.jsonMode),
             ...(reasoningSupported
                 ? { maxReasoningTokens: resolved.resolvedReasoningTokens }

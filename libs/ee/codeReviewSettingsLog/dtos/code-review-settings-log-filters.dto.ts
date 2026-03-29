@@ -2,7 +2,7 @@ import { Transform } from 'class-transformer';
 import { IsOptional, IsString, IsEnum, IsUUID } from 'class-validator';
 
 import { PaginationDto } from '@libs/core/domain/dtos/pagination.dto';
-import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
     ActionType,
     ConfigLevel,

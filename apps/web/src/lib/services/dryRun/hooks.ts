@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
-import { useAuth } from "src/core/providers/auth.provider";
 import { getJWTToken } from "src/core/utils/session";
 import { addSearchParamsToUrl } from "src/core/utils/url";
 
@@ -9,12 +8,9 @@ import { fetchDryRunDetails, fetchDryRunStatus } from "./fetch";
 import {
     DryRunEventType,
     DryRunStatus,
-    IDryRunDescriptionUpdatedPayload,
     IDryRunEvent,
     IDryRunMessage,
     IDryRunMessageAddedPayload,
-    IDryRunMessageUpdatedPayload,
-    IDryRunStatusUpdatedPayload,
     IFile,
     ISuggestionByPR,
 } from "./types";

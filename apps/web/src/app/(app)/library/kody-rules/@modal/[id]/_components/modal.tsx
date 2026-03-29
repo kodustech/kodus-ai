@@ -43,7 +43,7 @@ import { useAuth } from "src/core/providers/auth.provider";
 import { usePermissions } from "src/core/providers/permissions.provider";
 import type { LiteralUnion } from "src/core/types";
 import { cn } from "src/core/utils/components";
-import { hasPermission } from "src/core/utils/permissions";
+import { hasPermission } from "src/core/utils/permission-map";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 import { addSearchParamsToUrl } from "src/core/utils/url";
 

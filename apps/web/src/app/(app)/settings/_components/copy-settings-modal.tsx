@@ -46,6 +46,7 @@ export const AddRepoModal = ({
     const [directoryPath, setDirectoryPath] = useState<string>("/");
     const [search, setSearch] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showRepoList, setShowRepoList] = useState(false);
 
     const matchesSearch = (repo: Repository) => {
         if (!search) return true;
@@ -113,7 +114,8 @@ export const AddRepoModal = ({
 
     return (
         <Dialog open onOpenChange={() => magicModal.hide()}>
-            <DialogContent>
+            <DialogContent
+                onOpenAutoFocus={(e) => e.preventDefault()}>
                 <DialogHeader>
                     <DialogTitle>Create repository settings</DialogTitle>
                 </DialogHeader>
@@ -141,60 +143,78 @@ export const AddRepoModal = ({
                                 }}>
                                 <CommandInput
                                     placeholder="Search repository..."
-                                    onValueChange={setSearch}
+                                    onValueChange={(value) => {
+                                        setSearch(value);
+                                        setShowRepoList(true);
+                                    }}
+                                    onClick={() => setShowRepoList(true)}
+                                    onBlur={() =>
+                                        setTimeout(
+                                            () => setShowRepoList(false),
+                                            150,
+                                        )
+                                    }
                                 />
 
-                                <CommandList className="max-h-56 overflow-y-auto">
-                                    <CommandEmpty>
-                                        No repository found.
-                                    </CommandEmpty>
+                                {showRepoList && (
+                                    <CommandList
+                                        className="max-h-56 overflow-y-auto"
+                                        onMouseDown={(e) =>
+                                            e.preventDefault()
+                                        }>
+                                        <CommandEmpty>
+                                            No repository found.
+                                        </CommandEmpty>
 
-                                    {selectedRepositories.length > 0 && (
-                                        <CommandGroup heading="Selected">
-                                            {selectedRepositories.map((r) => (
-                                                <CommandItem
-                                                    key={r.id}
-                                                    value={r.id}
-                                                    onSelect={(
-                                                        currentValue,
-                                                    ) => {
-                                                        setSelectedIds(
-                                                            selectedIds.filter(
-                                                                (id) =>
-                                                                    id !==
-                                                                    currentValue,
-                                                            ),
-                                                        );
-                                                    }}>
-                                                    {r.name}
-                                                    <Check className="text-primary-light -mr-2 size-5" />
-                                                </CommandItem>
-                                            ))}
-                                        </CommandGroup>
-                                    )}
-
-                                    {unselectedRepositories.length > 0 && (
-                                        <CommandGroup heading="Not selected">
-                                            {unselectedRepositories.map(
-                                                (r) => (
-                                                    <CommandItem
-                                                        key={r.id}
-                                                        value={r.id}
-                                                        onSelect={(
-                                                            currentValue,
-                                                        ) => {
-                                                            setSelectedIds([
-                                                                ...selectedIds,
+                                        {selectedRepositories.length > 0 && (
+                                            <CommandGroup heading="Selected">
+                                                {selectedRepositories.map(
+                                                    (r) => (
+                                                        <CommandItem
+                                                            key={r.id}
+                                                            value={r.id}
+                                                            onSelect={(
                                                                 currentValue,
-                                                            ]);
-                                                        }}>
-                                                        {r.name}
-                                                    </CommandItem>
-                                                ),
-                                            )}
-                                        </CommandGroup>
-                                    )}
-                                </CommandList>
+                                                            ) => {
+                                                                setSelectedIds(
+                                                                    selectedIds.filter(
+                                                                        (id) =>
+                                                                            id !==
+                                                                            currentValue,
+                                                                    ),
+                                                                );
+                                                            }}>
+                                                            {r.name}
+                                                            <Check className="text-primary-light -mr-2 size-5" />
+                                                        </CommandItem>
+                                                    ),
+                                                )}
+                                            </CommandGroup>
+                                        )}
+
+                                        {unselectedRepositories.length > 0 && (
+                                            <CommandGroup heading="Not selected">
+                                                {unselectedRepositories.map(
+                                                    (r) => (
+                                                        <CommandItem
+                                                            key={r.id}
+                                                            value={r.id}
+                                                            onSelect={(
+                                                                currentValue,
+                                                            ) => {
+                                                                setSelectedIds([
+                                                                    ...selectedIds,
+                                                                    currentValue,
+                                                                ]);
+                                                            }}>
+                                                            {r.name}
+                                                        </CommandItem>
+                                                    ),
+                                                )}
+                                            </CommandGroup>
+                                        )}
+                                    </CommandList>
+                                )}
                             </Command>
                         </Card>
                     </FormControl.Input>

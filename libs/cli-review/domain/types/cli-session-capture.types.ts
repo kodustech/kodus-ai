@@ -10,6 +10,8 @@ export type CliSessionDecisionType =
     | 'tooling'
     | 'other';
 
+export type CliSessionDecisionOrigin = 'human' | 'agent' | 'collaborative';
+
 export interface CliSessionToolUse {
     tool: string;
     filePath?: string;
@@ -38,6 +40,7 @@ export interface CliSessionCaptureInput {
 
 export interface CliSessionClassifiedDecision {
     type: CliSessionDecisionType;
+    origin?: CliSessionDecisionOrigin;
     decision: string;
     rationale?: string;
     confidence?: number;

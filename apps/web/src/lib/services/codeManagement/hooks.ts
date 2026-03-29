@@ -86,8 +86,7 @@ export function useSearchPullRequests(
         true, // Always enabled
         {
             refetchOnWindowFocus: false,
-            staleTime: 0, // No cache - always fresh data
-            gcTime: 0, // Don't cache results
+            staleTime: 30000,
         },
     );
 }

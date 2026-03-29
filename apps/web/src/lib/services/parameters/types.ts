@@ -9,8 +9,17 @@ export enum ParametersConfigKey {
     PLATFORM_CONFIGS = "platform_configs",
     LANGUAGE_CONFIG = "language_config",
     CODE_REVIEW_CONFIG = "code_review_config",
+    CENTRALIZED_CONFIG = "centralized_config",
     ISSUE_CREATION_CONFIG = "issue_creation_config",
 }
+
+export type CentralizedConfigValue = {
+    enabled: boolean;
+    repository: {
+        id: string;
+        name: string;
+    };
+};
 
 export enum OrganizationParametersConfigKey {
     TIMEZONE_CONFIG = "timezone_config",

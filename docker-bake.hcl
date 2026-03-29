@@ -62,6 +62,9 @@ target "worker" {
 target "web" {
   context = "./apps/web"
   dockerfile = "../../docker/Dockerfile.web.selfhosted"
+  args = {
+    RELEASE_VERSION = "${RELEASE_VERSION}"
+  }
   tags = split(",", WEB_TAGS)
   cache-from = ["type=gha,scope=${CACHE_SCOPE}"]
   cache-to = ["type=gha,scope=${CACHE_SCOPE},mode=max"]

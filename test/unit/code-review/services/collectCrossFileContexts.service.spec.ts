@@ -63,6 +63,7 @@ describe('CollectCrossFileContextsService', () => {
 
         mockObservabilityService = {
             runLLMInSpan: jest.fn().mockImplementation(({ exec }) => exec([])),
+            runInSpan: jest.fn().mockImplementation((_name, fn) => fn()),
         };
 
         mockTokenChunkingService = {
@@ -119,7 +120,7 @@ describe('CollectCrossFileContextsService', () => {
 
     describe('deduplicateAndRank()', () => {
         const dedup = (snippets: CrossFileContextSnippet[]) =>
-            (service as any).deduplicateAndRank(snippets);
+            (service as any)._deduplicateAndRankInner(snippets);
 
         it('should sort by relevanceScore desc within each file', () => {
             const snippets = [
@@ -504,7 +505,11 @@ const greet = () => {}
             mockCodebaseSearchService.search.mockResolvedValue({
                 success: true,
                 contexts: [
-                    { file: 'other.ts', content: 'import { greet }', lines: [[1, 1]] },
+                    {
+                        file: 'other.ts',
+                        content: 'import { greet }',
+                        lines: [[1, 1]],
+                    },
                 ],
             });
 
@@ -537,7 +542,11 @@ const greet = () => {}
                         content: 'already in PR',
                         lines: [[1, 1]],
                     },
-                    { file: 'other.ts', content: 'external file', lines: [[1, 1]] },
+                    {
+                        file: 'other.ts',
+                        content: 'external file',
+                        lines: [[1, 1]],
+                    },
                 ],
             });
 
@@ -562,14 +571,24 @@ const greet = () => {}
                 return Promise.resolve({
                     success: true,
                     contexts: [
-                        { file: 'result.ts', content: 'found it', lines: [[1, 1]] },
+                        {
+                            file: 'result.ts',
+                            content: 'found it',
+                            lines: [[1, 1]],
+                        },
                     ],
                 });
             });
 
             const queries = [
-                createSamplePlannerQuery({ symbolName: 'fail', pattern: 'fail\\(' }),
-                createSamplePlannerQuery({ symbolName: 'succeed', pattern: 'succeed\\(' }),
+                createSamplePlannerQuery({
+                    symbolName: 'fail',
+                    pattern: 'fail\\(',
+                }),
+                createSamplePlannerQuery({
+                    symbolName: 'succeed',
+                    pattern: 'succeed\\(',
+                }),
             ];
 
             const result = await executeSearch(
@@ -593,7 +612,10 @@ const greet = () => {}
             const result = await executeSearch(
                 [
                     createSamplePlannerQuery({ pattern: 'greet\\(' }),
-                    createSamplePlannerQuery({ symbolName: 'other', pattern: 'other\\(' }),
+                    createSamplePlannerQuery({
+                        symbolName: 'other',
+                        pattern: 'other\\(',
+                    }),
                 ],
                 createMockRemoteCommands() as any,
                 new Set(),
@@ -713,7 +735,11 @@ const greet = () => {}
             mockCodebaseSearchService.search.mockResolvedValue({
                 success: true,
                 contexts: [
-                    { file: 'hop2.ts', content: 'hop2 content', lines: [[1, 1]] },
+                    {
+                        file: 'hop2.ts',
+                        content: 'hop2 content',
+                        lines: [[1, 1]],
+                    },
                 ],
             });
 
@@ -767,13 +793,21 @@ const greet = () => {}
             mockCodebaseSearchService.search.mockResolvedValue({
                 success: true,
                 contexts: [
-                    { file: 'src/utils/greet.ts', content: 'PR file', lines: [[1, 1]] },
+                    {
+                        file: 'src/utils/greet.ts',
+                        content: 'PR file',
+                        lines: [[1, 1]],
+                    },
                     {
                         file: 'src/controllers/hello.controller.ts',
                         content: 'hop1 file',
                         lines: [[1, 1]],
                     },
-                    { file: 'src/new-caller.ts', content: 'new file', lines: [[1, 1]] },
+                    {
+                        file: 'src/new-caller.ts',
+                        content: 'new file',
+                        lines: [[1, 1]],
+                    },
                 ],
             });
 
@@ -809,7 +843,11 @@ const greet = () => {}
             mockCodebaseSearchService.search.mockResolvedValue({
                 success: true,
                 contexts: [
-                    { file: 'src/hop2.ts', content: 'hop2 content', lines: [[1, 1]] },
+                    {
+                        file: 'src/hop2.ts',
+                        content: 'hop2 content',
+                        lines: [[1, 1]],
+                    },
                 ],
             });
 
@@ -837,7 +875,11 @@ const greet = () => {}
             mockCodebaseSearchService.search.mockResolvedValue({
                 success: true,
                 contexts: [
-                    { file: 'src/hop2.ts', content: 'hop2 content', lines: [[1, 1]] },
+                    {
+                        file: 'src/hop2.ts',
+                        content: 'hop2 content',
+                        lines: [[1, 1]],
+                    },
                 ],
             });
 
@@ -895,7 +937,8 @@ const greet = () => {}
                 contexts: [
                     {
                         file: 'src/caller.ts',
-                        content: 'import { greet } from "./greet";\ngreet("world");',
+                        content:
+                            'import { greet } from "./greet";\ngreet("world");',
                         lines: [[1, 2]],
                     },
                 ],
@@ -1049,7 +1092,9 @@ const greet = () => {}
 
             expect(result).toBeNull();
             // evaluateSufficiency should NOT be called
-            expect(mockObservabilityService.runLLMInSpan).not.toHaveBeenCalled();
+            expect(
+                mockObservabilityService.runLLMInSpan,
+            ).not.toHaveBeenCalled();
         });
 
         it('should return null when evaluateSufficiency says sufficient', async () => {

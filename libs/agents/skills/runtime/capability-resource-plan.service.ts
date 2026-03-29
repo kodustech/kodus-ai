@@ -80,31 +80,40 @@ export class CapabilityResourcePlanService {
             return this.seedCache.get(cacheKey) ?? [];
         }
 
-        const candidates = this.getSeedFileCandidates(providerType, capability);
-        for (const filePath of candidates) {
-            if (!fs.existsSync(filePath)) {
-                continue;
-            }
+        const providerCandidates =
+            this.resolveProviderSeedCandidates(providerType);
+        for (const providerCandidate of providerCandidates) {
+            const candidates = this.getSeedFileCandidates(
+                providerCandidate,
+                capability,
+            );
+            for (const filePath of candidates) {
+                if (!fs.existsSync(filePath)) {
+                    continue;
+                }
 
-            try {
-                const raw = fs.readFileSync(filePath, 'utf-8');
-                const parsed = JSON.parse(raw) as CapabilityResourcePlan;
-                const tools = Array.isArray(parsed?.tools)
-                    ? parsed.tools.filter(
-                          (tool): tool is string =>
-                              typeof tool === 'string' &&
-                              tool.trim().length > 0,
-                      )
-                    : [];
+                try {
+                    const raw = fs.readFileSync(filePath, 'utf-8');
+                    const parsed = JSON.parse(raw) as CapabilityResourcePlan;
+                    const tools = Array.isArray(parsed?.tools)
+                        ? parsed.tools.filter(
+                              (tool): tool is string =>
+                                  typeof tool === 'string' &&
+                                  tool.trim().length > 0,
+                          )
+                        : [];
 
-                this.seedCache.set(cacheKey, tools);
-                return tools;
-            } catch (error) {
-                this.logger.warn(
-                    `Failed to read seed capability resource plan from ${filePath}: ${
-                        error instanceof Error ? error.message : String(error)
-                    }`,
-                );
+                    this.seedCache.set(cacheKey, tools);
+                    return tools;
+                } catch (error) {
+                    this.logger.warn(
+                        `Failed to read seed capability resource plan from ${filePath}: ${
+                            error instanceof Error
+                                ? error.message
+                                : String(error)
+                        }`,
+                    );
+                }
             }
         }
 
@@ -166,5 +175,40 @@ export class CapabilityResourcePlanService {
 
     private isSafeCapability(value: string): boolean {
         return /^[a-z0-9._-]+$/i.test(value);
+    }
+
+    private resolveProviderSeedCandidates(providerType: string): string[] {
+        const normalized = this.normalizeProviderToken(providerType);
+        const compact = normalized.replace(/[-_]/g, '');
+        const candidates = [normalized];
+
+        if (normalized.includes('jira') || normalized.includes('atlassian')) {
+            candidates.push('jira');
+        }
+        if (normalized.includes('linear')) {
+            candidates.push('linear');
+        }
+        if (normalized.includes('notion')) {
+            candidates.push('notion');
+        }
+        if (normalized.includes('clickup')) {
+            candidates.push('clickup');
+        }
+        if (
+            normalized.includes('kodus-github-issues') ||
+            compact.includes('kodusgithubissues') ||
+            (compact.includes('github') && compact.includes('issues'))
+        ) {
+            candidates.push('kodus-github-issues');
+        }
+
+        return [...new Set(candidates)];
+    }
+
+    private normalizeProviderToken(value: string): string {
+        return value
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9_-]+/g, '');
     }
 }

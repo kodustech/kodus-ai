@@ -264,18 +264,29 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         return;
                     }
 
-                    const automationExecutions =
-                        await this.automationExecutionService.findByPeriodAndTeamAutomationId(
+                    const eligiblePullRequestRefs =
+                        await this.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId(
                             sevenDaysAgo,
                             now,
                             teamAutomation.uuid,
-                            AutomationStatus.SUCCESS,
                         );
 
-                    const automationExecutionsPRs = automationExecutions?.map(
-                        (execution) =>
-                            execution?.dataExecution?.pullRequestNumber,
+                    const eligiblePullRequestKeys = new Set(
+                        eligiblePullRequestRefs.map(
+                            (ref) =>
+                                `${ref.repositoryId}:${ref.pullRequestNumber}`,
+                        ),
                     );
+
+                    const automationExecutionsPRs = [
+                        ...new Set(
+                            eligiblePullRequestRefs
+                                .map((ref) => ref.pullRequestNumber)
+                                .filter((prNumber): prNumber is number =>
+                                    Number.isInteger(prNumber),
+                                ),
+                        ),
+                    ];
 
                     if (!automationExecutionsPRs?.length) {
                         return;
@@ -304,9 +315,20 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         return;
                     }
 
+                    const eligibleOpenPullRequests = openPullRequests.filter(
+                        (pr) =>
+                            eligiblePullRequestKeys.has(
+                                `${pr?.repository?.id}:${pr?.number}`,
+                            ),
+                    );
+
+                    if (!eligibleOpenPullRequests.length) {
+                        return;
+                    }
+
                     // Process PRs in parallel with proper error handling
                     await Promise.allSettled(
-                        openPullRequests.map(async (pr) => {
+                        eligibleOpenPullRequests.map(async (pr) => {
                             const repository = pr?.repository;
 
                             const codeReviewConfigFromRepo =
@@ -341,6 +363,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                 organizationAndTeamData,
                                 pr,
                                 codeReviewConfig: resolvedConfig,
+                                teamAutomationId: teamAutomation.uuid,
                             });
                         }),
                     );
@@ -374,10 +397,12 @@ export class CheckIfPRCanBeApprovedCronProvider {
         organizationAndTeamData,
         pr,
         codeReviewConfig,
+        teamAutomationId,
     }: {
         organizationAndTeamData: OrganizationAndTeamData;
         pr: IPullRequestWithDeliveredSuggestions;
         codeReviewConfig?: CodeReviewConfig;
+        teamAutomationId: string;
     }): Promise<boolean> {
         const repository = pr?.repository;
         const prNumber = pr?.number;
@@ -519,6 +544,31 @@ export class CheckIfPRCanBeApprovedCronProvider {
             );
 
             if (isEveryReviewCommentResolved) {
+                const hasInProgressReview =
+                    await this.hasInProgressReviewExecution({
+                        teamAutomationId,
+                        pullRequestNumber: prNumber,
+                        repositoryId: repository?.id,
+                    });
+
+                if (hasInProgressReview) {
+                    this.logger.log({
+                        message:
+                            'Skipping approval due to in-progress review execution in final check',
+                        context: CheckIfPRCanBeApprovedCronProvider.name,
+                        metadata: {
+                            organizationAndTeamData,
+                            prNumber,
+                            repository: {
+                                name: repository?.name,
+                                id: repository?.id,
+                            },
+                            teamAutomationId,
+                        },
+                    });
+                    return false;
+                }
+
                 this.logger.log({
                     message: `Is every review comment resolved for PR#${prNumber}`,
                     context: CheckIfPRCanBeApprovedCronProvider.name,
@@ -564,6 +614,34 @@ export class CheckIfPRCanBeApprovedCronProvider {
 
             return false;
         }
+    }
+
+    private async hasInProgressReviewExecution({
+        teamAutomationId,
+        pullRequestNumber,
+        repositoryId,
+    }: {
+        teamAutomationId: string;
+        pullRequestNumber: number;
+        repositoryId?: string;
+    }): Promise<boolean> {
+        if (!teamAutomationId || typeof pullRequestNumber !== 'number') {
+            return false;
+        }
+
+        const inProgressExecutions = await this.automationExecutionService.find(
+            {
+                teamAutomation: { uuid: teamAutomationId },
+                pullRequestNumber,
+                ...(repositoryId ? { repositoryId } : {}),
+                status: AutomationStatus.IN_PROGRESS,
+            },
+        );
+
+        return (
+            Array.isArray(inProgressExecutions) &&
+            inProgressExecutions.length > 0
+        );
     }
 
     private async setPullRequestMessagesConfig(

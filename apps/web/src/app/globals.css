@@ -412,3 +412,19 @@
 body {
     padding-right: 60px !important;
 }
+
+@keyframes field-highlight-pulse {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 transparent;
+    }
+
+    50% {
+        box-shadow: 0 0 0 3px var(--color-primary-light);
+    }
+}
+
+.field-highlight {
+    animation: field-highlight-pulse 0.6s ease-in-out 3;
+    border-radius: 8px;
+}

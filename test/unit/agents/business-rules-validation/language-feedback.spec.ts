@@ -20,9 +20,9 @@ describe('business-rules language feedback', () => {
 
         expect(feedback).toContain('## 🔌 MCP Integration Required');
         expect(feedback).toContain(
-            'To run business rules validation, I need at least one external MCP integration connected',
+            'Business validation compares the PR implementation with task/ticket requirements.',
         );
-        expect(feedback).toContain('### How to fix');
+        expect(feedback).toContain('### Next steps');
     });
 
     it('keeps MCP connection failure feedback as a language-neutral internal message', () => {
@@ -32,8 +32,10 @@ describe('business-rules language feedback', () => {
         });
 
         expect(feedback).toContain('## ⚠️ MCP Connection Failed');
-        expect(feedback).toContain('MCP integrations are configured');
-        expect(feedback).toContain('### How to fix');
+        expect(feedback).toContain(
+            "MCP integrations are configured, but I couldn't connect to any provider right now.",
+        );
+        expect(feedback).toContain('### Next steps');
     });
 
     it('keeps contract violation feedback as a language-neutral internal message', () => {

@@ -3,7 +3,7 @@ import { getOrganizationId } from "@services/organizations/fetch";
 import { pathToApiUrl } from "src/core/utils/helpers";
 import { isSelfHosted } from "src/core/utils/self-hosted";
 
-import type { OrganizationLicense, Plan } from "./types";
+import type { OrganizationLicense, Plan, PlanType } from "./types";
 import { billingFetch } from "./utils";
 
 type OrganizationMember = {
@@ -79,7 +79,15 @@ export const createManageBillingLink = async (params: { teamId: string }) => {
 };
 
 export const getUsersWithLicense = async (params: { teamId: string }) => {
-    if (isSelfHosted) return [];
+    if (isSelfHosted) {
+        try {
+            return await authorizedFetch<Array<{ git_id: string }>>(
+                pathToApiUrl("/license/users"),
+            );
+        } catch {
+            return [];
+        }
+    }
 
     const organizationId = await getOrganizationId();
     return billingFetch<Array<{ git_id: string }>>(`users-with-license`, {
@@ -105,6 +113,21 @@ export const assignOrDeassignUserLicense = async (params: {
     };
     userName?: string;
 }) => {
+    if (isSelfHosted) {
+        return authorizedFetch<{
+            successful: any[];
+            failed: any[];
+        }>(pathToApiUrl("/license/assign"), {
+            method: "POST",
+            body: JSON.stringify({
+                teamId: params.teamId,
+                users: [params.user],
+                editedBy: params.currentUser,
+                userName: params.userName,
+            }),
+        });
+    }
+
     const organizationId = await getOrganizationId();
 
     return billingFetch<{
@@ -126,6 +149,33 @@ export const validateOrganizationLicense = async (params: {
     teamId: string;
 }): Promise<OrganizationLicense> => {
     if (isSelfHosted) {
+        // Check if there's a self-hosted license key activated
+        // Use /license/org-status which is accessible to all org members
+        try {
+            const result = await authorizedFetch<{
+                valid: boolean;
+                subscriptionStatus?: string;
+                planType?: string;
+                numberOfLicenses?: number;
+                expiresAt?: string;
+            }>(pathToApiUrl("/license/org-status"));
+
+            if (
+                result?.valid &&
+                result.subscriptionStatus === "licensed-self-hosted"
+            ) {
+                return {
+                    valid: true,
+                    subscriptionStatus: "licensed-self-hosted",
+                    planType: (result.planType as PlanType) || "enterprise",
+                    numberOfLicenses: result.numberOfLicenses || 0,
+                    expiresAt: result.expiresAt,
+                };
+            }
+        } catch {
+            // License endpoint not available or failed, fall back to default
+        }
+
         return { valid: true, subscriptionStatus: "self-hosted" };
     }
 

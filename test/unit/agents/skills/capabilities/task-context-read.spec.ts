@@ -386,9 +386,7 @@ describe('fetchTaskContext capability', () => {
         };
 
         const hooks = {
-            getSeedTaskContextTools: jest.fn(async () => [
-                'CLICKUP_GET_TASK',
-            ]),
+            getSeedTaskContextTools: jest.fn(async () => ['CLICKUP_GET_TASK']),
             getCachedTaskContextTools: jest.fn(async () => []),
             saveCachedTaskContextTools: jest.fn(async () => undefined),
             resolvePreferredTool: jest.fn(async () => undefined),
@@ -729,9 +727,7 @@ describe('fetchTaskContext capability', () => {
         };
 
         const hooks = {
-            getSeedTaskContextTools: jest.fn(async () => [
-                'CLICKUP_GET_TASK',
-            ]),
+            getSeedTaskContextTools: jest.fn(async () => ['CLICKUP_GET_TASK']),
             getCachedTaskContextTools: jest.fn(async () => []),
             saveCachedTaskContextTools: jest.fn(async () => undefined),
             resolvePreferredTool: jest.fn(async () => undefined),
@@ -756,6 +752,186 @@ describe('fetchTaskContext capability', () => {
             links: ['https://app.clickup.com/t/86d123'],
             sourceProvider: 'clickup',
         });
+    });
+
+    it('builds deterministic args for KODUS_GET_GITHUB_ISSUE using repository owner/name and issue number', async () => {
+        const callTool: CallToolMock = jest.fn().mockResolvedValue({
+            success: true,
+            data: {
+                number: 37,
+                title: 'Business logic validation issue',
+                body: 'Issue context from GitHub',
+                html_url: 'https://github.com/kodustech/kodus-ai/issues/37',
+            },
+        });
+
+        const toolCaller: ToolCaller = {
+            callTool,
+            getRegisteredTools: () => [{ name: 'KODUS_GET_GITHUB_ISSUE' }],
+            getToolsForLLM: () => [
+                {
+                    name: 'KODUS_GET_GITHUB_ISSUE',
+                    parameters: {
+                        required: [
+                            'organizationId',
+                            'teamId',
+                            'repository',
+                            'issueNumber',
+                        ],
+                        properties: {
+                            organizationId: { type: 'string' },
+                            teamId: { type: 'string' },
+                            repository: {
+                                type: 'object',
+                                properties: {
+                                    owner: { type: 'string' },
+                                    name: { type: 'string' },
+                                },
+                                required: ['owner', 'name'],
+                            },
+                            issueNumber: { type: 'number' },
+                        },
+                    },
+                },
+            ],
+        };
+
+        const hooks = {
+            getSeedTaskContextTools: jest.fn(async () => [
+                'KODUS_GET_GITHUB_ISSUE',
+            ]),
+            getCachedTaskContextTools: jest.fn(async () => []),
+            saveCachedTaskContextTools: jest.fn(async () => undefined),
+            resolvePreferredTool: jest.fn(async () => undefined),
+            recordExecution: jest.fn(async () => undefined),
+        };
+
+        await fetchTaskContext(
+            toolCaller,
+            createCapabilityRuntime('kodus-github-issues'),
+            {
+                ...createBaseParams(),
+                userQuestion: '@kody -v business-logic use issue #37',
+                repositoryOwner: 'kodustech',
+                repositoryName: 'kodus-ai',
+            },
+            hooks,
+        );
+
+        expect(callTool).toHaveBeenCalledWith('KODUS_GET_GITHUB_ISSUE', {
+            organizationId: 'org-1',
+            teamId: 'team-1',
+            repository: {
+                owner: 'kodustech',
+                name: 'kodus-ai',
+            },
+            issueNumber: 37,
+        });
+    });
+
+    it('includes repository and issue number hints in agent fallback prompt', async () => {
+        const callAgent: CallAgentMock = jest.fn().mockResolvedValue({
+            result: JSON.stringify({
+                taskContext: 'Agent context',
+                title: 'Agent title',
+                id: 'GH-37',
+                toolsUsed: ['KODUS_GET_GITHUB_ISSUE'],
+            }),
+        });
+
+        const toolCaller: ToolCaller = {
+            callTool: jest.fn(),
+            callAgent,
+            getRegisteredTools: () => [{ name: 'KODUS_GET_GITHUB_ISSUE' }],
+            getToolsForLLM: () => [],
+        };
+
+        const hooks = {
+            getSeedTaskContextTools: jest.fn(async () => []),
+            getCachedTaskContextTools: jest.fn(async () => []),
+            saveCachedTaskContextTools: jest.fn(async () => undefined),
+            resolvePreferredTool: jest.fn(async () => undefined),
+            recordExecution: jest.fn(async () => undefined),
+        };
+
+        await fetchTaskContext(
+            toolCaller,
+            createCapabilityRuntime('kodus-github-issues'),
+            {
+                ...createBaseParams(),
+                userQuestion: '@kody -v business-logic for issue #37',
+                repositoryOwner: 'kodustech',
+                repositoryName: 'kodus-ai',
+                taskContextResolutionMode: 'agent_first',
+            },
+            hooks,
+        );
+
+        expect(callAgent).toHaveBeenCalled();
+        const prompt = callAgent.mock.calls[0][1];
+        expect(prompt).toContain('KNOWN_ISSUE_NUMBERS: 37');
+        expect(prompt).toContain('KNOWN_REPOSITORY_OWNER: kodustech');
+        expect(prompt).toContain('KNOWN_REPOSITORY_NAME: kodus-ai');
+    });
+
+    it('uses typed candidates for optional-only tool parameters', async () => {
+        const callTool: CallToolMock = jest.fn().mockResolvedValue({
+            success: true,
+            data: {
+                number: 37,
+                title: 'Optional params issue',
+                body: 'Fetched with optional-only schema params',
+            },
+        });
+
+        const toolCaller: ToolCaller = {
+            callTool,
+            getRegisteredTools: () => [{ name: 'KODUS_GET_GITHUB_ISSUE' }],
+            getToolsForLLM: () => [
+                {
+                    name: 'KODUS_GET_GITHUB_ISSUE',
+                    parameters: {
+                        required: [],
+                        properties: {
+                            issueNumber: { type: 'number' },
+                            repositoryOwner: { type: 'string' },
+                            repositoryName: { type: 'string' },
+                        },
+                    },
+                },
+            ],
+        };
+
+        const hooks = {
+            getSeedTaskContextTools: jest.fn(async () => [
+                'KODUS_GET_GITHUB_ISSUE',
+            ]),
+            getCachedTaskContextTools: jest.fn(async () => []),
+            saveCachedTaskContextTools: jest.fn(async () => undefined),
+            resolvePreferredTool: jest.fn(async () => undefined),
+            recordExecution: jest.fn(async () => undefined),
+        };
+
+        await fetchTaskContext(
+            toolCaller,
+            createCapabilityRuntime('kodus-github-issues'),
+            {
+                ...createBaseParams(),
+                userQuestion: '@kody -v business-logic use issue #37',
+                repositoryOwner: 'kodustech',
+                repositoryName: 'kodus-ai',
+            },
+            hooks,
+        );
+
+        expect(callTool).toHaveBeenCalledWith(
+            'KODUS_GET_GITHUB_ISSUE',
+            expect.objectContaining({
+                issueNumber: 37,
+                repositoryOwner: 'kodustech',
+                repositoryName: 'kodus-ai',
+            }),
+        );
     });
 
     it('does not crash when provider payload contains empty objects in text fields', async () => {
@@ -1072,6 +1248,355 @@ describe('fetchTaskContext capability', () => {
             {
                 ...createBaseParams(),
                 userQuestion: '@kody KC-1441',
+            },
+            hooks,
+        );
+
+        expect(callTool).not.toHaveBeenCalled();
+        expect(callAgent).toHaveBeenCalled();
+        expect(result.normalized).toMatchObject({
+            id: 'KC-1441',
+            title: 'Jira task',
+            description: 'Fallback context',
+            sourceProvider: 'jira',
+        });
+    });
+
+    it('ignores non-task documentation URLs when selecting task links for Jira cloudId resolution', async () => {
+        const callTool: CallToolMock = jest
+            .fn()
+            .mockImplementation(
+                (toolName: string, args: Record<string, unknown>) => {
+                    if (toolName === 'getJiraIssue') {
+                        return Promise.resolve({
+                            result: {
+                                data: {
+                                    key: String(args.issueIdOrKey),
+                                    fields: {
+                                        summary: 'Jira task',
+                                        description:
+                                            'Resolved from issue details',
+                                    },
+                                },
+                            },
+                        });
+                    }
+
+                    return Promise.resolve({ result: {} });
+                },
+            );
+
+        const toolCaller: ToolCaller = {
+            callTool,
+            getRegisteredTools: () => [{ name: 'getJiraIssue' }],
+            getToolsForLLM: () => [
+                {
+                    name: 'getJiraIssue',
+                    parameters: {
+                        required: ['cloudId', 'issueIdOrKey'],
+                        properties: {
+                            cloudId: {
+                                type: 'string',
+                                description: 'Cloud ID (UUID or site URL)',
+                            },
+                            issueIdOrKey: {
+                                type: 'string',
+                                description: 'Issue ID or key',
+                            },
+                        },
+                    },
+                },
+            ],
+        };
+
+        const hooks = {
+            getSeedTaskContextTools: jest.fn(async () => ['getJiraIssue']),
+            getCachedTaskContextTools: jest.fn(async () => []),
+            saveCachedTaskContextTools: jest.fn(async () => undefined),
+            resolvePreferredTool: jest.fn(async () => undefined),
+            recordExecution: jest.fn(async () => undefined),
+        };
+
+        await fetchTaskContext(
+            toolCaller,
+            createCapabilityRuntime('jira'),
+            {
+                ...createBaseParams(),
+                userQuestion:
+                    '@kody KC-1441 https://kodustech.atlassian.net/jira/software/c/projects/KC/boards/2?selectedIssue=KC-1441 https://editorconfig.org.',
+                pullRequestDescription: '',
+                prBody: '',
+            },
+            hooks,
+        );
+
+        expect(callTool).toHaveBeenCalledWith(
+            'getJiraIssue',
+            expect.objectContaining({
+                cloudId: 'https://kodustech.atlassian.net',
+                issueIdOrKey: 'KC-1441',
+            }),
+        );
+    });
+
+    it('prioritizes explicit taskId over heuristic URLs for query-like tools', async () => {
+        const callTool: CallToolMock = jest
+            .fn()
+            .mockImplementation(
+                (_toolName: string, args: Record<string, unknown>) => {
+                    const query = String(args.query ?? '');
+                    if (query === 'KC-1441') {
+                        return Promise.resolve({
+                            result: {
+                                task: {
+                                    key: 'KC-1441',
+                                    title: 'Jira task',
+                                    description: 'Resolved from task key.',
+                                },
+                            },
+                        });
+                    }
+                    return Promise.resolve({ result: {} });
+                },
+            );
+
+        const toolCaller: ToolCaller = {
+            callTool,
+            getRegisteredTools: () => [{ name: 'search' }],
+            getToolsForLLM: () => [
+                {
+                    name: 'search',
+                    parameters: {
+                        required: ['query'],
+                        properties: {
+                            query: {
+                                type: 'string',
+                                description: 'Search query',
+                            },
+                        },
+                    },
+                },
+            ],
+        };
+
+        const hooks = {
+            getSeedTaskContextTools: jest.fn(async () => ['search']),
+            getCachedTaskContextTools: jest.fn(async () => []),
+            saveCachedTaskContextTools: jest.fn(async () => undefined),
+            resolvePreferredTool: jest.fn(async () => undefined),
+            recordExecution: jest.fn(async () => undefined),
+        };
+
+        const result = await fetchTaskContext(
+            toolCaller,
+            createCapabilityRuntime('jira'),
+            {
+                ...createBaseParams(),
+                userQuestion:
+                    '@kody https://kodustech.atlassian.net/jira/software/c/projects/KC/boards/2?selectedIssue=KC-1441',
+                pullRequestDescription: '',
+                prBody: '',
+                taskId: 'KC-1441',
+            },
+            hooks,
+        );
+
+        expect(callTool).toHaveBeenCalledWith(
+            'search',
+            expect.objectContaining({ query: 'KC-1441' }),
+        );
+        expect(
+            callTool.mock.calls.some(([, args]) =>
+                String(args.query ?? '').includes('https://'),
+            ),
+        ).toBe(false);
+        expect(result.normalized).toMatchObject({
+            id: 'KC-1441',
+            title: 'Jira task',
+            description: 'Resolved from task key.',
+            sourceProvider: 'jira',
+        });
+    });
+
+    it('ignores deterministic tool payloads that are explicit fetch errors', async () => {
+        const callTool: CallToolMock = jest.fn().mockResolvedValue({
+            result: {
+                error: true,
+                message:
+                    'Failed to fetch tenant info for cloud ID: http://editorconfig.org. Status: 404',
+            },
+        });
+        const callAgent: CallAgentMock = jest.fn().mockResolvedValue({
+            result: JSON.stringify({
+                taskContext: 'Fallback task context from agent.',
+                id: 'KC-1441',
+                title: 'Jira task',
+                toolsUsed: ['search'],
+            }),
+        });
+
+        const toolCaller: ToolCaller = {
+            callTool,
+            callAgent,
+            getRegisteredTools: () => [{ name: 'search' }],
+            getToolsForLLM: () => [
+                {
+                    name: 'search',
+                    parameters: {
+                        required: ['query'],
+                        properties: {
+                            query: {
+                                type: 'string',
+                                description: 'Search query',
+                            },
+                        },
+                    },
+                },
+            ],
+        };
+
+        const hooks = {
+            getSeedTaskContextTools: jest.fn(async () => ['search']),
+            getCachedTaskContextTools: jest.fn(async () => []),
+            saveCachedTaskContextTools: jest.fn(async () => undefined),
+            resolvePreferredTool: jest.fn(async () => undefined),
+            recordExecution: jest.fn(async () => undefined),
+        };
+
+        const result = await fetchTaskContext(
+            toolCaller,
+            createCapabilityRuntime('jira'),
+            {
+                ...createBaseParams(),
+                userQuestion: '@kody -v business-logic KC-1441',
+                pullRequestDescription: '',
+                prBody: '',
+            },
+            hooks,
+        );
+
+        expect(callTool).toHaveBeenCalled();
+        expect(callAgent).toHaveBeenCalled();
+        expect(result.normalized).toMatchObject({
+            id: 'KC-1441',
+            title: 'Jira task',
+            description: 'Fallback task context from agent.',
+            sourceProvider: 'jira',
+        });
+    });
+
+    it('uses explicit taskId parameter as deterministic issue hint even without issue key in prompt text', async () => {
+        const callTool: CallToolMock = jest.fn().mockResolvedValue({
+            result: {
+                task: {
+                    id: '86d123',
+                    name: 'Kody rules por time',
+                    description: 'Resolved from explicit taskId parameter.',
+                },
+            },
+        });
+
+        const toolCaller: ToolCaller = {
+            callTool,
+            getRegisteredTools: () => [{ name: 'CLICKUP_GET_TASK' }],
+            getToolsForLLM: () => [
+                {
+                    name: 'CLICKUP_GET_TASK',
+                    parameters: {
+                        required: ['taskId'],
+                        properties: {
+                            taskId: { type: 'string', description: 'Task ID' },
+                        },
+                    },
+                },
+            ],
+        };
+
+        const hooks = {
+            getSeedTaskContextTools: jest.fn(async () => ['CLICKUP_GET_TASK']),
+            getCachedTaskContextTools: jest.fn(async () => []),
+            saveCachedTaskContextTools: jest.fn(async () => undefined),
+            resolvePreferredTool: jest.fn(async () => undefined),
+            recordExecution: jest.fn(async () => undefined),
+        };
+
+        const result = await fetchTaskContext(
+            toolCaller,
+            createCapabilityRuntime('clickup'),
+            {
+                ...createBaseParams(),
+                userQuestion: '@kody -v business-logic',
+                pullRequestDescription: '',
+                prBody: '',
+                taskId: '86d123',
+            },
+            hooks,
+        );
+
+        expect(callTool).toHaveBeenCalledWith(
+            'CLICKUP_GET_TASK',
+            expect.objectContaining({ taskId: '86d123' }),
+        );
+        expect(result.normalized).toMatchObject({
+            id: '86d123',
+            title: 'Kody rules por time',
+            description: 'Resolved from explicit taskId parameter.',
+            sourceProvider: 'clickup',
+        });
+    });
+
+    it('does not call Jira issue tool with invalid cloud context when only taskId is provided', async () => {
+        const callTool: CallToolMock = jest.fn();
+        const callAgent: CallAgentMock = jest.fn().mockResolvedValue({
+            result: JSON.stringify({
+                taskContext: 'Fallback context',
+                id: 'KC-1441',
+                title: 'Jira task',
+                toolsUsed: ['search'],
+            }),
+        });
+
+        const toolCaller: ToolCaller = {
+            callTool,
+            callAgent,
+            getRegisteredTools: () => [{ name: 'getJiraIssue' }],
+            getToolsForLLM: () => [
+                {
+                    name: 'getJiraIssue',
+                    parameters: {
+                        required: ['cloudId', 'issueIdOrKey'],
+                        properties: {
+                            cloudId: {
+                                type: 'string',
+                                description: 'Cloud ID (UUID or site URL)',
+                            },
+                            issueIdOrKey: {
+                                type: 'string',
+                                description: 'Issue ID or key',
+                            },
+                        },
+                    },
+                },
+            ],
+        };
+
+        const hooks = {
+            getSeedTaskContextTools: jest.fn(async () => ['getJiraIssue']),
+            getCachedTaskContextTools: jest.fn(async () => []),
+            saveCachedTaskContextTools: jest.fn(async () => undefined),
+            resolvePreferredTool: jest.fn(async () => undefined),
+            recordExecution: jest.fn(async () => undefined),
+        };
+
+        const result = await fetchTaskContext(
+            toolCaller,
+            createCapabilityRuntime('jira'),
+            {
+                ...createBaseParams(),
+                userQuestion: '@kody -v business-logic',
+                pullRequestDescription: '',
+                prBody: '',
+                taskId: 'KC-1441',
             },
             hooks,
         );

@@ -172,9 +172,41 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
                 partialErrors: errors.map((e) => ({
                     file: e.substage || 'unknown',
                     message: e.error?.message || String(e.error),
+                    isTimeout: e.metadata?.isTimeout || false,
                     ...e.metadata,
                 })),
             };
+        }
+
+        if (
+            stageName === 'FileAnalysisStage' &&
+            context.fileMetadata?.size > 0
+        ) {
+            additionalMetadata = additionalMetadata || {};
+            const fileTimings: Array<{
+                file: string;
+                durationMs: number;
+                status: 'success' | 'error' | 'timeout';
+            }> = [];
+
+            context.fileMetadata.forEach((meta: any, filename: string) => {
+                if (meta?.durationMs != null) {
+                    fileTimings.push({
+                        file: filename,
+                        durationMs: meta.durationMs,
+                        status: meta.isTimeout
+                            ? 'timeout'
+                            : meta.hasError
+                              ? 'error'
+                              : 'success',
+                    });
+                }
+            });
+
+            if (fileTimings.length > 0) {
+                fileTimings.sort((a, b) => b.durationMs - a.durationMs);
+                additionalMetadata.fileTimings = fileTimings;
+            }
         }
 
         const ignoredFilesMetadata = this.getIgnoredFilesMetadata(

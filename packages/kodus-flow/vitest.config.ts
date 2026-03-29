@@ -14,11 +14,11 @@ export default defineConfig({
         watch: false,
         // Setup global para carregar .env
         setupFiles: ['./tests/setup.ts'],
-        
+
         // Configuração de timeouts
-        testTimeout: process.env.CI ? 60000 : 30000,  // 60s para CI/CD, 30s para desenvolvimento
-        hookTimeout: 10000,  // 10 segundos para hooks (before/after)
-        
+        testTimeout: process.env.CI ? 60000 : 30000, // 60s para CI/CD, 30s para desenvolvimento
+        hookTimeout: 10000, // 10 segundos para hooks (before/after)
+
         // Configurações específicas para diferentes tipos de teste
         pool: 'threads',
         poolOptions: {
@@ -29,16 +29,16 @@ export default defineConfig({
                 minThreads: 1,
             },
         },
-        
+
         // Configurações para testes lentos
         slowTestThreshold: 5000, // 5 segundos
-        
+
         // Configurações de retry para testes flaky
         retry: process.env.CI ? 2 : 0,
-        
+
         // Configurações para debugging
         logHeapUsage: true,
-        
+
         // Configurações para testes de integração
         sequence: {
             concurrent: true,

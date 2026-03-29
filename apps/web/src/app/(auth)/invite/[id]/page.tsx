@@ -14,10 +14,30 @@ export const metadata: Metadata = {
 export default async function InvitePage({
     params,
 }: {
-    params: Promise<{ id: string }>;
+    params: { id: string };
 }) {
-    const { id } = await params;
-    const userData = await getInviteData(id);
+    const { id } = params;
+    const userData = await getInviteData(id).catch((error) => {
+    console.error(`Failed to get invite data for id ${id}:`, error);
+    return null;
+});
+
+    if (!userData?.uuid || !userData?.email) {
+        return (
+            <Page.Root className="flex h-full w-full flex-col items-center overflow-auto py-20">
+                <div className="flex w-[90%] flex-1 flex-col items-center justify-center gap-10 md:max-w-[500px]">
+                    <SvgKodus className="h-8" />
+                    <Heading variant="h2" className="text-center">
+                        Invalid or expired invitation
+                    </Heading>
+                    <p className="text-text-secondary text-center text-sm">
+                        This invitation link is no longer valid. Please contact your
+                        organization administrator for a new invitation.
+                    </p>
+                </div>
+            </Page.Root>
+        );
+    }
 
     return (
         <Page.Root className="flex h-full w-full flex-col items-center overflow-auto py-20">

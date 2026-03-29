@@ -3,6 +3,7 @@ export enum ParametersKey {
     PLATFORM_CONFIGS = 'platform_configs',
     LANGUAGE_CONFIG = 'language_config',
     ISSUE_CREATION_CONFIG = 'issue_creation_config',
+    CENTRALIZED_CONFIG = 'centralized_config',
 
     //DEPRECATED
     TEAM_ARTIFACTS_CONFIG = 'team_artifacts_config',

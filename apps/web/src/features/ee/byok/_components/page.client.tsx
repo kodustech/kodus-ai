@@ -15,7 +15,7 @@ import { BYOKCard } from "./card";
 export const ByokPageClient = ({
     config,
 }: {
-    config: { main: BYOKConfig; fallback: BYOKConfig } | undefined;
+    config: { main: BYOKConfig; fallback: BYOKConfig } | null;
 }) => {
     const onSaveMain = async (newConfig: BYOKConfig) => {
         try {

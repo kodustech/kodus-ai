@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { createLogger } from '@kodus/flow';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import {
@@ -20,6 +21,9 @@ import {
 } from '@libs/organization/domain/teamMembers/contracts/teamMembers.service.contracts';
 import { UpdateAnotherUserDto } from '@libs/identity/dtos/update-another-user.dto';
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
+import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
+import { UserRoleChangeLogParams } from '@libs/ee/codeReviewSettingsLog/infrastructure/adapters/services/userManagementLog.handler';
+import { ActionType } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
 
 @Injectable()
 export class UpdateAnotherUserUseCase implements IUseCase {
@@ -37,6 +41,8 @@ export class UpdateAnotherUserUseCase implements IUseCase {
 
         @Inject(TEAM_MEMBERS_SERVICE_TOKEN)
         private readonly teamMembersService: ITeamMemberService,
+
+        private readonly eventEmitter: EventEmitter2,
     ) {}
 
     async execute(
@@ -85,6 +91,8 @@ export class UpdateAnotherUserUseCase implements IUseCase {
                 );
             }
 
+            const previousRole = targetUser.role;
+
             const updatedUser = await this.usersService.update(
                 { uuid: targetUserId },
                 {
@@ -102,6 +110,32 @@ export class UpdateAnotherUserUseCase implements IUseCase {
                 context: UpdateAnotherUserUseCase.name,
                 metadata: { userId, targetUserId, data },
             });
+
+            if (role && previousRole !== role) {
+                const actingUser = await this.usersService.findOne({
+                    uuid: userId,
+                });
+
+                const logParams: UserRoleChangeLogParams = {
+                    organizationAndTeamData: {
+                        organizationId,
+                        teamId: teamMember.team.uuid,
+                    },
+                    userInfo: {
+                        userId,
+                        userEmail: actingUser?.email,
+                    },
+                    actionType: ActionType.EDIT,
+                    targetUserEmail: targetUser.email,
+                    previousRole,
+                    newRole: role,
+                };
+
+                this.eventEmitter.emit(
+                    AuditLogEvents.USER_ROLE_CHANGE,
+                    logParams,
+                );
+            }
 
             return updatedUser.toObject();
         } catch (error) {

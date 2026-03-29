@@ -33,6 +33,7 @@ import {
     prompt_KodyRulesGeneratorSystem,
     prompt_KodyRulesGeneratorUser,
 } from '@libs/common/utils/langchainCommon/prompts/kodyRulesGenerator';
+import { DocumentationContextItem } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { LibraryKodyRule } from '@libs/core/infrastructure/config/types/general/kodyRules.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
@@ -183,8 +184,16 @@ export class CommentAnalysisService {
         comments: UncategorizedComment[];
         existingRules: IKodyRule[];
         organizationAndTeamData: OrganizationAndTeamData;
+        memories?: Array<Partial<IKodyRule>>;
+        documentationContext?: DocumentationContextItem[];
     }): Promise<IKodyRule[]> {
-        const { comments, existingRules, organizationAndTeamData } = params;
+        const {
+            comments,
+            existingRules,
+            organizationAndTeamData,
+            memories,
+            documentationContext,
+        } = params;
 
         try {
             const filteredComments = await this.filterComments({
@@ -231,6 +240,8 @@ export class CommentAnalysisService {
                             .setPayload({
                                 comments: filteredComments,
                                 rules: filteredLibraryKodyRules,
+                                memories,
+                                documentationContext,
                             })
                             .addPrompt({
                                 role: PromptRole.SYSTEM,

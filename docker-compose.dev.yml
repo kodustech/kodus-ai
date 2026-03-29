@@ -40,7 +40,7 @@ services:
             test:
                 [
                     'CMD-SHELL',
-                    "node -e \"const http=require('http'); const port=process.env.API_PORT||3001; const req=http.get({host:'127.0.0.1', port, path:'/health', timeout:2000}, (res)=>process.exit(res.statusCode===200?0:1)); req.on('error', ()=>process.exit(1)); req.on('timeout', ()=>{ req.destroy(); process.exit(1); });\"",
+                    'node -e "const http=require(''http''); const port=process.env.API_PORT||3001; const req=http.get({host:''127.0.0.1'', port, path:''/health'', timeout:2000}, (res)=>process.exit(res.statusCode===200?0:1)); req.on(''error'', ()=>process.exit(1)); req.on(''timeout'', ()=>{ req.destroy(); process.exit(1); });"',
                 ]
             interval: 20s
             timeout: 10s
@@ -141,6 +141,7 @@ services:
             - ./apps/web:/usr/src/app:delegated
             - web_node_modules_cache:/usr/src/app/node_modules
             - web_next_cache:/usr/src/app/.next
+            - yalc_store:/root/.yalc
         restart: unless-stopped
         healthcheck:
             test:
@@ -226,7 +227,7 @@ services:
             RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-dev}
             RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-devpass}
             RABBITMQ_HOSTNAME: ${RABBITMQ_HOSTNAME:-rabbitmq}
-            RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit heartbeat 60"
+            RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: '-rabbit heartbeat 60'
         command: /usr/local/bin/init-definitions.sh
 
     db_postgres:

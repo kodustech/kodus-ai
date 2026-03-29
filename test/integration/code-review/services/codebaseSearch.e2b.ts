@@ -79,7 +79,9 @@ async function main() {
 
         const remoteCommands: RemoteCommands = {
             grep: async (pattern, path, glob?) => {
-                const fullPath = path.startsWith('/') ? path : `${REPO_DIR}/${path}`;
+                const fullPath = path.startsWith('/')
+                    ? path
+                    : `${REPO_DIR}/${path}`;
                 const globArg = glob ? ` --glob '${glob}'` : '';
                 const result = await sandbox.commands.run(
                     `rg --no-heading -n '${pattern.replace(/'/g, "'\\''")}' '${fullPath}'${globArg}`,
@@ -88,7 +90,9 @@ async function main() {
                 return result.stdout;
             },
             read: async (path, start, end) => {
-                const fullPath = path.startsWith('/') ? path : `${REPO_DIR}/${path}`;
+                const fullPath = path.startsWith('/')
+                    ? path
+                    : `${REPO_DIR}/${path}`;
                 const result = await sandbox.commands.run(
                     `sed -n '${start},${end}p' '${fullPath}'`,
                     { timeoutMs: 10_000 },
@@ -96,7 +100,9 @@ async function main() {
                 return result.stdout;
             },
             listDir: async (path, maxDepth) => {
-                const fullPath = path.startsWith('/') ? path : `${REPO_DIR}/${path}`;
+                const fullPath = path.startsWith('/')
+                    ? path
+                    : `${REPO_DIR}/${path}`;
                 const result = await sandbox.commands.run(
                     `find '${fullPath}' -maxdepth ${maxDepth} -type f`,
                     { timeoutMs: 30_000 },
@@ -114,13 +120,19 @@ async function main() {
         // Uses --glob '!**/NAME/**' so exclude semantics match the service's
         // segment-based matchesExclude (matches "test" at ANY depth, not just root).
         // Extension globs like *.min.js are passed as --glob '!*.min.js'.
-        async function countGrepFiles(pattern: string, glob: string, extraExcludes: string[] = []): Promise<string[]> {
+        async function countGrepFiles(
+            pattern: string,
+            glob: string,
+            extraExcludes: string[] = [],
+        ): Promise<string[]> {
             const allExcludes = [...EXCLUDES, ...extraExcludes];
-            const excludeArgs = allExcludes.map(e => {
-                if (e.startsWith('*.')) return `--glob '!${e}'`;           // extension glob
-                if (e.endsWith('/'))   return `--glob '!${e}**'`;          // path prefix
-                return `--glob '!**/${e}/**' --glob '!${e}/**'`;           // segment at any depth + root
-            }).join(' ');
+            const excludeArgs = allExcludes
+                .map((e) => {
+                    if (e.startsWith('*.')) return `--glob '!${e}'`; // extension glob
+                    if (e.endsWith('/')) return `--glob '!${e}**'`; // path prefix
+                    return `--glob '!**/${e}/**' --glob '!${e}/**'`; // segment at any depth + root
+                })
+                .join(' ');
             try {
                 const result = await sandbox.commands.run(
                     `cd ${REPO_DIR} && rg --no-heading -l --glob '${glob}' ${excludeArgs} '${pattern}'`,
@@ -133,21 +145,41 @@ async function main() {
         }
 
         // Ground truth for isFileMatchingGlob
-        const truthGlobFiles = await countGrepFiles('isFileMatchingGlob', '**/*.ts', ['test', 'spec']);
-        console.log(`  Ground truth: isFileMatchingGlob in ${truthGlobFiles.length} files (excl test/spec)`);
+        const truthGlobFiles = await countGrepFiles(
+            'isFileMatchingGlob',
+            '**/*.ts',
+            ['test', 'spec'],
+        );
+        console.log(
+            `  Ground truth: isFileMatchingGlob in ${truthGlobFiles.length} files (excl test/spec)`,
+        );
 
         // Ground truth for FileChange (with glob *.ts, excl test)
-        const truthFileChangeFiles = await countGrepFiles('FileChange', '**/*.ts', ['test', 'spec']);
-        console.log(`  Ground truth: FileChange in ${truthFileChangeFiles.length} files (excl test/spec)`);
+        const truthFileChangeFiles = await countGrepFiles(
+            'FileChange',
+            '**/*.ts',
+            ['test', 'spec'],
+        );
+        console.log(
+            `  Ground truth: FileChange in ${truthFileChangeFiles.length} files (excl test/spec)`,
+        );
 
         // Ground truth for collectContexts\( callers
-        const truthCollectCallers = await countGrepFiles('collectContexts\\(', '**/*.ts', ['test', 'spec']);
-        console.log(`  Ground truth: collectContexts\\( in ${truthCollectCallers.length} files (excl test/spec)`);
+        const truthCollectCallers = await countGrepFiles(
+            'collectContexts\\(',
+            '**/*.ts',
+            ['test', 'spec'],
+        );
+        console.log(
+            `  Ground truth: collectContexts\\( in ${truthCollectCallers.length} files (excl test/spec)`,
+        );
 
         // ═══════════════════════════════════════════════════════════════════════
         // 1. COMPLETENESS — compare service results against ground truth
         // ═══════════════════════════════════════════════════════════════════════
-        console.log('\n═══ 1. COMPLETENESS — service results vs ground truth ═══');
+        console.log(
+            '\n═══ 1. COMPLETENESS — service results vs ground truth ═══',
+        );
 
         // isFileMatchingGlob: service should find ALL files that rg -l finds
         {
@@ -158,14 +190,15 @@ async function main() {
                 excludes: [...EXCLUDES, 'test', 'spec'],
             });
             assert(result.success, 'isFileMatchingGlob: search succeeds');
-            const foundFiles = new Set(result.contexts.map(c => c.file));
+            const foundFiles = new Set(result.contexts.map((c) => c.file));
 
             // Must find the same count as ground truth (capped by maxFiles=20)
             const expectedCount = Math.min(truthGlobFiles.length, 20);
-            assert(foundFiles.size === expectedCount,
+            assert(
+                foundFiles.size === expectedCount,
                 `isFileMatchingGlob: found ${foundFiles.size} files, ground truth ${truthGlobFiles.length} (cap 20 → expected ${expectedCount})`,
                 foundFiles.size !== expectedCount
-                    ? `missing: ${truthGlobFiles.filter(f => !foundFiles.has(f)).join(', ')}`
+                    ? `missing: ${truthGlobFiles.filter((f) => !foundFiles.has(f)).join(', ')}`
                     : undefined,
             );
 
@@ -179,9 +212,12 @@ async function main() {
                 'kody-rules-validation.service',
             ];
             for (const name of knownConsumers) {
-                const found = [...foundFiles].some(f => f.includes(name));
-                assert(found, `isFileMatchingGlob: contains ${name}`,
-                    !found ? `files: ${[...foundFiles].join(', ')}` : undefined);
+                const found = [...foundFiles].some((f) => f.includes(name));
+                assert(
+                    found,
+                    `isFileMatchingGlob: contains ${name}`,
+                    !found ? `files: ${[...foundFiles].join(', ')}` : undefined,
+                );
             }
         }
 
@@ -195,10 +231,12 @@ async function main() {
                 maxFiles: 20,
             });
             assert(result.success, 'FileChange: search succeeds');
-            const foundFiles = new Set(result.contexts.map(c => c.file));
+            const foundFiles = new Set(result.contexts.map((c) => c.file));
             const expectedCount = Math.min(truthFileChangeFiles.length, 20);
-            assert(foundFiles.size === expectedCount,
-                `FileChange: found ${foundFiles.size} files, ground truth ${truthFileChangeFiles.length} (cap 20 → expected ${expectedCount})`);
+            assert(
+                foundFiles.size === expectedCount,
+                `FileChange: found ${foundFiles.size} files, ground truth ${truthFileChangeFiles.length} (cap 20 → expected ${expectedCount})`,
+            );
         }
 
         // collectContexts\( callers: precise count
@@ -210,9 +248,10 @@ async function main() {
                 excludes: [...EXCLUDES, 'test', 'spec'],
             });
             assert(result.success, 'collectContexts\\(: search succeeds');
-            const foundFiles = new Set(result.contexts.map(c => c.file));
+            const foundFiles = new Set(result.contexts.map((c) => c.file));
             const expectedCount = Math.min(truthCollectCallers.length, 20);
-            assert(foundFiles.size === expectedCount,
+            assert(
+                foundFiles.size === expectedCount,
                 `collectContexts\\(: found ${foundFiles.size} files, ground truth ${truthCollectCallers.length} (expected ${expectedCount})`,
                 foundFiles.size !== expectedCount
                     ? `found: ${[...foundFiles].join(', ')}`
@@ -223,7 +262,9 @@ async function main() {
         // ═══════════════════════════════════════════════════════════════════════
         // 2. CONTEXT QUALITY — content is useful for code review
         // ═══════════════════════════════════════════════════════════════════════
-        console.log('\n═══ 2. CONTEXT QUALITY — content is useful for code review ═══');
+        console.log(
+            '\n═══ 2. CONTEXT QUALITY — content is useful for code review ═══',
+        );
 
         // FULL LOOP: cross-validate EVERY context from a broad multi-file search.
         // For each context the service returns, we:
@@ -243,7 +284,10 @@ async function main() {
                 contextLines: CONTEXT_LINES,
             });
             assert(result.success, 'content-loop: search succeeds');
-            assert(result.contexts.length > 0, `content-loop: found ${result.contexts.length} context(s) across files`);
+            assert(
+                result.contexts.length > 0,
+                `content-loop: found ${result.contexts.length} context(s) across files`,
+            );
 
             let byteMatchCount = 0;
             let lineAlignCount = 0;
@@ -256,21 +300,32 @@ async function main() {
                 const readEnd = matchEnd + CONTEXT_LINES;
 
                 // (a) Byte-for-byte comparison with direct file read
-                const directContent = await remoteCommands.read(ctx.file, readStart, readEnd);
+                const directContent = await remoteCommands.read(
+                    ctx.file,
+                    readStart,
+                    readEnd,
+                );
                 if (ctx.content === directContent) {
                     byteMatchCount++;
                 } else {
-                    console.log(`    ✗ MISMATCH ${ctx.file}:${matchStart} — service: ${ctx.content.length} chars, direct: ${directContent.length} chars`);
+                    console.log(
+                        `    ✗ MISMATCH ${ctx.file}:${matchStart} — service: ${ctx.content.length} chars, direct: ${directContent.length} chars`,
+                    );
                 }
 
                 // (b) Verify match line is at the correct position within the content
                 const contentLines = ctx.content.split('\n');
                 const matchLineIndex = matchStart - readStart;
-                if (matchLineIndex >= 0 && matchLineIndex < contentLines.length
-                    && contentLines[matchLineIndex].includes(SEARCH_PATTERN)) {
+                if (
+                    matchLineIndex >= 0 &&
+                    matchLineIndex < contentLines.length &&
+                    contentLines[matchLineIndex].includes(SEARCH_PATTERN)
+                ) {
                     lineAlignCount++;
                 } else {
-                    console.log(`    ✗ LINE MISALIGN ${ctx.file}:${matchStart} — index ${matchLineIndex}, line: "${(contentLines[matchLineIndex] || '').trim()}"`);
+                    console.log(
+                        `    ✗ LINE MISALIGN ${ctx.file}:${matchStart} — index ${matchLineIndex}, line: "${(contentLines[matchLineIndex] || '').trim()}"`,
+                    );
                 }
 
                 // (c) Content contains the pattern somewhere (even if line index is off)
@@ -282,33 +337,57 @@ async function main() {
 
                 // (d) Has surrounding code context (function/class/method — not just the match line)
                 const contentLen = contentLines.length;
-                if (contentLen >= 20 &&
-                    (ctx.content.includes('function') || ctx.content.includes('=>') || ctx.content.includes('async') || ctx.content.includes('class'))) {
+                if (
+                    contentLen >= 20 &&
+                    (ctx.content.includes('function') ||
+                        ctx.content.includes('=>') ||
+                        ctx.content.includes('async') ||
+                        ctx.content.includes('class'))
+                ) {
                     hasFunctionContext++;
                 } else if (contentLen < 20) {
-                    console.log(`    ⚠ ${ctx.file}:${matchStart} — short context (${contentLen} lines), may be near file start/end`);
+                    console.log(
+                        `    ⚠ ${ctx.file}:${matchStart} — short context (${contentLen} lines), may be near file start/end`,
+                    );
                 }
             }
 
             const total = result.contexts.length;
-            assert(byteMatchCount === total,
-                `content-loop: ${byteMatchCount}/${total} contexts match direct read byte-for-byte`);
-            assert(lineAlignCount === total,
-                `content-loop: ${lineAlignCount}/${total} contexts have match at correct line position`);
-            assert(patternPresentCount === total,
-                `content-loop: ${patternPresentCount}/${total} contexts contain the search pattern`);
+            assert(
+                byteMatchCount === total,
+                `content-loop: ${byteMatchCount}/${total} contexts match direct read byte-for-byte`,
+            );
+            assert(
+                lineAlignCount === total,
+                `content-loop: ${lineAlignCount}/${total} contexts have match at correct line position`,
+            );
+            assert(
+                patternPresentCount === total,
+                `content-loop: ${patternPresentCount}/${total} contexts contain the search pattern`,
+            );
             // Most contexts should have function/class context; a few may be type defs or interfaces
-            assert(hasFunctionContext >= total * 0.8,
-                `content-loop: ${hasFunctionContext}/${total} contexts include surrounding function/class code (≥80%)`);
+            assert(
+                hasFunctionContext >= total * 0.8,
+                `content-loop: ${hasFunctionContext}/${total} contexts include surrounding function/class code (≥80%)`,
+            );
 
             // (e) Each file's content is unique — proves we're reading different files
-            const uniqueContents = new Set(result.contexts.map(c => c.content));
-            assert(uniqueContents.size === total,
-                `content-loop: ${uniqueContents.size}/${total} contexts have unique content (no duplicates)`);
+            const uniqueContents = new Set(
+                result.contexts.map((c) => c.content),
+            );
+            assert(
+                uniqueContents.size === total,
+                `content-loop: ${uniqueContents.size}/${total} contexts have unique content (no duplicates)`,
+            );
 
             // Line numbers must be valid
-            const allValidLines = result.contexts.every(c => c.lines[0][0] > 0 && c.lines[0][1] >= c.lines[0][0]);
-            assert(allValidLines, 'content-loop: all line ranges are valid (start > 0, end >= start)');
+            const allValidLines = result.contexts.every(
+                (c) => c.lines[0][0] > 0 && c.lines[0][1] >= c.lines[0][0],
+            );
+            assert(
+                allValidLines,
+                'content-loop: all line ranges are valid (start > 0, end >= start)',
+            );
         }
 
         // Same loop for a DIFFERENT pattern — multiple files, multiple ranges per file
@@ -325,7 +404,10 @@ async function main() {
                 maxFiles: 10,
             });
             assert(result.success, 'content-loop-2: search succeeds');
-            assert(result.contexts.length >= 5, `content-loop-2: found ${result.contexts.length} contexts (PlatformType is widespread)`);
+            assert(
+                result.contexts.length >= 5,
+                `content-loop-2: found ${result.contexts.length} contexts (PlatformType is widespread)`,
+            );
 
             let byteOk = 0;
             let patternOk = 0;
@@ -334,22 +416,32 @@ async function main() {
                 const readStart = Math.max(1, matchStart - CONTEXT_LINES);
                 const readEnd = matchEnd + CONTEXT_LINES;
 
-                const directContent = await remoteCommands.read(ctx.file, readStart, readEnd);
+                const directContent = await remoteCommands.read(
+                    ctx.file,
+                    readStart,
+                    readEnd,
+                );
                 if (ctx.content === directContent) byteOk++;
                 if (ctx.content.includes(SEARCH_PATTERN)) patternOk++;
             }
 
             const total = result.contexts.length;
-            assert(byteOk === total,
-                `content-loop-2: ${byteOk}/${total} byte-match (PlatformType across ${total} contexts)`);
-            assert(patternOk === total,
-                `content-loop-2: ${patternOk}/${total} contain pattern`);
+            assert(
+                byteOk === total,
+                `content-loop-2: ${byteOk}/${total} byte-match (PlatformType across ${total} contexts)`,
+            );
+            assert(
+                patternOk === total,
+                `content-loop-2: ${patternOk}/${total} contain pattern`,
+            );
         }
 
         // ═══════════════════════════════════════════════════════════════════════
         // 3. PLANNER PATTERN TYPES — patterns the LLM planner actually generates
         // ═══════════════════════════════════════════════════════════════════════
-        console.log('\n═══ 3. PLANNER PATTERNS — patterns the LLM planner generates ═══');
+        console.log(
+            '\n═══ 3. PLANNER PATTERNS — patterns the LLM planner generates ═══',
+        );
 
         // Type 1: function call-site with escaped parens
         {
@@ -359,13 +451,25 @@ async function main() {
                 includes: ['**/*.ts'],
                 excludes: [...EXCLUDES, 'test', 'spec'],
             });
-            assert(result.success, 'call-site: createSandboxWithRepo\\( succeeds');
-            const files = [...new Set(result.contexts.map(c => c.file))];
-            assert(files.length >= 1, `call-site: found ${files.length} callers`);
+            assert(
+                result.success,
+                'call-site: createSandboxWithRepo\\( succeeds',
+            );
+            const files = [...new Set(result.contexts.map((c) => c.file))];
+            assert(
+                files.length >= 1,
+                `call-site: found ${files.length} callers`,
+            );
             // Should find the stage that calls it
-            assert(files.some(f => f.includes('collect-cross-file-context') || f.includes('codeAnalysis')),
+            assert(
+                files.some(
+                    (f) =>
+                        f.includes('collect-cross-file-context') ||
+                        f.includes('codeAnalysis'),
+                ),
                 'call-site: found calling stage/orchestrator',
-                `files: ${files.join(', ')}`);
+                `files: ${files.join(', ')}`,
+            );
         }
 
         // Type 2: import-from pattern (Category 5 — upstream deps)
@@ -377,11 +481,16 @@ async function main() {
                 excludes: [...EXCLUDES, 'test', 'spec'],
             });
             assert(result.success, 'import: from.*e2bSandbox.service succeeds');
-            const files = [...new Set(result.contexts.map(c => c.file))];
-            assert(files.length >= 1, `import: found ${files.length} importers`);
-            assert(files.some(f => f.includes('codebase.module')),
+            const files = [...new Set(result.contexts.map((c) => c.file))];
+            assert(
+                files.length >= 1,
+                `import: found ${files.length} importers`,
+            );
+            assert(
+                files.some((f) => f.includes('codebase.module')),
                 'import: found codebase.module (module registration)',
-                `files: ${files.join(', ')}`);
+                `files: ${files.join(', ')}`,
+            );
         }
 
         // Type 3: constant reference (Category 4 — config/limits)
@@ -393,10 +502,17 @@ async function main() {
                 excludes: [...EXCLUDES, 'test', 'spec'],
             });
             assert(result.success, 'constant: SANDBOX_TIMEOUT_MS succeeds');
-            assert(result.contexts.length >= 1, `constant: found ${result.contexts.length} usages`);
+            assert(
+                result.contexts.length >= 1,
+                `constant: found ${result.contexts.length} usages`,
+            );
             // Verify content actually shows the constant being used
-            assert(result.contexts.some(c => c.content.includes('SANDBOX_TIMEOUT_MS')),
-                'constant: context text includes SANDBOX_TIMEOUT_MS');
+            assert(
+                result.contexts.some((c) =>
+                    c.content.includes('SANDBOX_TIMEOUT_MS'),
+                ),
+                'constant: context text includes SANDBOX_TIMEOUT_MS',
+            );
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -419,24 +535,39 @@ async function main() {
                 includes: ['**/*.service.ts'],
                 excludes: [...EXCLUDES, 'test', 'spec'],
             });
-            assert(broad.success && narrow.success, 'glob filter: both succeed');
+            assert(
+                broad.success && narrow.success,
+                'glob filter: both succeed',
+            );
 
-            const broadFiles = new Set(broad.contexts.map(c => c.file));
-            const narrowFiles = new Set(narrow.contexts.map(c => c.file));
+            const broadFiles = new Set(broad.contexts.map((c) => c.file));
+            const narrowFiles = new Set(narrow.contexts.map((c) => c.file));
 
             // Narrow MUST have strictly fewer files (we know stages use it too, which are .stage.ts not .service.ts)
-            assert(narrowFiles.size < broadFiles.size,
+            assert(
+                narrowFiles.size < broadFiles.size,
                 `glob filter: narrow (${narrowFiles.size}) < broad (${broadFiles.size})`,
-                `narrow: ${[...narrowFiles].join(', ')} | broad: ${[...broadFiles].join(', ')}`);
+                `narrow: ${[...narrowFiles].join(', ')} | broad: ${[...broadFiles].join(', ')}`,
+            );
 
             // All narrow files should be *.service.ts
-            const allService = [...narrowFiles].every(f => f.endsWith('.service.ts'));
-            assert(allService, 'glob filter: all narrow results are *.service.ts',
-                !allService ? `non-service: ${[...narrowFiles].filter(f => !f.endsWith('.service.ts')).join(', ')}` : undefined);
+            const allService = [...narrowFiles].every((f) =>
+                f.endsWith('.service.ts'),
+            );
+            assert(
+                allService,
+                'glob filter: all narrow results are *.service.ts',
+                !allService
+                    ? `non-service: ${[...narrowFiles].filter((f) => !f.endsWith('.service.ts')).join(', ')}`
+                    : undefined,
+            );
 
             // Broad should include .stage.ts files that narrow doesn't
-            const hasStage = [...broadFiles].some(f => f.includes('.stage.'));
-            assert(hasStage, 'glob filter: broad includes .stage.ts files that narrow excludes');
+            const hasStage = [...broadFiles].some((f) => f.includes('.stage.'));
+            assert(
+                hasStage,
+                'glob filter: broad includes .stage.ts files that narrow excludes',
+            );
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -456,20 +587,30 @@ async function main() {
             assert(result.success, 'merge: search succeeds');
 
             // Get ground truth: how many individual rg lines match?
-            const rawMatchCount = await countGrepFiles('PlatformType', '**/e2bSandbox.service.ts');
+            const rawMatchCount = await countGrepFiles(
+                'PlatformType',
+                '**/e2bSandbox.service.ts',
+            );
             // With maxMatchesPerFile=5, we cap at 5 matches then merge
             // MERGE_GAP=10 means matches within 10 lines become one range
             // So we expect fewer contexts than raw match count
-            assert(result.contexts.length > 0, `merge: found ${result.contexts.length} contexts`);
-            assert(result.contexts.length < 5,
-                `merge: ${result.contexts.length} merged contexts < 5 (raw matches in file, merging worked)`);
+            assert(
+                result.contexts.length > 0,
+                `merge: found ${result.contexts.length} contexts`,
+            );
+            assert(
+                result.contexts.length < 5,
+                `merge: ${result.contexts.length} merged contexts < 5 (raw matches in file, merging worked)`,
+            );
 
             // Each context should be substantial (multiple lines of surrounding code)
             for (let i = 0; i < result.contexts.length; i++) {
                 const ctx = result.contexts[i];
                 const lineCount = ctx.content.split('\n').length;
-                assert(lineCount >= 20,
-                    `merge: context[${i}] has ${lineCount} lines (sufficient surrounding code)`);
+                assert(
+                    lineCount >= 20,
+                    `merge: context[${i}] has ${lineCount} lines (sufficient surrounding code)`,
+                );
             }
         }
 
@@ -486,8 +627,14 @@ async function main() {
                 includes: ['**/*.ts'],
                 excludes: EXCLUDES,
             });
-            assert(result.success, 'no match: returns success=true (not error)');
-            assert(result.contexts.length === 0, 'no match: contexts is empty array');
+            assert(
+                result.success,
+                'no match: returns success=true (not error)',
+            );
+            assert(
+                result.contexts.length === 0,
+                'no match: contexts is empty array',
+            );
         }
 
         // Empty query → success: false with error
@@ -497,7 +644,10 @@ async function main() {
                 remoteCommands,
             });
             assert(!result.success, 'empty query: returns success=false');
-            assert(result.error === 'Empty query', `empty query: error is "Empty query" (got "${result.error}")`);
+            assert(
+                result.error === 'Empty query',
+                `empty query: error is "Empty query" (got "${result.error}")`,
+            );
         }
 
         // Special regex characters in pattern (common in TS generics)
@@ -510,7 +660,10 @@ async function main() {
                 maxFiles: 5,
             });
             assert(result.success, 'special chars: "Map<string" succeeds');
-            assert(result.contexts.length > 0, `special chars: found ${result.contexts.length} contexts`);
+            assert(
+                result.contexts.length > 0,
+                `special chars: found ${result.contexts.length} contexts`,
+            );
         }
 
         // Excludes: segment matching vs substring matching (the bug we fixed)
@@ -524,16 +677,25 @@ async function main() {
                 excludes: EXCLUDES,
                 maxFiles: 200,
             });
-            assert(withoutExclude.success, 'excludes-segment: base search succeeds');
-            const baseFiles = new Set(withoutExclude.contexts.map(c => c.file));
+            assert(
+                withoutExclude.success,
+                'excludes-segment: base search succeeds',
+            );
+            const baseFiles = new Set(
+                withoutExclude.contexts.map((c) => c.file),
+            );
 
             // The base MUST contain some test/spec/evals files (prove pattern hits them)
-            const baseTestFiles = [...baseFiles].filter(f => {
+            const baseTestFiles = [...baseFiles].filter((f) => {
                 const segs = f.split('/');
-                return segs.some(s => s === 'test' || s === 'spec' || s === 'evals');
+                return segs.some(
+                    (s) => s === 'test' || s === 'spec' || s === 'evals',
+                );
             });
-            assert(baseTestFiles.length > 0,
-                `excludes-segment: base has ${baseTestFiles.length} test/spec/eval files (proves pattern exists there)`);
+            assert(
+                baseTestFiles.length > 0,
+                `excludes-segment: base has ${baseTestFiles.length} test/spec/eval files (proves pattern exists there)`,
+            );
 
             // Step 2: search WITH test/spec/evals exclude
             const withExclude = await service.search({
@@ -543,39 +705,56 @@ async function main() {
                 excludes: [...EXCLUDES, 'test', 'spec', 'evals'],
                 maxFiles: 200,
             });
-            assert(withExclude.success, 'excludes-segment: filtered search succeeds');
-            const filteredFiles = new Set(withExclude.contexts.map(c => c.file));
+            assert(
+                withExclude.success,
+                'excludes-segment: filtered search succeeds',
+            );
+            const filteredFiles = new Set(
+                withExclude.contexts.map((c) => c.file),
+            );
 
             // Filtered MUST have fewer files — the test files were actively removed
-            assert(filteredFiles.size < baseFiles.size,
+            assert(
+                filteredFiles.size < baseFiles.size,
                 `excludes-segment: filtered (${filteredFiles.size}) < base (${baseFiles.size})`,
-                `excludes removed nothing?`);
+                `excludes removed nothing?`,
+            );
 
             // No file in filtered results should have test/spec/evals as a path SEGMENT
-            const leaked = [...filteredFiles].filter(f => {
+            const leaked = [...filteredFiles].filter((f) => {
                 const segs = f.split('/');
-                return segs.some(s => s === 'test' || s === 'spec' || s === 'evals');
+                return segs.some(
+                    (s) => s === 'test' || s === 'spec' || s === 'evals',
+                );
             });
-            assert(leaked.length === 0,
+            assert(
+                leaked.length === 0,
                 `excludes-segment: 0 test/spec/eval segments in filtered results`,
-                leaked.length > 0 ? `leaked: ${leaked.join(', ')}` : undefined);
+                leaked.length > 0 ? `leaked: ${leaked.join(', ')}` : undefined,
+            );
 
             // CRITICAL: files with "test" as SUBSTRING but not SEGMENT must NOT be excluded
             // e.g. "contest", "attest", "testing-utils", "latest"
             // This validates the matchesExclude fix (segment match, not substring)
-            const substringNotSegment = [...baseFiles].filter(f => {
+            const substringNotSegment = [...baseFiles].filter((f) => {
                 const segs = f.split('/');
-                const hasSegment = segs.some(s => s === 'test');
+                const hasSegment = segs.some((s) => s === 'test');
                 const hasSubstring = f.toLowerCase().includes('test');
                 return hasSubstring && !hasSegment;
             });
             if (substringNotSegment.length > 0) {
-                const keptInFiltered = substringNotSegment.filter(f => filteredFiles.has(f));
-                assert(keptInFiltered.length === substringNotSegment.length,
+                const keptInFiltered = substringNotSegment.filter((f) =>
+                    filteredFiles.has(f),
+                );
+                assert(
+                    keptInFiltered.length === substringNotSegment.length,
                     `excludes-segment: ${keptInFiltered.length}/${substringNotSegment.length} substring-only files kept (not wrongly excluded)`,
-                    `wrongly excluded: ${substringNotSegment.filter(f => !filteredFiles.has(f)).join(', ')}`);
+                    `wrongly excluded: ${substringNotSegment.filter((f) => !filteredFiles.has(f)).join(', ')}`,
+                );
             } else {
-                console.log('    (no substring-only test files found — segment test is structural only)');
+                console.log(
+                    '    (no substring-only test files found — segment test is structural only)',
+                );
             }
         }
 
@@ -589,10 +768,16 @@ async function main() {
                 maxFiles: 50,
             });
             assert(result.success, 'excludes-glob: search succeeds');
-            const minFiles = result.contexts.filter(c => c.file.endsWith('.min.js') || c.file.endsWith('.map'));
-            assert(minFiles.length === 0,
+            const minFiles = result.contexts.filter(
+                (c) => c.file.endsWith('.min.js') || c.file.endsWith('.map'),
+            );
+            assert(
+                minFiles.length === 0,
                 `excludes-glob: 0 .min.js/.map files in results`,
-                minFiles.length > 0 ? `leaked: ${minFiles.map(c => c.file).join(', ')}` : undefined);
+                minFiles.length > 0
+                    ? `leaked: ${minFiles.map((c) => c.file).join(', ')}`
+                    : undefined,
+            );
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -605,14 +790,13 @@ async function main() {
         }
         console.log('');
         if (failed > 0) process.exitCode = 1;
-
     } finally {
         console.log('Cleaning up sandbox...');
         await sandbox.kill();
     }
 }
 
-main().catch(err => {
+main().catch((err) => {
     console.error('Fatal error:', err);
     process.exit(1);
 });

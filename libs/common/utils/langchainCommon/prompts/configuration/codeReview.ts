@@ -74,6 +74,13 @@ export interface CodeReviewPayload {
         title?: string;
         rule?: string;
     }>;
+    documentationContext?: Array<{
+        query?: string;
+        title?: string;
+        url?: string;
+        snippet?: string;
+        source?: string;
+    }>;
 }
 
 const PATH_SOURCE_TYPE_MAP: Record<string, string> = {
@@ -321,6 +328,45 @@ function formatMemoriesSection(
     }
 
     return `## Memories\n\nAdditional context from past learnings in Kody Rules format.\n\n${formattedMemories.join('\n\n')}`;
+}
+
+function formatDocumentationSection(
+    documentationContext: CodeReviewPayload['documentationContext'],
+): string | null {
+    if (!Array.isArray(documentationContext) || !documentationContext.length) {
+        return null;
+    }
+
+    const formattedDocs = documentationContext
+        .map((item, index) => {
+            const title = (item?.title || '').trim();
+            const url = (item?.url || '').trim();
+            const query = (item?.query || '').trim();
+            const snippet = (item?.snippet || '').trim();
+            const source = (item?.source || '').trim();
+
+            if (!title && !url && !query && !snippet) {
+                return null;
+            }
+
+            const lines = [
+                `### Documentation ${index + 1}`,
+                query ? `- Query: ${query}` : null,
+                title ? `- Title: ${title}` : null,
+                url ? `- URL: ${url}` : null,
+                source ? `- Source: ${source}` : null,
+                snippet ? `- Summary: ${snippet}` : null,
+            ].filter((line): line is string => Boolean(line));
+
+            return lines.join('\n');
+        })
+        .filter((section): section is string => Boolean(section));
+
+    if (!formattedDocs.length) {
+        return null;
+    }
+
+    return `## Documentation Context\n\nAdditional package/framework documentation gathered for this file.\n\n${formattedDocs.join('\n\n')}`;
 }
 
 /**
@@ -1407,11 +1453,19 @@ Your final output should be **ONLY** a JSON object with the following structure:
    - The current date is ${new Date().toLocaleDateString('en-GB')}
 `;
 
-    if (!memoriesBlock) {
+    const documentationBlock = formatDocumentationSection(
+        payload?.documentationContext,
+    );
+
+    const contextBlocks = [memoriesBlock, documentationBlock].filter(
+        (block): block is string => Boolean(block),
+    );
+
+    if (!contextBlocks.length) {
         return basePrompt;
     }
 
-    return `${basePrompt}\n\n## External Context & Injected Knowledge\n\nThe following information is provided to ground your analysis in the broader system reality. Use this as your source of truth.\n\n---\n\n${memoriesBlock}`;
+    return `${basePrompt}\n\n## External Context & Injected Knowledge\n\nThe following information is provided to ground your analysis in the broader system reality. Use this as your source of truth.\n\n---\n\n${contextBlocks.join('\n\n---\n\n')}`;
 };
 
 // NOTE: v2 overrides are applied directly in prompt_codereview_system_gemini_v2
@@ -1513,6 +1567,13 @@ export const prompt_codereview_system_gemini_v2 = (
     const memoriesBlock = formatMemoriesSection(payload?.memories);
     if (memoriesBlock) {
         collectExternalContext('memories', memoriesBlock);
+    }
+
+    const documentationBlock = formatDocumentationSection(
+        payload?.documentationContext,
+    );
+    if (documentationBlock) {
+        collectExternalContext('documentation', documentationBlock);
     }
 
     const prompt = buildFinalPrompt(

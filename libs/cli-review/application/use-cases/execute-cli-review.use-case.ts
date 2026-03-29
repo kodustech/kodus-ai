@@ -35,6 +35,11 @@ import {
 } from '@libs/automation/domain/teamAutomation/contracts/team-automation.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { deepMerge } from '@libs/common/utils/deep';
+import {
+    IKodyRulesService,
+    KODY_RULES_SERVICE_TOKEN,
+} from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
+import { KodyRulesValidationService } from '@libs/ee/kodyRules/service/kody-rules-validation.service';
 
 interface GitContext {
     remote?: string;
@@ -69,6 +74,9 @@ export class ExecuteCliReviewUseCase implements IUseCase {
         private readonly automationExecutionService: IAutomationExecutionService,
         @Inject(TEAM_AUTOMATION_SERVICE_TOKEN)
         private readonly teamAutomationService: ITeamAutomationService,
+        @Inject(KODY_RULES_SERVICE_TOKEN)
+        private readonly kodyRulesService: IKodyRulesService,
+        private readonly kodyRulesValidationService: KodyRulesValidationService,
     ) {}
 
     async execute(params: ExecuteCliReviewInput): Promise<CliReviewResponse> {
@@ -98,14 +106,12 @@ export class ExecuteCliReviewUseCase implements IUseCase {
             });
 
             // 1. Create automation execution for tracking
-            if (!isTrialMode) {
-                execution = await this.createAutomationExecution(
-                    organizationAndTeamData,
-                    correlationId,
-                    userEmail,
-                    gitContext,
-                );
-            }
+            execution = await this.createAutomationExecution(
+                organizationAndTeamData,
+                correlationId,
+                userEmail,
+                gitContext,
+            );
 
             // 2. Convert CLI input to FileChange[]
             const changedFiles = this.converter.convertToFileChanges(input);
@@ -128,10 +134,18 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 };
             }
 
-            // 3. Load or create config
-            const codeReviewConfig = isTrialMode
-                ? this.getDefaultConfig(true) // Trial mode: use Gemini Flash
-                : await this.loadUserConfig(organizationAndTeamData);
+            // 3. Load or create config and resolve repository
+            const { config: codeReviewConfig, repositoryId: resolvedRepoId, repositoryName: resolvedRepoName } =
+                isTrialMode
+                    ? {
+                          config: this.getDefaultConfig(true),
+                          repositoryId: 'global',
+                          repositoryName: null,
+                      }
+                    : await this.loadUserConfigWithRules(
+                          organizationAndTeamData,
+                          gitContext,
+                      );
 
             // 4. Create pipeline context
             const context: CliReviewPipelineContext = {
@@ -145,16 +159,15 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 organizationAndTeamData,
                 codeReviewConfig,
                 changedFiles,
-                batches: [],
                 validSuggestions: [],
                 discardedSuggestions: [],
                 preparedFileContexts: [],
 
-                // PR context (dummy values - not used in CLI mode)
+                // PR context - use resolved repository ID and name for kody rules filtering
                 repository: {
-                    id: 0,
-                    name: 'cli-review',
-                    fullName: 'cli/cli-review',
+                    id: resolvedRepoId,
+                    name: resolvedRepoName ?? 'cli-review',
+                    fullName: resolvedRepoName ? `cli/${resolvedRepoName}` : 'cli/cli-review',
                     private: false,
                     owner: 'cli',
                     html_url: '',
@@ -235,7 +248,14 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                         filesAnalyzed: changedFiles.length,
                         issuesFound: result.cliResponse.issues.length,
                         duration: result.cliResponse.duration,
+                        repositoryResolution: {
+                            resolvedRepositoryId: resolvedRepoId,
+                            resolvedRepositoryName: resolvedRepoName,
+                            matchedByRemote: resolvedRepoId !== 'global',
+                            gitRemote: gitContext?.remote ?? null,
+                        },
                     },
+                    resolvedRepoId !== 'global' ? resolvedRepoId : undefined,
                 );
             }
 
@@ -276,16 +296,23 @@ export class ExecuteCliReviewUseCase implements IUseCase {
     }
 
     /**
-     * Load user's code review configuration from database
+     * Load user's code review configuration from database,
+     * including kody rules resolved for the repository matched by git remote.
      */
-    private async loadUserConfig(
+    private async loadUserConfigWithRules(
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<CodeReviewConfig> {
+        gitContext?: GitContext,
+    ): Promise<{ config: CodeReviewConfig; repositoryId: string; repositoryName: string | null }> {
         try {
-            const params = await this.parametersService.findByKey(
-                ParametersKey.CODE_REVIEW_CONFIG,
-                organizationAndTeamData,
-            );
+            const [params, kodyRulesEntity] = await Promise.all([
+                this.parametersService.findByKey(
+                    ParametersKey.CODE_REVIEW_CONFIG,
+                    organizationAndTeamData,
+                ),
+                this.kodyRulesService.findByOrganizationId(
+                    organizationAndTeamData.organizationId,
+                ),
+            ]);
 
             if (!params) {
                 this.logger.warn({
@@ -293,7 +320,11 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                     context: ExecuteCliReviewUseCase.name,
                     metadata: { organizationAndTeamData },
                 });
-                return this.getDefaultConfig();
+                return {
+                    config: this.getDefaultConfig(),
+                    repositoryId: 'global',
+                    repositoryName: null,
+                };
             }
 
             const paramObj = params.toObject();
@@ -304,12 +335,46 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 this.getDefaultConfig(),
             );
 
-            // Ensure required fields are present
+            // Resolve repositoryId and repositoryName from git remote URL
+            const { id: repositoryId, name: repositoryName } = this.resolveRepositoryFromRemote(
+                gitContext?.remote,
+                paramObj.configValue?.repositories,
+            );
+
+            // Load and filter kody rules (global + repository-scoped)
+            const { standardRules, memoryRules } =
+                this.kodyRulesValidationService.filterKodyRules(
+                    kodyRulesEntity?.toObject()?.rules,
+                    repositoryId,
+                );
+
+            if (standardRules.length > 0 || memoryRules.length > 0) {
+                this.logger.log({
+                    message: 'Kody rules loaded for CLI review',
+                    context: ExecuteCliReviewUseCase.name,
+                    metadata: {
+                        organizationId:
+                            organizationAndTeamData.organizationId,
+                        repositoryId,
+                        repositoryName,
+                        standardRulesCount: standardRules.length,
+                        memoryRulesCount: memoryRules.length,
+                        gitRemote: gitContext?.remote,
+                    },
+                });
+            }
+
             return {
-                ...normalizedConfig,
-                languageResultPrompt:
-                    (normalizedConfig as any).languageResultPrompt || {},
-            } as any as CodeReviewConfig;
+                config: {
+                    ...normalizedConfig,
+                    languageResultPrompt:
+                        (normalizedConfig as any).languageResultPrompt || {},
+                    kodyRules: standardRules,
+                    kodyMemoryRules: memoryRules,
+                } as any as CodeReviewConfig,
+                repositoryId,
+                repositoryName,
+            };
         } catch (error) {
             this.logger.warn({
                 message: 'Error loading config from database, using defaults',
@@ -317,8 +382,112 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 context: ExecuteCliReviewUseCase.name,
                 metadata: { organizationAndTeamData },
             });
-            return this.getDefaultConfig();
+            return {
+                config: this.getDefaultConfig(),
+                repositoryId: 'global',
+                repositoryName: null,
+            };
         }
+    }
+
+    /**
+     * Resolve the repository id and name by matching the git remote URL against
+     * configured repositories. Falls back to 'global' if no match is found,
+     * which ensures global rules are still applied.
+     */
+    private resolveRepositoryFromRemote(
+        remote?: string,
+        repositories?: Array<{ id: string; name: string; http_url?: string }>,
+    ): { id: string; name: string | null } {
+        if (!remote || !repositories?.length) {
+            return { id: 'global', name: null };
+        }
+
+        const normalizedRemote = this.normalizeGitUrl(remote);
+
+        for (const repo of repositories) {
+            if (
+                repo.http_url &&
+                this.normalizeGitUrl(repo.http_url) === normalizedRemote
+            ) {
+                this.logger.log({
+                    message: 'Repository matched from git remote',
+                    context: ExecuteCliReviewUseCase.name,
+                    metadata: {
+                        repositoryId: repo.id,
+                        repositoryName: repo.name,
+                        remote,
+                    },
+                });
+                return { id: repo.id, name: repo.name };
+            }
+        }
+
+        // Fallback: try matching by repo name extracted from remote
+        const repoName = this.extractRepoNameFromRemote(remote);
+        if (repoName) {
+            const match = repositories.find(
+                (repo) =>
+                    repo.name?.toLowerCase() === repoName.toLowerCase(),
+            );
+            if (match) {
+                this.logger.log({
+                    message:
+                        'Repository matched from git remote by name fallback',
+                    context: ExecuteCliReviewUseCase.name,
+                    metadata: {
+                        repositoryId: match.id,
+                        repositoryName: match.name,
+                        remote,
+                    },
+                });
+                return { id: match.id, name: match.name };
+            }
+        }
+
+        this.logger.warn({
+            message:
+                'Could not match git remote to any configured repository, using global rules only',
+            context: ExecuteCliReviewUseCase.name,
+            metadata: {
+                remote,
+                configuredRepos: repositories.map((r) => ({
+                    id: r.id,
+                    name: r.name,
+                    http_url: r.http_url,
+                })),
+            },
+        });
+
+        return { id: 'global', name: null };
+    }
+
+    /**
+     * Normalize a git URL for comparison by stripping protocol, auth,
+     * trailing slashes, and .git suffix.
+     */
+    private normalizeGitUrl(url: string): string {
+        return url
+            .trim()
+            .toLowerCase()
+            .replace(/^(?:https?:\/\/|git@|ssh:\/\/)/, '')
+            .replace(/:(?!\/)/, '/')
+            .replace(/\.git$/, '')
+            .replace(/\/+$/, '');
+    }
+
+    /**
+     * Extract repository name from a git remote URL.
+     * Handles HTTPS and SSH formats.
+     */
+    private extractRepoNameFromRemote(remote: string): string | null {
+        // Strip trailing .git and slashes, then split by / or : to get last segment
+        const normalized = remote.replace(/\.git$/, '').replace(/\/+$/, '');
+        const parts = normalized.split(/[/:]/).filter(Boolean);
+        if (parts.length >= 2) {
+            return parts[parts.length - 1];
+        }
+        return null;
     }
 
     private normalizeCliConfig(
@@ -426,12 +595,14 @@ export class ExecuteCliReviewUseCase implements IUseCase {
         execution: IAutomationExecution,
         status: AutomationStatus,
         resultData: Record<string, any>,
+        repositoryId?: string,
     ): Promise<void> {
         try {
             await this.automationExecutionService.update(
                 { uuid: execution.uuid },
                 {
                     status,
+                    ...(repositoryId && { repositoryId }),
                     dataExecution: {
                         ...execution.dataExecution,
                         ...resultData,

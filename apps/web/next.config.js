@@ -18,8 +18,8 @@ const nextConfig = {
     experimental: {
         authInterrupts: true,
         staleTimes: {
-            dynamic: 30,
-            static: 180,
+            dynamic: 300,
+            static: 600,
         },
     },
 
@@ -150,6 +150,7 @@ const nextConfig = {
         WEB_HOSTNAME_MCP_MANAGER: process.env.WEB_HOSTNAME_MCP_MANAGER,
         WEB_PORT_MCP_MANAGER: process.env.WEB_PORT_MCP_MANAGER,
         WEB_RULE_FILES_DOCS: process.env.WEB_RULE_FILES_DOCS,
+        RELEASE_VERSION: process.env.RELEASE_VERSION,
     },
 };
 

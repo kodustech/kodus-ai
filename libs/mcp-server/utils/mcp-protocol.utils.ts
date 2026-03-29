@@ -228,3 +228,66 @@ export function logToolCompletion(
         });
     }
 }
+
+export async function executeLoggedTool<I = any, O = any>(
+    toolName: string,
+    executor: (args: I, extra?: any) => Promise<O>,
+    args: I,
+    extra: any,
+    logger: SimpleLogger,
+): Promise<O> {
+    const startTime = Date.now();
+
+    logger.log({
+        message: 'MCP tool invoked',
+        context: 'McpProtocol',
+        metadata: {
+            tool: toolName,
+            organizationId: (args as any)?.organizationId,
+            teamId: (args as any)?.teamId,
+            requestId: extra?.requestId,
+        },
+    });
+
+    try {
+        const result = await executor(args, extra);
+        logToolCompletion(toolName, startTime, logger);
+        return result;
+    } catch (error) {
+        logToolCompletion(toolName, startTime, logger, error);
+        throw error;
+    }
+}
+
+export function extractMcpRequestMetadata(body: any): {
+    jsonrpcMethod?: string;
+    toolName?: string;
+    organizationId?: string;
+    teamId?: string;
+    requestId?: string;
+} {
+    const params = body?.params;
+    const args = params?.arguments;
+
+    return {
+        jsonrpcMethod:
+            typeof body?.method === 'string' ? body.method : undefined,
+        toolName:
+            typeof params?.name === 'string'
+                ? params.name
+                : typeof args?.toolName === 'string'
+                  ? args.toolName
+                  : undefined,
+        organizationId:
+            typeof args?.organizationId === 'string'
+                ? args.organizationId
+                : undefined,
+        teamId: typeof args?.teamId === 'string' ? args.teamId : undefined,
+        requestId:
+            typeof params?.requestId === 'string'
+                ? params.requestId
+                : typeof args?.requestId === 'string'
+                  ? args.requestId
+                  : undefined,
+    };
+}

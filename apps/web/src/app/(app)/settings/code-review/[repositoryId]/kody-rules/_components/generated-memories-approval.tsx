@@ -9,9 +9,14 @@ import { useAsyncAction } from "@hooks/use-async-action";
 import { useReactQueryInvalidateQueries } from "@hooks/use-invalidate-queries";
 import { PARAMETERS_PATHS } from "@services/parameters";
 import { createOrUpdateCodeReviewParameter } from "@services/parameters/fetch";
-import { ParametersConfigKey } from "@services/parameters/types";
+import { useOptionalParameterQuery } from "@services/parameters/hooks";
+import {
+    ParametersConfigKey,
+    type CentralizedConfigValue,
+} from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { OverrideIndicator } from "src/app/(app)/settings/code-review/_components/override";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
@@ -20,6 +25,7 @@ import { useCodeReviewRouteParams } from "../../../../_hooks";
 
 export const GeneratedMemoriesApprovalSetting = () => {
     const config = useCodeReviewConfig();
+    const { centralizedConfigParameter } = useFeatureFlags();
     const { teamId } = useSelectedTeamId();
     const { repositoryId, directoryId } = useCodeReviewRouteParams();
     const { invalidateQueries, generateQueryKey } =
@@ -30,6 +36,26 @@ export const GeneratedMemoriesApprovalSetting = () => {
         ResourceType.CodeReviewSettings,
         repositoryId,
     );
+
+    const centralizedConfig = useOptionalParameterQuery<CentralizedConfigValue>(
+        ParametersConfigKey.CENTRALIZED_CONFIG,
+        teamId,
+        {
+            uuid: "",
+            configKey: ParametersConfigKey.CENTRALIZED_CONFIG,
+            configValue: {
+                enabled: false,
+                repository: {
+                    id: "",
+                    name: "",
+                },
+            },
+        },
+    );
+
+    const isDisabledByCentralizedConfig =
+        centralizedConfigParameter === true &&
+        centralizedConfig.data?.configValue?.enabled === true;
 
     const currentValue =
         config?.llmGeneratedMemoriesRequireApproval?.value ?? false;
@@ -86,7 +112,7 @@ export const GeneratedMemoriesApprovalSetting = () => {
             size="lg"
             variant="helper"
             className="w-full justify-between p-0"
-            disabled={!canEdit || loading}
+            disabled={!canEdit || loading || isDisabledByCentralizedConfig}
             onClick={() => handleToggle()}>
             <Card color="none" className="w-full">
                 <CardHeader>

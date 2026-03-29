@@ -7,9 +7,9 @@ import {
     Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as Sentry from '@sentry/nestjs';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
+import { reportExceptionToSentry } from '../config/log/sentry';
 
 interface ExceptionResponse {
     statusCode?: number;
@@ -43,19 +43,25 @@ export class ExceptionsFilter implements ExceptionFilter {
                 : StatusCodes.INTERNAL_SERVER_ERROR;
 
         const requestId = request?.requestId || 'unknown-request-id';
+        const shouldReportToSentry =
+            !(exception instanceof HttpException) || status >= 500;
 
-        Sentry.withScope((scope) => {
-            scope.setTag('requestId', requestId);
-            scope.setExtra('path', request?.url);
-            scope.setExtra('method', request?.method);
-
-            if (exception instanceof HttpException) {
-                scope.setTag('statusCode', exception?.getStatus());
-                scope.setExtra('response', exception?.getResponse());
-            }
-
-            Sentry.captureException(exception);
-        });
+        if (shouldReportToSentry) {
+            void reportExceptionToSentry(exception, {
+                context: 'ExceptionsFilter',
+                tags: {
+                    requestId,
+                    statusCode: status,
+                },
+                extra: {
+                    path: request?.url,
+                    method: request?.method,
+                    ...(exception instanceof HttpException
+                        ? { response: exception.getResponse() }
+                        : {}),
+                },
+            });
+        }
 
         const errorResponse =
             exception instanceof HttpException ? exception.getResponse() : {};

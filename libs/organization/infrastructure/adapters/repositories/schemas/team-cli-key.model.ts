@@ -21,6 +21,9 @@ export class TeamCliKeyModel extends CoreModel {
     @Column({ default: true })
     active: boolean;
 
+    @Column({ type: 'jsonb', default: () => "'{}'" })
+    config: Record<string, any>;
+
     @Column({ nullable: true })
     lastUsedAt?: Date;
 

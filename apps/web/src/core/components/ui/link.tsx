@@ -2,6 +2,10 @@
 
 import NextLink from "next/link";
 import { cn } from "src/core/utils/components";
+import {
+    hasUnsavedChanges,
+    triggerNavigationBlock,
+} from "src/core/utils/navigation-guard";
 
 export const Link = ({
     disabled,
@@ -22,6 +26,15 @@ export const Link = ({
     return (
         <NextLink
             {...props}
+            onClick={(event) => {
+                if (hasUnsavedChanges()) {
+                    event.preventDefault();
+                    triggerNavigationBlock();
+                    return;
+                }
+
+                props.onClick?.(event);
+            }}
             className={cn(
                 "group/link",
                 "w-fit underline-offset-5 transition",

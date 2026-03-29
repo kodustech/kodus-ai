@@ -41,6 +41,7 @@ Tool calls:
 - {"tool": "search", "pattern": "<grep pattern>"} — searches all files recursively
 - {"tool": "read", "path": "<file path>"} — reads a file's content
 - {"tool": "list", "path": "<directory path>"} — lists directory contents
+- {"tool": "documentation", "packageName": "<package name>", "query": "<question>"} — fetches package documentation context
 
 Verdict (when you have enough evidence OR run out of budget):
 - {"verdict": true, "evidence": "<brief evidence>", "action": "no_changes"} — defect is REAL and UNMITIGATED

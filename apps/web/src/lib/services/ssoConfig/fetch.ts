@@ -1,4 +1,4 @@
-import { authorizedFetch } from "@services/fetch";
+import { authorizedFetch, TypedFetchError } from "@services/fetch";
 import { axiosAuthorized } from "src/core/utils/axios";
 import {
     SSOConfig,
@@ -11,12 +11,22 @@ import { SSO_CONFIG_PATHS } from "./index";
 export const getSSOConfig = async <T extends SSOProtocol>(params: {
     active?: boolean;
     protocol?: T;
-}): Promise<SSOConfig<T>> => {
-    const response = await authorizedFetch<SSOConfig<T>>(SSO_CONFIG_PATHS.GET, {
-        params,
-    });
+}): Promise<SSOConfig<T> | null> => {
+    try {
+        const response = await authorizedFetch<SSOConfig<T>>(
+            SSO_CONFIG_PATHS.GET,
+            {
+                params,
+            },
+        );
 
-    return response;
+        return response;
+    } catch (error) {
+        if (TypedFetchError.isError(error) && error.statusCode === 404) {
+            return null;
+        }
+        throw error;
+    }
 };
 
 export const createOrUpdateSSOConfig = async <T extends SSOProtocol>(params: {

@@ -1,6 +1,8 @@
 import { getTextOrDefault, sanitizePromptText } from './prompt.helpers';
 
-export function formatSyncErrors(errors: unknown[] | string | undefined): string {
+export function formatSyncErrors(
+    errors: unknown[] | string | undefined,
+): string {
     if (!errors) {
         return '';
     }
@@ -33,7 +35,9 @@ export function formatSyncErrors(errors: unknown[] | string | undefined): string
     return `### Source: System Messages\n**Reference issues detected:**\n${formatted.join('\n')}`;
 }
 
-export function formatReferenceSection(references: unknown[] | undefined): string {
+export function formatReferenceSection(
+    references: unknown[] | undefined,
+): string {
     if (!Array.isArray(references) || !references.length) {
         return '';
     }

@@ -20,6 +20,7 @@ import { FetchChangedFilesStage } from '../stages/fetch-changed-files.stage';
 import { FileContextGateStage } from '../stages/file-context-gate.stage';
 import { UpdateCommentsAndGenerateSummaryStage } from '../stages/finish-comments.stage';
 import { RequestChangesOrApproveStage } from '../stages/finish-process-review.stage';
+import { GatherDocumentationContextStage } from '../stages/gather-documentation-context.stage';
 import { InitialCommentStage } from '../stages/initial-comment.stage';
 import { ProcessFilesPrLevelReviewStage } from '../stages/process-files-pr-level-review.stage';
 import { ProcessFilesReview } from '../stages/process-files-review.stage';
@@ -36,6 +37,7 @@ export class CodeReviewPipelineStrategy implements IPipelineStrategy<CodeReviewP
         private readonly resolveConfigStage: ResolveConfigStage,
         private readonly validateConfigStage: ValidateConfigStage,
         private readonly fetchChangedFilesStage: FetchChangedFilesStage,
+        private readonly gatherDocumentationContextStage: GatherDocumentationContextStage,
         @Inject(LOAD_EXTERNAL_CONTEXT_STAGE_TOKEN)
         private readonly loadExternalContextStage: ILoadExternalContextStage,
         private readonly fileContextGateStage: FileContextGateStage,
@@ -58,6 +60,7 @@ export class CodeReviewPipelineStrategy implements IPipelineStrategy<CodeReviewP
             this.resolveConfigStage,
             this.validateConfigStage,
             this.fetchChangedFilesStage,
+            this.gatherDocumentationContextStage,
             this.loadExternalContextStage,
             this.fileContextGateStage,
             this.initialCommentStage,

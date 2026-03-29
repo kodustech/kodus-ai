@@ -150,3 +150,45 @@ export class CliReviewRateLimitErrorDto {
     @ApiProperty({ type: Number })
     limit: number;
 }
+
+export class CliBusinessValidationResponseDto {
+    @ApiProperty({ type: Boolean, example: true })
+    accepted: boolean;
+
+    @ApiProperty({
+        enum: ['pull_request', 'local_diff'],
+        example: 'pull_request',
+    })
+    mode: 'pull_request' | 'local_diff';
+
+    @ApiProperty({
+        example:
+            '@kody -v business-logic https://linear.app/kodus/issue/KD-1234/validar-regra',
+    })
+    command: string;
+
+    @ApiPropertyOptional({ type: Number, example: 123 })
+    prNumber?: number;
+
+    @ApiPropertyOptional({
+        example: 'https://github.com/kodus-ai/kodus-ai/pull/123',
+    })
+    prUrl?: string;
+
+    @ApiPropertyOptional({ example: '123456789' })
+    repositoryId?: string;
+
+    @ApiPropertyOptional({ example: 'kodus-ai' })
+    repositoryName?: string;
+
+    @ApiPropertyOptional({ example: 'KD-1234' })
+    taskReference?: string;
+
+    @ApiProperty({
+        description:
+            'Business validation result returned by the business rules provider.',
+        example:
+            '## Business Rules Validation\n\nI found 1 potential gap between implementation and acceptance criteria...',
+    })
+    result: string;
+}

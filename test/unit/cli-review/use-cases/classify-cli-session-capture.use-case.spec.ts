@@ -146,24 +146,22 @@ describe('ClassifyCliSessionCaptureUseCase', () => {
     it('stores normalized LLM decisions when model returns valid output', async () => {
         mockRepository.findByCaptureId.mockResolvedValue(makeCapture());
         mockBuilder.execute.mockResolvedValue({
-            result: {
-                decisions: [
-                    {
-                        type: 'architectural_decision',
-                        decision: 'D'.repeat(520),
-                        rationale: 'R'.repeat(1010),
-                        confidence: 1.6,
-                        evidence: [
-                            'E'.repeat(350),
-                            'file:src/auth/middleware.ts',
-                            'tool:Edit',
-                            'jwt',
-                            'middleware',
-                            'extra-should-be-cut',
-                        ],
-                    },
-                ],
-            },
+            decisions: [
+                {
+                    type: 'architectural_decision',
+                    decision: 'D'.repeat(520),
+                    rationale: 'R'.repeat(1010),
+                    confidence: 1.6,
+                    evidence: [
+                        'E'.repeat(350),
+                        'file:src/auth/middleware.ts',
+                        'tool:Edit',
+                        'jwt',
+                        'middleware',
+                        'extra-should-be-cut',
+                    ],
+                },
+            ],
         });
 
         await useCase.execute('cap_llm');
@@ -199,9 +197,7 @@ describe('ClassifyCliSessionCaptureUseCase', () => {
     it('uses heuristic classifier when LLM returns empty decisions', async () => {
         mockRepository.findByCaptureId.mockResolvedValue(makeCapture());
         mockBuilder.execute.mockResolvedValue({
-            result: {
-                decisions: [],
-            },
+            decisions: [],
         });
 
         await useCase.execute('cap_heuristic');

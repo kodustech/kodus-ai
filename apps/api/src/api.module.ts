@@ -9,16 +9,19 @@ import { CodeReviewDashboardModule } from '@libs/code-review/modules/code-review
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { PullRequestsModule } from '@libs/code-review/modules/pull-requests.module';
 import { PullRequestMessagesModule } from '@libs/code-review/modules/pullRequestMessages.module';
+import { GlobalCacheModule } from '@libs/core/cache/cache.module';
 import { HealthModule } from '@libs/core/health/health.module';
 import { IncidentModule } from '@libs/core/infrastructure/incident/incident.module';
-import { MetricsModule } from '@libs/core/infrastructure/metrics/metrics.module';
 import { MetricsController } from '@libs/core/infrastructure/metrics/metrics.controller';
+import { MetricsModule } from '@libs/core/infrastructure/metrics/metrics.module';
 import { RabbitMQWrapperModule } from '@libs/core/infrastructure/queue/rabbitmq.module';
+import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import { WorkflowModule } from '@libs/core/workflow/modules/workflow.module';
 import { DryRunModule } from '@libs/dryRun/dry-run.module';
 import { CodeReviewSettingsLogModule } from '@libs/ee/codeReviewSettingsLog/codeReviewSettingsLog.module';
 import { LicenseModule } from '@libs/ee/license/license.module';
 import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
+import { SSOModule } from '@libs/ee/sso/sso.module';
 import { AuthModule } from '@libs/identity/modules/auth.module';
 import { PermissionsModule } from '@libs/identity/modules/permissions.module';
 import { UserModule } from '@libs/identity/modules/user.module';
@@ -26,6 +29,7 @@ import { IntegrationConfigModule } from '@libs/integrations/modules/config.modul
 import { IntegrationModule } from '@libs/integrations/modules/integrations.module';
 import { IssuesModule } from '@libs/issues/issues.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
+import { GithubIssuesMcpModule } from '@libs/mcp-server/github-issues-mcp.module';
 import { McpModule } from '@libs/mcp-server/mcp.module';
 import { OrganizationOnboardingModule } from '@libs/organization/modules/organization-onboarding.module';
 import { OrganizationModule } from '@libs/organization/modules/organization.module';
@@ -40,13 +44,13 @@ import { SharedConfigModule } from '@libs/shared/infrastructure/shared-config.mo
 import { SharedCoreModule } from '@libs/shared/infrastructure/shared-core.module';
 import { SharedLogModule } from '@libs/shared/infrastructure/shared-log.module';
 import { SharedObservabilityModule } from '@libs/shared/infrastructure/shared-observability.module';
-import { GlobalCacheModule } from '@libs/core/cache/cache.module';
 import { Module } from '@nestjs/common';
-import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
-import { SSOModule } from '@libs/ee/sso/sso.module';
 import { AgentController } from './controllers/agent.controller';
 import { AuthController } from './controllers/auth.controller';
-import { CliReviewController } from './controllers/cli-review.controller';
+import { CliConfigController } from './controllers/cli/cli-config.controller';
+import { CliCentralizedConfigController } from './controllers/cli/cli-centralized-config.controller';
+import { CliKodyRulesController } from './controllers/cli/cli-kody-rules.controller';
+import { CliReviewController } from './controllers/cli/cli-review.controller';
 import { CodeBaseController } from './controllers/codeBase.controller';
 import { CodeManagementController } from './controllers/codeManagement.controller';
 import { CodeReviewSettingLogController } from './controllers/codeReviewSettingLog.controller';
@@ -55,6 +59,7 @@ import { IntegrationController } from './controllers/integration.controller';
 import { IntegrationConfigController } from './controllers/integrationConfig.controller';
 import { IssuesController } from './controllers/issues.controller';
 import { KodyRulesController } from './controllers/kodyRules.controller';
+import { LicenseController } from './controllers/license.controller';
 import { OrganizationController } from './controllers/organization.controller';
 import { OrganizationParametersController } from './controllers/organizationParameters.controller';
 import { ParametersController } from './controllers/parameters.controller';
@@ -116,6 +121,7 @@ import { CronModule } from './cron/cron.module';
         PermissionValidationModule,
         LicenseModule,
         McpModule.forRoot(),
+        GithubIssuesMcpModule.forRoot(),
         HealthModule,
         CronModule,
         SSOModule,
@@ -147,7 +153,11 @@ import { CronModule } from './cron/cron.module';
         PullRequestController,
         UsersController,
         CliReviewController,
+        CliConfigController,
+        CliCentralizedConfigController,
+        CliKodyRulesController,
         SSOConfigController,
+        LicenseController,
         MetricsController,
     ],
 })

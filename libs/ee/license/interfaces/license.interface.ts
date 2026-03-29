@@ -11,7 +11,19 @@ export enum SubscriptionStatus {
     CANCELED = 'canceled',
     EXPIRED = 'expired',
     SELF_HOSTED = 'self-hosted',
+    LICENSED_SELF_HOSTED = 'licensed-self-hosted',
 }
+
+export type SelfHostedLicensePayload = {
+    iss: string;
+    sub: string;
+    iat: number;
+    exp: number;
+    plan: string;
+    seats: number;
+    features: string[];
+    customer: string;
+};
 
 export type OrganizationLicenseValidationResult = {
     valid: boolean;
@@ -19,6 +31,7 @@ export type OrganizationLicenseValidationResult = {
     trialEnd?: Date;
     numberOfLicenses?: number;
     planType?: string;
+    expiresAt?: string;
 };
 
 export type UserWithLicense = {

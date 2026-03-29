@@ -1,6 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ApiResponseBaseDto } from './api-response.dto';
 
+export class TeamCliKeyConfigDto {
+    @ApiProperty({
+        required: false,
+        type: [String],
+        default: [],
+    })
+    capabilities?: string[];
+}
+
 export class TeamCliKeyCreatedDataDto {
     @ApiProperty()
     key: string;
@@ -29,6 +38,13 @@ export class TeamCliKeyMetadataDto {
     @ApiProperty()
     active: boolean;
 
+    @ApiProperty({
+        required: false,
+        nullable: true,
+        type: TeamCliKeyConfigDto,
+    })
+    config?: TeamCliKeyConfigDto | null;
+
     @ApiProperty({ required: false, nullable: true })
     lastUsedAt?: string | null;
 
@@ -56,4 +72,9 @@ export class TeamCliKeyDeleteDataDto {
 export class TeamCliKeyDeleteResponseDto extends ApiResponseBaseDto {
     @ApiProperty({ type: TeamCliKeyDeleteDataDto })
     data: TeamCliKeyDeleteDataDto;
+}
+
+export class TeamCliKeyUpdateResponseDto extends ApiResponseBaseDto {
+    @ApiProperty({ type: TeamCliKeyMetadataDto })
+    data: TeamCliKeyMetadataDto;
 }

@@ -1,14 +1,14 @@
 import { createMCPAdapter, createOrchestration } from '@kodus/flow';
 
-import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
-import { ObservabilityService } from '@libs/core/log/observability.service';
-import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { GenericSkillRunnerService } from '@libs/agents/skills/generic-skill-runner.service';
+import { SkillLoaderService } from '@libs/agents/skills/skill-loader.service';
 import {
     McpConnectionUnavailableError,
     RequiredMcpPreflightError,
 } from '@libs/agents/skills/skill.errors';
-import { SkillLoaderService } from '@libs/agents/skills/skill-loader.service';
+import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
+import { ObservabilityService } from '@libs/core/log/observability.service';
+import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 
 jest.mock('@kodus/flow', () => ({
     createMCPAdapter: jest.fn(),
@@ -166,6 +166,7 @@ describe('GenericSkillRunnerService', () => {
         mcpManagerService.getConnections.mockResolvedValue([
             {
                 provider: 'kodusmcp',
+                name: 'Kodus MCP',
                 allowedTools: ['KODUS_GET_PULL_REQUEST'],
             },
         ] as any);
@@ -194,6 +195,7 @@ describe('GenericSkillRunnerService', () => {
         mcpManagerService.getConnections.mockResolvedValue([
             {
                 provider: 'kodusmcp',
+                name: 'Kodus MCP',
                 allowedTools: ['KODUS_GET_PULL_REQUEST'],
             },
             {
@@ -226,6 +228,7 @@ describe('GenericSkillRunnerService', () => {
         mcpManagerService.getConnections.mockResolvedValue([
             {
                 provider: 'kodusmcp',
+                name: 'Kodus MCP',
                 allowedTools: ['KODUS_GET_PULL_REQUEST'],
             },
             {
@@ -259,6 +262,7 @@ describe('GenericSkillRunnerService', () => {
         mcpManagerService.getConnections.mockResolvedValue([
             {
                 provider: 'kodusmcp',
+                name: 'Kodus MCP',
                 allowedTools: ['KODUS_GET_PULL_REQUEST'],
             },
             {

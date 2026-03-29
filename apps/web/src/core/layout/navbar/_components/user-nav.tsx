@@ -29,6 +29,8 @@ import { useAuth } from "src/core/providers/auth.provider";
 import { useSubscriptionStatus } from "src/core/providers/byok.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { TEAM_STATUS } from "src/core/types";
+import { isSelfHosted } from "src/core/utils/self-hosted";
+import { VersionInfo } from "./version-info";
 
 export function UserNav() {
     const { tokenUsagePage } = useFeatureFlags();
@@ -118,19 +120,26 @@ export function UserNav() {
                     </Link>
                 )}
 
-                {(isBYOK || isTrial) && tokenUsagePage && canReadLogs && (
-                    <Link href="/token-usage">
-                        <DropdownMenuItem leftIcon={<ChartColumn />}>
-                            Token Usage
-                        </DropdownMenuItem>
-                    </Link>
-                )}
+                {(isSelfHosted || isBYOK || isTrial) &&
+                    tokenUsagePage &&
+                    canReadLogs && (
+                        <Link href="/token-usage">
+                            <DropdownMenuItem leftIcon={<ChartColumn />}>
+                                Token Usage
+                            </DropdownMenuItem>
+                        </Link>
+                    )}
 
                 <Link href="/sign-out" replace>
                     <DropdownMenuItem leftIcon={<LogOutIcon />}>
                         Sign out
                     </DropdownMenuItem>
                 </Link>
+
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5">
+                    <VersionInfo showUpdate={isSelfHosted} />
+                </div>
             </DropdownMenuContent>
         </DropdownMenu>
     );

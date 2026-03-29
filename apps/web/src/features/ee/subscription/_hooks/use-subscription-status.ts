@@ -62,11 +62,22 @@ type SelfHostedSubscriptionStatus = {
     status: "self-hosted";
 };
 
+type LicensedSelfHostedSubscriptionStatus = {
+    valid: true;
+    status: "licensed-self-hosted";
+    planType: string;
+    numberOfLicenses: number;
+    usersWithAssignedLicense: { git_id: string }[];
+    expiresAt?: string;
+    daysRemaining?: number;
+};
+
 type SubscriptionStatus =
     | ActiveSubscriptionStatus
     | TrialSubscriptionStatus
     | InvalidSubscriptionStatus
     | SelfHostedSubscriptionStatus
+    | LicensedSelfHostedSubscriptionStatus
     | FreeSubscriptionStatus;
 
 export const useSubscriptionStatus = (): SubscriptionStatus => {
@@ -78,6 +89,29 @@ export const useSubscriptionStatus = (): SubscriptionStatus => {
             return {
                 valid: true,
                 status: "self-hosted",
+            };
+        }
+
+        if (
+            subscription.license.subscriptionStatus === "licensed-self-hosted"
+        ) {
+            const expiresAt = (subscription.license as any).expiresAt as
+                | string
+                | undefined;
+            const daysRemaining = expiresAt
+                ? differenceInDays(new Date(expiresAt), new Date())
+                : undefined;
+
+            return {
+                valid: true,
+                status: "licensed-self-hosted",
+                planType:
+                    (subscription.license as any).planType || "enterprise",
+                numberOfLicenses:
+                    (subscription.license as any).numberOfLicenses || 0,
+                usersWithAssignedLicense: subscription.usersWithAssignedLicense,
+                expiresAt,
+                daysRemaining,
             };
         }
 

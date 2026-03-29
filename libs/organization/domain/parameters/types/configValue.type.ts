@@ -54,15 +54,21 @@ export enum KodyLearningStatus {
     GENERATING_CONFIG = 'generating_config',
 }
 
-export type ConfigValueMap = {
+export type CentralizedConfigParameter = {
+    enabled: boolean;
+    repository: {
+        name: string;
+        id: string;
+    };
+};
+
+interface KnownConfigs {
     [ParametersKey.CODE_REVIEW_CONFIG]: CodeReviewParameter;
     [ParametersKey.LANGUAGE_CONFIG]: LanguageValue;
     [ParametersKey.PLATFORM_CONFIGS]: PlatformConfigValue;
-} & {
-    [K in Exclude<
-        ParametersKey,
-        | ParametersKey.CODE_REVIEW_CONFIG
-        | ParametersKey.LANGUAGE_CONFIG
-        | ParametersKey.PLATFORM_CONFIGS
-    >]?: any;
+    [ParametersKey.CENTRALIZED_CONFIG]: CentralizedConfigParameter;
+}
+
+export type ConfigValueMap = {
+    [K in ParametersKey]: K extends keyof KnownConfigs ? KnownConfigs[K] : any;
 };

@@ -5,6 +5,9 @@ export enum MCP_CONNECTION_STATUS {
     PENDING = "PENDING",
 }
 
+export const KODUS_MCP_GITHUB_ISSUES_INTEGRATION_ID =
+    "kodus-github-issues-default";
+
 export type CustomMCPPlugin = {
     id: string;
     name: string;

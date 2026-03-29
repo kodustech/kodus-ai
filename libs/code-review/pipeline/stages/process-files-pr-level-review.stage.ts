@@ -590,6 +590,9 @@ export class ProcessFilesPrLevelReviewStage extends BasePipelineStage<CodeReview
             'contexto limitado da task',
             'nao consegui validar',
             'sem as alteracoes de codigo',
+            'mcp connection failed',
+            'mcp integration required',
+            'no compatible mcp integration',
         ];
         if (
             limitationIndicators.some((indicator) => lower.includes(indicator))

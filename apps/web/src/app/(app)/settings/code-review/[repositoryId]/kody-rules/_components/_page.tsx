@@ -34,6 +34,7 @@ import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { safeArray } from "src/core/utils/safe-array";
 
 import { CodeReviewPagesBreadcrumb } from "../../../_components/breadcrumb";
+import { CentralizedConfigReadOnlyAlert } from "../../../_components/centralized-config-readonly-alert";
 import { GenerateRulesOptions } from "../../../_components/generate-rules-options";
 import GeneratingConfig from "../../../_components/generating-config";
 import { KodyRuleAddOrUpdateItemModal } from "../../../_components/modal";
@@ -555,6 +556,8 @@ const KodyRulesPageContent = () => {
 
                     <TabsContent value="configuration" className="mt-4">
                         <div className="flex flex-col gap-4">
+                            <CentralizedConfigReadOnlyAlert />
+
                             <GeneratedMemoriesApprovalSetting />
 
                             {isRepoView && (

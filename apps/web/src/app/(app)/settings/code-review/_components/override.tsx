@@ -7,12 +7,11 @@ import {
     Tooltip,
     TooltipContent,
     TooltipPortal,
-    TooltipProvider,
     TooltipTrigger,
 } from "@components/ui/tooltip";
 import { useEffectOnce } from "@hooks/use-effect-once";
 import { Undo2 } from "lucide-react";
-import { useFormContext } from "react-hook-form";
+import { useFormContext, useWatch } from "react-hook-form";
 
 import {
     CodeReviewFormType,
@@ -21,29 +20,16 @@ import {
 } from "../_types";
 import { useCodeReviewConfig } from "../../_components/context";
 import { useCurrentConfigLevel } from "../../_hooks";
+import {
+    buildOverrideRevertState,
+    isOverrideValueChanged,
+} from "./override-state";
 
 function getNestedProperty<T>(
     obj: T,
     path: string,
 ): IFormattedConfigProperty<any> {
     return path.split(".").reduce((acc: any, key) => acc?.[key], obj);
-}
-
-function areValuesDifferent(val1: any, val2: any): boolean {
-    if (Array.isArray(val1) && Array.isArray(val2)) {
-        return JSON.stringify(val1) !== JSON.stringify(val2);
-    }
-
-    if (
-        typeof val1 === "object" &&
-        typeof val2 === "object" &&
-        val1 !== null &&
-        val2 !== null
-    ) {
-        return JSON.stringify(val1) !== JSON.stringify(val2);
-    }
-
-    return val1 !== val2;
 }
 
 type OverrideIndicatorFormProps = {
@@ -59,26 +45,23 @@ export const OverrideIndicatorForm = ({
     const currentLevel = useCurrentConfigLevel();
 
     const initialState = getNestedProperty(config, fieldName);
-    const currentValue = form.watch(`${fieldName}.value` as any);
-
-    const isExistingOverride = initialState?.level === currentLevel;
+    const currentValue = useWatch({
+        control: form.control,
+        name: `${fieldName}.value` as any,
+    });
 
     const handleRevert = () => {
         if (!initialState) return;
 
-        const valueToRevert = isExistingOverride
-            ? initialState.overriddenValue
-            : initialState.value;
+        const { value, level } = buildOverrideRevertState(
+            initialState,
+            currentLevel,
+        );
 
-        const levelToRevert =
-            (isExistingOverride
-                ? initialState.overriddenLevel
-                : initialState.level) ?? FormattedConfigLevel.DEFAULT;
-
-        form.setValue(`${fieldName}.value` as any, valueToRevert, {
+        form.setValue(`${fieldName}.value` as any, value, {
             shouldDirty: true,
         });
-        form.setValue(`${fieldName}.level` as any, levelToRevert, {
+        form.setValue(`${fieldName}.level` as any, level, {
             shouldDirty: true,
         });
         form.trigger(fieldName as any);
@@ -132,7 +115,7 @@ export const OverrideIndicator = <T,>({
             ? initialState?.overriddenLevel
             : initialState?.level) ?? FormattedConfigLevel.DEFAULT;
 
-    const isOverridden = areValuesDifferent(currentValue, parentValue);
+    const isOverridden = isOverrideValueChanged(currentValue, parentValue);
 
     if (!isOverridden) {
         return null;

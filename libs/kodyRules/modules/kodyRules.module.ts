@@ -6,7 +6,6 @@ import { ContextReferenceModule } from '@libs/code-review/modules/contextReferen
 import { PromptsModule } from '@libs/code-review/modules/prompts.module';
 import { PullRequestsModule } from '@libs/code-review/modules/pull-requests.module';
 import { GlobalCacheModule } from '@libs/core/cache/cache.module';
-import { CodeReviewSettingsLogModule } from '@libs/ee/codeReviewSettingsLog/codeReviewSettingsLog.module';
 import { KodyRulesRepository } from '@libs/ee/kodyRules/repository/kodyRules.repository';
 import { KodyRulesValidationService } from '@libs/ee/kodyRules/service/kody-rules-validation.service';
 import { KodyRulesService } from '@libs/ee/kodyRules/service/kodyRules.service';
@@ -73,7 +72,6 @@ import { KodyRulesSyncListener } from '../infrastructure/adapters/listeners/kody
         forwardRef(() => ParametersModule),
         forwardRef(() => UserModule),
         forwardRef(() => OrganizationModule),
-        forwardRef(() => CodeReviewSettingsLogModule),
         forwardRef(() => RuleLikeModule),
         forwardRef(() => LicenseModule),
         forwardRef(() => PullRequestsModule),

@@ -97,9 +97,7 @@ describe('Bitbucket Service — Bug Regressions', () => {
             const user = transformPullRequestUserMapping(bitbucketAuthor);
 
             // Falls back to uuid (with braces — API accepts this format)
-            expect(user.login).toBe(
-                '{aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee}',
-            );
+            expect(user.login).toBe('{aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee}');
         });
     });
 
@@ -134,8 +132,7 @@ describe('Bitbucket Service — Bug Regressions', () => {
 
             return contentType.includes('application/json')
                 ? response.json()
-                : !contentType ||
-                    /^text\/|charset=utf-8$/.test(contentType)
+                : !contentType || /^text\/|charset=utf-8$/.test(contentType)
                   ? response.text()
                   : response.arrayBuffer();
         }

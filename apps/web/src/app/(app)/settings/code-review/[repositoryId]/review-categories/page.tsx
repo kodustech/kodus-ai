@@ -1,74 +1,86 @@
 "use client";
 
+import { useMemo } from "react";
 import { Button } from "@components/ui/button";
 import { Page } from "@components/ui/page";
 import { toast } from "@components/ui/toaster/use-toast";
-import { useReactQueryInvalidateQueries } from "@hooks/use-invalidate-queries";
-import { PARAMETERS_PATHS } from "@services/parameters";
-import { createOrUpdateCodeReviewParameter } from "@services/parameters/fetch";
-import {
-    KodyLearningStatus,
-    ParametersConfigKey,
-} from "@services/parameters/types";
-import { SaveIcon } from "lucide-react";
-import { useFormContext } from "react-hook-form";
+import { useGetCodeReviewLabels } from "@services/parameters/hooks";
+import { KodyLearningStatus } from "@services/parameters/types";
+import { RotateCcwIcon, SaveIcon } from "lucide-react";
+import { useFormContext, useWatch } from "react-hook-form";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
 
 import { CodeReviewPagesBreadcrumb } from "../../_components/breadcrumb";
+import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import GeneratingConfig from "../../_components/generating-config";
+import { CodeReviewSaveButton } from "../../_components/save-button";
+import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import { type CodeReviewFormType } from "../../_types";
-import { usePlatformConfig } from "../../../_components/context";
+import {
+    useFeatureFlags,
+    usePlatformConfig,
+} from "../../../_components/context";
 import { useCodeReviewRouteParams } from "../../../_hooks";
 import { AnalysisTypes } from "../general/_components/analysis-types";
 import { CodeReviewVersionSelector } from "../general/_components/code-review-version-selector";
+import {
+    filterVisibleReviewLabels,
+    mergeMissingReviewOptions,
+} from "../general/_utils/review-options-state";
 
 export default function ReviewCategories() {
     const platformConfig = usePlatformConfig();
+    const { businessLogic } = useFeatureFlags();
     const form = useFormContext<CodeReviewFormType>();
     const { teamId } = useSelectedTeamId();
     const { repositoryId, directoryId } = useCodeReviewRouteParams();
-    const { resetQueries, generateQueryKey } = useReactQueryInvalidateQueries();
+    const codeReviewVersion =
+        useWatch({
+            control: form.control,
+            name: "codeReviewVersion.value",
+        }) || "v2";
+    const { data: labels = [] } = useGetCodeReviewLabels(codeReviewVersion);
+    const { saveSettings } = useCodeReviewSettingsMutation({
+        teamId,
+        repositoryId,
+        directoryId,
+        form,
+    });
+    const visibleLabelTypes = useMemo(
+        () =>
+            filterVisibleReviewLabels(labels, businessLogic === true).map(
+                (label) => label.type,
+            ),
+        [businessLogic, labels],
+    );
 
     const handleSubmit = form.handleSubmit(async (formData) => {
-        const { language, ...config } = formData;
-
-        const unformattedConfig = unformatConfig(config);
-
         try {
-            const result = await createOrUpdateCodeReviewParameter(
-                unformattedConfig,
-                teamId,
-                repositoryId,
-                directoryId,
-            );
-
-            if (result.error) {
-                throw new Error(`Failed to save settings: ${result.error}`);
-            }
-
-            await Promise.all([
-                resetQueries({
-                    queryKey: generateQueryKey(PARAMETERS_PATHS.GET_BY_KEY, {
-                        params: {
-                            key: ParametersConfigKey.CODE_REVIEW_CONFIG,
-                            teamId,
+            const mergedFormData = {
+                ...formData,
+                reviewOptions: mergeMissingReviewOptions(
+                    formData.reviewOptions || {},
+                    visibleLabelTypes,
+                ),
+            };
+            await saveSettings(mergedFormData, {
+                prepare: (data) => {
+                    const { language: _language, ...config } = data;
+                    const unformatted = unformatConfig(config);
+                    const rawVersion = unformatted.codeReviewVersion;
+                    const codeReviewVersion =
+                        rawVersion === "legacy" ? "legacy" : "v2";
+                    return {
+                        savedFormData: data,
+                        codeReviewConfig: {
+                            ...unformatted,
+                            codeReviewVersion,
+                            reviewOptions: unformatted.reviewOptions,
                         },
-                    }),
-                }),
-                resetQueries({
-                    queryKey: generateQueryKey(
-                        PARAMETERS_PATHS.GET_CODE_REVIEW_PARAMETER,
-                        {
-                            params: {
-                                teamId,
-                            },
-                        },
-                    ),
-                }),
-            ]);
-
-            form.reset(formData);
+                    };
+                },
+            });
 
             toast({
                 description: "Settings saved",
@@ -109,7 +121,18 @@ export default function ReviewCategories() {
                 <Page.Title>Review Categories</Page.Title>
 
                 <Page.HeaderActions>
-                    <Button
+                    {formIsDirty && (
+                        <Button
+                            size="md"
+                            variant="cancel"
+                            leftIcon={<RotateCcwIcon />}
+                            onClick={() => form.reset()}
+                            disabled={formIsSubmitting}>
+                            Reset
+                        </Button>
+                    )}
+
+                    <CodeReviewSaveButton
                         size="md"
                         variant="primary"
                         leftIcon={<SaveIcon />}
@@ -117,13 +140,18 @@ export default function ReviewCategories() {
                         disabled={!formIsDirty || !formIsValid}
                         loading={formIsSubmitting}>
                         Save settings
-                    </Button>
+                    </CodeReviewSaveButton>
                 </Page.HeaderActions>
             </Page.Header>
 
             <Page.Content>
-                <CodeReviewVersionSelector />
-                <AnalysisTypes />
+                <CentralizedConfigReadOnlyAlert />
+                <div data-field-name="codeReviewVersion">
+                    <CodeReviewVersionSelector />
+                </div>
+                <div data-field-name="analysisTypes">
+                    <AnalysisTypes />
+                </div>
             </Page.Content>
         </Page.Root>
     );

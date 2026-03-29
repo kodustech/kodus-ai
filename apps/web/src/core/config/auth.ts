@@ -57,10 +57,15 @@ const githubProvider = GithubProvider({
     clientSecret: process.env.WEB_OAUTH_GITHUB_CLIENT_SECRET!,
 });
 
+const gitlabBaseUrl = process.env.WEB_GITLAB_OAUTH_URL
+    ? new URL(process.env.WEB_GITLAB_OAUTH_URL).origin
+    : "https://gitlab.com";
+
 const gitlabProvider = GitlabProvider({
     id: AuthProviders.GITLAB,
     clientId: process.env.WEB_OAUTH_GITLAB_CLIENT_ID!,
     clientSecret: process.env.WEB_OAUTH_GITLAB_CLIENT_SECRET!,
+    baseUrl: gitlabBaseUrl,
 });
 
 const ssoProvider = CredentialsProvider({

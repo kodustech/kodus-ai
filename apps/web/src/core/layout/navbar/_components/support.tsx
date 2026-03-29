@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import NextLink from "next/link";
 import { Button } from "@components/ui/button";
 import { SvgDiscord } from "@components/ui/icons/SvgDiscord";
@@ -14,21 +13,6 @@ import {
 } from "src/core/components/ui/dropdown-menu";
 
 export const SupportDropdown = () => {
-    const [mounted, setMounted] = useState(false);
-
-    useEffect(() => {
-        setMounted(true);
-    }, []);
-
-    // Render a placeholder during SSR to avoid hydration mismatch with Radix IDs
-    if (!mounted) {
-        return (
-            <Button variant="helper" size="sm" rightIcon={<ChevronDown />}>
-                Support
-            </Button>
-        );
-    }
-
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>

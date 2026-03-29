@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MCPPluginsLimitPopover } from "@components/system/mcp-plugins-limit-popover";
 import { Avatar, AvatarImage } from "@components/ui/avatar";
@@ -22,6 +22,7 @@ import { MagicModalContext } from "@components/ui/magic-modal";
 import { PopoverTrigger } from "@components/ui/popover";
 import { useToast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
+import { checkHasConnectionByPlatform } from "@services/integrations/fetch";
 import {
     deleteMCPConnection,
     deleteMCPCustomPlugin,
@@ -32,7 +33,10 @@ import {
     type getMCPPlugins,
     type getMCPPluginTools,
 } from "@services/mcp-manager/fetch";
-import { CUSTOM_MCP_SESSION_STORAGE_KEYS } from "@services/mcp-manager/types";
+import {
+    CUSTOM_MCP_SESSION_STORAGE_KEYS,
+    KODUS_MCP_GITHUB_ISSUES_INTEGRATION_ID,
+} from "@services/mcp-manager/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { EditIcon, PlugIcon, RefreshCwIcon, Trash } from "lucide-react";
@@ -72,6 +76,13 @@ export const PluginModal = ({
         )
             return { canAddMoreRules: total < 3, total, limit: 3 };
 
+        if (subscription.status === "licensed-self-hosted")
+            return {
+                canAddMoreRules: true,
+                total,
+                limit: Number.POSITIVE_INFINITY,
+            };
+
         return {
             canAddMoreRules: true,
             total,
@@ -83,6 +94,11 @@ export const PluginModal = ({
     const isDefault = plugin.isDefault;
     const canEdit = usePermission(Action.Update, ResourceType.PluginSettings);
     const canDelete = usePermission(Action.Delete, ResourceType.PluginSettings);
+    const requiresGithubIntegration =
+        plugin.id === KODUS_MCP_GITHUB_ISSUES_INTEGRATION_ID;
+    const [hasGithubIntegration, setHasGithubIntegration] = useState<
+        boolean | null
+    >(requiresGithubIntegration ? null : true);
 
     const isCustomOauthUnauthorized =
         plugin.authScheme?.toLowerCase() === "oauth2" &&
@@ -108,6 +124,39 @@ export const PluginModal = ({
     const effectiveSelectedTools = selectedTools;
 
     const [isResettingAuth, setIsResettingAuth] = useState(false);
+
+    useEffect(() => {
+        let mounted = true;
+
+        if (!requiresGithubIntegration) {
+            setHasGithubIntegration(true);
+            return;
+        }
+
+        (async () => {
+            const result = await checkHasConnectionByPlatform({
+                platform: "github",
+                category: "codeManagement",
+            });
+
+            if (!mounted) {
+                return;
+            }
+
+            const hasConnection =
+                typeof result === "boolean"
+                    ? result
+                    : "error" in result
+                      ? false
+                      : Boolean(result);
+
+            setHasGithubIntegration(hasConnection);
+        })();
+
+        return () => {
+            mounted = false;
+        };
+    }, [requiresGithubIntegration]);
 
     const hasToolsWithWarningSelected = useMemo(
         () =>
@@ -155,6 +204,16 @@ export const PluginModal = ({
 
     const [installPlugin, { loading: isInstallPluginLoading }] = useAsyncAction(
         async () => {
+            if (requiresGithubIntegration && !hasGithubIntegration) {
+                toast({
+                    variant: "warning",
+                    title: "GitHub integration required",
+                    description:
+                        "Connect GitHub in Settings > Integrations before installing this MCP.",
+                });
+                return;
+            }
+
             const installationResponse = await installMCPPlugin({
                 id: plugin.id,
                 provider: plugin.provider,
@@ -252,6 +311,13 @@ export const PluginModal = ({
         isResetAuthLoading ||
         isDeletePluginLoading;
 
+    const isGithubIntegrationMissing =
+        requiresGithubIntegration && hasGithubIntegration === false;
+    const isGithubIntegrationPending =
+        requiresGithubIntegration && hasGithubIntegration === null;
+    const isGithubIntegrationBlocked =
+        isGithubIntegrationMissing || isGithubIntegrationPending;
+
     return (
         <MagicModalContext
             value={{
@@ -312,6 +378,26 @@ export const PluginModal = ({
                                     setValuesAction={setRequiredParamsValues}
                                     isValid={areRequiredParametersValid}
                                 />
+                            )}
+
+                            {(isGithubIntegrationMissing ||
+                                isGithubIntegrationPending) && (
+                                <Card
+                                    className="flex w-full flex-col gap-2 px-4 py-3 text-sm"
+                                    color="lv1">
+                                    {isGithubIntegrationPending ? (
+                                        <p className="text-text-secondary">
+                                            Checking GitHub integration
+                                            status...
+                                        </p>
+                                    ) : (
+                                        <p className="text-text-secondary">
+                                            GitHub integration is required to
+                                            install this MCP. Connect GitHub in
+                                            Settings &gt; Integrations.
+                                        </p>
+                                    )}
+                                </Card>
                             )}
 
                             {isCustomOauthUnauthorized && !isConnected ? (
@@ -435,6 +521,7 @@ export const PluginModal = ({
                                                     !areRequiredParametersValid ||
                                                     selectedTools.length ===
                                                         0 ||
+                                                    isGithubIntegrationBlocked ||
                                                     (hasToolsWithWarningSelected &&
                                                         !confirmInstallationOfToolsWithWarnings)
                                                 }>
@@ -454,6 +541,7 @@ export const PluginModal = ({
                                                             !areRequiredParametersValid ||
                                                             selectedTools.length ===
                                                                 0 ||
+                                                            isGithubIntegrationBlocked ||
                                                             (hasToolsWithWarningSelected &&
                                                                 !confirmInstallationOfToolsWithWarnings)
                                                         }>

@@ -77,6 +77,7 @@ export class TeamCliKeyDatabaseRepository implements ITeamCliKeyRepository {
                 keyHash: data.keyHash,
                 keyPrefix: data.keyPrefix,
                 active: data.active ?? true,
+                config: data.config ?? {},
                 team: data.team ? ({ uuid: data.team.uuid } as any) : undefined,
                 createdBy: data.createdBy
                     ? ({ uuid: data.createdBy.uuid } as any)

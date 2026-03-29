@@ -6,20 +6,20 @@ import * as yaml from 'js-yaml';
 
 import { createLogger } from '@kodus/flow';
 import {
-    IParametersService,
-    PARAMETERS_SERVICE_TOKEN,
-} from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
-import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
     ICodeBaseConfigService,
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
-import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import { ParametersKey } from '@libs/core/domain/enums';
+import { KodusConfigFile } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
     Action,
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
-import { ParametersKey } from '@libs/core/domain/enums';
-import { KodusConfigFile } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import {
+    IParametersService,
+    PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 
 @Injectable()
 export class GenerateKodusConfigFileUseCase {
@@ -44,6 +44,9 @@ export class GenerateKodusConfigFileUseCase {
         teamId: string,
         repositoryId?: string,
         directoryId?: string,
+        options: {
+            skipAuthorization?: boolean;
+        } = {},
     ): Promise<{ yamlString?: string }> {
         try {
             const organizationId = this.request.user?.organization.uuid;
@@ -52,7 +55,11 @@ export class GenerateKodusConfigFileUseCase {
                 teamId,
             };
 
-            if (repositoryId && repositoryId !== 'global') {
+            if (
+                !options.skipAuthorization &&
+                repositoryId &&
+                repositoryId !== 'global'
+            ) {
                 await this.authorizationService.ensure({
                     user: this.request.user,
                     action: Action.Read,
@@ -61,7 +68,7 @@ export class GenerateKodusConfigFileUseCase {
                 });
             }
 
-            if (!repositoryId || repositoryId === 'global') {
+            if (!repositoryId) {
                 return this.getKodyConfigFile();
             }
 
@@ -70,22 +77,31 @@ export class GenerateKodusConfigFileUseCase {
                 organizationAndTeamData,
             );
 
-            const codeReviewRepositories =
-                codeReviewConfigs.configValue.repositories;
+            let config: KodusConfigFile | undefined;
 
-            const repository = codeReviewRepositories.find(
-                (repository) => repository.id === repositoryId,
-            );
+            if (repositoryId === 'global') {
+                config = codeReviewConfigs.configValue.configs as
+                    | KodusConfigFile
+                    | undefined;
+            } else if (repositoryId && directoryId) {
+                const repo = codeReviewConfigs.configValue.repositories?.find(
+                    (repository) => repository.id === repositoryId,
+                );
 
-            const directory = directoryId
-                ? repository?.directories?.find(
-                      (directory) => directory.id === directoryId,
-                  )
-                : undefined;
+                const directory = repo?.directories?.find(
+                    (directory) => directory.id === directoryId,
+                );
 
-            return this.getKodyConfigFile(
-                (directory?.configs || repository?.configs) as KodusConfigFile,
-            );
+                config = directory?.configs as KodusConfigFile | undefined;
+            } else if (repositoryId && repositoryId !== 'global') {
+                const repo = codeReviewConfigs.configValue.repositories?.find(
+                    (repository) => repository.id === repositoryId,
+                );
+
+                config = repo?.configs as KodusConfigFile | undefined;
+            }
+
+            return this.getKodyConfigFile(config);
         } catch (error) {
             this.logger.error({
                 message: 'Failed to generate Kodus config file!',
@@ -99,6 +115,7 @@ export class GenerateKodusConfigFileUseCase {
             });
             throw new Error(
                 `Failed to generate Kodus config file for team ${teamId}${repositoryId ? ` and repository ${repositoryId}` : ''}: ${error.message}`,
+                { cause: error },
             );
         }
     }
@@ -108,8 +125,10 @@ export class GenerateKodusConfigFileUseCase {
     } {
         let yamlString: string;
 
-        if (configObject) {
+        if (configObject && !this.isEmptyObject(configObject)) {
             yamlString = yaml.dump(configObject);
+        } else if (configObject && this.isEmptyObject(configObject)) {
+            yamlString = '';
         } else {
             const kodusDefaultConfigYMLfile = yaml.load(
                 fs.readFileSync('default-kodus-config.yml', 'utf8'),
@@ -118,5 +137,9 @@ export class GenerateKodusConfigFileUseCase {
         }
 
         return { yamlString };
+    }
+
+    private isEmptyObject(obj?: object): boolean {
+        return !!obj && Object.keys(obj).length === 0;
     }
 }

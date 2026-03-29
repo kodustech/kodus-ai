@@ -28,6 +28,7 @@ import { CliDeviceModel } from '../../../../organization/infrastructure/adapters
 import { TeamModel } from '../../../../organization/infrastructure/adapters/repositories/schemas/team.model';
 import { TeamMemberModel } from '../../../../organization/infrastructure/adapters/repositories/schemas/teamMember.model';
 import { PullRequestsModel } from '../../../../platformData/infrastructure/adapters/repositories/schemas/pullRequests.model';
+import { SessionEventModel } from '../../../../cli-review/infrastructure/repositories/schemas/session-event.model';
 import { InboxMessageModel } from '../../../workflow/infrastructure/repositories/schemas/inbox-message.model';
 import { OutboxMessageModel } from '../../../workflow/infrastructure/repositories/schemas/outbox-message.model';
 import { WorkflowJobModel } from '../../../workflow/infrastructure/repositories/schemas/workflow-job.model';
@@ -66,4 +67,5 @@ export const ENTITIES = [
     CodeReviewExecutionModel,
     InteractionModel,
     CliDeviceModel,
+    SessionEventModel,
 ];

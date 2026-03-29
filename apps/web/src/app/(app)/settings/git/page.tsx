@@ -30,7 +30,7 @@ export default async function GitSettings() {
     > = [];
     let autoLicenseAssignmentConfig: Awaited<
         ReturnType<typeof getAutoLicenseAssignmentConfig>
-    > | null = null;
+    > = undefined;
     let organizationMembersRaw: Awaited<
         ReturnType<typeof getOrganizationMembers>
     > = [];
@@ -45,7 +45,7 @@ export default async function GitSettings() {
         ] = await Promise.all([
             getConnections(teamId),
             getIntegrationConfig({ teamId }),
-            getAutoLicenseAssignmentConfig().catch(() => null),
+            getAutoLicenseAssignmentConfig().catch(() => undefined),
             getOrganizationMembers({ teamId }).catch(() => []),
         ]);
     } catch (err) {

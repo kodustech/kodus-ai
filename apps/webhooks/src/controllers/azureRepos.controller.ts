@@ -1,11 +1,11 @@
 import { createLogger } from '@kodus/flow';
 import { Controller, HttpStatus, Post, Req, Res } from '@nestjs/common';
-import { Response, Request } from 'express';
+import { Request, Response } from 'express';
 
-import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
-import { EnqueueWebhookUseCase } from '@libs/platform/application/use-cases/webhook/enqueue-webhook.use-case';
 import { validateWebhookToken } from '@libs/common/utils/webhooks/webhookTokenCrypto';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
+import { EnqueueWebhookUseCase } from '@libs/platform/application/use-cases/webhook/enqueue-webhook.use-case';
 
 @Public()
 @Controller('azure-repos')

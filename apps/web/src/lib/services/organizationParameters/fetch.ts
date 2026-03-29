@@ -25,9 +25,14 @@ export const createOrUpdateOrganizationParameter = async (
 export const getBYOK = async () => {
     const byokConfig = await getOrganizationParameterByKey<{
         configValue: { main: BYOKConfig; fallback: BYOKConfig };
-    }>({
-        key: OrganizationParametersConfigKey.BYOK_CONFIG,
-    });
+    }>(
+        {
+            key: OrganizationParametersConfigKey.BYOK_CONFIG,
+        },
+        {
+            cache: "no-store",
+        },
+    );
 
     return byokConfig?.configValue;
 };
@@ -53,10 +58,14 @@ export const deleteBYOK = async (params: {
 
 export const getOrganizationParameterByKey = async <
     T extends { configValue: unknown },
->(params: {
-    key: OrganizationParametersConfigKey;
-}) =>
+>(
+    params: {
+        key: OrganizationParametersConfigKey;
+    },
+    config?: Parameters<typeof authorizedFetch<T | null>>[1],
+) =>
     await authorizedFetch<T | null>(ORGANIZATION_PARAMETERS_PATHS.GET_BY_KEY, {
+        ...config,
         params,
     });
 

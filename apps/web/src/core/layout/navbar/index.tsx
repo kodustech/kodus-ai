@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useMemo } from "react";
-import dynamic from "next/dynamic";
 import NextLink from "next/link";
 import { usePathname } from "next/navigation";
 import { SvgKodus } from "@components/ui/icons/SvgKodus";
@@ -21,49 +20,23 @@ import {
     LibraryBig,
     SlidersHorizontalIcon,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ErrorBoundary } from "react-error-boundary";
+import { UserNav } from "src/core/layout/navbar/_components/user-nav";
 import { cn } from "src/core/utils/components";
 import { SubscriptionBadge } from "src/features/ee/subscription/_components/subscription-badge";
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
-const UserNav = dynamic(
-    () =>
-        import("src/core/layout/navbar/_components/user-nav").then(
-            (f) => f.UserNav,
-        ),
-    {
-        ssr: false,
-    },
-);
-
-const NoSSRIssuesCount = dynamic(
-    () => import("./_components/issues-count").then((f) => f.IssuesCount),
-    {
-        ssr: false,
-        loading: () => (
-            <div className="flex size-full items-center justify-center">
-                <Spinner className="size-4" />
-            </div>
-        ),
-    },
-);
-
-const NoSSRGithubStars = dynamic(
-    () => import("./_components/github-stars").then((f) => f.GithubStars),
-    { ssr: false },
-);
-
-const NoSSRPendingRulesNotification = dynamic(
-    () =>
-        import("./_components/pending-rules-notification").then(
-            (f) => f.PendingRulesNotification,
-        ),
-    { ssr: false },
-);
+import { GithubStars } from "./_components/github-stars";
+import { IssuesCount } from "./_components/issues-count";
+import { PendingRulesNotification } from "./_components/pending-rules-notification";
+import { VERSION_QUERY } from "./_components/version-info";
 
 export const NavMenu = () => {
     const pathname = usePathname();
     const subscription = useSubscriptionContext();
+    const queryClient = useQueryClient();
+    queryClient.prefetchQuery(VERSION_QUERY);
 
     const canReadIssues = usePermission(Action.Read, ResourceType.Issues);
     const canReadPullRequests = usePermission(
@@ -98,7 +71,9 @@ export const NavMenu = () => {
                 href: "/cockpit",
                 visible:
                     subscription.license.valid &&
-                    subscription.license.subscriptionStatus !== "self-hosted",
+                    subscription.license.subscriptionStatus !== "self-hosted" &&
+                    subscription.license.subscriptionStatus !==
+                        "licensed-self-hosted",
                 icon: <GaugeIcon className="size-6" />,
             },
 
@@ -129,7 +104,14 @@ export const NavMenu = () => {
                 icon: <InfoIcon className="size-5" />,
                 badge: (
                     <div className="h-5 min-h-auto min-w-8">
-                        <NoSSRIssuesCount />
+                        <Suspense
+                            fallback={
+                                <div className="flex size-full items-center justify-center">
+                                    <Spinner className="size-4" />
+                                </div>
+                            }>
+                            <IssuesCount />
+                        </Suspense>
                     </div>
                 ),
             });
@@ -211,17 +193,15 @@ export const NavMenu = () => {
 
             <div className="flex items-center gap-4">
                 <ErrorBoundary fallback={null}>
-                    <NoSSRGithubStars />
+                    <GithubStars />
                 </ErrorBoundary>
 
                 <div className="flex items-center gap-2">
                     <SubscriptionBadge />
-                    <NoSSRPendingRulesNotification />
+                    <PendingRulesNotification />
                 </div>
 
-                <Suspense>
-                    <UserNav />
-                </Suspense>
+                <UserNav />
             </div>
         </div>
     );

@@ -33,7 +33,6 @@ metadata:
                 required-context-fields:
                     - organizationAndTeamData.organizationId
                     - organizationAndTeamData.teamId
-                    - prepareContext.pullRequest.pullRequestNumber
                     - prepareContext.repository.id
             output:
                 required-fields:
@@ -42,7 +41,7 @@ metadata:
         required-mcps:
             - category: task-management
               label: Task Management
-              examples: Jira, Linear, Notion, ClickUp
+              examples: Jira, Linear, Notion, ClickUp, Github Issues
 ---
 
 # Business Rules Gap Analysis
@@ -60,6 +59,11 @@ Every validation must be grounded in specific business requirements from the ext
 
 `TASK_QUALITY` is classified by the runtime deterministic stage. Do not reclassify it.
 Apply the task-quality policy exactly as provided in the user prompt.
+
+Mode-specific context notes:
+
+- Pull-request mode requires `prepareContext.pullRequest.pullRequestNumber` when diff is fetched from PR tools.
+- Local-diff mode works with `prepareContext.prDiff` and does not require pull request number.
 
 ## Grounding Rules (MANDATORY)
 
@@ -80,25 +84,29 @@ You will receive ACCEPTANCE_CRITERIA as a numbered list (when available) and FUL
 Before checking detailed gaps, perform an intent comparison:
 
 ### Task Intent
+
 - Summarize the primary business problem the task is trying to solve
 - Identify the main domain entities involved (for example: rules, billing, team, license, subscription)
 - Identify the expected behavioral change
 
 ### PR Intent
+
 - Infer the primary implementation intent of the PR from:
-  - changed file paths
-  - changed symbols
-  - changed code behavior visible in the diff
+    - changed file paths
+    - changed symbols
+    - changed code behavior visible in the diff
 - Use PR_DESCRIPTION only as a secondary hint. Never let PR_DESCRIPTION override the PR_DIFF.
 
 ### Alignment
+
 - Classify the relationship between task and PR as one of:
-  - `aligned`
-  - `partially_aligned`
-  - `scope_mismatch`
+    - `aligned`
+    - `partially_aligned`
+    - `scope_mismatch`
 - If the correct classification is `scope_mismatch`, make that the leading finding before any detailed requirement-by-requirement discussion.
 
 For EACH acceptance criterion:
+
 1. Search the PR_DIFF for code that satisfies it
 2. Classify: IMPLEMENTED / MISSING / PARTIAL
 3. If MISSING or PARTIAL — create a finding with the exact requirement quote
@@ -106,11 +114,13 @@ For EACH acceptance criterion:
 After checking all criteria, scan PR_DIFF for code that contradicts or misinterprets any requirement.
 
 When the diff appears unrelated to the task:
+
 1. State that there is **no evidence in this PR diff** of implementation for the requirement
 2. Explain briefly why the changed files or diff scope appear unrelated
 3. Do **not** convert that into an unsupported claim about how the backend/system currently behaves
 
 When task reference details are available:
+
 1. Use the task id/title already provided in the prompt as the canonical task reference
 2. If task links are available, you may mention the task link briefly near the top of the summary
 3. Keep task reference concise; do not repeat raw metadata blocks
@@ -223,6 +233,7 @@ For each acceptance criterion checked, briefly state what code satisfies it:
 ```
 
 Additional output rules:
+
 - Include a short task reference near the top of the summary when task id, title, or link is available.
 - If no task requirements were verified from the diff, omit the "Requirements Verified" section entirely.
 - If you do not see the implementation in the diff, say `No evidence in this PR diff...`

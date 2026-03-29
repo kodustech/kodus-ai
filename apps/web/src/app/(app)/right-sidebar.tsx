@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import {
     RightSidebar,
     RightSidebarItem,
@@ -13,9 +14,12 @@ interface AppRightSidebarProps {
 }
 
 export const AppRightSidebar = ({ showTestReview }: AppRightSidebarProps) => {
+    const pathname = usePathname();
+    const isInCodeReviewSettings = pathname.includes("/settings/code-review/");
+
     return (
         <RightSidebar>
-            {showTestReview && (
+            {showTestReview && isInCodeReviewSettings && (
                 <RightSidebarItem>
                     <TestReviewSidebarButton />
                 </RightSidebarItem>

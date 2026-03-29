@@ -6,6 +6,7 @@ import { Spinner } from "@components/ui/spinner";
 import { useDebounce } from "@hooks/use-debounce";
 import {
     useInfinitePullRequestExecutions,
+    usePullRequestExecutionSSE,
     type PullRequestExecution,
 } from "@services/pull-requests";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
@@ -15,6 +16,7 @@ import { PullRequestsFilters } from "./pull-requests-filters";
 
 export function PullRequestsPageClient() {
     const { teamId } = useSelectedTeamId();
+    usePullRequestExecutionSSE();
     const [selectedRepository, setSelectedRepository] = useState<string>();
     const [pullRequestTitle, setPullRequestTitle] = useState("");
     const [pullRequestNumber, setPullRequestNumber] = useState("");

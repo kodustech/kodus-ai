@@ -9,6 +9,7 @@ export const FEATURE_FLAGS = {
     kodyRuleSuggestions: 'kody-rules-suggestions',
     codeReviewDryRun: 'code-review-dry-run',
     businessLogic: 'business-logic',
+    documentationContext: 'documentation-context',
     sso: 'sso',
     cliKeys: 'cli-keys',
     committableSuggestions: 'committable-suggestions',

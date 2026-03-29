@@ -52,6 +52,9 @@ export function classifyTaskContextStatus(input: {
     if (looksLikeStructuredMetadata(description)) {
         return 'weak';
     }
+    if (looksLikeTaskFetchFailure(description)) {
+        return 'weak';
+    }
 
     return 'usable';
 }
@@ -217,5 +220,29 @@ function looksLikeStructuredMetadata(value: string): boolean {
         trimmed.includes('"application"') ||
         trimmed.includes('"attrs"') ||
         trimmed.includes('"url"')
+    );
+}
+
+function looksLikeTaskFetchFailure(value: string): boolean {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+        return false;
+    }
+
+    const hasErrorMarkers =
+        normalized.includes('"error":true') ||
+        normalized.includes('failed to fetch') ||
+        /status:\s*\d{3}/i.test(value);
+
+    if (!hasErrorMarkers) {
+        return false;
+    }
+
+    return (
+        normalized.includes('tenant info') ||
+        normalized.includes('task context') ||
+        normalized.includes('cloud id') ||
+        normalized.includes('jira') ||
+        normalized.includes('linear')
     );
 }

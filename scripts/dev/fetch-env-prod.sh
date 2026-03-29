@@ -71,7 +71,7 @@ KEYS=(
     "/prod/kodus-orchestrator/LANGCHAIN_PROJECT"
     "/prod/kodus-orchestrator/LANGCHAIN_CALLBACKS_BACKGROUND"
 
-    "/prod/kodus-orchestrator/API_SENTRY_DNS"
+    "/prod/kodus-orchestrator/API_BETTERSTACK_DSN"
 
     "/prod/kodus-orchestrator/API_CRON_AUTOMATION_INTERACTION_MONITOR"
     "/prod/kodus-orchestrator/API_CRON_AUTOMATION_TEAM_PROGRESS_TRACKER"
@@ -168,6 +168,8 @@ KEYS=(
     "/prod/kodus-orchestrator/API_BETTERSTACK_HEARTBEAT_REVIEW_MONITOR_URL"
     "/prod/kodus-orchestrator/API_BETTERSTACK_HEARTBEAT_OUTBOX_URL"
     "/prod/kodus-orchestrator/API_BETTERSTACK_HEARTBEAT_WEBHOOK_URL"
+
+    "/prod/kodus-orchestrator/API_EXA_KEY"
 )
 
 # Lista de todas as chaves que você precisa

@@ -149,6 +149,35 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             });
         }
 
+        const centralizedConfigDisablesReviewForRepository =
+            await this.isCentralizedConfigRepositoryReviewDisabled(
+                organizationAndTeamData,
+                context.repository,
+            );
+
+        if (centralizedConfigDisablesReviewForRepository) {
+            this.logger.log({
+                message:
+                    'Repository is centralized-config source, skipping automation',
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryName: context.repository?.name,
+                    repositoryId: context.repository?.id,
+                    prNumber: pullRequest?.number,
+                },
+            });
+
+            return this.updateContext(context, (draft) => {
+                applyShowStatusFeedbackMetadata(draft);
+                draft.statusInfo = {
+                    status: AutomationStatus.SKIPPED,
+                    message:
+                        'Code reviews are disabled for the centralized config repository',
+                };
+            });
+        }
+
         // Centralized permission validation
         const validationResult =
             await this.permissionValidationService.validateExecutionPermissions(
@@ -171,6 +200,31 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                     draft.codeReviewConfig.byokConfig =
                         validationResult.byokConfig;
                 }
+            });
+        }
+
+        // If auto-review is disabled and this is not a command-triggered review,
+        // skip silently without posting notifications (e.g. BYOK required).
+        try {
+            if (context.origin !== 'command') {
+                const autoReviewEnabled =
+                    await this.isAutomatedReviewActive(context);
+                if (!autoReviewEnabled) {
+                    return this.updateContext(context, (draft) => {
+                        applyShowStatusFeedbackMetadata(draft);
+                        draft.statusInfo = {
+                            status: AutomationStatus.SKIPPED,
+                            message: AutomationMessage.VALIDATION_FAILED,
+                        };
+                    });
+                }
+            }
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Error checking automatedReviewActive, proceeding with notification',
+                context: this.stageName,
+                error,
             });
         }
 
@@ -407,6 +461,64 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         return false;
     }
 
+    private async isCentralizedConfigRepositoryReviewDisabled(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository?: { id?: string; name?: string },
+    ): Promise<boolean> {
+        try {
+            const centralizedConfigParameter =
+                await this.parametersService.findByKey(
+                    ParametersKey.CENTRALIZED_CONFIG,
+                    organizationAndTeamData,
+                );
+
+            if (
+                !centralizedConfigParameter ||
+                !centralizedConfigParameter.configValue ||
+                !centralizedConfigParameter.configValue.enabled
+            ) {
+                return false;
+            }
+
+            const centralizedConfigRepoId =
+                centralizedConfigParameter.configValue.repository?.id;
+
+            if (!centralizedConfigRepoId || !repository?.id) {
+                return false;
+            }
+
+            if (repository.id === centralizedConfigRepoId) {
+                this.logger.log({
+                    message: 'Centralized config repository identified',
+                    context: this.stageName,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryName: repository.name,
+                        repositoryId: repository.id,
+                    },
+                });
+
+                return true;
+            }
+
+            return false;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Error resolving centralized config repository review exclusion',
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository?.id,
+                    repositoryName: repository?.name,
+                },
+            });
+        }
+
+        return false;
+    }
+
     private async addNoLicenseReaction(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string };
@@ -549,6 +661,48 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         );
     }
 
+    private async isAutomatedReviewActive(
+        context: CodeReviewPipelineContext,
+    ): Promise<boolean> {
+        try {
+            const parameter = await this.parametersService.findByKey(
+                ParametersKey.CODE_REVIEW_CONFIG,
+                context.organizationAndTeamData,
+            );
+
+            const parameterConfig = parameter?.configValue as any;
+            const repositoryConfig = parameterConfig?.repositories?.find(
+                (repo: any) => repo?.id === context.repository?.id,
+            );
+
+            if (
+                typeof repositoryConfig?.configs?.automatedReviewActive ===
+                'boolean'
+            ) {
+                return repositoryConfig.configs.automatedReviewActive;
+            }
+
+            if (
+                typeof parameterConfig?.configs?.automatedReviewActive ===
+                'boolean'
+            ) {
+                return parameterConfig.configs.automatedReviewActive;
+            }
+        } catch (error) {
+            this.logger.warn({
+                message: 'Error resolving automatedReviewActive config',
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    repositoryId: context.repository?.id,
+                },
+            });
+        }
+
+        return true;
+    }
+
     private validatePrerequisites(
         context: CodeReviewPipelineContext,
     ): IStageValidationResult {
@@ -578,7 +732,11 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             };
         }
 
-        if (pullRequest.state === 'closed' || pullRequest.state === 'merged') {
+        if (
+            (pullRequest.state === 'closed' ||
+                pullRequest.state === 'merged') &&
+            context.origin !== 'command'
+        ) {
             return {
                 canProceed: false,
                 details: {

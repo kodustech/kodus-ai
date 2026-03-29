@@ -114,6 +114,19 @@ export class CollectCrossFileContextsService {
     async collectContexts(
         params: CollectContextsParams,
     ): Promise<CollectCrossFileContextsResult> {
+        return this.observabilityService.runInSpan(
+            'CollectCrossFileContextsService::collectContexts',
+            () => this._collectContextsInner(params),
+            {
+                organizationId: params.organizationAndTeamData?.organizationId,
+                prNumber: params.prNumber,
+            },
+        );
+    }
+
+    private async _collectContextsInner(
+        params: CollectContextsParams,
+    ): Promise<CollectCrossFileContextsResult> {
         const {
             remoteCommands,
             changedFiles,
@@ -130,6 +143,27 @@ export class CollectCrossFileContextsService {
             totalSearches: 0,
             totalSnippetsBeforeDedup: 0,
         };
+
+        // Canary: verify sandbox has files before spending tokens on planner
+        const canaryFiles = await remoteCommands.listDir('.', 1);
+        this.logger.log({
+            message: `[DEBUG] Canary listDir('.', 1) for PR#${prNumber}: ${canaryFiles ? canaryFiles.trim().split('\n').length + ' files' : 'EMPTY'}`,
+            context: CollectCrossFileContextsService.name,
+            metadata: {
+                organizationAndTeamData,
+                prNumber,
+                canaryOutput: canaryFiles?.slice(0, 500),
+                canaryLength: canaryFiles?.length ?? 0,
+            },
+        });
+        if (!canaryFiles || !canaryFiles.trim()) {
+            this.logger.warn({
+                message: `Sandbox appears empty (listDir returned no files) for PR#${prNumber} — skipping cross-file context`,
+                context: CollectCrossFileContextsService.name,
+                metadata: { organizationAndTeamData, prNumber },
+            });
+            return emptyResult;
+        }
 
         // 1. Run planner to get search queries
         const plannerQueries = await this.runPlanner(
@@ -166,9 +200,7 @@ export class CollectCrossFileContextsService {
         });
 
         // 2. Execute search queries via CodebaseSearchService
-        const changedFilePaths = new Set(
-            changedFiles.map((f) => f.filename),
-        );
+        const changedFilePaths = new Set(changedFiles.map((f) => f.filename));
 
         const searchExecution = await this.executeSearchQueries(
             plannerQueries,
@@ -180,8 +212,8 @@ export class CollectCrossFileContextsService {
         );
 
         if (!searchExecution.snippets.length) {
-            this.logger.log({
-                message: `No search results found for PR#${prNumber}`,
+            this.logger.warn({
+                message: `All ${plannerQueries.length} search queries returned 0 results for PR#${prNumber} — possible sandbox issue`,
                 context: CollectCrossFileContextsService.name,
                 metadata: { organizationAndTeamData, prNumber },
             });
@@ -202,7 +234,7 @@ export class CollectCrossFileContextsService {
         const totalSnippetsBeforeDedup = allSnippets.length;
 
         // 5. Deduplicate and rank
-        let finalContexts = this.deduplicateAndRank(allSnippets);
+        let finalContexts = await this.deduplicateAndRank(allSnippets);
         let totalSearches = plannerQueries.length;
 
         // 6. Sufficiency feedback loop (max 1 iteration)
@@ -463,26 +495,39 @@ export class CollectCrossFileContextsService {
     ): PlannerQuery[] {
         // Patterns that indicate log/comment strings, not code symbols
         const LOG_STRING_PATTERNS = [
-            /^\[.*\]$/,            // [TIMING], [ERROR], etc.
-            /^\[.*\]/,             // [TIMING] PR#...
-            /^logger\./,           // logger.log, logger.warn
-            /^console\./,          // console.log
+            /^\[.*\]$/, // [TIMING], [ERROR], etc.
+            /^\[.*\]/, // [TIMING] PR#...
+            /^logger\./, // logger.log, logger.warn
+            /^console\./, // console.log
             /error occurred/i,
             /failed to/i,
         ];
 
         // Generic parameter names that match hundreds of files
         const GENERIC_NAMES = new Set([
-            'config', 'options', 'params', 'context', 'data', 'result',
-            'error', 'response', 'request', 'callback', 'handler',
-            'value', 'item', 'input', 'output', 'args',
+            'config',
+            'options',
+            'params',
+            'context',
+            'data',
+            'result',
+            'error',
+            'response',
+            'request',
+            'callback',
+            'handler',
+            'value',
+            'item',
+            'input',
+            'output',
+            'args',
         ]);
 
         // Private/internal symbols unlikely to have external consumers
         const PRIVATE_PATTERNS = [
-            /^(private|#)/,              // private keyword or # prefix
-            /^_[a-z]/,                   // _privateMethod convention
-            /^(MAX_|MIN_|DEFAULT_)/,     // Constants
+            /^(private|#)/, // private keyword or # prefix
+            /^_[a-z]/, // _privateMethod convention
+            /^(MAX_|MIN_|DEFAULT_)/, // Constants
         ];
 
         const kept: PlannerQuery[] = [];
@@ -510,7 +555,11 @@ export class CollectCrossFileContextsService {
             }
 
             // Reject patterns that are just log strings wrapped in regex
-            if (/\[TIMING\]|\[ERROR\]|\[WARN\]|\[INFO\]|\[DEBUG\]/.test(query.pattern)) {
+            if (
+                /\[TIMING\]|\[ERROR\]|\[WARN\]|\[INFO\]|\[DEBUG\]/.test(
+                    query.pattern,
+                )
+            ) {
                 rejected.push(`${query.pattern} (log tag pattern)`);
                 continue;
             }
@@ -531,6 +580,33 @@ export class CollectCrossFileContextsService {
 
     //#region Search Execution
     private async executeSearchQueries(
+        queries: PlannerQuery[],
+        remoteCommands: RemoteCommands,
+        changedFilePaths: Set<string>,
+        repoRoot: string,
+        organizationAndTeamData: OrganizationAndTeamData,
+        prNumber: number,
+    ): Promise<SearchExecutionResult> {
+        return this.observabilityService.runInSpan(
+            'CollectCrossFileContextsService::executeSearchQueries',
+            () =>
+                this._executeSearchQueriesInner(
+                    queries,
+                    remoteCommands,
+                    changedFilePaths,
+                    repoRoot,
+                    organizationAndTeamData,
+                    prNumber,
+                ),
+            {
+                organizationId: organizationAndTeamData?.organizationId,
+                prNumber,
+                queryCount: queries.length,
+            },
+        );
+    }
+
+    private async _executeSearchQueriesInner(
         queries: PlannerQuery[],
         remoteCommands: RemoteCommands,
         changedFilePaths: Set<string>,
@@ -585,7 +661,10 @@ export class CollectCrossFileContextsService {
             return { query, result };
         });
 
-        const results = await this.runWithConcurrency(tasks, SEARCH_CONCURRENCY);
+        const results = await this.runWithConcurrency(
+            tasks,
+            SEARCH_CONCURRENCY,
+        );
 
         const allSnippets: CrossFileContextSnippet[] = [];
         for (const outcome of results) {
@@ -632,6 +711,17 @@ export class CollectCrossFileContextsService {
         snippets: CrossFileContextSnippet[],
         remoteCommands: RemoteCommands,
     ): Promise<CrossFileContextSnippet[]> {
+        return this.observabilityService.runInSpan(
+            'CollectCrossFileContextsService::expandContextWindows',
+            () => this._expandContextWindowsInner(snippets, remoteCommands),
+            { snippetCount: snippets.length },
+        );
+    }
+
+    private async _expandContextWindowsInner(
+        snippets: CrossFileContextSnippet[],
+        remoteCommands: RemoteCommands,
+    ): Promise<CrossFileContextSnippet[]> {
         const tasks = snippets.map((snippet) => async () => {
             const lineCount = snippet.content.split('\n').length;
 
@@ -650,12 +740,8 @@ export class CollectCrossFileContextsService {
                     ? CONTEXT_WINDOW_SINGLE_LINE
                     : CONTEXT_WINDOW_SMALL;
 
-            const startLine = Math.max(
-                1,
-                (snippet.startLine || 1) - window,
-            );
-            const endLine =
-                (snippet.endLine || lineCount) + window;
+            const startLine = Math.max(1, (snippet.startLine || 1) - window);
+            const endLine = (snippet.endLine || lineCount) + window;
 
             const expandedContent = await remoteCommands.read(
                 snippet.filePath,
@@ -680,7 +766,10 @@ export class CollectCrossFileContextsService {
             return snippet;
         });
 
-        const results = await this.runWithConcurrency(tasks, SEARCH_CONCURRENCY);
+        const results = await this.runWithConcurrency(
+            tasks,
+            SEARCH_CONCURRENCY,
+        );
 
         return results.map((r, i) =>
             r.status === 'fulfilled' ? r.value : snippets[i],
@@ -736,12 +825,7 @@ export class CollectCrossFileContextsService {
                 const result = await this.codebaseSearchService.search({
                     query: funcName,
                     remoteCommands,
-                    excludes: [
-                        'node_modules',
-                        '.git',
-                        'dist',
-                        'build',
-                    ],
+                    excludes: ['node_modules', '.git', 'dist', 'build'],
                 });
 
                 if (!result.success || !result.contexts?.length) {
@@ -754,17 +838,21 @@ export class CollectCrossFileContextsService {
                         filePath: ctx.file,
                         content: ctx.content,
                         rationale: `Hop 2: caller of ${funcName} found in hop 1 results`,
-                        relevanceScore:
-                            this.getBaseScore('high') - 10,
+                        relevanceScore: this.getBaseScore('high') - 10,
                         relatedSymbol: funcName,
                         relationship: `indirect consumer (hop 2) of ${funcName}`,
                         hop: 2 as const,
                         riskLevel: 'high' as const,
-                        targetFiles: [...(funcToTargetFiles.get(funcName) || [])],
+                        targetFiles: [
+                            ...(funcToTargetFiles.get(funcName) || []),
+                        ],
                     }));
             });
 
-            const results = await this.runWithConcurrency(tasks, SEARCH_CONCURRENCY);
+            const results = await this.runWithConcurrency(
+                tasks,
+                SEARCH_CONCURRENCY,
+            );
             for (const outcome of results) {
                 if (outcome.status === 'fulfilled') {
                     hop2Snippets.push(...outcome.value);
@@ -784,7 +872,17 @@ export class CollectCrossFileContextsService {
     //#endregion
 
     //#region Dedup & Rank
-    private deduplicateAndRank(
+    private async deduplicateAndRank(
+        snippets: CrossFileContextSnippet[],
+    ): Promise<CrossFileContextSnippet[]> {
+        return this.observabilityService.runInSpan(
+            'CollectCrossFileContextsService::deduplicateAndRank',
+            () => this._deduplicateAndRankInner(snippets),
+            { snippetCount: snippets.length },
+        );
+    }
+
+    private _deduplicateAndRankInner(
         snippets: CrossFileContextSnippet[],
     ): CrossFileContextSnippet[] {
         // Group by file
@@ -857,6 +955,33 @@ export class CollectCrossFileContextsService {
 
     //#region Sufficiency Loop
     private async runSufficiencyLoop(params: {
+        changedFiles: FileChange[];
+        plannerQueries: PlannerQuery[];
+        currentContexts: CrossFileContextSnippet[];
+        queryResultMap: Map<string, boolean>;
+        remoteCommands: RemoteCommands;
+        changedFilePaths: Set<string>;
+        repoRoot: string;
+        byokConfig?: BYOKConfig;
+        organizationAndTeamData: OrganizationAndTeamData;
+        prNumber: number;
+        language: string;
+    }): Promise<{
+        mergedContexts: CrossFileContextSnippet[];
+        additionalSearchCount: number;
+    } | null> {
+        return this.observabilityService.runInSpan(
+            'CollectCrossFileContextsService::runSufficiencyLoop',
+            () => this._runSufficiencyLoopInner(params),
+            {
+                organizationId: params.organizationAndTeamData?.organizationId,
+                prNumber: params.prNumber,
+                currentContextCount: params.currentContexts.length,
+            },
+        );
+    }
+
+    private async _runSufficiencyLoopInner(params: {
         changedFiles: FileChange[];
         plannerQueries: PlannerQuery[];
         currentContexts: CrossFileContextSnippet[];
@@ -978,7 +1103,7 @@ export class CollectCrossFileContextsService {
         );
 
         // Merge with existing contexts and re-deduplicate
-        const mergedContexts = this.deduplicateAndRank([
+        const mergedContexts = await this.deduplicateAndRank([
             ...currentContexts,
             ...expandedAdditional,
         ]);
@@ -1080,10 +1205,7 @@ export class CollectCrossFileContextsService {
                     role: PromptRole.USER,
                 })
                 .setTemperature(0)
-                .addTags([
-                    'crossFileContextSufficiency',
-                    `model:${provider}`,
-                ])
+                .addTags(['crossFileContextSufficiency', `model:${provider}`])
                 .setRunName(runName)
                 .addMetadata({
                     organizationAndTeamData,
@@ -1091,14 +1213,12 @@ export class CollectCrossFileContextsService {
                     runName,
                 });
 
-            const { result } =
-                await this.observabilityService.runLLMInSpan({
-                    spanName,
-                    runName,
-                    attrs: spanAttrs,
-                    exec: (callbacks) =>
-                        builder.addCallbacks(callbacks).execute(),
-                });
+            const { result } = await this.observabilityService.runLLMInSpan({
+                spanName,
+                runName,
+                attrs: spanAttrs,
+                exec: (callbacks) => builder.addCallbacks(callbacks).execute(),
+            });
 
             return (result as CrossFileContextSufficiencySchemaType) ?? null;
         } catch (error) {

@@ -49,6 +49,7 @@ export interface ICodeBaseConfigService {
         overrideConfig?: boolean;
         directoryPath?: string;
         defaultBranch?: string;
+        removeProperties?: boolean;
     }): Promise<KodusConfigFile | undefined>;
 
     getKodyFineTuningConfigParameter(

@@ -148,7 +148,16 @@ export function createBusinessRulesBlueprint(
             },
             fn: async (ctx): Promise<BusinessRulesContext> => {
                 const cachedPrBody = resolvePullRequestDescription(ctx);
+                const pullRequestNumber =
+                    ctx.prepareContext?.pullRequest?.pullRequestNumber ??
+                    ctx.prepareContext?.pullRequestNumber;
                 if (cachedPrBody.trim().length > 0) {
+                    return {
+                        ...ctx,
+                        prBody: cachedPrBody,
+                    };
+                }
+                if (typeof pullRequestNumber !== 'number') {
                     return {
                         ...ctx,
                         prBody: cachedPrBody,
@@ -176,6 +185,24 @@ export function createBusinessRulesBlueprint(
                 output: hasPrDiffSchema,
             },
             fn: async (ctx): Promise<BusinessRulesContext> => {
+                const preloadedPrDiff = readPrepareContextPrDiff(ctx);
+                if (preloadedPrDiff) {
+                    return {
+                        ...ctx,
+                        prDiff: preloadedPrDiff,
+                        analysisEligibility:
+                            ctx.taskQuality !== undefined
+                                ? buildBusinessLogicEligibility({
+                                      taskQuality: ctx.taskQuality,
+                                      taskContext: ctx.taskContext,
+                                      taskContextNormalized:
+                                          ctx.taskContextNormalized,
+                                      prDiff: preloadedPrDiff,
+                                  })
+                                : ctx.analysisEligibility,
+                    };
+                }
+
                 const diff = await tooling.fetchPullRequestDiff(ctx);
                 return {
                     ...ctx,
@@ -373,6 +400,11 @@ function appendCapabilityTraces(
     traces: CapabilityExecutionTrace[],
 ): CapabilityExecutionTrace[] {
     return [...(ctx.capabilityExecutionTrace ?? []), ...traces];
+}
+
+function readPrepareContextPrDiff(ctx: BusinessRulesContext): string {
+    const preloadedDiff = ctx.prepareContext?.prDiff;
+    return typeof preloadedDiff === 'string' ? preloadedDiff : '';
 }
 
 function formatNormalizedTaskContext(

@@ -55,6 +55,24 @@ describe('task-quality.rules', () => {
         );
     });
 
+    it('treats fetch-failure task payloads as weak context', () => {
+        expect(
+            buildBusinessLogicEligibility({
+                taskQuality: 'PARTIAL',
+                prDiff: 'diff --git a/file.ts b/file.ts',
+                taskContext:
+                    '{"error":true,"message":"Failed to fetch tenant info for cloud ID: abc Status: 404"}',
+            }),
+        ).toEqual(
+            expect.objectContaining({
+                mode: 'limitation_response',
+                reason: 'task_context_weak',
+                taskContextStatus: 'weak',
+                prDiffStatus: 'usable',
+            }),
+        );
+    });
+
     it('builds full-analysis eligibility when task context and diff are usable', () => {
         expect(
             buildBusinessLogicEligibility({

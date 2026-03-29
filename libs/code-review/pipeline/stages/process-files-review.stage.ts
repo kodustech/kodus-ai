@@ -58,6 +58,8 @@ interface FileProcessingResult {
     error?: PipelineError;
     reviewMode?: any;
     codeReviewModelUsed?: any;
+    durationMs?: number;
+    isTimeout?: boolean;
 }
 
 @Injectable()
@@ -145,6 +147,7 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                 // Release data no longer needed by subsequent stages
                 draft.crossFileContexts = undefined;
                 draft.sandboxHandle = undefined;
+                draft.sandboxCloneParams = undefined;
 
                 for (const file of draft.changedFiles) {
                     delete file.patchWithLinesStr;
@@ -175,13 +178,13 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                 );
             });
         } finally {
-            // Cleanup E2B sandbox after all files are processed
+            // Cleanup sandbox after all files are processed
             if (context.sandboxHandle?.cleanup) {
                 try {
                     await context.sandboxHandle.cleanup();
                 } catch (cleanupErr) {
                     this.logger.warn({
-                        message: 'E2B sandbox cleanup failed after file analysis',
+                        message: 'Sandbox cleanup failed after file analysis',
                         context: this.stageName,
                         error: cleanupErr,
                     });
@@ -534,6 +537,9 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
             fileMetadata.set(fileProcessingResult.filename, {
                 reviewMode: fileProcessingResult.reviewMode,
                 codeReviewModelUsed: fileProcessingResult.codeReviewModelUsed,
+                durationMs: fileProcessingResult.durationMs,
+                isTimeout: fileProcessingResult.isTimeout,
+                hasError: !!fileProcessingResult.error,
             });
         }
     }
@@ -680,6 +686,8 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                     fileAugmentations:
                         context.augmentationsByFile?.[file.filename] ?? {},
                     crossFileSnippets: filteredSnippets,
+                    documentationContext:
+                        context.documentationByFile?.[file.filename] || [],
                 };
 
                 return this.fileReviewContextPreparation.prepareFileContext(
@@ -720,6 +728,8 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
         const { reviewModeResponse } = baseContext;
         const { file, relevantContent, patchWithLinesStr, hasRelevantContent } =
             baseContext.fileChangeContext;
+
+        const startMs = Date.now();
 
         try {
             const context: AnalysisContext = {
@@ -822,6 +832,7 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                     reviewMode: lastReviewMode,
                     codeReviewModelUsed: lastCodeReviewModelUsed,
                     filename: file.filename,
+                    durationMs: Date.now() - startMs,
                 };
             }
 
@@ -845,7 +856,11 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                 context,
             );
 
-            return { ...finalResult, filename: file.filename };
+            return {
+                ...finalResult,
+                filename: file.filename,
+                durationMs: Date.now() - startMs,
+            };
         } catch (error) {
             this.logger.error({
                 message: `Error analyzing file ${file.filename}`,
@@ -862,20 +877,28 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
 
             const errorMessage =
                 error instanceof Error ? error.message : String(error);
+            const isTimeout = /timeout|timed out|ETIMEDOUT|abort/i.test(
+                errorMessage,
+            );
             const enrichedError = new Error(
-                `File analysis failed: ${errorMessage} (Check model config)`,
+                isTimeout
+                    ? `File analysis timed out after ${Math.round((Date.now() - startMs) / 1000)}s`
+                    : `File analysis failed: ${errorMessage} (Check model config)`,
             );
 
             return {
                 validSuggestionsToAnalyze: [],
                 discardedSuggestionsBySafeGuard: [],
                 filename: file.filename,
+                durationMs: Date.now() - startMs,
+                isTimeout,
                 error: {
                     stage: this.stageName,
                     substage: file.filename,
                     error: enrichedError,
                     metadata: {
                         filename: file.filename,
+                        isTimeout,
                     },
                 },
             };
@@ -1203,11 +1226,10 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
             getDataPipelineKodyFineTunning?.discardedSuggestions;
 
         const discardedSuggestionsByKodyFineTuning = discardedSuggestions.map(
-            (suggestion) => {
-                suggestion.priorityStatus =
-                    PriorityStatus.DISCARDED_BY_KODY_FINE_TUNING;
-                return suggestion;
-            },
+            (suggestion) => ({
+                ...suggestion,
+                priorityStatus: PriorityStatus.DISCARDED_BY_KODY_FINE_TUNING,
+            }),
         );
 
         return {
@@ -1270,6 +1292,8 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                 context?.codeReviewConfig?.kodyMemoryRules,
                 context?.externalPromptContext?.generation?.main?.references,
                 context?.externalPromptContext?.generation?.main?.error,
+                context?.sandboxCloneParams,
+                context?.documentationContext,
             );
 
         const safeguardLLMProvider =
@@ -1333,7 +1357,9 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                 context.fileContextMap,
             ),
             crossFileSnippets: context.crossFileContexts?.contexts,
+            documentationByFile: context.documentationByFile,
             remoteCommands: context.sandboxHandle?.remoteCommands,
+            sandboxCloneParams: context.sandboxCloneParams,
         };
     }
 

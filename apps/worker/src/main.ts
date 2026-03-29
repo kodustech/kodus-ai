@@ -1,8 +1,8 @@
+import './instrument';
 import 'source-map-support/register';
-import * as dotenv from 'dotenv';
-dotenv.config();
 
 import { initPyroscope } from '@libs/core/infrastructure/config/profiling/pyroscope';
+import { reportExceptionToSentry } from '@libs/core/infrastructure/config/log/sentry';
 
 // Initialize profiling early (before NestJS bootstrap)
 initPyroscope({ appName: 'kodus-worker' });
@@ -41,6 +41,10 @@ async function bootstrap() {
         logger.log('Initializing Worker...', 'Bootstrap');
 
         process.on('uncaughtException', (error) => {
+            void reportExceptionToSentry(error, {
+                context: 'GlobalExceptionHandler',
+                extra: { component: 'worker', type: 'uncaughtException' },
+            });
             if (logger) {
                 logger.error({
                     message: `Uncaught Exception: ${error.message}`,
@@ -56,14 +60,17 @@ async function bootstrap() {
         });
 
         process.on('unhandledRejection', (reason: any) => {
+            const error =
+                reason instanceof Error ? reason : new Error(String(reason));
+            void reportExceptionToSentry(error, {
+                context: 'GlobalExceptionHandler',
+                extra: { component: 'worker', type: 'unhandledRejection' },
+            });
             if (logger) {
                 logger.error({
                     message: `Unhandled Rejection: ${reason?.message || reason}`,
                     context: 'GlobalExceptionHandler',
-                    error:
-                        reason instanceof Error
-                            ? reason
-                            : new Error(String(reason)),
+                    error,
                 });
             } else {
                 console.error(
@@ -82,6 +89,10 @@ async function bootstrap() {
         handleNestJSWebpackHmr(appContext, module);
     } catch (e) {
         const error = e instanceof Error ? e : new Error(String(e));
+        void reportExceptionToSentry(error, {
+            context: 'Bootstrap',
+            extra: { component: 'worker', phase: 'bootstrap' },
+        });
         const message = `Bootstrap failed: ${error.message}`;
 
         if (logger) {

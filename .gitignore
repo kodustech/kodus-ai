@@ -31,10 +31,10 @@ packages/**/*.js
 
 # E2B sandbox secrets
 e2b-sandbox/config.json
-e2b-sandbox/iptables-rules.sh
 _*
 !apps/web/src/**/_*
 !test/__mocks__/
+!**/__tests__/
 
 # Logs
 logs

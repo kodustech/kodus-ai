@@ -3,7 +3,7 @@ import { useCodeReviewRouteParams } from "src/app/(app)/settings/_hooks";
 import { FormattedConfigLevel } from "src/app/(app)/settings/code-review/_types";
 import type { LiteralUnion } from "src/core/types";
 import { pathToApiUrl } from "src/core/utils/helpers";
-import { useSuspenseFetch } from "src/core/utils/reactQuery";
+import { useFetch, useSuspenseFetch } from "src/core/utils/reactQuery";
 
 import {
     FormattedCustomMessageEntity,
@@ -146,5 +146,32 @@ export const useSuspenseParentPullRequestMessages = () => {
     return useSuspensePullRequestMessagesFor(
         parentRepositoryId,
         parentDirectoryId,
+    );
+};
+
+export type PullRequestMessagesOverrideCountsByRepository = {
+    repositoryId: string;
+    repositoryOverrideCount: number;
+    directoryOverrideCounts: Array<{
+        directoryId: string;
+        overrideCount: number;
+    }>;
+};
+
+export const useCustomMessagesOverrideCountsByRepository = (
+    repositoryId: string,
+    enabled = true,
+) => {
+    return useFetch<PullRequestMessagesOverrideCountsByRepository>(
+        pathToApiUrl("/pull-request-messages/override-counts-by-repository"),
+        {
+            params: {
+                repositoryId,
+            },
+        },
+        enabled,
+        {
+            staleTime: 60_000,
+        },
     );
 };

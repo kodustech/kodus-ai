@@ -24,7 +24,7 @@ export default async function SubscriptionTabs() {
             valid: false,
             subscriptionStatus: "inactive" as const,
         })),
-        getAutoLicenseAssignmentConfig().catch(() => null),
+        getAutoLicenseAssignmentConfig().catch(() => undefined),
     ]);
 
     const organizationMembers = Array.isArray(organizationMembersRaw)

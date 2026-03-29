@@ -536,7 +536,21 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
         ctx: BusinessRulesContext,
     ): Promise<string> {
         if (result.needsMoreInfo) {
-            const limitationMessage = result.summary?.trim();
+            let limitationMessage = result.summary?.trim();
+            const diagnostic = result.missingInfo?.trim();
+            const shouldAppendDiagnostic =
+                (result.reason === 'analyzer_failure' ||
+                    result.reason === 'parser_fallback') &&
+                typeof diagnostic === 'string' &&
+                diagnostic.length > 0 &&
+                !limitationMessage?.includes(diagnostic);
+
+            if (shouldAppendDiagnostic) {
+                limitationMessage = limitationMessage
+                    ? `${limitationMessage}\n\n### Details\n- ${diagnostic}`
+                    : diagnostic;
+            }
+
             if (limitationMessage) {
                 return this.formatUserFacingMessage(
                     limitationMessage,

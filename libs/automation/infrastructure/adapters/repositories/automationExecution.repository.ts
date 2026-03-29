@@ -7,11 +7,12 @@ import {
     Repository,
 } from 'typeorm';
 
+import { createLogger } from '@kodus/flow';
+import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { IAutomationExecutionRepository } from '@libs/automation/domain/automationExecution/contracts/automation-execution.repository';
 import { AutomationExecutionEntity } from '@libs/automation/domain/automationExecution/entities/automation-execution.entity';
 import { IAutomationExecution } from '@libs/automation/domain/automationExecution/interfaces/automation-execution.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { createLogger } from '@kodus/flow';
 import {
     mapSimpleModelsToEntities,
     mapSimpleModelToEntity,
@@ -435,6 +436,84 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                 error,
                 metadata: { startDate, endDate, teamAutomationId, status },
             });
+        }
+    }
+
+    async findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId(
+        startDate: Date,
+        endDate: Date,
+        teamAutomationId: string,
+    ): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>> {
+        try {
+            const queryBuilder =
+                this.automationExecutionRepository.createQueryBuilder(
+                    'success',
+                );
+
+            const successRepositoryExpr = '"success"."repositoryId"';
+            const successPullRequestExpr = '"success"."pullRequestNumber"';
+
+            const inProgressRepositoryExpr = '"in_progress"."repositoryId"';
+            const inProgressPullRequestExpr = '"in_progress"."pullRequestNumber"';
+
+            const inProgressSubquery = queryBuilder
+                .subQuery()
+                .select('1')
+                .from(AutomationExecutionModel, 'in_progress')
+                .where('in_progress.team_automation_id = :teamAutomationId')
+                .andWhere('in_progress.status = :inProgressStatus')
+                .andWhere(`${inProgressRepositoryExpr} IS NOT NULL`)
+                .andWhere(`${inProgressPullRequestExpr} IS NOT NULL`)
+                .andWhere(
+                    `${inProgressRepositoryExpr} = ${successRepositoryExpr}`,
+                )
+                .andWhere(
+                    `${inProgressPullRequestExpr} = ${successPullRequestExpr}`,
+                )
+                .getQuery();
+
+            const result = await queryBuilder
+                .select(successRepositoryExpr, 'repositoryId')
+                .addSelect(successPullRequestExpr, 'pullRequestNumber')
+                .where('success.createdAt BETWEEN :startDate AND :endDate')
+                .andWhere('success.team_automation_id = :teamAutomationId')
+                .andWhere('success.status = :successStatus')
+                .andWhere(`${successRepositoryExpr} IS NOT NULL`)
+                .andWhere(`${successPullRequestExpr} IS NOT NULL`)
+                .andWhere(`NOT EXISTS ${inProgressSubquery}`)
+                .groupBy(successRepositoryExpr)
+                .addGroupBy(successPullRequestExpr)
+                .setParameters({
+                    startDate,
+                    endDate,
+                    teamAutomationId,
+                    successStatus: AutomationStatus.SUCCESS,
+                    inProgressStatus: AutomationStatus.IN_PROGRESS,
+                })
+                .getRawMany<{
+                    repositoryId: string;
+                    pullRequestNumber: number | string;
+                }>();
+
+            return (result ?? [])
+                .map((item) => ({
+                    repositoryId: item.repositoryId,
+                    pullRequestNumber: Number(item.pullRequestNumber),
+                }))
+                .filter(
+                    (item) =>
+                        !!item.repositoryId &&
+                        Number.isInteger(item.pullRequestNumber),
+                );
+        } catch (error) {
+            this.logger.error({
+                message:
+                    'Failed to find eligible pull request refs for approval by period and team automation id',
+                context: AutomationExecutionRepository.name,
+                error,
+                metadata: { startDate, endDate, teamAutomationId },
+            });
+            return [];
         }
     }
 

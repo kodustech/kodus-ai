@@ -29,6 +29,12 @@ export default {
         // which Jest cannot parse. Map to a stub to prevent ESM parse errors.
         '^e2b$': '<rootDir>/test/__mocks__/e2b.ts',
 
+        // Web app aliases
+        '^@enums$': '<rootDir>/apps/web/src/core/enums',
+        '^@services$': '<rootDir>/apps/web/src/lib/services',
+        '^@services/(.*)$': '<rootDir>/apps/web/src/lib/services/$1',
+        '^src/(.*)$': '<rootDir>/apps/web/src/$1',
+
         // Shared domain enums
         '^@/shared/domain/enums/(.*)$': '<rootDir>/libs/core/domain/enums/$1',
 
@@ -186,7 +192,12 @@ export default {
     transformIgnorePatterns: [
         'node_modules/(?!(@octokit|universal-user-agent|p-limit|@kodus/flow|uuid|universal-github-app-jwt|before-after-hook|yocto-queue)/)',
     ],
-    modulePathIgnorePatterns: ['<rootDir>/.yalc', '<rootDir>/.worktrees'],
+    modulePathIgnorePatterns: [
+        '<rootDir>/dist',
+        '<rootDir>/.yalc',
+        '<rootDir>/.worktrees',
+        '<rootDir>/worktrees',
+    ],
     // Resolve ESM-style .js imports to .ts files in packages
     resolver: '<rootDir>/jest-resolver.cjs',
 };

@@ -18,7 +18,11 @@ export class ResyncRulesFromIdeUseCase {
         },
     ) {}
 
-    async execute(params: { teamId: string; repositoriesIds: string[] }) {
+    async execute(params: {
+        teamId: string;
+        repositoriesIds: string[];
+        path?: string;
+    }) {
         const organizationAndTeamData: OrganizationAndTeamData = {
             organizationId: this.request.user?.organization?.uuid,
             teamId: params.teamId,
@@ -29,7 +33,9 @@ export class ResyncRulesFromIdeUseCase {
                 organizationAndTeamData,
             });
 
-            if (!Array.isArray(repos) || repos.length === 0) return;
+            if (!Array.isArray(repos) || repos.length === 0) {
+                return;
+            }
 
             const filtered = repos
                 .filter(
@@ -54,6 +60,7 @@ export class ResyncRulesFromIdeUseCase {
                             `${(repo as any)?.organizationName || ''}/${repo.name}`,
                         defaultBranch: (repo as any)?.default_branch,
                     },
+                    path: params.path,
                 });
             }
         } catch (error) {

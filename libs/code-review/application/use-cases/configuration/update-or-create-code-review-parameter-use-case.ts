@@ -1,5 +1,5 @@
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
-import { Inject, Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 import { produce } from 'immer';
@@ -7,56 +7,54 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { createLogger } from '@kodus/flow';
 import {
-    IParametersService,
-    PARAMETERS_SERVICE_TOKEN,
-} from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
-import {
-    IIntegrationConfigService,
-    INTEGRATION_CONFIG_SERVICE_TOKEN,
-} from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
-import {
-    CODE_REVIEW_SETTINGS_LOG_SERVICE_TOKEN,
-    ICodeReviewSettingsLogService,
-} from '@libs/ee/codeReviewSettingsLog/domain/contracts/codeReviewSettingsLog.service.contract';
-import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
-import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
-import {
-    ContextDetectionField,
-    ContextReferenceDetectionService,
-} from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
-import {
     IPromptExternalReferenceManagerService,
     PROMPT_EXTERNAL_REFERENCE_MANAGER_SERVICE_TOKEN,
 } from '@libs/ai-engine/domain/prompt/contracts/promptExternalReferenceManager.contract';
-import { ParametersEntity } from '@libs/organization/domain/parameters/entities/parameters.entity';
-import { IntegrationConfigKey, ParametersKey } from '@libs/core/domain/enums';
-import {
-    Action,
-    ResourceType,
-} from '@libs/identity/domain/permissions/enums/permissions.enum';
-import {
-    CodeReviewParameter,
-    DirectoryCodeReviewConfig,
-    ICodeRepository,
-    RepositoryCodeReviewConfig,
-} from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
-import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
-import { deepDifference, deepMerge } from '@libs/common/utils/deep';
-import {
-    ActionType,
-    ConfigLevel,
-} from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
 import { PromptSourceType } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
-import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
 import {
     CODE_REVIEW_CONTEXT_PATTERNS,
     extractDependenciesFromValue,
     pathToKey,
     resolveSourceTypeFromPath,
 } from '@libs/ai-engine/infrastructure/adapters/services/context/code-review-context.utils';
+import {
+    ContextDetectionField,
+    ContextReferenceDetectionService,
+} from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
+import { deepDifference, deepMerge } from '@libs/common/utils/deep';
+import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
+import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
+import { IntegrationConfigKey, ParametersKey } from '@libs/core/domain/enums';
 import { CodeReviewVersion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    CodeReviewParameter,
+    DirectoryCodeReviewConfig,
+    ICodeRepository,
+    RepositoryCodeReviewConfig,
+} from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
+import {
+    ActionType,
+    ConfigLevel,
+} from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
+import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
+import {
+    Action,
+    ResourceType,
+} from '@libs/identity/domain/permissions/enums/permissions.enum';
+import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import {
+    IIntegrationConfigService,
+    INTEGRATION_CONFIG_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
+import {
+    IParametersService,
+    PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import { ParametersEntity } from '@libs/organization/domain/parameters/entities/parameters.entity';
 import { CreateOrUpdateCodeReviewParameterDto } from '@libs/organization/dtos/create-or-update-code-review-parameter.dto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class UpdateOrCreateCodeReviewParameterUseCase {
@@ -73,8 +71,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
         private readonly integrationConfigService: IIntegrationConfigService,
 
-        @Inject(CODE_REVIEW_SETTINGS_LOG_SERVICE_TOKEN)
-        private readonly codeReviewSettingsLogService: ICodeReviewSettingsLogService,
+        private readonly eventEmitter: EventEmitter2,
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
@@ -88,7 +85,15 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     ) {}
 
     async execute(
-        body: CreateOrUpdateCodeReviewParameterDto,
+        body: CreateOrUpdateCodeReviewParameterDto & {
+            actor?: {
+                source?: 'cli' | 'web' | 'sync';
+                organizationId?: string;
+                userId?: string;
+                userEmail?: string;
+            };
+            skipAuthorization?: boolean;
+        },
     ): Promise<ParametersEntity<ParametersKey.CODE_REVIEW_CONFIG> | boolean> {
         try {
             const { organizationAndTeamData, configValue, repositoryId } = body;
@@ -101,15 +106,23 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
 
             if (!organizationAndTeamData.organizationId) {
                 organizationAndTeamData.organizationId =
-                    this.request.user.organization.uuid;
+                    body.actor?.organizationId ??
+                    this.request?.user?.organization?.uuid;
             }
 
-            await this.authorizationService.ensure({
-                user: this.request.user,
-                action: Action.Create,
-                resource: ResourceType.CodeReviewSettings,
-                repoIds: [repositoryId],
-            });
+            await this.ensureManualChangesAllowed(
+                organizationAndTeamData,
+                body.actor?.source,
+            );
+
+            if (!body.skipAuthorization) {
+                await this.authorizationService.ensure({
+                    user: this.request?.user,
+                    action: Action.Create,
+                    resource: ResourceType.CodeReviewSettings,
+                    repoIds: [repositoryId],
+                });
+            }
 
             const codeReviewConfigs = await this.getCodeReviewConfigs(
                 organizationAndTeamData,
@@ -184,14 +197,41 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 organizationAndTeamData,
                 codeReviewConfigs,
                 configValue,
+                body.actor,
                 repositoryId,
                 directoryId,
             );
 
             return result;
         } catch (error) {
+            if (error instanceof ForbiddenException) {
+                throw error;
+            }
+
             this.handleError(error, body);
-            throw new Error('Error creating or updating parameters');
+            throw new Error('Error creating or updating parameters', {
+                cause: error,
+            });
+        }
+    }
+
+    private async ensureManualChangesAllowed(
+        organizationAndTeamData: OrganizationAndTeamData,
+        source?: 'cli' | 'web' | 'sync',
+    ): Promise<void> {
+        if (source === 'sync') {
+            return;
+        }
+
+        const centralizedConfig = await this.parametersService.findByKey(
+            ParametersKey.CENTRALIZED_CONFIG,
+            organizationAndTeamData,
+        );
+
+        if (centralizedConfig?.configValue?.enabled === true) {
+            throw new ForbiddenException(
+                'Code review settings are locked while centralized configuration is enabled.',
+            );
         }
     }
 
@@ -279,6 +319,12 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         organizationAndTeamData: OrganizationAndTeamData,
         codeReviewConfigs: CodeReviewParameter,
         newConfigValue: CreateOrUpdateCodeReviewParameterDto['configValue'],
+        actor?: {
+            source?: 'cli' | 'web' | 'sync';
+            organizationId?: string;
+            userId?: string;
+            userEmail?: string;
+        },
         repositoryId?: string,
         directoryId?: string,
     ) {
@@ -289,20 +335,23 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             directoryId,
         );
 
-        let oldConfig: CreateOrUpdateCodeReviewParameterDto['configValue'] = {};
+        let oldConfig: CreateOrUpdateCodeReviewParameterDto['configValue'];
         let level: ConfigLevel;
         let repository: RepositoryCodeReviewConfig | undefined;
         let directory: DirectoryCodeReviewConfig | undefined;
+        let isCreation = false;
 
         if (directoryId && repositoryId) {
             level = ConfigLevel.DIRECTORY;
             repository = resolver.findRepository(repositoryId);
             directory = resolver.findDirectory(repository, directoryId);
             oldConfig = directory.configs ?? {};
+            isCreation = !directory.isSelected;
         } else if (repositoryId) {
             level = ConfigLevel.REPOSITORY;
             repository = resolver.findRepository(repositoryId);
             oldConfig = repository.configs ?? {};
+            isCreation = !repository.isSelected;
         } else {
             level = ConfigLevel.GLOBAL;
             oldConfig = codeReviewConfigs.configs ?? {};
@@ -342,13 +391,14 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         );
 
         await this.logConfigUpdate({
+            actor,
             organizationAndTeamData,
             oldConfig,
-            newConfig: newConfigValue,
+            newConfig: newDelta,
             level,
-            sourceFunctionName: `handleConfigUpdate[${level}]`,
             repository,
             directory,
+            isCreation,
         });
 
         return true;
@@ -629,53 +679,59 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     }
 
     private async logConfigUpdate(options: {
+        actor?: {
+            source?: 'cli' | 'web' | 'sync';
+            organizationId?: string;
+            userId?: string;
+            userEmail?: string;
+        };
         organizationAndTeamData: OrganizationAndTeamData;
         oldConfig: CreateOrUpdateCodeReviewParameterDto['configValue'];
         newConfig: CreateOrUpdateCodeReviewParameterDto['configValue'];
         level: ConfigLevel;
-        sourceFunctionName: string;
         repository?: RepositoryCodeReviewConfig;
         directory?: DirectoryCodeReviewConfig;
+        isCreation?: boolean;
     }) {
         const {
             organizationAndTeamData,
             oldConfig,
             newConfig,
             level,
-            sourceFunctionName,
             repository,
             directory,
+            isCreation,
         } = options;
 
         try {
-            const logPayload: any = {
-                organizationAndTeamData,
+            const actor = options.actor ?? {
+                source: 'web',
+                organizationId: this.request?.user?.organization?.uuid,
+                userId: this.request?.user?.uuid,
+                userEmail: this.request?.user?.email,
+            };
+
+            if (!actor.organizationId || !actor.userId || !actor.userEmail) {
+                return;
+            }
+
+            this.eventEmitter.emit(AuditLogEvents.CODE_REVIEW_CONFIG, {
+                organizationAndTeamData: {
+                    ...organizationAndTeamData,
+                    organizationId: actor.organizationId,
+                },
                 userInfo: {
-                    userId: this.request.user.uuid,
-                    userEmail: this.request.user.email,
+                    userId: actor.userId,
+                    userEmail: actor.userEmail,
                 },
                 oldConfig,
                 newConfig,
                 actionType: ActionType.EDIT,
                 configLevel: level,
-            };
-
-            if (repository) {
-                logPayload.repository = {
-                    id: repository.id,
-                    name: repository.name,
-                };
-            }
-            if (directory) {
-                logPayload.directory = {
-                    id: directory.id,
-                    path: directory.path,
-                };
-            }
-
-            await this.codeReviewSettingsLogService.registerCodeReviewConfigLog(
-                logPayload,
-            );
+                repository,
+                directory,
+                isCreation,
+            });
         } catch (error) {
             this.logger.error({
                 message: `Error saving code review settings log for ${level.toLowerCase()} level`,
@@ -683,7 +739,6 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 context: UpdateOrCreateCodeReviewParameterUseCase.name,
                 metadata: {
                     organizationAndTeamData: organizationAndTeamData,
-                    functionName: sourceFunctionName,
                 },
             });
         }

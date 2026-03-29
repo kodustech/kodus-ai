@@ -14,6 +14,7 @@ import { PULL_REQUESTS_SERVICE_TOKEN } from '@/platformData/domain/pullRequests/
 import { DeliveryStatus } from '@/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { PriorityStatus } from '@/platformData/domain/pullRequests/enums/priorityStatus.enum';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { Test, TestingModule } from '@nestjs/testing';
 
 describe('SuggestionService', () => {
@@ -27,6 +28,7 @@ describe('SuggestionService', () => {
 
     const mockPullRequestService = {
         updateSuggestion: jest.fn(),
+        findByNumberAndRepositoryName: jest.fn(),
     };
 
     const mockCommentManagerService = {
@@ -247,6 +249,134 @@ describe('SuggestionService', () => {
             expect(discarded).toHaveLength(2);
             expect(discarded.map((s) => s.id)).toContain('3');
             expect(discarded.map((s) => s.id)).toContain('4');
+        });
+    });
+
+    // ─── Frozen object safety (Zod v4 regression guard) ──────────────────
+    // Zod v4 calls Object.freeze() on parsed objects, making them
+    // non-extensible. These tests guarantee that our priority/delivery
+    // status assignment never mutates the original objects in-place.
+
+    describe('frozen object safety — filterSuggestionsBySeverityLevel', () => {
+        it('should not throw when suggestions are frozen (Object.freeze)', async () => {
+            const frozenSuggestions = [
+                Object.freeze({
+                    id: '1',
+                    severity: 'critical',
+                    label: 'security',
+                }),
+                Object.freeze({
+                    id: '2',
+                    severity: 'low',
+                    label: 'code_style',
+                }),
+            ];
+
+            const result = await service.filterSuggestionsBySeverityLevel(
+                frozenSuggestions,
+                'high',
+                mockOrganizationAndTeamData as any,
+                99,
+            );
+
+            expect(result).toHaveLength(2);
+            expect(result[0].priorityStatus).toBe(PriorityStatus.PRIORITIZED);
+            expect(result[1].priorityStatus).toBe(
+                PriorityStatus.DISCARDED_BY_SEVERITY,
+            );
+        });
+
+        it('should not mutate the original frozen objects', async () => {
+            const original = Object.freeze({ id: '1', severity: 'critical' });
+
+            const result = await service.filterSuggestionsBySeverityLevel(
+                [original],
+                'critical',
+                mockOrganizationAndTeamData as any,
+                99,
+            );
+
+            // Result should be a new object, not the same reference
+            expect(result[0]).not.toBe(original);
+            // Original must remain unchanged (no priorityStatus property)
+            expect((original as any).priorityStatus).toBeUndefined();
+        });
+    });
+
+    describe('frozen object safety — addRelatedSuggestionsFromPrioritizedParents', () => {
+        it('should not throw when clustered suggestions are frozen', async () => {
+            const parent = Object.freeze({
+                id: 'parent-1',
+                severity: 'high',
+                priorityStatus: PriorityStatus.PRIORITIZED,
+            });
+
+            const related = Object.freeze({
+                id: 'related-1',
+                severity: 'medium',
+                clusteringInformation: {
+                    type: ClusteringType.RELATED,
+                    parentSuggestionId: 'parent-1',
+                },
+            });
+
+            const result =
+                await service.addRelatedSuggestionsFromPrioritizedParents(
+                    [related] as any,
+                    [parent] as any,
+                );
+
+            expect(result).toHaveLength(2);
+            const relatedResult = result.find((s) => s.id === 'related-1');
+            expect(relatedResult?.priorityStatus).toBe(
+                PriorityStatus.PRIORITIZED_BY_CLUSTERING,
+            );
+        });
+
+        it('should not mutate the original frozen related suggestion', async () => {
+            const parent = {
+                id: 'p1',
+                priorityStatus: PriorityStatus.PRIORITIZED,
+            };
+            const related = Object.freeze({
+                id: 'r1',
+                clusteringInformation: {
+                    type: ClusteringType.RELATED,
+                    parentSuggestionId: 'p1',
+                },
+            });
+
+            const result =
+                await service.addRelatedSuggestionsFromPrioritizedParents(
+                    [related] as any,
+                    [parent] as any,
+                );
+
+            const relatedResult = result.find((s) => s.id === 'r1');
+            expect(relatedResult).not.toBe(related);
+            expect((related as any).priorityStatus).toBeUndefined();
+        });
+    });
+
+    describe('frozen object safety — prioritizeSuggestionsBySeverityLimits', () => {
+        it('should not throw when suggestions are frozen', async () => {
+            const frozenSuggestions = [
+                Object.freeze({
+                    id: '1',
+                    severity: 'critical',
+                    rankScore: 100,
+                }),
+                Object.freeze({ id: '2', severity: 'high', rankScore: 80 }),
+            ];
+
+            const result = await service.prioritizeSuggestionsBySeverityLimits(
+                mockOrganizationAndTeamData as any,
+                99,
+                frozenSuggestions,
+                { critical: 1, high: 1, medium: 0, low: 0 },
+            );
+
+            expect(result).toHaveLength(2);
         });
     });
 
@@ -1548,6 +1678,131 @@ __new hunk__
             expect(result.repriorizedSuggestions).toHaveLength(2);
             expect(result.filteredDiscardedSuggestions).toHaveLength(1);
             expect(result.filteredDiscardedSuggestions[0].id).toBe('s3');
+        });
+    });
+
+    describe('resolveImplementedSuggestionsOnPlatform', () => {
+        it('should NOT call markReviewCommentAsResolved for already resolved comments', async () => {
+            const mockPr = {
+                number: 42,
+                files: [
+                    {
+                        suggestions: [
+                            {
+                                comment: { id: 100 },
+                                implementationStatus:
+                                    ImplementationStatus.IMPLEMENTED,
+                                deliveryStatus: DeliveryStatus.SENT,
+                            },
+                            {
+                                comment: { id: 200 },
+                                implementationStatus:
+                                    ImplementationStatus.IMPLEMENTED,
+                                deliveryStatus: DeliveryStatus.SENT,
+                            },
+                        ],
+                    },
+                ],
+            };
+
+            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
+                mockPr,
+            );
+
+            // Comment 100 is already resolved, comment 200 is not
+            mockCodeManagementService.getPullRequestReviewComments.mockResolvedValue(
+                [
+                    {
+                        id: 100,
+                        threadId: 't-100',
+                        body: 'suggestion 1',
+                        isResolved: true,
+                    },
+                    {
+                        id: 200,
+                        threadId: 't-200',
+                        body: 'suggestion 2',
+                        isResolved: false,
+                    },
+                ],
+            );
+
+            mockCodeManagementService.markReviewCommentAsResolved.mockResolvedValue(
+                undefined,
+            );
+
+            await service.resolveImplementedSuggestionsOnPlatform({
+                organizationAndTeamData: mockOrganizationAndTeamData as any,
+                repository: { id: 'repo-1', name: 'test-repo' },
+                prNumber: 42,
+                platformType: PlatformType.GITLAB,
+            });
+
+            // Should only resolve the unresolved comment (id: 200)
+            expect(
+                mockCodeManagementService.markReviewCommentAsResolved,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                mockCodeManagementService.markReviewCommentAsResolved,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    commentId: 't-200',
+                }),
+            );
+        });
+    });
+
+    describe('filterActiveReviewSuggestions', () => {
+        it('should only keep active GitHub review thread suggestions from the current iteration', async () => {
+            const suggestions = [
+                {
+                    id: 'old-suggestion',
+                    comment: { id: 101, pullRequestReviewId: 1001 },
+                },
+                {
+                    id: 'current-suggestion',
+                    comment: { id: 202, pullRequestReviewId: 1002 },
+                },
+            ];
+
+            mockCodeManagementService.getPullRequestReviewThreads.mockResolvedValue(
+                [
+                    {
+                        fullDatabaseId: '101',
+                        threadId: 'thread-1',
+                        body: 'old',
+                        isResolved: true,
+                        isOutdated: true,
+                    },
+                    {
+                        fullDatabaseId: '202',
+                        threadId: 'thread-2',
+                        body: 'current',
+                        isResolved: false,
+                        isOutdated: false,
+                    },
+                ],
+            );
+
+            const result = await service.filterActiveReviewSuggestions({
+                organizationAndTeamData: mockOrganizationAndTeamData as any,
+                repository: { id: 'repo-1', name: 'test-repo' },
+                prNumber: 42,
+                platformType: PlatformType.GITHUB,
+                suggestions,
+            });
+
+            expect(result).toEqual([suggestions[1]]);
+            expect(
+                mockCodeManagementService.getPullRequestReviewThreads,
+            ).toHaveBeenCalledWith(
+                {
+                    organizationAndTeamData: mockOrganizationAndTeamData,
+                    repository: { id: 'repo-1', name: 'test-repo' },
+                    prNumber: 42,
+                },
+                PlatformType.GITHUB,
+            );
         });
     });
 });

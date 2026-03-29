@@ -23,7 +23,7 @@ export const analyticsFetch = async <Data>(
     }
 
     let hostName = process.env.WEB_ANALYTICS_HOSTNAME;
-    let port = process.env.WEB_PORT_ANALYTICS;
+    const port = process.env.WEB_PORT_ANALYTICS;
 
     // if 'true' we are in the server and hostname is not a domain
     if (isServerSide && hostName === "localhost") {

@@ -106,10 +106,11 @@ describe('ChatWithKodyFromGitUseCase', () => {
                         '@kody -v business-logic validate this change',
                     pullRequestDescription: 'PR description body',
                     platformType: PlatformType.GITHUB,
-                    repository: {
+                    repository: expect.objectContaining({
                         id: 'repo-1',
                         name: 'kodus-extension',
-                    },
+                        owner: 'kodus',
+                    }),
                     pullRequest: {
                         pullRequestNumber: 132,
                         headRef: 'feature/improve-refs',
@@ -166,6 +167,10 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 prepareContext: expect.objectContaining({
                     userQuestion: `@kody -v business-logic ${jiraUrl}`,
                     pullRequestDescription: 'PR description body',
+                    repository: expect.objectContaining({
+                        name: 'kodus-extension',
+                        owner: 'kodus',
+                    }),
                     pullRequest: expect.objectContaining({
                         pullRequestNumber: 132,
                     }),

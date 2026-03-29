@@ -28,4 +28,13 @@ export const PARAMETERS_PATHS = {
     APPLY_CODE_REVIEW_PRESET: pathToApiUrl(
         "/parameters/apply-code-review-preset",
     ),
+    CENTRALIZED_CONFIG_SYNC: pathToApiUrl(
+        "/parameters/centralized-config-sync",
+    ),
+    CENTRALIZED_CONFIG_INIT: pathToApiUrl(
+        "/parameters/centralized-config-init",
+    ),
+    CENTRALIZED_CONFIG_DOWNLOAD: pathToApiUrl(
+        "/parameters/centralized-config-download",
+    ),
 } as const;

@@ -38,6 +38,7 @@ export class WebhookHealthController {
 
             const response = {
                 status: allHealthy ? 'ok' : 'degraded',
+                version: process.env.RELEASE_VERSION || 'unknown',
                 timestamp: new Date().toISOString(),
                 checks,
             };
@@ -50,6 +51,7 @@ export class WebhookHealthController {
         } catch (error) {
             const response = {
                 status: 'error',
+                version: process.env.RELEASE_VERSION || 'unknown',
                 error: `Health check failed: ${error instanceof Error ? error.message : String(error)}`,
                 timestamp: new Date().toISOString(),
             };
@@ -62,6 +64,7 @@ export class WebhookHealthController {
     simpleCheck(@Res() res: Response) {
         return res.status(HttpStatus.OK).json({
             status: 'ok',
+            version: process.env.RELEASE_VERSION || 'unknown',
             timestamp: new Date().toISOString(),
             message: 'Webhook handler is running',
             uptime: Math.floor(process.uptime()),

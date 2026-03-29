@@ -65,6 +65,14 @@ export const OauthOrTokenModal = (props: Props) => {
         props.onGoToOauth,
     );
 
+    const selfHostedLabel =
+        props.integration === "github" ? "GitHub Enterprise URL" : "Gitlab URL";
+
+    const selfHostedPlaceholder =
+        props.integration === "github"
+            ? "https://github.your-company.com"
+            : "Enter the URL of your authentication server";
+
     return (
         <Dialog open onOpenChange={() => magicModal.hide()}>
             <DialogContent>
@@ -146,7 +154,7 @@ export const OauthOrTokenModal = (props: Props) => {
                                         <CardHeader>
                                             <FormControl.Root>
                                                 <FormControl.Label>
-                                                    Gitlab URL
+                                                    {selfHostedLabel}
                                                 </FormControl.Label>
 
                                                 <FormControl.Input>
@@ -157,7 +165,9 @@ export const OauthOrTokenModal = (props: Props) => {
                                                                 e.target.value,
                                                             )
                                                         }
-                                                        placeholder="Enter the URL of your authentication server"
+                                                        placeholder={
+                                                            selfHostedPlaceholder
+                                                        }
                                                     />
                                                 </FormControl.Input>
                                             </FormControl.Root>

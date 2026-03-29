@@ -72,8 +72,10 @@ const codeManagementPlatforms = {
 export default function CardsGroup({
     team,
     connections: connectionsBack,
+    githubEnterpriseServerPatEnabled,
 }: {
     team: ReturnType<typeof useAllTeams>["teams"][number];
+    githubEnterpriseServerPatEnabled: boolean;
     connections: {
         platformName: string;
         isSetupComplete: boolean;
@@ -307,7 +309,11 @@ export default function CardsGroup({
                         integrationKey,
                     });
                 }}
-                showSelfHosted={integrationKey === INTEGRATIONS_KEY.GITLAB}
+                showSelfHosted={
+                    integrationKey === INTEGRATIONS_KEY.GITLAB ||
+                    (integrationKey === INTEGRATIONS_KEY.GITHUB &&
+                        githubEnterpriseServerPatEnabled)
+                }
             />
         ));
     };

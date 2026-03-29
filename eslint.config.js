@@ -51,6 +51,7 @@ module.exports = tseslint.config(
         ignores: [
             '**/node_modules/**',
             '**/dist/**',
+            'apps/web/**',
             '.eslintrc.js',
             'eslint.config.js',
             'webpack.config.js',

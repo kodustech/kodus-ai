@@ -91,9 +91,12 @@ export default function CustomizeTeamPage() {
         { params: { teamId } },
         !!teamId,
         {
-            refetchInterval: 5000,
-            refetchIntervalInBackground: true,
-            staleTime: 0,
+            refetchInterval: (data) => {
+                const rules = Array.isArray(data) ? data : [];
+                const hasValidRules = rules.some((rule) => rule?.uuid);
+                return hasValidRules ? false : 15000;
+            },
+            staleTime: 10000,
         },
     );
 

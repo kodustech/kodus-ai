@@ -155,23 +155,15 @@ export class ObservabilityService implements OnModuleInit {
 
             try {
                 await obs.initialize();
-
-                this.logger.log({
-                    message: 'Observability initialized',
-                    context: ObservabilityService.name,
-                    metadata: {
-                        config,
-                        options,
-                    },
-                });
             } catch (error) {
                 this.logger.error({
                     message: 'Error initializing observability',
                     context: ObservabilityService.name,
                     error,
                     metadata: {
-                        config,
-                        options,
+                        serviceName: options.serviceName,
+                        host: config.host,
+                        database: config.database,
                     },
                 });
             }

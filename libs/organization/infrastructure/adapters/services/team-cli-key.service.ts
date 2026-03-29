@@ -12,7 +12,12 @@ import {
     ValidateKeyResult,
 } from '@libs/organization/domain/team-cli-key/contracts/team-cli-key.service.contract';
 import { TeamCliKeyEntity } from '@libs/organization/domain/team-cli-key/entities/team-cli-key.entity';
-import { ITeamCliKey } from '@libs/organization/domain/team-cli-key/interfaces/team-cli-key.interface';
+import {
+    ITeamCliKey,
+    ITeamCliKeyConfig,
+    TEAM_CLI_KEY_CAPABILITIES,
+    TeamCliKeyCapability,
+} from '@libs/organization/domain/team-cli-key/interfaces/team-cli-key.interface';
 
 @Injectable()
 export class TeamCliKeyService implements ITeamCliKeyService {
@@ -27,6 +32,7 @@ export class TeamCliKeyService implements ITeamCliKeyService {
         teamId: string,
         name: string,
         createdByUserId: string,
+        config?: ITeamCliKeyConfig,
     ): Promise<string> {
         // Generate random key
         const rawKey = crypto.randomBytes(32).toString('base64url');
@@ -47,6 +53,7 @@ export class TeamCliKeyService implements ITeamCliKeyService {
             keyHash,
             keyPrefix,
             active: true,
+            config: this.normalizeConfig(config),
             team: { uuid: teamId },
             createdBy: { uuid: createdByUserId },
         });
@@ -104,6 +111,7 @@ export class TeamCliKeyService implements ITeamCliKeyService {
             return {
                 team: keyRecord.team,
                 organization: keyRecord.team.organization,
+                config: this.normalizeConfig(keyRecord.config),
             };
         } catch (error) {
             this.logger.error({
@@ -149,10 +157,40 @@ export class TeamCliKeyService implements ITeamCliKeyService {
         filter: Partial<ITeamCliKey>,
         data: Partial<ITeamCliKey>,
     ): Promise<TeamCliKeyEntity | undefined> {
-        return this.teamCliKeyRepository.update(filter, data);
+        const normalizedData: Partial<ITeamCliKey> = {
+            ...data,
+        };
+
+        if (data.config !== undefined) {
+            normalizedData.config = this.normalizeConfig(data.config);
+        }
+
+        return this.teamCliKeyRepository.update(filter, normalizedData);
     }
 
     delete(uuid: string): Promise<void> {
         return this.teamCliKeyRepository.delete(uuid);
+    }
+
+    private normalizeConfig(config?: ITeamCliKeyConfig): ITeamCliKeyConfig {
+        const legacyConfig = config as
+            | (ITeamCliKeyConfig & {
+                  permissions?: {
+                      configureRepositories?: boolean;
+                  };
+              })
+            | undefined;
+
+        const capabilities = new Set<TeamCliKeyCapability>(
+            config?.capabilities ?? [],
+        );
+
+        if (legacyConfig?.permissions?.configureRepositories) {
+            capabilities.add(TEAM_CLI_KEY_CAPABILITIES.CONFIG_REPO_MANAGE);
+        }
+
+        return {
+            capabilities: Array.from(capabilities),
+        };
     }
 }

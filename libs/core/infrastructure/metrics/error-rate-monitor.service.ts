@@ -7,6 +7,11 @@ import { createLogger } from '@kodus/flow';
 import { MetricsEventModel } from './schemas/metrics-event.schema';
 import { IncidentManagerService } from '../incident/incident-manager.service';
 import { MetricsCollectorService } from './metrics-collector.service';
+import {
+    DistributedLock,
+    DistributedLockService,
+} from '@libs/core/workflow/infrastructure/distributed-lock.service';
+import { buildHeartbeatContext } from '../incident/heartbeat-context.util';
 
 @Injectable()
 export class ErrorRateMonitorService {
@@ -22,6 +27,7 @@ export class ErrorRateMonitorService {
         private readonly incidentManager: IncidentManagerService,
         private readonly metricsCollector: MetricsCollectorService,
         private readonly configService: ConfigService,
+        private readonly distributedLockService: DistributedLockService,
     ) {
         this.thresholdPercent = this.configService.get<number>(
             'METRICS_ERROR_RATE_THRESHOLD_PERCENT',
@@ -39,8 +45,16 @@ export class ErrorRateMonitorService {
 
     @Cron(CronExpression.EVERY_MINUTE)
     async checkErrorRate(): Promise<void> {
+        const lock = await this.acquireCronLock();
+        if (!lock) {
+            return;
+        }
+
         try {
-            const since = new Date(Date.now() - this.windowMinutes * 60 * 1000);
+            const now = new Date();
+            const since = new Date(
+                now.getTime() - this.windowMinutes * 60 * 1000,
+            );
 
             const [errorCounts, requestCounts] = await Promise.all([
                 this.metricsModel.countDocuments({
@@ -70,9 +84,18 @@ export class ErrorRateMonitorService {
             );
 
             if (errorRate >= this.thresholdPercent) {
+                const context = this.buildContext({
+                    monitor: 'error_rate',
+                    windowStart: since,
+                    windowEnd: now,
+                    totalErrors: errorCounts,
+                    totalRequests: requestCounts,
+                    errorRate: errorRate.toFixed(1),
+                });
                 await this.incidentManager.failHeartbeat(
                     'API_BETTERSTACK_HEARTBEAT_ERROR_RATE_URL',
                     `HTTP error rate is ${errorRate.toFixed(1)}% (threshold: ${this.thresholdPercent}%) over the last ${this.windowMinutes} minutes. Total errors: ${errorCounts}, total requests: ${requestCounts}.`,
+                    context,
                 );
             } else {
                 await this.incidentManager.pingHeartbeat(
@@ -89,6 +112,48 @@ export class ErrorRateMonitorService {
                     thresholdPercent: this.thresholdPercent,
                 },
             });
+        } finally {
+            await this.releaseCronLock(lock);
         }
+    }
+
+    private async acquireCronLock(): Promise<DistributedLock | null> {
+        try {
+            return await this.distributedLockService.acquire(
+                'CRON:BETTERSTACK:ERROR_RATE_MONITOR',
+                { ttl: 55_000 },
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to acquire error rate monitor lock',
+                context: ErrorRateMonitorService.name,
+                error: error instanceof Error ? error : undefined,
+            });
+            return null;
+        }
+    }
+
+    private async releaseCronLock(lock: DistributedLock | null): Promise<void> {
+        if (!lock) {
+            return;
+        }
+
+        try {
+            await lock.release();
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to release error rate monitor lock',
+                context: ErrorRateMonitorService.name,
+                error: error instanceof Error ? error : undefined,
+            });
+        }
+    }
+
+    private buildContext(extra: Record<string, Date | number | string>) {
+        return buildHeartbeatContext(
+            this.configService.get<string>('API_NODE_ENV'),
+            this.configService.get<string>('COMPONENT_TYPE', 'worker'),
+            extra,
+        );
     }
 }

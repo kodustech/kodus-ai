@@ -4,10 +4,9 @@ import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/code
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
-import { CodeManagementConnectionStatus } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 import {
-    isFileMatchingGlobCaseInsensitive,
     isFileMatchingGlob,
+    isFileMatchingGlobCaseInsensitive,
 } from '@libs/common/utils/glob-utils';
 import { CacheService } from '@libs/core/cache/cache.service';
 import {
@@ -18,8 +17,8 @@ import {
     PullRequestState,
 } from '@libs/core/domain/enums';
 import {
-    FileChange,
     CommentResult,
+    FileChange,
     Repository,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
@@ -41,24 +40,21 @@ import {
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import { IntegrationEntity } from '@libs/integrations/domain/integrations/entities/integration.entity';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
-import {
-    CODE_BASE_CONFIG_SERVICE_TOKEN,
-    ICodeBaseConfigService,
-} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import { CodeManagementConnectionStatus } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import { ICodeManagementService } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
 import {
-    PullRequestAuthor,
-    PullRequestsWithChangesRequested,
-    PullRequestReviewState,
-    PullRequest,
-    PullRequestWithFiles,
-    PullRequestFile,
-    PullRequestCodeReviewTime,
     OneSentenceSummaryItem,
+    PullRequest,
+    PullRequestAuthor,
+    PullRequestCodeReviewTime,
+    PullRequestFile,
     PullRequestReviewComment,
+    PullRequestReviewState,
+    PullRequestsWithChangesRequested,
+    PullRequestWithFiles,
     ReactionsInComments,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
@@ -72,6 +68,12 @@ import { APIClient, Bitbucket, Schema } from 'bitbucket';
 import { Response as BitbucketResponse } from 'bitbucket/src/request/types';
 import moment from 'moment';
 import { v4 } from 'uuid';
+import {
+    buildDefaultSourceBranchName,
+    DEFAULT_COMMIT_MESSAGE,
+    DEFAULT_PR_TITLE,
+} from './code-management-defaults.constants';
+import { CODE_BASE_CONFIG_SERVICE_TOKEN, ICodeBaseConfigService } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.BITBUCKET, 'codeManagement')
@@ -103,7 +105,263 @@ export class BitbucketService implements Omit<
         @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
         private readonly codeBaseConfigService: ICodeBaseConfigService,
         private readonly mcpManagerService?: MCPManagerService,
-    ) {}
+    ) { }
+
+    async findRepositoryByName(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        name: string;
+    }) {
+        const { organizationAndTeamData, name } = params;
+
+        try {
+            const repositories = await this.getRepositories({
+                organizationAndTeamData: organizationAndTeamData,
+            });
+
+            const wanted = name.trim().toLowerCase();
+            const repository = repositories.find(
+                (repo) =>
+                    repo.name.toLowerCase() === wanted ||
+                    repo.full_name?.toLowerCase() === wanted ||
+                    `${repo.organizationName}/${repo.name}`.toLowerCase() ===
+                    wanted,
+            );
+
+            if (!repository) {
+                return null;
+            }
+
+            return {
+                id: repository.id,
+                name: repository.name,
+                fullName: `${repository.organizationName}/${repository.name}`,
+                url: repository.http_url,
+                organizationName: repository.organizationName,
+                defaultBranch: repository.default_branch,
+                visibility: repository.visibility,
+                workspaceId: repository.workspaceId,
+                project: repository.project,
+            };
+        } catch (error) {
+            this.logger.error({
+                message: 'Error finding repository by name in Bitbucket',
+                context: BitbucketService.name,
+                error,
+                metadata: { params },
+            });
+            throw new BadRequestException(error);
+        }
+    }
+
+    async createPullRequestWithFiles(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string };
+        sourceBranch?: string;
+        targetBranch?: string;
+        baseBranch?: string;
+        title?: string;
+        description?: string;
+        commitMessage?: string;
+        author?: { name: string; email?: string };
+        files: { path: string; content: string }[];
+    }): Promise<Partial<PullRequest> | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+            sourceBranch,
+            targetBranch,
+            baseBranch,
+            title,
+            description = '',
+            commitMessage,
+            author,
+            files,
+        } = params;
+
+        const resolvedSourceBranch =
+            sourceBranch || buildDefaultSourceBranchName();
+        const resolvedTitle = title?.trim() || DEFAULT_PR_TITLE;
+        const resolvedCommitMessage =
+            commitMessage?.trim() || DEFAULT_COMMIT_MESSAGE;
+
+        try {
+            const resolvedTargetBranch =
+                targetBranch ||
+                (await this.getDefaultBranch({
+                    organizationAndTeamData,
+                    repository,
+                }));
+            const resolvedBaseBranch = baseBranch || resolvedTargetBranch;
+
+            const bitbucketAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            if (!bitbucketAuthDetail) {
+                throw new BadRequestException(
+                    'Failed to get Bitbucket authentication details',
+                );
+            }
+
+            const bitbucketAPI = this.instanceBitbucketApi(bitbucketAuthDetail);
+
+            const workspace = await this.getWorkspaceFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+
+            if (!workspace) {
+                throw new BadRequestException(
+                    'Failed to get workspace from repository',
+                );
+            }
+
+            const uploadResult = await this.uploadFiles({
+                organizationAndTeamData,
+                branchName: resolvedSourceBranch,
+                baseBranch: resolvedBaseBranch,
+                repository,
+                files,
+                message: resolvedCommitMessage,
+                author,
+            });
+
+            if (!uploadResult) {
+                throw new BadRequestException(
+                    'Failed to upload files to Bitbucket',
+                );
+            }
+
+            const pr = await bitbucketAPI.pullrequests.create({
+                workspace: `{${workspace}}`,
+                repo_slug: `{${repository.id}}`,
+                // @ts-expect-error: library type definition is incorrect for the body of this endpoint
+                _body: {
+                    title: resolvedTitle,
+                    summary: {
+                        raw: description,
+                    },
+                    source: {
+                        branch: {
+                            name: resolvedSourceBranch,
+                        },
+                    },
+                    destination: {
+                        branch: {
+                            name: resolvedTargetBranch,
+                        },
+                    },
+                },
+            });
+
+            return {
+                id: pr.data.id.toString(),
+                number: pr.data.id,
+                title: pr.data.title,
+                prURL: pr.data.links.html.href,
+            };
+        } catch (error) {
+            this.logger.error({
+                message: 'Error creating pull request with files in Bitbucket',
+                context: BitbucketService.name,
+                error,
+                metadata: { params },
+            });
+            throw new BadRequestException(error);
+        }
+    }
+
+    async uploadFiles(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string };
+        branchName?: string;
+        baseBranch?: string;
+        files: { path: string; content: string }[];
+        message?: string;
+        author?: { name: string; email?: string };
+    }): Promise<boolean> {
+        const {
+            organizationAndTeamData,
+            repository,
+            branchName,
+            baseBranch,
+            files,
+            message,
+            author,
+        } = params;
+
+        try {
+            const defaultBranch = await this.getDefaultBranch({
+                organizationAndTeamData,
+                repository,
+            });
+            const resolvedBaseBranch = baseBranch || defaultBranch;
+            const resolvedBranchName = branchName || resolvedBaseBranch;
+            const resolvedMessage = message?.trim() || DEFAULT_COMMIT_MESSAGE;
+
+            const bitbucketAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            if (!bitbucketAuthDetail) {
+                throw new BadRequestException(
+                    'Failed to get Bitbucket authentication details',
+                );
+            }
+
+            const bitbucketAPI = this.instanceBitbucketApi(bitbucketAuthDetail);
+
+            const workspace = await this.getWorkspaceFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+
+            if (!workspace) {
+                throw new BadRequestException(
+                    'Failed to get workspace from repository',
+                );
+            }
+
+            const form = new FormData();
+
+            form.append('branch', resolvedBranchName);
+            form.append('message', resolvedMessage);
+
+            if (
+                bitbucketAuthDetail.authMode === AuthMode.TOKEN &&
+                author?.name
+            ) {
+                form.append(
+                    'author',
+                    `${author.name} <${author.email || 'kody@kodus.io'}>`,
+                );
+            }
+
+            files.forEach((file) => {
+                const repoPath = file.path.startsWith('/')
+                    ? file.path
+                    : `/${file.path}`;
+                form.append(repoPath, file.content);
+            });
+
+            await bitbucketAPI.source.createFileCommit({
+                workspace: `{${workspace}}`,
+                repo_slug: `{${repository.id}}`,
+                _body: form,
+            });
+
+            return true;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error uploading files to Bitbucket',
+                context: BitbucketService.name,
+                error,
+                metadata: { params },
+            });
+
+            return false;
+        }
+    }
 
     getWorkflows(params: any): Promise<Workflow[]> {
         throw new Error('Method not implemented.');
@@ -1023,9 +1281,9 @@ export class BitbucketService implements Omit<
                     const user =
                         (membership?.user as
                             | (Schema.Account & {
-                                  nickname?: string;
-                                  username?: string;
-                              })
+                                nickname?: string;
+                                username?: string;
+                            })
                             | undefined) ?? undefined;
 
                     const displayName =
@@ -1618,14 +1876,14 @@ export class BitbucketService implements Omit<
                         const contents =
                             pathForContent && commitForContent
                                 ? await bitbucketAPI.source
-                                      .read({
-                                          repo_slug: `{${repo.id}}`,
-                                          workspace: `{${repo.workspaceId}}`,
-                                          commit: commitForContent,
-                                          path: pathForContent,
-                                      })
-                                      .then((res) => res.data as string)
-                                      .catch(() => null)
+                                    .read({
+                                        repo_slug: `{${repo.id}}`,
+                                        workspace: `{${repo.workspaceId}}`,
+                                        commit: commitForContent,
+                                        path: pathForContent,
+                                    })
+                                    .then((res) => res.data as string)
+                                    .catch(() => null)
                                 : null;
 
                         const pathForDiff = isRemoved
@@ -1634,16 +1892,16 @@ export class BitbucketService implements Omit<
 
                         const diff = pathForDiff
                             ? await bitbucketAPI.commits
-                                  .getDiff({
-                                      repo_slug: `{${repo.id}}`,
-                                      workspace: `{${repo.workspaceId}}`,
-                                      spec: `${pr.source?.commit?.hash}..${pr.destination?.commit?.hash}`,
-                                      path: pathForDiff,
-                                  })
-                                  .then((res) =>
-                                      this.convertDiff(res.data as string),
-                                  )
-                                  .catch(() => null)
+                                .getDiff({
+                                    repo_slug: `{${repo.id}}`,
+                                    workspace: `{${repo.workspaceId}}`,
+                                    spec: `${pr.source?.commit?.hash}..${pr.destination?.commit?.hash}`,
+                                    path: pathForDiff,
+                                })
+                                .then((res) =>
+                                    this.convertDiff(res.data as string),
+                                )
+                                .catch(() => null)
                             : null;
 
                         return {
@@ -1797,9 +2055,9 @@ export class BitbucketService implements Omit<
     ) {
         const codeBlock = lineComment?.body?.improvedCode
             ? this.formatCodeBlock(
-                  repository?.language?.toLowerCase(),
-                  lineComment?.body?.improvedCode,
-              )
+                repository?.language?.toLowerCase(),
+                lineComment?.body?.improvedCode,
+            )
             : '';
         const suggestionContent = lineComment?.body?.suggestionContent || '';
         const actionStatement = lineComment?.body?.actionStatement
@@ -1898,7 +2156,7 @@ export class BitbucketService implements Omit<
                             path: lineComment?.path,
                             to: this.sanitizeLine(
                                 params.lineComment.start_line ??
-                                    params.lineComment.line,
+                                params.lineComment.line,
                             ),
                         },
                     },
@@ -2982,10 +3240,7 @@ export class BitbucketService implements Omit<
      * `contentType.includes(...)` without a null-check, which crashes when
      * the Bitbucket edge proxy returns a response with no Content-Type.
      */
-    private safeFetch(
-        url: string,
-        options: any,
-    ): Promise<any> {
+    private safeFetch(url: string, options: any): Promise<any> {
         return fetch(url, options).then((response) => {
             if (!response.headers.get('content-type')) {
                 const patchedHeaders = new Headers(response.headers);
@@ -3740,9 +3995,8 @@ export class BitbucketService implements Omit<
                 queryString += `created_on >= "${filters.startDate}"`;
             }
             if (filters?.endDate) {
-                queryString += `${
-                    queryString ? ' AND ' : ''
-                }created_on <= "${filters.endDate}"`;
+                queryString += `${queryString ? ' AND ' : ''
+                    }created_on <= "${filters.endDate}"`;
             }
 
             const listParams: any = {
@@ -3895,7 +4149,7 @@ export class BitbucketService implements Omit<
                         isResolved: comment.resolution ? true : false,
                         author: {
                             id: this.sanitizeUUID(comment?.user?.uuid) ?? '',
-                            username: comment?.user?.nickname as string ?? '',
+                            username: (comment?.user?.nickname as string) ?? '',
                             name: comment?.user?.display_name ?? '',
                         },
                     };
@@ -4194,57 +4448,71 @@ export class BitbucketService implements Omit<
     async deleteWebhook(params: {
         organizationAndTeamData: OrganizationAndTeamData;
     }): Promise<void> {
-        const authDetails = await this.getAuthDetails(
-            params.organizationAndTeamData,
-        );
-        const bitbucketAPI = this.instanceBitbucketApi(authDetails);
-
-        if (authDetails.authMode === AuthMode.TOKEN) {
-            const repositories = <Repositories[]>(
-                await this.findOneByOrganizationAndTeamDataAndConfigKey(
-                    params.organizationAndTeamData,
-                    IntegrationConfigKey.REPOSITORIES,
-                )
+        try {
+            const authDetails = await this.getAuthDetails(
+                params.organizationAndTeamData,
             );
+            const bitbucketAPI = this.instanceBitbucketApi(authDetails);
 
-            const webhookUrl = this.configService.get<string>(
-                'GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK',
-            );
+            if (authDetails.authMode === AuthMode.TOKEN) {
+                const repositories = <Repositories[]>(
+                    await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                        params.organizationAndTeamData,
+                        IntegrationConfigKey.REPOSITORIES,
+                    )
+                );
 
-            if (!webhookUrl) {
-                this.logger.error({
-                    message: 'Bitbucket webhook URL not found',
-                    context: BitbucketService.name,
-                });
-                return;
-            }
+                const webhookUrl = this.configService.get<string>(
+                    'GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK',
+                );
 
-            for (const repo of repositories) {
-                try {
-                    const existingHooks = await bitbucketAPI.webhooks
-                        .listForRepo({
-                            repo_slug: `{${repo.id}}`,
-                            workspace: `{${repo.workspaceId}}`,
-                            pagelen: 50,
-                        })
-                        .then((res) =>
-                            this.getPaginatedResults(bitbucketAPI, res),
+                if (!webhookUrl) {
+                    this.logger.error({
+                        message: 'Bitbucket webhook URL not found',
+                        context: BitbucketService.name,
+                    });
+                    return;
+                }
+
+                for (const repo of repositories) {
+                    try {
+                        const existingHooks = await bitbucketAPI.webhooks
+                            .listForRepo({
+                                repo_slug: `{${repo.id}}`,
+                                workspace: `{${repo.workspaceId}}`,
+                                pagelen: 50,
+                            })
+                            .then((res) =>
+                                this.getPaginatedResults(bitbucketAPI, res),
+                            );
+
+                        const webhook = existingHooks.find(
+                            (hook) => hook.url === webhookUrl,
                         );
 
-                    const webhook = existingHooks.find(
-                        (hook) => hook.url === webhookUrl,
-                    );
+                        if (webhook) {
+                            await bitbucketAPI.repositories.deleteWebhook({
+                                repo_slug: `{${repo.id}}`,
+                                workspace: `{${repo.workspaceId}}`,
+                                uid: webhook.uuid,
+                            });
 
-                    if (webhook) {
-                        await bitbucketAPI.repositories.deleteWebhook({
-                            repo_slug: `{${repo.id}}`,
-                            workspace: `{${repo.workspaceId}}`,
-                            uid: webhook.uuid,
-                        });
-
-                        this.logger.log({
-                            message: `Webhook deleted successfully for repository ${repo.name}`,
+                            this.logger.log({
+                                message: `Webhook deleted successfully for repository ${repo.name}`,
+                                context: this.deleteWebhook.name,
+                                metadata: {
+                                    repository: repo.name,
+                                    workspace: repo.workspaceId,
+                                    organizationAndTeamData:
+                                        params.organizationAndTeamData,
+                                },
+                            });
+                        }
+                    } catch (error) {
+                        this.logger.error({
+                            message: `Error deleting Bitbucket webhook for repository ${repo.name}`,
                             context: this.deleteWebhook.name,
+                            error: error,
                             metadata: {
                                 repository: repo.name,
                                 workspace: repo.workspaceId,
@@ -4253,20 +4521,17 @@ export class BitbucketService implements Omit<
                             },
                         });
                     }
-                } catch (error) {
-                    this.logger.error({
-                        message: `Error deleting Bitbucket webhook for repository ${repo.name}`,
-                        context: this.deleteWebhook.name,
-                        error: error,
-                        metadata: {
-                            repository: repo.name,
-                            workspace: repo.workspaceId,
-                            organizationAndTeamData:
-                                params.organizationAndTeamData,
-                        },
-                    });
                 }
             }
+        } catch (error) {
+            this.logger.error({
+                message: 'Error authenticating for webhook deletion',
+                context: BitbucketService.name,
+                error: error,
+                metadata: {
+                    organizationAndTeamData: params.organizationAndTeamData,
+                },
+            });
         }
     }
 
@@ -4460,7 +4725,7 @@ export class BitbucketService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
         treeType?: 'all' | 'directories' | 'files';
-    }): Promise<any[]> {
+    }): Promise<TreeItem[]> {
         try {
             const {
                 organizationAndTeamData,
@@ -4536,11 +4801,11 @@ export class BitbucketService implements Omit<
         workspace: string,
         repositoryId: string,
         maxDepth: number = 10, // Evitar timeout, pode ajustar conforme necessário
-    ): Promise<any[]> {
+    ): Promise<TreeItem[]> {
         try {
             const bitbucketAPI =
                 this.instanceBitbucketApi(bitbucketAuthDetails);
-            const allItems: any[] = [];
+            const allItems: TreeItem[] = [];
             let hasNext = true;
             let nextPageUrl: string | null = null;
             let pageNum = 1;
@@ -4601,12 +4866,13 @@ export class BitbucketService implements Omit<
                         path: item.path,
                         type:
                             item.type === 'commit_directory'
-                                ? 'directory'
-                                : 'file',
+                                ? ('directory' as const)
+                                : ('file' as const),
                         sha: item.commit?.hash || '',
                         size: item.size || undefined,
                         url: item.links?.self?.href || '',
                         commit: item.commit, // Manter dados do commit se necessário
+                        hasChildren: item.type === 'commit_directory', // Marcar diretórios para possível navegação futura
                     };
 
                     allItems.push(normalizedItem);
@@ -4794,12 +5060,12 @@ export class BitbucketService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         commentId: string;
         reason?:
-            | 'ABUSE'
-            | 'OFF_TOPIC'
-            | 'OUTDATED'
-            | 'RESOLVED'
-            | 'DUPLICATE'
-            | 'SPAM';
+        | 'ABUSE'
+        | 'OFF_TOPIC'
+        | 'OUTDATED'
+        | 'RESOLVED'
+        | 'DUPLICATE'
+        | 'SPAM';
     }): Promise<any | null> {
         throw new Error('Method not implemented.');
     }

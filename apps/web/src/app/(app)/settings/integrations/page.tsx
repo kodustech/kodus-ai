@@ -5,14 +5,21 @@ import { getConnections } from "@services/setup/fetch";
 import { getTeams } from "@services/teams/fetch";
 import { HelpCircleIcon } from "lucide-react";
 import { ErrorCard } from "src/core/components/ui/error-card";
+import { FEATURE_FLAGS } from "src/core/config/feature-flags";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
+import { isFeatureEnabled } from "src/core/utils/posthog-server-side";
 import { safeArray } from "src/core/utils/safe-array";
 
 export default async function IntegrationsPage() {
-    const [teamId, teams] = await Promise.all([
-        getGlobalSelectedTeamId(),
-        getTeams(),
-    ]);
+    const [teamId, teams, githubEnterpriseServerPatEnabled] = await Promise.all(
+        [
+            getGlobalSelectedTeamId(),
+            getTeams(),
+            isFeatureEnabled({
+                feature: FEATURE_FLAGS.githubEnterpriseServerPat,
+            }).catch(() => false),
+        ],
+    );
 
     let connectionsError = false;
     const connectionsResult = await getConnections(teamId).catch(() => {
@@ -35,7 +42,13 @@ export default async function IntegrationsPage() {
                         message="Failed to load integrations. Please try again."
                     />
                 ) : (
-                    <CardsGroup connections={connections} team={team} />
+                    <CardsGroup
+                        connections={connections}
+                        team={team}
+                        githubEnterpriseServerPatEnabled={
+                            githubEnterpriseServerPatEnabled
+                        }
+                    />
                 )}
 
                 <Alert>

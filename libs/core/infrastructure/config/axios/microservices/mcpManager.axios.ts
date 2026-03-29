@@ -26,4 +26,12 @@ export class AxiosMCPManagerService {
         const { data } = await this.axiosInstance.post(url, body, config);
         return data;
     }
+
+    public async delete(url: string, body = {}, config = {}) {
+        const { data } = await this.axiosInstance.delete(url, {
+            ...config,
+            data: body,
+        });
+        return data;
+    }
 }

@@ -1,9 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import {
-    CODE_REVIEW_SETTINGS_LOG_SERVICE_TOKEN,
-    ICodeReviewSettingsLogService,
-} from '@libs/ee/codeReviewSettingsLog/domain/contracts/codeReviewSettingsLog.service.contract';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
 import { PullRequestMessagesLogParams } from '@libs/ee/codeReviewSettingsLog/infrastructure/adapters/services/pullRequestMessageLog.handler';
 import {
     IPullRequestMessagesService,
@@ -37,8 +35,7 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
         @Inject(PULL_REQUEST_MESSAGES_SERVICE_TOKEN)
         private readonly pullRequestMessagesService: IPullRequestMessagesService,
 
-        @Inject(CODE_REVIEW_SETTINGS_LOG_SERVICE_TOKEN)
-        private readonly codeReviewSettingsLogService: ICodeReviewSettingsLogService,
+        private readonly eventEmitter: EventEmitter2,
 
         @Inject(CONTEXT_RESOLUTION_SERVICE_TOKEN)
         private readonly contextResolutionService: IContextResolutionService,
@@ -128,52 +125,34 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
             await this.pullRequestMessagesService.create(pullRequestMessages);
         }
 
-        try {
-            const logParams: PullRequestMessagesLogParams = {
-                organizationAndTeamData: {
-                    organizationId: pullRequestMessages.organizationId,
-                },
-                userInfo: {
-                    userId: userInfo?.uuid,
-                    userEmail: userInfo?.email,
-                },
-                actionType: ActionType.EDIT,
-                configLevel: pullRequestMessages.configLevel,
-                repositoryId: pullRequestMessages.repositoryId,
-                directoryId: pullRequestMessages.directoryId,
-                startReviewMessage: pullRequestMessages.startReviewMessage,
-                endReviewMessage: pullRequestMessages.endReviewMessage,
-                existingStartMessage:
-                    existingPullRequestMessage?.startReviewMessage,
-                existingEndMessage:
-                    existingPullRequestMessage?.endReviewMessage,
-                directoryPath:
-                    (await this.contextResolutionService.getDirectoryPathByOrganizationAndRepository(
-                        pullRequestMessages.organizationId,
-                        pullRequestMessages.repositoryId,
-                        pullRequestMessages.directoryId,
-                    )) || '',
-                isUpdate,
-            };
-            await this.codeReviewSettingsLogService.registerPullRequestMessagesLog(
-                logParams,
-            );
-
-            return;
-        } catch (error) {
-            this.logger.error({
-                message: 'Error registering pull request messages log',
-                context: CreateOrUpdatePullRequestMessagesUseCase.name,
-                error,
-                metadata: {
-                    organizationId: pullRequestMessages.organizationId,
-                    configLevel: pullRequestMessages.configLevel,
-                    repositoryId: pullRequestMessages.repositoryId,
-                    directoryId: pullRequestMessages.directoryId,
-                },
-            });
-            return;
-        }
+        const logParams: PullRequestMessagesLogParams = {
+            organizationAndTeamData: {
+                organizationId: pullRequestMessages.organizationId,
+            },
+            userInfo: {
+                userId: userInfo?.uuid,
+                userEmail: userInfo?.email,
+            },
+            actionType: ActionType.EDIT,
+            configLevel: pullRequestMessages.configLevel,
+            repositoryId: pullRequestMessages.repositoryId,
+            directoryId: pullRequestMessages.directoryId,
+            startReviewMessage: pullRequestMessages.startReviewMessage,
+            endReviewMessage: pullRequestMessages.endReviewMessage,
+            existingStartMessage:
+                existingPullRequestMessage?.startReviewMessage,
+            existingEndMessage: existingPullRequestMessage?.endReviewMessage,
+            globalSettings: pullRequestMessages.globalSettings,
+            existingGlobalSettings: existingPullRequestMessage?.globalSettings,
+            directoryPath:
+                (await this.contextResolutionService.getDirectoryPathByOrganizationAndRepository(
+                    pullRequestMessages.organizationId,
+                    pullRequestMessages.repositoryId,
+                    pullRequestMessages.directoryId,
+                )) || '',
+            isUpdate,
+        };
+        this.eventEmitter.emit(AuditLogEvents.PR_MESSAGES, logParams);
     }
 
     private async findExistingConfiguration(

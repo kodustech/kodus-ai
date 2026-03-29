@@ -6,6 +6,7 @@ ARG RELEASE_VERSION=local
 
 ENV API_CLOUD_MODE=${API_CLOUD_MODE}
 ENV API_DEVELOPMENT_MODE=false
+ENV RELEASE_VERSION=${RELEASE_VERSION}
 ENV SENTRY_RELEASE=${RELEASE_VERSION}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -34,6 +35,7 @@ ARG API_CLOUD_MODE=false
 ENV API_CLOUD_MODE=${API_CLOUD_MODE}
 
 ARG RELEASE_VERSION=local
+ENV RELEASE_VERSION=$RELEASE_VERSION
 ENV SENTRY_RELEASE=$RELEASE_VERSION
 
 COPY . .
@@ -72,10 +74,11 @@ ARG RELEASE_VERSION=local
 # Set ENVs for runtime
 ENV API_CLOUD_MODE=${API_CLOUD_MODE}
 ENV API_DEVELOPMENT_MODE=false
+ENV RELEASE_VERSION=${RELEASE_VERSION}
 ENV SENTRY_RELEASE=${RELEASE_VERSION}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates procps \
+    ca-certificates procps git ripgrep \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --chown=1000:1000 --from=prod-deps /usr/src/app/node_modules ./node_modules

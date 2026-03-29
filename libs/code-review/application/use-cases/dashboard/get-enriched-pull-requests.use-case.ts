@@ -245,7 +245,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
 
                 // PERF: Fetch PR basics first so author-policy filtering can reduce
                 // downstream heavy queries (suggestion aggregation + code review logs).
-                const pullRequestsList = await this.pullRequestsService
+                const pullRequestsList = (await this.pullRequestsService
                     .findManyByNumbersAndRepositoryIds(
                         prCriteria,
                         organizationId,
@@ -260,7 +260,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             },
                         });
                         return [];
-                    });
+                    })) ?? [];
 
                 const allFetchedPrKeys = new Set<string>();
                 pullRequestsList.forEach((pr) => {

@@ -1,11 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
-import { KODY_ISSUES_MANAGEMENT_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/KodyIssuesManagement.contract';
 import {
     CODE_REVIEW_FEEDBACK_SERVICE_TOKEN,
     ICodeReviewFeedbackService,
 } from '@libs/code-review/domain/codeReviewFeedback/contracts/codeReviewFeedback.service.contract';
+import { KODY_ISSUES_MANAGEMENT_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/KodyIssuesManagement.contract';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
@@ -77,7 +77,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             codeReviewFeedback,
         );
 
-        let httpUrl = null;
+        let httpUrl = issue.repository.url ?? null;
 
         if (issue.repository.platform === PlatformType.AZURE_REPOS) {
             const integrationConfig =
@@ -98,6 +98,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryName: issue.repository.name,
             repositoryFullName: issue.repository.full_name,
             httpUrl: httpUrl,
+            repositoryUrl: issue.repository.url ?? null,
         };
 
         const prUrls = await this.selectAllPrNumbers(issue, dataToBuildUrls);
@@ -200,6 +201,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryName: string;
             repositoryFullName: string;
             httpUrl: string;
+            repositoryUrl?: string;
         },
     ): Promise<
         {
@@ -240,6 +242,7 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryName: string;
             repositoryFullName: string;
             httpUrl: string;
+            repositoryUrl?: string;
         },
         filePath: string,
         branch: string = 'main',
@@ -248,11 +251,13 @@ export class GetIssueByIdUseCase implements IUseCase {
             ? filePath.substring(1)
             : filePath;
 
+        const repositoryUrl = this.buildRepositoryUrl(data);
+
         switch (data.platform) {
             case PlatformType.GITHUB:
-                return `https://github.com/${data.repositoryFullName}/blob/${branch}/${cleanFilePath}`;
+                return `${repositoryUrl}/blob/${branch}/${cleanFilePath}`;
             case PlatformType.GITLAB:
-                return `https://gitlab.com/${data.repositoryFullName}/-/blob/${branch}/${cleanFilePath}`;
+                return `${repositoryUrl}/-/blob/${branch}/${cleanFilePath}`;
             case PlatformType.AZURE_REPOS:
                 return `${data.httpUrl}?path=/${cleanFilePath}`;
             case PlatformType.BITBUCKET:
@@ -268,14 +273,17 @@ export class GetIssueByIdUseCase implements IUseCase {
             repositoryName: string;
             repositoryFullName: string;
             httpUrl: string;
+            repositoryUrl?: string;
         },
         prNumber: string,
     ): string {
+        const repositoryUrl = this.buildRepositoryUrl(data);
+
         switch (data.platform) {
             case PlatformType.GITHUB:
-                return `https://github.com/${data.repositoryFullName}/pull/${prNumber}`;
+                return `${repositoryUrl}/pull/${prNumber}`;
             case PlatformType.GITLAB:
-                return `https://gitlab.com/${data.repositoryFullName}/-/merge_requests/${prNumber}`;
+                return `${repositoryUrl}/-/merge_requests/${prNumber}`;
             case PlatformType.AZURE_REPOS:
                 return `${data.httpUrl}/pullrequest/${prNumber}`;
             case PlatformType.BITBUCKET:
@@ -289,12 +297,26 @@ export class GetIssueByIdUseCase implements IUseCase {
         platform: PlatformType;
         repositoryFullName: string;
         httpUrl: string;
+        repositoryUrl?: string;
     }): string {
         switch (data.platform) {
             case PlatformType.GITHUB:
+                if (data.repositoryUrl) {
+                    try {
+                        const parsedRepositoryUrl = new URL(data.repositoryUrl);
+                        return `${parsedRepositoryUrl.origin}/${data.repositoryFullName}`;
+                    } catch {
+                        // Fall back to cloud URL when stored repository URL is malformed.
+                    }
+                }
+
                 return `https://github.com/${data.repositoryFullName}`;
-            case PlatformType.GITLAB:
-                return `https://gitlab.com/${data.repositoryFullName}`;
+            case PlatformType.GITLAB: {
+                const gitlabUrl = process.env.WEB_GITLAB_OAUTH_URL
+                    ? new URL(process.env.WEB_GITLAB_OAUTH_URL).origin
+                    : 'https://gitlab.com';
+                return `${gitlabUrl}/${data.repositoryFullName}`;
+            }
             case PlatformType.AZURE_REPOS:
                 return data.httpUrl;
             case PlatformType.BITBUCKET:

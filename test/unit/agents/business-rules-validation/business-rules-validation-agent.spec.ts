@@ -47,6 +47,36 @@ describe('BusinessRulesValidationAgentProvider parser', () => {
         expect(parsed.summary).toContain('Status');
     });
 
+    it('accepts direct markdown limitation summaries without strict english keywords', () => {
+        const provider = createProvider();
+
+        const payload = `## ⚠️ Missing Validation Context
+
+I couldn't start the skill because required context fields are missing.`;
+
+        const parsed = (provider as any).parseValidationResult(payload);
+
+        expect(parsed.needsMoreInfo).toBe(true);
+        expect(parsed.summary).toContain('Missing Validation Context');
+    });
+
+    it('parses JSON fenced payload even when surrounded by additional text', () => {
+        const provider = createProvider();
+
+        const payload = `Analyzer output below:
+
+\`\`\`json
+{"needsMoreInfo":false,"summary":"## Business Rules Validation\\n\\nAll checks passed."}
+\`\`\`
+
+End of message.`;
+
+        const parsed = (provider as any).parseValidationResult(payload);
+
+        expect(parsed.needsMoreInfo).toBe(false);
+        expect(parsed.summary).toContain('All checks passed');
+    });
+
     it('parses explicit limitation metadata when analyzer returns a needs-more-info payload', () => {
         const provider = createProvider();
 
@@ -202,6 +232,31 @@ describe('BusinessRulesValidationAgentProvider.formatValidationResponse', () => 
             'feedback',
         );
         expect(formatted).toBe('## 🔌 Integracao MCP Necessaria');
+    });
+
+    it('appends diagnostic details on analyzer failure limitations', async () => {
+        const provider = createProvider();
+        (provider as any).formatUserFacingMessage = jest
+            .fn()
+            .mockImplementation(async (message: string) => message);
+
+        const formatted = await (provider as any).formatValidationResponse(
+            {
+                needsMoreInfo: true,
+                mode: 'limitation_response',
+                reason: 'analyzer_failure',
+                summary:
+                    '❌ **Error processing validation**\n\nAn error occurred while processing the system response. Please try again.',
+                missingInfo:
+                    'Analyzer execution failed: Timeout after 120000ms in business-rules-analyzer-attempt-1',
+            },
+            {
+                userLanguage: 'en-US',
+            },
+        );
+
+        expect(formatted).toContain('### Details');
+        expect(formatted).toContain('Analyzer execution failed: Timeout');
     });
 });
 

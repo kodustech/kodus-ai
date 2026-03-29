@@ -1,4 +1,9 @@
-import { UserInfo } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
+import {
+    ActionType,
+    ConfigLevel,
+    UserInfo,
+} from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
+import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { Injectable } from '@nestjs/common';
 import {
     BaseLogParams,
@@ -9,6 +14,7 @@ import {
 export interface CodeReviewConfigLogParams extends BaseLogParams {
     oldConfig: any;
     newConfig: any;
+    isCreation?: boolean;
 }
 
 interface PropertyConfig {
@@ -29,36 +35,21 @@ const PROPERTY_CONFIGS: Record<string, PropertyConfig> = {
         actionDescription: 'Request Changes',
     },
 
-    //Review Options
+    //Review Options (only active categories)
+    'reviewOptions.bug': {
+        actionDescription: 'Bug Detection',
+    },
+    'reviewOptions.performance': {
+        actionDescription: 'Performance',
+    },
     'reviewOptions.security': {
         actionDescription: 'Security',
     },
-    'reviewOptions.code_style': {
-        actionDescription: 'Code Style',
+    'reviewOptions.cross_file': {
+        actionDescription: 'Cross-file Analysis',
     },
-    'reviewOptions.kody_rules': {
-        actionDescription: 'Kody Rules',
-    },
-    'reviewOptions.refactoring': {
-        actionDescription: 'Refactoring',
-    },
-    'reviewOptions.error_handling': {
-        actionDescription: 'Error Handling',
-    },
-    'reviewOptions.maintainability': {
-        actionDescription: 'Maintainability',
-    },
-    'reviewOptions.breaking_changes': {
-        actionDescription: 'Breaking Changes',
-    },
-    'reviewOptions.potential_issues': {
-        actionDescription: 'Potential Issues',
-    },
-    'reviewOptions.documentation_and_comments': {
-        actionDescription: 'Documentation and Comments',
-    },
-    'reviewOptions.performance_and_optimization': {
-        actionDescription: 'Performance and Optimization',
+    'reviewOptions.business_logic': {
+        actionDescription: 'Business Logic',
     },
 
     'ignorePaths': {
@@ -84,6 +75,9 @@ const PROPERTY_CONFIGS: Record<string, PropertyConfig> = {
     },
     'crossFileDependenciesAnalysis': {
         actionDescription: 'Crossfile Dependencies Analysis',
+    },
+    'enableCommittableSuggestions': {
+        actionDescription: 'Committable Suggestions',
     },
     //#endregion
 
@@ -156,6 +150,11 @@ export class CodeReviewConfigLogHandler {
             params.userInfo,
         );
 
+        if (params.isCreation) {
+            const creationEntry = this.generateCreationEntry(params);
+            changedData.unshift(creationEntry);
+        }
+
         if (changedData.length === 0) {
             return;
         }
@@ -163,7 +162,9 @@ export class CodeReviewConfigLogHandler {
         await this.unifiedLogHandler.saveLogEntry({
             organizationAndTeamData: params.organizationAndTeamData,
             userInfo: params.userInfo,
-            actionType: params.actionType,
+            actionType: params.isCreation
+                ? ActionType.CREATE
+                : params.actionType,
             configLevel: params.configLevel,
             repository: params.repository,
             directory: params?.directory,
@@ -171,17 +172,57 @@ export class CodeReviewConfigLogHandler {
         });
     }
 
+    private generateCreationEntry(
+        params: CodeReviewConfigLogParams,
+    ): ChangedDataToExport {
+        const userEmail = params.userInfo.userEmail;
+
+        if (params.configLevel === ConfigLevel.DIRECTORY && params.directory) {
+            const directoryLabel = params.directory.path || params.directory.id;
+            const repoLabel = params.repository?.name || params.repository?.id;
+
+            return {
+                actionDescription: 'Directory Configuration Created',
+                previousValue: null,
+                currentValue: {
+                    directoryId: params.directory.id,
+                    directoryPath: params.directory.path,
+                    repositoryId: params.repository?.id,
+                },
+                description: `User ${userEmail} created configuration for directory "${directoryLabel}" in repository "${repoLabel}"`,
+            };
+        }
+
+        const repoLabel = params.repository?.name || params.repository?.id;
+
+        return {
+            actionDescription: 'Repository Configuration Created',
+            previousValue: null,
+            currentValue: {
+                repositoryId: params.repository?.id,
+                repositoryName: repoLabel,
+            },
+            description: `User ${userEmail} created configuration for repository "${repoLabel}"`,
+        };
+    }
+
     private async generateChangedData(
         oldConfig: any,
         newConfig: any,
         userInfo: UserInfo,
     ): Promise<ChangedDataToExport[]> {
-        const specialChanges = this.collectSpecialChanges(oldConfig, newConfig);
+        const resolvedOld = this.resolveWithDefaults(oldConfig);
+        const resolvedNew = this.resolveWithDefaults(newConfig);
+
+        const specialChanges = this.collectSpecialChanges(
+            resolvedOld,
+            resolvedNew,
+        );
         const excludeFromBasic =
             this.getPropertiesHandledBySpecialCases(specialChanges);
         const basicChanges = this.collectBasicChanges(
-            oldConfig,
-            newConfig,
+            resolvedOld,
+            resolvedNew,
             excludeFromBasic,
         );
 
@@ -192,13 +233,39 @@ export class CodeReviewConfigLogHandler {
                 this.createUnifiedChangedData(
                     allChanges,
                     userInfo,
-                    oldConfig,
-                    newConfig,
+                    resolvedOld,
+                    resolvedNew,
                 ),
             ];
         }
 
         return [];
+    }
+
+    private resolveWithDefaults(deltaConfig: any): any {
+        const defaults = getDefaultKodusConfigFile();
+        return this.deepMerge(defaults, deltaConfig || {});
+    }
+
+    private deepMerge(target: any, source: any): any {
+        const result = { ...target };
+
+        for (const key of Object.keys(source)) {
+            if (
+                source[key] !== null &&
+                typeof source[key] === 'object' &&
+                !Array.isArray(source[key]) &&
+                target[key] !== null &&
+                typeof target[key] === 'object' &&
+                !Array.isArray(target[key])
+            ) {
+                result[key] = this.deepMerge(target[key], source[key]);
+            } else {
+                result[key] = source[key];
+            }
+        }
+
+        return result;
     }
 
     private collectBasicChanges(
@@ -210,7 +277,12 @@ export class CodeReviewConfigLogHandler {
         const flatOld = this.flattenObject(oldConfig);
         const flatNew = this.flattenObject(newConfig);
 
-        for (const key of Object.keys(flatNew)) {
+        const allKeys = new Set([
+            ...Object.keys(flatOld),
+            ...Object.keys(flatNew),
+        ]);
+
+        for (const key of allKeys) {
             if (
                 PROPERTY_CONFIGS[key] &&
                 !excludeKeys.includes(key) &&

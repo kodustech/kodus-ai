@@ -11,6 +11,11 @@ import z from 'zod';
 import type { ContextAugmentationsMap } from '@libs/ai-engine/infrastructure/adapters/services/context/interfaces/code-review-context-pack.interface';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 
+import { CreateSandboxParams } from '@libs/code-review/domain/contracts/sandbox.provider';
+import {
+    CrossFileContextSnippet,
+    RemoteCommands,
+} from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import {
     BehaviourForExistingDescription,
     BehaviourForNewCommits,
@@ -29,10 +34,6 @@ import {
     GetImpactAnalysisResponse,
     TaskStatus,
 } from '@libs/ee/kodyAST/interfaces/code-ast-analysis.interface';
-import {
-    CrossFileContextSnippet,
-    RemoteCommands,
-} from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { IClusterizedSuggestion } from '@libs/kodyFineTuning/domain/interfaces/kodyFineTuning.interface';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { OrganizationAndTeamData } from './organizationAndTeamData';
@@ -135,8 +136,22 @@ export type AnalysisContext<TPullRequest = any> = {
     augmentationsByFile?: Record<string, ContextAugmentationsMap>;
     /** Cross-file context snippets relevant to the current file under review. */
     crossFileSnippets?: CrossFileContextSnippet[];
+    /** Documentation context grouped by file path, built in previous pipeline stages. */
+    documentationByFile?: Record<string, DocumentationContextItem[]>;
+    /** Documentation context scoped to the current file under analysis. */
+    documentationContext?: DocumentationContextItem[];
     /** Remote commands for safeguard agent verification (from E2B sandbox) */
     remoteCommands?: RemoteCommands;
+    /** Parameters used to create the sandbox — kept for renewal if it expires */
+    sandboxCloneParams?: CreateSandboxParams;
+};
+
+export type DocumentationContextItem = {
+    query: string;
+    title: string;
+    url: string;
+    snippet: string;
+    source: string;
 };
 
 export type ASTAnalysisResult = {

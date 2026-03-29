@@ -34,7 +34,7 @@ export class CliReviewPipelineStrategy implements IPipelineStrategy<CliReviewPip
      * Configure the pipeline stages in execution order
      * 5 stages total (vs 14 in PR pipeline):
      * 1. PrepareCliFiles - Validate FileChange objects
-     * 2. CollectCrossFileContext - Gather cross-file dependencies via E2B (skipped in trial/fast mode)
+     * 2. CollectCrossFileContext - Gather cross-file dependencies via E2B (skipped in fast mode)
      * 3. ProcessFilesReview - Core LLM analysis (HEAVY_MODE uses fileContent)
      * 4. AggregateResults - Collect all suggestions
      * 5. FormatCliOutput - Convert to CLI response format

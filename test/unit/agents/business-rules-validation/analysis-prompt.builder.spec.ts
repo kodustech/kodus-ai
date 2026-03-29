@@ -96,4 +96,48 @@ describe('buildBusinessRulesAnalysisPrompt', () => {
 
         expect(prompt).toContain('USER LANGUAGE: en-US');
     });
+
+    it('does not treat URL-only bullet items as acceptance criteria', () => {
+        const prompt = buildBusinessRulesAnalysisPrompt({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            userLanguage: 'en-US',
+            taskQuality: 'PARTIAL',
+            taskContext:
+                'Description:\nSome context\n\nLinks:\n- http://editorconfig.org.',
+            prDiff: 'diff --git a/file.ts b/file.ts',
+            prBody: 'PR body',
+        } as BusinessRulesContext);
+
+        expect(prompt).toContain(
+            '(no structured acceptance criteria available — use FULL_TASK_CONTEXT to identify requirements)',
+        );
+        expect(prompt).not.toContain('extracted from task description');
+        expect(prompt).not.toContain('"http://editorconfig.org."');
+    });
+
+    it('extracts task id and sanitizes links from raw task context when normalized context is missing', () => {
+        const prompt = buildBusinessRulesAnalysisPrompt({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            userLanguage: 'en-US',
+            taskQuality: 'PARTIAL',
+            taskContext:
+                'Task ID: KC-1441\nTitle: Team-scoped rules\nLinks:\n- https://kodustech.atlassian.net/browse/KC-1441.',
+            prDiff: 'diff --git a/file.ts b/file.ts',
+            prBody: 'PR body',
+        } as BusinessRulesContext);
+
+        expect(prompt).toContain('TASK: KC-1441 — Team-scoped rules');
+        expect(prompt).toContain(
+            'TASK_LINKS:\nhttps://kodustech.atlassian.net/browse/KC-1441',
+        );
+        expect(prompt).toContain(
+            'TASK_LINKS:\nhttps://kodustech.atlassian.net/browse/KC-1441\n\nACCEPTANCE_CRITERIA:',
+        );
+    });
 });

@@ -24,7 +24,7 @@ import {
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
-import { Inject, Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 @Injectable()
@@ -65,6 +65,17 @@ export class ApplyCodeReviewPresetUseCase implements IUseCase {
         };
 
         try {
+            const centralizedConfig = await this.parametersService.findByKey(
+                ParametersKey.CENTRALIZED_CONFIG,
+                organizationAndTeamData,
+            );
+
+            if (centralizedConfig?.configValue?.enabled === true) {
+                throw new ForbiddenException(
+                    'Code review settings are locked while centralized configuration is enabled.',
+                );
+            }
+
             const existing = await this.parametersService.findByKey(
                 ParametersKey.CODE_REVIEW_CONFIG,
                 organizationAndTeamData,
@@ -100,6 +111,10 @@ export class ApplyCodeReviewPresetUseCase implements IUseCase {
 
             return updatedConfig;
         } catch (error) {
+            if (error instanceof ForbiddenException) {
+                throw error;
+            }
+
             this.logger.error({
                 message: 'Failed to apply code review preset',
                 context: ApplyCodeReviewPresetUseCase.name,

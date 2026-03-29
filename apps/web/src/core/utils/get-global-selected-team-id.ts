@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { getTeams } from "@services/teams/fetch";
+import { TEAM_STATUS } from "src/core/types";
 
-import { TEAM_STATUS } from "../types";
 import { CookieName } from "./cookie";
 
 export const getGlobalSelectedTeamId = async () => {

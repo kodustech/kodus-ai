@@ -175,6 +175,7 @@ jobs:
         if: always() && needs.create-release.result == 'success'
         runs-on: ubuntu-latest
         environment: production
+        permissions: {}
         steps:
             - name: Check Discord webhook configuration
               id: discord-webhook

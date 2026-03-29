@@ -184,7 +184,7 @@ export default function ReviewModePage() {
         undefined,
         onboardingEnabled,
         {
-            staleTime: 0,
+            staleTime: 10000,
             refetchOnMount: "always",
             refetchOnReconnect: true,
             retry: 3,
@@ -202,10 +202,9 @@ export default function ReviewModePage() {
                               mode === "default"
                           );
                       });
-                      return hasRecommendation ? false : 5000;
+                      return hasRecommendation ? false : 15000;
                   }
                 : false,
-            refetchIntervalInBackground: true,
         },
     );
 

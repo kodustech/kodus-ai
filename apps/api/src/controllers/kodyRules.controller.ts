@@ -697,13 +697,14 @@ export class KodyRulesController {
     })
     @ApiNoContentResponse({ description: 'Resync started' })
     public async resyncIdeRules(
-        @Body() body: { teamId: string; repositoryId: string },
+        @Body() body: { teamId: string; repositoryId: string; path?: string },
     ) {
         const respositories = [body.repositoryId];
 
         return this.resyncRulesFromIdeUseCase.execute({
             teamId: body.teamId,
             repositoriesIds: respositories,
+            path: body.path,
         });
     }
 }

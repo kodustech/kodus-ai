@@ -37,8 +37,14 @@ export interface CodeReviewTimelineItem {
                         path?: string;
                         file?: string;
                         message?: string;
+                        isTimeout?: boolean;
                     }
               > | null;
+              fileTimings?: Array<{
+                  file: string;
+                  durationMs: number;
+                  status: "success" | "error" | "timeout";
+              }> | null;
               cta?: {
                   label: string;
                   href: string;
@@ -91,4 +97,56 @@ export interface PullRequestExecutionsResponse {
     data: PullRequestExecutionsPayload;
     statusCode: number;
     type: "Array" | string;
+}
+
+export interface PullRequestSuggestion {
+    id?: string;
+    filePath?: string;
+    language?: string;
+    suggestionContent?: string;
+    existingCode?: string;
+    improvedCode?: string;
+    oneSentenceSummary?: string;
+    relevantLinesStart?: number;
+    relevantLinesEnd?: number;
+    label?: string;
+    severity?: string;
+    deliveryStatus?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    comment?: { id: number | string; pullRequestReviewId: number | null };
+}
+
+export interface PullRequestSuggestionsPayload {
+    prNumber: number;
+    repositoryId: string;
+    repositoryFullName?: string;
+    suggestions: {
+        files: PullRequestSuggestion[];
+        prLevel: PullRequestSuggestion[];
+    };
+}
+
+export interface PullRequestSuggestionsResponse {
+    data: PullRequestSuggestionsPayload;
+    statusCode: number;
+    type: string;
+}
+
+export interface PullRequestFile {
+    filename: string;
+    status: string;
+    additions: number;
+    deletions: number;
+    changes: number;
+    patch?: string;
+    previous_filename?: string;
+}
+
+export interface PullRequestFilesResponse {
+    data: {
+        files: PullRequestFile[];
+    };
+    statusCode: number;
+    type: string;
 }

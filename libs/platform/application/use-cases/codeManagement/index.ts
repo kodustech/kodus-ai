@@ -6,15 +6,16 @@ import { DeleteIntegrationAndRepositoriesUseCase } from './delete-integration-an
 import { DeleteIntegrationUseCase } from './delete-integration.use-case';
 import { FinishOnboardingUseCase } from './finish-onboarding.use-case';
 import { GetCodeManagementMemberListUseCase } from './get-code-management-members-list.use-case';
+import { GetCurrentCodeManagementUserUseCase } from './get-current-code-management-user.use-case';
 import { GetPRsByRepoUseCase } from './get-prs-repo.use-case';
 import { GetPRsUseCase } from './get-prs.use-case';
 import { GetRepositoriesUseCase } from './get-repositories';
-import { GetSelectedRepositoriesUseCase } from './get-selected-repositories.use-case';
 import { GetRepositoryTreeByDirectoryUseCase } from './get-repository-tree-by-directory.use-case';
+import { GetSelectedRepositoriesUseCase } from './get-selected-repositories.use-case';
 import { GetWebhookStatusUseCase } from './get-webhook-status.use-case';
-import { GetCurrentCodeManagementUserUseCase } from './get-current-code-management-user.use-case';
-import { SearchCodeManagementUsersUseCase } from './search-code-management-users.use-case';
 import { ReceiveWebhookUseCase } from './receiveWebhook.use-case';
+import { SearchCodeManagementUsersUseCase } from './search-code-management-users.use-case';
+import { TriggerBusinessValidationUseCase } from './trigger-business-validation.use-case';
 import { UpdateAutoLicenseAllowedUsersUseCase } from './update-auto-license-allowed-users.use-case';
 
 export default [
@@ -35,5 +36,6 @@ export default [
     GetWebhookStatusUseCase,
     SearchCodeManagementUsersUseCase,
     GetCurrentCodeManagementUserUseCase,
+    TriggerBusinessValidationUseCase,
     UpdateAutoLicenseAllowedUsersUseCase,
 ];

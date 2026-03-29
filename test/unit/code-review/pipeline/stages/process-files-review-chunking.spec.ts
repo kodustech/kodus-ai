@@ -1,9 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProcessFilesReview } from '@libs/code-review/pipeline/stages/process-files-review.stage';
-import {
-    SUGGESTION_SERVICE_TOKEN,
-    ISuggestionService,
-} from '@libs/code-review/domain/contracts/SuggestionService.contract';
+import { SUGGESTION_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/SuggestionService.contract';
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { FILE_REVIEW_CONTEXT_PREPARATION_TOKEN } from '@libs/core/domain/interfaces/file-review-context-preparation.interface';
 import { KODY_FINE_TUNING_CONTEXT_PREPARATION_TOKEN } from '@libs/core/domain/interfaces/kody-fine-tuning-context-preparation.interface';
@@ -12,7 +9,6 @@ import { CodeAnalysisOrchestrator } from '@libs/ee/codeBase/codeAnalysisOrchestr
 import { ASTContentFormatterService } from '@libs/code-review/infrastructure/adapters/services/astContentFormatter.service';
 import {
     AnalysisContext,
-    AIAnalysisResult,
     CodeSuggestion,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
@@ -67,7 +63,7 @@ function makeSuggestion(id: string, file: string): Partial<CodeSuggestion> {
 const mockSuggestionService = {
     filterCodeSuggestionsByReviewOptions: jest.fn((_opts, result) => result),
     filterSuggestionsCodeDiff: jest.fn((_patch, suggestions) => suggestions),
-    getDiscardedSuggestions: jest.fn(() => []),
+    getDiscardedSuggestions: jest.fn((..._args: any[]) => []),
     filterSuggestionsSafeGuard: jest.fn(),
     analyzeSuggestionsSeverity: jest.fn(
         (_org, _pr, suggestions) => suggestions,

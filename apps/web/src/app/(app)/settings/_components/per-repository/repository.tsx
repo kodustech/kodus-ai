@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import {
@@ -9,7 +8,6 @@ import {
     CollapsibleIndicator,
     CollapsibleTrigger,
 } from "@components/ui/collapsible";
-import { Link } from "@components/ui/link";
 import { magicModal } from "@components/ui/magic-modal";
 import {
     SidebarMenuItem,
@@ -25,18 +23,179 @@ import type { useSuspenseGetParameterPlatformConfigs } from "@services/parameter
 import { KodyLearningStatus } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
+import { useCustomMessagesOverrideCountsByRepository } from "@services/pull-request-messages/hooks";
 import { Plus } from "lucide-react";
-import { safeArray } from "src/core/utils/safe-array";
 
 import { useCodeReviewRouteParams } from "../../_hooks";
-import { countConfigOverrides } from "../../_utils/count-overrides";
+import { countConfigOverridesForRoutes } from "../../_utils/count-overrides";
 import {
     FormattedConfigLevel,
     type FormattedGlobalCodeReviewConfig,
 } from "../../code-review/_types";
 import { AddRepoModal } from "../copy-settings-modal";
+import { RouteButtonWithOverrideCount } from "../route-button-with-override-count";
 import { PerDirectory } from "./directory";
 import { SidebarRepositoryOrDirectoryDropdown } from "./options-dropdown";
+
+const RepositoryCollapsibleItem = ({
+    repository,
+    repositoryId,
+    directoryId,
+    pageName,
+    routes,
+}: {
+    repository: FormattedGlobalCodeReviewConfig["repositories"][number];
+    repositoryId: string;
+    directoryId?: string;
+    pageName: string;
+    routes: Array<{ label: string; href: string }>;
+}) => {
+    const hasRepositoryConfig = repository.isSelected;
+    const routeHrefs = routes.map((route) => route.href);
+
+    const repositoryConfigOverrideCount = hasRepositoryConfig
+        ? countConfigOverridesForRoutes(
+              repository.configs,
+              routeHrefs,
+              FormattedConfigLevel.REPOSITORY,
+          )
+        : 0;
+
+    const shouldFetchRepositoryCounts =
+        hasRepositoryConfig || (repository.directories?.length ?? 0) > 0;
+
+    const { data: repositoryOverrideCountsData } =
+        useCustomMessagesOverrideCountsByRepository(
+            repository.id,
+            shouldFetchRepositoryCounts,
+        );
+
+    const repositoryCustomMessagesOverrideCount = hasRepositoryConfig
+        ? (repositoryOverrideCountsData?.repositoryOverrideCount ?? 0)
+        : 0;
+
+    const directoryCustomMessageCounts = new Map(
+        (repositoryOverrideCountsData?.directoryOverrideCounts ?? []).map(
+            (item) => [item.directoryId, item.overrideCount] as const,
+        ),
+    );
+
+    const nestedDirectoryOverrideCount = (repository.directories ?? []).reduce(
+        (total, directory) => {
+            const directoryConfigOverrideCount = countConfigOverridesForRoutes(
+                directory.configs,
+                routeHrefs,
+                FormattedConfigLevel.DIRECTORY,
+            );
+
+            return (
+                total +
+                directoryConfigOverrideCount +
+                (directoryCustomMessageCounts.get(directory.id) ?? 0)
+            );
+        },
+        0,
+    );
+
+    const overrideCount =
+        repositoryConfigOverrideCount +
+        repositoryCustomMessagesOverrideCount +
+        nestedDirectoryOverrideCount;
+
+    return (
+        <Collapsible
+            key={repository.id}
+            defaultOpen={repositoryId === repository.id}>
+            <div className="flex items-center justify-between gap-2">
+                <Tooltip disableHoverableContent>
+                    <CollapsibleTrigger asChild>
+                        <TooltipTrigger asChild>
+                            <Button
+                                size="md"
+                                variant="helper"
+                                className="h-fit flex-1 justify-start py-2"
+                                leftIcon={
+                                    <CollapsibleIndicator className="-ml-1 group-data-[state=closed]/collapsible:rotate-[-90deg] group-data-[state=open]/collapsible:rotate-0" />
+                                }
+                                rightIcon={
+                                    overrideCount > 0 && (
+                                        <Badge
+                                            variant="primary-dark"
+                                            className="h-5 min-w-5 rounded-full px-1.5 text-[10px] font-medium">
+                                            {overrideCount}
+                                        </Badge>
+                                    )
+                                }>
+                                <span className="line-clamp-1 truncate text-ellipsis">
+                                    {repository.name}
+                                </span>
+                            </Button>
+                        </TooltipTrigger>
+                    </CollapsibleTrigger>
+
+                    <TooltipContent side="right" className="text-sm">
+                        {repository.name}
+                        {overrideCount > 0 && (
+                            <div className="text-text-tertiary mt-1 text-xs">
+                                {overrideCount} config
+                                {overrideCount !== 1 ? "s" : ""} overridden
+                            </div>
+                        )}
+                    </TooltipContent>
+                </Tooltip>
+
+                {hasRepositoryConfig && (
+                    <SidebarRepositoryOrDirectoryDropdown
+                        repository={repository}
+                    />
+                )}
+            </div>
+
+            <CollapsibleContent>
+                <SidebarMenuSub>
+                    {hasRepositoryConfig &&
+                        routes.map(({ label, href }) => {
+                            const active =
+                                repositoryId === repository.id &&
+                                pageName === href &&
+                                !directoryId;
+
+                            return (
+                                <SidebarMenuSubItem key={label}>
+                                    <RouteButtonWithOverrideCount
+                                        label={label}
+                                        href={href}
+                                        to={`/settings/code-review/${repository.id}/${href}`}
+                                        active={active}
+                                        level={FormattedConfigLevel.REPOSITORY}
+                                        config={repository.configs}
+                                        customMessagesOverrideCount={
+                                            repositoryCustomMessagesOverrideCount
+                                        }
+                                    />
+                                </SidebarMenuSubItem>
+                            );
+                        })}
+
+                    {repository.directories?.map((d) => {
+                        return (
+                            <PerDirectory
+                                key={d.id}
+                                directory={d}
+                                repository={repository}
+                                routes={routes}
+                                configs={d.configs}
+                                customMessagesOverrideCount={
+                                    directoryCustomMessageCounts.get(d.id) ?? 0
+                                }
+                            />
+                        );
+                    })}
+                </SidebarMenuSub>
+            </CollapsibleContent>
+        </Collapsible>
+    );
+};
 
 export const PerRepository = ({
     configValue,
@@ -52,12 +211,6 @@ export const PerRepository = ({
         Action.Create,
         ResourceType.CodeReviewSettings,
     );
-
-    // Avoid hydration mismatch with Radix Collapsible/Tooltip IDs
-    const [mounted, setMounted] = useState(false);
-    useEffect(() => {
-        setMounted(true);
-    }, []);
 
     return (
         <SidebarMenuItem>
@@ -92,146 +245,22 @@ export const PerRepository = ({
             </div>
 
             <div className="flex flex-col gap-1">
-                {/* Render Collapsible only after mount to avoid hydration mismatch */}
-                {mounted &&
-                    safeArray(configValue?.repositories)
-                        .filter(
-                            (r) =>
-                                r.isSelected ||
-                                safeArray(r.directories).length > 0,
-                        )
-                        .map((r) => {
-                            const hasRepositoryConfig = r.isSelected;
-                            const overrideCount = hasRepositoryConfig
-                                ? countConfigOverrides(
-                                      r.configs,
-                                      FormattedConfigLevel.REPOSITORY,
-                                  )
-                                : 0;
-
-                            return (
-                                <Collapsible
-                                    key={r.id}
-                                    defaultOpen={repositoryId === r.id}>
-                                    <div className="flex items-center justify-between gap-2">
-                                        <Tooltip disableHoverableContent>
-                                            <CollapsibleTrigger asChild>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        size="md"
-                                                        variant="helper"
-                                                        className="h-fit flex-1 justify-start py-2"
-                                                        leftIcon={
-                                                            <CollapsibleIndicator className="-ml-1 group-data-[state=closed]/collapsible:rotate-[-90deg] group-data-[state=open]/collapsible:rotate-0" />
-                                                        }
-                                                        rightIcon={
-                                                            overrideCount >
-                                                                0 && (
-                                                                <Badge
-                                                                    variant="primary-dark"
-                                                                    className="h-5 min-w-5 rounded-full px-1.5 text-[10px] font-medium">
-                                                                    {
-                                                                        overrideCount
-                                                                    }
-                                                                </Badge>
-                                                            )
-                                                        }>
-                                                        <span className="line-clamp-1 truncate text-ellipsis">
-                                                            {r.name}
-                                                        </span>
-                                                    </Button>
-                                                </TooltipTrigger>
-                                            </CollapsibleTrigger>
-
-                                            <TooltipContent
-                                                side="right"
-                                                className="text-sm">
-                                                {r.name}
-                                                {overrideCount > 0 && (
-                                                    <div className="text-text-tertiary mt-1 text-xs">
-                                                        {overrideCount} config
-                                                        {overrideCount !== 1
-                                                            ? "s"
-                                                            : ""}{" "}
-                                                        overridden
-                                                    </div>
-                                                )}
-                                            </TooltipContent>
-                                        </Tooltip>
-
-                                        {hasRepositoryConfig && (
-                                            <SidebarRepositoryOrDirectoryDropdown
-                                                repository={r}
-                                            />
-                                        )}
-                                    </div>
-
-                                    <CollapsibleContent>
-                                        <SidebarMenuSub>
-                                            {hasRepositoryConfig &&
-                                                routes.map(
-                                                    ({ label, href }) => {
-                                                        const active =
-                                                            repositoryId ===
-                                                                r.id &&
-                                                            pageName === href &&
-                                                            !directoryId;
-
-                                                        return (
-                                                            <SidebarMenuSubItem
-                                                                key={label}>
-                                                                <Link
-                                                                    className="w-full"
-                                                                    href={`/settings/code-review/${r.id}/${href}`}>
-                                                                    <Button
-                                                                        key={
-                                                                            label
-                                                                        }
-                                                                        decorative
-                                                                        size="sm"
-                                                                        variant="cancel"
-                                                                        active={
-                                                                            active
-                                                                        }
-                                                                        className="min-h-auto w-full justify-start px-0 py-2">
-                                                                        {label}
-                                                                    </Button>
-                                                                </Link>
-                                                            </SidebarMenuSubItem>
-                                                        );
-                                                    },
-                                                )}
-
-                                            {r.directories?.map((d) => {
-                                                const directoryWithConfigs =
-                                                    configValue.repositories
-                                                        .find(
-                                                            (repo) =>
-                                                                repo.id ===
-                                                                r.id,
-                                                        )
-                                                        ?.directories?.find(
-                                                            (dir) =>
-                                                                dir.id === d.id,
-                                                        );
-
-                                                return (
-                                                    <PerDirectory
-                                                        key={d.id}
-                                                        directory={d}
-                                                        repository={r}
-                                                        routes={routes}
-                                                        configs={
-                                                            directoryWithConfigs?.configs
-                                                        }
-                                                    />
-                                                );
-                                            })}
-                                        </SidebarMenuSub>
-                                    </CollapsibleContent>
-                                </Collapsible>
-                            );
-                        })}
+                {configValue.repositories
+                    .filter(
+                        (repository) =>
+                            repository.isSelected ||
+                            (repository.directories?.length ?? 0) > 0,
+                    )
+                    .map((repository) => (
+                        <RepositoryCollapsibleItem
+                            key={repository.id}
+                            repository={repository}
+                            repositoryId={repositoryId}
+                            directoryId={directoryId}
+                            pageName={pageName}
+                            routes={routes}
+                        />
+                    ))}
             </div>
         </SidebarMenuItem>
     );

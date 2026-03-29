@@ -10,6 +10,17 @@ import {
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { OrganizationParametersEntity } from '@libs/organization/domain/organizationParameters/entities/organizationParameters.entity';
 import { Inject, Injectable } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
+import { ActionType } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
+
+const AUDITABLE_KEYS = new Set([
+    OrganizationParametersKey.AUTO_JOIN_CONFIG,
+    OrganizationParametersKey.TIMEZONE_CONFIG,
+    OrganizationParametersKey.COCKPIT_METRICS_VISIBILITY,
+]);
 
 @Injectable()
 export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
@@ -19,6 +30,11 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
     constructor(
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
         private readonly organizationParametersService: IOrganizationParametersService,
+
+        @Inject(REQUEST)
+        private readonly request: UserRequest,
+
+        private readonly eventEmitter: EventEmitter2,
     ) {}
 
     async execute(
@@ -39,11 +55,38 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
                 );
             }
 
-            return await this.organizationParametersService.createOrUpdateConfig(
-                organizationParametersKey,
-                processedConfigValue,
-                organizationAndTeamData,
-            );
+            let previousValue: any = null;
+            if (AUDITABLE_KEYS.has(organizationParametersKey)) {
+                const existing =
+                    await this.organizationParametersService.findByKey(
+                        organizationParametersKey,
+                        organizationAndTeamData,
+                    );
+                previousValue = existing?.configValue ?? null;
+            }
+
+            const result =
+                await this.organizationParametersService.createOrUpdateConfig(
+                    organizationParametersKey,
+                    processedConfigValue,
+                    organizationAndTeamData,
+                );
+
+            if (AUDITABLE_KEYS.has(organizationParametersKey)) {
+                this.eventEmitter.emit(AuditLogEvents.ORG_SETTINGS, {
+                    organizationAndTeamData,
+                    userInfo: {
+                        userId: this.request.user?.uuid,
+                        userEmail: this.request.user?.email,
+                    },
+                    actionType: ActionType.EDIT,
+                    settingKey: organizationParametersKey,
+                    previousValue,
+                    currentValue: processedConfigValue,
+                });
+            }
+
+            return result;
         } catch (error) {
             this.logger.error({
                 message: 'Error creating or updating organization parameters',
@@ -93,6 +136,18 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
                 mergedConfigValue,
                 organizationAndTeamData,
             );
+
+        this.eventEmitter.emit(AuditLogEvents.ORG_SETTINGS, {
+            organizationAndTeamData,
+            userInfo: {
+                userId: this.request.user?.uuid,
+                userEmail: this.request.user?.email,
+            },
+            actionType: ActionType.EDIT,
+            settingKey: organizationParametersKey,
+            previousValue: existingConfig ?? null,
+            currentValue: mergedConfigValue,
+        });
 
         return !!result;
     }

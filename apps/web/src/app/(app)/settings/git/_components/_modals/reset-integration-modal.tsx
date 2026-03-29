@@ -66,6 +66,15 @@ export const ResetIntegrationModal = ({
                         },
                     ),
                 }),
+                resetQueries({
+                    type: "all",
+                    queryKey: generateQueryKey(PARAMETERS_PATHS.GET_BY_KEY, {
+                        params: {
+                            key: ParametersConfigKey.CENTRALIZED_CONFIG,
+                            teamId,
+                        },
+                    }),
+                }),
                 revalidateServerSidePath("/settings/git"),
             ]);
         } catch (error) {
@@ -112,6 +121,26 @@ export const ResetIntegrationModal = ({
                     queryKey: generateQueryKey(PARAMETERS_PATHS.GET_BY_KEY, {
                         params: {
                             key: ParametersConfigKey.CODE_REVIEW_CONFIG,
+                            teamId,
+                        },
+                    }),
+                }),
+                resetQueries({
+                    type: "all",
+                    queryKey: generateQueryKey(
+                        PARAMETERS_PATHS.GET_CODE_REVIEW_PARAMETER,
+                        {
+                            params: {
+                                teamId,
+                            },
+                        },
+                    ),
+                }),
+                resetQueries({
+                    type: "all",
+                    queryKey: generateQueryKey(PARAMETERS_PATHS.GET_BY_KEY, {
+                        params: {
+                            key: ParametersConfigKey.CENTRALIZED_CONFIG,
                             teamId,
                         },
                     }),

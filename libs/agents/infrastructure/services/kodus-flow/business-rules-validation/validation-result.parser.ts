@@ -5,6 +5,11 @@ import {
 
 import { ValidationResult } from './types';
 
+const PARSER_FALLBACK_SUMMARY =
+    '❌ **Error processing validation**\n\nAn error occurred while processing the system response. Please try again.';
+const PARSER_FALLBACK_MISSING_INFO =
+    'Error parsing validation result. Please try again.';
+
 export function parseBusinessRulesValidationResult(
     result: unknown,
 ): ValidationResult {
@@ -24,23 +29,36 @@ export function parseBusinessRulesValidationResult(
             };
         }
 
-        if (looksLikeValidationSummary(unwrapped)) {
+        const normalized = unwrapped.trim();
+        if (!normalized) {
+            return buildParserFallbackResult();
+        }
+
+        const looksLikeLimitation = looksLikeValidationLimitation(normalized);
+        if (
+            looksLikeValidationSummary(normalized) ||
+            looksLikeLimitation ||
+            containsNaturalLanguage(normalized)
+        ) {
             return {
-                needsMoreInfo: false,
-                missingInfo: '',
-                summary: unwrapped.trim(),
+                needsMoreInfo: looksLikeLimitation,
+                missingInfo: looksLikeLimitation ? normalized : '',
+                summary: normalized,
             };
         }
     }
 
+    return buildParserFallbackResult();
+}
+
+function buildParserFallbackResult(): ValidationResult {
     return {
         needsMoreInfo: true,
         mode: 'limitation_response',
         reason: 'parser_fallback',
         confidence: 'low',
-        missingInfo: 'Error parsing validation result. Please try again.',
-        summary:
-            '❌ **Error processing validation**\n\nAn error occurred while processing the system response. Please try again.',
+        missingInfo: PARSER_FALLBACK_MISSING_INFO,
+        summary: PARSER_FALLBACK_SUMMARY,
     };
 }
 
@@ -50,10 +68,7 @@ function unwrapValidationResult(result: unknown): unknown {
     for (let index = 0; index < 4; index++) {
         if (typeof current === 'string') {
             const stripped = stripCodeFence(current);
-            const parsed = safeJsonParse<unknown | undefined>(
-                stripped,
-                undefined,
-            );
+            const parsed = parseJsonLikeString(stripped);
             if (parsed !== undefined) {
                 current = parsed;
                 continue;
@@ -71,9 +86,25 @@ function unwrapValidationResult(result: unknown): unknown {
             current = action.content;
             continue;
         }
+        const actionBlocksText = collectTextFromContentBlocks(action.content);
+        if (typeof actionBlocksText === 'string') {
+            current = actionBlocksText;
+            continue;
+        }
 
         if (typeof currentRecord.content === 'string') {
             current = currentRecord.content;
+            continue;
+        }
+        const contentBlocksText = collectTextFromContentBlocks(
+            currentRecord.content,
+        );
+        if (typeof contentBlocksText === 'string') {
+            current = contentBlocksText;
+            continue;
+        }
+        if (typeof currentRecord.text === 'string') {
+            current = currentRecord.text;
             continue;
         }
 
@@ -172,7 +203,9 @@ function looksLikeValidationSummary(value: string): boolean {
         normalized.includes('business rules validation') ||
         normalized.includes(
             'analysis performed by kodus ai business rules validator',
-        )
+        ) ||
+        /^#{1,6}\s+\S+/m.test(value) ||
+        /\*\*status:\*\*/i.test(value)
     );
 }
 
@@ -197,4 +230,122 @@ function extractFieldsFromString(text: string): Partial<ValidationResult> {
     }
 
     return fields;
+}
+
+function parseJsonLikeString(text: string): unknown | undefined {
+    const direct = safeJsonParse<unknown | undefined>(text, undefined);
+    if (direct !== undefined) {
+        return direct;
+    }
+
+    const fencedCandidates = [
+        ...text.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi),
+    ];
+    for (const match of fencedCandidates) {
+        const candidate = match[1]?.trim();
+        if (!candidate) {
+            continue;
+        }
+        const parsed = safeJsonParse<unknown | undefined>(candidate, undefined);
+        if (parsed !== undefined) {
+            return parsed;
+        }
+    }
+
+    const extractedObject = extractFirstJsonObject(text);
+    if (!extractedObject) {
+        return undefined;
+    }
+    return safeJsonParse<unknown | undefined>(extractedObject, undefined);
+}
+
+function extractFirstJsonObject(text: string): string | undefined {
+    let startIndex = -1;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let index = 0; index < text.length; index += 1) {
+        const char = text[index];
+
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+            } else if (char === '\\') {
+                escaped = true;
+            } else if (char === '"') {
+                inString = false;
+            }
+            continue;
+        }
+
+        if (char === '"') {
+            inString = true;
+            continue;
+        }
+
+        if (char === '{') {
+            if (depth === 0) {
+                startIndex = index;
+            }
+            depth += 1;
+            continue;
+        }
+
+        if (char === '}') {
+            if (depth === 0) {
+                continue;
+            }
+            depth -= 1;
+            if (depth === 0 && startIndex >= 0) {
+                return text.slice(startIndex, index + 1);
+            }
+        }
+    }
+
+    return undefined;
+}
+
+function looksLikeValidationLimitation(value: string): boolean {
+    const normalized = value.trim().toLowerCase();
+    return (
+        normalized.includes('need task information') ||
+        normalized.includes('insufficient task context') ||
+        normalized.includes('missing validation context') ||
+        normalized.includes('need pull request diff') ||
+        normalized.includes('mcp integration required') ||
+        normalized.includes('could not start the skill') ||
+        normalized.includes("couldn't start the skill")
+    );
+}
+
+function containsNaturalLanguage(value: string): boolean {
+    return /[a-zà-ÿ]{4,}/i.test(value);
+}
+
+function collectTextFromContentBlocks(value: unknown): string | undefined {
+    if (!Array.isArray(value) || value.length === 0) {
+        return undefined;
+    }
+
+    const text = value
+        .map((item) => {
+            if (typeof item === 'string') {
+                return item;
+            }
+
+            const block = asRecord(item);
+            if (typeof block.text === 'string') {
+                return block.text;
+            }
+            if (typeof block.content === 'string') {
+                return block.content;
+            }
+            return '';
+        })
+        .filter((item) => item.trim().length > 0)
+        .join('\n')
+        .trim();
+
+    return text.length > 0 ? text : undefined;
 }

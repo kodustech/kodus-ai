@@ -75,12 +75,24 @@ export class CodebaseSearchService {
             // 1. Execute grep
             const glob = includes?.[0];
             let raw: string;
+
+            this.logger.log({
+                message: `[DEBUG] codebaseSearch.grep starting: query="${query}" path="." glob="${glob ?? 'none'}"`,
+                context: CodebaseSearchService.name,
+            });
+
             try {
                 raw = await remoteCommands.grep(query, '.', glob);
             } catch (error) {
                 // rg exits with code 1 when no matches found — not an error
                 const message =
                     error instanceof Error ? error.message : String(error);
+
+                this.logger.log({
+                    message: `[DEBUG] codebaseSearch.grep threw for query="${query}": ${message.slice(0, 300)}`,
+                    context: CodebaseSearchService.name,
+                });
+
                 if (
                     message.includes('exit code 1') ||
                     message.includes('exit status 1') ||
@@ -92,6 +104,12 @@ export class CodebaseSearchService {
                 return { success: false, contexts: [], error: message };
             }
 
+            this.logger.log({
+                message: `[DEBUG] codebaseSearch.grep returned for query="${query}": ${raw ? raw.length + ' chars, ' + raw.trim().split('\n').length + ' lines' : 'EMPTY'}`,
+                context: CodebaseSearchService.name,
+                metadata: { rawPreview: raw?.slice(0, 300) },
+            });
+
             if (!raw || !raw.trim()) {
                 return { success: true, contexts: [] };
             }
@@ -102,7 +120,10 @@ export class CodebaseSearchService {
             // 3. Filter by excludes
             const filtered = excludes?.length
                 ? matches.filter(
-                      (m) => !excludes.some((ex) => this.matchesExclude(m.file, ex)),
+                      (m) =>
+                          !excludes.some((ex) =>
+                              this.matchesExclude(m.file, ex),
+                          ),
                   )
                 : matches;
 
@@ -159,7 +180,10 @@ export class CodebaseSearchService {
             if (secondColon === -1) continue;
 
             const file = line.substring(0, firstColon);
-            const lineNum = parseInt(line.substring(firstColon + 1, secondColon), 10);
+            const lineNum = parseInt(
+                line.substring(firstColon + 1, secondColon),
+                10,
+            );
             const text = line.substring(secondColon + 1);
 
             if (!file || isNaN(lineNum)) continue;
@@ -261,7 +285,11 @@ export class CodebaseSearchService {
                 );
 
                 if (content && content.trim()) {
-                    return { file, content, lines: [[start, end]] } as CodebaseSearchContext;
+                    return {
+                        file,
+                        content,
+                        lines: [[start, end]],
+                    } as CodebaseSearchContext;
                 }
                 return null;
             }),
@@ -299,13 +327,16 @@ export class CodebaseSearchService {
         if (exclude.endsWith('/')) {
             const segments = filePath.split('/');
             return segments.some((_, i) =>
-                segments.slice(0, i + 1).join('/').startsWith(exclude.slice(0, -1)),
+                segments
+                    .slice(0, i + 1)
+                    .join('/')
+                    .startsWith(exclude.slice(0, -1)),
             );
         }
 
         // Directory segment: "node_modules" matches as a path segment, not substring
         // "test" matches "test/foo.ts" or "src/test/foo.ts" but NOT "attest.ts"
         const segments = filePath.split('/');
-        return segments.some(seg => seg === exclude);
+        return segments.some((seg) => seg === exclude);
     }
 }

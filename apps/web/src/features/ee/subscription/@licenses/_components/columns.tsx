@@ -52,10 +52,15 @@ const LicenseAssignmentCell = ({ row }: { row: Row<LicenseTableRow> }) => {
         <Switch
             loading={isAssigningOrDeassigningLicense}
             checked={row.original.licenseStatus === "active"}
-            disabled={!canEdit || subscription.status !== "active"}
+            disabled={
+                !canEdit ||
+                (subscription.status !== "active" &&
+                    subscription.status !== "licensed-self-hosted")
+            }
             onCheckedChange={async () => {
                 if (
-                    subscription.status === "active" &&
+                    (subscription.status === "active" ||
+                        subscription.status === "licensed-self-hosted") &&
                     subscription.usersWithAssignedLicense.length >=
                         subscription.numberOfLicenses &&
                     row.original.licenseStatus === "inactive"

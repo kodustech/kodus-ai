@@ -5,6 +5,9 @@
 FROM docker.io/library/node:22.22.0-slim AS builder
 WORKDIR /usr/src/app
 
+ARG RELEASE_VERSION=local
+ENV RELEASE_VERSION=${RELEASE_VERSION}
+
 COPY package.json yarn.lock ./
 
 RUN yarn install --frozen-lockfile --production=false

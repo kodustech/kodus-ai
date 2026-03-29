@@ -93,9 +93,14 @@ const TimeAgoDisplay = ({
     }, [dateString]);
 
     return (
-        <>
-            {displayedTime} · {formatDateTime(dateString, timezone)}
-        </>
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <span className="cursor-default">{displayedTime}</span>
+            </TooltipTrigger>
+            <TooltipContent className="text-xs">
+                {formatDateTime(dateString, timezone)}
+            </TooltipContent>
+        </Tooltip>
     );
 };
 
@@ -268,9 +273,10 @@ const getPartialErrors = (
                     entry.name ||
                     "";
                 const message = entry.message || entry.error || "";
+                const timeoutTag = entry.isTimeout ? " \u23F1" : "";
 
                 if (file && message) {
-                    return `${file} — ${message}`;
+                    return `${file} — ${message}${timeoutTag}`;
                 }
 
                 return file || message || JSON.stringify(entry);
@@ -279,6 +285,23 @@ const getPartialErrors = (
         })
         .filter((value): value is string => Boolean(value && value.trim()))
         .map((value) => value.trim());
+};
+
+const formatFileTime = (ms: number): string => {
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    const mins = Math.floor(ms / 60000);
+    const secs = Math.round((ms % 60000) / 1000);
+    return `${mins}m ${secs.toString().padStart(2, "0")}s`;
+};
+
+const getFileTimings = (
+    metadata?: CodeReviewTimelineItem["metadata"] | null,
+): Array<{ file: string; durationMs: number; status: string }> | null => {
+    if (!metadata || typeof metadata !== "object") return null;
+    const raw = (metadata as Record<string, any>).fileTimings;
+    if (!Array.isArray(raw) || raw.length === 0) return null;
+    return raw;
 };
 
 const getStageDisplay = (item: CodeReviewTimelineItem) => {
@@ -298,12 +321,14 @@ const getStageDisplay = (item: CodeReviewTimelineItem) => {
         (item.stageName ? formatStageName(item.stageName) : item.message);
     const cta = getMetadataCta(item.metadata);
     const partialErrors = getPartialErrors(item.metadata);
+    const fileTimings = getFileTimings(item.metadata);
 
     return {
         label,
         message: item.message,
         cta,
         partialErrors,
+        fileTimings,
         visibility:
             item.metadata && typeof item.metadata === "object"
                 ? (item.metadata as Record<string, any>).visibility
@@ -438,7 +463,10 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                     </span>
                 </TableCell>
                 <TableCell className="w-20 text-center">
-                    <div className="flex justify-center gap-1.5">
+                    <NextLink
+                        href={`/pull-requests/${latest.repositoryId}/${latest.prNumber}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="hover:bg-card-lv3/50 flex justify-center gap-1.5 rounded-md px-1 py-0.5 transition-colors">
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <span className="bg-success/10 text-success inline-flex min-w-7 items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium tabular-nums">
@@ -446,7 +474,7 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                 </span>
                             </TooltipTrigger>
                             <TooltipContent className="text-xs">
-                                Suggestions sent for this PR
+                                View review details
                             </TooltipContent>
                         </Tooltip>
                         <Tooltip>
@@ -459,7 +487,7 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                 Suggestions filtered out by your configuration
                             </TooltipContent>
                         </Tooltip>
-                    </div>
+                    </NextLink>
                 </TableCell>
                 <TableCell className="w-32 text-center">
                     {getStatusBadge(
@@ -800,6 +828,54 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                                                                                             {
                                                                                                                 entry
                                                                                                             }
+                                                                                                        </li>
+                                                                                                    ),
+                                                                                                )}
+                                                                                            </ul>
+                                                                                        </details>
+                                                                                    )}
+                                                                                {stageInfo.fileTimings &&
+                                                                                    stageInfo
+                                                                                        .fileTimings
+                                                                                        .length >
+                                                                                        0 && (
+                                                                                        <details className="text-text-tertiary mt-2 text-xs">
+                                                                                            <summary className="cursor-pointer">
+                                                                                                File
+                                                                                                timings
+                                                                                                (
+                                                                                                {
+                                                                                                    stageInfo
+                                                                                                        .fileTimings
+                                                                                                        .length
+                                                                                                }
+
+                                                                                                )
+                                                                                            </summary>
+                                                                                            <ul className="mt-2 space-y-1 pl-4">
+                                                                                                {stageInfo.fileTimings.map(
+                                                                                                    (
+                                                                                                        ft,
+                                                                                                    ) => (
+                                                                                                        <li
+                                                                                                            key={
+                                                                                                                ft.file
+                                                                                                            }
+                                                                                                            className="font-mono text-xs">
+                                                                                                            {
+                                                                                                                ft.file
+                                                                                                            }{" "}
+                                                                                                            &mdash;{" "}
+                                                                                                            {formatFileTime(
+                                                                                                                ft.durationMs,
+                                                                                                            )}{" "}
+                                                                                                            {ft.status ===
+                                                                                                            "timeout"
+                                                                                                                ? "\u23F1 timeout"
+                                                                                                                : ft.status ===
+                                                                                                                    "error"
+                                                                                                                  ? "\u2717"
+                                                                                                                  : "\u2713"}
                                                                                                         </li>
                                                                                                     ),
                                                                                                 )}

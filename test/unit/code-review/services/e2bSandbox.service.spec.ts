@@ -87,8 +87,11 @@ describe('E2BSandboxService', () => {
             service = await createService({ API_E2B_KEY: 'key' });
         });
 
-        const buildAuthHeader = (platform: PlatformType, token: string) =>
-            (service as any).buildAuthHeader(platform, token);
+        const buildAuthHeader = (
+            platform: PlatformType,
+            token: string,
+            username?: string,
+        ) => (service as any).buildAuthHeader(platform, token, username);
 
         it('should use x-access-token for GitHub', () => {
             const header = buildAuthHeader(PlatformType.GITHUB, 'mytoken');
@@ -103,6 +106,23 @@ describe('E2BSandboxService', () => {
             const expectedBase64 =
                 Buffer.from('oauth2:mytoken').toString('base64');
             expect(header).toBe(`Authorization: Basic ${expectedBase64}`);
+        });
+
+        it('should use actual username for Bitbucket when provided', () => {
+            const header = buildAuthHeader(
+                PlatformType.BITBUCKET,
+                'app-pass',
+                'bbuser',
+            );
+            const expectedBase64 =
+                Buffer.from('bbuser:app-pass').toString('base64');
+            expect(header).toBe(`Authorization: Basic ${expectedBase64}`);
+        });
+
+        it('should throw when Bitbucket username is missing', () => {
+            expect(() =>
+                buildAuthHeader(PlatformType.BITBUCKET, 'app-pass'),
+            ).toThrow('Bitbucket authentication requires a username');
         });
     });
 
@@ -144,7 +164,7 @@ describe('E2BSandboxService', () => {
             const mockKill = jest.fn().mockResolvedValue(undefined);
             const mockRun = jest
                 .fn()
-                .mockResolvedValue({ stdout: '', stderr: '' });
+                .mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' });
             const mockSandbox = {
                 commands: { run: mockRun },
                 kill: mockKill,
@@ -192,7 +212,7 @@ describe('E2BSandboxService', () => {
             await service.createSandboxWithRepo(defaultParams);
 
             expect(Sandbox.create).toHaveBeenCalledWith({
-                timeoutMs: 5 * 60 * 1000,
+                timeoutMs: 10 * 60 * 1000,
                 apiKey: 'my-e2b-key',
             });
         });
@@ -257,7 +277,7 @@ describe('E2BSandboxService', () => {
             await service.createSandboxWithRepo(defaultParams);
 
             expect(Sandbox.create).toHaveBeenCalledWith('kodus-sandbox', {
-                timeoutMs: 5 * 60 * 1000,
+                timeoutMs: 10 * 60 * 1000,
                 apiKey: 'key',
             });
 
@@ -288,7 +308,7 @@ describe('E2BSandboxService', () => {
 
             const mockRun = jest
                 .fn()
-                .mockResolvedValue({ stdout: '', stderr: '' });
+                .mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' });
             const mockKill = jest.fn().mockResolvedValue(undefined);
             const fallbackSandbox = {
                 commands: { run: mockRun },
@@ -305,11 +325,11 @@ describe('E2BSandboxService', () => {
             // Should have tried template first, then fallback
             expect(Sandbox.create).toHaveBeenCalledTimes(2);
             expect(Sandbox.create).toHaveBeenNthCalledWith(1, 'bad-template', {
-                timeoutMs: 5 * 60 * 1000,
+                timeoutMs: 10 * 60 * 1000,
                 apiKey: 'key',
             });
             expect(Sandbox.create).toHaveBeenNthCalledWith(2, {
-                timeoutMs: 5 * 60 * 1000,
+                timeoutMs: 10 * 60 * 1000,
                 apiKey: 'key',
             });
 
@@ -356,7 +376,7 @@ describe('E2BSandboxService', () => {
             const mockKill = jest.fn().mockResolvedValue(undefined);
             const mockRun = jest
                 .fn()
-                .mockResolvedValue({ stdout: '', stderr: '' });
+                .mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' });
             const mockSandbox = {
                 commands: { run: mockRun },
                 kill: mockKill,
@@ -457,7 +477,11 @@ describe('E2BSandboxService', () => {
             const mockKill = jest.fn().mockResolvedValue(undefined);
             const { Sandbox } = require('e2b');
             Sandbox.create.mockResolvedValue({
-                commands: { run: jest.fn().mockResolvedValue({ stdout: '' }) },
+                commands: {
+                    run: jest
+                        .fn()
+                        .mockResolvedValue({ exitCode: 0, stdout: '' }),
+                },
                 kill: mockKill,
             });
 
@@ -482,7 +506,11 @@ describe('E2BSandboxService', () => {
                 .mockRejectedValue(new Error('kill failed'));
             const { Sandbox } = require('e2b');
             Sandbox.create.mockResolvedValue({
-                commands: { run: jest.fn().mockResolvedValue({ stdout: '' }) },
+                commands: {
+                    run: jest
+                        .fn()
+                        .mockResolvedValue({ exitCode: 0, stdout: '' }),
+                },
                 kill: mockKill,
             });
 
@@ -508,7 +536,9 @@ describe('E2BSandboxService', () => {
         beforeEach(async () => {
             service = await createService({ API_E2B_KEY: 'key' });
 
-            mockRun = jest.fn().mockResolvedValue({ stdout: 'output' });
+            mockRun = jest
+                .fn()
+                .mockResolvedValue({ exitCode: 0, stdout: 'output' });
             const { Sandbox } = require('e2b');
             Sandbox.create.mockResolvedValue({
                 commands: { run: mockRun },

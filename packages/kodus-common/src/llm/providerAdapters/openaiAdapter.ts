@@ -1,7 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { resolveModelOptions } from './resolver';
 import { supportsJsonMode } from './capabilities';
-import { AdapterBuildParams, ProviderAdapter } from './types';
+import { AdapterBuildParams, ProviderAdapter, LLM_TIMEOUT_MS, LLM_MAX_RETRIES } from './types';
 
 export class OpenAIAdapter implements ProviderAdapter {
     build(params: AdapterBuildParams): ChatOpenAI {
@@ -51,6 +51,8 @@ export class OpenAIAdapter implements ProviderAdapter {
                   }
                 : {}),
             callbacks: options?.callbacks,
+            timeout: LLM_TIMEOUT_MS,
+            maxRetries: LLM_MAX_RETRIES,
             configuration: {
                 ...(baseURL ? { baseURL } : {}),
             },

@@ -2,7 +2,7 @@ import { IsEnum, IsOptional } from 'class-validator';
 
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateAnotherUserDto {
     @IsOptional()

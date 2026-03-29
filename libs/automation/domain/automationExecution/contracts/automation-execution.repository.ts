@@ -47,4 +47,9 @@ export interface IAutomationExecutionRepository {
         teamAutomationId: string,
         status?: string | string[],
     ): Promise<AutomationExecutionEntity[]>;
+    findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId(
+        startDate: Date,
+        endDate: Date,
+        teamAutomationId: string,
+    ): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>>;
 }

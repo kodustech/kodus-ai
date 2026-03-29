@@ -24,6 +24,20 @@ import {
     PullRequestMessagesLogHandler,
     PullRequestMessagesLogParams,
 } from './pullRequestMessageLog.handler';
+import {
+    UserInviteLogHandler,
+    UserInviteLogParams,
+} from './userInviteLog.handler';
+import {
+    UserManagementLogHandler,
+    UserRoleChangeLogParams,
+    UserRepoAccessLogParams,
+} from './userManagementLog.handler';
+import {
+    OrgSettingsLogHandler,
+    OrgSettingsLogParams,
+} from './orgSettingsLog.handler';
+import { CliKeyLogHandler, CliKeyLogParams } from './cliKeyLog.handler';
 import { ICodeReviewSettingsLogService } from '@libs/ee/codeReviewSettingsLog/domain/contracts/codeReviewSettingsLog.service.contract';
 import {
     CODE_REVIEW_SETTINGS_LOG_REPOSITORY_TOKEN,
@@ -47,6 +61,10 @@ export class CodeReviewSettingsLogService implements ICodeReviewSettingsLogServi
         private readonly integrationLogHandler: IntegrationLogHandler,
         private readonly userStatusLogHandler: UserStatusLogHandler,
         private readonly pullRequestMessagesLogHandler: PullRequestMessagesLogHandler,
+        private readonly userInviteLogHandler: UserInviteLogHandler,
+        private readonly userManagementLogHandler: UserManagementLogHandler,
+        private readonly orgSettingsLogHandler: OrgSettingsLogHandler,
+        private readonly cliKeyLogHandler: CliKeyLogHandler,
     ) {}
 
     /**
@@ -196,5 +214,73 @@ export class CodeReviewSettingsLogService implements ICodeReviewSettingsLogServi
         await this.pullRequestMessagesLogHandler.logPullRequestMessagesAction(
             params,
         );
+    }
+
+    // User Invite
+    public async registerUserInviteLog(
+        params: UserInviteLogParams,
+    ): Promise<void> {
+        const canAudit = await this.shouldAllowAuditLogs(
+            params.organizationAndTeamData,
+        );
+        if (!canAudit) {
+            return;
+        }
+
+        await this.userInviteLogHandler.logUserInviteAction(params);
+    }
+
+    // User Role Change
+    public async registerUserRoleChangeLog(
+        params: UserRoleChangeLogParams,
+    ): Promise<void> {
+        const canAudit = await this.shouldAllowAuditLogs(
+            params.organizationAndTeamData,
+        );
+        if (!canAudit) {
+            return;
+        }
+
+        await this.userManagementLogHandler.logUserRoleChange(params);
+    }
+
+    // User Repository Access
+    public async registerUserRepoAccessLog(
+        params: UserRepoAccessLogParams,
+    ): Promise<void> {
+        const canAudit = await this.shouldAllowAuditLogs(
+            params.organizationAndTeamData,
+        );
+        if (!canAudit) {
+            return;
+        }
+
+        await this.userManagementLogHandler.logUserRepoAccessChange(params);
+    }
+
+    // Organization Settings (Auto-Join, Timezone)
+    public async registerOrgSettingsLog(
+        params: OrgSettingsLogParams,
+    ): Promise<void> {
+        const canAudit = await this.shouldAllowAuditLogs(
+            params.organizationAndTeamData,
+        );
+        if (!canAudit) {
+            return;
+        }
+
+        await this.orgSettingsLogHandler.logOrgSettingsChange(params);
+    }
+
+    // CLI Keys
+    public async registerCliKeyLog(params: CliKeyLogParams): Promise<void> {
+        const canAudit = await this.shouldAllowAuditLogs(
+            params.organizationAndTeamData,
+        );
+        if (!canAudit) {
+            return;
+        }
+
+        await this.cliKeyLogHandler.logCliKeyAction(params);
     }
 }

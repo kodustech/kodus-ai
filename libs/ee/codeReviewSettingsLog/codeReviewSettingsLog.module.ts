@@ -21,6 +21,11 @@ import { PullRequestMessagesLogHandler } from './infrastructure/adapters/service
 import { RepositoriesLogHandler } from './infrastructure/adapters/services/repositoriesLog.handler';
 import { UnifiedLogHandler } from './infrastructure/adapters/services/unifiedLog.handler';
 import { UserStatusLogHandler } from './infrastructure/adapters/services/userStatusLog.handler';
+import { UserInviteLogHandler } from './infrastructure/adapters/services/userInviteLog.handler';
+import { UserManagementLogHandler } from './infrastructure/adapters/services/userManagementLog.handler';
+import { OrgSettingsLogHandler } from './infrastructure/adapters/services/orgSettingsLog.handler';
+import { CliKeyLogHandler } from './infrastructure/adapters/services/cliKeyLog.handler';
+import { AuditLogListener } from './listeners/audit-log.listener';
 
 @Module({
     imports: [
@@ -50,8 +55,13 @@ import { UserStatusLogHandler } from './infrastructure/adapters/services/userSta
         RepositoriesLogHandler,
         UnifiedLogHandler,
         UserStatusLogHandler,
+        UserInviteLogHandler,
+        UserManagementLogHandler,
+        OrgSettingsLogHandler,
+        CliKeyLogHandler,
         RegisterUserStatusLogUseCase,
         FindCodeReviewSettingsLogsUseCase,
+        AuditLogListener,
     ],
     exports: [
         CODE_REVIEW_SETTINGS_LOG_SERVICE_TOKEN,

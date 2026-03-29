@@ -7,7 +7,7 @@ import {
     UnauthorizedException,
 } from '@nestjs/common';
 
-import { CliReviewController } from '@/core/infrastructure/http/controllers/cli-review.controller';
+import { CliReviewController } from '@/core/infrastructure/http/controllers/cli/cli-review.controller';
 import { ExecuteCliReviewUseCase } from '@libs/cli-review/application/use-cases/execute-cli-review.use-case';
 import { SubmitCliSessionCaptureUseCase } from '@libs/cli-review/application/use-cases/submit-cli-session-capture.use-case';
 import { AuthenticatedRateLimiterService } from '@libs/cli-review/infrastructure/services/authenticated-rate-limiter.service';
@@ -16,9 +16,11 @@ import { TEAM_CLI_KEY_SERVICE_TOKEN } from '@libs/organization/domain/team-cli-k
 import { TEAM_SERVICE_TOKEN } from '@libs/organization/domain/team/contracts/team.service.contract';
 import { AUTH_SERVICE_TOKEN } from '@libs/identity/domain/auth/contracts/auth.service.contracts';
 import { CLI_DEVICE_SERVICE_TOKEN } from '@libs/organization/domain/cli-device/contracts/cli-device.service.contract';
+import { TriggerBusinessValidationUseCase } from '@libs/platform/application/use-cases/codeManagement/trigger-business-validation.use-case';
 import { TeamEntity } from '@libs/organization/domain/team/entities/team.entity';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { CliReviewRequestDto } from '@/core/infrastructure/http/dtos/cli-review.dto';
+import { IngestSessionEventUseCase } from '@libs/cli-review/application/use-cases/ingest-session-event.use-case';
 
 jest.mock('@kodus/flow', () => ({
     createLogger: () => ({
@@ -135,6 +137,12 @@ const mockExecuteCliReview = {
 const mockSubmitCliSessionCapture = {
     execute: jest.fn().mockResolvedValue({ id: 'cap_abc123', accepted: true }),
 };
+const mockTriggerBusinessValidation = {
+    execute: jest.fn(),
+};
+const mockIngestSessionEvent = {
+    execute: jest.fn().mockResolvedValue({ accepted: true }),
+};
 const mockCliDeviceService = {
     validateOrRegisterDevice: jest.fn().mockResolvedValue({}),
 };
@@ -157,6 +165,14 @@ describe('CliReviewController', () => {
                 {
                     provide: SubmitCliSessionCaptureUseCase,
                     useValue: mockSubmitCliSessionCapture,
+                },
+                {
+                    provide: IngestSessionEventUseCase,
+                    useValue: mockIngestSessionEvent,
+                },
+                {
+                    provide: TriggerBusinessValidationUseCase,
+                    useValue: mockTriggerBusinessValidation,
                 },
                 {
                     provide: AuthenticatedRateLimiterService,

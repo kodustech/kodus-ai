@@ -168,42 +168,75 @@ export class BetterStackClient {
     }
 
     async pingHeartbeat(heartbeatUrl: string): Promise<void> {
+        const heartbeatTarget = this.redactHeartbeatUrl(heartbeatUrl);
         try {
             await axios.get(heartbeatUrl, { timeout: 10_000 });
             this.logger.debug({
                 message: 'Heartbeat ping sent',
                 context: BetterStackClient.name,
-                metadata: { heartbeatUrl },
+                metadata: { heartbeatTarget },
             });
         } catch (error) {
             this.logger.error({
                 message: 'Failed to send heartbeat ping',
                 context: BetterStackClient.name,
                 error: error instanceof Error ? error : undefined,
-                metadata: { heartbeatUrl },
+                metadata: { heartbeatTarget },
             });
         }
     }
 
-    async failHeartbeat(heartbeatUrl: string, message?: string): Promise<void> {
+    async failHeartbeat(
+        heartbeatUrl: string,
+        message?: string,
+        context?: Record<string, unknown>,
+    ): Promise<void> {
+        const heartbeatTarget = this.redactHeartbeatUrl(heartbeatUrl);
         try {
+            // O Better Stack /fail exibe qualquer campo extra na UI,
+            // e os valores "extra" e "context" muitas vezes ganham tratamento especial.
+            const payload = {
+                ...(message ? { message } : {}),
+                context: context || {},
+            };
+
             await axios.post(
                 `${heartbeatUrl}/fail`,
-                message ? { message } : undefined,
+                Object.keys(payload).length > 0 ? payload : undefined,
                 { timeout: 10_000 },
             );
             this.logger.warn({
                 message: 'Heartbeat fail reported',
                 context: BetterStackClient.name,
-                metadata: { heartbeatUrl, failMessage: message },
+                metadata: { heartbeatTarget, failMessage: message, ...context },
             });
         } catch (error) {
             this.logger.error({
                 message: 'Failed to send heartbeat fail',
                 context: BetterStackClient.name,
                 error: error instanceof Error ? error : undefined,
-                metadata: { heartbeatUrl },
+                metadata: { heartbeatTarget },
             });
+        }
+    }
+
+    private redactHeartbeatUrl(heartbeatUrl: string): string {
+        try {
+            const parsed = new URL(heartbeatUrl);
+            const segments = parsed.pathname.split('/').filter(Boolean);
+            const token = segments.at(-1);
+
+            if (!token) {
+                return parsed.origin;
+            }
+
+            const prefix = token.slice(0, 4);
+            const suffix = token.slice(-4);
+
+            segments[segments.length - 1] = `${prefix}...${suffix}`;
+            return `${parsed.origin}/${segments.join('/')}`;
+        } catch {
+            return 'invalid-heartbeat-url';
         }
     }
 

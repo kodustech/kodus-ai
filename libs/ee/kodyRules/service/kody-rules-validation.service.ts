@@ -97,6 +97,7 @@ export class KodyRulesValidationService {
         rules: Partial<IKodyRule>[] = [],
         repositoryId: string,
         directoryId?: string,
+        limited?: boolean,
     ): {
         standardRules: Partial<IKodyRule>[];
         memoryRules: Partial<IKodyRule>[];
@@ -140,7 +141,7 @@ export class KodyRulesValidationService {
         const mergedRulesWithoutDuplicates =
             this.extractUniqueKodyRules(mergedRules);
 
-        const limit = this.isCloud ? 0 : this.MAX_KODY_RULES;
+        const limit = limited ? this.MAX_KODY_RULES : 0;
         const orderedRules = this.orderByCreatedAtAndLimit(
             mergedRulesWithoutDuplicates,
             limit,

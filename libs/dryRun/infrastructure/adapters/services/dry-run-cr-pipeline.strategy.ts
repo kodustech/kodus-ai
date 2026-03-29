@@ -8,6 +8,7 @@ import { CreateFileCommentsStage } from '@libs/code-review/pipeline/stages/creat
 import { CreatePrLevelCommentsStage } from '@libs/code-review/pipeline/stages/create-pr-level-comments.stage';
 import { FetchChangedFilesStage } from '@libs/code-review/pipeline/stages/fetch-changed-files.stage';
 import { UpdateCommentsAndGenerateSummaryStage } from '@libs/code-review/pipeline/stages/finish-comments.stage';
+import { GatherDocumentationContextStage } from '@libs/code-review/pipeline/stages/gather-documentation-context.stage';
 import { InitialCommentStage } from '@libs/code-review/pipeline/stages/initial-comment.stage';
 import { ProcessFilesPrLevelReviewStage } from '@libs/code-review/pipeline/stages/process-files-pr-level-review.stage';
 import { ProcessFilesReview } from '@libs/code-review/pipeline/stages/process-files-review.stage';
@@ -24,6 +25,7 @@ export class DryRunCodeReviewPipelineStrategy implements IPipelineStrategy<CodeR
         private readonly resolveConfigStage: ResolveConfigStage,
         private readonly validateConfigStage: ValidateConfigStage,
         private readonly fetchChangedFilesStage: FetchChangedFilesStage,
+        private readonly gatherDocumentationContextStage: GatherDocumentationContextStage,
         @Inject(LOAD_EXTERNAL_CONTEXT_STAGE_TOKEN)
         private readonly loadExternalContextStage: ILoadExternalContextStage,
         private readonly initialCommentStage: InitialCommentStage,
@@ -41,6 +43,7 @@ export class DryRunCodeReviewPipelineStrategy implements IPipelineStrategy<CodeR
             this.resolveConfigStage,
             this.validateConfigStage,
             this.fetchChangedFilesStage,
+            this.gatherDocumentationContextStage,
             this.loadExternalContextStage,
             this.initialCommentStage,
             this.processFilesPrLevelReviewStage,

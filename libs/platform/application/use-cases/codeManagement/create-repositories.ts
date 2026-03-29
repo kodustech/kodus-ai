@@ -44,7 +44,9 @@ export class CreateRepositoriesUseCase implements IUseCase {
     public async execute(params: any) {
         try {
             const teamId = params?.teamId;
-            const organizationId = this.request.user?.organization?.uuid;
+            const organizationId =
+                params?.organizationId ??
+                this.request?.user?.organization?.uuid;
 
             const team = await this.teamService.findById(teamId);
 
@@ -53,6 +55,10 @@ export class CreateRepositoriesUseCase implements IUseCase {
                     status: false,
                     message: 'Team not found.',
                 };
+            }
+
+            if (!organizationId) {
+                throw new BadRequestException('Organization ID is required.');
             }
 
             await this.codeManagementService.createOrUpdateIntegrationConfig({

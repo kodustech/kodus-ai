@@ -138,7 +138,9 @@ describe('CodebaseSearchService', () => {
         it('should match directory segments exactly', () => {
             expect(matchesExclude('src/test/foo.ts', 'test')).toBe(true);
             expect(matchesExclude('test/foo.ts', 'test')).toBe(true);
-            expect(matchesExclude('node_modules/lib/a.ts', 'node_modules')).toBe(true);
+            expect(
+                matchesExclude('node_modules/lib/a.ts', 'node_modules'),
+            ).toBe(true);
         });
 
         it('should NOT match partial directory names (no substring)', () => {
@@ -189,12 +191,16 @@ describe('CodebaseSearchService', () => {
         });
 
         it('should parse grep output and read context', async () => {
-            const mockGrep = jest.fn().mockResolvedValue(
-                'src/utils.ts:10:export function greet(name: string) {\nsrc/utils.ts:11:  return `Hello ${name}`;\n',
-            );
-            const mockRead = jest.fn().mockResolvedValue(
-                'import something;\n\nexport function greet(name: string) {\n  return `Hello ${name}`;\n}\n',
-            );
+            const mockGrep = jest
+                .fn()
+                .mockResolvedValue(
+                    'src/utils.ts:10:export function greet(name: string) {\nsrc/utils.ts:11:  return `Hello ${name}`;\n',
+                );
+            const mockRead = jest
+                .fn()
+                .mockResolvedValue(
+                    'import something;\n\nexport function greet(name: string) {\n  return `Hello ${name}`;\n}\n',
+                );
 
             const result = await service.search({
                 query: 'greet',
@@ -213,9 +219,11 @@ describe('CodebaseSearchService', () => {
         });
 
         it('should apply excludes filter', async () => {
-            const mockGrep = jest.fn().mockResolvedValue(
-                'node_modules/lib/a.ts:1:match\nsrc/b.ts:1:match\n',
-            );
+            const mockGrep = jest
+                .fn()
+                .mockResolvedValue(
+                    'node_modules/lib/a.ts:1:match\nsrc/b.ts:1:match\n',
+                );
             const mockRead = jest.fn().mockResolvedValue('content');
 
             const result = await service.search({

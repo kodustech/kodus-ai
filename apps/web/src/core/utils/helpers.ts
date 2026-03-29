@@ -160,7 +160,6 @@ export const codeReviewConfigRemovePropertiesNotInType = (
 ) => {
     const newConfig: Partial<CodeReviewGlobalConfig> = {};
     const expectedKeys: LiteralUnion<keyof CodeReviewGlobalConfig>[] = [
-        "path",
         "automatedReviewActive",
         "showStatusFeedback",
         "reviewCadence",

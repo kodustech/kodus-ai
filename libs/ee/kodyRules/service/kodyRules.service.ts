@@ -39,10 +39,8 @@ import {
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import {
-    CODE_REVIEW_SETTINGS_LOG_SERVICE_TOKEN,
-    ICodeReviewSettingsLogService,
-} from '@libs/ee/codeReviewSettingsLog/domain/contracts/codeReviewSettingsLog.service.contract';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
 import {
     CreateKodyRuleDto,
     KodyRuleSeverity,
@@ -88,8 +86,7 @@ export class KodyRulesService implements IKodyRulesService {
         @Inject(KODY_RULES_REPOSITORY_TOKEN)
         private readonly kodyRulesRepository: IKodyRulesRepository,
 
-        @Inject(CODE_REVIEW_SETTINGS_LOG_SERVICE_TOKEN)
-        private readonly codeReviewSettingsLogService: ICodeReviewSettingsLogService,
+        private readonly eventEmitter: EventEmitter2,
 
         @Inject(RULE_LIKE_SERVICE_TOKEN)
         private readonly ruleLikeService: IRuleLikeService,
@@ -292,36 +289,30 @@ export class KodyRulesService implements IKodyRulesService {
                 );
             }
 
-            try {
-                this.codeReviewSettingsLogService.registerKodyRulesLog({
-                    organizationAndTeamData,
-                    userInfo,
-                    actionType: ActionType.CLONE,
-                    repository: { id: newRule.repositoryId },
-                    oldRule: undefined,
-                    newRule: newRule,
-                    ruleTitle: newRule.title,
-                });
-            } catch (error) {
-                this.logger.error({
-                    message: 'Error in registerKodyRulesLog',
-                    error: error,
-                    context: KodyRulesService.name,
-                    metadata: {
-                        organizationAndTeamData: organizationAndTeamData,
-                        repositoryId: newRule.repositoryId,
-                    },
-                });
-            }
+            this.eventEmitter.emit(AuditLogEvents.KODY_RULES, {
+                organizationAndTeamData,
+                userInfo,
+                actionType:
+                    newRule.origin === KodyRulesOrigin.LIBRARY
+                        ? ActionType.CLONE
+                        : ActionType.CREATE,
+                repository: { id: newRule.repositoryId },
+                oldRule: undefined,
+                newRule: newRule,
+                ruleTitle: newRule.title,
+            });
 
             return newKodyRules.rules[0];
         }
 
         // If there is no UUID, it is a new rule
         if (!kodyRule.uuid) {
+            const activeRulesCount = (existing.rules ?? []).filter(
+                (r) => r.status !== KodyRulesStatus.DELETED,
+            ).length;
             await this.ensureFreePlanLimit(
                 organizationAndTeamData,
-                (existing.rules?.length ?? 0) + 1,
+                activeRulesCount + 1,
             );
 
             const newRule: IKodyRule = {
@@ -358,31 +349,19 @@ export class KodyRulesService implements IKodyRulesService {
                 throw new Error('Could not add new rule');
             }
 
-            try {
-                this.codeReviewSettingsLogService.registerKodyRulesLog({
-                    organizationAndTeamData,
-                    userInfo,
-                    actionType:
-                        newRule.origin === KodyRulesOrigin.LIBRARY
-                            ? ActionType.CLONE
-                            : ActionType.CREATE,
-                    repository: { id: newRule.repositoryId },
-                    directory: { id: newRule.directoryId },
-                    oldRule: undefined,
-                    newRule: newRule,
-                    ruleTitle: newRule.title,
-                });
-            } catch (error) {
-                this.logger.error({
-                    message: 'Error in registerKodyRulesLog',
-                    error: error,
-                    context: KodyRulesService.name,
-                    metadata: {
-                        organizationAndTeamData: organizationAndTeamData,
-                        repositoryId: newRule.repositoryId,
-                    },
-                });
-            }
+            this.eventEmitter.emit(AuditLogEvents.KODY_RULES, {
+                organizationAndTeamData,
+                userInfo,
+                actionType:
+                    newRule.origin === KodyRulesOrigin.LIBRARY
+                        ? ActionType.CLONE
+                        : ActionType.CREATE,
+                repository: { id: newRule.repositoryId },
+                directory: { id: newRule.directoryId },
+                oldRule: undefined,
+                newRule: newRule,
+                ruleTitle: newRule.title,
+            });
 
             return updatedKodyRules.rules.find(
                 (rule) => rule.uuid === newRule.uuid,
@@ -410,32 +389,19 @@ export class KodyRulesService implements IKodyRulesService {
             updatedRule,
         );
 
-        try {
-            this.codeReviewSettingsLogService.registerKodyRulesLog({
-                organizationAndTeamData,
-                userInfo: userInfo || {
-                    userId: 'kody-system',
-                    userEmail: 'kody@kodus.io',
-                },
-                actionType: ActionType.EDIT,
-                repository: { id: updatedRule.repositoryId },
-                directory: { id: updatedRule.directoryId },
-                oldRule: existingRule,
-                newRule: updatedRule,
-                ruleTitle: updatedRule.title,
-            });
-        } catch (error) {
-            this.logger.error({
-                message: 'Error in registerKodyRulesLog',
-                error: error,
-                context: KodyRulesService.name,
-                metadata: {
-                    organizationAndTeamData: organizationAndTeamData,
-                    repositoryId: updatedRule.repositoryId,
-                    directoryId: updatedRule?.directoryId,
-                },
-            });
-        }
+        this.eventEmitter.emit(AuditLogEvents.KODY_RULES, {
+            organizationAndTeamData,
+            userInfo: userInfo || {
+                userId: 'kody-system',
+                userEmail: 'kody@kodus.io',
+            },
+            actionType: ActionType.EDIT,
+            repository: { id: updatedRule.repositoryId },
+            directory: { id: updatedRule.directoryId },
+            oldRule: existingRule,
+            newRule: updatedRule,
+            ruleTitle: updatedRule.title,
+        });
 
         if (!updatedKodyRules) {
             throw new Error('Could not update rule');
@@ -548,32 +514,19 @@ export class KodyRulesService implements IKodyRulesService {
             updatedRule,
         );
 
-        try {
-            this.codeReviewSettingsLogService.registerKodyRulesLog({
-                organizationAndTeamData,
-                userInfo: userInfo || {
-                    userId: 'kody-system',
-                    userEmail: 'kody@kodus.io',
-                },
-                actionType: ActionType.EDIT,
-                repository: { id: updatedRule.repositoryId },
-                directory: { id: updatedRule.directoryId },
-                oldRule: existingRule,
-                newRule: updatedRule,
-                ruleTitle: updatedRule.title,
-            });
-        } catch (error) {
-            this.logger.error({
-                message: 'Error in registerKodyRulesLog',
-                error: error,
-                context: KodyRulesService.name,
-                metadata: {
-                    organizationAndTeamData,
-                    repositoryId: updatedRule.repositoryId,
-                    directoryId: updatedRule.directoryId,
-                },
-            });
-        }
+        this.eventEmitter.emit(AuditLogEvents.KODY_RULES, {
+            organizationAndTeamData,
+            userInfo: userInfo || {
+                userId: 'kody-system',
+                userEmail: 'kody@kodus.io',
+            },
+            actionType: ActionType.EDIT,
+            repository: { id: updatedRule.repositoryId },
+            directory: { id: updatedRule.directoryId },
+            oldRule: existingRule,
+            newRule: updatedRule,
+            ruleTitle: updatedRule.title,
+        });
 
         if (!updatedKodyRules) {
             throw new Error('Could not update rule');
@@ -663,28 +616,15 @@ export class KodyRulesService implements IKodyRulesService {
 
             const rule = await this.deleteRuleLogically(existing.uuid, ruleId);
 
-            try {
-                this.codeReviewSettingsLogService.registerKodyRulesLog({
-                    organizationAndTeamData,
-                    userInfo,
-                    actionType: ActionType.DELETE,
-                    repository: { id: deletedRule.repositoryId },
-                    oldRule: deletedRule,
-                    newRule: undefined,
-                    ruleTitle: deletedRule.title,
-                });
-            } catch (error) {
-                this.logger.error({
-                    message: 'Error saving code review settings log',
-                    error: error,
-                    context: KodyRulesService.name,
-                    metadata: {
-                        ...organizationAndTeamData,
-                        ruleId,
-                        userInfo,
-                    },
-                });
-            }
+            this.eventEmitter.emit(AuditLogEvents.KODY_RULES, {
+                organizationAndTeamData,
+                userInfo,
+                actionType: ActionType.DELETE,
+                repository: { id: deletedRule.repositoryId },
+                oldRule: deletedRule,
+                newRule: undefined,
+                ruleTitle: deletedRule.title,
+            });
 
             return !!rule;
         } catch (error) {

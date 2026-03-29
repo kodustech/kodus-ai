@@ -55,7 +55,7 @@ export class SubmitCliSessionCaptureUseCase implements IUseCase {
                 signals: input.signals,
                 summary: input.summary,
                 capturedAt,
-                rawPayload: input,
+                rawPayload: input as unknown as Record<string, unknown>,
             });
 
             setImmediate(() => {

@@ -7,7 +7,7 @@ const downloadUrl = `https://github.com/shadowsocks/shadowsocks-rust/releases/do
 // so git fetch, curl, etc. automatically use the proxy without any extra configuration.
 export const kodusTemplate = Template()
     .fromBaseImage()
-    .aptInstall('iptables', 'git', 'ripgrep')
+    .aptInstall(['iptables', 'git', 'ripgrep'])
     .runCmd([
         `wget ${downloadUrl}`,
         'tar -xf shadowsocks-*.tar.xz',

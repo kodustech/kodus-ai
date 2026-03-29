@@ -22,6 +22,7 @@ import {
 import { FormControl } from "@components/ui/form-control";
 import { Input } from "@components/ui/input";
 import { Page } from "@components/ui/page";
+import { Switch } from "@components/ui/switch";
 import {
     Table,
     TableBody,
@@ -36,20 +37,37 @@ import {
     createCLIKey,
     listCLIKeys,
     revokeCLIKey,
+    updateCLIKeyConfig,
 } from "@services/cliKeys/fetch";
-import type { CLIKey } from "@services/cliKeys/types";
+import {
+    CLI_KEY_CAPABILITIES,
+    type CLIKey,
+    type CLIKeyCapability,
+} from "@services/cliKeys/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { format, formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import {
     CopyIcon,
     KeyRoundIcon,
     RefreshCcwIcon,
+    Settings2Icon,
     TerminalIcon,
     Trash2Icon,
 } from "lucide-react";
 import { useAllTeams } from "src/core/providers/all-teams-context";
 import { ClipboardHelpers } from "src/core/utils/clipboard";
+
+const createdAtFormatter = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+    timeZone: "UTC",
+});
 
 export const CliKeysPage = ({
     teamId,
@@ -68,8 +86,14 @@ export const CliKeysPage = ({
     const [newKeyName, setNewKeyName] = useState("");
     const [isCreating, setIsCreating] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [updatingKeyId, setUpdatingKeyId] = useState<string | null>(null);
     const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
     const [keyToRevoke, setKeyToRevoke] = useState<CLIKey | null>(null);
+    const [keyToConfigure, setKeyToConfigure] = useState<CLIKey | null>(null);
+    const [configDraft, setConfigDraft] = useState({
+        repositoryConfig: false,
+        kodyRulesManage: false,
+    });
     const [createdKey, setCreatedKey] = useState<string | null>(null);
     const [createdMessage, setCreatedMessage] = useState<string | undefined>();
     const [showKeyModal, setShowKeyModal] = useState(false);
@@ -132,6 +156,88 @@ export const CliKeysPage = ({
         } finally {
             setIsCreating(false);
         }
+    };
+
+    const handleUpdateKeyConfig = async (
+        cliKey: CLIKey,
+        draft: {
+            repositoryConfig: boolean;
+            kodyRulesManage: boolean;
+        },
+    ) => {
+        setUpdatingKeyId(cliKey.uuid);
+        try {
+            const otherCapabilities =
+                cliKey.config?.capabilities?.filter(
+                    (capability) =>
+                        capability !==
+                            CLI_KEY_CAPABILITIES.CONFIG_REPO_MANAGE &&
+                        capability !== CLI_KEY_CAPABILITIES.KODY_RULES_MANAGE,
+                ) ?? [];
+
+            const capabilities: CLIKeyCapability[] = [...otherCapabilities];
+
+            if (draft.repositoryConfig) {
+                capabilities.push(CLI_KEY_CAPABILITIES.CONFIG_REPO_MANAGE);
+            }
+
+            if (draft.kodyRulesManage) {
+                capabilities.push(CLI_KEY_CAPABILITIES.KODY_RULES_MANAGE);
+            }
+
+            const updatedKey = await updateCLIKeyConfig({
+                teamId,
+                keyId: cliKey.uuid,
+                config: {
+                    capabilities,
+                },
+            });
+
+            if (!updatedKey) {
+                throw new Error("The CLI key config could not be updated");
+            }
+
+            setKeys((currentKeys) =>
+                currentKeys.map((currentKey) =>
+                    currentKey.uuid === cliKey.uuid ? updatedKey : currentKey,
+                ),
+            );
+
+            toast({
+                variant: "success",
+                title: "CLI key configuration updated",
+            });
+        } catch (error: any) {
+            toast({
+                variant: "danger",
+                title: "Failed to update CLI key config",
+                description: error?.message ?? "Try again in a moment.",
+            });
+            console.error(error);
+        } finally {
+            setUpdatingKeyId(null);
+        }
+    };
+
+    const openConfigModal = (cliKey: CLIKey) => {
+        setKeyToConfigure(cliKey);
+        setConfigDraft({
+            repositoryConfig: thisKeyHasCapability(
+                cliKey,
+                CLI_KEY_CAPABILITIES.CONFIG_REPO_MANAGE,
+            ),
+            kodyRulesManage: thisKeyHasCapability(
+                cliKey,
+                CLI_KEY_CAPABILITIES.KODY_RULES_MANAGE,
+            ),
+        });
+    };
+
+    const handleSaveKeyConfig = async () => {
+        if (!keyToConfigure) return;
+
+        await handleUpdateKeyConfig(keyToConfigure, configDraft);
+        setKeyToConfigure(null);
     };
 
     const handleConfirmRevoke = async () => {
@@ -206,6 +312,14 @@ export const CliKeysPage = ({
         if (!value) return "Never used";
         return formatDistanceToNow(new Date(value), { addSuffix: true });
     };
+
+    const formatCreatedAt = (value: string) =>
+        `${createdAtFormatter.format(new Date(value))} UTC`;
+
+    const thisKeyHasCapability = (
+        cliKey: CLIKey,
+        capability: CLIKeyCapability,
+    ) => cliKey.config?.capabilities?.includes(capability) ?? false;
 
     return (
         <Page.Root>
@@ -343,11 +457,8 @@ export const CliKeysPage = ({
                                                     )}
                                                 </TableCell>
                                                 <TableCell className="tabular-nums">
-                                                    {format(
-                                                        new Date(
-                                                            cliKey.createdAt,
-                                                        ),
-                                                        "PPpp",
+                                                    {formatCreatedAt(
+                                                        cliKey.createdAt,
                                                     )}
                                                 </TableCell>
                                                 <TableCell>
@@ -364,6 +475,23 @@ export const CliKeysPage = ({
                                                 </TableCell>
                                                 <TableCell align="right">
                                                     <div className="flex items-center justify-end gap-2">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="helper"
+                                                            leftIcon={
+                                                                <Settings2Icon />
+                                                            }
+                                                            onClick={() =>
+                                                                openConfigModal(
+                                                                    cliKey,
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                !canManage ||
+                                                                !cliKey.active
+                                                            }>
+                                                            Configure
+                                                        </Button>
                                                         <Button
                                                             size="sm"
                                                             variant="error"
@@ -462,6 +590,107 @@ export const CliKeysPage = ({
                             variant="primary-dark"
                             onClick={() => setShowKeyModal(false)}>
                             Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={!!keyToConfigure}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setKeyToConfigure(null);
+                    }
+                }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="text-balance">
+                            Configure CLI key
+                        </DialogTitle>
+                        <DialogDescription className="text-pretty">
+                            Adjust what this key can do. New options can be
+                            added here later without changing the main screen.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {keyToConfigure && (
+                        <div className="flex flex-col gap-4">
+                            <div className="bg-card-lv2 border-card-lv1 rounded-xl border p-4">
+                                <div className="mb-1 text-sm font-semibold">
+                                    {keyToConfigure.name}
+                                </div>
+                                <div className="text-text-secondary text-sm">
+                                    Update the permissions available for this
+                                    CLI key.
+                                </div>
+                            </div>
+
+                            <div className="bg-card-lv2 border-card-lv1 flex items-start justify-between gap-4 rounded-xl border p-4">
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-sm font-semibold">
+                                        Allow repository configuration via CLI
+                                    </span>
+                                    <span className="text-text-secondary text-sm">
+                                        Enables commands like{" "}
+                                        <code>kodus config repo ...</code> for
+                                        this key.
+                                    </span>
+                                </div>
+
+                                <Switch
+                                    checked={configDraft.repositoryConfig}
+                                    onCheckedChange={(checked) =>
+                                        setConfigDraft((current) => ({
+                                            ...current,
+                                            repositoryConfig: checked,
+                                        }))
+                                    }
+                                    disabled={
+                                        updatingKeyId === keyToConfigure.uuid
+                                    }
+                                />
+                            </div>
+
+                            <div className="bg-card-lv2 border-card-lv1 flex items-start justify-between gap-4 rounded-xl border p-4">
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-sm font-semibold">
+                                        Allow Kody Rules management via CLI
+                                    </span>
+                                    <span className="text-text-secondary text-sm">
+                                        Enables commands that manage Kody Rules
+                                        for this key.
+                                    </span>
+                                </div>
+
+                                <Switch
+                                    checked={configDraft.kodyRulesManage}
+                                    onCheckedChange={(checked) =>
+                                        setConfigDraft((current) => ({
+                                            ...current,
+                                            kodyRulesManage: checked,
+                                        }))
+                                    }
+                                    disabled={
+                                        updatingKeyId === keyToConfigure.uuid
+                                    }
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        <Button
+                            size="md"
+                            variant="helper"
+                            onClick={() => setKeyToConfigure(null)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            size="md"
+                            variant="primary"
+                            loading={updatingKeyId === keyToConfigure?.uuid}
+                            onClick={handleSaveKeyConfig}>
+                            Save changes
                         </Button>
                     </DialogFooter>
                 </DialogContent>

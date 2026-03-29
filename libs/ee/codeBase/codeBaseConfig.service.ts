@@ -32,6 +32,7 @@ import { ValidateCodeManagementIntegration } from '@libs/common/utils/decorators
 import { deepMerge } from '@libs/common/utils/deep';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { CacheService } from '@libs/core/cache/cache.service';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import {
     IIntegrationConfigService,
     INTEGRATION_CONFIG_SERVICE_TOKEN,
@@ -86,6 +87,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         private readonly globalParametersService: IGlobalParametersService,
         private readonly codeManagementService: CodeManagementService,
         private readonly kodyRulesValidationService: KodyRulesValidationService,
+        private readonly permissionValidationService: PermissionValidationService,
         private readonly cacheService: CacheService,
     ) {
         this.DEFAULT_CONFIG = this.getDefaultConfigs();
@@ -134,11 +136,18 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 preliminaryFiles || [],
             );
 
+            const limited =
+                await this.permissionValidationService.shouldLimitResources(
+                    organizationAndTeamData,
+                    CodeBaseConfigService.name,
+                );
+
             const { standardRules, memoryRules } =
                 this.kodyRulesValidationService.filterKodyRules(
                     kodyRulesEntity?.toObject()?.rules,
                     repository.id,
                     mergedConfigs.directoryId,
+                    limited,
                 ) || { standardRules: [], memoryRules: [] };
 
             const globalIgnorePaths = await this.getGlobalIgnorePaths(
@@ -625,6 +634,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         overrideConfig?: boolean;
         directoryPath?: string;
         defaultBranch?: string;
+        removeProperties?: boolean;
     }): Promise<KodusConfigFile | undefined> {
         const {
             organizationAndTeamData,
@@ -632,6 +642,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             directoryPath,
             defaultBranch,
             overrideConfig = true,
+            removeProperties = true,
         } = params;
 
         if (!overrideConfig) {
@@ -670,8 +681,10 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             }
         }
 
-        delete kodusConfigYMLfile.version;
-        delete kodusConfigYMLfile.kodusConfigFileOverridesWebPreferences;
+        if (removeProperties) {
+            delete kodusConfigYMLfile.version;
+            delete kodusConfigYMLfile.kodusConfigFileOverridesWebPreferences;
+        }
 
         return kodusConfigYMLfile;
     }

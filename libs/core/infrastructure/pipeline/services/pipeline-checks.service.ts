@@ -176,6 +176,21 @@ export class PipelineChecksService implements IPipelineChecksService {
             parts.push(errorList.join('\n'));
         }
 
+        // 3. Timeout-specific section
+        const timeoutFiles = (context.errors || [])
+            .filter((e) => e.metadata?.isTimeout && e.substage)
+            .map((e) => e.substage as string);
+
+        if (timeoutFiles.length > 0) {
+            const displayFiles = timeoutFiles.slice(0, 10);
+            const remaining = timeoutFiles.length - displayFiles.length;
+            let timeoutSection = `### Timeouts\n- ${displayFiles.join(', ')}`;
+            if (remaining > 0) {
+                timeoutSection += ` (+${remaining} more)`;
+            }
+            parts.push(timeoutSection);
+        }
+
         if (parts.length === 0) {
             return undefined;
         }

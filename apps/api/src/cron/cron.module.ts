@@ -9,11 +9,13 @@ import { IntegrationModule } from '@libs/integrations/modules/integrations.modul
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
 import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { TeamModule } from '@libs/organization/modules/team.module';
+import { CliReviewModule } from '@libs/cli-review/cli-review.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { forwardRef, Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 
 import { CheckIfPRCanBeApprovedCronProvider } from './CheckIfPRCanBeApproved.cron';
+import { ClassifyOrphanedSessionsCronProvider } from './classifyOrphanedSessions.cron';
 import { CodeReviewFeedbackCronProvider } from './codeReviewFeedback.cron';
 import { KodyLearningCronProvider } from './kodyLearning.cron';
 
@@ -31,9 +33,11 @@ import { KodyLearningCronProvider } from './kodyLearning.cron';
         forwardRef(() => CodebaseModule),
         IntegrationModule,
         IntegrationConfigModule,
+        forwardRef(() => CliReviewModule),
     ],
     providers: [
         CheckIfPRCanBeApprovedCronProvider,
+        ClassifyOrphanedSessionsCronProvider,
         CodeReviewFeedbackCronProvider,
         KodyLearningCronProvider,
         DistributedLockService,

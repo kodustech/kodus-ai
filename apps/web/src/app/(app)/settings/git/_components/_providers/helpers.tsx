@@ -111,14 +111,18 @@ const openGithubModal = async (props: {
     teamId: string;
     onGoToOauth: () => void;
     onSaveToken: () => void;
+    githubEnterpriseServerPatEnabled: boolean;
 }) =>
     magicModal.show(() => (
         <GithubModal
+            githubEnterpriseServerPatEnabled={
+                props.githubEnterpriseServerPatEnabled
+            }
             onGoToOauth={props.onGoToOauth}
-            onSaveToken={async (token) => {
+            onSaveToken={async (token, selfHostedUrl) => {
                 await onSaveToken({
                     token,
-                    selfHostedUrl: undefined,
+                    selfHostedUrl,
                     teamId: props.teamId,
                     integrationType: PlatformType.GITHUB,
                     integrationKey: INTEGRATIONS_KEY.GITHUB,
@@ -154,11 +158,13 @@ export const openProviderModal = ({
     provider,
     teamId,
     onSaveToken,
+    githubEnterpriseServerPatEnabled,
 }: {
     provider: INTEGRATIONS_KEY;
     teamId: string;
     onGoToOauth: () => void;
     onSaveToken: () => void;
+    githubEnterpriseServerPatEnabled: boolean;
 }) => {
     switch (provider) {
         case "github":
@@ -166,6 +172,7 @@ export const openProviderModal = ({
                 teamId,
                 onGoToOauth,
                 onSaveToken,
+                githubEnterpriseServerPatEnabled,
             });
 
         case "gitlab":

@@ -71,7 +71,9 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
         };
 
         mockPermissionValidationService = {
-            validateBasicLicense: jest.fn().mockResolvedValue({ allowed: true }),
+            validateBasicLicense: jest
+                .fn()
+                .mockResolvedValue({ allowed: true }),
             getBYOKConfig: jest.fn().mockResolvedValue(null),
         };
 

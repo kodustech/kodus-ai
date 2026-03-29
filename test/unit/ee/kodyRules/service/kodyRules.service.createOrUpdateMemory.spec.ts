@@ -108,7 +108,7 @@ describe('KodyRulesService.createOrUpdateMemory', () => {
 
         const service = new KodyRulesService(
             repositoryMock as any,
-            { registerKodyRulesLog: jest.fn() } as any,
+            { emit: jest.fn() } as any,
             {} as any,
             {} as any,
             validationService,
@@ -502,7 +502,7 @@ describe('KodyRulesService.createOrUpdateMemory', () => {
 
         const service = new KodyRulesService(
             repositoryMock as any,
-            { registerKodyRulesLog: jest.fn() } as any,
+            { emit: jest.fn() } as any,
             {} as any,
             {} as any,
             new KodyRulesValidationService({} as any),

@@ -1,9 +1,13 @@
 ARG API_CLOUD_MODE=false
+ARG RELEASE_VERSION=local
 
 FROM docker.io/library/node:22.22.0-slim
 
 ARG API_CLOUD_MODE
+ARG RELEASE_VERSION
 ENV API_CLOUD_MODE=${API_CLOUD_MODE}
+ENV RELEASE_VERSION=${RELEASE_VERSION}
+ENV SENTRY_RELEASE=${RELEASE_VERSION}
 
 WORKDIR /usr/src/app
 ENV NODE_ENV=development
@@ -13,7 +17,7 @@ RUN corepack disable \
  && npm i -g yarn@1.22.22
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates python3 make g++ procps git \
+      ca-certificates python3 make g++ procps git ripgrep \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm i -g yalc chokidar-cli nodemon

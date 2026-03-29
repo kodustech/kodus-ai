@@ -1,5 +1,4 @@
 import { authorizedFetch } from "@services/fetch";
-import { axiosAuthorized } from "src/core/utils/axios";
 
 import { TOKEN_USAGE_PATHS } from ".";
 import {

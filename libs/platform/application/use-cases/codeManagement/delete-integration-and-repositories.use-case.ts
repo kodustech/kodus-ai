@@ -57,13 +57,23 @@ export class DeleteIntegrationAndRepositoriesUseCase {
             });
 
             // 2. Execute the existing deleteIntegrationUseCase (remove integration and config repositories)
-            await this.deleteIntegrationUseCase.execute(params);
+            try {
+                await this.deleteIntegrationUseCase.execute(params);
 
-            this.logger.log({
-                message: 'Integration deleted successfully',
-                context: DeleteIntegrationAndRepositoriesUseCase.name,
-                metadata: { organizationId, teamId },
-            });
+                this.logger.log({
+                    message: 'Integration deleted successfully',
+                    context: DeleteIntegrationAndRepositoriesUseCase.name,
+                    metadata: { organizationId, teamId },
+                });
+            } catch (error) {
+                this.logger.error({
+                    message:
+                        'Error deleting integration — proceeding with remaining cleanup',
+                    context: DeleteIntegrationAndRepositoriesUseCase.name,
+                    error,
+                    metadata: { organizationId, teamId },
+                });
+            }
 
             // 3. Remove the repositories array from the code_review_config parameter
             await this.removeRepositoriesFromCodeReviewConfig(

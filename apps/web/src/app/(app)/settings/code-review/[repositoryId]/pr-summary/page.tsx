@@ -13,25 +13,22 @@ import { Page } from "@components/ui/page";
 import { Switch } from "@components/ui/switch";
 import { Textarea } from "@components/ui/textarea";
 import { toast } from "@components/ui/toaster/use-toast";
-import { useReactQueryInvalidateQueries } from "@hooks/use-invalidate-queries";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
-import { PARAMETERS_PATHS } from "@services/parameters";
-import { createOrUpdateCodeReviewParameter } from "@services/parameters/fetch";
-import {
-    KodyLearningStatus,
-    ParametersConfigKey,
-} from "@services/parameters/types";
+import { KodyLearningStatus } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { EyeIcon, Save } from "lucide-react";
+import { EyeIcon, RotateCcwIcon, Save } from "lucide-react";
 import { Controller, useFormContext } from "react-hook-form";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
 
 import { CodeReviewPagesBreadcrumb } from "../../_components/breadcrumb";
+import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import GeneratingConfig from "../../_components/generating-config";
 import { OverrideIndicatorForm } from "../../_components/override";
 import { PRSummaryPreviewModal } from "../../_components/pr-summary-preview-modal/modal";
+import { CodeReviewSaveButton } from "../../_components/save-button";
+import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import {
     BehaviourForNewCommits,
     CodeReviewSummaryOptions,
@@ -102,44 +99,25 @@ export default function PRSummary(props: AutomationCodeReviewConfigPageProps) {
     const generatePRSummary = form.watch("summary.generatePRSummary.value");
     const [isExternalReferencesProcessing, setIsExternalReferencesProcessing] =
         useState(false);
-
-    const { resetQueries, generateQueryKey } = useReactQueryInvalidateQueries();
+    const { saveSettings } = useCodeReviewSettingsMutation({
+        teamId,
+        repositoryId,
+        directoryId,
+        form,
+    });
 
     const handleSubmit = form.handleSubmit(async (formData) => {
-        const { language, ...config } = formData;
-
-        const unformattedConfig = unformatConfig(config);
-
         try {
-            await createOrUpdateCodeReviewParameter(
-                unformattedConfig,
-                teamId,
-                repositoryId,
-                directoryId,
-            );
-
-            await Promise.all([
-                resetQueries({
-                    queryKey: generateQueryKey(PARAMETERS_PATHS.GET_BY_KEY, {
-                        params: {
-                            key: ParametersConfigKey.CODE_REVIEW_CONFIG,
-                            teamId,
-                        },
-                    }),
-                }),
-                resetQueries({
-                    queryKey: generateQueryKey(
-                        PARAMETERS_PATHS.GET_CODE_REVIEW_PARAMETER,
-                        {
-                            params: {
-                                teamId,
-                            },
-                        },
-                    ),
-                }),
-            ]);
-
-            form.reset(config);
+            await saveSettings(formData, {
+                prepare: (data) => {
+                    const { language: _language, ...config } = data;
+                    const unformatted = unformatConfig(config);
+                    return {
+                        savedFormData: data,
+                        codeReviewConfig: unformatted,
+                    };
+                },
+            });
 
             toast({
                 description: "Settings saved",
@@ -180,7 +158,18 @@ export default function PRSummary(props: AutomationCodeReviewConfigPageProps) {
                 <Page.Title>PR summary</Page.Title>
 
                 <Page.HeaderActions>
-                    <Button
+                    {formIsDirty && (
+                        <Button
+                            size="md"
+                            variant="cancel"
+                            leftIcon={<RotateCcwIcon />}
+                            onClick={() => form.reset()}
+                            disabled={formIsSubmitting}>
+                            Reset
+                        </Button>
+                    )}
+
+                    <CodeReviewSaveButton
                         size="md"
                         variant="primary"
                         leftIcon={<Save />}
@@ -188,88 +177,179 @@ export default function PRSummary(props: AutomationCodeReviewConfigPageProps) {
                         disabled={!formIsDirty || !formIsValid}
                         loading={formIsSubmitting}>
                         Save settings
-                    </Button>
+                    </CodeReviewSaveButton>
                 </Page.HeaderActions>
             </Page.Header>
 
             <Page.Content className="gap-8">
-                <Controller
-                    name="summary.generatePRSummary.value"
-                    control={form.control}
-                    render={({ field }) => (
-                        <Button
-                            size="sm"
-                            variant="helper"
-                            disabled={field.disabled}
-                            onClick={() => field.onChange(!field.value)}
-                            className="w-full">
-                            <CardHeader className="flex flex-row items-center justify-between">
-                                <div className="flex flex-col gap-1">
-                                    <div className="mb-2 flex flex-row items-center gap-2">
-                                        <FormControl.Label className="mb-0">
-                                            Enable Automatic Summary Generation
-                                        </FormControl.Label>
+                <CentralizedConfigReadOnlyAlert />
+                <div data-field-name="summary.generatePRSummary.value">
+                    <Controller
+                        name="summary.generatePRSummary.value"
+                        control={form.control}
+                        render={({ field }) => (
+                            <Button
+                                size="sm"
+                                variant="helper"
+                                disabled={field.disabled}
+                                onClick={() => field.onChange(!field.value)}
+                                className="w-full">
+                                <CardHeader className="flex flex-row items-center justify-between">
+                                    <div className="flex flex-col gap-1">
+                                        <div className="mb-2 flex flex-row items-center gap-2">
+                                            <FormControl.Label className="mb-0">
+                                                Enable Automatic Summary
+                                                Generation
+                                            </FormControl.Label>
 
-                                        <OverrideIndicatorForm fieldName="summary.generatePRSummary" />
+                                            <OverrideIndicatorForm fieldName="summary.generatePRSummary" />
+                                        </div>
                                     </div>
+
+                                    <Switch
+                                        size="md"
+                                        decorative
+                                        checked={field.value}
+                                    />
+                                </CardHeader>
+                            </Button>
+                        )}
+                    />
+                </div>
+                <div data-field-name="summary.behaviourForNewCommits.value">
+                    <Controller
+                        name="summary.behaviourForNewCommits.value"
+                        control={form.control}
+                        render={({ field }) => (
+                            <FormControl.Root>
+                                <div className="mb-2 flex flex-row items-center gap-2">
+                                    <FormControl.Label className="mb-0">
+                                        Behavior for commits after PR is opened
+                                    </FormControl.Label>
+
+                                    <OverrideIndicatorForm fieldName="summary.behaviourForNewCommits" />
                                 </div>
 
-                                <Switch
-                                    size="md"
-                                    decorative
-                                    checked={field.value}
-                                />
-                            </CardHeader>
-                        </Button>
-                    )}
-                />
-                <Controller
-                    name="summary.behaviourForNewCommits.value"
-                    control={form.control}
-                    render={({ field }) => (
-                        <FormControl.Root>
-                            <div className="mb-2 flex flex-row items-center gap-2">
-                                <FormControl.Label className="mb-0">
-                                    Behavior for commits after PR is opened
-                                </FormControl.Label>
+                                <FormControl.Helper className="mb-3">
+                                    You can define Kody's behavior in relation
+                                    to commits after the PR is opened.
+                                </FormControl.Helper>
 
-                                <OverrideIndicatorForm fieldName="summary.behaviourForNewCommits" />
-                            </div>
+                                <FormControl.Input>
+                                    <ToggleGroup.Root
+                                        type="single"
+                                        value={field.value}
+                                        className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3"
+                                        disabled={
+                                            field.disabled || !generatePRSummary
+                                        }
+                                        onValueChange={(value) => {
+                                            if (!value) return;
+                                            field.onChange(value);
+                                        }}>
+                                        {behaviorForCommitsAfterPROpenedOptions.map(
+                                            (option) => (
+                                                <ToggleGroup.ToggleGroupItem
+                                                    asChild
+                                                    key={option.value}
+                                                    value={option.value}
+                                                    aria-label={option.name}>
+                                                    <Button
+                                                        size="lg"
+                                                        variant="helper"
+                                                        className="w-full items-start py-4">
+                                                        <div className="flex w-full items-start justify-between gap-6">
+                                                            <div className="flex flex-col gap-2">
+                                                                <Heading
+                                                                    variant="h3"
+                                                                    className="truncate">
+                                                                    {
+                                                                        option.name
+                                                                    }
+                                                                    {"default" in
+                                                                        option && (
+                                                                        <small className="text-text-secondary ml-1">
+                                                                            (default)
+                                                                        </small>
+                                                                    )}
+                                                                </Heading>
 
-                            <FormControl.Helper className="mb-3">
-                                You can define Kody's behavior in relation to
-                                commits after the PR is opened.
-                            </FormControl.Helper>
+                                                                <p className="text-text-secondary text-xs">
+                                                                    {
+                                                                        option.description
+                                                                    }
+                                                                </p>
+                                                            </div>
 
-                            <FormControl.Input>
-                                <ToggleGroup.Root
-                                    type="single"
-                                    value={field.value}
-                                    className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3"
-                                    disabled={
-                                        field.disabled || !generatePRSummary
-                                    }
-                                    onValueChange={(value) => {
-                                        if (!value) return;
-                                        field.onChange(value);
-                                    }}>
-                                    {behaviorForCommitsAfterPROpenedOptions.map(
-                                        (option) => (
+                                                            <Checkbox
+                                                                decorative
+                                                                checked={
+                                                                    option.value ===
+                                                                    field.value
+                                                                }
+                                                            />
+                                                        </div>
+                                                    </Button>
+                                                </ToggleGroup.ToggleGroupItem>
+                                            ),
+                                        )}
+                                    </ToggleGroup.Root>
+                                </FormControl.Input>
+                            </FormControl.Root>
+                        )}
+                    />
+                </div>
+
+                <div data-field-name="summary.behaviourForExistingDescription.value">
+                    <Controller
+                        name="summary.behaviourForExistingDescription.value"
+                        control={form.control}
+                        render={({ field }) => (
+                            <FormControl.Root>
+                                <div className="mb-2 flex flex-row items-center gap-2">
+                                    <FormControl.Label className="mb-0">
+                                        Behavior for Existing Description
+                                    </FormControl.Label>
+
+                                    <OverrideIndicatorForm fieldName="summary.behaviourForExistingDescription" />
+                                </div>
+
+                                <FormControl.Helper className="mb-3">
+                                    You can define Kody's behavior in relation
+                                    to the descriptions already present in the
+                                    PR.
+                                </FormControl.Helper>
+
+                                <FormControl.Input>
+                                    <ToggleGroup.Root
+                                        type="single"
+                                        disabled={
+                                            field.disabled || !generatePRSummary
+                                        }
+                                        className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3"
+                                        value={field.value}
+                                        onValueChange={(value) => {
+                                            if (!value) return;
+                                            field.onChange(
+                                                value as CodeReviewSummaryOptions,
+                                            );
+                                        }}>
+                                        {reviewOptions.map((option) => (
                                             <ToggleGroup.ToggleGroupItem
                                                 asChild
                                                 key={option.value}
-                                                value={option.value}
-                                                aria-label={option.name}>
+                                                value={option.value}>
                                                 <Button
                                                     size="lg"
                                                     variant="helper"
                                                     className="w-full items-start py-4">
-                                                    <div className="flex w-full items-start justify-between gap-6">
+                                                    <div className="flex items-start justify-between gap-6">
                                                         <div className="flex flex-col gap-2">
                                                             <Heading
                                                                 variant="h3"
                                                                 className="truncate">
                                                                 {option.name}
+
                                                                 {"default" in
                                                                     option && (
                                                                     <small className="text-text-secondary ml-1">
@@ -295,174 +375,98 @@ export default function PRSummary(props: AutomationCodeReviewConfigPageProps) {
                                                     </div>
                                                 </Button>
                                             </ToggleGroup.ToggleGroupItem>
-                                        ),
-                                    )}
-                                </ToggleGroup.Root>
-                            </FormControl.Input>
-                        </FormControl.Root>
-                    )}
-                />
-
-                <Controller
-                    name="summary.behaviourForExistingDescription.value"
-                    control={form.control}
-                    render={({ field }) => (
-                        <FormControl.Root>
-                            <div className="mb-2 flex flex-row items-center gap-2">
-                                <FormControl.Label className="mb-0">
-                                    Behavior for Existing Description
-                                </FormControl.Label>
-
-                                <OverrideIndicatorForm fieldName="summary.behaviourForExistingDescription" />
-                            </div>
-
-                            <FormControl.Helper className="mb-3">
-                                You can define Kody's behavior in relation to
-                                the descriptions already present in the PR.
-                            </FormControl.Helper>
-
-                            <FormControl.Input>
-                                <ToggleGroup.Root
-                                    type="single"
-                                    disabled={
-                                        field.disabled || !generatePRSummary
-                                    }
-                                    className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3"
-                                    value={field.value}
-                                    onValueChange={(value) => {
-                                        if (!value) return;
-                                        field.onChange(
-                                            value as CodeReviewSummaryOptions,
-                                        );
-                                    }}>
-                                    {reviewOptions.map((option) => (
-                                        <ToggleGroup.ToggleGroupItem
-                                            asChild
-                                            key={option.value}
-                                            value={option.value}>
-                                            <Button
-                                                size="lg"
-                                                variant="helper"
-                                                className="w-full items-start py-4">
-                                                <div className="flex items-start justify-between gap-6">
-                                                    <div className="flex flex-col gap-2">
-                                                        <Heading
-                                                            variant="h3"
-                                                            className="truncate">
-                                                            {option.name}
-
-                                                            {"default" in
-                                                                option && (
-                                                                <small className="text-text-secondary ml-1">
-                                                                    (default)
-                                                                </small>
-                                                            )}
-                                                        </Heading>
-
-                                                        <p className="text-text-secondary text-xs">
-                                                            {option.description}
-                                                        </p>
-                                                    </div>
-
-                                                    <Checkbox
-                                                        decorative
-                                                        checked={
-                                                            option.value ===
-                                                            field.value
-                                                        }
-                                                    />
-                                                </div>
-                                            </Button>
-                                        </ToggleGroup.ToggleGroupItem>
-                                    ))}
-                                </ToggleGroup.Root>
-                            </FormControl.Input>
-                        </FormControl.Root>
-                    )}
-                />
-
-                <Controller
-                    name="summary.customInstructions.value"
-                    control={form.control}
-                    render={({ field }) => (
-                        <FormControl.Root>
-                            <div className="mb-2 flex flex-row items-center gap-2">
-                                <FormControl.Label
-                                    className="mb-0"
-                                    htmlFor={field.name}>
-                                    Custom Instructions
-                                </FormControl.Label>
-
-                                <OverrideIndicatorForm fieldName="summary.customInstructions" />
-                            </div>
-
-                            <FormControl.Helper className="mb-3">
-                                You can customize how Kody generates your
-                                summaries.
-                            </FormControl.Helper>
-
-                            <Alert className="mb-3">
-                                <AlertTitle>Examples</AlertTitle>
-                                <AlertDescription>
-                                    <ul className="list-inside list-disc space-y-2">
-                                        {examples.map((example) => (
-                                            <li key={example}>
-                                                <Link
-                                                    href=""
-                                                    disabled={
-                                                        !generatePRSummary
-                                                    }
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-
-                                                        const newInstructions =
-                                                            field.value
-                                                                ? `${field.value}\n${example}`
-                                                                : example;
-
-                                                        field.onChange(
-                                                            newInstructions,
-                                                        );
-                                                    }}>
-                                                    {example}
-                                                </Link>
-                                            </li>
                                         ))}
-                                    </ul>
-                                </AlertDescription>
-                            </Alert>
+                                    </ToggleGroup.Root>
+                                </FormControl.Input>
+                            </FormControl.Root>
+                        )}
+                    />
+                </div>
 
-                            <FormControl.Input>
-                                <Textarea
-                                    value={field.value}
-                                    disabled={
-                                        field.disabled ||
-                                        !generatePRSummary ||
-                                        isExternalReferencesProcessing
-                                    }
-                                    id={field.name}
-                                    className="min-h-48"
-                                    placeholder="Write the instructions here"
-                                    onChange={(e) =>
-                                        field.onChange(e.target.value)
-                                    }
-                                />
-                                <ExternalReferencesDisplay
-                                    externalReferences={
-                                        (
-                                            config?.summary
-                                                ?.customInstructions as any
-                                        )?.externalReferences
-                                    }
-                                    onProcessingChange={
-                                        setIsExternalReferencesProcessing
-                                    }
-                                    compact
-                                />
-                            </FormControl.Input>
-                        </FormControl.Root>
-                    )}
-                />
+                <div data-field-name="summary.customInstructions.value">
+                    <Controller
+                        name="summary.customInstructions.value"
+                        control={form.control}
+                        render={({ field }) => (
+                            <FormControl.Root>
+                                <div className="mb-2 flex flex-row items-center gap-2">
+                                    <FormControl.Label
+                                        className="mb-0"
+                                        htmlFor={field.name}>
+                                        Custom Instructions
+                                    </FormControl.Label>
+
+                                    <OverrideIndicatorForm fieldName="summary.customInstructions" />
+                                </div>
+
+                                <FormControl.Helper className="mb-3">
+                                    You can customize how Kody generates your
+                                    summaries.
+                                </FormControl.Helper>
+
+                                <Alert className="mb-3">
+                                    <AlertTitle>Examples</AlertTitle>
+                                    <AlertDescription>
+                                        <ul className="list-inside list-disc space-y-2">
+                                            {examples.map((example) => (
+                                                <li key={example}>
+                                                    <Link
+                                                        href=""
+                                                        disabled={
+                                                            !generatePRSummary
+                                                        }
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+
+                                                            const newInstructions =
+                                                                field.value
+                                                                    ? `${field.value}\n${example}`
+                                                                    : example;
+
+                                                            field.onChange(
+                                                                newInstructions,
+                                                            );
+                                                        }}>
+                                                        {example}
+                                                    </Link>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </AlertDescription>
+                                </Alert>
+
+                                <FormControl.Input>
+                                    <Textarea
+                                        value={field.value}
+                                        disabled={
+                                            field.disabled ||
+                                            !generatePRSummary ||
+                                            isExternalReferencesProcessing
+                                        }
+                                        id={field.name}
+                                        className="min-h-48"
+                                        placeholder="Write the instructions here"
+                                        onChange={(e) =>
+                                            field.onChange(e.target.value)
+                                        }
+                                    />
+                                    <ExternalReferencesDisplay
+                                        externalReferences={
+                                            (
+                                                config?.summary
+                                                    ?.customInstructions as any
+                                            )?.externalReferences
+                                        }
+                                        onProcessingChange={
+                                            setIsExternalReferencesProcessing
+                                        }
+                                        compact
+                                    />
+                                </FormControl.Input>
+                            </FormControl.Root>
+                        )}
+                    />
+                </div>
 
                 <div className="-mt-3 flex justify-end">
                     <Button

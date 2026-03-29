@@ -14,7 +14,6 @@ import { ParametersRepository } from '../infrastructure/adapters/repositories/pa
 import { PARAMETERS_SERVICE_TOKEN } from '../domain/parameters/contracts/parameters.service.contract';
 import { ParametersService } from '../infrastructure/adapters/services/parameters.service';
 import { UpdateOrCreateCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/update-or-create-code-review-parameter-use-case';
-import { CodeReviewSettingsLogModule } from '@libs/ee/codeReviewSettingsLog/codeReviewSettingsLog.module';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
 import { AIEngineModule } from '@libs/ai-engine/modules/ai-engine.module'; // Added
 
@@ -25,7 +24,6 @@ import { AIEngineModule } from '@libs/ai-engine/modules/ai-engine.module'; // Ad
         forwardRef(() => IntegrationModule),
         forwardRef(() => OrganizationParametersModule),
         PermissionsModule,
-        forwardRef(() => CodeReviewSettingsLogModule),
         forwardRef(() => McpCoreModule),
         forwardRef(() => AIEngineModule), // Added
     ],

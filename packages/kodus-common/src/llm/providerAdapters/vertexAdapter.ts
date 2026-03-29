@@ -1,7 +1,7 @@
 import { ChatVertexAI } from '@langchain/google-vertexai';
 import { resolveModelOptions } from './resolver';
 import { buildJsonModeOptions } from './jsonMode';
-import { AdapterBuildParams, ProviderAdapter } from './types';
+import { AdapterBuildParams, ProviderAdapter, LLM_TIMEOUT_MS, LLM_MAX_RETRIES } from './types';
 
 export class VertexAdapter implements ProviderAdapter {
     build(params: AdapterBuildParams): ChatVertexAI {
@@ -35,6 +35,7 @@ export class VertexAdapter implements ProviderAdapter {
                 ? { maxOutputTokens: resolved.resolvedMaxTokens }
                 : {}),
             callbacks: options?.callbacks,
+            maxRetries: LLM_MAX_RETRIES,
             ...(resolved.supportsReasoning &&
             resolved.reasoningType === 'budget' &&
             resolved.resolvedReasoningTokens

@@ -4,30 +4,30 @@ import { createLogger } from '@kodus/flow';
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
-import { CacheService } from '@libs/core/cache/cache.service';
-import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
-import { GenerateIssuesFromPrClosedUseCase } from '@libs/issues/application/use-cases/generate-issues-from-pr-closed.use-case';
-import { ChatWithKodyFromGitUseCase } from '@libs/platform/application/use-cases/codeManagement/chatWithKodyFromGit.use-case';
-import {
-    IWebhookEventHandler,
-    IWebhookEventParams,
-} from '@libs/platform/domain/platformIntegrations/interfaces/webhook-event-handler.interface';
-import { CodeManagementService } from '../../adapters/services/codeManagement.service';
-import { SavePullRequestUseCase } from '@libs/platformData/application/use-cases/pullRequests/save.use-case';
-import {
-    IPullRequestsService,
-    PULL_REQUESTS_SERVICE_TOKEN,
-} from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
-import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
-import { EnqueueCodeReviewJobUseCase } from '@libs/core/workflow/application/use-cases/enqueue-code-review-job.use-case';
 import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
-import { getMappedPlatform } from '@libs/common/utils/webhooks';
 import {
     hasReviewMarker,
     isKodyMentionNonReview,
     isReviewCommand,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
+import { getMappedPlatform } from '@libs/common/utils/webhooks';
+import { CacheService } from '@libs/core/cache/cache.service';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
+import { EnqueueCodeReviewJobUseCase } from '@libs/core/workflow/application/use-cases/enqueue-code-review-job.use-case';
+import { GenerateIssuesFromPrClosedUseCase } from '@libs/issues/application/use-cases/generate-issues-from-pr-closed.use-case';
 import { WebhookContextService } from '@libs/platform/application/services/webhook-context.service';
+import { ChatWithKodyFromGitUseCase } from '@libs/platform/application/use-cases/codeManagement/chatWithKodyFromGit.use-case';
+import {
+    IWebhookEventHandler,
+    IWebhookEventParams,
+} from '@libs/platform/domain/platformIntegrations/interfaces/webhook-event-handler.interface';
+import { SavePullRequestUseCase } from '@libs/platformData/application/use-cases/pullRequests/save.use-case';
+import {
+    IPullRequestsService,
+    PULL_REQUESTS_SERVICE_TOKEN,
+} from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
+import { CodeManagementService } from '../../adapters/services/codeManagement.service';
 
 @Injectable()
 export class AzureReposPullRequestHandler implements IWebhookEventHandler {
@@ -91,11 +91,22 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
             return;
         }
 
-        // Direct to the appropriate method based on the event type
-        if (event === 'ms.vss-code.git-pullrequest-comment-event') {
-            await this.handleComment(params);
-        } else {
-            await this.handlePullRequest(params);
+        switch (event) {
+            case 'git.pullrequest.created':
+            case 'git.pullrequest.updated':
+            case 'git.pullrequest.merge.attempted':
+                await this.handlePullRequest(params);
+                break;
+            case 'ms.vss-code.git-pullrequest-comment-event':
+                await this.handleComment(params);
+                break;
+            default:
+                this.logger.warn({
+                    message: `Unsupported Azure Repos event: ${event}`,
+                    context: AzureReposPullRequestHandler.name,
+                    serviceName: AzureReposPullRequestHandler.name,
+                    metadata: { eventType: event },
+                });
         }
     }
 
@@ -444,6 +455,21 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                         triggerCommentId: comment?.id,
                     },
                 };
+
+                if (!context?.organizationAndTeamData) {
+                    this.logger.log({
+                        message:
+                            'No active automation found for Azure Repos comment command, skipping code review enqueue',
+                        serviceName: AzureReposPullRequestHandler.name,
+                        metadata: {
+                            prId,
+                            repository,
+                            commentId: comment?.id,
+                        },
+                        context: AzureReposPullRequestHandler.name,
+                    });
+                    return;
+                }
 
                 // Execute the necessary use cases
                 await this.savePullRequestUseCase.execute(updatedParams);

@@ -1,6 +1,6 @@
 import { useAuth } from "src/core/providers/auth.provider";
 import { usePermissions } from "src/core/providers/permissions.provider";
-import { hasPermission } from "src/core/utils/permissions";
+import { hasPermission } from "src/core/utils/permission-map";
 
 import { Action, ResourceType } from "./types";
 

@@ -1,4 +1,4 @@
-import { createThreadId, createLogger } from '@kodus/flow';
+import { createLogger, createThreadId } from '@kodus/flow';
 import { Injectable } from '@nestjs/common';
 
 import { BusinessRulesValidationAgentUseCase } from '@libs/agents/application/use-cases/business-rules-validation-agent.use-case';
@@ -106,6 +106,7 @@ interface WebhookParams {
 interface Repository {
     name: string;
     id: string;
+    owner?: string;
 }
 
 interface Sender {
@@ -415,7 +416,7 @@ export class ChatWithKodyFromGitUseCase {
             params.platformType,
         );
 
-        let ackResponse = null;
+        let ackResponse;
         let ackResponseId = null;
         let parentId = null;
         const commentId = this.getCommentId(params);
@@ -682,7 +683,7 @@ export class ChatWithKodyFromGitUseCase {
             params.platformType,
         );
 
-        let ackResponse = null;
+        let ackResponse;
         let ackResponseId = null;
         let parentId = null;
 
@@ -742,8 +743,6 @@ export class ChatWithKodyFromGitUseCase {
             }
         }
 
-        let response = '';
-
         const gitUser = this.getGitUser(params);
 
         const prepareContext = this.prepareContext({
@@ -778,7 +777,7 @@ export class ChatWithKodyFromGitUseCase {
             prepareContext.userQuestion,
         );
 
-        response = await this.processCommand(commandType, {
+        const response = await this.processCommand(commandType, {
             prepareContext,
             organizationAndTeamData,
             thread,
@@ -996,15 +995,33 @@ export class ChatWithKodyFromGitUseCase {
 
     private getRepository(params: WebhookParams): Repository {
         switch (params.platformType) {
-            case PlatformType.GITHUB:
+            case PlatformType.GITHUB: {
+                const fallbackRepository =
+                    this.extractRepositoryFromGitHubPullRequestUrl(params);
+
                 return {
-                    name: params.payload?.repository?.name,
+                    name:
+                        params.payload?.repository?.name ||
+                        fallbackRepository.name ||
+                        '',
                     id: params.payload?.repository?.id,
+                    owner:
+                        params.payload?.repository?.owner?.login ||
+                        fallbackRepository.owner ||
+                        '',
                 };
+            }
             case PlatformType.GITLAB:
                 return {
                     name: params.payload?.project?.name,
                     id: params.payload?.project?.id,
+                    owner:
+                        params.payload?.project?.namespace ||
+                        params.payload?.project?.path_with_namespace
+                            ?.split('/')
+                            ?.slice(0, -1)
+                            ?.join('/') ||
+                        '',
                 };
             case PlatformType.BITBUCKET:
                 return {
@@ -1012,12 +1029,23 @@ export class ChatWithKodyFromGitUseCase {
                     id:
                         params.payload?.repository?.uuid?.slice(1, -1) ||
                         params.payload?.repository?.id,
+                    owner:
+                        params.payload?.repository?.workspace?.slug ||
+                        params.payload?.repository?.owner?.username ||
+                        params.payload?.repository?.full_name
+                            ?.split('/')
+                            ?.at(0) ||
+                        '',
                 };
             case PlatformType.AZURE_REPOS:
                 return {
                     name: params.payload?.resource?.pullRequest?.repository
                         ?.name,
                     id: params.payload?.resource?.pullRequest?.repository?.id,
+                    owner:
+                        params.payload?.resource?.repository?.project?.name ||
+                        params.payload?.resourceContainers?.project?.id ||
+                        '',
                 };
             default:
                 this.logger.warn({
@@ -1027,6 +1055,75 @@ export class ChatWithKodyFromGitUseCase {
                 });
                 return { name: '', id: '' };
         }
+    }
+
+    private getRepositoryOwner(
+        params: WebhookParams,
+        repository?: Repository,
+    ): string {
+        if (repository?.owner?.trim()) {
+            return repository.owner.trim();
+        }
+
+        switch (params.platformType) {
+            case PlatformType.GITHUB: {
+                const fallbackRepository =
+                    this.extractRepositoryFromGitHubPullRequestUrl(params);
+                return (
+                    params.payload?.repository?.owner?.login ||
+                    fallbackRepository.owner ||
+                    ''
+                );
+            }
+            case PlatformType.GITLAB:
+                return (
+                    params.payload?.project?.namespace ||
+                    params.payload?.project?.path_with_namespace
+                        ?.split('/')
+                        ?.slice(0, -1)
+                        ?.join('/') ||
+                    ''
+                );
+            case PlatformType.BITBUCKET:
+                return (
+                    params.payload?.repository?.workspace?.slug ||
+                    params.payload?.repository?.owner?.username ||
+                    params.payload?.repository?.full_name?.split('/')?.at(0) ||
+                    ''
+                );
+            case PlatformType.AZURE_REPOS:
+                return (
+                    params.payload?.resource?.repository?.project?.name ||
+                    params.payload?.resourceContainers?.project?.id ||
+                    ''
+                );
+            default:
+                return '';
+        }
+    }
+
+    private extractRepositoryFromGitHubPullRequestUrl(params: WebhookParams): {
+        owner: string;
+        name: string;
+    } {
+        const pullRequestUrl = params.payload?.issue?.pull_request?.url;
+
+        if (typeof pullRequestUrl !== 'string' || !pullRequestUrl.length) {
+            return { owner: '', name: '' };
+        }
+
+        const match = pullRequestUrl.match(
+            /\/repos\/([^/]+)\/([^/]+)\/pulls\/\d+/,
+        );
+
+        if (!match) {
+            return { owner: '', name: '' };
+        }
+
+        return {
+            owner: match[1],
+            name: match[2],
+        };
     }
 
     private getPullRequestNumber(params: WebhookParams): number {
@@ -1152,7 +1249,7 @@ export class ChatWithKodyFromGitUseCase {
     }
 
     private getPullRequestDescription(params: WebhookParams): string {
-        let description = '';
+        let description: string;
 
         switch (params.platformType) {
             case PlatformType.GITHUB:

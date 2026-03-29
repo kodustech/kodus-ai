@@ -7,14 +7,14 @@ import {
     PULL_REQUEST_MESSAGES_SERVICE_TOKEN,
 } from '@libs/code-review/domain/pullRequestMessages/contracts/pullRequestMessages.service.contract';
 import { PullRequestMessagesEntity } from '@libs/code-review/domain/pullRequestMessages/entities/pullRequestMessages.entity';
+import { deepDifference, deepMerge } from '@libs/common/utils/deep';
+import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import {
     FormattedConfig,
     FormattedConfigLevel,
     IFormattedConfigProperty,
 } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 import { ConfigLevel } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
-import { deepDifference, deepMerge } from '@libs/common/utils/deep';
-import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 
 type CustomMessagesConfig = ReturnType<
     typeof getDefaultKodusConfigFile
@@ -198,30 +198,80 @@ export class FindByRepositoryOrDirectoryIdPullRequestMessagesUseCase {
                     continue;
                 }
 
+                const isParentNodeLeaf =
+                    this.isFormattedConfigProperty(parentNode);
+                const isParentNodeBranch =
+                    !!parentNode &&
+                    typeof parentNode === 'object' &&
+                    !isParentNodeLeaf;
+
                 if (
                     typeof childValue === 'object' &&
-                    !Array.isArray(childValue) &&
-                    parentNode
+                    !Array.isArray(childValue)
                 ) {
-                    formattedChild[key] = this.formatLevel(
-                        parentNode,
-                        childValue,
-                        childLevel,
-                    );
-                } else if (parentNode) {
-                    formattedChild[key] = {
-                        value: childValue,
-                        level: childLevel,
-                        overriddenValue: (
-                            parentNode as IFormattedConfigProperty<any>
-                        )?.value,
-                        overriddenLevel: (
-                            parentNode as IFormattedConfigProperty<any>
-                        )?.level,
+                    if (isParentNodeBranch) {
+                        formattedChild[key] = this.formatLevel(
+                            parentNode,
+                            childValue,
+                            childLevel,
+                        );
+                    } else {
+                        formattedChild[key] = this.formatObjectAtLevel(
+                            childValue,
+                            childLevel,
+                        );
+                    }
+                    continue;
+                }
+
+                formattedChild[key] = {
+                    value: childValue,
+                    level: childLevel,
+                    overriddenValue: isParentNodeLeaf
+                        ? (parentNode as IFormattedConfigProperty<any>).value
+                        : undefined,
+                    overriddenLevel: isParentNodeLeaf
+                        ? (parentNode as IFormattedConfigProperty<any>).level
+                        : undefined,
+                };
+            }
+        }
+        return formattedChild;
+    }
+
+    private formatObjectAtLevel(
+        config: object,
+        level: FormattedConfigLevel,
+    ): FormattedCustomMessagesConfig {
+        const formatted = {};
+        for (const key in config) {
+            if (Object.prototype.hasOwnProperty.call(config, key)) {
+                const value = config[key];
+                if (
+                    typeof value === 'object' &&
+                    value !== null &&
+                    !Array.isArray(value)
+                ) {
+                    formatted[key] = this.formatObjectAtLevel(value, level);
+                } else {
+                    formatted[key] = {
+                        value,
+                        level,
                     };
                 }
             }
         }
-        return formattedChild;
+        return formatted as FormattedCustomMessagesConfig;
+    }
+
+    private isFormattedConfigProperty(
+        value: any,
+    ): value is IFormattedConfigProperty<any> {
+        return (
+            value &&
+            typeof value === 'object' &&
+            'value' in value &&
+            'level' in value
+        );
     }
 }

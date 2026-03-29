@@ -17,11 +17,9 @@ describe('fetchPullRequestMetadata', () => {
     };
 
     it('returns body and success trace when tool succeeds', async () => {
-        const callTool = jest
-            .fn<ToolCaller['callTool']>()
-            .mockResolvedValue({
-                result: { data: { body: 'PR body content' } },
-            });
+        const callTool = jest.fn<ToolCaller['callTool']>().mockResolvedValue({
+            result: { data: { body: 'PR body content' } },
+        });
         const toolCaller = createToolCaller(callTool);
 
         const result = await fetchPullRequestMetadata(

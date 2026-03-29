@@ -91,81 +91,125 @@ export class GetReactionsUseCase implements IUseCase {
         organizationAndTeamData: OrganizationAndTeamData,
     ) {
         const reactionsPromises = pullRequests.map(async (pr) => {
-            if (!pr.suggestions?.length) {
-                return [];
-            }
+            try {
+                if (!pr.suggestions?.length) {
+                    return [];
+                }
 
-            const suggestionsByCommentId = new Map(
-                pr.suggestions.map((s) => [s.comment?.id, s]),
-            );
+                const suggestionsByCommentId = new Map(
+                    pr.suggestions.map((s) => [s.comment?.id, s]),
+                );
 
-            const comments =
-                await this.codeManagementService.getPullRequestReviewComment({
-                    organizationAndTeamData,
-                    filters: {
-                        repository: pr.repository,
-                        pullRequestNumber: pr.number,
-                    },
-                });
-
-            const commentsLinkedToSuggestions = comments.filter((comment) => {
-                const commentId = comment?.threadId
-                    ? comment.threadId
-                    : comment?.notes?.[0]?.id || comment?.id;
-                return suggestionsByCommentId.has(commentId);
-            });
-
-            if (!commentsLinkedToSuggestions.length) {
-                return [];
-            }
-
-            const reactionsInComments =
-                await this.codeManagementService.countReactions({
-                    organizationAndTeamData,
-                    comments: commentsLinkedToSuggestions,
-                    pr: {
-                        pull_number: pr.number,
-                        repository: pr.repository,
-                    },
-                });
-
-            if (!reactionsInComments?.length) {
-                return [];
-            }
-
-            return reactionsInComments
-                .map((reaction) => {
-                    const suggestion = suggestionsByCommentId.get(
-                        reaction.comment.id,
-                    );
-                    if (!suggestion) {
-                        return null;
-                    }
-
-                    return {
-                        reactions: reaction.reactions,
-                        comment: {
-                            id: reaction.comment.id,
-                            pullRequestReviewId:
-                                reaction.comment?.pull_request_review_id,
-                        },
-                        suggestionId: suggestion.id,
-                        pullRequest: {
-                            id: reaction.pullRequest.id,
-                            number: reaction.pullRequest.number,
-                            repository: {
-                                id:
-                                    reaction?.pullRequest?.repository?.id ||
-                                    pr?.repository?.id,
-                                fullName:
-                                    reaction?.pullRequest?.repository
-                                        ?.fullName || pr?.repository?.name,
+                const comments =
+                    await this.codeManagementService.getPullRequestReviewComment(
+                        {
+                            organizationAndTeamData,
+                            filters: {
+                                repository: pr.repository,
+                                pullRequestNumber: pr.number,
                             },
                         },
-                        organizationId: organizationAndTeamData.organizationId,
-                    };
-                })
-                .filter((reaction) => reaction !== null);
+                    );
+
+                const reactionCommentIdToSuggestion = new Map();
+                const commentsLinkedToSuggestions = comments.filter(
+                    (comment) => {
+                        const threadId =
+                            comment?.threadId ??
+                            comment?.notes?.[0]?.id ??
+                            comment?.id;
+                        const suggestion =
+                            suggestionsByCommentId.get(threadId);
+
+                        if (!suggestion) {
+                            return false;
+                        }
+
+                        if (comment.notes?.length > 0) {
+                            comment.notes.forEach((note) =>
+                                reactionCommentIdToSuggestion.set(
+                                    note.id,
+                                    suggestion,
+                                ),
+                            );
+                        } else {
+                            reactionCommentIdToSuggestion.set(
+                                comment.id,
+                                suggestion,
+                            );
+                        }
+                        return true;
+                    },
+                );
+
+                if (!commentsLinkedToSuggestions.length) {
+                    return [];
+                }
+
+                const reactionsInComments =
+                    await this.codeManagementService.countReactions({
+                        organizationAndTeamData,
+                        comments: commentsLinkedToSuggestions,
+                        pr: {
+                            pull_number: pr.number,
+                            repository: pr.repository,
+                        },
+                    });
+
+                if (!reactionsInComments?.length) {
+                    return [];
+                }
+
+                return reactionsInComments
+                    .map((reaction) => {
+                        const suggestion =
+                            reactionCommentIdToSuggestion.get(
+                                reaction.comment.id,
+                            );
+                        if (!suggestion) {
+                            return null;
+                        }
+
+                        return {
+                            reactions: reaction.reactions,
+                            comment: {
+                                id: reaction.comment.id,
+                                pullRequestReviewId:
+                                    reaction.comment?.pull_request_review_id,
+                            },
+                            suggestionId: suggestion.id,
+                            pullRequest: {
+                                id: reaction.pullRequest.id,
+                                number: reaction.pullRequest.number,
+                                repository: {
+                                    id:
+                                        reaction?.pullRequest?.repository?.id ||
+                                        pr?.repository?.id,
+                                    fullName:
+                                        reaction?.pullRequest?.repository
+                                            ?.fullName || pr?.repository?.name,
+                                },
+                            },
+                            organizationId:
+                                organizationAndTeamData.organizationId,
+                        };
+                    })
+                    .filter((reaction) => reaction !== null);
+            } catch (error) {
+                this.logger.error({
+                    message: 'Failed to fetch reactions for PR',
+                    context: GetReactionsUseCase.name,
+                    error,
+                    metadata: {
+                        organizationId:
+                            organizationAndTeamData.organizationId,
+                        prNumber: pr.number,
+                        repository: pr?.repository?.name,
+                        suggestionsCount: pr.suggestions?.length || 0,
+                    },
+                });
+                return [];
+            }
         });
 
         const reactionsResults = await Promise.all(reactionsPromises);

@@ -1,12 +1,25 @@
-import { useMemo } from "react";
-import { useInfiniteQuery, type InfiniteData } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { fetchEventSource } from "@microsoft/fetch-event-source";
+import {
+    useInfiniteQuery,
+    useQuery,
+    useQueryClient,
+    type InfiniteData,
+} from "@tanstack/react-query";
 import { axiosAuthorized } from "src/core/utils/axios";
+import { getJWTToken } from "src/core/utils/session";
 
-import { PULL_REQUEST_API, type PullRequestFilters } from "./fetch";
+import {
+    PULL_REQUEST_API,
+    PULL_REQUEST_SSE,
+    type PullRequestFilters,
+} from "./fetch";
 import type {
     PullRequestExecution,
     PullRequestExecutionsPayload,
     PullRequestExecutionsResponse,
+    PullRequestFilesResponse,
+    PullRequestSuggestionsResponse,
 } from "./types";
 
 const normalizeExecutions = (
@@ -95,6 +108,15 @@ export const useInfinitePullRequestExecutions = (
         retry: false,
     });
 
+    // Poll only the first page every 30s (avoids refetching all loaded pages)
+    const { refetch } = query;
+    useEffect(() => {
+        const id = setInterval(() => {
+            refetch({ refetchPage: (_page, index) => index === 0 });
+        }, 30_000);
+        return () => clearInterval(id);
+    }, [refetch]);
+
     const items = useMemo(() => {
         const pages = infiniteData?.pages ?? [];
         const map = new Map<string, PullRequestExecution>();
@@ -123,4 +145,111 @@ export const useInfinitePullRequestExecutions = (
     }, [infiniteData]);
 
     return { ...query, data: infiniteData, items };
+};
+
+export const usePullRequestSuggestions = (
+    repositoryId: string | undefined,
+    prNumber: number | undefined,
+    filters?: { severity?: string; category?: string },
+) => {
+    return useQuery({
+        queryKey: ["pull-request-suggestions", repositoryId, prNumber, filters],
+        queryFn: () =>
+            axiosAuthorized.fetcher<PullRequestSuggestionsResponse>(
+                PULL_REQUEST_API.GET_SUGGESTIONS({
+                    repositoryId: repositoryId!,
+                    prNumber: prNumber!,
+                    ...filters,
+                }),
+            ),
+        enabled: !!repositoryId && !!prNumber,
+        retry: false,
+    });
+};
+
+export const usePullRequestFiles = (
+    repositoryId: string | undefined,
+    prNumber: number | undefined,
+    teamId: string | undefined,
+    repositoryName?: string,
+) => {
+    return useQuery({
+        queryKey: [
+            "pull-request-files",
+            repositoryId,
+            prNumber,
+            teamId,
+            repositoryName,
+        ],
+        queryFn: () =>
+            axiosAuthorized.fetcher<PullRequestFilesResponse>(
+                PULL_REQUEST_API.GET_FILES({
+                    repositoryId: repositoryId!,
+                    prNumber: prNumber!,
+                    teamId: teamId!,
+                    repositoryName,
+                }),
+            ),
+        enabled: !!repositoryId && !!prNumber && !!teamId,
+        retry: 1,
+        staleTime: 5 * 60 * 1000,
+    });
+};
+
+export const usePullRequestExecutionSSE = (enabled = true) => {
+    const queryClient = useQueryClient();
+    const controllerRef = useRef<AbortController | null>(null);
+
+    const invalidate = useCallback(() => {
+        queryClient.invalidateQueries({
+            queryKey: ["pull-request-executions"],
+        });
+    }, [queryClient]);
+
+    useEffect(() => {
+        if (!enabled) return;
+
+        let cancelled = false;
+
+        const connect = async () => {
+            controllerRef.current?.abort();
+            const controller = new AbortController();
+            controllerRef.current = controller;
+
+            const accessToken = await getJWTToken();
+            if (!accessToken || cancelled) return;
+
+            await fetchEventSource(PULL_REQUEST_SSE.EXECUTION_EVENTS, {
+                headers: { Authorization: `Bearer ${accessToken}` },
+                signal: controller.signal,
+                openWhenHidden: false,
+
+                onmessage(event) {
+                    if (!event.data) return;
+
+                    try {
+                        const parsed = JSON.parse(event.data);
+                        if (parsed?.type === "execution_updated") {
+                            invalidate();
+                        }
+                    } catch {
+                        // ignore parse errors
+                    }
+                },
+
+                onerror() {
+                    // fetchEventSource will auto-retry; return nothing to keep default behavior
+                },
+            });
+        };
+
+        connect().catch(() => {
+            // Silently handle fatal SSE connection errors (e.g., 401, 500)
+        });
+
+        return () => {
+            cancelled = true;
+            controllerRef.current?.abort();
+        };
+    }, [enabled, invalidate]);
 };

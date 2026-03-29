@@ -24,7 +24,10 @@ export default function AzureReposRepositoriesSelector({
     React.useEffect(() => {
         const fetchData = async () => {
             setIsLoading(true);
-            const response = await getRepositories(teamId, organizationSelected);
+            const response = await getRepositories(
+                teamId,
+                organizationSelected,
+            );
             const data = Array.isArray(response) ? response : [];
 
             setOriginalRepositories(data);

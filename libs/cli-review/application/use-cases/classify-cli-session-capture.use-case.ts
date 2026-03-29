@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
 import {
     CliSessionClassifiedDecision,
+    CliSessionDecisionOrigin,
     CliSessionDecisionType,
 } from '@libs/cli-review/domain/types/cli-session-capture.types';
 import { CliSessionCaptureRepository } from '@libs/cli-review/infrastructure/repositories/cli-session-capture.repository';
@@ -23,6 +24,7 @@ const LLMDecisionSchema = z.object({
         'tooling',
         'other',
     ]),
+    origin: z.enum(['human', 'agent', 'collaborative']).optional(),
     decision: z.string().min(1).max(600),
     rationale: z.string().max(1000).optional(),
     confidence: z.number().min(0).max(1).optional(),
@@ -150,7 +152,7 @@ export class ClassifyCliSessionCaptureUseCase {
             'You are classifying coding session captures into reusable decisions.',
             '',
             'Return ONLY JSON with shape:',
-            '{ "decisions": [ { "type": "...", "decision": "...", "rationale": "...", "confidence": 0.0, "evidence": ["..."] } ] }',
+            '{ "decisions": [ { "type": "...", "origin": "...", "decision": "...", "rationale": "...", "confidence": 0.0, "evidence": ["..."] } ] }',
             '',
             'Allowed decision types:',
             '- architectural_decision: high-level structure or system choice',
@@ -164,6 +166,12 @@ export class ClassifyCliSessionCaptureUseCase {
             '- Extract only concrete choices, not generic statements.',
             '- Keep each "decision" concise and self-contained.',
             '- confidence must be between 0 and 1.',
+            '',
+            'Allowed origin values:',
+            '- human: the human explicitly requested or decided this',
+            '- agent: the agent proposed and implemented this without the human asking',
+            '- collaborative: the agent suggested and the human confirmed/refined',
+            '',
             '- If nothing useful exists, return { "decisions": [] }.',
         ].join('\n');
 
@@ -175,7 +183,7 @@ export class ClassifyCliSessionCaptureUseCase {
             toolUses: capture.signals?.toolUses || [],
         };
 
-        const { result } = await promptRunner
+        const result = await promptRunner
             .builder()
             .setParser(ParserType.ZOD, LLMDecisionExtractionSchema)
             .setLLMJsonMode(true)
@@ -198,9 +206,11 @@ export class ClassifyCliSessionCaptureUseCase {
                 decision.confidence,
             );
             const normalizedType = decision.type as CliSessionDecisionType;
+            const origin = decision.origin as CliSessionDecisionOrigin;
 
             return {
                 type: normalizedType,
+                origin,
                 decision: this.trim(decision.decision, 500),
                 rationale: decision.rationale
                     ? this.trim(decision.rationale, 1000)

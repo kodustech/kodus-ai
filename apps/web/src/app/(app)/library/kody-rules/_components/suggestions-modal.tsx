@@ -32,7 +32,7 @@ import {
     Minimize2,
     RefreshCw,
 } from "lucide-react";
-import { cn } from "src/core/utils/components";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { safeArray } from "src/core/utils/safe-array";
 
 type SuggestionsModalProps = {
@@ -45,10 +45,12 @@ const buildExternalPullRequestUrl = ({
     prUrl,
     prNumber,
     repositoryFullName,
+    githubEnterpriseServerPatEnabled,
 }: {
     prUrl?: string;
     prNumber: number;
     repositoryFullName?: string;
+    githubEnterpriseServerPatEnabled: boolean;
 }) => {
     if (!prUrl) {
         return `#pr-${prNumber}`;
@@ -58,18 +60,27 @@ const buildExternalPullRequestUrl = ({
         const url = new URL(prUrl);
         const hostname = url.hostname.toLowerCase();
 
-        // GitHub: api.github.com for API, github.com for web
-        if (hostname === "github.com" || hostname === "api.github.com") {
-            if (hostname === "api.github.com") {
+        const isGithubApiHost =
+            hostname === "api.github.com" ||
+            (githubEnterpriseServerPatEnabled &&
+                url.pathname.startsWith("/api/v3/"));
+        const isGithubWebHost =
+            hostname === "github.com" ||
+            (githubEnterpriseServerPatEnabled &&
+                url.pathname.includes("/pull/"));
+
+        // GitHub cloud always works; GHES URL patterns are enabled by flag.
+        if (isGithubApiHost || isGithubWebHost) {
+            if (isGithubApiHost) {
                 const apiMatch = url.pathname.match(
-                    /\/repos\/([^/]+)\/([^/]+)\/pulls/,
+                    /\/(?:api\/v3\/)?repos\/([^/]+)\/([^/]+)\/pulls/,
                 );
                 if (apiMatch) {
                     const [, owner, repo] = apiMatch;
-                    return `https://github.com/${owner}/${repo}/pull/${prNumber}`;
+                    return `${url.origin}/${owner}/${repo}/pull/${prNumber}`;
                 }
                 if (repositoryFullName) {
-                    return `https://github.com/${repositoryFullName}/pull/${prNumber}`;
+                    return `${url.origin}/${repositoryFullName}/pull/${prNumber}`;
                 }
             } else {
                 return prUrl;
@@ -137,6 +148,7 @@ export const SuggestionsModal = ({
     variant = "default",
 }: SuggestionsModalProps) => {
     const [open, setOpen] = useState(false);
+    const { githubEnterpriseServerPat } = useFeatureFlags();
     const [viewMode, setViewMode] = useState<"detailed" | "minimal">(
         "detailed",
     );
@@ -202,7 +214,7 @@ export const SuggestionsModal = ({
                         )}
                     </DialogTrigger>
                 </TooltipTrigger>
-                <TooltipContent className="z-[100]">
+                <TooltipContent className="z-100">
                     <p>View suggestions sent in PRs</p>
                 </TooltipContent>
             </Tooltip>
@@ -238,7 +250,7 @@ export const SuggestionsModal = ({
                                     )}
                                 </Button>
                             </TooltipTrigger>
-                            <TooltipContent className="z-[100]">
+                            <TooltipContent className="z-100">
                                 <p>
                                     {viewMode === "detailed"
                                         ? "Switch to minimal view"
@@ -304,6 +316,8 @@ export const SuggestionsModal = ({
                                                 prNumber: group.prNumber,
                                                 repositoryFullName:
                                                     group.repositoryFullName,
+                                                githubEnterpriseServerPatEnabled:
+                                                    !!githubEnterpriseServerPat,
                                             })}
                                             target="_blank"
                                             rel="noopener noreferrer">
@@ -407,7 +421,7 @@ export const SuggestionsModal = ({
                                                         group.suggestions
                                                             .length -
                                                             1 && (
-                                                        <Separator className="!mt-4" />
+                                                        <Separator className="mt-4!" />
                                                     )}
                                                 </div>
                                             );

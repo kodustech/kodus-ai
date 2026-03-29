@@ -1,14 +1,15 @@
 import { redirect } from "next/navigation";
-import { getOrganizationId } from "@services/organizations/fetch";
 import { getTeamParametersNoCache } from "@services/parameters/fetch";
 import { ParametersConfigKey } from "@services/parameters/types";
 import { Action, ResourceType } from "@services/permissions/types";
 import { auth } from "src/core/config/auth";
 import { NavMenu } from "src/core/layout/navbar";
 import { TEAM_STATUS } from "src/core/types";
-import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
 import { BYOKMissingKeyTopbar } from "src/features/ee/byok/_components/missing-key-topbar";
-import { isBYOKSubscriptionPlan } from "src/features/ee/byok/_utils";
+import {
+    isBYOKSubscriptionPlan,
+    shouldShowBYOKMissingKeyTopbar,
+} from "src/features/ee/byok/_utils";
 import { FinishedTrialModal } from "src/features/ee/subscription/_components/finished-trial-modal";
 import { SubscriptionStatusTopbar } from "src/features/ee/subscription/_components/subscription-status-topbar";
 import { SubscriptionProvider } from "src/features/ee/subscription/_providers/subscription-context";
@@ -18,7 +19,9 @@ import { Providers } from "./providers";
 import { AppRightSidebar } from "./right-sidebar";
 
 export default async function Layout({ children }: React.PropsWithChildren) {
-    const session = await auth();
+    // Phase 1: auth + teams in parallel (both needed for redirect checks)
+    const [session, teams] = await Promise.all([auth(), getTeamsCached()]);
+
     if (!session) {
         redirect("/sign-out");
     }
@@ -31,33 +34,44 @@ export default async function Layout({ children }: React.PropsWithChildren) {
         redirect("/confirm-email");
     }
 
-    // Fetch teams (cached, returns [] on error)
-    const teams = await getTeamsCached();
-
     if (!teams?.some((team) => team.status === TEAM_STATUS.ACTIVE)) {
         redirect("/setup");
     }
 
-    const teamId = await getGlobalSelectedTeamId();
+    // Derive teamId from already-fetched teams (avoid refetching)
+    const { cookies } = await import("next/headers");
+    const cookieStore = await cookies();
+    const selectedTeamIdFromCookie = cookieStore.get(
+        "global-selected-team-id",
+    )?.value;
+    const teamId =
+        teams?.find((t) => t.uuid === selectedTeamIdFromCookie)?.uuid ??
+        teams?.find((t) => t.status === TEAM_STATUS.ACTIVE)?.uuid!;
 
-    // Platform configs check - this one we keep uncached as it controls redirects
-    const platformConfigs = await getTeamParametersNoCache<{
-        configValue: { finishOnboard?: boolean };
-    }>({
-        key: ParametersConfigKey.PLATFORM_CONFIGS,
-        teamId,
-    }).catch((err) => {
-        console.error("[Layout] Failed to fetch platform configs:", err);
-        return null;
-    });
+    // Derive organizationId from session (avoid extra auth() call)
+    const organizationId = session.user?.organizationId;
+    if (!organizationId) {
+        redirect("/sign-out");
+    }
+
+    // Phase 2: platform config + layout data in parallel
+    const [platformConfigs, layoutData] = await Promise.all([
+        getTeamParametersNoCache<{
+            configValue: { finishOnboard?: boolean };
+        }>({
+            key: ParametersConfigKey.PLATFORM_CONFIGS,
+            teamId,
+        }).catch((err) => {
+            console.error("[Layout] Failed to fetch platform configs:", err);
+            return null;
+        }),
+        getLayoutData(teamId, organizationId),
+    ]);
 
     if (platformConfigs && !platformConfigs?.configValue?.finishOnboard) {
         redirect("/setup");
     }
 
-    const organizationId = await getOrganizationId();
-
-    // Fetch all layout data (cached for 60 seconds)
     const {
         permissions,
         organizationName,
@@ -65,18 +79,23 @@ export default async function Layout({ children }: React.PropsWithChildren) {
         usersWithAssignedLicense,
         byokConfig,
         featureFlags,
-    } = await getLayoutData(teamId, organizationId);
+    } = layoutData;
 
     const isBYOK = organizationLicense
         ? isBYOKSubscriptionPlan(organizationLicense)
         : false;
     const isTrial = organizationLicense?.subscriptionStatus === "trial";
+    const showBYOKMissingKeyTopbar = shouldShowBYOKMissingKeyTopbar({
+        license: organizationLicense,
+        byokConfig,
+        permissions,
+        organizationId,
+        role: session.user.role,
+    });
 
     const canManageCodeReview = !!(
-        (
-            permissions as Record<string, Record<string, boolean>> | undefined
-        )?.[ResourceType.CodeReviewSettings]?.[Action.Manage]
-    );
+        permissions as Record<string, Record<string, boolean>> | undefined
+    )?.[ResourceType.CodeReviewSettings]?.[Action.Manage];
 
     return (
         <Providers
@@ -103,7 +122,7 @@ export default async function Layout({ children }: React.PropsWithChildren) {
                 <FinishedTrialModal />
                 <SubscriptionStatusTopbar />
 
-                {isBYOK && !byokConfig?.main && <BYOKMissingKeyTopbar />}
+                {showBYOKMissingKeyTopbar && <BYOKMissingKeyTopbar />}
 
                 {children}
 

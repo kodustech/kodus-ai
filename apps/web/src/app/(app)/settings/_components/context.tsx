@@ -8,62 +8,34 @@ import { FEATURE_FLAGS } from "src/core/config/feature-flags";
 import { useCodeReviewRouteParams } from "../_hooks";
 import type {
     CodeReviewGlobalConfig,
-    FormattedCodeReviewConfig,
     FormattedGlobalCodeReviewConfig,
 } from "../code-review/_types";
+import {
+    resolveCodeReviewConfigForScope,
+    type ScopedCodeReviewConfig,
+} from "./code-review-config-scope";
 
 const AutomationCodeReviewConfigContext =
     createContext<FormattedGlobalCodeReviewConfig>(
         {} as FormattedGlobalCodeReviewConfig,
     );
 
-export const useCodeReviewConfig = ():
-    | (FormattedCodeReviewConfig & {
-          id: string;
-          name: string;
-          isSelected: boolean;
-          displayName: string;
-      })
-    | undefined => {
+const ScopedCodeReviewConfigContext = createContext<
+    ScopedCodeReviewConfig | undefined
+>(undefined);
+
+export const useCodeReviewConfig = (): ScopedCodeReviewConfig | undefined => {
     const { repositoryId, directoryId } = useCodeReviewRouteParams();
-    const context = useFullCodeReviewConfig();
-
-    if (repositoryId === "global") {
-        const { configs } = context;
-
-        return {
-            ...configs,
-            id: "global",
-            name: "Global",
-            isSelected: true,
-            displayName: "Global",
-        };
+    const scopedContext = useContext(ScopedCodeReviewConfigContext);
+    if (scopedContext) {
+        return scopedContext;
     }
 
-    const repository = context.repositories.find((r) => r.id === repositoryId);
-    if (!repository) return;
-
-    const directory = repository?.directories?.find(
-        (d) => d.id === directoryId,
+    return resolveCodeReviewConfigForScope(
+        useFullCodeReviewConfig(),
+        repositoryId,
+        directoryId,
     );
-
-    if (!directory) {
-        const { configs, ...rest } = repository;
-
-        return {
-            ...configs,
-            ...rest,
-            displayName: repository.name,
-        };
-    }
-
-    const { configs, ...rest } = directory;
-
-    return {
-        ...configs,
-        ...rest,
-        displayName: `${repository?.name}${directory?.path}`,
-    };
 };
 
 export const useFullCodeReviewConfig = (): FormattedGlobalCodeReviewConfig => {
@@ -86,6 +58,16 @@ export const AutomationCodeReviewConfigProvider = (
     <AutomationCodeReviewConfigContext.Provider value={props.config}>
         {props.children}
     </AutomationCodeReviewConfigContext.Provider>
+);
+
+export const ScopedCodeReviewConfigProvider = (
+    props: React.PropsWithChildren & {
+        config: ScopedCodeReviewConfig | undefined;
+    },
+) => (
+    <ScopedCodeReviewConfigContext.Provider value={props.config}>
+        {props.children}
+    </ScopedCodeReviewConfigContext.Provider>
 );
 
 const PlatformConfigContext = createContext<PlatformConfigValue>(
@@ -157,3 +139,5 @@ export const FeatureFlagsProvider = (
         {props.children}
     </FeatureFlagsContext.Provider>
 );
+
+export { resolveCodeReviewConfigForScope };

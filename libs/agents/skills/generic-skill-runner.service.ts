@@ -11,16 +11,19 @@ import { SDKOrchestrator } from '@kodus/flow/dist/orchestration';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { ObservabilityService } from '@libs/core/log/observability.service';
 import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
+import { ObservabilityService } from '@libs/core/log/observability.service';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 
-import {
-    McpConnectionUnavailableError,
-    RequiredMcpPreflightError,
-} from './skill.errors';
-import { resolveCapabilityTools } from './skill-capabilities';
 import { BoundedMap } from './runtime/bounded-map';
+import {
+    AgentCallOptions,
+    SkillCapabilityRuntimeConfig,
+    SkillFetcherRuntime,
+    ToolCaller,
+    ToolExecutionResponse,
+} from './runtime/skill-runtime.types';
+import { resolveCapabilityTools } from './skill-capabilities';
 import {
     SkillExecutionPolicy,
     SkillFetcherPolicy,
@@ -30,12 +33,9 @@ import {
     SkillRequiredMcp,
 } from './skill-loader.service';
 import {
-    AgentCallOptions,
-    SkillCapabilityRuntimeConfig,
-    SkillFetcherRuntime,
-    ToolExecutionResponse,
-    ToolCaller,
-} from './runtime/skill-runtime.types';
+    McpConnectionUnavailableError,
+    RequiredMcpPreflightError,
+} from './skill.errors';
 
 export interface SkillFetcherResult {
     raw: string;
@@ -486,10 +486,18 @@ export class GenericSkillRunnerService {
         }
 
         const externalConnections = (mcpManagerServers ?? []).filter(
-            (server) =>
-                String(server?.provider ?? '')
+            (server) => {
+                const serverProvider = String(server?.provider ?? '')
                     .trim()
-                    .toLowerCase() !== 'kodusmcp',
+                    .toLowerCase();
+                const serverName = String(server?.name ?? '')
+                    .trim()
+                    .toLowerCase();
+
+                return !(
+                    serverProvider === 'kodusmcp' && serverName === 'kodus mcp'
+                );
+            },
         );
 
         if (!externalConnections.length) {
@@ -558,27 +566,48 @@ export class GenericSkillRunnerService {
 
         const filteredServers = mcpManagerServers
             .filter((server) => {
-                if (server.provider !== 'kodusmcp') {
-                    if (!requiredProviderHints.length) {
+                const serverProvider = String(server?.provider ?? '')
+                    .trim()
+                    .toLowerCase();
+                const serverName = String(server?.name ?? '')
+                    .trim()
+                    .toLowerCase();
+
+                if (
+                    serverProvider === 'kodusmcp' &&
+                    serverName === 'kodus mcp'
+                ) {
+                    if (!resolvedRequiredTools.length) {
                         return true;
                     }
-                    return this.serverMatchesRequiredHints(
-                        server,
-                        requiredProviderHints,
+                    const availableTools = Array.isArray(server.allowedTools)
+                        ? server.allowedTools
+                        : [];
+                    return resolvedRequiredTools.some((tool) =>
+                        availableTools.includes(tool),
                     );
                 }
-                if (!resolvedRequiredTools.length) {
+
+                if (!requiredProviderHints.length) {
                     return true;
                 }
-                const availableTools = Array.isArray(server.allowedTools)
-                    ? server.allowedTools
-                    : [];
-                return resolvedRequiredTools.some((tool) =>
-                    availableTools.includes(tool),
+                return this.serverMatchesRequiredHints(
+                    server,
+                    requiredProviderHints,
                 );
             })
             .map((server) => {
-                if (server.provider === 'kodusmcp') {
+                const serverProvider = String(server?.provider ?? '')
+                    .trim()
+                    .toLowerCase();
+                const serverName = String(server?.name ?? '')
+                    .trim()
+                    .toLowerCase();
+
+                if (
+                    serverProvider === 'kodusmcp' &&
+                    serverName === 'kodus mcp'
+                ) {
                     if (!resolvedRequiredTools.length) {
                         return server;
                     }

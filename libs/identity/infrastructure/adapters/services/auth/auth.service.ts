@@ -385,7 +385,7 @@ export class AuthService implements IAuthService {
                 clientSecret = process.env.API_GITHUB_CLIENT_SECRET;
                 break;
             case AuthProvider.GITLAB:
-                url = 'https://gitlab.com/oauth/token';
+                url = process.env.API_GITLAB_TOKEN_URL || 'https://gitlab.com/oauth/token';
                 clientId = process.env.GLOBAL_GITLAB_CLIENT_ID;
                 clientSecret = process.env.GLOBAL_GITLAB_CLIENT_SECRET;
                 break;

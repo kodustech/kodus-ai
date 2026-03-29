@@ -33,10 +33,16 @@ const SOFT_SPECULATION_FEATURES: (keyof SafeguardFeatureSet)[] = [
  * suggestion into: keep (clear structural defect), discard (clear
  * speculation), or verify (ambiguous — needs agent verification).
  */
-export function triageSuggestion(features: SafeguardFeatureSet): TriageDecision {
+export function triageSuggestion(
+    features: SafeguardFeatureSet,
+): TriageDecision {
     const hasHardDiscard = HARD_DISCARD_FEATURES.some((f) => features[f]);
-    const hasSoftSpeculation = SOFT_SPECULATION_FEATURES.some((f) => features[f]);
-    const hasStructuralDefect = STRUCTURAL_DEFECT_FEATURES.some((f) => features[f]);
+    const hasSoftSpeculation = SOFT_SPECULATION_FEATURES.some(
+        (f) => features[f],
+    );
+    const hasStructuralDefect = STRUCTURAL_DEFECT_FEATURES.some(
+        (f) => features[f],
+    );
 
     // Hard discard: definitive signals → always discard
     if (hasHardDiscard) {

@@ -1,15 +1,21 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Button } from "@components/ui/button";
+import { Card, CardHeader } from "@components/ui/card";
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from "@components/ui/collapsible";
 import { FormControl } from "@components/ui/form-control";
 import { Input } from "@components/ui/input";
 import { KodyReviewPreview } from "@components/ui/kody-review-preview";
 import { magicModal } from "@components/ui/magic-modal";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { Switch } from "@components/ui/switch";
 import { createCodeManagementIntegration } from "@services/codeManagement/fetch";
 import { AxiosError } from "axios";
 import { SaveIcon } from "lucide-react";
-import { Controller, useForm } from "react-hook-form";
 import { GitTokenDocs } from "src/core/components/system/git-token-docs";
 import {
     Dialog,
@@ -21,13 +27,13 @@ import {
 } from "src/core/components/ui/dialog";
 import { AuthMode, PlatformType } from "src/core/types";
 import { captureSegmentEvent } from "src/core/utils/segment";
-import { z } from "zod";
 
-const tokenFormSchema = z.object({
-    token: z.string().min(1, {
-        error: "Enter a Token",
-    }),
-});
+import {
+    getGithubTokenErrorMessage,
+    getGithubTokenConfig,
+    isValidGithubEnterpriseUrl,
+    resolveGithubTokenHost,
+} from "./github-token-config";
 
 function getUsernameFromEmail(email: string): string {
     return email.split("@")[0] || email;
@@ -37,23 +43,48 @@ export const GithubTokenModal = (props: {
     teamId: string;
     userId: string;
     userEmail: string;
+    githubEnterpriseServerPatEnabled: boolean;
 }) => {
-    const form = useForm({
-        resolver: zodResolver(tokenFormSchema),
-        mode: "all",
-        defaultValues: {
-            token: "",
-        },
+    const [token, setToken] = useState("");
+    const [selfhosted, setSelfhosted] = useState(false);
+    const [selfHostedUrl, setSelfHostedUrl] = useState("");
+    const [error, setError] = useState({ message: "" });
+    const [selfHostedUrlError, setSelfHostedUrlError] = useState("");
+    const githubTokenConfig = getGithubTokenConfig({
+        githubEnterpriseServerPatEnabled:
+            props.githubEnterpriseServerPatEnabled,
     });
 
-    const submit = async (data: z.infer<typeof tokenFormSchema>) => {
+    useEffect(() => {
+        if (error.message || selfHostedUrlError) {
+            setError({ message: "" });
+            setSelfHostedUrlError("");
+        }
+    }, [token, selfHostedUrl]);
+
+    const submit = async () => {
+        if (
+            selfhosted &&
+            selfHostedUrl &&
+            !isValidGithubEnterpriseUrl(selfHostedUrl)
+        ) {
+            setSelfHostedUrlError("Enter a valid URL");
+            return;
+        }
+
         magicModal.lock();
 
         try {
             await createCodeManagementIntegration({
                 integrationType: PlatformType.GITHUB,
                 authMode: AuthMode.TOKEN,
-                token: data.token,
+                token,
+                host: resolveGithubTokenHost({
+                    githubEnterpriseServerPatEnabled:
+                        props.githubEnterpriseServerPatEnabled,
+                    selfHosted: selfhosted,
+                    selfHostedUrl,
+                }),
                 organizationAndTeamData: {
                     teamId: props.teamId,
                 },
@@ -74,24 +105,38 @@ export const GithubTokenModal = (props: {
             magicModal.unlock();
 
             if (error instanceof AxiosError && error.status === 400) {
-                form.setError("token", {
-                    type: "custom",
-                    message: "Invalid Token",
+                setError({
+                    message: getGithubTokenErrorMessage({
+                        selfHosted: selfhosted,
+                    }),
                 });
             }
         }
     };
 
-    const {
-        isDirty: formIsDirty,
-        isValid: formIsValid,
-        isSubmitting: formIsSubmitting,
-    } = form.formState;
+    const [formIsSubmitting, setFormIsSubmitting] = useState(false);
+    const canSubmit =
+        !!token &&
+        !error.message &&
+        !selfHostedUrlError &&
+        (!githubTokenConfig.showSelfHosted ||
+            !selfhosted ||
+            (!!selfHostedUrl.trim() &&
+                isValidGithubEnterpriseUrl(selfHostedUrl.trim())));
 
     return (
         <Dialog open onOpenChange={() => magicModal.hide()}>
             <DialogContent>
-                <form onSubmit={form.handleSubmit(submit)}>
+                <form
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        if (!canSubmit || formIsSubmitting) return;
+
+                        setFormIsSubmitting(true);
+                        void submit().finally(() => {
+                            setFormIsSubmitting(false);
+                        });
+                    }}>
                     <DialogHeader>
                         <DialogTitle>Github Personal Access Token</DialogTitle>
                         <DialogDescription></DialogDescription>
@@ -113,29 +158,91 @@ export const GithubTokenModal = (props: {
                                 content: "const result = await fetchData();",
                             }}
                         />
+                        <p className="text-destructive text-sm font-semibold">
+                            GitHub Checks/PR status won&apos;t be available with
+                            PAT tokens.
+                        </p>
                     </div>
 
                     <div className="flex flex-col gap-4">
-                        <Controller
-                            name="token"
-                            control={form.control}
-                            render={({ field, fieldState }) => (
-                                <FormControl.Root>
-                                    <FormControl.Input>
-                                        <Input
-                                            {...field}
-                                            type="password"
-                                            error={fieldState.error}
-                                            placeholder="Paste your Token here"
-                                        />
-                                    </FormControl.Input>
+                        <FormControl.Root>
+                            <FormControl.Input>
+                                <Input
+                                    type="password"
+                                    value={token}
+                                    error={error.message}
+                                    onChange={(event) =>
+                                        setToken(event.target.value)
+                                    }
+                                    placeholder="Paste your Token here"
+                                />
+                            </FormControl.Input>
 
-                                    <FormControl.Error>
-                                        {fieldState.error?.message}
-                                    </FormControl.Error>
-                                </FormControl.Root>
-                            )}
-                        />
+                            <FormControl.Error>
+                                {error.message}
+                            </FormControl.Error>
+                        </FormControl.Root>
+
+                        {githubTokenConfig.showSelfHosted && (
+                            <Collapsible
+                                open={selfhosted}
+                                onOpenChange={(open) => setSelfhosted(open)}
+                                className="flex flex-col gap-1">
+                                <div className="relative">
+                                    <CollapsibleTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="helper"
+                                            size="lg"
+                                            className="w-full items-center justify-between py-4">
+                                            <FormControl.Label className="mb-0">
+                                                Self-hosted
+                                            </FormControl.Label>
+                                        </Button>
+                                    </CollapsibleTrigger>
+
+                                    <div className="pointer-events-none absolute inset-y-0 right-6 flex items-center">
+                                        <Switch
+                                            decorative
+                                            checked={selfhosted}
+                                        />
+                                    </div>
+                                </div>
+
+                                <CollapsibleContent>
+                                    <Card color="lv1">
+                                        <CardHeader>
+                                            <FormControl.Root>
+                                                <FormControl.Label htmlFor="github-selfhost-url">
+                                                    GitHub Enterprise URL
+                                                </FormControl.Label>
+
+                                                <FormControl.Input>
+                                                    <Input
+                                                        id="github-selfhost-url"
+                                                        value={selfHostedUrl}
+                                                        error={
+                                                            selfHostedUrlError
+                                                        }
+                                                        onChange={(event) =>
+                                                            setSelfHostedUrl(
+                                                                event.target
+                                                                    .value,
+                                                            )
+                                                        }
+                                                        placeholder="https://github.your-company.com"
+                                                    />
+                                                </FormControl.Input>
+
+                                                <FormControl.Error>
+                                                    {selfHostedUrlError}
+                                                </FormControl.Error>
+                                            </FormControl.Root>
+                                        </CardHeader>
+                                    </Card>
+                                </CollapsibleContent>
+                            </Collapsible>
+                        )}
 
                         <GitTokenDocs provider="github" />
                     </div>
@@ -155,7 +262,7 @@ export const GithubTokenModal = (props: {
                             variant="primary"
                             leftIcon={<SaveIcon />}
                             loading={formIsSubmitting}
-                            disabled={!formIsValid}>
+                            disabled={!canSubmit}>
                             Validate and save
                         </Button>
                     </DialogFooter>

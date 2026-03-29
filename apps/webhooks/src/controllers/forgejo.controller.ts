@@ -3,8 +3,8 @@ import { Controller, HttpStatus, Post, Req, Res } from '@nestjs/common';
 import { Request, Response } from 'express';
 
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
-import { EnqueueWebhookUseCase } from '@libs/platform/application/use-cases/webhook/enqueue-webhook.use-case';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
+import { EnqueueWebhookUseCase } from '@libs/platform/application/use-cases/webhook/enqueue-webhook.use-case';
 
 import {
     WebhookForgejoEvent,

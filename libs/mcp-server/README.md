@@ -2,6 +2,33 @@
 
 Este módulo expõe funcionalidades do `CodeManagementService` através do protocolo MCP (Model Context Protocol), permitindo que aplicações externas consumam as operações de gerenciamento de código do Kodus.
 
+## Modelo de transporte HTTP
+
+O endpoint HTTP MCP do Kodus roda em modo `Streamable HTTP` stateless.
+
+## Contrato atual
+
+- `initialize`, `ping`, `tools/list` e demais chamadas de descoberta podem ser feitas diretamente no endpoint MCP.
+- O endpoint HTTP em si não mantém sessão entre requests e não aplica autenticação própria neste momento.
+- A execução real continua dependendo das validações de domínio já existentes nos serviços e tools, incluindo contexto de organização, time e integrações ativas.
+- `GET` e `DELETE` não fazem parte do contrato exposto neste deployment; o endpoint é `POST`-only.
+- O objetivo atual é previsibilidade operacional atrás de load balancer, sem reintroduzir estado local por instância.
+
+## Observabilidade e performance
+
+- Cada request MCP gera logs canônicos de início e fim com `method`, `path`, `jsonrpcMethod`, `toolName`, `organizationId`, `teamId`, `statusCode`, `latencyMs` e `instanceId` quando aplicável.
+- A execução de tools continua registrando invocação, sucesso e falha no nível do tool.
+- As factories MCP permanecem stateless, mas agora cacheiam apenas a metadata estática dos tools (`name`, `description`, schemas transformados e annotations) para evitar recomputação de schema a cada `POST`.
+- `McpServer` e `StreamableHTTPServerTransport` continuam sendo criados por request; nenhum estado conectado do protocolo é reutilizado.
+
+- Cada `POST /mcp` cria um `McpServer` e um `StreamableHTTPServerTransport` novos, válidos apenas durante aquela requisição.
+- O servidor não mantém `Mcp-Session-Id` em memória entre requests.
+- `GET /mcp` e `DELETE /mcp` retornam `405 Method Not Allowed`.
+- Todas as operações MCP neste endpoint seguem públicas no nível HTTP. Validações de tenant e integração continuam no fluxo de domínio e nos próprios tools.
+- Esse desenho evita afinidade de sessão no load balancer e funciona corretamente com múltiplas instâncias ECS/EC2 atrás de ALB.
+
+Esse comportamento é intencional. No fluxo interno do Kodus, contexto de tenant, autenticação e autorização já trafegam no request e nos argumentos dos tools. Não há dependência funcional de sessão MCP para executar `initialize`, `tools/list`, `tool/call` e `ping`.
+
 ## Funcionalidades Disponíveis
 
 ### Tools MCP Expostos
@@ -35,7 +62,7 @@ yarn mcp:server
 
 ### Configuração do Cliente MCP
 
-Para consumir este servidor MCP, configure seu cliente MCP para se conectar via stdio:
+Para consumir este servidor MCP via HTTP:
 
 ```typescript
 import { createMCPAdapter } from '@kodus/flow';
@@ -44,12 +71,18 @@ const mcpAdapter = createMCPAdapter({
   servers: [
     {
       name: 'kodus-code-management',
-      command: 'npm',
-      args: ['run', 'mcp:server']
+      type: 'http',
+      url: 'https://api.kodus.io/mcp'
     }
   ]
 });
 ```
+
+O client `StreamableHTTPClientTransport` do SDK funciona com esse modelo porque:
+
+- faz `GET` opcional para SSE e trata `405` como comportamento esperado;
+- só passa a enviar `Mcp-Session-Id` se o servidor tiver retornado esse header no `initialize`;
+- em modo stateless, como o servidor não devolve `Mcp-Session-Id`, não há afinidade entre requests.
 
 ### Exemplos de Uso dos Tools
 
@@ -246,18 +279,21 @@ This sets the issue status to `dismissed`.
 
 ## Arquitetura
 
-```
-├── code-management-mcp.server.ts  # MCP Server implementation
-├── mcp.module.ts                  # NestJS module
-├── mcp-server.ts                  # Executable script
-└── README.md                      # Documentação
-```
+- `libs/mcp-server/controllers/*.controller.ts`: endpoints HTTP MCP.
+- `libs/mcp-server/services/*-factory.ts`: constroem `McpServer` + `StreamableHTTPServerTransport({ sessionIdGenerator: undefined })`.
+- `libs/mcp-server/services/*-server.service.ts`: coordenam o ciclo de vida por request, logging e cleanup.
+- `libs/mcp-server/tools/*`: catálogo de tools expostos no protocolo.
 
-### Componentes
+## Quando não usar esse modelo
 
-- **`CodeManagementMcpServer`**: Implementação completa do servidor MCP usando SDK oficial
-- **`McpModule`**: Módulo NestJS com todas as dependências
-- **`mcp-server.ts`**: Script executável com graceful shutdown
+Se no futuro o Kodus precisar de:
+
+- SSE iniciado por `GET`,
+- resumability com `Last-Event-ID`,
+- notificações servidor -> cliente fora do ciclo do `POST`,
+- sessões longas com estado no transport,
+
+o endpoint HTTP terá que voltar a um modo stateful com storage ou roteamento distribuído. Nesse cenário, memória local por instância não é suficiente atrás de load balancer.
 
 ## Tecnologias
 

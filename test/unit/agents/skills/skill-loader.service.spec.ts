@@ -123,7 +123,6 @@ describe('SkillLoaderService', () => {
                 requiredContextFields: [
                     'organizationAndTeamData.organizationId',
                     'organizationAndTeamData.teamId',
-                    'prepareContext.pullRequest.pullRequestNumber',
                     'prepareContext.repository.id',
                 ],
             },
@@ -135,7 +134,7 @@ describe('SkillLoaderService', () => {
             {
                 category: 'task-management',
                 label: 'Task Management',
-                examples: 'Jira, Linear, Notion, ClickUp',
+                examples: 'Jira, Linear, Notion, ClickUp, Github Issues',
             },
         ]);
     });

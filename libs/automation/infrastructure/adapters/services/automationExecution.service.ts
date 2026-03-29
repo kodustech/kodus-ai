@@ -1,6 +1,8 @@
 import { createLogger } from '@kodus/flow';
 import { Inject, Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
+import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import {
     AUTOMATION_EXECUTION_REPOSITORY_TOKEN,
     IAutomationExecutionRepository,
@@ -8,15 +10,16 @@ import {
 import { IAutomationExecutionService } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { AutomationExecutionEntity } from '@libs/automation/domain/automationExecution/entities/automation-execution.entity';
 import { IAutomationExecution } from '@libs/automation/domain/automationExecution/interfaces/automation-execution.interface';
-import { CodeReviewExecution } from '@libs/automation/domain/codeReviewExecutions/interfaces/codeReviewExecution.interface';
-import { CodeReviewExecutionEntity } from '@libs/automation/domain/codeReviewExecutions/entities/codeReviewExecution.entity';
 import {
     CODE_REVIEW_EXECUTION_SERVICE,
     ICodeReviewExecutionService,
 } from '@libs/automation/domain/codeReviewExecutions/contracts/codeReviewExecution.service.contract';
-import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
+import { CodeReviewExecutionEntity } from '@libs/automation/domain/codeReviewExecutions/entities/codeReviewExecution.entity';
+import { CodeReviewExecution } from '@libs/automation/domain/codeReviewExecutions/interfaces/codeReviewExecution.interface';
 import { CacheService } from '@libs/core/cache/cache.service';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+
+export const PR_EXECUTION_UPDATED_EVENT = 'pr-execution.updated';
 
 @Injectable()
 export class AutomationExecutionService implements IAutomationExecutionService {
@@ -27,7 +30,26 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         @Inject(CODE_REVIEW_EXECUTION_SERVICE)
         private readonly codeReviewExecutionService: ICodeReviewExecutionService<IAutomationExecution>,
         private readonly cacheService: CacheService,
+        private readonly eventEmitter: EventEmitter2,
     ) {}
+
+    private emitExecutionUpdate(execution: AutomationExecutionEntity) {
+        try {
+            const orgId =
+                execution?.dataExecution?.organizationAndTeamData
+                    ?.organizationId;
+            if (orgId) {
+                this.eventEmitter.emit(PR_EXECUTION_UPDATED_EVENT, {
+                    organizationId: orgId,
+                    executionUuid: execution.uuid,
+                    status: execution.status,
+                    timestamp: new Date().toISOString(),
+                });
+            }
+        } catch {
+            // fire-and-forget
+        }
+    }
 
     findLatestExecutionByFilters(
         filters?: Partial<any>,
@@ -78,17 +100,28 @@ export class AutomationExecutionService implements IAutomationExecutionService {
             });
         }
 
+        if (result) {
+            this.emitExecutionUpdate(result);
+        }
+
         return result;
     }
 
-    update(
+    async update(
         filter: Partial<IAutomationExecution>,
         data: Omit<
             Partial<IAutomationExecution>,
             'uuid' | 'createdAt' | 'updatedAt'
         >,
     ): Promise<AutomationExecutionEntity | null> {
-        return this.automationExecutionRepository.update(filter, data);
+        const result = await this.automationExecutionRepository.update(
+            filter,
+            data,
+        );
+        if (result) {
+            this.emitExecutionUpdate(result);
+        }
+        return result;
     }
 
     delete(uuid: string): Promise<void> {
@@ -136,6 +169,18 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         );
     }
 
+    findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId(
+        startDate: Date,
+        endDate: Date,
+        teamAutomationId: string,
+    ): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>> {
+        return this.automationExecutionRepository.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId(
+            startDate,
+            endDate,
+            teamAutomationId,
+        );
+    }
+
     async createCodeReview(
         automationExecution: Omit<IAutomationExecution, 'uuid'>,
         message: string,
@@ -179,6 +224,8 @@ export class AutomationExecutionService implements IAutomationExecutionService {
                 stageName,
                 metadata,
             });
+
+            this.emitExecutionUpdate(newAutomationExecution);
 
             return {
                 execution: newAutomationExecution,
@@ -256,6 +303,8 @@ export class AutomationExecutionService implements IAutomationExecutionService {
                 stageName,
                 metadata,
             });
+
+            this.emitExecutionUpdate(updatedAutomationExecution);
 
             return {
                 execution: updatedAutomationExecution,

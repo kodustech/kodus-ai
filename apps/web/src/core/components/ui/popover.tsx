@@ -21,6 +21,7 @@ const PopoverContent = React.forwardRef<
             sideOffset={sideOffset}
             className={cn(
                 "bg-card-lv2 border-card-lv3 z-50 w-72 rounded-xl border-1 px-5 py-4 shadow-md backdrop-blur-3xl",
+                "max-h-[300px] overflow-y-auto",
                 "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
                 "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
                 "data-[side=bottom]:slide-in-from-top-2",

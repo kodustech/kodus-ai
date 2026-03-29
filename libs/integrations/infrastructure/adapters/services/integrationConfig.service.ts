@@ -149,7 +149,7 @@ export class IntegrationConfigService implements IIntegrationConfigService {
                     team: { uuid: organizationAndTeamData.teamId },
                 });
             } else {
-                this.update(
+                return await this.update(
                     {
                         uuid: integrationConfig?.uuid,
                         team: { uuid: organizationAndTeamData.teamId },

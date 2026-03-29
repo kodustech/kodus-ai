@@ -104,6 +104,7 @@ type SyncTarget = {
         fullName?: string;
         defaultBranch?: string;
     };
+    path?: string;
 };
 
 @Injectable()
@@ -649,7 +650,8 @@ export class KodyRulesSyncService {
     }
 
     async syncRepositoryMain(params: SyncTarget): Promise<void> {
-        const { organizationAndTeamData, repository } = params;
+        const { organizationAndTeamData, repository, path: requestedPath } =
+            params;
         try {
             const syncEnabled = await this.isIdeRulesSyncEnabled(
                 organizationAndTeamData,
@@ -667,6 +669,36 @@ export class KodyRulesSyncService {
             );
 
             const patterns = [...RULE_FILE_PATTERNS, ...directoryPatterns];
+
+            if (requestedPath) {
+                const normalizedRequestedPath = requestedPath
+                    .replace(/\\/g, '/')
+                    .replace(/^\.\/+/, '')
+                    .replace(/^\/+/, '');
+
+                if (!isFileMatchingGlob(normalizedRequestedPath, patterns)) {
+                    this.logger.log({
+                        message:
+                            'Requested file path is not a supported IDE rule file',
+                        context: KodyRulesSyncService.name,
+                        metadata: {
+                            repositoryId: repository.id,
+                            requestedPath: normalizedRequestedPath,
+                            organizationAndTeamData,
+                        },
+                    });
+                    return;
+                }
+
+                await this.syncSingleFileFromMain({
+                    organizationAndTeamData,
+                    repository,
+                    branch,
+                    filePath: normalizedRequestedPath,
+                    syncEnabled,
+                });
+                return;
+            }
 
             // List only rule files
             const allFiles =
@@ -876,6 +908,187 @@ export class KodyRulesSyncService {
                 context: KodyRulesSyncService.name,
                 error,
                 metadata: params,
+            });
+        }
+    }
+
+    private async syncSingleFileFromMain(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: {
+            id: string;
+            name: string;
+            fullName?: string;
+            defaultBranch?: string;
+        };
+        branch: string;
+        filePath: string;
+        syncEnabled: boolean;
+    }): Promise<void> {
+        const {
+            organizationAndTeamData,
+            repository,
+            branch,
+            filePath,
+            syncEnabled,
+        } = params;
+
+        const content = await this.getFileContent({
+            organizationAndTeamData,
+            repository: {
+                id: repository.id,
+                name: repository.name,
+            },
+            filename: filePath,
+            branch,
+        });
+
+        if (!content) {
+            this.logger.log({
+                message: 'Requested file was not found on the default branch',
+                context: KodyRulesSyncService.name,
+                metadata: {
+                    repositoryId: repository.id,
+                    filePath,
+                    branch,
+                    organizationAndTeamData,
+                },
+            });
+            return;
+        }
+
+        if (!syncEnabled && !this.shouldForceSync(content)) {
+            this.logger.log({
+                message:
+                    'Requested file is not marked with @kody-sync while IDE rules sync is disabled',
+                context: KodyRulesSyncService.name,
+                metadata: {
+                    repositoryId: repository.id,
+                    filePath,
+                    organizationAndTeamData,
+                },
+            });
+            return;
+        }
+
+        if (!syncEnabled) {
+            this.logger.log({
+                message: 'File marked for force sync with @kody-sync',
+                context: KodyRulesSyncService.name,
+                metadata: {
+                    filename: filePath,
+                    repositoryId: repository.id,
+                    organizationAndTeamData,
+                },
+            });
+        }
+
+        if (this.shouldIgnoreFile(content)) {
+            this.logger.log({
+                message:
+                    'File ignored due to @kody-ignore marker - removing existing rules',
+                context: KodyRulesSyncService.name,
+                metadata: {
+                    file: filePath,
+                    repositoryId: repository.id,
+                    syncType: 'main',
+                    organizationAndTeamData,
+                },
+            });
+
+            await this.deleteRuleBySourcePath({
+                organizationAndTeamData,
+                repositoryId: repository.id,
+                sourcePath: filePath,
+            });
+            return;
+        }
+
+        const rules = await this.convertFileToKodyRules({
+            filePath,
+            repositoryId: repository.id,
+            content,
+            organizationAndTeamData,
+        });
+
+        const oneRule = rules?.find(
+            (r) => r && typeof r === 'object' && r.title && r.rule,
+        );
+
+        if (!oneRule) {
+            this.logger.warn({
+                message: 'No rules parsed from requested file',
+                context: KodyRulesSyncService.name,
+                metadata: {
+                    file: filePath,
+                    repositoryId: repository.id,
+                },
+            });
+            return;
+        }
+
+        const existing = await this.findRuleBySourcePath({
+            organizationAndTeamData,
+            repositoryId: repository.id,
+            sourcePath: filePath,
+        });
+
+        const dto: CreateKodyRuleDto = {
+            uuid: existing?.uuid,
+            title: oneRule.title as string,
+            rule: oneRule.rule as string,
+            path: (oneRule.path as string) ?? filePath,
+            sourcePath: filePath,
+            severity:
+                (((oneRule.severity as any)?.toLowerCase?.() as
+                    KodyRuleSeverity) || KodyRuleSeverity.MEDIUM),
+            repositoryId: repository.id,
+            directoryId: (
+                await this.resolveDirectoryForFile({
+                    organizationAndTeamData,
+                    repositoryId: repository.id,
+                    filePath,
+                })
+            )?.id,
+            origin: KodyRulesOrigin.USER,
+            status: oneRule.status as any,
+            scope:
+                (oneRule.scope as KodyRulesScope) || KodyRulesScope.FILE,
+            examples: Array.isArray(oneRule.examples)
+                ? (oneRule.examples as any)
+                : [],
+        } as CreateKodyRuleDto;
+
+        const result = await this.kodyRulesService.createOrUpdate(
+            organizationAndTeamData,
+            dto,
+            this.systemUserInfo,
+        );
+
+        await this.processContextReferences({
+            ruleId: this.getRuleId(result),
+            ruleText: dto.rule,
+            repositoryId: dto.repositoryId,
+            organizationAndTeamData,
+        });
+
+        try {
+            await this.updateOrCreateCodeReviewParameterUseCase.execute({
+                organizationAndTeamData,
+                configValue: {
+                    kodyRules: [],
+                } as any,
+                repositoryId: repository.id,
+            });
+        } catch (paramError) {
+            this.logger.error({
+                message:
+                    'Failed to ensure CODE_REVIEW_CONFIG after rule sync (main:path)',
+                context: KodyRulesSyncService.name,
+                error: paramError,
+                metadata: {
+                    repositoryId: repository.id,
+                    file: filePath,
+                },
             });
         }
     }

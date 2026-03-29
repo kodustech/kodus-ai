@@ -1,6 +1,6 @@
 import { ChatAnthropic } from '@langchain/anthropic';
 import { resolveModelOptions } from './resolver';
-import { AdapterBuildParams, ProviderAdapter } from './types';
+import { AdapterBuildParams, ProviderAdapter, LLM_TIMEOUT_MS, LLM_MAX_RETRIES } from './types';
 
 export class AnthropicAdapter implements ProviderAdapter {
     build(params: AdapterBuildParams): ChatAnthropic {
@@ -34,6 +34,10 @@ export class AnthropicAdapter implements ProviderAdapter {
                   }
                 : {}),
             callbacks: options?.callbacks,
+            maxRetries: LLM_MAX_RETRIES,
+            clientOptions: {
+                timeout: LLM_TIMEOUT_MS,
+            },
         };
 
         return new ChatAnthropic(payload);

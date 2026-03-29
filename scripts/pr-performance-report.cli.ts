@@ -38,10 +38,13 @@ const daysArg = args.find(a => a.startsWith('--days='));
 const formatArg = args.find(a => a.startsWith('--format='));
 const outputArg = args.find(a => a.startsWith('--output='));
 
+const orgArg = args.find(a => a.startsWith('--org='));
+
 const DAYS_BACK = daysArg ? parseInt(daysArg.split('=')[1], 10) : 7;
 const FORMAT = formatArg ? formatArg.split('=')[1] : 'console';
 const OUTPUT_PATH = outputArg ? outputArg.split('=')[1] : null;
 const INCLUDE_LEGACY = args.includes('--legacy');
+const ORG_FILTER = orgArg ? orgArg.split('=')[1] : null;
 
 interface StageMetrics {
     stageName: string;
@@ -169,11 +172,18 @@ function padLeft(str: string, len: number): string {
 }
 
 async function getStageMetrics(db: Db, startDate: Date, endDate: Date): Promise<StageMetrics[]> {
-    const matchStage = {
+    const matchStage: any = {
         message: { $regex: /Stage.*completed in \d+ms/ },
         component: 'PipelineExecutor',
         timestamp: { $gte: startDate, $lte: endDate }
     };
+
+    if (ORG_FILTER) {
+        matchStage['$or'] = [
+            { 'attributes.organizationId': ORG_FILTER },
+            { 'attributes.organizationAndTeamData.organizationId': ORG_FILTER }
+        ];
+    }
 
     const pipeline: any[] = [
         { $match: matchStage }
@@ -275,27 +285,31 @@ async function getStageMetrics(db: Db, startDate: Date, endDate: Date): Promise<
 }
 
 async function getLLMMetrics(db: Db, startDate: Date, endDate: Date): Promise<LLMMetrics[]> {
-    const llmAgg = await db.collection('observability_telemetry').aggregate([
-        {
-            $match: {
-                timestamp: { $gte: startDate, $lte: endDate },
-                name: {
-                    $in: [
-                        'LLMAnalysisService::analyzeCodeWithAI',
-                        'LLMAnalysisService::analyzeCodeWithAI_v2',
-                        'LLMAnalysisService::selectReviewMode',
-                        'LLMAnalysisService::filterSuggestionsSafeGuard',
-                        'LLMAnalysisService::severityAnalysis',
-                        'KodyRulesAnalysisService::kodyRulesAnalyzeCodeWithAI',
-                        'KodyRulesPrLevelAnalysisService::prLevelKodyRulesAnalyzer',
-                        'CrossFileAnalysisService::crossFileAnalyzeCodeWithAI',
-                        'CommentManagerService::generateSummaryPR',
-                        'CommentManagerService::repeatedCodeReviewSuggestionClustering'
-                    ]
-                },
-                duration: { $gt: 0 }
-            }
+    const llmMatch: any = {
+        timestamp: { $gte: startDate, $lte: endDate },
+        name: {
+            $in: [
+                'LLMAnalysisService::analyzeCodeWithAI',
+                'LLMAnalysisService::analyzeCodeWithAI_v2',
+                'LLMAnalysisService::selectReviewMode',
+                'LLMAnalysisService::filterSuggestionsSafeGuard',
+                'LLMAnalysisService::severityAnalysis',
+                'KodyRulesAnalysisService::kodyRulesAnalyzeCodeWithAI',
+                'KodyRulesPrLevelAnalysisService::prLevelKodyRulesAnalyzer',
+                'CrossFileAnalysisService::crossFileAnalyzeCodeWithAI',
+                'CommentManagerService::generateSummaryPR',
+                'CommentManagerService::repeatedCodeReviewSuggestionClustering'
+            ]
         },
+        duration: { $gt: 0 }
+    };
+
+    if (ORG_FILTER) {
+        llmMatch['attributes.organizationId'] = ORG_FILTER;
+    }
+
+    const llmAgg = await db.collection('observability_telemetry').aggregate([
+        { $match: llmMatch },
         {
             $group: {
                 _id: '$name',
@@ -340,27 +354,31 @@ async function getLLMMetrics(db: Db, startDate: Date, endDate: Date): Promise<LL
 }
 
 async function getModelMetrics(db: Db, startDate: Date, endDate: Date): Promise<ModelMetrics[]> {
-    const modelAgg = await db.collection('observability_telemetry').aggregate([
-        {
-            $match: {
-                timestamp: { $gte: startDate, $lte: endDate },
-                name: {
-                    $in: [
-                        'LLMAnalysisService::analyzeCodeWithAI',
-                        'LLMAnalysisService::analyzeCodeWithAI_v2',
-                        'LLMAnalysisService::selectReviewMode',
-                        'LLMAnalysisService::filterSuggestionsSafeGuard',
-                        'LLMAnalysisService::severityAnalysis',
-                        'KodyRulesAnalysisService::kodyRulesAnalyzeCodeWithAI',
-                        'KodyRulesPrLevelAnalysisService::prLevelKodyRulesAnalyzer',
-                        'CrossFileAnalysisService::crossFileAnalyzeCodeWithAI',
-                        'CommentManagerService::generateSummaryPR',
-                        'CommentManagerService::repeatedCodeReviewSuggestionClustering'
-                    ]
-                },
-                duration: { $gt: 0 }
-            }
+    const modelMatch: any = {
+        timestamp: { $gte: startDate, $lte: endDate },
+        name: {
+            $in: [
+                'LLMAnalysisService::analyzeCodeWithAI',
+                'LLMAnalysisService::analyzeCodeWithAI_v2',
+                'LLMAnalysisService::selectReviewMode',
+                'LLMAnalysisService::filterSuggestionsSafeGuard',
+                'LLMAnalysisService::severityAnalysis',
+                'KodyRulesAnalysisService::kodyRulesAnalyzeCodeWithAI',
+                'KodyRulesPrLevelAnalysisService::prLevelKodyRulesAnalyzer',
+                'CrossFileAnalysisService::crossFileAnalyzeCodeWithAI',
+                'CommentManagerService::generateSummaryPR',
+                'CommentManagerService::repeatedCodeReviewSuggestionClustering'
+            ]
         },
+        duration: { $gt: 0 }
+    };
+
+    if (ORG_FILTER) {
+        modelMatch['attributes.organizationId'] = ORG_FILTER;
+    }
+
+    const modelAgg = await db.collection('observability_telemetry').aggregate([
+        { $match: modelMatch },
         {
             $addFields: {
                 modelName: {
@@ -427,15 +445,19 @@ async function getModelMetrics(db: Db, startDate: Date, endDate: Date): Promise<
 }
 
 async function getOrgMetrics(db: Db, startDate: Date, endDate: Date): Promise<OrgMetrics[]> {
+    const orgMatch: any = {
+        timestamp: { $gte: startDate, $lte: endDate },
+        'attributes.prNumber': { $exists: true },
+        'attributes.organizationId': { $exists: true },
+        duration: { $gt: 0 }
+    };
+
+    if (ORG_FILTER) {
+        orgMatch['attributes.organizationId'] = ORG_FILTER;
+    }
+
     const orgAgg = await db.collection('observability_telemetry').aggregate([
-        {
-            $match: {
-                timestamp: { $gte: startDate, $lte: endDate },
-                'attributes.prNumber': { $exists: true },
-                'attributes.organizationId': { $exists: true },
-                duration: { $gt: 0 }
-            }
-        },
+        { $match: orgMatch },
         {
             $group: {
                 _id: {
@@ -487,13 +509,17 @@ async function getOrgMetrics(db: Db, startDate: Date, endDate: Date): Promise<Or
 }
 
 async function getPipelineMetrics(db: Db, startDate: Date, endDate: Date): Promise<PipelineMetrics> {
-    const matchStage = {
+    const matchStage: any = {
         $or: [
             { message: { $regex: /Starting pipeline: CodeReviewPipeline/ } },
             { message: { $regex: /Finished pipeline: CodeReviewPipeline/ } }
         ],
         timestamp: { $gte: startDate, $lte: endDate }
     };
+
+    if (ORG_FILTER) {
+        matchStage['attributes.organizationAndTeamData.organizationId'] = ORG_FILTER;
+    }
 
     const pipeline: any[] = [
         { $match: matchStage }
@@ -563,14 +589,18 @@ async function getPipelineMetrics(db: Db, startDate: Date, endDate: Date): Promi
 }
 
 async function getSlowestPRs(db: Db, startDate: Date, endDate: Date, limit: number = 10): Promise<any[]> {
+    const slowMatch: any = {
+        timestamp: { $gte: startDate, $lte: endDate },
+        'attributes.prNumber': { $exists: true },
+        duration: { $gt: 60000 } // > 1 minute
+    };
+
+    if (ORG_FILTER) {
+        slowMatch['attributes.organizationId'] = ORG_FILTER;
+    }
+
     const slowPRs = await db.collection('observability_telemetry').aggregate([
-        {
-            $match: {
-                timestamp: { $gte: startDate, $lte: endDate },
-                'attributes.prNumber': { $exists: true },
-                duration: { $gt: 60000 } // > 1 minute
-            }
-        },
+        { $match: slowMatch },
         {
             $group: {
                 _id: {
@@ -614,7 +644,9 @@ function generateConsoleReport(data: ReportData): string {
     output += `${line}\n\n`;
 
     output += `Generated: ${data.generatedAt.toISOString()}\n`;
-    output += `Period: ${data.periodStart.toISOString().split('T')[0]} to ${data.periodEnd.toISOString().split('T')[0]} (${data.daysAnalyzed} days)\n\n`;
+    output += `Period: ${data.periodStart.toISOString().split('T')[0]} to ${data.periodEnd.toISOString().split('T')[0]} (${data.daysAnalyzed} days)\n`;
+    if (ORG_FILTER) output += `Organization: ${ORG_FILTER}\n`;
+    output += '\n';
 
     // Pipeline Summary
     output += `${thinLine}\n`;
@@ -851,6 +883,7 @@ Usage:
 Options:
   --env=<path>       Path to .env file (required for prod)
   --days=<number>    Number of days to analyze (default: 7)
+  --org=<orgId>      Filter by organization ID
   --format=<type>    Output format: console, markdown, json (default: console)
   --output=<path>    Output file path (optional)
   --legacy           Also search in legacy collection (observability_logs)
@@ -859,6 +892,7 @@ Options:
 Examples:
   npx ts-node scripts/pr-performance-report.cli.ts --env=.env.prod
   npx ts-node scripts/pr-performance-report.cli.ts --env=.env.prod --days=14 --format=markdown
+  npx ts-node scripts/pr-performance-report.cli.ts --env=.env.prod --org=97442318-9d2a-496b-a0d2-b45fb1b701f8
   npx ts-node scripts/pr-performance-report.cli.ts --env=.env.prod --legacy
 `);
         process.exit(0);

@@ -7,9 +7,7 @@ export function buildBusinessRulesAnalysisPrompt(
     ctx: BusinessRulesContext,
 ): string {
     const acceptanceCriteria = formatAcceptanceCriteria(ctx);
-    const taskId = ctx.taskContextNormalized?.id;
-    const taskTitle = ctx.taskContextNormalized?.title;
-    const taskLinks = ctx.taskContextNormalized?.links ?? [];
+    const taskMetadata = resolveTaskMetadata(ctx);
     const userLanguage =
         typeof ctx.userLanguage === 'string' &&
         ctx.userLanguage.trim().length > 0
@@ -22,15 +20,17 @@ export function buildBusinessRulesAnalysisPrompt(
         `TASK_QUALITY: ${ctx.taskQuality}`,
     ];
 
-    if (taskId || taskTitle) {
+    if (taskMetadata.id || taskMetadata.title) {
         sections.push(
             '',
-            `TASK: ${[taskId, taskTitle].filter(Boolean).join(' — ')}`,
+            `TASK: ${[taskMetadata.id, taskMetadata.title]
+                .filter(Boolean)
+                .join(' — ')}`,
         );
     }
 
-    if (taskLinks.length > 0) {
-        sections.push('', 'TASK_LINKS:', taskLinks.join('\n'));
+    if (taskMetadata.links.length > 0) {
+        sections.push('', 'TASK_LINKS:', taskMetadata.links.join('\n'));
     }
 
     sections.push(
@@ -62,6 +62,25 @@ export function buildBusinessRulesAnalysisPrompt(
     );
 
     return sections.join('\n');
+}
+
+function resolveTaskMetadata(ctx: BusinessRulesContext): {
+    id?: string;
+    title?: string;
+    links: string[];
+} {
+    const normalized = ctx.taskContextNormalized;
+    const linksFromText = extractLinksFromText(ctx.taskContext);
+    const links = uniqueNonEmpty([
+        ...(normalized?.links ?? []),
+        ...linksFromText,
+    ]);
+
+    return {
+        id: normalized?.id ?? extractTaskIdFromText(ctx.taskContext),
+        title: normalized?.title ?? extractTaskTitleFromText(ctx.taskContext),
+        links,
+    };
 }
 
 function formatPromptValue(
@@ -115,6 +134,9 @@ function extractCriteriaFromText(text: string | undefined): string[] {
         );
         if (match && match[1]) {
             const content = match[1].trim();
+            if (isUrlOnlyItem(content)) {
+                continue;
+            }
             // Skip very short items (likely not requirements) and headers
             if (content.length > 10 && !content.startsWith('#')) {
                 criteria.push(content);
@@ -123,4 +145,72 @@ function extractCriteriaFromText(text: string | undefined): string[] {
     }
 
     return criteria;
+}
+
+function isUrlOnlyItem(value: string): boolean {
+    const normalized = normalizeLikelyUrl(value);
+    if (!normalized) {
+        return false;
+    }
+    return /^https?:\/\/\S+$/i.test(normalized);
+}
+
+function extractTaskIdFromText(text: string | undefined): string | undefined {
+    if (!text) {
+        return undefined;
+    }
+
+    const explicit = text.match(
+        /\b(?:task|ticket|issue)\s*(?:id|key)\s*[:#-]?\s*([A-Z][A-Z0-9]+-\d+|\d+)\b/i,
+    );
+    if (explicit?.[1]) {
+        return explicit[1].trim();
+    }
+
+    const issueKey = text.match(/\b([A-Z][A-Z0-9]+-\d+)\b/);
+    return issueKey?.[1];
+}
+
+function extractTaskTitleFromText(
+    text: string | undefined,
+): string | undefined {
+    if (!text) {
+        return undefined;
+    }
+
+    const match = text.match(/(?:^|\n)\s*title\s*:\s*(.+)$/im);
+    if (!match?.[1]) {
+        return undefined;
+    }
+
+    const title = match[1].trim();
+    return title.length > 0 ? title : undefined;
+}
+
+function extractLinksFromText(text: string | undefined): string[] {
+    if (!text) {
+        return [];
+    }
+
+    const links: string[] = [];
+    for (const match of text.matchAll(/https?:\/\/[^\s)]+/gi)) {
+        const normalized = normalizeLikelyUrl(match[0]);
+        if (!normalized) {
+            continue;
+        }
+        links.push(normalized);
+    }
+
+    return uniqueNonEmpty(links);
+}
+
+function normalizeLikelyUrl(value: string): string {
+    return value
+        .trim()
+        .replace(/^[("'`<]+/g, '')
+        .replace(/[)\]'",.;:!?]+$/g, '');
+}
+
+function uniqueNonEmpty(values: string[]): string[] {
+    return [...new Set(values.filter((value) => value.trim().length > 0))];
 }

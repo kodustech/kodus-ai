@@ -26,12 +26,14 @@ export default async function Route({
     const initialPlugAndPlay = params.type === "plug-and-play";
     const initialNeedMCPS = params.type === "mcp";
 
-    const teamId = await getGlobalSelectedTeamId();
+    const [teamId, buckets] = await Promise.all([
+        getGlobalSelectedTeamId().catch(() => null),
+        getLibraryKodyRulesBuckets().catch(() => []),
+    ]);
 
-    const [buckets, orgLanguage] = (await Promise.all([
-        getLibraryKodyRulesBuckets(),
-        getOrganizationLanguage(teamId),
-    ])) || [[], undefined];
+    const orgLanguage = await getOrganizationLanguage(teamId).catch(
+        () => undefined,
+    );
     const previewBuckets = [...buckets]
         .sort((a, b) => b.rulesCount - a.rulesCount)
         .slice(0, BUCKETS_PREVIEW_COUNT);

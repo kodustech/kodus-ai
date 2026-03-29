@@ -4,49 +4,28 @@ import {
     type ContextPack,
 } from '@kodus/flow';
 import {
+    BYOKConfig,
     LLMModelProvider,
-    PromptRunnerService,
     ParserType,
     PromptRole,
-    BYOKConfig,
+    PromptRunnerService,
 } from '@kodus/kodus-common/llm';
 import { Inject, Injectable } from '@nestjs/common';
 import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
 
-import { IKodyRulesAnalysisService } from '@libs/code-review/domain/contracts/KodyRulesAnalysisService.contract';
-import {
-    CODE_BASE_CONFIG_SERVICE_TOKEN,
-    ICodeBaseConfigService,
-} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
-import type { ContextAugmentationsMap } from '@libs/ai-engine/infrastructure/adapters/services/context/interfaces/code-review-context-pack.interface';
 import {
     getAugmentationsFromPack,
     getOverridesFromPack,
 } from '@libs/ai-engine/infrastructure/adapters/services/context/code-review-context.utils';
 import { FileContextAugmentationService } from '@libs/ai-engine/infrastructure/adapters/services/context/file-context-augmentation.service';
+import type { ContextAugmentationsMap } from '@libs/ai-engine/infrastructure/adapters/services/context/interfaces/code-review-context-pack.interface';
 import {
-    AIAnalysisResult,
-    AnalysisContext,
-    CodeSuggestion,
-    FileChangeContext,
-    ReviewModeResponse,
-    ReviewOptions,
-    SuggestionControlConfig,
-    CodeReviewConfig,
-} from '@libs/core/infrastructure/config/types/general/codeReview.type';
-import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
-import {
-    IKodyRule,
-    KodyRulesScope,
-} from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
-import { KodyRulesValidationService } from '../kodyRules/service/kody-rules-validation.service';
-import { KODY_RULES_SERVICE_TOKEN } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
-import { KodyRuleDependencyService } from '@libs/kodyRules/infrastructure/adapters/services/kodyRulesDependency.service';
-import { ObservabilityService } from '@libs/core/log/observability.service';
-import { ExternalReferenceLoaderService } from '@libs/kodyRules/infrastructure/adapters/services/externalReferenceLoader.service';
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import { IKodyRulesAnalysisService } from '@libs/code-review/domain/contracts/KodyRulesAnalysisService.contract';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
+import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import {
     KodyRulesClassifierSchema,
     kodyRulesClassifierSchema,
@@ -63,6 +42,28 @@ import {
     prompt_kodyrules_updatestdsuggestions_user,
 } from '@libs/common/utils/langchainCommon/prompts/kodyRules';
 import { tryParseJSONObject } from '@libs/common/utils/transforms/json';
+import {
+    AIAnalysisResult,
+    AnalysisContext,
+    CodeReviewConfig,
+    CodeSuggestion,
+    DocumentationContextItem,
+    FileChangeContext,
+    ReviewModeResponse,
+    ReviewOptions,
+    SuggestionControlConfig,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
+import { ObservabilityService } from '@libs/core/log/observability.service';
+import { KODY_RULES_SERVICE_TOKEN } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
+import {
+    IKodyRule,
+    KodyRulesScope,
+} from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { ExternalReferenceLoaderService } from '@libs/kodyRules/infrastructure/adapters/services/externalReferenceLoader.service';
+import { KodyRuleDependencyService } from '@libs/kodyRules/infrastructure/adapters/services/kodyRulesDependency.service';
+import { KodyRulesValidationService } from '../kodyRules/service/kody-rules-validation.service';
 import { KodyRulesService } from '../kodyRules/service/kodyRules.service';
 
 interface KodyRulesExtendedContext {
@@ -78,6 +79,8 @@ interface KodyRulesExtendedContext {
     severityLevelFilter?: SeverityLevel;
     organizationAndTeamData: OrganizationAndTeamData;
     kodyRules: Array<Partial<IKodyRule>>;
+    memories?: Array<Partial<IKodyRule>>;
+    documentationContext?: DocumentationContextItem[];
     v2PromptOverrides?: CodeReviewConfig['v2PromptOverrides'];
     contextAugmentations?: ContextAugmentationsMap;
     contextPack?: ContextPack;
@@ -1037,6 +1040,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
                 : undefined,
             organizationAndTeamData: context?.organizationAndTeamData,
             kodyRules: kodyRulesFiltered,
+            memories: context?.codeReviewConfig?.kodyMemoryRules || [],
             v2PromptOverrides:
                 context?.activeOverrides ??
                 getOverridesFromPack(context?.sharedContextPack) ??
@@ -1047,6 +1051,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
                 ...(context?.fileAugmentations ?? {}),
             } as ContextAugmentationsMap,
             contextPack: context?.sharedContextPack as ContextPack | undefined,
+            documentationContext: context?.documentationContext || [],
         };
 
         return baseContext;

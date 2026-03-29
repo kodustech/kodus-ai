@@ -2,13 +2,14 @@ import { Module, forwardRef } from '@nestjs/common';
 
 // Stages
 import { AggregateResultsStage } from './stages/aggregate-result.stage';
+import { CollectCrossFileContextStage } from './stages/collect-cross-file-context.stage';
 import { CreateFileCommentsStage } from './stages/create-file-comments.stage';
 import { CreatePrLevelCommentsStage } from './stages/create-pr-level-comments.stage';
 import { FetchChangedFilesStage } from './stages/fetch-changed-files.stage';
 import { FileContextGateStage } from './stages/file-context-gate.stage';
 import { UpdateCommentsAndGenerateSummaryStage } from './stages/finish-comments.stage';
 import { RequestChangesOrApproveStage } from './stages/finish-process-review.stage';
-import { CollectCrossFileContextStage } from './stages/collect-cross-file-context.stage';
+import { GatherDocumentationContextStage } from './stages/gather-documentation-context.stage';
 import { InitialCommentStage } from './stages/initial-comment.stage';
 import { LoadExternalContextStage } from './stages/load-external-context.stage';
 import { ProcessFilesPrLevelReviewStage } from './stages/process-files-pr-level-review.stage';
@@ -45,20 +46,22 @@ import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { GithubChecksService } from '@libs/platform/infrastructure/adapters/services/github/github-checks.service';
 import { GithubModule } from '@libs/platform/modules/github.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
+import { ASTContentFormatterService } from '../infrastructure/adapters/services/astContentFormatter.service';
 import { CodeReviewPipelineObserver } from '../infrastructure/observers/code-review-pipeline.observer';
 import { CodebaseModule } from '../modules/codebase.module';
+import { DocumentationContextModule } from '../modules/documentation-context.module';
 import { PullRequestsModule } from '../modules/pull-requests.module';
 import { PullRequestMessagesModule } from '../modules/pullRequestMessages.module';
 import { CodeReviewJobProcessorService } from '../workflow/code-review-job-processor.service';
 import { ImplementationVerificationProcessor } from '../workflow/implementation-verification.processor';
 import { LOAD_EXTERNAL_CONTEXT_STAGE_TOKEN } from './stages/contracts/loadExternalContextStage.contract';
 import { ValidateSuggestionsStage } from './stages/validate-suggestions.stage';
-import { ASTContentFormatterService } from '../infrastructure/adapters/services/astContentFormatter.service';
 import { CodeReviewPipelineStrategy } from './strategy/code-review-pipeline.strategy';
 
 @Module({
     imports: [
         forwardRef(() => CodebaseModule),
+        forwardRef(() => DocumentationContextModule),
         forwardRef(() => FileReviewModule),
         forwardRef(() => PullRequestMessagesModule),
         forwardRef(() => PullRequestsModule),
@@ -96,6 +99,7 @@ import { CodeReviewPipelineStrategy } from './strategy/code-review-pipeline.stra
             useExisting: LoadExternalContextStage,
         },
         LoadExternalContextStage,
+        GatherDocumentationContextStage,
         FileContextGateStage,
         InitialCommentStage,
         CollectCrossFileContextStage,
@@ -147,6 +151,7 @@ import { CodeReviewPipelineStrategy } from './strategy/code-review-pipeline.stra
         FetchChangedFilesStage,
         InitialCommentStage,
         CollectCrossFileContextStage,
+        GatherDocumentationContextStage,
         AggregateResultsStage,
         LoadExternalContextStage,
         LOAD_EXTERNAL_CONTEXT_STAGE_TOKEN,

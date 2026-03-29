@@ -1,52 +1,47 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { MentionGroup } from "@components/ui/rich-text-editor-with-mentions";
+import { useMCPAvailability } from "@services/mcp-manager/hooks";
+import { MCPServiceUnavailableError } from "@services/mcp-manager/utils";
+import { useQuery } from "@tanstack/react-query";
 import { getMCPConnections } from "src/lib/services/mcp-manager/fetch";
 
+import { mapMCPConnectionsToMentionGroups } from "./mcp-mentions-state";
+
 export function useMCPMentions() {
-    const [mcpGroups, setMcpGroups] = useState<MentionGroup[]>([]);
-
-    useEffect(() => {
-        let mounted = true;
-        (async () => {
+    const { data: isMCPAvailable } = useMCPAvailability();
+    const { data: mcpConnections } = useQuery({
+        queryKey: ["mcp-connections"],
+        enabled: isMCPAvailable === true,
+        staleTime: 5 * 60 * 1000,
+        retry: false,
+        queryFn: async () => {
             try {
-                const res = await getMCPConnections();
-                const groups: MentionGroup[] = [
-                    {
-                        groupLabel: "MCP",
-                        items: (res.items ?? []).map((c) => ({
-                            type: "mcp" as const,
-                            value: c.integrationId,
-                            label: c.appName,
-                            children: () => [
-                                {
-                                    groupLabel: c.appName,
-                                    items: (c.allowedTools ?? []).map(
-                                        (tool) => ({
-                                            type: "mcp" as const,
-                                            value: `${c.integrationId}:${tool}`,
-                                            label: tool,
-                                            meta: { appName: c.appName },
-                                        }),
-                                    ),
-                                },
-                            ],
-                        })),
-                    },
-                ];
-
-                if (mounted) {
-                    setMcpGroups(groups);
-                }
+                const response = await getMCPConnections();
+                return response.items ?? [];
             } catch (error) {
+                if (error instanceof MCPServiceUnavailableError) {
+                    return [];
+                }
+
                 console.error("Failed to fetch MCP connections:", error);
+                return [];
             }
-        })();
-        return () => {
-            mounted = false;
-        };
-    }, []);
+        },
+    });
+
+    const mcpGroups = useMemo(
+        () =>
+            mapMCPConnectionsToMentionGroups(
+                (mcpConnections ?? []) as Array<{
+                    integrationId: string;
+                    appName: string;
+                    allowedTools?: string[];
+                }>,
+            ) as MentionGroup[],
+        [mcpConnections],
+    );
 
     const formatInsertByType = useMemo(
         () => ({

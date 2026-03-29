@@ -1,4 +1,3 @@
-import { createCapabilityToolRuntime } from '@libs/agents/skills/runtime/capability-runtime.resolver';
 import {
     fetchPullRequestDiff,
     fetchPullRequestMetadata,
@@ -6,6 +5,7 @@ import {
     PrDiffReadParams,
     PrMetadataReadParams,
 } from '@libs/agents/skills/capabilities';
+import { createCapabilityToolRuntime } from '@libs/agents/skills/runtime/capability-runtime.resolver';
 import {
     CapabilityExecutionHooks,
     CapabilityExecutionTrace,
@@ -227,6 +227,8 @@ export function createBusinessRulesBlueprintTooling(
                     skillName: SKILL_NAME,
                     organizationId: scope.organizationId,
                     teamId: scope.teamId,
+                    repositoryOwner: resolveRepositoryOwner(ctx),
+                    repositoryName: resolveRepositoryName(ctx),
                     pullRequestNumber: resolvePullRequestNumber(ctx),
                     prBody: ctx.prBody,
                     headRef: resolvePullRequestHeadRef(ctx),
@@ -236,6 +238,12 @@ export function createBusinessRulesBlueprintTooling(
                         'pullRequestDescription',
                     ),
                     taskContext: readPrepareContextString(ctx, 'taskContext'),
+                    taskId: readPrepareContextString(ctx, 'taskId'),
+                    taskUrl: readPrepareContextString(ctx, 'taskUrl'),
+                    taskReference: readPrepareContextString(
+                        ctx,
+                        'taskReference',
+                    ),
                     userLanguage: ctx.userLanguage,
                     thread: ctx.thread,
                     excludedTools: resolveExcludedTools(capabilityTools),
@@ -327,6 +335,11 @@ function resolveRepositoryId(ctx: BusinessRulesContext): string | undefined {
 function resolveRepositoryName(ctx: BusinessRulesContext): string | undefined {
     const repositoryName = ctx.prepareContext?.repository?.name;
     return typeof repositoryName === 'string' ? repositoryName : undefined;
+}
+
+function resolveRepositoryOwner(ctx: BusinessRulesContext): string | undefined {
+    const repositoryOwner = ctx.prepareContext?.repository?.owner;
+    return typeof repositoryOwner === 'string' ? repositoryOwner : undefined;
 }
 
 function resolvePullRequestHeadRef(

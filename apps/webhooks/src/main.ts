@@ -1,8 +1,8 @@
+import './instrument';
 import 'source-map-support/register';
-import * as dotenv from 'dotenv';
-dotenv.config();
 
 import { initPyroscope } from '@libs/core/infrastructure/config/profiling/pyroscope';
+import { reportExceptionToSentry } from '@libs/core/infrastructure/config/log/sentry';
 
 // Initialize profiling early (before NestJS bootstrap)
 initPyroscope({ appName: 'kodus-webhooks' });
@@ -89,6 +89,10 @@ async function bootstrap() {
         );
 
         process.on('uncaughtException', (error) => {
+            void reportExceptionToSentry(error, {
+                context: 'GlobalExceptionHandler',
+                extra: { component: 'webhook', type: 'uncaughtException' },
+            });
             logger.error({
                 message: `Uncaught Exception: ${error.message}`,
                 context: 'GlobalExceptionHandler',
@@ -97,13 +101,16 @@ async function bootstrap() {
         });
 
         process.on('unhandledRejection', (reason: any) => {
+            const error =
+                reason instanceof Error ? reason : new Error(String(reason));
+            void reportExceptionToSentry(error, {
+                context: 'GlobalExceptionHandler',
+                extra: { component: 'webhook', type: 'unhandledRejection' },
+            });
             logger.error({
                 message: `Unhandled Rejection: ${reason?.message || reason}`,
                 context: 'GlobalExceptionHandler',
-                error:
-                    reason instanceof Error
-                        ? reason
-                        : new Error(String(reason)),
+                error,
             });
         });
 
@@ -124,6 +131,10 @@ async function bootstrap() {
 
         handleNestJSWebpackHmr(app, module);
     } catch (error) {
+        void reportExceptionToSentry(error, {
+            context: 'Bootstrap',
+            extra: { component: 'webhook', phase: 'bootstrap' },
+        });
         logger.error(
             `Bootstrap failed inside catch block: ${error.message}`,
             error.stack,

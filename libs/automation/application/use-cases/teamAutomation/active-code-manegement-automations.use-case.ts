@@ -46,10 +46,11 @@ export class ActiveCodeManagementTeamAutomationsUseCase implements IUseCase {
         const codeManagementAutomations =
             AutomationCategoryMapping[AutomationTypeCategory.CODE_MANAGEMENT];
 
-        const automations = await this.automationService.find({
-            status: true,
-            level: AutomationLevel.TEAM,
-        });
+        const automations =
+            (await this.automationService.find({
+                status: true,
+                level: AutomationLevel.TEAM,
+            })) || [];
 
         const automationsFiltered = automations.filter((automation) =>
             codeManagementAutomations.includes(automation.automationType),

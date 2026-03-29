@@ -57,8 +57,9 @@ export const getFeatureFlagWithPayload = async ({
       }
     | undefined
 > => {
-    // if no environment key is provided, there's no way to create Posthog client
-    if (!process.env.WEB_POSTHOG_KEY) return undefined;
+    // if no environment key is provided, assume self-hosted with all features enabled
+    if (!process.env.WEB_POSTHOG_KEY)
+        return { value: true, payload: undefined };
 
     const jwtPayload = await auth();
     const id =
@@ -112,7 +113,8 @@ export const isFeatureEnabled = async ({
     identifier?: "user" | "organization";
 }): Promise<boolean> => {
     try {
-        if (!process.env.WEB_POSTHOG_KEY) return false;
+        // if no environment key is provided, assume self-hosted with all features enabled
+        if (!process.env.WEB_POSTHOG_KEY) return true;
 
         const jwtPayload = await auth();
         const id =

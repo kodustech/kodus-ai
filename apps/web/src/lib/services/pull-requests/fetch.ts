@@ -12,6 +12,10 @@ export interface PullRequestFilters {
     authorPolicy?: "all" | "reviewable" | "excluded";
 }
 
+export const PULL_REQUEST_SSE = {
+    EXECUTION_EVENTS: pathToApiUrl("/pull-requests/executions/events"),
+};
+
 export const PULL_REQUEST_API = {
     GET_EXECUTIONS: (filters?: PullRequestFilters) => {
         const params = new URLSearchParams();
@@ -57,5 +61,34 @@ export const PULL_REQUEST_API = {
         return pathToApiUrl(
             `/pull-requests/onboarding-signals${queryString ? `?${queryString}` : ""}`,
         );
+    },
+    GET_SUGGESTIONS: (params: {
+        repositoryId: string;
+        prNumber: number;
+        severity?: string;
+        category?: string;
+    }) => {
+        const searchParams = new URLSearchParams();
+        searchParams.append("repositoryId", params.repositoryId);
+        searchParams.append("prNumber", params.prNumber.toString());
+        if (params.severity) searchParams.append("severity", params.severity);
+        if (params.category) searchParams.append("category", params.category);
+        return pathToApiUrl(
+            `/pull-requests/suggestions?${searchParams.toString()}`,
+        );
+    },
+    GET_FILES: (params: {
+        repositoryId: string;
+        prNumber: number;
+        teamId: string;
+        repositoryName?: string;
+    }) => {
+        const searchParams = new URLSearchParams();
+        searchParams.append("repositoryId", params.repositoryId);
+        searchParams.append("prNumber", params.prNumber.toString());
+        searchParams.append("teamId", params.teamId);
+        if (params.repositoryName)
+            searchParams.append("repositoryName", params.repositoryName);
+        return pathToApiUrl(`/pull-requests/files?${searchParams.toString()}`);
     },
 } as const;

@@ -691,4 +691,82 @@ describe('ProcessFilesReview', () => {
             expect(file2.fileContent).toBe('original content of src/b.ts');
         });
     });
+
+    // ─── Frozen object safety (Zod v4 regression guard) ──────────────────
+
+    describe('frozen object safety — applyKodyFineTuningFilter', () => {
+        it('should not throw when discarded suggestions are frozen (Object.freeze)', async () => {
+            const frozenDiscarded = Object.freeze({
+                id: 'd1',
+                severity: 'low',
+                label: 'code_style',
+            });
+
+            mockKodyFineTuningContextPreparation.prepareKodyFineTuningContext.mockResolvedValue(
+                {
+                    keepedSuggestions: [{ id: 'k1', severity: 'high' }],
+                    discardedSuggestions: [frozenDiscarded],
+                },
+            );
+
+            const context = {
+                organizationAndTeamData: mockOrganizationAndTeamData,
+                pullRequest: {
+                    number: 42,
+                    repository: { id: 'repo-1', fullName: 'org/repo' },
+                },
+                codeReviewConfig: {
+                    kodyFineTuningConfig: { enabled: true },
+                },
+                clusterizedSuggestions: [],
+            };
+
+            const result = await (stage as any).applyKodyFineTuningFilter(
+                [{ id: 'k1' }, frozenDiscarded],
+                context,
+            );
+
+            expect(result.keepedSuggestions).toHaveLength(1);
+            expect(result.discardedSuggestionsByKodyFineTuning).toHaveLength(1);
+            expect(
+                result.discardedSuggestionsByKodyFineTuning[0].priorityStatus,
+            ).toBe(PriorityStatus.DISCARDED_BY_KODY_FINE_TUNING);
+        });
+
+        it('should not mutate the original frozen discarded suggestion', async () => {
+            const frozenDiscarded = Object.freeze({
+                id: 'd1',
+                severity: 'low',
+            });
+
+            mockKodyFineTuningContextPreparation.prepareKodyFineTuningContext.mockResolvedValue(
+                {
+                    keepedSuggestions: [],
+                    discardedSuggestions: [frozenDiscarded],
+                },
+            );
+
+            const context = {
+                organizationAndTeamData: mockOrganizationAndTeamData,
+                pullRequest: {
+                    number: 1,
+                    repository: { id: 'r1', fullName: 'o/r' },
+                },
+                codeReviewConfig: {},
+                clusterizedSuggestions: [],
+            };
+
+            const result = await (stage as any).applyKodyFineTuningFilter(
+                [frozenDiscarded],
+                context,
+            );
+
+            // Must be a new object, not the same frozen reference
+            expect(result.discardedSuggestionsByKodyFineTuning[0]).not.toBe(
+                frozenDiscarded,
+            );
+            // Original must remain unchanged
+            expect((frozenDiscarded as any).priorityStatus).toBeUndefined();
+        });
+    });
 });
