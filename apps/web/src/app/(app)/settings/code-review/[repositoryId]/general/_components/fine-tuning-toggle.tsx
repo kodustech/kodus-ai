@@ -13,6 +13,7 @@ import type { CodeReviewFormType } from "../../../_types";
 export const FineTuningToggle = () => {
     const form = useFormContext<CodeReviewFormType>();
     const config = useCodeReviewConfig();
+    console.log({ config });
 
     return (
         <Controller

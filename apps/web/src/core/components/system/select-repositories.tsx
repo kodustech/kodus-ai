@@ -150,45 +150,45 @@ export const SelectRepositories = (props: {
 
                     {(filteredUnselected.length > 0 ||
                         filteredSelected.length > 0) && (
-                        <div className="flex justify-end gap-3 border-b px-3 py-1.5">
-                            {filteredSelected.length > 0 && (
-                                <button
-                                    type="button"
-                                    className="text-text-secondary hover:text-text-primary cursor-pointer text-xs font-medium"
-                                    onClick={() => {
-                                        const idsToRemove = new Set(
-                                            filteredSelected.map((r) => r.id),
-                                        );
-                                        onChangeSelectedRepositories(
-                                            selectedRepositories.filter(
-                                                (r) => !idsToRemove.has(r.id),
-                                            ),
-                                        );
-                                    }}>
-                                    Clear selection
-                                    {search
-                                        ? ` (${filteredSelected.length})`
-                                        : ""}
-                                </button>
-                            )}
-                            {filteredUnselected.length > 0 && (
-                                <button
-                                    type="button"
-                                    className="text-primary-light hover:text-primary-dark cursor-pointer text-xs font-medium"
-                                    onClick={() => {
-                                        onChangeSelectedRepositories([
-                                            ...selectedRepositories,
-                                            ...filteredUnselected,
-                                        ]);
-                                    }}>
-                                    Select all
-                                    {search
-                                        ? ` (${filteredUnselected.length})`
-                                        : ""}
-                                </button>
-                            )}
-                        </div>
-                    )}
+                            <div className="flex justify-end gap-3 border-b px-3 py-1.5">
+                                {filteredSelected.length > 0 && (
+                                    <button
+                                        type="button"
+                                        className="text-text-secondary hover:text-text-primary cursor-pointer text-xs font-medium"
+                                        onClick={() => {
+                                            const idsToRemove = new Set(
+                                                filteredSelected.map((r) => r.id),
+                                            );
+                                            onChangeSelectedRepositories(
+                                                selectedRepositories.filter(
+                                                    (r) => !idsToRemove.has(r.id),
+                                                ),
+                                            );
+                                        }}>
+                                        Clear selection
+                                        {search
+                                            ? ` (${filteredSelected.length})`
+                                            : ""}
+                                    </button>
+                                )}
+                                {filteredUnselected.length > 0 && (
+                                    <button
+                                        type="button"
+                                        className="text-primary-light hover:text-primary-dark cursor-pointer text-xs font-medium"
+                                        onClick={() => {
+                                            onChangeSelectedRepositories([
+                                                ...selectedRepositories,
+                                                ...filteredUnselected,
+                                            ]);
+                                        }}>
+                                        Select all
+                                        {search
+                                            ? ` (${filteredUnselected.length})`
+                                            : ""}
+                                    </button>
+                                )}
+                            </div>
+                        )}
 
                     <CommandList className="max-h-56 overflow-y-auto">
                         <CommandEmpty>No repository found.</CommandEmpty>
@@ -218,13 +218,13 @@ export const SelectRepositories = (props: {
                                             {formatLastActivity(
                                                 r.lastActivityAt,
                                             ) && (
-                                                <span className="text-text-tertiary text-xs">
-                                                    Last activity{" "}
-                                                    {formatLastActivity(
-                                                        r.lastActivityAt,
-                                                    )}
-                                                </span>
-                                            )}
+                                                    <span className="text-text-tertiary text-xs">
+                                                        Last activity{" "}
+                                                        {formatLastActivity(
+                                                            r.lastActivityAt,
+                                                        )}
+                                                    </span>
+                                                )}
                                         </span>
 
                                         <Check className="text-primary-light -mr-2 size-5" />
@@ -239,13 +239,15 @@ export const SelectRepositories = (props: {
                                         key={r.id}
                                         value={r.id}
                                         onSelect={(currentValue) => {
+                                            const selectedRepo = sortedRepositories.find(
+                                                (repo) =>
+                                                    repo.id ===
+                                                    currentValue,
+                                            )!;
+                                            selectedRepo.kodyFineTuningEnabled = true;
                                             onChangeSelectedRepositories([
                                                 ...selectedRepositories,
-                                                sortedRepositories.find(
-                                                    (repo) =>
-                                                        repo.id ===
-                                                        currentValue,
-                                                )!,
+                                                selectedRepo,
                                             ]);
                                         }}>
                                         <span className="flex flex-col items-start gap-1 text-left">
@@ -258,13 +260,13 @@ export const SelectRepositories = (props: {
                                             {formatLastActivity(
                                                 r.lastActivityAt,
                                             ) && (
-                                                <span className="text-text-tertiary text-xs">
-                                                    Last activity{" "}
-                                                    {formatLastActivity(
-                                                        r.lastActivityAt,
-                                                    )}
-                                                </span>
-                                            )}
+                                                    <span className="text-text-tertiary text-xs">
+                                                        Last activity{" "}
+                                                        {formatLastActivity(
+                                                            r.lastActivityAt,
+                                                        )}
+                                                    </span>
+                                                )}
                                         </span>
                                     </CommandItem>
                                 ))}

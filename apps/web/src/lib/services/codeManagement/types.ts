@@ -22,6 +22,7 @@ export type Repository = {
     };
     selected?: boolean;
     lastActivityAt?: string;
+    kodyFineTuningEnabled?: boolean;
 };
 
 export type RepositoryMinimal = {

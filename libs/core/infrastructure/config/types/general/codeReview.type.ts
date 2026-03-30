@@ -96,6 +96,7 @@ export type Repository = {
     fullName?: string;
     language: string;
     defaultBranch: string;
+    isFineTuningEnabled?: boolean;
 };
 
 export type AnalysisContext<TPullRequest = any> = {
@@ -229,13 +230,13 @@ export type FileChange = {
     sha: string;
     filename: string;
     status:
-        | 'added'
-        | 'removed'
-        | 'modified'
-        | 'renamed'
-        | 'copied'
-        | 'changed'
-        | 'unchanged';
+    | 'added'
+    | 'removed'
+    | 'modified'
+    | 'renamed'
+    | 'copied'
+    | 'changed'
+    | 'unchanged';
     additions: number;
     deletions: number;
     changes: number;

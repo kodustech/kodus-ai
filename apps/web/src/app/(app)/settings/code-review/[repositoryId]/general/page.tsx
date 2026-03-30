@@ -286,8 +286,13 @@ export default function General() {
                     </div>
                     <div data-field-name="showStatusFeedback">
                         <ShowStatusFeedback />
-                        {repositoryId !== "global" && <FineTuningToggle />}
                     </div>
+                    {repositoryId === "global" && (
+                        <div data-field-name="kodyFineTuningEnabled">
+                            <FineTuningToggle />
+                        </div>
+                    )}
+                    {repositoryId !== "global" && <FineTuningToggle />}
                     <AsyncBoundary errorVariant="minimal">
                         <div data-field-name="enableCommittableSuggestions">
                             <EnableCommittableSuggestions />

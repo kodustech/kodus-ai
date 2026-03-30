@@ -43,7 +43,7 @@ export class CodeManagementService implements ICodeManagementService {
         @Inject(forwardRef(() => INTEGRATION_SERVICE_TOKEN))
         private readonly integrationService: IIntegrationService,
         private platformIntegrationFactory: PlatformIntegrationFactory,
-    ) {}
+    ) { }
 
     async getTypeIntegration(
         organizationAndTeamData: OrganizationAndTeamData,
@@ -762,12 +762,12 @@ export class CodeManagementService implements ICodeManagementService {
             organizationAndTeamData: OrganizationAndTeamData;
             commentId: string;
             reason?:
-                | 'ABUSE'
-                | 'OFF_TOPIC'
-                | 'OUTDATED'
-                | 'RESOLVED'
-                | 'DUPLICATE'
-                | 'SPAM';
+            | 'ABUSE'
+            | 'OFF_TOPIC'
+            | 'OUTDATED'
+            | 'RESOLVED'
+            | 'DUPLICATE'
+            | 'SPAM';
         },
         type?: PlatformType,
     ): Promise<any | null> {
@@ -1193,7 +1193,7 @@ export class CodeManagementService implements ICodeManagementService {
     async formatReviewCommentBody(
         params: {
             suggestion: any;
-            repository: { name: string; language: string };
+            repository: { name: string; id: string; language: string };
             includeHeader?: boolean;
             includeFooter?: boolean;
             language?: string;

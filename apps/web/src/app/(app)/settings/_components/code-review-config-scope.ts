@@ -24,6 +24,7 @@ export const resolveCodeReviewConfigForScope = (
             displayName: "Global",
         };
     }
+    console.log({ config });
 
     const repository = config.repositories.find(
         (item) => item.id === repositoryId,
