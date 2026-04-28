@@ -384,4 +384,69 @@ describe('ValidatePrerequisitesStage', () => {
             expect(result.statusInfo?.status).not.toBe(AutomationStatus.SKIPPED);
         });
     });
+
+    describe('auto-assign license with automatedReviewActive disabled', () => {
+        beforeEach(() => {
+            jest.spyOn(stage as any, 'isAutomatedReviewActive').mockResolvedValue(false);
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+        });
+
+        it('should proceed with review when auto-assign succeeds even if automatedReviewActive is false', async () => {
+            const context = makeContext();
+            context.origin = 'opened';
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue({
+                allowed: false,
+                errorType: ValidationErrorType.USER_NOT_LICENSED,
+            });
+
+            mockAutoAssignLicenseUseCase.execute.mockResolvedValue({
+                shouldProceed: true,
+                reason: 'FREEBIE',
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).not.toBe(AutomationStatus.SKIPPED);
+            expect(mockAutoAssignLicenseUseCase.execute).toHaveBeenCalled();
+        });
+
+        it('should skip review when auto-assign fails and automatedReviewActive is false', async () => {
+            const context = makeContext();
+            context.origin = 'opened';
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue({
+                allowed: false,
+                errorType: ValidationErrorType.USER_NOT_LICENSED,
+            });
+
+            mockAutoAssignLicenseUseCase.execute.mockResolvedValue({
+                shouldProceed: false,
+                reason: 'NOT_ELIGIBLE',
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+        });
+
+        it('should proceed with review when user has license even if automatedReviewActive is false', async () => {
+            const context = makeContext();
+            context.origin = 'opened';
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue({
+                allowed: true,
+                errorType: ValidationErrorType.NOT_ERROR,
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).not.toBe(AutomationStatus.SKIPPED);
+        });
+    });
 });

@@ -203,6 +203,35 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             });
         }
 
+        // If validation failed due to USER_NOT_LICENSED, try auto-assign FIRST
+        // before checking autoReviewEnabled, so the "freebie" logic can work
+        // even when automatedReviewActive is false.
+        if (validationResult.errorType === ValidationErrorType.USER_NOT_LICENSED) {
+            const failureHandled = await this.handleValidationFailure(
+                context,
+                validationResult,
+                showStatusFeedback,
+            );
+
+            if (failureHandled === 'auto_assigned') {
+                return this.updateContext(context, (draft) => {
+                    applyShowStatusFeedbackMetadata(draft);
+                });
+            }
+
+            // Auto-assign didn't succeed (user not eligible), skip the autoReviewEnabled
+            // check and go straight to the final SKIP result below.
+            return this.updateContext(context, (draft) => {
+                applyShowStatusFeedbackMetadata(draft);
+                draft.statusInfo = {
+                    status: AutomationStatus.SKIPPED,
+                    message: StageMessageHelper.skippedWithReason(
+                        this.getLicenseSkipReason(validationResult.errorType),
+                    ),
+                };
+            });
+        }
+
         // If auto-review is disabled and this is not a command-triggered review,
         // skip silently without posting notifications (e.g. BYOK required).
         try {
@@ -228,18 +257,12 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             });
         }
 
-        // Validation failed
-        const failureHandled = await this.handleValidationFailure(
+        // Validation failed for other error types (non-USER_NOT_LICENSED)
+        await this.handleValidationFailure(
             context,
             validationResult,
             showStatusFeedback,
         );
-
-        if (failureHandled === 'auto_assigned') {
-            return this.updateContext(context, (draft) => {
-                applyShowStatusFeedbackMetadata(draft);
-            });
-        }
 
         return this.updateContext(context, (draft) => {
             applyShowStatusFeedbackMetadata(draft);
