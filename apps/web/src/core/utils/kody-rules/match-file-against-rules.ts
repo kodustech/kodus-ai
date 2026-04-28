@@ -1,4 +1,4 @@
-import { minimatch } from "minimatch";
+import minimatch from "minimatch";
 
 /**
  * Tests whether a rule's `path` glob (or comma-separated globs) matches

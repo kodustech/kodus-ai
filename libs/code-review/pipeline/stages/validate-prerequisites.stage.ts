@@ -229,6 +229,19 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                         this.getLicenseSkipReason(validationResult.errorType),
                     ),
                 };
+
+                // handleValidationFailure already sent a license notification (for Azure/Bitbucket).
+                // Mark it so the handler doesn't send a generic "Skipped" message on top.
+                if (
+                    context.platformType === PlatformType.AZURE_REPOS ||
+                    context.platformType === PlatformType.BITBUCKET ||
+                    !showStatusFeedback
+                ) {
+                    if (!draft.pipelineMetadata) {
+                        draft.pipelineMetadata = {};
+                    }
+                    draft.pipelineMetadata.notificationHandled = true;
+                }
             });
         }
 
