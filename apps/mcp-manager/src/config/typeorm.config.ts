@@ -2,6 +2,10 @@ import * as dotenv from 'dotenv';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { DataSource, DataSourceOptions } from 'typeorm';
 
+import { MCPConnectionEntity } from '../modules/mcp/entities/mcp-connection.entity';
+import { MCPIntegrationEntity } from '../modules/integrations/entities/mcp-integration.entity';
+import { MCPIntegrationOAuthEntity } from '../modules/integrations/entities/mcp-integration-oauth.entity';
+
 dotenv.config();
 
 const requiredEnvVars = [
@@ -35,7 +39,11 @@ const dataSourceConfig: DataSourceOptions = {
     password: process.env.API_PG_DB_PASSWORD,
     database: process.env.API_PG_DB_DATABASE,
     schema: 'mcp-manager',
-    entities: [__dirname + '/../**/*.entity{.ts,.js}'],
+    entities: [
+        MCPConnectionEntity,
+        MCPIntegrationEntity,
+        MCPIntegrationOAuthEntity,
+    ],
     migrations: [__dirname + '/../database/migrations/*{.ts,.js}'],
     migrationsTableName: 'migrations',
     synchronize: false,
