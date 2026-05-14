@@ -2766,12 +2766,11 @@ keyv@^4.5.4:
     json-buffer "3.0.1"
 
 "langsmith@>=0.4.0 <1.0.0", "langsmith@>=0.5.0 <1.0.0":
-  version "0.5.21"
-  resolved "https://registry.npmjs.org/langsmith/-/langsmith-0.5.21.tgz#2f4cd30dafc22922e423cf0f151ead5f636e76b0"
-  integrity sha512-l140hzgqo91T/QKDXLEfRnnxahuwVEVohr9zqpy3BaGDeBdrPiJuNJ2TBhPZxNXNCl68IkVcn555FD3jp5peyw==
+  version "0.7.0"
+  resolved "https://registry.yarnpkg.com/langsmith/-/langsmith-0.7.0.tgz#0d01f98d3e26dd6d3e7b9f10d9b087b10bfaf157"
+  integrity sha512-iiPAGHJZ3uIHGnnLSkgcYZ4+thzhsGp5U48pWuW3ETgCRtbYzoDxYJigiQ3iWkK8ovF7Vr37tYvbI1ZE0tB+6A==
   dependencies:
     p-queue "6.6.2"
-    uuid "10.0.0"
 
 leven@^3.1.0:
   version "3.1.0"
@@ -3672,7 +3671,7 @@ uri-js@^4.2.2:
   dependencies:
     punycode "^2.1.0"
 
-uuid@10.0.0, uuid@^10.0.0:
+uuid@^10.0.0:
   version "10.0.0"
   resolved "https://registry.npmjs.org/uuid/-/uuid-10.0.0.tgz#5a95aa454e6e002725c79055fd42aaba30ca6294"
   integrity sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==
