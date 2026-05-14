@@ -9625,9 +9625,9 @@ kleur@^3.0.3:
   integrity sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w==
 
 "langsmith@>=0.4.0 <1.0.0", "langsmith@>=0.5.0 <1.0.0":
-  version "0.5.25"
-  resolved "https://registry.npmjs.org/langsmith/-/langsmith-0.5.25.tgz#5d05ece666fa92b3174e2be0b67cc51fa53455d4"
-  integrity sha512-AG7NOymrDmwaWq+wus5hJHZjPFKXwsEdfqGBU3eZiF5242mme+5wuJocdBJKGyU1kgBO7TuLHiqtdyIwl4V4yQ==
+  version "0.7.0"
+  resolved "https://registry.yarnpkg.com/langsmith/-/langsmith-0.7.0.tgz#0d01f98d3e26dd6d3e7b9f10d9b087b10bfaf157"
+  integrity sha512-iiPAGHJZ3uIHGnnLSkgcYZ4+thzhsGp5U48pWuW3ETgCRtbYzoDxYJigiQ3iWkK8ovF7Vr37tYvbI1ZE0tB+6A==
   dependencies:
     p-queue "6.6.2"
 
