@@ -2665,20 +2665,24 @@ export class GitlabService implements Omit<
                 (comment) => comment.id === filters.discussionId,
             )?.notes[0];
 
-            const flattenNotes = (discussions: typeof comments) =>
-                discussions
-                    ?.flatMap((comment) =>
+            if (
+                filters?.discussionId === undefined ||
+                filters.discussionId === ''
+            ) {
+                return comments;
+            } else {
+                return comments
+                    ?.filter((comment) => comment.id === filters.discussionId)
+                    .flatMap((comment) =>
                         comment.notes.map((note) => ({
                             id: note.id,
                             body: note.body,
                             createdAt: note.created_at,
                             discussionId: comment.id,
-                            originalCommit: originalCommit
-                                ? {
-                                      body: originalCommit.body,
-                                      id: originalCommit.id,
-                                  }
-                                : undefined,
+                            originalCommit: {
+                                body: originalCommit.body,
+                                id: originalCommit.id,
+                            },
                             author: {
                                 id: note.author.id,
                                 username: note.author.username,
@@ -2691,18 +2695,6 @@ export class GitlabService implements Omit<
                             new Date(b.createdAt).getTime() -
                             new Date(a.createdAt).getTime(),
                     );
-
-            if (
-                filters?.discussionId === undefined ||
-                filters.discussionId === ''
-            ) {
-                return flattenNotes(comments);
-            } else {
-                return flattenNotes(
-                    comments?.filter(
-                        (comment) => comment.id === filters.discussionId,
-                    ),
-                );
             }
         } catch (error) {
             this.logger.error({

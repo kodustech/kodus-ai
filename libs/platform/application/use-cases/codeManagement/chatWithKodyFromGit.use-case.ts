@@ -645,13 +645,27 @@ export class ChatWithKodyFromGitUseCase {
                 },
             });
 
+        // Normalize: when discussionId is missing, getPullRequestReviewComment
+        // returns raw GitLab discussions (with notes[]). Flatten to note-shaped
+        // objects so the find-by-note-id below works in both cases.
+        const normalizedComments =
+            params.payload?.object_attributes?.discussion_id
+                ? allComments
+                : allComments?.flatMap((d) =>
+                      (d.notes || []).map((note) => ({
+                          ...note,
+                          id: note.id,
+                          discussionId: d.id,
+                      })),
+                  );
+
         const commentId = this.getCommentId(params);
         const comment =
             params.platformType !== PlatformType.AZURE_REPOS
-                ? allComments?.find((c) => c.id === commentId)
+                ? normalizedComments?.find((c) => c.id === commentId)
                 : this.getReviewThreadByCommentId(
                       commentId,
-                      allComments,
+                      normalizedComments,
                       params,
                   );
 
@@ -915,13 +929,27 @@ export class ChatWithKodyFromGitUseCase {
                 },
             });
 
+        // Normalize: when discussionId is missing, getPullRequestReviewComment
+        // returns raw GitLab discussions (with notes[]). Flatten to note-shaped
+        // objects so the find-by-note-id below works in both cases.
+        const normalizedComments =
+            params.payload?.object_attributes?.discussion_id
+                ? allComments
+                : allComments?.flatMap((d) =>
+                      (d.notes || []).map((note) => ({
+                          ...note,
+                          id: note.id,
+                          discussionId: d.id,
+                      })),
+                  );
+
         const commentId = this.getCommentId(params);
         const comment =
             params.platformType !== PlatformType.AZURE_REPOS
-                ? allComments?.find((c) => c.id === commentId)
+                ? normalizedComments?.find((c) => c.id === commentId)
                 : this.getReviewThreadByCommentId(
                       commentId,
-                      allComments,
+                      normalizedComments,
                       params,
                   );
 
