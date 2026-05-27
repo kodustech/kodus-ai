@@ -641,7 +641,7 @@ export class ChatWithKodyFromGitUseCase {
                     pullRequestNumber,
                     repository,
                     discussionId:
-                        params.payload?.object_attributes?.discussion_id ?? '',
+                        params.payload?.object_attributes?.discussion_id,
                 },
             });
 
@@ -909,7 +909,7 @@ export class ChatWithKodyFromGitUseCase {
                     pullRequestNumber,
                     repository,
                     discussionId:
-                        params.payload?.object_attributes?.discussion_id ?? '',
+                        params.payload?.object_attributes?.discussion_id,
                 },
             });
 
