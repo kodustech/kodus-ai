@@ -645,19 +645,22 @@ export class ChatWithKodyFromGitUseCase {
                 },
             });
 
-        // Normalize: when discussionId is missing, getPullRequestReviewComment
-        // returns raw GitLab discussions (with notes[]). Flatten to note-shaped
-        // objects so the find-by-note-id below works in both cases.
-        const normalizedComments =
-            params.payload?.object_attributes?.discussion_id
-                ? allComments
-                : allComments?.flatMap((d) =>
-                      (d.notes || []).map((note) => ({
-                          ...note,
-                          id: note.id,
-                          discussionId: d.id,
-                      })),
-                  );
+        // GitLab-only: when discussion_id is missing from the webhook,
+        // getPullRequestReviewComment returns raw discussions (with notes[]).
+        // Flatten to note-shaped objects so find-by-note-id works.
+        const isGitLabWithMissingDiscussionId =
+            params.payload?.object_attributes !== undefined &&
+            !params.payload?.object_attributes?.discussion_id;
+
+        const normalizedComments = isGitLabWithMissingDiscussionId
+            ? allComments?.flatMap((d) =>
+                  (d.notes || []).map((note) => ({
+                      ...note,
+                      id: note.id,
+                      discussionId: d.id,
+                  })),
+              )
+            : allComments;
 
         const commentId = this.getCommentId(params);
         const comment =
@@ -929,19 +932,22 @@ export class ChatWithKodyFromGitUseCase {
                 },
             });
 
-        // Normalize: when discussionId is missing, getPullRequestReviewComment
-        // returns raw GitLab discussions (with notes[]). Flatten to note-shaped
-        // objects so the find-by-note-id below works in both cases.
-        const normalizedComments =
-            params.payload?.object_attributes?.discussion_id
-                ? allComments
-                : allComments?.flatMap((d) =>
-                      (d.notes || []).map((note) => ({
-                          ...note,
-                          id: note.id,
-                          discussionId: d.id,
-                      })),
-                  );
+        // GitLab-only: when discussion_id is missing from the webhook,
+        // getPullRequestReviewComment returns raw discussions (with notes[]).
+        // Flatten to note-shaped objects so find-by-note-id works.
+        const isGitLabWithMissingDiscussionId =
+            params.payload?.object_attributes !== undefined &&
+            !params.payload?.object_attributes?.discussion_id;
+
+        const normalizedComments = isGitLabWithMissingDiscussionId
+            ? allComments?.flatMap((d) =>
+                  (d.notes || []).map((note) => ({
+                      ...note,
+                      id: note.id,
+                      discussionId: d.id,
+                  })),
+              )
+            : allComments;
 
         const commentId = this.getCommentId(params);
         const comment =
