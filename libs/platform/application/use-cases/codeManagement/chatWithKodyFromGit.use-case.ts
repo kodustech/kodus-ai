@@ -698,12 +698,12 @@ export class ChatWithKodyFromGitUseCase {
 
         const originalKodyComment = this.getOriginalKodyComment(
             comment,
-            allComments,
+            normalizedComments,
             params.platformType,
         );
         const othersReplies = this.getOthersReplies(
             comment,
-            allComments,
+            normalizedComments,
             params.platformType,
         );
         const sender = this.getSender(params);
