@@ -706,7 +706,8 @@ export class ChatWithKodyFromGitUseCase {
                     organizationAndTeamData,
                     inReplyToId: comment.id,
                     discussionId:
-                        params.payload?.object_attributes?.discussion_id,
+                        params.payload?.object_attributes?.discussion_id ??
+                        comment.discussionId,
                     threadId: comment.threadId,
                     body: responsePolicy.getAcknowledgmentBody(),
                     repository,
@@ -807,7 +808,8 @@ export class ChatWithKodyFromGitUseCase {
                     organizationAndTeamData,
                     inReplyToId: comment.id,
                     discussionId:
-                        params.payload?.object_attributes?.discussion_id,
+                        params.payload?.object_attributes?.discussion_id ??
+                        comment.discussionId,
                     threadId: comment.threadId,
                     body: response,
                     repository,
@@ -941,7 +943,9 @@ export class ChatWithKodyFromGitUseCase {
             await this.codeManagementService.createResponseToComment({
                 organizationAndTeamData,
                 inReplyToId: comment.id,
-                discussionId: params.payload?.object_attributes?.discussion_id,
+                discussionId:
+                    params.payload?.object_attributes?.discussion_id ??
+                    comment.discussionId,
                 threadId: comment.threadId ?? comment?.in_reply_to_id,
                 body: ACKNOWLEDGMENT_MESSAGES.BUSINESS_LOGIC_INVALID_CONTEXT,
                 repository,
