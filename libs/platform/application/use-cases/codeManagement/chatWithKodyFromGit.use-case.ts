@@ -653,13 +653,20 @@ export class ChatWithKodyFromGitUseCase {
             !params.payload?.object_attributes?.discussion_id;
 
         const normalizedComments = isGitLabWithMissingDiscussionId
-            ? allComments?.flatMap((d) =>
-                  (d.notes || []).map((note) => ({
+            ? allComments?.flatMap((d) => {
+                  const firstNote = d.notes?.[0];
+                  return (d.notes || []).map((note) => ({
                       ...note,
                       id: note.id,
                       discussionId: d.id,
-                  })),
-              )
+                      originalCommit: firstNote
+                          ? {
+                                body: firstNote.body,
+                                id: firstNote.id,
+                            }
+                          : undefined,
+                  }));
+              })
             : allComments;
 
         const commentId = this.getCommentId(params);
@@ -940,13 +947,20 @@ export class ChatWithKodyFromGitUseCase {
             !params.payload?.object_attributes?.discussion_id;
 
         const normalizedComments = isGitLabWithMissingDiscussionId
-            ? allComments?.flatMap((d) =>
-                  (d.notes || []).map((note) => ({
+            ? allComments?.flatMap((d) => {
+                  const firstNote = d.notes?.[0];
+                  return (d.notes || []).map((note) => ({
                       ...note,
                       id: note.id,
                       discussionId: d.id,
-                  })),
-              )
+                      originalCommit: firstNote
+                          ? {
+                                body: firstNote.body,
+                                id: firstNote.id,
+                            }
+                          : undefined,
+                  }));
+              })
             : allComments;
 
         const commentId = this.getCommentId(params);
