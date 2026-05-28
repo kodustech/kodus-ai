@@ -459,9 +459,12 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
 
         try {
             // Note Hook fires only on new comments. GitLab 13.x omits
-            // the action field, so treat missing action as 'create'.
+            // the action field, so treat missing action as 'create',
+            // but only for MR notes (not issue/snippet/commit comments).
             if (
-                !payload?.object_attributes?.action ||
+                (!payload?.object_attributes?.action &&
+                    payload?.object_attributes?.noteable_type ===
+                        'MergeRequest') ||
                 payload?.object_attributes?.action === 'create'
             ) {
                 const comment = mappedPlatform.mapComment({ payload });
