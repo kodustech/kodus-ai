@@ -1877,14 +1877,13 @@ ${summaries}`,
                         updateData,
                     );
                 } else {
-                    // Fallback: create if not found
-                    await this.automationExecutionService.updateCodeReview(
-                        filter,
-                        { status },
-                        label,
-                        stageName,
-                        metadata,
-                    );
+                    // No existing record found — skip creating a new one.
+                    // In chunked mode, batch_started fires before the recursive
+                    // execute() emits started. Both are fire-and-forget, so
+                    // batch_started's findLatestStageLog may run before started
+                    // creates the initial record. Creating a fallback here would
+                    // produce an orphaned IN_PROGRESS record that never gets
+                    // updated. The completed event will create the final record.
                 }
             }
         } catch {

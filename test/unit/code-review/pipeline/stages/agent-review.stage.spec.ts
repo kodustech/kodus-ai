@@ -9,6 +9,26 @@ import { CodeReviewPipelineContext } from '@/code-review/pipeline/context/code-r
 import { PlatformType } from '@/core/domain/enums';
 import { CodeReviewVersion } from '@/core/domain/enums/code-review.enum';
 
+const mockTracedGenerateText = jest.fn();
+const mockWithStructuredOutputFallback = jest.fn();
+
+jest.mock(
+    '@libs/code-review/infrastructure/agents/llm/agent-loop',
+    () => ({
+        tracedGenerateText: (...args: any[]) => mockTracedGenerateText(...args),
+    }),
+);
+
+jest.mock(
+    '@libs/code-review/infrastructure/agents/llm/byok-to-vercel',
+    () => ({
+        withStructuredOutputFallback: (...args: any[]) =>
+            mockWithStructuredOutputFallback(...args),
+        NoStructuredFallbackModelError: class extends Error {},
+        getModelName: jest.fn().mockReturnValue('test-model'),
+    }),
+);
+
 jest.mock('ai', () => ({
     generateText: jest.fn().mockResolvedValue({
         object: { classifications: [] },
@@ -450,5 +470,152 @@ describe('AgentReviewStage', () => {
             expect(result.fileAnalysisResults[0].validSuggestionsToAnalyze).toHaveLength(1);
         });
 
+    });
+
+    describe('writeAgentTrace - race condition (Bug 2)', () => {
+        let mockAutomationService: any;
+
+        beforeEach(() => {
+            mockAutomationService = (stage as any).automationExecutionService;
+            mockAutomationService.updateCodeReview.mockReset();
+            mockAutomationService.findLatestStageLog.mockReset();
+            mockAutomationService.updateStageLog.mockReset();
+        });
+
+        const makeEvent = (status: string, overrides: any = {}) => ({
+            agentName: 'generalist-review-agent',
+            agentCategory: 'generalist',
+            status,
+            ...overrides,
+        });
+
+        it('started event should call updateCodeReview (create)', async () => {
+            mockAutomationService.updateCodeReview.mockResolvedValue({
+                execution: { uuid: 'exec-1' },
+                stageLog: { uuid: 'log-1' },
+            });
+
+            await (stage as any).writeAgentTrace(
+                'exec-1',
+                42,
+                'repo-1',
+                'AgentReview::generalist',
+                makeEvent('started'),
+                'Agent — investigating...',
+                new Map(),
+            );
+
+            expect(
+                mockAutomationService.updateCodeReview,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                mockAutomationService.findLatestStageLog,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('non-started event with existing record should update via updateStageLog', async () => {
+            mockAutomationService.findLatestStageLog.mockResolvedValue({
+                uuid: 'existing-log-1',
+                metadata: {},
+            });
+
+            await (stage as any).writeAgentTrace(
+                'exec-1',
+                42,
+                'repo-1',
+                'AgentReview::generalist',
+                makeEvent('batch_started', {
+                    batchIndex: 1,
+                    batchTotal: 2,
+                    batchFiles: 3,
+                }),
+                'Agent batch 1/2 — starting (3 files)',
+                new Map(),
+            );
+
+            expect(
+                mockAutomationService.findLatestStageLog,
+            ).toHaveBeenCalledWith('exec-1', 'AgentReview::generalist');
+            expect(
+                mockAutomationService.updateStageLog,
+            ).toHaveBeenCalledWith(
+                'existing-log-1',
+                expect.objectContaining({ status: 'in_progress' }),
+            );
+            expect(
+                mockAutomationService.updateCodeReview,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('non-started event with NO existing record should skip fallback (fix)', async () => {
+            mockAutomationService.findLatestStageLog.mockResolvedValue(null);
+
+            await (stage as any).writeAgentTrace(
+                'exec-1',
+                42,
+                'repo-1',
+                'AgentReview::generalist',
+                makeEvent('batch_started', {
+                    batchIndex: 1,
+                    batchTotal: 2,
+                    batchFiles: 3,
+                }),
+                'Agent batch 1/2 — starting (3 files)',
+                new Map(),
+            );
+
+            // After fix: no fallback creation — prevents orphaned records
+            expect(
+                mockAutomationService.updateCodeReview,
+            ).not.toHaveBeenCalled();
+            expect(
+                mockAutomationService.updateStageLog,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('race condition: batch_started then started creates only one record', async () => {
+            mockAutomationService.findLatestStageLog.mockResolvedValue(null);
+            mockAutomationService.updateCodeReview.mockResolvedValue({
+                execution: { uuid: 'exec-1' },
+                stageLog: { uuid: 'log-1' },
+            });
+
+            const toolCalls = new Map();
+
+            // batch_started fires first — findLatestStageLog returns null,
+            // but after fix it skips fallback (no orphaned record)
+            await (stage as any).writeAgentTrace(
+                'exec-1',
+                42,
+                'repo-1',
+                'AgentReview::generalist',
+                makeEvent('batch_started', {
+                    batchIndex: 1,
+                    batchTotal: 2,
+                    batchFiles: 3,
+                }),
+                'Agent batch 1/2 — starting (3 files)',
+                toolCalls,
+            );
+
+            // started fires second — creates the record via updateCodeReview
+            await (stage as any).writeAgentTrace(
+                'exec-1',
+                42,
+                'repo-1',
+                'AgentReview::generalist',
+                makeEvent('started'),
+                'Agent — investigating...',
+                toolCalls,
+            );
+
+            // After fix: only 1 record created (by started), no orphan
+            expect(
+                mockAutomationService.updateCodeReview,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                mockAutomationService.updateCodeReview.mock.calls[0][1].status,
+            ).toBe('in_progress');
+        });
     });
 });
