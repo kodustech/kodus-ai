@@ -759,5 +759,44 @@ describe('AgentReviewStage', () => {
                 }
             }
         });
+
+        it('should merge duplicate locations when keep overlaps with unique', async () => {
+            const suggestions = makeSuggestions(2);
+
+            // unique[0] adds suggestion 0, then group { keep: 0, dup: [1] } is skipped
+            // but "Also found in" from dup 1 should be merged into suggestion 0
+            mockTracedGenerateText.mockResolvedValue({
+                object: {
+                    groups: [{ keep: 0, duplicates: [1] }],
+                    unique: [0],
+                },
+                usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+            });
+
+            const origKey = process.env.API_GOOGLE_AI_API_KEY;
+            process.env.API_GOOGLE_AI_API_KEY = 'test-key';
+
+            try {
+                const result = await (stage as any).deduplicateSuggestions(
+                    suggestions,
+                    42,
+                );
+
+                // suggestion 0 should have "Also found in" for suggestion 1's location
+                expect(result.suggestions).toHaveLength(1);
+                expect(result.suggestions[0].relevantFile).toBe(
+                    'src/file-0.ts',
+                );
+                expect(result.suggestions[0].suggestionContent).toContain(
+                    'src/file-1.ts',
+                );
+            } finally {
+                if (origKey === undefined) {
+                    delete process.env.API_GOOGLE_AI_API_KEY;
+                } else {
+                    process.env.API_GOOGLE_AI_API_KEY = origKey;
+                }
+            }
+        });
     });
 });

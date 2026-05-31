@@ -1527,12 +1527,14 @@ ${summaries}`,
             const groupSummaries: DedupTraceGroupSummary[] = [];
             const addedIndices = new Set<number>();
             const classifiedIndices = new Set<number>();
+            const indexToResult = new Map<number, number>();
 
             // Layer 1: Number.isInteger guard — NaN and non-integer floats rejected immediately
 
             // Add unique suggestions as-is
             for (const idx of unique) {
                 if (Number.isInteger(idx) && idx >= 0 && idx < suggestions.length) {
+                    indexToResult.set(idx, result.length);
                     result.push(suggestions[idx]);
                     addedIndices.add(idx);
                     classifiedIndices.add(idx);
@@ -1552,6 +1554,7 @@ ${summaries}`,
                     for (const dupIdx of dupIndices) {
                         classifiedIndices.add(dupIdx);
                         if (Number.isInteger(dupIdx) && dupIdx >= 0 && dupIdx < suggestions.length && !addedIndices.has(dupIdx)) {
+                            indexToResult.set(dupIdx, result.length);
                             result.push(suggestions[dupIdx]);
                             addedIndices.add(dupIdx);
                             uniqueSuggestions.push(
@@ -1562,12 +1565,33 @@ ${summaries}`,
                     continue;
                 }
 
-                // Skip if this keep was already added by Layer 2 (malformed groups with overlapping indices)
+                // Skip if this keep was already added (malformed groups with overlapping indices)
                 if (addedIndices.has(keepIdx)) {
-                    // Still classify the duplicates so Layer 3 doesn't re-add them
-                    for (const dupIdx of dupIndices) {
-                        if (Number.isInteger(dupIdx) && dupIdx >= 0 && dupIdx < suggestions.length) {
-                            classifiedIndices.add(dupIdx);
+                    // Merge duplicate locations into the already-added suggestion
+                    const existingIdx = indexToResult.get(keepIdx);
+                    if (existingIdx !== undefined) {
+                        const locations: string[] = [];
+                        for (const dupIdx of dupIndices) {
+                            if (Number.isInteger(dupIdx) && dupIdx >= 0 && dupIdx < suggestions.length) {
+                                classifiedIndices.add(dupIdx);
+                                const dup = suggestions[dupIdx];
+                                const loc = `${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd}`;
+                                const keptLoc = `${suggestions[keepIdx].relevantFile}:${suggestions[keepIdx].relevantLinesStart}-${suggestions[keepIdx].relevantLinesEnd}`;
+                                if (loc !== keptLoc) {
+                                    locations.push(loc);
+                                }
+                            }
+                        }
+                        if (locations.length > 0) {
+                            const existing = result[existingIdx];
+                            const locList = locations.map((l) => `- \`${l}\``).join('\n');
+                            existing.suggestionContent = `${existing.suggestionContent}\n\n**Also found in:**\n${locList}`;
+                        }
+                    } else {
+                        for (const dupIdx of dupIndices) {
+                            if (Number.isInteger(dupIdx) && dupIdx >= 0 && dupIdx < suggestions.length) {
+                                classifiedIndices.add(dupIdx);
+                            }
                         }
                     }
                     continue;
@@ -1612,6 +1636,7 @@ ${summaries}`,
                     keep: this.summarizeDedupSuggestion(kept),
                     duplicates: duplicateSummaries,
                 });
+                indexToResult.set(keepIdx, result.length);
                 result.push(kept);
             }
 
