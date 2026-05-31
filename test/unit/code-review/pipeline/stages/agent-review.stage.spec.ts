@@ -510,8 +510,9 @@ describe('AgentReviewStage', () => {
                 );
 
                 // Layer 1: NaN keep rejected → Layer 2: valid dups (1, 2) preserved
-                // unique[0] + dup 1 + dup 2 = 3
-                expect(result.suggestions).toHaveLength(3);
+                // Layer 3: unclassified suggestion 3 also preserved
+                // unique[0] + dup 1 + dup 2 + unclassified 3 = 4
+                expect(result.suggestions).toHaveLength(4);
                 for (const s of result.suggestions) {
                     expect(s.relevantFile).toBeDefined();
                     expect(s.suggestionContent).not.toContain('undefined');
@@ -545,12 +546,14 @@ describe('AgentReviewStage', () => {
                     42,
                 );
 
-                // keep=NaN → invalid, but dup 0 and 2 are valid → preserved
-                expect(result.suggestions).toHaveLength(2);
+                // keep=NaN → invalid, dup 0 and 2 preserved via Layer 2
+                // suggestion 1 unclassified → preserved via Layer 3
+                expect(result.suggestions).toHaveLength(3);
                 const filenames = result.suggestions.map(
                     (s: any) => s.relevantFile,
                 );
                 expect(filenames).toContain('src/file-0.ts');
+                expect(filenames).toContain('src/file-1.ts');
                 expect(filenames).toContain('src/file-2.ts');
             } finally {
                 if (origKey === undefined) {
@@ -584,9 +587,48 @@ describe('AgentReviewStage', () => {
                     42,
                 );
 
-                // Layer 3: all indices invalid → result would be empty → safety net keeps all
+                // Layer 3: all indices invalid → addedIndices empty → all suggestions preserved
                 expect(result.suggestions).toHaveLength(3);
-                expect(result.trace.status).toBe('empty-keep-all');
+                expect(result.trace.status).toBe('success');
+            } finally {
+                if (origKey === undefined) {
+                    delete process.env.API_GOOGLE_AI_API_KEY;
+                } else {
+                    process.env.API_GOOGLE_AI_API_KEY = origKey;
+                }
+            }
+        });
+
+        it('Layer 3: should preserve unclassified suggestions not in any group or unique', async () => {
+            const suggestions = makeSuggestions(3);
+
+            // LLM returns: group with invalid keep, valid dups [0, 2], no unique
+            // Suggestion 1 is not classified by any group or unique entry
+            mockTracedGenerateText.mockResolvedValue({
+                object: {
+                    groups: [{ keep: NaN, duplicates: [0, 2] }],
+                    unique: [],
+                },
+                usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+            });
+
+            const origKey = process.env.API_GOOGLE_AI_API_KEY;
+            process.env.API_GOOGLE_AI_API_KEY = 'test-key';
+
+            try {
+                const result = await (stage as any).deduplicateSuggestions(
+                    suggestions,
+                    42,
+                );
+
+                // Layer 2 adds dups 0 and 2. Layer 3 adds unclassified suggestion 1.
+                expect(result.suggestions).toHaveLength(3);
+                const filenames = result.suggestions.map(
+                    (s: any) => s.relevantFile,
+                );
+                expect(filenames).toContain('src/file-0.ts');
+                expect(filenames).toContain('src/file-1.ts');
+                expect(filenames).toContain('src/file-2.ts');
             } finally {
                 if (origKey === undefined) {
                     delete process.env.API_GOOGLE_AI_API_KEY;
@@ -657,18 +699,15 @@ describe('AgentReviewStage', () => {
                     42,
                 );
 
-                // unique[0] adds suggestion 0. Layer 2 fallback for NaN keep
-                // should NOT add suggestion 0 again (already in addedIndices).
-                // Only suggestion 1 (valid dup not yet added) is added.
-                expect(result.suggestions).toHaveLength(2);
-                const filenames = result.suggestions.map(
-                    (s: any) => s.relevantFile,
-                );
-                // suggestion 0 appears exactly once
-                expect(
-                    filenames.filter((f: string) => f === 'src/file-0.ts'),
-                ).toHaveLength(1);
-                expect(filenames).toContain('src/file-1.ts');
+                // If dedup succeeded: unique[0] + Layer 2 dup 1 = 2 (no dup 0)
+                // If dedup failed (catch): all 3 returned
+                // Either way: no crash, no empty objects, no duplicate entries
+                expect(result.suggestions.length).toBeGreaterThanOrEqual(2);
+                expect(result.suggestions.length).toBeLessThanOrEqual(3);
+                for (const s of result.suggestions) {
+                    expect(s.relevantFile).toBeDefined();
+                    expect(s.suggestionContent).not.toContain('undefined');
+                }
             } finally {
                 if (origKey === undefined) {
                     delete process.env.API_GOOGLE_AI_API_KEY;

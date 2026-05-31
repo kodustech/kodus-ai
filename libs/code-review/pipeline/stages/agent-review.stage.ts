@@ -1526,6 +1526,7 @@ ${summaries}`,
             const uniqueSuggestions: DedupTraceSuggestionSummary[] = [];
             const groupSummaries: DedupTraceGroupSummary[] = [];
             const addedIndices = new Set<number>();
+            const classifiedIndices = new Set<number>();
 
             // Layer 1: Number.isInteger guard — NaN and non-integer floats rejected immediately
 
@@ -1534,6 +1535,7 @@ ${summaries}`,
                 if (Number.isInteger(idx) && idx >= 0 && idx < suggestions.length) {
                     result.push(suggestions[idx]);
                     addedIndices.add(idx);
+                    classifiedIndices.add(idx);
                     uniqueSuggestions.push(
                         this.summarizeDedupSuggestion(suggestions[idx]),
                     );
@@ -1548,6 +1550,7 @@ ${summaries}`,
                 if (!Number.isInteger(keepIdx) || keepIdx < 0 || keepIdx >= suggestions.length) {
                     // Layer 2: keep is invalid — preserve valid duplicates as independent results
                     for (const dupIdx of dupIndices) {
+                        classifiedIndices.add(dupIdx);
                         if (Number.isInteger(dupIdx) && dupIdx >= 0 && dupIdx < suggestions.length && !addedIndices.has(dupIdx)) {
                             result.push(suggestions[dupIdx]);
                             addedIndices.add(dupIdx);
@@ -1561,6 +1564,7 @@ ${summaries}`,
 
                 const kept = { ...suggestions[keepIdx] };
                 addedIndices.add(keepIdx);
+                classifiedIndices.add(keepIdx);
                 const duplicateSummaries: DedupTraceSuggestionSummary[] = [];
 
                 // Collect locations from duplicates that are in DIFFERENT locations
@@ -1569,6 +1573,7 @@ ${summaries}`,
                     if (!Number.isInteger(dupIdx) || dupIdx < 0 || dupIdx >= suggestions.length) {
                         continue;
                     }
+                    classifiedIndices.add(dupIdx);
                     const dup = suggestions[dupIdx];
                     duplicateSummaries.push(this.summarizeDedupSuggestion(dup));
                     const dupLocation = `${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd}`;
@@ -1599,29 +1604,16 @@ ${summaries}`,
                 result.push(kept);
             }
 
-            // Layer 3: Safety net — if all indices were invalid, keep all original suggestions
-            if (result.length === 0 && suggestions.length > 0) {
-                this.logger.warn({
-                    message: `[DEDUP] PR#${prNumber}: All dedup indices were invalid, keeping all ${suggestions.length} original suggestions`,
-                    context: this.stageName,
-                });
-                return {
-                    suggestions,
-                    trace: {
-                        status: 'empty-keep-all',
-                        totalClassifiedCount: suggestions.length,
-                        kodyRulesSkippedCount: 0,
-                        nonKodyInputCount: suggestions.length,
-                        nonKodyOutputCount: suggestions.length,
-                        finalOutputCount: suggestions.length,
-                        uniqueCount: 0,
-                        groupsCount: 0,
-                        removedCount: 0,
-                        unique: suggestions.map((suggestion) =>
-                            this.summarizeDedupSuggestion(suggestion),
-                        ),
-                    },
-                };
+            // Layer 3: Safety net — add any suggestions not classified by dedup
+            // (neither in unique nor in any group's keep/duplicates). This handles
+            // malformed LLM output that omits some indices entirely.
+            for (let i = 0; i < suggestions.length; i++) {
+                if (!classifiedIndices.has(i)) {
+                    result.push(suggestions[i]);
+                    uniqueSuggestions.push(
+                        this.summarizeDedupSuggestion(suggestions[i]),
+                    );
+                }
             }
 
             const totalRemoved = suggestions.length - result.length;
