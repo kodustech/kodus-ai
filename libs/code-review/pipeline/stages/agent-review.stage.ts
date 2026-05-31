@@ -1525,6 +1525,7 @@ ${summaries}`,
             const result: Partial<CodeSuggestion>[] = [];
             const uniqueSuggestions: DedupTraceSuggestionSummary[] = [];
             const groupSummaries: DedupTraceGroupSummary[] = [];
+            const addedIndices = new Set<number>();
 
             // Layer 1: Number.isInteger guard — NaN and non-integer floats rejected immediately
 
@@ -1532,6 +1533,7 @@ ${summaries}`,
             for (const idx of unique) {
                 if (Number.isInteger(idx) && idx >= 0 && idx < suggestions.length) {
                     result.push(suggestions[idx]);
+                    addedIndices.add(idx);
                     uniqueSuggestions.push(
                         this.summarizeDedupSuggestion(suggestions[idx]),
                     );
@@ -1546,8 +1548,9 @@ ${summaries}`,
                 if (!Number.isInteger(keepIdx) || keepIdx < 0 || keepIdx >= suggestions.length) {
                     // Layer 2: keep is invalid — preserve valid duplicates as independent results
                     for (const dupIdx of dupIndices) {
-                        if (Number.isInteger(dupIdx) && dupIdx >= 0 && dupIdx < suggestions.length) {
+                        if (Number.isInteger(dupIdx) && dupIdx >= 0 && dupIdx < suggestions.length && !addedIndices.has(dupIdx)) {
                             result.push(suggestions[dupIdx]);
+                            addedIndices.add(dupIdx);
                             uniqueSuggestions.push(
                                 this.summarizeDedupSuggestion(suggestions[dupIdx]),
                             );
@@ -1557,6 +1560,7 @@ ${summaries}`,
                 }
 
                 const kept = { ...suggestions[keepIdx] };
+                addedIndices.add(keepIdx);
                 const duplicateSummaries: DedupTraceSuggestionSummary[] = [];
 
                 // Collect locations from duplicates that are in DIFFERENT locations

@@ -636,5 +636,46 @@ describe('AgentReviewStage', () => {
                 }
             }
         });
+
+        it('should not emit duplicate suggestions when index appears in both unique and group duplicates', async () => {
+            const suggestions = makeSuggestions(3);
+
+            mockTracedGenerateText.mockResolvedValue({
+                object: {
+                    groups: [{ keep: NaN, duplicates: [0, 1] }],
+                    unique: [0],
+                },
+                usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+            });
+
+            const origKey = process.env.API_GOOGLE_AI_API_KEY;
+            process.env.API_GOOGLE_AI_API_KEY = 'test-key';
+
+            try {
+                const result = await (stage as any).deduplicateSuggestions(
+                    suggestions,
+                    42,
+                );
+
+                // unique[0] adds suggestion 0. Layer 2 fallback for NaN keep
+                // should NOT add suggestion 0 again (already in addedIndices).
+                // Only suggestion 1 (valid dup not yet added) is added.
+                expect(result.suggestions).toHaveLength(2);
+                const filenames = result.suggestions.map(
+                    (s: any) => s.relevantFile,
+                );
+                // suggestion 0 appears exactly once
+                expect(
+                    filenames.filter((f: string) => f === 'src/file-0.ts'),
+                ).toHaveLength(1);
+                expect(filenames).toContain('src/file-1.ts');
+            } finally {
+                if (origKey === undefined) {
+                    delete process.env.API_GOOGLE_AI_API_KEY;
+                } else {
+                    process.env.API_GOOGLE_AI_API_KEY = origKey;
+                }
+            }
+        });
     });
 });
