@@ -716,5 +716,48 @@ describe('AgentReviewStage', () => {
                 }
             }
         });
+
+        it('should not emit duplicate when valid group keep overlaps with Layer 2 fallback', async () => {
+            const suggestions = makeSuggestions(2);
+
+            // Invalid group adds dup 0 via Layer 2, then valid group keeps 0 again
+            mockTracedGenerateText.mockResolvedValue({
+                object: {
+                    groups: [
+                        { keep: NaN, duplicates: [0] },
+                        { keep: 0, duplicates: [1] },
+                    ],
+                    unique: [],
+                },
+                usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+            });
+
+            const origKey = process.env.API_GOOGLE_AI_API_KEY;
+            process.env.API_GOOGLE_AI_API_KEY = 'test-key';
+
+            try {
+                const result = await (stage as any).deduplicateSuggestions(
+                    suggestions,
+                    42,
+                );
+
+                // Layer 2 adds suggestion 0 (from NaN group dup).
+                // Valid group { keep: 0 } should skip (already added).
+                // Layer 3: suggestion 1 classified as dup by valid group → not added.
+                // Result: only suggestion 0.
+                const filenames = result.suggestions.map(
+                    (s: any) => s.relevantFile,
+                );
+                expect(
+                    filenames.filter((f: string) => f === 'src/file-0.ts'),
+                ).toHaveLength(1);
+            } finally {
+                if (origKey === undefined) {
+                    delete process.env.API_GOOGLE_AI_API_KEY;
+                } else {
+                    process.env.API_GOOGLE_AI_API_KEY = origKey;
+                }
+            }
+        });
     });
 });

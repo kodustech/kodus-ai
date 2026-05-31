@@ -1562,6 +1562,17 @@ ${summaries}`,
                     continue;
                 }
 
+                // Skip if this keep was already added by Layer 2 (malformed groups with overlapping indices)
+                if (addedIndices.has(keepIdx)) {
+                    // Still classify the duplicates so Layer 3 doesn't re-add them
+                    for (const dupIdx of dupIndices) {
+                        if (Number.isInteger(dupIdx) && dupIdx >= 0 && dupIdx < suggestions.length) {
+                            classifiedIndices.add(dupIdx);
+                        }
+                    }
+                    continue;
+                }
+
                 const kept = { ...suggestions[keepIdx] };
                 addedIndices.add(keepIdx);
                 classifiedIndices.add(keepIdx);
