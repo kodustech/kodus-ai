@@ -9,6 +9,26 @@ import { CodeReviewPipelineContext } from '@/code-review/pipeline/context/code-r
 import { PlatformType } from '@/core/domain/enums';
 import { CodeReviewVersion } from '@/core/domain/enums/code-review.enum';
 
+const mockTracedGenerateText = jest.fn();
+const mockWithStructuredOutputFallback = jest.fn();
+
+jest.mock(
+    '@libs/code-review/infrastructure/agents/llm/agent-loop',
+    () => ({
+        tracedGenerateText: (...args: any[]) => mockTracedGenerateText(...args),
+    }),
+);
+
+jest.mock(
+    '@libs/code-review/infrastructure/agents/llm/byok-to-vercel',
+    () => ({
+        withStructuredOutputFallback: (...args: any[]) =>
+            mockWithStructuredOutputFallback(...args),
+        NoStructuredFallbackModelError: class extends Error {},
+        getModelName: jest.fn().mockReturnValue('test-model'),
+    }),
+);
+
 jest.mock('ai', () => ({
     generateText: jest.fn().mockResolvedValue({
         object: { classifications: [] },
@@ -450,5 +470,155 @@ describe('AgentReviewStage', () => {
             expect(result.fileAnalysisResults[0].validSuggestionsToAnalyze).toHaveLength(1);
         });
 
+    });
+
+    describe('deduplicateSuggestions - NaN index handling (three-layer protection)', () => {
+        const makeSuggestions = (count: number) =>
+            Array.from({ length: count }, (_, i) => ({
+                relevantFile: `src/file-${i}.ts`,
+                suggestionContent: `Suggestion ${i}`,
+                label: 'bug',
+                severity: 'high',
+                relevantLinesStart: i * 10,
+                relevantLinesEnd: i * 10 + 5,
+                oneSentenceSummary: `Summary ${i}`,
+            }));
+
+        beforeEach(() => {
+            mockTracedGenerateText.mockReset();
+            mockWithStructuredOutputFallback.mockReset();
+        });
+
+        it('Layer 1: should reject NaN keep index', async () => {
+            const suggestions = makeSuggestions(4);
+
+            mockTracedGenerateText.mockResolvedValue({
+                object: {
+                    groups: [{ keep: NaN, duplicates: [1, 2] }],
+                    unique: [0],
+                },
+                usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+            });
+
+            const origKey = process.env.API_GOOGLE_AI_API_KEY;
+            process.env.API_GOOGLE_AI_API_KEY = 'test-key';
+
+            try {
+                const result = await (stage as any).deduplicateSuggestions(
+                    suggestions,
+                    42,
+                );
+
+                // Layer 1: NaN keep rejected → Layer 2: valid dups (1, 2) preserved
+                // unique[0] + dup 1 + dup 2 = 3
+                expect(result.suggestions).toHaveLength(3);
+                for (const s of result.suggestions) {
+                    expect(s.relevantFile).toBeDefined();
+                    expect(s.suggestionContent).not.toContain('undefined');
+                }
+            } finally {
+                process.env.API_GOOGLE_AI_API_KEY = origKey;
+            }
+        });
+
+        it('Layer 2: should preserve valid duplicates when keep is invalid', async () => {
+            const suggestions = makeSuggestions(3);
+
+            mockTracedGenerateText.mockResolvedValue({
+                object: {
+                    groups: [{ keep: NaN, duplicates: [0, 2] }],
+                    unique: [],
+                },
+                usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+            });
+
+            const origKey = process.env.API_GOOGLE_AI_API_KEY;
+            process.env.API_GOOGLE_AI_API_KEY = 'test-key';
+
+            try {
+                const result = await (stage as any).deduplicateSuggestions(
+                    suggestions,
+                    42,
+                );
+
+                // keep=NaN → invalid, but dup 0 and 2 are valid → preserved
+                expect(result.suggestions).toHaveLength(2);
+                const filenames = result.suggestions.map(
+                    (s: any) => s.relevantFile,
+                );
+                expect(filenames).toContain('src/file-0.ts');
+                expect(filenames).toContain('src/file-2.ts');
+            } finally {
+                process.env.API_GOOGLE_AI_API_KEY = origKey;
+            }
+        });
+
+        it('Layer 3: should keep all suggestions when all dedup indices are invalid', async () => {
+            const suggestions = makeSuggestions(3);
+
+            mockTracedGenerateText.mockResolvedValue({
+                object: {
+                    groups: [
+                        { keep: NaN, duplicates: [NaN] },
+                        { keep: NaN, duplicates: [NaN] },
+                    ],
+                    unique: [NaN],
+                },
+                usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+            });
+
+            const origKey = process.env.API_GOOGLE_AI_API_KEY;
+            process.env.API_GOOGLE_AI_API_KEY = 'test-key';
+
+            try {
+                const result = await (stage as any).deduplicateSuggestions(
+                    suggestions,
+                    42,
+                );
+
+                // Layer 3: all indices invalid → result would be empty → safety net keeps all
+                expect(result.suggestions).toHaveLength(3);
+                expect(result.trace.status).toBe('empty-keep-all');
+            } finally {
+                process.env.API_GOOGLE_AI_API_KEY = origKey;
+            }
+        });
+
+        it('should handle valid indices correctly (regression)', async () => {
+            const suggestions = makeSuggestions(4);
+
+            mockTracedGenerateText.mockResolvedValue({
+                object: {
+                    groups: [{ keep: 0, duplicates: [1] }],
+                    unique: [2, 3],
+                },
+                usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
+            });
+
+            const origKey = process.env.API_GOOGLE_AI_API_KEY;
+            process.env.API_GOOGLE_AI_API_KEY = 'test-key';
+
+            try {
+                const result = await (stage as any).deduplicateSuggestions(
+                    suggestions,
+                    42,
+                );
+
+                expect(result.suggestions).toHaveLength(3);
+                const filenames = result.suggestions.map(
+                    (s: any) => s.relevantFile,
+                );
+                expect(filenames).toContain('src/file-0.ts');
+                expect(filenames).toContain('src/file-2.ts');
+                expect(filenames).toContain('src/file-3.ts');
+
+                const file0 = result.suggestions.find(
+                    (s: any) => s.relevantFile === 'src/file-0.ts',
+                );
+                expect(file0.suggestionContent).toContain('src/file-1.ts');
+            } finally {
+                process.env.API_GOOGLE_AI_API_KEY = origKey;
+            }
+        });
     });
 });

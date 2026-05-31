@@ -1526,9 +1526,11 @@ ${summaries}`,
             const uniqueSuggestions: DedupTraceSuggestionSummary[] = [];
             const groupSummaries: DedupTraceGroupSummary[] = [];
 
+            // Layer 1: Number.isInteger guard — NaN and non-integer floats rejected immediately
+
             // Add unique suggestions as-is
             for (const idx of unique) {
-                if (idx >= 0 && idx < suggestions.length) {
+                if (Number.isInteger(idx) && idx >= 0 && idx < suggestions.length) {
                     result.push(suggestions[idx]);
                     uniqueSuggestions.push(
                         this.summarizeDedupSuggestion(suggestions[idx]),
@@ -1541,7 +1543,16 @@ ${summaries}`,
                 const keepIdx = group.keep;
                 const dupIndices = group.duplicates || [];
 
-                if (keepIdx < 0 || keepIdx >= suggestions.length) {
+                if (!Number.isInteger(keepIdx) || keepIdx < 0 || keepIdx >= suggestions.length) {
+                    // Layer 2: keep is invalid — preserve valid duplicates as independent results
+                    for (const dupIdx of dupIndices) {
+                        if (Number.isInteger(dupIdx) && dupIdx >= 0 && dupIdx < suggestions.length) {
+                            result.push(suggestions[dupIdx]);
+                            uniqueSuggestions.push(
+                                this.summarizeDedupSuggestion(suggestions[dupIdx]),
+                            );
+                        }
+                    }
                     continue;
                 }
 
@@ -1551,7 +1562,7 @@ ${summaries}`,
                 // Collect locations from duplicates that are in DIFFERENT locations
                 const otherLocations: string[] = [];
                 for (const dupIdx of dupIndices) {
-                    if (dupIdx < 0 || dupIdx >= suggestions.length) {
+                    if (!Number.isInteger(dupIdx) || dupIdx < 0 || dupIdx >= suggestions.length) {
                         continue;
                     }
                     const dup = suggestions[dupIdx];
@@ -1582,6 +1593,31 @@ ${summaries}`,
                     duplicates: duplicateSummaries,
                 });
                 result.push(kept);
+            }
+
+            // Layer 3: Safety net — if all indices were invalid, keep all original suggestions
+            if (result.length === 0 && suggestions.length > 0) {
+                this.logger.warn({
+                    message: `[DEDUP] PR#${prNumber}: All dedup indices were invalid, keeping all ${suggestions.length} original suggestions`,
+                    context: this.stageName,
+                });
+                return {
+                    suggestions,
+                    trace: {
+                        status: 'empty-keep-all',
+                        totalClassifiedCount: suggestions.length,
+                        kodyRulesSkippedCount: 0,
+                        nonKodyInputCount: suggestions.length,
+                        nonKodyOutputCount: suggestions.length,
+                        finalOutputCount: suggestions.length,
+                        uniqueCount: 0,
+                        groupsCount: 0,
+                        removedCount: 0,
+                        unique: suggestions.map((suggestion) =>
+                            this.summarizeDedupSuggestion(suggestion),
+                        ),
+                    },
+                };
             }
 
             const totalRemoved = suggestions.length - result.length;
