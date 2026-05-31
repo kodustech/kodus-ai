@@ -617,5 +617,59 @@ describe('AgentReviewStage', () => {
                 mockAutomationService.updateCodeReview.mock.calls[0][1].status,
             ).toBe('in_progress');
         });
+
+        it('terminal event (completed) with NO existing record should still create via fallback', async () => {
+            mockAutomationService.findLatestStageLog.mockResolvedValue(null);
+            mockAutomationService.updateCodeReview.mockResolvedValue({
+                execution: { uuid: 'exec-1' },
+                stageLog: { uuid: 'log-1' },
+            });
+
+            await (stage as any).writeAgentTrace(
+                'exec-1',
+                42,
+                'repo-1',
+                'AgentReview::generalist',
+                makeEvent('completed', { findings: 5, durationMs: 3000 }),
+                'Agent — 5 findings 3.0s',
+                new Map(),
+            );
+
+            // Terminal events must create a record even when no existing log found
+            expect(
+                mockAutomationService.updateCodeReview,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                mockAutomationService.updateCodeReview.mock.calls[0][1].status,
+            ).toBe('success');
+        });
+
+        it('terminal event (error) with NO existing record should still create via fallback', async () => {
+            mockAutomationService.findLatestStageLog.mockResolvedValue(null);
+            mockAutomationService.updateCodeReview.mockResolvedValue({
+                execution: { uuid: 'exec-1' },
+                stageLog: { uuid: 'log-1' },
+            });
+
+            await (stage as any).writeAgentTrace(
+                'exec-1',
+                42,
+                'repo-1',
+                'AgentReview::generalist',
+                makeEvent('error', {
+                    errorMessage: 'timeout',
+                    finishReason: 'timeout',
+                }),
+                'Agent — failed 5.0s (timeout)',
+                new Map(),
+            );
+
+            expect(
+                mockAutomationService.updateCodeReview,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                mockAutomationService.updateCodeReview.mock.calls[0][1].status,
+            ).toBe('error');
+        });
     });
 });

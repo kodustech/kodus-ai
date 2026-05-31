@@ -1876,15 +1876,29 @@ ${summaries}`,
                         existing.uuid,
                         updateData,
                     );
-                } else {
-                    // No existing record found — skip creating a new one.
-                    // In chunked mode, batch_started fires before the recursive
-                    // execute() emits started. Both are fire-and-forget, so
-                    // batch_started's findLatestStageLog may run before started
-                    // creates the initial record. Creating a fallback here would
-                    // produce an orphaned IN_PROGRESS record that never gets
-                    // updated. The completed event will create the final record.
+                } else if (
+                    status === AutomationStatus.SUCCESS ||
+                    status === AutomationStatus.ERROR
+                ) {
+                    // Fallback for terminal events (completed/error) that raced
+                    // ahead of 'started', or where 'started' failed to emit.
+                    // Without this, the final SUCCESS/ERROR state and agentTrace
+                    // metadata would be silently dropped.
+                    await this.automationExecutionService.updateCodeReview(
+                        filter,
+                        { status },
+                        label,
+                        stageName,
+                        metadata,
+                    );
                 }
+                // Non-terminal events (batch_started, investigating, etc.) with
+                // no existing record are silently skipped. In chunked mode,
+                // batch_started fires before the recursive execute() emits
+                // started — both are fire-and-forget, so batch_started's
+                // findLatestStageLog may run before started creates the initial
+                // record. Creating a fallback here would produce an orphaned
+                // IN_PROGRESS record that never gets updated.
             }
         } catch {
             // Best effort
