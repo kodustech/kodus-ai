@@ -517,7 +517,11 @@ describe('AgentReviewStage', () => {
                     expect(s.suggestionContent).not.toContain('undefined');
                 }
             } finally {
-                process.env.API_GOOGLE_AI_API_KEY = origKey;
+                if (origKey === undefined) {
+                    delete process.env.API_GOOGLE_AI_API_KEY;
+                } else {
+                    process.env.API_GOOGLE_AI_API_KEY = origKey;
+                }
             }
         });
 
@@ -549,7 +553,11 @@ describe('AgentReviewStage', () => {
                 expect(filenames).toContain('src/file-0.ts');
                 expect(filenames).toContain('src/file-2.ts');
             } finally {
-                process.env.API_GOOGLE_AI_API_KEY = origKey;
+                if (origKey === undefined) {
+                    delete process.env.API_GOOGLE_AI_API_KEY;
+                } else {
+                    process.env.API_GOOGLE_AI_API_KEY = origKey;
+                }
             }
         });
 
@@ -580,7 +588,11 @@ describe('AgentReviewStage', () => {
                 expect(result.suggestions).toHaveLength(3);
                 expect(result.trace.status).toBe('empty-keep-all');
             } finally {
-                process.env.API_GOOGLE_AI_API_KEY = origKey;
+                if (origKey === undefined) {
+                    delete process.env.API_GOOGLE_AI_API_KEY;
+                } else {
+                    process.env.API_GOOGLE_AI_API_KEY = origKey;
+                }
             }
         });
 
@@ -617,7 +629,11 @@ describe('AgentReviewStage', () => {
                 );
                 expect(file0.suggestionContent).toContain('src/file-1.ts');
             } finally {
-                process.env.API_GOOGLE_AI_API_KEY = origKey;
+                if (origKey === undefined) {
+                    delete process.env.API_GOOGLE_AI_API_KEY;
+                } else {
+                    process.env.API_GOOGLE_AI_API_KEY = origKey;
+                }
             }
         });
     });
