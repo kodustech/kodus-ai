@@ -6828,7 +6828,7 @@ This is an experimental feature that generates committable changes. Review the d
     }
     //#endregion
 
-    formatReviewCommentBody(params: {
+    async formatReviewCommentBody(params: {
         suggestion: any;
         repository: { name: string; id: string; language: string };
         includeHeader?: boolean;
@@ -6891,7 +6891,7 @@ This is an experimental feature that generates committable changes. Review the d
                     params.organizationAndTeamData,
                     params.repository.id,
                 );
-            if (fineTuningConfig.enabled) {
+            if (fineTuningConfig.value) {
                 commentBody +=
                     this.formatSub(translations.feedback) +
                     '<!-- kody-codereview -->&#8203;\n&#8203;';
