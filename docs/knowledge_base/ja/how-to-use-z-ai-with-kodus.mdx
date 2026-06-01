@@ -1,0 +1,210 @@
+---
+title: "Z.AI (GLM Coding Plan) - サブスクリプションベースの推論"
+description: "GLM Coding Plan サブスクリプションを含む、Z.AI の GLM モデルを Kodus に接続する方法を学びます。"
+icon: "bolt"
+---
+
+## Z.AI の動作方法
+
+Z.AI（Zhipu AI によって開発）は GLM ファミリーのモデルを提供します。API アクセスに**定額サブスクリプション**を提供している数少ない主要プロバイダーの1つです：**GLM Coding Plan** は、トークンごとの課金ではなく5時間および週次ウィンドウに適用されるレート制限で、固定月額料金でモデル使用量をバンドルします。
+
+より大量または変動するワークロードには、Z.AI は標準 Developer API で同じモデルへのペイパートークンアクセスも提供しています。
+
+両方のパスは OpenAI 互換エンドポイントを公開しているため、Kodus は `OpenAI Compatible` プロバイダー（または BYOK のキュレートされた **GLM 5.1** カードを介して直接）を通じて通信します。
+
+## プランの概要
+
+<Info>
+  価格とクォータは定期的に変更されます。ティアを選択する前に、[z.ai/subscribe](https://z.ai/subscribe) と [docs.z.ai](https://docs.z.ai/devpack/overview) で最新の数値を必ず確認してください。
+</Info>
+
+### GLM Coding Plan（サブスクリプション）
+
+| ティア | 価格（月額換算） | API バリュー換算の概算 | 同時実行数 |
+| ---- | -------------------------- | -------------------------------- | ----------- |
+| **Lite** | 約$18/月（四半期課金） | 月額料金の約15倍 | 約1 concurrent |
+| **Pro**  | 約$30/月（四半期課金） | 月額料金の約20倍 | 約1 concurrent |
+| **Max**  | 約$80/月（四半期課金） | 月額料金の約30倍 | 最大30 concurrent |
+
+- クォータはローリング**5時間**ウィンドウと**週次**ウィンドウでリセットされます — 月次上限ではなくその上限を念頭に計画してください。
+- カバレッジには GLM-5.1、GLM-5-Turbo、GLM-5、GLM-4.5、GLM-4.5-Air が含まれます。
+- 専用エンドポイント：`https://api.z.ai/api/coding/paas/v4` — Coding Plan キーは**ここでのみ動作**します。
+
+### ペイパートークン Developer API
+
+| モデル | 価格（入力/出力トークン 100万当たり） | コンテキストウィンドウ |
+| ----- | ---------------------------------- | -------------- |
+| **GLM-5.1** `推奨` | $0.95 / $3.15 | 約200kトークン |
+| **GLM-5**      | $0.72 / $2.30 | 約131kトークン |
+| **GLM-4.5**    | $0.60 / $2.20 | 約128kトークン |
+| **GLM-4.5-Air** | より低い価格帯、ルーティング最適化 | 約128kトークン |
+
+標準エンドポイント：`https://api.z.ai/api/paas/v4/`（OpenAI 互換）。
+
+## APIキーの作成
+
+<Warning>APIキーを作成するには Z.AI アカウントが必要です。</Warning>
+
+<Tabs>
+  <Tab title="Coding Plan サブスクライバー">
+    1. [z.ai](https://z.ai) にサインインします。
+    2. [z.ai/subscribe](https://z.ai/subscribe) で **GLM Coding Plan** ティアを購入します。
+    3. サブスクリプションのキー管理ページを開き、Coding Plan キーを作成します。
+    4. キーをコピーします — 再度見ることはできません。
+
+    <Note>
+      Coding Plan キーは `/api/coding/paas/v4` エンドポイントに紐づいています。標準の `/api/paas/v4/` エンドポイントに対して送信すると**401 を返します**。
+    </Note>
+  </Tab>
+
+  <Tab title="Developer API（ペイパートークン）">
+    1. [z.ai](https://z.ai) にサインインします。
+    2. [z.ai/manage-apikey/apikey-list](https://z.ai/manage-apikey/apikey-list) で **API Keys** セクションを開きます。
+    3. **Create API Key** をクリックし、説明的な名前（例：`kodus-prod`）を付けてキーをコピーします。
+
+    <Note>
+      Developer API キーは `/api/paas/v4/` エンドポイントに紐づいています。
+    </Note>
+  </Tab>
+</Tabs>
+
+## Kodus で Z.AI を設定する
+
+主なフローは Kodus Cloud での BYOK です — キュレートされた **GLM 5.1** カードがエンドポイントの切り替えを処理します。プロセスレベルでプロバイダーを固定することを好むセルフホストユーザーは、代わりに環境変数を使用できます。
+
+### オプション1 — Kodus Cloud での BYOK（推奨）
+
+<Steps>
+  <Step title="BYOK を開き GLM 5.1 を選択">
+    [app.kodus.io/organization/byok](https://app.kodus.io/organization/byok) にアクセスし、メインモデルセクションの **GLM 5.1** カードをクリックします。
+  </Step>
+
+  <Step title="プランを選択">
+    カードは **Plan** セレクターとともに展開します。以下を選択します：
+    - **Developer API** — キーが [z.ai/manage-apikey](https://z.ai/manage-apikey/apikey-list) からの場合
+    - **Coding Plan** — キーが [GLM Coding Plan サブスクリプション](https://z.ai/subscribe) からの場合
+
+    ベース URL と "Get a key" リンクは自動的にプランに合わせて更新されます。
+  </Step>
+
+  <Step title="APIキーを貼り付ける">
+    キーのみ — 他に設定するものはありません。Coding Plan ユーザーの場合、Kodus は Advanced settings に `maxConcurrentRequests=1` を事前入力し、これは Lite/Pro ティアの制限と一致します。Max ティアの場合は 30 に増やしてください。
+  </Step>
+
+  <Step title="Test & save">
+    **Test & save** をクリックします。Kodus は安価なメタデータ呼び出しでエンドポイントをプローブし、成功時に設定を保存します。401 はキーが選択したプランのエンドポイントと一致しないことを意味し、404 はベース URL が間違っていることを意味します。
+  </Step>
+</Steps>
+
+### Reasoning のチューニング（任意）
+
+キュレートされた GLM 5.1 カードは **Thinking: Medium** を事前入力し、これは OpenAI 互換プロバイダーでは `thinking: { type: "enabled" }` を生成します。ほとんどのワークロードではこれで問題ありません。オーバーライドする2つのケース：
+
+- **特定のトークン予算を強制** — Advanced settings で **Thinking** を **Custom** に切り替え、以下を貼り付け：
+
+  ```json
+  {
+    "thinking": { "type": "enabled", "budget_tokens": 20000 }
+  }
+  ```
+
+- **thinking を無効化** — 小さな PR で最速/最安のレビューのために：
+
+  ```json
+  {
+    "thinking": { "type": "disabled" }
+  }
+  ```
+
+<Note>
+  名前空間のラップは不要です — Kodus が送信前に `openaiCompatible`（アクティブなプロバイダー）で自動ラップします。詳しくは [main BYOK doc → Custom JSON override](/how_to_use/ja/byok#custom-json-override) を参照してください。
+</Note>
+
+### 同時実行数のチューニング
+
+- **Coding Plan Lite / Pro**：事前入力された `maxConcurrentRequests=1` を維持します。それ以上にすると `429 Too much concurrency` を返します。
+- **Coding Plan Max**：最初に `5` に上げ、429 が発生しなければ最大 `30` まで。Max ティアは最大30 concurrent を許可します。
+- **Developer API**：空のまま開始（制限なし）。レート制限エラーが発生したら `5` に下げ、その後調整します。
+
+<Note>
+  GLM 5.1 を**メイン**モデルとして設定し、OpenAI または Anthropic キーを**フォールバック**として保持することで、Coding Plan の5時間ウィンドウが枯渇してもレビューが継続されます。Kodus は自動的にフェイルオーバーします。
+</Note>
+
+### オプション2 — 手動設定
+
+キュレートされたカタログにない GLM バリアント（例：GLM-5 または GLM-4.5）が必要な場合、カタログ下部の **Configure manually** をクリックして以下を入力します：
+
+| フィールド | 値 |
+| --- | --- |
+| **プロバイダー** | `OpenAI Compatible` |
+| **ベース URL** | `https://api.z.ai/api/coding/paas/v4`（Coding Plan）<br />`https://api.z.ai/api/paas/v4/`（Developer API） |
+| **モデル** | `glm-5.1`、`glm-5`、`glm-5-turbo`、`glm-4.5`、`glm-4.5-air` |
+| **APIキー** | Z.AI キー（上記のベース URL と一致） |
+| **Max Concurrent Requests** | Lite/Pro Coding Plan では `1`；Max では最大 `30`；Developer API では空のまま |
+
+### オプション3 — セルフホスト（環境変数）
+
+固定モード（単一グローバルプロバイダー、組織ごとの BYOK なし）で Kodus を実行している場合は、API とワーカーコンテナの `.env` で Z.AI を設定します：
+
+```env
+# Z.AI configuration (Fixed Mode)
+API_LLM_PROVIDER_MODEL="glm-5.1"                                  # any GLM model you have access to
+API_OPENAI_FORCE_BASE_URL="https://api.z.ai/api/coding/paas/v4"   # use /api/paas/v4/ for pay-per-token
+API_OPEN_AI_API_KEY="your-z-ai-api-key"
+```
+
+<Note>
+  このパスは意図的に BYOK を無効にしているセルフホスト Kodus インストールにのみ必要です。セルフホストインスタンスで BYOK が有効な場合は、**オプション1**を優先してください — キュレートされたカードがエンドポイントのロジックを処理します。
+</Note>
+
+`.env` を編集後、API とワーカーコンテナを再起動して統合を確認します：
+
+```bash
+docker-compose logs api worker | grep -iE "z\.ai|glm"
+```
+
+完全なセルフホストセットアップ（ドメイン、セキュリティキー、データベース、Webhook、リバースプロキシ）については、[汎用VMデプロイガイド](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm) に従い、LLM ブロックのみ上記のものと置き換えてください。
+
+## Coding Plan とペイパートークンの選択
+
+- 予測可能なレビュアーチームがあり、定額月額コストを希望する場合は **Coding Plan** を選択します。5時間および週次クォータは、サブスクリプション料金に対して約15〜30倍の同等 API 支出に相当します。
+- トラフィックがバースト的な場合、最大コンテキストウィンドウへの不定期アクセスが必要な場合、または PR ボリュームに応じてコストを線形にスケールしたい場合は**ペイパートークン**を選択します。
+- **ペアにする**：Coding Plan をメインとして使用し、サブスクリプションウィンドウを枯渇させるバーストをカバーするため、Developer API キー（または完全に異なるプロバイダー）をフォールバックとして使用します。
+
+## トラブルシューティング
+
+<AccordionGroup>
+  <Accordion title="Test 後の 401 — キーがエンドポイントと一致しない">
+    - Coding Plan キーは `/api/coding/paas/v4` でのみ動作します。Developer API キーは `/api/paas/v4/` でのみ動作します。
+    - キュレートされたカードでは、**Plan** セレクターがキータイプと一致することを確認してください。
+    - 手動モードでは、ベース URL がキーの出所と一致することを確認してください。
+  </Accordion>
+
+  <Accordion title="レビュー時の 'Too much concurrency'">
+    - Lite および Pro Coding Plan ティアは通常、**1 concurrent リクエスト**のみを許可します。Kodus がこれを事前入力します；Max でのみ上げてください。
+    - まだ 429 にヒットしている場合は、Advanced settings で **Max concurrent requests** を下げます。
+  </Accordion>
+
+  <Accordion title="Coding Plan でクォータ枯渇">
+    - クォータは**5時間ローリングウィンドウ**と**週次ウィンドウ**で適用されます。どちらかに達すると HTTP 429 を返します。
+    - Z.AI コンソールで残りのクォータを確認します。
+    - オプション：次のウィンドウを待つ、より高いティアにアップグレードする、またはギャップをカバーするために Developer API キーをフォールバックとして設定する。
+  </Accordion>
+
+  <Accordion title="モデルが見つからない">
+    - モデル ID が Z.AI のカタログと一致していることを確認します（`glm-5.1`、`glm-5-turbo`、`glm-5`、`glm-4.5`、`glm-4.5-air`）。
+    - Coding Plan は現在 GLM ファミリーのみをカバーしています — GLM 以外のモデル名は拒否されます。
+  </Accordion>
+
+  <Accordion title="接続エラー（タイムアウト、DNS）">
+    - サーバーが `api.z.ai` に到達できることを確認します。
+    - API とワーカーのログで正確な上流エラーを確認します。
+    - アウトバウンドトラフィックが制限されているリージョンにいる場合は、インフラが許可するリバースプロキシを通じてリクエストをルーティングします。
+  </Accordion>
+</AccordionGroup>
+
+## 関連リンク
+
+- [GLM Coding Plan（価格）](https://z.ai/subscribe)
+- [Z.AI 開発者ドキュメント](https://docs.z.ai/devpack/overview)
+- [BYOK の概要](/how_to_use/ja/byok)

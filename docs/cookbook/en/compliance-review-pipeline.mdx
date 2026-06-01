@@ -1,0 +1,150 @@
+---
+title: "PR review for compliance (SOC2, HIPAA)"
+description: "Configure Kody Rules and Memories to enforce audit trail, data handling, and access control requirements."
+icon: "file-shield"
+---
+
+## Why compliance needs automated review
+
+Compliance frameworks like SOC2, HIPAA, and GDPR require specific coding practices around data handling, access control, and audit logging. Manual reviews catch some violations, but they're inconsistent — especially when the reviewer isn't a security specialist.
+
+This cookbook sets up rules that enforce compliance requirements on every PR.
+
+## Step 1 — Define your compliance Memories
+
+Start by teaching Kody the high-level compliance principles:
+
+```
+@kody remember: we are SOC2 compliant. All data access must be logged
+with who accessed what, when, and from where.
+```
+
+```
+@kody remember: PII (personally identifiable information) must never
+appear in logs, error messages, or API responses. PII includes:
+name, email, phone, address, SSN, date of birth, IP address.
+```
+
+```
+@kody remember: all data at rest must be encrypted. Database fields
+containing PII must use application-level encryption.
+```
+
+```
+@kody remember: access control follows least privilege principle.
+New endpoints default to authenticated + authorized, never public.
+```
+
+## Step 2 — Create audit trail rules
+
+### Audit logging rule
+
+```
+Name: Data mutations must have audit logging
+Scope: File
+Paths: src/services/**/*.ts, src/repositories/**/*.ts
+Severity: Critical
+Instructions:
+  If fileDiff contains create, update, or delete operations
+  on user data or sensitive records, verify that an audit log
+  entry is created. Look for calls to auditService.log(),
+  AuditLogger, or @Audited decorator.
+  Reference @file:src/shared/audit/audit.service.ts for
+  the approved audit patterns.
+```
+
+### Data retention rule
+
+```
+Name: Soft delete required for user data
+Scope: File
+Paths: src/**/*.ts
+Severity: Critical
+Instructions:
+  Flag any hard delete (DELETE FROM, .delete(), .destroy())
+  on tables/collections that contain user data.
+  User data must use soft delete (deletedAt timestamp)
+  for compliance with data retention policies.
+```
+
+## Step 3 — Create data handling rules
+
+### PII exposure prevention
+
+```
+Name: No PII in logs or error responses
+Scope: File
+Paths: src/**/*.ts
+Severity: Critical
+Instructions:
+  Check fileDiff for logging statements (logger.*, console.*)
+  and error response builders that might include PII fields:
+  email, name, phone, address, ssn, dateOfBirth, ipAddress.
+  These must be redacted or excluded before logging/responding.
+```
+
+### Encryption requirement
+
+```
+Name: PII fields must use encryption helpers
+Scope: File
+Paths: src/entities/**/*.ts, src/models/**/*.ts
+Severity: Critical
+Instructions:
+  If fileDiff adds or modifies entity/model fields that contain
+  PII (see list above), verify they use the @Encrypted decorator
+  or encryptionService helper. Reference
+  @file:src/shared/encryption/encryption.service.ts.
+```
+
+## Step 4 — Create access control rules
+
+```
+Name: New endpoints must have auth guards
+Scope: Pull Request
+Severity: Critical
+Instructions:
+  Check pr_files_diff for new route definitions or controller
+  methods. Every new endpoint must include:
+  1. Authentication guard (@UseGuards(AuthGuard))
+  2. Authorization decorator (@Roles or @Permissions)
+  3. Rate limiting (@Throttle or equivalent)
+  If any endpoint is intentionally public, it must have
+  an explicit @Public() decorator with a code comment
+  explaining why.
+```
+
+## Step 5 — Add a PR-level compliance check
+
+```
+Name: Compliance impact assessment
+Scope: Pull Request
+Severity: High
+Instructions:
+  If pr_files_diff touches any file in src/entities/,
+  src/models/, or database migrations, check whether:
+  1. New fields handling PII are documented
+  2. Data flow changes are noted in pr_description
+  3. Privacy impact is considered
+  If the PR adds new data collection, flag it for
+  privacy review.
+```
+
+## Step 6 — Configure for enforcement
+
+1. Enable **Request Changes** so compliance violations block merge
+2. Set all compliance rules to **Critical** severity
+3. Use rule inheritance to apply compliance rules across all repos in the organization
+
+## Checklist
+
+- [ ] Compliance Memories teach the high-level principles
+- [ ] Audit logging rule covers all data mutation paths
+- [ ] PII exposure rule covers logs and error responses
+- [ ] Encryption rule covers entity/model definitions
+- [ ] Access control rule covers all new endpoints
+- [ ] Request Changes enabled for critical findings
+- [ ] Rules are set at organization level for consistency
+- [ ] A test PR verified the rules fire correctly
+
+For more on configuring rules, see [Kody Rules](/how_to_use/en/code_review/configs/kody_rules).

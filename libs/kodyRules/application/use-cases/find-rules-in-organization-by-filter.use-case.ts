@@ -18,6 +18,7 @@ import {
 import {
     IKodyRule,
     KodyRulesStatus,
+    KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 import { createLogger } from '@kodus/flow';
@@ -51,13 +52,24 @@ export class FindRulesInOrganizationByRuleFilterKodyRulesUseCase implements IUse
         directoryId?: string,
     ) {
         try {
+            let allowedRepoScope: string[] | null | undefined;
+
             if (this.request?.user) {
-                await this.authorizationService.ensure({
-                    user: this.request.user,
-                    action: Action.Read,
-                    resource: ResourceType.KodyRules,
-                    repoIds: [repositoryId],
-                });
+                if (repositoryId) {
+                    await this.authorizationService.ensure({
+                        user: this.request.user,
+                        action: Action.Read,
+                        resource: ResourceType.KodyRules,
+                        repoIds: [repositoryId],
+                    });
+                } else {
+                    allowedRepoScope =
+                        await this.authorizationService.getRepositoryScope({
+                            user: this.request.user,
+                            action: Action.Read,
+                            resource: ResourceType.KodyRules,
+                        });
+                }
             }
 
             const ruleFilters: Partial<IKodyRule>[] = [];
@@ -85,15 +97,23 @@ export class FindRulesInOrganizationByRuleFilterKodyRulesUseCase implements IUse
 
             let filteredRules = allRules;
 
+            if (Array.isArray(allowedRepoScope)) {
+                const allowed = new Set([...allowedRepoScope, 'global']);
+                filteredRules = filteredRules.filter(
+                    (rule) =>
+                        !rule.repositoryId || allowed.has(rule.repositoryId),
+                );
+            }
+
             if (repositoryId && !directoryId) {
-                filteredRules = allRules.filter(
+                filteredRules = filteredRules.filter(
                     (rule) =>
                         rule.repositoryId === 'global' ||
                         (rule.repositoryId === repositoryId &&
                             !rule.directoryId),
                 );
             } else if (repositoryId && directoryId) {
-                filteredRules = allRules.filter(
+                filteredRules = filteredRules.filter(
                     (rule) =>
                         rule.repositoryId === 'global' ||
                         (rule.repositoryId === repositoryId &&
@@ -116,7 +136,11 @@ export class FindRulesInOrganizationByRuleFilterKodyRulesUseCase implements IUse
 
             const rules = filteredByStatus.filter((rule) => {
                 for (const key in filter) {
-                    if (rule[key] !== filter[key]) {
+                    const actual =
+                        key === 'type'
+                            ? (rule.type ?? KodyRulesType.STANDARD)
+                            : rule[key];
+                    if (actual !== filter[key]) {
                         return false;
                     }
                 }

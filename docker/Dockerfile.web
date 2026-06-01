@@ -1,37 +1,75 @@
+# syntax=docker/dockerfile:1.7
 # Multi-stage production build for kodus-web (Next.js)
-# Used for both cloud production and QA builds
+# Used for both cloud production and QA builds.
+#
+# Build context: the monorepo root (NOT apps/web).
+# This is required because apps/web imports from `@libs/feature-gate/*`,
+# which resolves to `../../libs/*` via tsconfig paths. With the historical
+# `apps/web` context, the build couldn't see those files. The web's
+# `outputFileTracingRoot` is also pinned to the monorepo root, so the
+# standalone output uses repo-relative paths.
 
 # 1) Builder stage: install all deps and build
-FROM docker.io/library/node:22.22.0-slim AS builder
+FROM docker.io/library/node:22.22.2-slim AS builder
 WORKDIR /usr/src/app
 
 ARG RELEASE_VERSION=local
 ENV RELEASE_VERSION=${RELEASE_VERSION}
 
-COPY package.json yarn.lock ./
+# Yarn1's default 30s tarball timeout is too tight for slow paths to
+# registry.npmjs.org from the GHA runners. yarn1 reads `network-timeout`
+# from `.yarnrc` (the YARN_HTTP_TIMEOUT env var does NOT exist on yarn1).
+RUN echo 'network-timeout 600000' > /root/.yarnrc
 
-RUN yarn install --frozen-lockfile --production=false
+# Install web deps first so the cache layer stays warm even if other
+# parts of the monorepo change. apps/web has its own package.json — the
+# repo isn't using yarn workspaces.
+COPY apps/web/package.json apps/web/yarn.lock ./apps/web/
 
-COPY . .
+RUN --mount=type=cache,target=/yarn-cache,sharing=locked \
+    YARN_CACHE_FOLDER=/yarn-cache \
+    cd apps/web && yarn install --frozen-lockfile --production=false
+
+# Copy only what the Next build actually needs:
+#   - apps/web — the app itself
+#   - libs/feature-gate — imported via `@libs/*` tsconfig path
+#   - release/features-snapshot.json — read at runtime by the lib loader
+# Anything else in the repo (apps/api, libs/code-review, etc.) would just
+# bloat the build context without being touched by Next.
+COPY apps/web ./apps/web
+COPY libs/feature-gate ./libs/feature-gate
+COPY release/features-snapshot.json ./release/features-snapshot.json
+
+WORKDIR /usr/src/app/apps/web
 RUN yarn build
 
 # 2) Production stage: only the final artifacts
-FROM docker.io/library/node:22.22.0-slim AS production
+FROM docker.io/library/node:22.22.2-slim AS production
 
-RUN apt-get update && apt-get install -y curl
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends curl
 
 WORKDIR /usr/src/app
 
 ENV NODE_ENV=production
 ENV WEB_NODE_ENV=production
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 
-COPY --from=builder /usr/src/app/.next ./.next
-COPY --from=builder /usr/src/app/node_modules ./node_modules
-COPY --from=builder /usr/src/app/package.json ./
-COPY --from=builder /usr/src/app/public ./public
+# `next build` with `outputFileTracingRoot=<monorepo-root>` emits the
+# standalone bundle under apps/web/.next/standalone/, with file paths
+# relative to that tracing root. The bundle's entry is at
+# `apps/web/server.js`, with required `node_modules/` and traced libs/
+# laid out alongside.
+COPY --from=builder --chown=1000:1000 /usr/src/app/apps/web/.next/standalone ./
+COPY --from=builder --chown=1000:1000 /usr/src/app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder --chown=1000:1000 /usr/src/app/apps/web/public ./apps/web/public
 
-COPY .env .env
+USER 1000
 
 EXPOSE 3000
 
-CMD ["yarn", "start"]
+CMD ["node", "apps/web/server.js"]

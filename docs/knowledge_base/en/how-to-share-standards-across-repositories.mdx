@@ -1,0 +1,44 @@
+---
+title: "How to share coding standards across repositories"
+description: "Use rule inheritance and organization-level rules to maintain consistent coding standards across all your repositories."
+---
+
+When you have multiple repositories, keeping coding standards consistent is a challenge. Kodus supports rule inheritance so you can define rules once and apply them everywhere.
+
+## Organization-level rules
+
+Create rules at the organization level and they automatically apply to all repositories:
+
+1. Go to **Code Review Settings** → **Global** → **Kody Rules**
+2. Create your rules — they apply to every repository in the organization
+3. Individual repositories can inherit, override, or exclude specific rules
+
+## Rule inheritance
+
+Rules flow down from organization → repository → directory:
+
+- **Organization rules** apply everywhere by default
+- **Repository rules** can override or extend organization rules
+- **Directory rules** can further specialize for specific paths
+
+A repository can **exclude** an inherited rule if it doesn't apply to that codebase.
+
+## Cross-repository references
+
+Use `@repo:org/project` in rule instructions to reference files from other repositories:
+
+```
+Ensure API endpoints follow the pattern defined in @repo:team/api-standards.
+```
+
+This lets you maintain a central standards repository that all rules reference.
+
+## Memories across the organization
+
+Memories scoped to **organization level** apply across all repositories. For example:
+
+```
+@kody remember: across all repos, we use ESLint flat config format.
+```
+
+For details, see [Rules Inheritance](/how_to_use/en/code_review/configs/rules_inheritance).

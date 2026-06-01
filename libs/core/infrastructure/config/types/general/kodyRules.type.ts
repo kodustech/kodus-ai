@@ -10,7 +10,7 @@ export type LibraryKodyRule = {
     title: string;
     rule: string;
     why_is_this_important: string;
-    severity: string;
+    severity?: string;
     /**
      * Optional list of MCP providers (display hint for UI).
      * Examples: ["Sentry", "Datadog"], ["Linear", "Jira"].

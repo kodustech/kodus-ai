@@ -1,0 +1,55 @@
+---
+title: "Como revisar PRs com contexto específico do projeto"
+description: "Dê ao Kody acesso aos documentos, manuais e guias de arquitetura do seu projeto para revisões de código mais relevantes."
+---
+
+Revisões de código genéricas identificam problemas genéricos. Para obter feedback realmente relevante para o seu projeto, o Kody precisa entender seu contexto específico — decisões arquiteturais, convenções e regras de negócio.
+
+## Formas de fornecer contexto
+
+### Memórias
+
+Ensine o Kody sobre suas convenções por meio de conversas:
+
+```
+@kody remember: este projeto usa arquitetura hexagonal.
+A camada de domínio nunca deve depender de infraestrutura.
+```
+
+As Memórias persistem e são aplicadas em todas as revisões futuras.
+
+### Referências de arquivo nas regras
+
+Referencie sua própria documentação diretamente nas regras:
+
+```
+Instruções: Valide que os novos endpoints seguem os padrões em
+@file:docs/api-conventions.md e usam as classes base
+definidas em @file:src/shared/base-controller.ts.
+```
+
+### Prompts personalizados
+
+Adicione instruções específicas do projeto que o Kody inclui em cada revisão:
+
+1. Vá em **Configurações de Revisão de Código** → **Prompts Personalizados**
+2. Adicione contexto como descrições de arquitetura, diretrizes do time ou conhecimento de domínio
+3. O Kody inclui isso em cada análise de revisão de código
+
+### Plugins MCP
+
+Conecte ferramentas externas para dar ao Kody acesso a um contexto mais rico:
+
+- **Jira/Linear** — requisitos de tarefas e critérios de aceitação
+- **Slack** — discussões e decisões do time
+- **Google Docs** — especificações e documentos de design
+- **Servidores MCP personalizados** — qualquer ferramenta que seu time usa
+
+## Exemplo de fluxo de trabalho
+
+1. Defina regras de arquitetura via **Memórias**: `@kody remember: seguimos o padrão CQRS neste serviço`
+2. Crie **Regras de Revisão** que referenciam seus documentos: `@file:docs/architecture.md`
+3. Conecte o **Jira** para que o Kody valide PRs contra os requisitos das tarefas
+4. Adicione **Prompts Personalizados** para conhecimento específico de domínio
+
+Para detalhes, consulte [Prompts Personalizados](/how_to_use/pt-br/code_review/configs/custom_prompts) e [Plugins](/how_to_use/pt-br/code_review/plugins).

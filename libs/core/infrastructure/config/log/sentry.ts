@@ -2,9 +2,27 @@ import * as Sentry from '@sentry/nestjs';
 
 let sentryInitialized = false;
 
-export function setupSentry(componentType: 'api' | 'worker' | 'webhook'): void {
+/**
+ * `skipOpenTelemetrySetup` is intentional: Sentry's OTel setup installs a
+ * `BasicTracerProvider` whose `SentrySampler` returns `NOT_RECORD` whenever
+ * `tracesSampleRate` is unset (default), and that decision is made *before*
+ * any registered span processor sees the span — so injecting Langfuse via
+ * `openTelemetrySpanProcessors` resulted in the processor being attached
+ * but never invoked. With `skipOpenTelemetrySetup: true` Sentry still
+ * captures errors via its own API (`captureException`, etc. — what
+ * `reportExceptionToSentry` uses); only the OTel side is left to us, so
+ * Langfuse can register its own provider unconditionally and receive every
+ * span without going through Sentry's sampler.
+ *
+ * Returns `true` when Sentry was actually initialized (DSN present and
+ * `Sentry.init` succeeded). Callers don't need this today, but keeping the
+ * signal makes future "is error tracking on?" branches trivial.
+ */
+export function setupSentry(
+    componentType: 'api' | 'worker' | 'webhook',
+): boolean {
     if (sentryInitialized) {
-        return;
+        return true;
     }
 
     const environment =
@@ -12,7 +30,7 @@ export function setupSentry(componentType: 'api' | 'worker' | 'webhook'): void {
 
     const dsn = process.env.API_BETTERSTACK_DSN;
     if (!dsn) {
-        return;
+        return false;
     }
 
     try {
@@ -28,9 +46,11 @@ export function setupSentry(componentType: 'api' | 'worker' | 'webhook'): void {
                     component: componentType,
                 },
             },
+            skipOpenTelemetrySetup: true,
         });
 
         sentryInitialized = true;
+        return true;
     } catch (error) {
         const message =
             error instanceof Error ? error.message : 'unknown error';
@@ -39,6 +59,7 @@ export function setupSentry(componentType: 'api' | 'worker' | 'webhook'): void {
             '[Sentry] initialization failed, continuing without error tracking:',
             message,
         );
+        return false;
     }
 }
 

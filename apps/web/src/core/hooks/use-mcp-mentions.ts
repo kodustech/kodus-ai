@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import type { MentionGroup } from "@components/ui/rich-text-editor-with-mentions";
 import { useMCPAvailability } from "@services/mcp-manager/hooks";
-import { MCPServiceUnavailableError } from "@services/mcp-manager/utils";
+import { MCPServiceUnavailableError } from "@services/mcp-manager/errors";
 import { useQuery } from "@tanstack/react-query";
 import { getMCPConnections } from "src/lib/services/mcp-manager/fetch";
 

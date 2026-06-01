@@ -1,4 +1,8 @@
 import { createLogger } from '@kodus/flow';
+import {
+    CentralizedConfigPrService,
+    CentralizedPrMetadata,
+} from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
     Action,
@@ -9,7 +13,10 @@ import { RuleIdsDto } from '@libs/kodyRules/dtos/rule-ids.dto';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
-import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import {
+    IKodyRule,
+    KodyRulesStatus,
+} from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { ChangeStatusKodyRulesUseCase } from './change-status-kody-rules.use-case';
 import { CreateOrUpdateKodyRulesUseCase } from './create-or-update.use-case';
 import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from './find-rules-in-organization-by-filter.use-case';
@@ -24,16 +31,24 @@ export class ConvertPendingUpdatesToMemoriesUseCase {
         private readonly createOrUpdateKodyRulesUseCase: CreateOrUpdateKodyRulesUseCase,
         private readonly findRulesInOrganizationByRuleFilterKodyRulesUseCase: FindRulesInOrganizationByRuleFilterKodyRulesUseCase,
         private readonly changeStatusKodyRulesUseCase: ChangeStatusKodyRulesUseCase,
+        private readonly centralizedConfigPrService: CentralizedConfigPrService,
         private readonly authorizationService: AuthorizationService,
         @Inject(REQUEST)
         private readonly request: UserRequest,
     ) {}
 
-    public async execute(body: RuleIdsDto) {
+    public async execute(
+        body: RuleIdsDto,
+    ): Promise<Array<Partial<IKodyRule>> | CentralizedPrMetadata> {
         const organizationId = this.request.user.organization.uuid;
         if (!organizationId) {
             throw new Error('Organization ID not found');
         }
+
+        const teamId =
+            body.teamId ||
+            (this.request.user as any)?.team?.uuid ||
+            (this.request.user as any)?.teamId;
 
         const rulesToConvert = await this.getRulesByIds(
             organizationId,
@@ -60,7 +75,8 @@ export class ConvertPendingUpdatesToMemoriesUseCase {
             userEmail: this.request.user?.email || 'kody@kodus.io',
         };
 
-        const createdRules: any[] = [];
+        const createdRules: Array<Partial<IKodyRule>> = [];
+        let centralizedPrResult: CentralizedPrMetadata | null = null;
 
         for (const rule of rulesToConvert) {
             const created = await this.createOrUpdateKodyRulesUseCase.execute(
@@ -74,13 +90,20 @@ export class ConvertPendingUpdatesToMemoriesUseCase {
                     targetRuleUuid: undefined,
                     resolvedAt: undefined,
                     resolvedBy: undefined,
+                    centralizedConfig: undefined,
                 },
                 organizationId,
                 userInfo,
+                true,
+                teamId,
             );
 
             if (created) {
-                createdRules.push(created);
+                if (this.isCentralizedPrMetadata(created)) {
+                    centralizedPrResult = created;
+                } else {
+                    createdRules.push(created);
+                }
 
                 await this.changeStatusKodyRulesUseCase.execute({
                     ruleIds: [rule.uuid],
@@ -89,7 +112,22 @@ export class ConvertPendingUpdatesToMemoriesUseCase {
             }
         }
 
+        if (centralizedPrResult) {
+            return centralizedPrResult;
+        }
+
         return createdRules;
+    }
+
+    private isCentralizedPrMetadata(
+        value: Partial<IKodyRule> | CentralizedPrMetadata,
+    ): value is CentralizedPrMetadata {
+        return (
+            typeof value === 'object' &&
+            value !== null &&
+            'mode' in value &&
+            (value as { mode?: string }).mode === 'centralized-pr'
+        );
     }
 
     private async getRulesByIds(organizationId: string, ruleIds: string[]) {

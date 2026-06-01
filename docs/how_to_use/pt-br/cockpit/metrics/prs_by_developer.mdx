@@ -1,0 +1,100 @@
+---
+title: "PRs por Desenvolvedor"
+description: "Acompanhe Pull Requests concluídos por desenvolvedor agrupados por semana"
+---
+
+## O que é PRs por Desenvolvedor
+
+PRs por Desenvolvedor mede o número de Pull Requests **fechados** concluídos por cada membro da equipe, agrupados por semana. Essa métrica foca nos resultados reais e no trabalho concluído, fornecendo insights sobre a produtividade individual dos desenvolvedores e a distribuição de carga de trabalho da equipe.
+
+## Como Calculamos
+
+Rastreamos automaticamente cada Pull Request fechado e os agrupamos por desenvolvedor e semana, a partir de segunda-feira. Isso fornece uma visão clara de quem está concluindo o trabalho e quando.
+
+**O que rastreamos:**
+- **PRs Fechados**: Cada PR que foi concluído (mesclado ou fechado)
+- **Atribuição ao Desenvolvedor**: Quem criou cada PR concluído
+- **Agregação Semanal**: Agrupado por semana a partir de segunda-feira
+- **Contagem de Conclusão**: Número de PRs finalizados por desenvolvedor por semana
+
+**O que não contamos:**
+- PRs abertos ou em rascunho
+- PRs sem data de fechamento válida
+- Trabalho incompleto ou abandonado
+
+**Como é calculado:**
+```
+PRs Semanais por Desenvolvedor = COUNT(PRs fechados) por desenvolvedor por semana
+```
+
+Agrupamos dados por semana a partir de segunda-feira para fornecer insights semanais consistentes e identificar tendências ao longo do tempo.
+
+## Por que é Importante
+
+Entender a conclusão de PRs por desenvolvedor ajuda a:
+
+- **Medir a Produção Individual**: Ver quem está concluindo mais trabalho
+- **Identificar Padrões de Produtividade**: Entender ritmos e tendências semanais
+- **Equilibrar a Carga de Trabalho**: Distribuir o trabalho de forma mais uniforme entre a equipe
+- **Acompanhar o Desempenho da Equipe**: Monitorar a velocidade e a produção geral da equipe
+
+### Impacto na Gestão de Equipe
+
+- **Alocação de Recursos**: Distribuir melhor o trabalho com base na capacidade individual
+- **Reconhecimento de Desempenho**: Reconhecer os melhores performers e suas contribuições
+- **Identificação de Gargalos**: Encontrar onde o trabalho trava ou é atrasado
+- **Planejamento da Equipe**: Definir expectativas realistas para prazos de projetos
+
+### Distribuição da Equipe
+- **Equilibrada**: Trabalho distribuído uniformemente entre os membros da equipe
+- **Concentrada**: Poucos desenvolvedores lidando com a maior parte do trabalho
+- **Fragmentada**: Trabalho distribuído de forma muito fina entre muitos desenvolvedores
+
+## Como Melhorar
+
+### Aumentar a Produção Individual
+- **Metas Claras**: Defina objetivos específicos e alcançáveis para cada desenvolvedor
+- **Desenvolvimento de Habilidades**: Forneça treinamento em áreas que os atrasam
+- **Otimização de Ferramentas**: Certifique-se de que os desenvolvedores têm as ferramentas e acessos certos
+- **Redução de Bloqueios**: Remova obstáculos que impedem a conclusão do trabalho
+
+### Melhorar o Equilíbrio da Equipe
+- **Distribuição de Trabalho**: Distribua o trabalho de forma mais uniforme entre a equipe
+- **Treinamento Cruzado**: Ajude os desenvolvedores a trabalhar em diferentes áreas
+- **Programação em Par**: Incentive a colaboração e o compartilhamento de conhecimento
+- **Mentoria**: Desenvolvedores sênior ajudam membros júnior da equipe
+
+### Otimizar o Fluxo de Trabalho
+- **Processos Claros**: Defina como o trabalho flui pela equipe
+- **Automação**: Reduza tarefas manuais e repetitivas
+- **Comunicação**: Melhore a coordenação da equipe e o compartilhamento de informações
+- **Eficiência de Revisão**: Simplifique o processo de revisão de código
+
+## Principais Diferenças em Relação à Atividade do Desenvolvedor
+
+| **Aspecto** | **Atividade do Desenvolvedor** | **PRs por Desenvolvedor** |
+|-------------|------------------------|---------------------------|
+| **Status do PR** | ❌ Sem filtragem | ✅ `status = 'closed'` |
+| **Base da Data** | Data de **criação** | Data de **conclusão** |
+| **Agregação** | Por **data específica** | Por **semana** |
+| **Foco** | Atividade de criação | Resultados concluídos |
+
+## Padrões Comuns
+
+### Desenvolvedores de Alta Produção
+- **Características**: Concluem muitos PRs por semana consistentemente
+- **Benefícios**: Impulsionam a velocidade da equipe, definem padrões de desempenho
+- **Riscos**: Potencial burnout, silos de conhecimento
+- **Gestão**: Assegure um ritmo sustentável, compartilhe conhecimento
+
+### Desenvolvedores de Baixa Produção
+- **Características**: Concluem menos PRs por semana
+- **Possíveis Causas**: Curva de aprendizado, tarefas complexas, fatores externos
+- **Apoio**: Forneça mentoria, simplifique tarefas, verifique bloqueios
+- **Metas**: Defina objetivos de melhoria incremental
+
+## Considerações de Contexto
+- **Tamanho do PR**: Um desenvolvedor com menos mas maiores PRs pode ser igualmente produtivo
+- **Complexidade**: Alguns trabalhos naturalmente levam mais tempo para concluir
+- **Papel na Equipe**: Diferentes funções podem ter padrões de PR diferentes
+- **Fase do Projeto**: A produção varia durante diferentes fases de desenvolvimento

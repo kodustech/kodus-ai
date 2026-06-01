@@ -19,12 +19,13 @@ export const IgnorePaths = () => {
         [field.value],
     );
     const [draftValue, setDraftValue] = useState(fieldValue);
+    const [isEditing, setIsEditing] = useState(false);
 
     useEffect(() => {
-        if (draftValue !== fieldValue) {
+        if (!isEditing && draftValue !== fieldValue) {
             setDraftValue(fieldValue);
         }
-    }, [draftValue, fieldValue]);
+    }, [isEditing, draftValue, fieldValue]);
 
     return (
         <FormControl.Root>
@@ -41,6 +42,7 @@ export const IgnorePaths = () => {
                     id={field.name}
                     disabled={field.disabled}
                     value={draftValue}
+                    onFocus={() => setIsEditing(true)}
                     onChange={(ev) => {
                         const nextValue = ev.target.value;
                         setDraftValue(nextValue);
@@ -51,7 +53,10 @@ export const IgnorePaths = () => {
 
                         field.onChange(ignorePaths);
                     }}
-                    onBlur={field.onBlur}
+                    onBlur={() => {
+                        setIsEditing(false);
+                        field.onBlur();
+                    }}
                     placeholder={`List the files to be ignored here, one per line. Example:\n\nyarn.lock\npackage-lock.json\npackage.json\n.env`}
                     maxLength={1000}
                     className="min-h-40"

@@ -1,0 +1,158 @@
+---
+title: "Novita AI - Plataforma de GPU Serverless"
+description: "Aprenda como usar os modelos da Novita com o Kodus"
+icon: "server"
+---
+
+## Como o Novita funciona
+
+A Novita é uma plataforma de infraestrutura serverless para IA, projetada para escalar modelos open-source com baixa latência e custo reduzido. Suporta centenas de modelos prontos para produção — incluindo Llama, Mistral, Claude e Stable Diffusion — e fornece APIs otimizadas, GPUs sob demanda e implantações de modelos personalizados sem nenhuma sobrecarga de DevOps.
+
+## Modelos Recomendados
+
+Recomendamos bons modelos de codificação com janela de contexto de +100k.
+
+<Info>
+  {" "}
+  Para informações mais atualizadas, visite o [site da Novita](https://novita.ai/models/llm).{" "}
+</Info>
+
+| Modelo                              | Preço      | Janela de Contexto |
+| ----------------------------------- | ---------- | ------------------ |
+| **Deepseek v3 0324** `recomendado` | $0.33/1.3  | ~128k tokens   |
+| **Deepseek R1 0528**               | $0.7/2.5   | ~128k tokens   |
+| **Llama 4 Maverick Instruct**      | $0.17/0.85 | ~100k tokens   |
+
+## Criando uma Chave de API
+
+<Warning>Uma conta Novita é necessária para criar uma Chave de API.</Warning>
+
+Acesse diretamente a [página de Chaves de API da Novita](https://novita.ai/settings/key-management) para criar uma nova Chave de API.
+
+Ou siga estes passos:
+
+1. Vá para o seu console Novita
+2. Clique no botão "Gerenciar Chaves de API" ou vá para a sua foto de perfil e clique em Chaves de API
+3. Clique em "Adicionar Nova Chave" e preencha com 'Kodus' ou qualquer nome que desejar
+4. Clique em "Confirmar"
+5. Copie a Chave de API e guarde-a em um lugar seguro
+
+
+
+<Snippet file="deploy-basic-setup.mdx" />
+
+### Configurar a Novita no Arquivo de Ambiente
+
+Edite o seu arquivo `.env` e configure as definições principais. Para a **Integração de LLM**, use a Novita no Modo Fixo:
+
+```env
+# Configurações Principais do Sistema (atualize com seus domínios)
+WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
+WEB_PORT_API=443                               
+NEXTAUTH_URL="https://kodus-web.yourdomain.com"
+
+# Chaves de Segurança (gere com os comandos openssl acima)
+WEB_NEXTAUTH_SECRET="your-generated-secret"
+API_CRYPTO_KEY="your-generated-hex-key"
+API_JWT_SECRET="your-generated-secret"
+API_JWT_REFRESH_SECRET="your-generated-secret"
+
+# Configuração do Banco de Dados
+API_PG_DB_PASSWORD="your-secure-db-password"
+API_MG_DB_PASSWORD="your-secure-db-password"
+
+# Configuração Novita (Modo Fixo) 
+API_LLM_PROVIDER_MODEL="deepseek-v3-0324"                    # Escolha seu modelo preferido
+API_OPENAI_FORCE_BASE_URL="https://api.novita.ai/v3/openai"  # URL da API Novita
+API_OPEN_AI_API_KEY="your-novita-api-key"                    # Sua Chave de API Novita
+
+# Webhooks do Provedor Git (escolha seu provedor)
+API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
+# ou API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
+# ou GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
+```
+
+<Note>
+  As URLs de webhook devem alcançar o serviço de Webhooks (porta 3332). Use um domínio dedicado para webhooks ou roteie `/.../webhook` para a porta 3332 no seu proxy reverso.
+</Note>
+
+<Info>
+  **O Modo Fixo é ideal para a Novita** porque ela fornece APIs compatíveis com OpenAI e requer apenas uma chave de API. Isso simplifica significativamente a sua configuração.
+</Info>
+
+<Snippet file="deploy-installation.mdx" />
+
+### 6. Configurar Proxy Reverso (Para Produção)
+
+Para webhooks e acesso externo, configure o Nginx:
+
+```nginx
+# Aplicação Web (porta 3000)
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com;
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# API (porta 3001)  
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com;
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Verificar a Integração com a Novita
+
+Além da verificação básica de instalação, confirme que a Novita está funcionando:
+
+```bash
+# Verificar especificamente a conexão com a API Novita
+docker-compose logs api worker | grep -i novita
+```
+
+<Tip>
+  Para informações detalhadas sobre configuração de SSL, monitoramento e configurações avançadas, consulte nosso [guia completo de implantação](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm).
+</Tip>
+
+### Solução de problemas
+
+<AccordionGroup>
+  <Accordion title="Problemas com Chave de API">
+    - Verifique se sua chave de API está correta e ativa no [console da Novita](https://novita.ai/settings/key-management)
+    - Verifique se você tem créditos suficientes na sua conta Novita
+    - Certifique-se de que não há espaços extras no seu arquivo `.env`
+  </Accordion>
+  
+  <Accordion title="Modelo Não Encontrado">
+    - Verifique se o nome do modelo está escrito corretamente na sua configuração
+    - Verifique se o modelo está disponível no seu plano Novita
+    - Tente com um modelo diferente da nossa lista recomendada
+  </Accordion>
+  
+  <Accordion title="Erros de Conexão">
+    - Verifique se o seu servidor tem acesso à internet para alcançar `api.novita.ai`
+    - Verifique se há restrições de firewall
+    - Revise os logs da API/worker para mensagens de erro detalhadas
+  </Accordion>
+</AccordionGroup>

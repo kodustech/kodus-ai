@@ -1,3 +1,7 @@
+export const DOCUMENTATION_SEARCH_EXA_SERVICE_TOKEN = Symbol.for(
+    'DocumentationSearchExaService',
+);
+
 import { createLogger } from '@kodus/flow';
 import {
     BYOKConfig,
@@ -14,9 +18,11 @@ import {
 } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
+import { ObservabilityService } from '@libs/core/log/observability.service';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Exa from 'exa-js';
+import pLimit from 'p-limit';
 import {
     prompt_code_review_documentation_formatter_system,
     prompt_code_review_documentation_formatter_user,
@@ -36,6 +42,22 @@ type ResultLike = {
     text?: string;
 };
 
+/**
+ * Concurrency cap for outbound Exa API calls.
+ *
+ * Exa free tier: 10 requests/second. Cap at 5 concurrent in-flight calls
+ * leaves headroom for:
+ *   - typical Exa latency (1-3s) → effective ~2-5 RPS, well below the limit
+ *   - SDK-level retries on transient failures
+ *   - parallel pipelines in the same worker process
+ *
+ * Module-level singleton so it is shared across all PRs running in the
+ * same Node process. Multi-worker setups still need a distributed limiter
+ * (e.g. Redis token bucket) to coordinate across processes.
+ */
+const EXA_CONCURRENCY = 5;
+const exaCallLimiter = pLimit(EXA_CONCURRENCY);
+
 @Injectable()
 export class DocumentationSearchExaService {
     private readonly logger = createLogger(DocumentationSearchExaService.name);
@@ -49,6 +71,7 @@ export class DocumentationSearchExaService {
         private readonly configService: ConfigService,
         private readonly documentationSearchCacheService: DocumentationSearchCacheService,
         private readonly promptRunnerService: PromptRunnerService,
+        private readonly observabilityService: ObservabilityService,
     ) {
         const apiKey = this.configService.get<string>('API_EXA_KEY');
         this.exaClient = apiKey ? new Exa(apiKey) : null;
@@ -198,10 +221,12 @@ export class DocumentationSearchExaService {
                 task.query,
             );
 
-            const response = await this.exaClient.search(packageScopedQuery, {
-                category: 'company',
-                type: 'auto',
-            });
+            const response = await exaCallLimiter(() =>
+                this.exaClient!.search(packageScopedQuery, {
+                    category: 'company',
+                    type: 'auto',
+                }),
+            );
 
             const formattedSnippet = await this.formatDocumentationForPrompt({
                 packageName: task.packageName,
@@ -289,7 +314,7 @@ export class DocumentationSearchExaService {
     }
 
     private extractLanguageFromQuery(query: string): string {
-        const match = (query || '').match(/language\s*:\s*([^\.]+)\.?/i);
+        const match = (query || '').match(/language\s*:\s*([^.]+)\.?/i);
         if (!match || !match[1]) {
             return 'Unspecified';
         }
@@ -398,6 +423,9 @@ export class DocumentationSearchExaService {
         }
 
         try {
+            const runName = 'documentationSearchExaFormat';
+            const spanName = `${DocumentationSearchExaService.name}::${runName}`;
+
             const promptRunner = new BYOKPromptRunnerService(
                 this.promptRunnerService,
                 LLMModelProvider.GEMINI_3_FLASH_PREVIEW,
@@ -405,34 +433,51 @@ export class DocumentationSearchExaService {
                 params.byokConfig,
             );
 
-            const response = await promptRunner
-                .builder()
-                .setParser(ParserType.STRING)
-                .setPayload(params)
-                .addPrompt({
-                    role: PromptRole.SYSTEM,
-                    prompt: prompt_code_review_documentation_formatter_system,
-                })
-                .addPrompt({
-                    role: PromptRole.USER,
-                    prompt: prompt_code_review_documentation_formatter_user,
-                })
-                .addMetadata({
-                    context: DocumentationSearchExaService.name,
-                    runName: 'documentationSearchExaFormat',
-                    metadata: {
-                        provider: CACHE_PROVIDER,
-                        packageName: params.packageName,
-                        query: params.query,
-                        rawSearchContentLength: params.rawSearchContent.length,
-                        hasByokConfig: Boolean(params.byokConfig),
-                        organizationAndTeamData: params.organizationAndTeamData,
+            const { result: response } =
+                await this.observabilityService.runLLMInSpan({
+                    spanName,
+                    runName,
+                    byokConfig: params.byokConfig,
+                    attrs: {
+                        type: promptRunner.executeMode,
+                        organizationId:
+                            params.organizationAndTeamData?.organizationId,
                         prNumber: params.prNumber,
+                        packageName: params.packageName,
                     },
-                })
-                .setTemperature(0)
-                .setRunName('documentationSearchExaFormat')
-                .execute();
+                    exec: (callbacks) =>
+                        promptRunner
+                            .builder()
+                            .setParser(ParserType.STRING)
+                            .setPayload(params)
+                            .addPrompt({
+                                role: PromptRole.SYSTEM,
+                                prompt: prompt_code_review_documentation_formatter_system,
+                            })
+                            .addPrompt({
+                                role: PromptRole.USER,
+                                prompt: prompt_code_review_documentation_formatter_user,
+                            })
+                            .addMetadata({
+                                context: DocumentationSearchExaService.name,
+                                runName,
+                                metadata: {
+                                    provider: CACHE_PROVIDER,
+                                    packageName: params.packageName,
+                                    query: params.query,
+                                    rawSearchContentLength:
+                                        params.rawSearchContent.length,
+                                    hasByokConfig: Boolean(params.byokConfig),
+                                    organizationAndTeamData:
+                                        params.organizationAndTeamData,
+                                    prNumber: params.prNumber,
+                                },
+                            })
+                            .setTemperature(0)
+                            .setRunName(runName)
+                            .addCallbacks(callbacks)
+                            .execute(),
+                });
 
             return this.extractPromptExecutionText(response);
         } catch (error) {

@@ -17,11 +17,9 @@ import {
     ReviewModeResponse,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
-    convertToHunksWithLinesNumbers,
+    convertToUnifiedDiffWithLineNumbers,
     handlePatchDeletions,
 } from '@libs/common/utils/patch';
-import { TaskStatus } from '@libs/ee/kodyAST/interfaces/code-ast-analysis.interface';
-
 /**
  * Abstract base class for file review context preparation
  * Implements the Template Method pattern to define the overall preparation flow
@@ -61,7 +59,7 @@ export abstract class BaseFileReviewContextPreparation implements IFileReviewCon
                     return null;
                 }
 
-                patchWithLinesStr = convertToHunksWithLinesNumbers(
+                patchWithLinesStr = convertToUnifiedDiffWithLineNumbers(
                     patchFormatted,
                     file,
                 );
@@ -128,7 +126,7 @@ export abstract class BaseFileReviewContextPreparation implements IFileReviewCon
 
         const [
             reviewModeResponse,
-            { relevantContent, taskStatus, hasRelevantContent },
+            { relevantContent, hasRelevantContent },
         ] = await Promise.all([reviewModeProm, relevantContentProm]);
 
         const updatedContext: AnalysisContext = {
@@ -140,14 +138,6 @@ export abstract class BaseFileReviewContextPreparation implements IFileReviewCon
                 patchWithLinesStr,
                 hasRelevantContent,
             },
-            tasks: {
-                ...context?.tasks,
-                astAnalysis: {
-                    ...context?.tasks?.astAnalysis,
-                    hasRelevantContent,
-                    status: taskStatus || TaskStatus.TASK_STATUS_FAILED,
-                },
-            },
         };
 
         return { fileContext: updatedContext };
@@ -158,7 +148,6 @@ export abstract class BaseFileReviewContextPreparation implements IFileReviewCon
         context: AnalysisContext,
     ): Promise<{
         relevantContent: string | null;
-        taskStatus?: TaskStatus;
         hasRelevantContent?: boolean;
     }>;
 }

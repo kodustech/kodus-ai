@@ -115,6 +115,7 @@ export class DeleteIntegrationUseCase {
             {
                 enabled: false,
                 repository: null,
+                activePullRequest: null,
             },
             {
                 organizationId: params.organizationId,

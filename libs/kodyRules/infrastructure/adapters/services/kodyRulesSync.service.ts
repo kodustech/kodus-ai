@@ -15,7 +15,11 @@ import {
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 
 import { ParametersKey } from '@libs/core/domain/enums';
-import { RULE_FILE_PATTERNS } from '@libs/common/utils/kody-rules/file-patterns';
+import {
+    RULE_FILE_PATTERNS,
+    isIdeRuleSource,
+    validateAndScopeIdeRulePath,
+} from '@libs/common/utils/kody-rules/file-patterns';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import {
     CreateKodyRuleDto,
@@ -25,6 +29,7 @@ import {
     KodyRulesOrigin,
     KodyRulesScope,
     KodyRulesStatus,
+    KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import {
     IParametersService,
@@ -46,6 +51,7 @@ import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/toke
 import { PromptSourceType } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
 import { createLogger } from '@kodus/flow';
 import { UpdateOrCreateCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/update-or-create-code-review-parameter-use-case';
+import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/create-or-update.use-case';
 import {
     CONTEXT_RESOLUTION_SERVICE_TOKEN,
     IContextResolutionService,
@@ -124,6 +130,7 @@ export class KodyRulesSyncService {
         private readonly contextResolutionService: IContextResolutionService,
         private readonly codeManagementService: CodeManagementService,
         private readonly updateOrCreateCodeReviewParameterUseCase: UpdateOrCreateCodeReviewParameterUseCase,
+        private readonly createOrUpdateKodyRulesUseCase: CreateOrUpdateKodyRulesUseCase,
         private readonly promptRunnerService: PromptRunnerService,
         private readonly permissionValidationService: PermissionValidationService,
         private readonly observabilityService: ObservabilityService,
@@ -257,13 +264,64 @@ export class KodyRulesSyncService {
             );
             if (!toDelete?.uuid) return;
 
-            await this.kodyRulesService.deleteRuleLogically(
-                entity.uuid,
-                toDelete.uuid,
+            // Soft-delete so the record can be restored if the source file
+            // reappears (or the @kody-ignore marker is removed).
+            await this.kodyRulesService.createOrUpdate(
+                organizationAndTeamData,
+                { ...toDelete, status: KodyRulesStatus.DELETED } as any,
+                this.systemUserInfo,
             );
         } catch (error) {
             this.logger.error({
-                message: 'Failed to delete rule by sourcePath',
+                message: 'Failed to soft-delete rule by sourcePath',
+                context: KodyRulesSyncService.name,
+                error,
+                metadata: params,
+            });
+        }
+    }
+
+    /**
+     * Flips a rule's `pinnedSync` back to false. Mirrors
+     * `deleteRuleBySourcePath` but only touches the pin flag — used when
+     * the source file still exists but no longer carries `@kody-sync`
+     * (with `ideRulesSyncEnabled=false`, the force-sync path skips that
+     * file, so without this depin pass the rule would keep a stale
+     * `pinnedSync=true` and disappear from the orphan-chip count even
+     * though the backend isn't maintaining it anymore).
+     *
+     * No-op when the rule isn't found or already has `pinnedSync !== true`
+     * — avoids unnecessary writes and audit-log noise.
+     */
+    private async depinRuleBySourcePath(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId: string;
+        sourcePath: string;
+    }): Promise<void> {
+        try {
+            const { organizationAndTeamData, repositoryId, sourcePath } =
+                params;
+            const entity = await this.kodyRulesService.findByOrganizationId(
+                organizationAndTeamData.organizationId,
+            );
+            if (!entity) return;
+
+            const toDepin = entity.rules?.find(
+                (r) =>
+                    r?.repositoryId === repositoryId &&
+                    (r?.sourcePath || '').split('#')[0] === sourcePath,
+            );
+            if (!toDepin?.uuid) return;
+            if (toDepin.pinnedSync !== true) return;
+
+            await this.kodyRulesService.createOrUpdate(
+                organizationAndTeamData,
+                { ...toDepin, pinnedSync: false } as any,
+                this.systemUserInfo,
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to depin rule by sourcePath',
                 context: KodyRulesSyncService.name,
                 error,
                 metadata: params,
@@ -359,6 +417,39 @@ export class KodyRulesSyncService {
                     }
                 }
 
+                // Depin / soft-delete pass: rule files that changed but
+                // didn't make it into `forceSyncFiles` either lost their
+                // `@kody-sync` marker or were deleted outright. Without
+                // this, a previously-pinned rule whose marker was just
+                // removed would keep `pinnedSync=true` forever (the
+                // normal sync path would never touch it again with the
+                // toggle off), which silently breaks the orphan-chip
+                // count.
+                // `ruleChanges` can be large; a Set keeps the per-file
+                // force-sync lookup O(1) inside the loop instead of the
+                // O(n) `Array.includes` (which made the pass O(n²)).
+                const forceSyncSet = new Set(forceSyncFiles);
+                let depinned = 0;
+                let removed = 0;
+                for (const f of ruleChanges) {
+                    if (forceSyncSet.has(f.filename)) continue;
+                    if (f.status === 'removed') {
+                        await this.deleteRuleBySourcePath({
+                            organizationAndTeamData,
+                            repositoryId: repository.id,
+                            sourcePath: f.previous_filename ?? f.filename,
+                        });
+                        removed += 1;
+                    } else {
+                        await this.depinRuleBySourcePath({
+                            organizationAndTeamData,
+                            repositoryId: repository.id,
+                            sourcePath: f.filename,
+                        });
+                        depinned += 1;
+                    }
+                }
+
                 if (forceSyncFiles.length === 0) {
                     this.logger.log({
                         message:
@@ -367,6 +458,8 @@ export class KodyRulesSyncService {
                         metadata: {
                             repositoryId: repository.id,
                             organizationAndTeamData,
+                            depinned,
+                            removed,
                         },
                     });
                     return;
@@ -577,7 +670,11 @@ export class KodyRulesSyncService {
                     uuid: existing?.uuid,
                     title: oneRule.title as string,
                     rule: oneRule.rule as string,
-                    path: (oneRule.path as string) ?? f.filename,
+                    path: validateAndScopeIdeRulePath({
+                        llmPath: oneRule.path as string,
+                        sourceFilePath: f.filename,
+                        pathSource: (oneRule as any)?.pathSource,
+                    }).path,
                     sourcePath: f.filename,
                     severity:
                         ((
@@ -601,16 +698,41 @@ export class KodyRulesSyncService {
                     examples: Array.isArray(oneRule.examples)
                         ? (oneRule.examples as any)
                         : [],
+                    // Computed from current file content on every sync.
+                    // With the toggle off this is always true (we only
+                    // reach this branch for force-sync files); with the
+                    // toggle on it reflects the current marker state,
+                    // so a later toggle-off keeps pinned rules out of
+                    // the UI's orphan-chip count without needing a
+                    // separate backfill step.
+                    pinnedSync: this.shouldForceSync(decoded),
                 } as CreateKodyRuleDto;
 
-                const result = await this.kodyRulesService.createOrUpdate(
-                    organizationAndTeamData,
-                    dto,
-                    this.systemUserInfo,
-                );
+                const result =
+                    await this.createOrUpdateKodyRulesUseCase.execute(
+                        dto,
+                        organizationAndTeamData.organizationId,
+                        this.systemUserInfo,
+                        true,
+                        organizationAndTeamData.teamId,
+                    );
+
+                // In centralized PR mode the mutation returns PR metadata, not the entity.
+                // Fallback to the known UUID from sourcePath lookup for reference processing.
+                let resolvedRuleId =
+                    this.getRuleId(result) || dto.uuid || existing?.uuid;
+
+                if (!resolvedRuleId) {
+                    const persistedRule = await this.findRuleBySourcePath({
+                        organizationAndTeamData,
+                        repositoryId: repository.id,
+                        sourcePath: f.filename,
+                    });
+                    resolvedRuleId = persistedRule?.uuid;
+                }
 
                 await this.processContextReferences({
-                    ruleId: this.getRuleId(result),
+                    ruleId: resolvedRuleId,
                     ruleText: dto.rule,
                     repositoryId: dto.repositoryId,
                     organizationAndTeamData,
@@ -620,10 +742,9 @@ export class KodyRulesSyncService {
                     await this.updateOrCreateCodeReviewParameterUseCase.execute(
                         {
                             organizationAndTeamData,
-                            configValue: {
-                                kodyRules: [],
-                            } as any,
+                            configValue: {},
                             repositoryId: repository.id,
+                            skipAuthorization: true,
                         },
                     );
                 } catch (paramError) {
@@ -650,8 +771,11 @@ export class KodyRulesSyncService {
     }
 
     async syncRepositoryMain(params: SyncTarget): Promise<void> {
-        const { organizationAndTeamData, repository, path: requestedPath } =
-            params;
+        const {
+            organizationAndTeamData,
+            repository,
+            path: requestedPath,
+        } = params;
         try {
             const syncEnabled = await this.isIdeRulesSyncEnabled(
                 organizationAndTeamData,
@@ -742,6 +866,54 @@ export class KodyRulesSyncService {
                     }
                 }
 
+                // Full-scan depin / soft-delete pass: with the toggle off,
+                // the normal flow would silently leave previously-pinned
+                // rules with stale `pinnedSync=true` whenever the marker is
+                // dropped from their source file (or the file is deleted
+                // from the default branch). Walk every IDE-synced rule for
+                // this repo once and reconcile against the current
+                // filesystem snapshot.
+                //
+                // We have `allFiles` (every rule file at HEAD of the default
+                // branch) and `forceSyncFiles` (the subset that still carries
+                // `@kody-sync`). For each pinned rule:
+                //   - sourcePath not in `allFiles` → file gone → soft-delete.
+                //   - sourcePath in `allFiles` but not in `forceSyncFiles` →
+                //     marker dropped → depin (no-op if already not pinned).
+                //   - sourcePath in `forceSyncFiles` → will be re-synced
+                //     below, which writes `pinnedSync: true` again.
+                const allFilePaths = new Set(
+                    allFiles.map((f: any) => f.path),
+                );
+                const forceSyncFilePaths = new Set(forceSyncFiles);
+                const existing =
+                    await this.kodyRulesService.findByOrganizationId(
+                        organizationAndTeamData.organizationId,
+                    );
+                let depinned = 0;
+                let removed = 0;
+                for (const rule of (existing?.rules ?? []) as any[]) {
+                    if (rule?.repositoryId !== repository.id) continue;
+                    if (!isIdeRuleSource(rule?.sourcePath)) continue;
+                    if (rule.pinnedSync !== true) continue;
+                    const sp = rule.sourcePath as string;
+                    if (!allFilePaths.has(sp)) {
+                        await this.deleteRuleBySourcePath({
+                            organizationAndTeamData,
+                            repositoryId: repository.id,
+                            sourcePath: sp,
+                        });
+                        removed += 1;
+                    } else if (!forceSyncFilePaths.has(sp)) {
+                        await this.depinRuleBySourcePath({
+                            organizationAndTeamData,
+                            repositoryId: repository.id,
+                            sourcePath: sp,
+                        });
+                        depinned += 1;
+                    }
+                }
+
                 if (forceSyncFiles.length === 0) {
                     this.logger.log({
                         message:
@@ -750,6 +922,8 @@ export class KodyRulesSyncService {
                         metadata: {
                             repositoryId: repository.id,
                             organizationAndTeamData,
+                            depinned,
+                            removed,
                         },
                     });
                     return;
@@ -766,6 +940,8 @@ export class KodyRulesSyncService {
                         repositoryId: repository.id,
                         organizationAndTeamData,
                         forceSyncFiles,
+                        depinned,
+                        removed,
                     },
                 });
             }
@@ -841,7 +1017,11 @@ export class KodyRulesSyncService {
                     uuid: existing?.uuid,
                     title: oneRule.title as string,
                     rule: oneRule.rule as string,
-                    path: (oneRule.path as string) ?? file.path,
+                    path: validateAndScopeIdeRulePath({
+                        llmPath: oneRule.path as string,
+                        sourceFilePath: file.path,
+                        pathSource: (oneRule as any)?.pathSource,
+                    }).path,
                     sourcePath: file.path,
                     severity:
                         ((
@@ -864,6 +1044,7 @@ export class KodyRulesSyncService {
                     examples: Array.isArray(oneRule.examples)
                         ? (oneRule.examples as any)
                         : [],
+                    pinnedSync: this.shouldForceSync(decoded),
                 } as CreateKodyRuleDto;
 
                 const result = await this.kodyRulesService.createOrUpdate(
@@ -883,10 +1064,9 @@ export class KodyRulesSyncService {
                     await this.updateOrCreateCodeReviewParameterUseCase.execute(
                         {
                             organizationAndTeamData,
-                            configValue: {
-                                kodyRules: [],
-                            } as any,
+                            configValue: {},
                             repositoryId: repository.id,
+                            skipAuthorization: true,
                         },
                     );
                 } catch (paramError) {
@@ -943,6 +1123,16 @@ export class KodyRulesSyncService {
         });
 
         if (!content) {
+            // File is gone from the default branch. If we were previously
+            // tracking a pinned rule for it, soft-delete so the orphan
+            // chip stops hiding it under the pinned exclusion.
+            if (!syncEnabled) {
+                await this.deleteRuleBySourcePath({
+                    organizationAndTeamData,
+                    repositoryId: repository.id,
+                    sourcePath: filePath,
+                });
+            }
             this.logger.log({
                 message: 'Requested file was not found on the default branch',
                 context: KodyRulesSyncService.name,
@@ -957,6 +1147,14 @@ export class KodyRulesSyncService {
         }
 
         if (!syncEnabled && !this.shouldForceSync(content)) {
+            // File exists but no longer carries `@kody-sync` — depin so the
+            // chip counts it as orphan again (the normal sync flow won't
+            // re-touch this file with the toggle off).
+            await this.depinRuleBySourcePath({
+                organizationAndTeamData,
+                repositoryId: repository.id,
+                sourcePath: filePath,
+            });
             this.logger.log({
                 message:
                     'Requested file is not marked with @kody-sync while IDE rules sync is disabled',
@@ -1036,11 +1234,17 @@ export class KodyRulesSyncService {
             uuid: existing?.uuid,
             title: oneRule.title as string,
             rule: oneRule.rule as string,
-            path: (oneRule.path as string) ?? filePath,
+            path: validateAndScopeIdeRulePath({
+                llmPath: oneRule.path as string,
+                sourceFilePath: filePath,
+                pathSource: (oneRule as any)?.pathSource,
+            }).path,
             sourcePath: filePath,
             severity:
-                (((oneRule.severity as any)?.toLowerCase?.() as
-                    KodyRuleSeverity) || KodyRuleSeverity.MEDIUM),
+                ((
+                    oneRule.severity as any
+                )?.toLowerCase?.() as KodyRuleSeverity) ||
+                KodyRuleSeverity.MEDIUM,
             repositoryId: repository.id,
             directoryId: (
                 await this.resolveDirectoryForFile({
@@ -1051,11 +1255,11 @@ export class KodyRulesSyncService {
             )?.id,
             origin: KodyRulesOrigin.USER,
             status: oneRule.status as any,
-            scope:
-                (oneRule.scope as KodyRulesScope) || KodyRulesScope.FILE,
+            scope: (oneRule.scope as KodyRulesScope) || KodyRulesScope.FILE,
             examples: Array.isArray(oneRule.examples)
                 ? (oneRule.examples as any)
                 : [],
+            pinnedSync: this.shouldForceSync(content),
         } as CreateKodyRuleDto;
 
         const result = await this.kodyRulesService.createOrUpdate(
@@ -1074,10 +1278,9 @@ export class KodyRulesSyncService {
         try {
             await this.updateOrCreateCodeReviewParameterUseCase.execute({
                 organizationAndTeamData,
-                configValue: {
-                    kodyRules: [],
-                } as any,
+                configValue: {},
                 repositoryId: repository.id,
+                skipAuthorization: true,
             });
         } catch (paramError) {
             this.logger.error({
@@ -1353,19 +1556,56 @@ export class KodyRulesSyncService {
                 for (const rule of rules) {
                     if (!rule?.title || !rule?.rule) continue;
 
+                    // sourcePath must point at a concrete repository file the
+                    // LLM analysed. Previously we fell back to `rule.path`,
+                    // which is a glob — that stored rules with
+                    // `sourcePath: "src/**/*.ts"` and confused downstream
+                    // consumers (UI badges, audit, purge). Accept only a real
+                    // string, otherwise persist `null` and let the rule be
+                    // classified as "sourceless".
+                    const rawSourcePath = rule.sourcePath as string | undefined;
                     const sourcePath =
-                        (rule.sourcePath as string) ||
-                        (rule.path as string) ||
-                        '';
+                        typeof rawSourcePath === 'string' &&
+                        rawSourcePath.length > 0
+                            ? rawSourcePath
+                            : null;
                     const directoryId =
                         sourcePath && directoryByPath[sourcePath]
                             ? directoryByPath[sourcePath]
                             : undefined;
 
+                    // Single point of truth for path normalisation. Catches
+                    // the legacy "path = sourcePath" failure mode (David's
+                    // Webview/SecretStorage rules) and any IDE-marker leak
+                    // the LLM might still emit. Falls back to repo-wide
+                    // when the rule has no usable sourcePath at all.
+                    const validated = sourcePath
+                        ? validateAndScopeIdeRulePath({
+                              llmPath: rule.path as string | undefined,
+                              sourceFilePath: sourcePath,
+                              pathSource: (rule as any)?.pathSource,
+                          })
+                        : { path: '**/*', reason: 'rejected-empty' as const };
+                    if (validated.reason !== 'accepted-as-is') {
+                        this.logger.log({
+                            message: `[kody-rules-fast] path validation: ${validated.reason}`,
+                            context: KodyRulesSyncService.name,
+                            metadata: {
+                                sourceFilePath: sourcePath,
+                                originalLlmPath: (validated as any)
+                                    .originalLlmPath,
+                                finalPath: validated.path,
+                                pathSource:
+                                    (rule as any)?.pathSource ?? 'unspecified',
+                                repositoryId: targetRepositoryId,
+                            },
+                        });
+                    }
+
                     const dto: CreateKodyRuleDto = {
                         title: rule.title as string,
                         rule: rule.rule as string,
-                        path: (rule.path as string) || sourcePath,
+                        path: validated.path,
                         sourcePath: sourcePath,
                         repositoryId: targetRepositoryId,
                         directoryId,
@@ -1382,6 +1622,7 @@ export class KodyRulesSyncService {
                         examples: Array.isArray(rule.examples)
                             ? (rule.examples as any)
                             : [],
+                        type: KodyRulesType.STANDARD,
                     };
 
                     try {
@@ -1523,6 +1764,7 @@ export class KodyRulesSyncService {
                     type: promptRunner.executeMode,
                     fallback: false,
                 },
+                byokConfig: byokConfigValue,
                 exec: async (callbacks) => {
                     return await promptRunner
                         .builder()
@@ -1547,12 +1789,35 @@ export class KodyRulesSyncService {
                                 'Convert repository rule files (Cursor, Claude, GitHub rules, coding standards, etc.) into a JSON array of Kody Rules. IMPORTANT: Enforce exactly one rule per file. If multiple candidate rules exist, merge them COMPREHENSIVELY into one unified rule that preserves all essential details.',
                                 'Output ONLY a valid JSON object with a "rules" array. Format: {"rules": [...]}. If no rules, output {"rules": []}. No comments or explanations.',
                                 'Each item in the "rules" array MUST match exactly:',
-                                '{"title": string, "rule": string, "path": string, "sourcePath": string, "severity": "low"|"medium"|"high"|"critical", "scope"?: "file"|"pull-request", "status"?: "active"|"pending"|"rejected"|"deleted", "examples": [{ "snippet": string, "isCorrect": boolean }], "sourceSnippet"?: string}',
+                                '{"title": string, "rule": string, "path": string, "pathSource": "declared"|"content-inferred"|"location-inferred"|"default-repo-wide", "sourcePath": string, "severity": "low"|"medium"|"high"|"critical", "scope"?: "file"|"pull-request", "status"?: "active"|"pending"|"rejected"|"deleted", "examples": [{ "snippet": string, "isCorrect": boolean }], "sourceSnippet"?: string}',
                                 'Detection: extract a rule only if the text imposes a requirement/restriction/convention/standard.',
                                 'Severity map: must/required/security/blocker → "high" or "critical"; should/warn → "medium"; tip/info/optional → "low".',
                                 'Scope: "file" for code/content; "pull-request" for PR titles/descriptions/commits/reviewers/labels.',
                                 'Status: "active"',
-                                'path (target GLOB): use declared globs/paths when present (frontmatter like "globs:" or explicit sections). If none, set "**/*". If multiple, join with commas (e.g., "services/**,api/**").',
+
+                                // === path / pathSource — choose in this strict priority order ===
+                                'path (target GLOB) — pick the NARROWEST glob that captures what the rule is about, in this priority order:',
+                                '  (1) DECLARED — if the source file declares a glob (frontmatter "globs:", an explicit "Path:" / "Applies to:" line, etc.), use it verbatim. Set "pathSource": "declared". Comma-join multiple declared globs (e.g. "services/**,api/**").',
+                                '  (2) CONTENT-INFERRED — if no declared glob, inspect the rule body and infer from concrete signals. Set "pathSource": "content-inferred". Mapping examples:',
+                                '       TypeScript / TS files / .ts → "**/*.ts,**/*.tsx"',
+                                '       Python / .py → "**/*.py"',
+                                '       Go / Golang → "**/*.go"',
+                                '       Java → "**/*.java"',
+                                '       React / JSX / components → "**/*.tsx,**/*.jsx"',
+                                '       API controllers / HTTP handlers → "**/*.controller.ts,**/api/**"',
+                                '       Tests / specs → "**/*.test.ts,**/*.spec.ts"',
+                                '       esbuild config → "esbuild.config.{js,ts,mjs}"',
+                                '       webpack config → "webpack.config.*"',
+                                '       eslint config → ".eslintrc*,eslint.config.*"',
+                                '       Dockerfiles → "**/Dockerfile,**/Dockerfile.*"',
+                                '       VS Code Extension Webviews → "src/**/*.ts"',
+                                '       Database migrations → "**/migrations/**"',
+                                '  (3) LOCATION-INFERRED — if neither (1) nor (2) gives a useful narrowing AND the source MDC lives inside a repo subdirectory, scope to that subdirectory. Set "pathSource": "location-inferred". Examples:',
+                                '       source "applications/foo/.cursor/rules/x.mdc" → "applications/foo/**"',
+                                '       source "apps/api/.kody/rules/security.md" → "apps/api/**"',
+                                '  (4) DEFAULT-REPO-WIDE — only as a last resort, when the rule is genuinely repo-wide and the source is at the repo root. Set "pathSource": "default-repo-wide". Use "**/*".',
+                                'CRITICAL — NEVER set path to a glob that would match the rule source files themselves: do NOT emit ".cursor/rules/**", ".kody/rules/**", "CLAUDE.md", ".cursorrules", ".github/instructions/**", or any other IDE-rule directory. Those host the rule, not the code it lints. If you find yourself wanting to do that, fall back to (3) or (4).',
+                                'CRITICAL — NEVER copy "sourcePath" into "path". They serve different purposes.',
                                 'sourcePath: ALWAYS set to the exact file path provided in input.',
                                 'sourceSnippet: when possible, include an EXACT copy (verbatim) of the bullet/line/paragraph from the file that led to this rule. Do NOT paraphrase. If none is suitable, omit this key.',
 
@@ -1585,24 +1850,56 @@ export class KodyRulesSyncService {
 
             if (!result?.rules || result.rules.length === 0) return [];
 
-            const normalizeRule = (rule: any): Partial<CreateKodyRuleDto> => ({
-                ...rule,
-                severity:
-                    (rule?.severity?.toString?.().toLowerCase?.() as any) ||
-                    KodyRuleSeverity.MEDIUM,
-                scope: (rule?.scope as any) || KodyRulesScope.FILE,
-                path: rule?.path || params.filePath,
-                sourcePath: rule?.sourcePath || params.filePath,
-                repositoryId: rule?.repositoryId || params.repositoryId,
-                origin: KodyRulesOrigin.USER,
-                status: options?.defaultStatus || KodyRulesStatus.ACTIVE,
-                examples: Array.isArray(rule?.examples)
-                    ? rule.examples.map((example: any) => ({
-                          snippet: example?.snippet || '',
-                          isCorrect: example?.isCorrect || false,
-                      }))
-                    : [],
-            });
+            const normalizeRule = (rule: any): Partial<CreateKodyRuleDto> => {
+                const sourcePath = rule?.sourcePath || params.filePath;
+                // Single entry point for path validation/scoping. Replaces
+                // the old `rule?.path || params.filePath` fallback (which
+                // could echo the source path into the rule) and the
+                // post-hoc scopePathToSourceDirectory call.
+                const validated = validateAndScopeIdeRulePath({
+                    llmPath: rule?.path,
+                    sourceFilePath: sourcePath,
+                    pathSource: rule?.pathSource,
+                });
+
+                if (validated.reason !== 'accepted-as-is') {
+                    // Telemetry: non-trivial path interventions are the
+                    // signal that the LLM prompt drifted or hit an edge
+                    // case the validator caught. Aggregate over time to
+                    // see if "default-repo-wide" or "rejected-ide-path"
+                    // is a recurring pattern that needs prompt tuning.
+                    this.logger.log({
+                        message: `[kody-rules-sync] path validation: ${validated.reason}`,
+                        context: KodyRulesSyncService.name,
+                        metadata: {
+                            sourceFilePath: sourcePath,
+                            originalLlmPath: validated.originalLlmPath,
+                            finalPath: validated.path,
+                            pathSource: rule?.pathSource ?? 'unspecified',
+                            repositoryId: params.repositoryId,
+                        },
+                    });
+                }
+
+                return {
+                    ...rule,
+                    severity:
+                        (rule?.severity?.toString?.().toLowerCase?.() as any) ||
+                        KodyRuleSeverity.MEDIUM,
+                    scope: (rule?.scope as any) || KodyRulesScope.FILE,
+                    path: validated.path,
+                    sourcePath,
+                    repositoryId: rule?.repositoryId || params.repositoryId,
+                    origin: KodyRulesOrigin.USER,
+                    status: options?.defaultStatus || KodyRulesStatus.ACTIVE,
+                    examples: Array.isArray(rule?.examples)
+                        ? rule.examples.map((example: any) => ({
+                              snippet: example?.snippet || '',
+                              isCorrect: example?.isCorrect || false,
+                          }))
+                        : [],
+                };
+            };
 
             return result.rules.map(normalizeRule);
         } catch {
@@ -1632,6 +1929,7 @@ export class KodyRulesSyncService {
                             type: promptRunner.executeMode,
                             fallback: true,
                         },
+                        byokConfig: byokConfigValue,
                         exec: async (callbacks) => {
                             return await promptRunner
                                 .builder()
@@ -1736,6 +2034,7 @@ export class KodyRulesSyncService {
                     type: promptRunner.executeMode,
                     fallback: false,
                 },
+                byokConfig: byokConfigValue,
                 exec: async (callbacks) => {
                     return await promptRunner
                         .builder()
@@ -1811,6 +2110,7 @@ export class KodyRulesSyncService {
                             type: promptRunner.executeMode,
                             fallback: true,
                         },
+                        byokConfig: byokConfigValue,
                         exec: async (callbacks) => {
                             return await promptRunner
                                 .builder()
@@ -1903,6 +2203,7 @@ export class KodyRulesSyncService {
                     type: promptRunner.executeMode,
                     fallback: false,
                 },
+                byokConfig: byokConfigValue,
                 exec: async (callbacks) => {
                     return await promptRunner
                         .builder()
@@ -1973,6 +2274,7 @@ export class KodyRulesSyncService {
                             type: promptRunner.executeMode,
                             fallback: true,
                         },
+                        byokConfig: byokConfigValue,
                         exec: async (callbacks) => {
                             return await promptRunner
                                 .builder()
@@ -2050,24 +2352,24 @@ export class KodyRulesSyncService {
         }
     }
 
-    private getRuleId(
-        result: Partial<{ uuid?: string; id?: string }> | null | undefined,
-    ): string | undefined {
+    private getRuleId(result: unknown): string | undefined {
         if (!result) {
             return undefined;
         }
 
-        if (typeof result.uuid === 'string' && result.uuid) {
-            return result.uuid;
+        const candidate = result as Record<string, unknown>;
+
+        if (typeof candidate.uuid === 'string' && candidate.uuid) {
+            return candidate.uuid;
         }
 
-        if (typeof result.id === 'string' && result.id) {
-            return result.id;
+        if (typeof candidate.id === 'string' && candidate.id) {
+            return candidate.id;
         }
 
         const fallback =
-            typeof (result as Record<string, unknown>)._id === 'string'
-                ? ((result as Record<string, unknown>)._id as string)
+            typeof candidate._id === 'string'
+                ? (candidate._id as string)
                 : undefined;
         return fallback;
     }
@@ -2387,7 +2689,14 @@ export class KodyRulesSyncService {
                 return [];
             }
 
-            return repoConfig.directories.map((d) => d.path);
+            // Each directory entry persisted in the parameters store carries
+            // a `path` string at runtime, but the formal type
+            // (`DirectoryCodeReviewConfig`) only models nested `folders[]`.
+            // Cast + runtime guard mirrors the pattern used by
+            // `findScopedDirectoryForFile` higher up in this file.
+            return (repoConfig.directories as any[])
+                .filter((d) => typeof d?.path === 'string')
+                .map((d) => d.path as string);
         } catch {
             return [];
         }
@@ -2411,5 +2720,195 @@ export class KodyRulesSyncService {
         } catch {
             return [];
         }
+    }
+
+    /**
+     * Internal helper: walk every IDE-sync rule for `repositoryId` and flip
+     * each one to `targetStatus`. Optionally restrict the set to rules
+     * whose CURRENT status is in `onlyFromStatus` (e.g. `pause` should only
+     * touch ACTIVE rules; `resume` should only touch PAUSED rules).
+     *
+     * `excludePinned` (default `true`) skips rules whose source file carries
+     * an `@kody-sync` marker (`pinnedSync === true`). The bulk pause/delete
+     * actions intentionally leave those alone — the next PR-driven sync
+     * would re-import them as ACTIVE anyway, and the chip already excludes
+     * them, so the two surfaces must agree. Set to `false` to force a
+     * sweep of every IDE-synced rule including pinned (no current caller
+     * does this; the option exists so future callers don't silently get
+     * the pinned-skip behaviour without knowing).
+     *
+     * Returns the count of rules whose status was changed.
+     */
+    private async transitionIdeSyncRulesStatus(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId: string;
+        targetStatus: KodyRulesStatus;
+        onlyFromStatus?: KodyRulesStatus[];
+        excludePinned?: boolean;
+    }): Promise<number> {
+        const {
+            organizationAndTeamData,
+            repositoryId,
+            targetStatus,
+            onlyFromStatus,
+            excludePinned = true,
+        } = params;
+        const entity = await this.kodyRulesService.findByOrganizationId(
+            organizationAndTeamData.organizationId,
+        );
+        if (!entity?.rules) return 0;
+
+        // Only act on rules whose `sourcePath` matches a recognised IDE
+        // rule file pattern. Other flows (e.g. Onboard) also persist rules
+        // with a `sourcePath`, so checking for null alone would sweep them
+        // up erroneously.
+        const ideSyncRules = entity.rules.filter((r: any) => {
+            if (r?.repositoryId !== repositoryId) return false;
+            if (!isIdeRuleSource(r?.sourcePath)) return false;
+            if (excludePinned && r?.pinnedSync === true) return false;
+            if (onlyFromStatus && !onlyFromStatus.includes(r?.status)) {
+                return false;
+            }
+            return true;
+        });
+
+        let changed = 0;
+        for (const rule of ideSyncRules) {
+            if (!rule.uuid) continue;
+            await this.kodyRulesService.createOrUpdate(
+                organizationAndTeamData,
+                { ...rule, status: targetStatus } as any,
+                this.systemUserInfo,
+            );
+            changed += 1;
+        }
+        return changed;
+    }
+
+    /**
+     * Soft-delete all IDE-synced rules for a repository (status → DELETED).
+     * Used by the toggle-off `delete` action and by the imported-rules
+     * management endpoint. The rule is kept for audit/undo but is hidden
+     * from the user's listing and skipped by the enforcement filter.
+     */
+    async purgeAllIdeSyncRulesForRepository(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId: string;
+    }): Promise<void> {
+        try {
+            await this.transitionIdeSyncRulesStatus({
+                ...params,
+                targetStatus: KodyRulesStatus.DELETED,
+            });
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to purge IDE sync rules for repository',
+                context: KodyRulesSyncService.name,
+                error,
+                metadata: params,
+            });
+        }
+    }
+
+    /**
+     * Soft-disable all IDE-synced rules for a repository (status → PAUSED).
+     * Used by the toggle-off `pause` action and by the management endpoint.
+     * The rule stays visible in the user's list but is skipped by the
+     * enforcement filter, so PRs are no longer reviewed against it. Reversible
+     * via `resumeAllIdeSyncRulesForRepository`.
+     *
+     * Only rules currently in ACTIVE are paused (idempotent: PAUSED stays
+     * PAUSED, DELETED stays DELETED).
+     */
+    async pauseAllIdeSyncRulesForRepository(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId: string;
+    }): Promise<void> {
+        try {
+            await this.transitionIdeSyncRulesStatus({
+                ...params,
+                targetStatus: KodyRulesStatus.PAUSED,
+                onlyFromStatus: [KodyRulesStatus.ACTIVE],
+            });
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to pause IDE sync rules for repository',
+                context: KodyRulesSyncService.name,
+                error,
+                metadata: params,
+            });
+        }
+    }
+
+    /**
+     * Re-enable all paused IDE-synced rules for a repository (status →
+     * ACTIVE). Mirror of `pauseAllIdeSyncRulesForRepository`. Only rules
+     * currently in PAUSED are flipped — DELETED rules are not resurrected
+     * via this path (re-enabling auto-sync re-imports them from source).
+     */
+    async resumeAllIdeSyncRulesForRepository(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId: string;
+    }): Promise<void> {
+        try {
+            await this.transitionIdeSyncRulesStatus({
+                ...params,
+                targetStatus: KodyRulesStatus.ACTIVE,
+                onlyFromStatus: [KodyRulesStatus.PAUSED],
+            });
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to resume IDE sync rules for repository',
+                context: KodyRulesSyncService.name,
+                error,
+                metadata: params,
+            });
+        }
+    }
+
+    /**
+     * Count IDE-synced rules per status for a repository — drives the
+     * toggle-off modal copy ("you have N rules currently auto-synced").
+     *
+     * `pinned` counts ACTIVE+PAUSED rules whose source file carries
+     * `@kody-sync` — those won't be touched by pause/delete bulk actions
+     * (the next sync would re-import them anyway). The UI uses this to
+     * tell the user "we'll preserve M pinned rules" so the result of
+     * the action isn't surprising. DELETED-pinned isn't counted because
+     * those won't matter to the user's pending decision.
+     */
+    async countIdeSyncRulesForRepository(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId: string;
+    }): Promise<{
+        active: number;
+        paused: number;
+        deleted: number;
+        pinned: number;
+    }> {
+        const { organizationAndTeamData, repositoryId } = params;
+        const counts = { active: 0, paused: 0, deleted: 0, pinned: 0 };
+        const entity = await this.kodyRulesService.findByOrganizationId(
+            organizationAndTeamData.organizationId,
+        );
+        if (!entity?.rules) return counts;
+
+        for (const r of entity.rules as any[]) {
+            if (r?.repositoryId !== repositoryId) continue;
+            if (!isIdeRuleSource(r?.sourcePath)) continue;
+            if (r?.status === KodyRulesStatus.ACTIVE) counts.active += 1;
+            else if (r?.status === KodyRulesStatus.PAUSED) counts.paused += 1;
+            else if (r?.status === KodyRulesStatus.DELETED) {
+                counts.deleted += 1;
+            }
+            if (
+                r?.pinnedSync === true &&
+                (r?.status === KodyRulesStatus.ACTIVE ||
+                    r?.status === KodyRulesStatus.PAUSED)
+            ) {
+                counts.pinned += 1;
+            }
+        }
+        return counts;
     }
 }

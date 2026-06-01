@@ -1,0 +1,35 @@
+id: sh-all
+description: |
+    Self-hosted only, all four providers — re-validation of the license
+    seat-gate work (2026-05-26): ensureLicenseSeat in the review scenarios
+    and Provider.pollForLicenseBlock in per-seat-license-toggle. Runs against
+    already-provisioned droplets via SELFHOSTED_*_<PROVIDER> env (no
+    provisioning, no image rebuild — all changes are test-harness side).
+
+    onboarding-webhook-registration runs first per cell: if the webhook isn't
+    registered after onboarding, every downstream scenario times out instead
+    of failing fast.
+
+scenarios:
+    - onboarding-webhook-registration
+    - code-review-basic
+    - command-review
+    - kody-rules-create-and-apply
+    - license-attribution
+    # per-seat gate (license-paid only); exercises pollForLicenseBlock on all
+    # four providers — the cross-provider validation this run is for.
+    - per-seat-license-toggle
+
+cells:
+    - target: self-hosted
+      provider: github
+      license: license-paid
+    - target: self-hosted
+      provider: gitlab
+      license: license-paid
+    - target: self-hosted
+      provider: bitbucket
+      license: license-paid
+    - target: self-hosted
+      provider: azure-devops
+      license: license-paid

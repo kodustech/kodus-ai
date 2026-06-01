@@ -1,0 +1,146 @@
+---
+title: "Decision Memory"
+description: "Capture and persist AI agent decisions as structured files in your repository."
+tag: 'alpha'
+---
+
+Decision Memory is Kodus's way of remembering **why** an AI agent made the changes it did — not just the diff, but the reasoning, the constraints, the alternatives considered. Decisions are captured automatically on every agent turn and stored as structured markdown files versioned alongside your code.
+
+## Why it exists
+
+Code review catches what's wrong with a diff. It doesn't tell you why the author went with approach A over approach B, or what constraint forced the ugly workaround on line 42. For AI agents, that context vanishes between sessions — each run starts from scratch.
+
+Decision Memory fixes this by:
+
+- **Capturing reasoning automatically** at every turn-complete event.
+- **Storing it in the repo** so the context travels with the code, not with a session.
+- **Scoping it by PR and by module** so you get both branch-level context and long-term module knowledge.
+
+## How it works
+
+When enabled, Kodus installs hooks into your AI agent's turn-complete events. Each turn, the agent's decisions are captured into:
+
+```
+.kody/
+├── pr/by-sha/<head-sha>.md    # PR-level decisions (versioned with code)
+├── memory/<module-id>.md      # Module-level decisions (long-term)
+└── modules.yml                # Module configuration
+```
+
+- **PR memory** lives on the branch. It's scoped to the current head SHA — as the branch evolves, new files are created for each meaningful state.
+- **Module memory** is long-term. It accumulates decisions per module over time.
+- **`modules.yml`** tells Kodus how to map paths to modules (e.g., `src/auth/**` → `auth` module).
+
+## Supported agents
+
+- **Claude Code** — via settings hook on stop/agent-turn-complete.
+- **Cursor** — via workspace rules.
+- **Codex** — via `notify` entry in `~/.codex/config.toml`.
+
+## Setup
+
+Enable for all detected agents:
+
+```bash
+kodus decisions enable
+```
+
+Or target specific agents:
+
+```bash
+kodus decisions enable --agents claude,cursor
+kodus decisions enable --agents codex --codex-config ~/.codex/config.toml
+```
+
+If a previous config is in place, force a reinstall:
+
+```bash
+kodus decisions enable --force
+```
+
+Check what's wired up:
+
+```bash
+kodus decisions status
+```
+
+## Workflow
+
+<Steps>
+  <Step title="Enable hooks">
+    ```bash
+    kodus decisions enable
+    ```
+
+    This installs agent-specific integration files and adds `.kody/` to git (creating a `modules.yml` if it doesn't exist).
+  </Step>
+  <Step title="Work normally">
+    As you (or your agent) work, each turn-complete event captures a decision to `.kody/pr/by-sha/<sha>.md`. Commit these files along with your code changes — the reasoning is now in version control.
+  </Step>
+  <Step title="Review captured decisions">
+    ```bash
+    kodus decisions show                    # current branch PR memory
+    kodus decisions show feat/auth          # decisions for a specific branch
+    kodus decisions show auth               # module decisions for 'auth'
+    ```
+  </Step>
+  <Step title="Promote to long-term memory">
+    When a PR merges, promote its PR-level decisions to module-level memory so they persist beyond the branch:
+
+    ```bash
+    kodus decisions promote                               # current branch, all matched modules
+    kodus decisions promote --branch feat/auth            # a specific branch
+    kodus decisions promote --branch feat/auth --modules auth,users
+    ```
+  </Step>
+</Steps>
+
+## What gets captured
+
+Each decision file is structured markdown:
+
+- **Summary** — what the agent intended to do.
+- **Context** — constraints, prior decisions, referenced files.
+- **Alternatives considered** — approaches the agent rejected and why.
+- **Outcome** — what was actually changed.
+
+The exact shape depends on the agent's turn event; the CLI normalizes it into a consistent frontmatter + body format.
+
+## Disabling
+
+Remove all hooks and integration files:
+
+```bash
+kodus decisions disable
+```
+
+This does not delete data in `.kody/` — your history stays intact. Delete the directory manually if you want a clean slate.
+
+## Context files the CLI reads
+
+In addition to `.kody/`, the CLI picks up project context from these files when running reviews:
+
+| File              | Description                                      |
+| ----------------- | ------------------------------------------------ |
+| `.kodus.md`       | Kodus-specific configuration and guidelines      |
+| `claude.md`       | Claude-specific guidelines                       |
+| `.cursor/rules/`  | Cursor IDE rules directory                       |
+
+These are orthogonal to Decision Memory — they describe *standing* context, while Decision Memory captures *turn-by-turn* reasoning.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="AI Agents" icon="robot" href="ai_agents">
+    Review-fix loops with Claude Code, Cursor, Codex, and Windsurf.
+  </Card>
+  <Card title="Concepts" icon="book-open" href="concepts">
+    Kody Rules, centralized config, and diff modes.
+  </Card>
+  <Card title="Command Reference" icon="book" href="commands#kodus-decisions">
+    Full `kodus decisions` flag listing.
+  </Card>
+  <Card title="Troubleshooting" icon="life-ring" href="troubleshooting">
+    Decision hooks not capturing? See the dedicated accordion.
+  </Card>
+</CardGroup>

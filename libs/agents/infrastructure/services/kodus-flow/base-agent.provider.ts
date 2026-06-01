@@ -45,15 +45,33 @@ export abstract class BaseAgentProvider {
     ) {}
 
     /**
-     * Fetches BYOK configuration for the organization
+     * Fetches BYOK configuration for the organization.
+     *
+     * `byokModelOverride` is the per-repository/directory model resolved by
+     * the code review pipeline (`codeReviewConfig.byokModel`). `getBYOKConfig()`
+     * returns the raw org-level config, so without applying it here an agent
+     * invoked during a review would run on the BYOK-settings main model and
+     * ignore the override. Empty/absent means "inherit" (no override).
      */
     protected async fetchBYOKConfig(
         organizationAndTeamData: OrganizationAndTeamData,
+        byokModelOverride?: string,
     ): Promise<void> {
         this.organizationAndTeamData = organizationAndTeamData;
-        this.byokConfig = await this.permissionValidationService.getBYOKConfig(
-            organizationAndTeamData,
-        );
+
+        const byokConfig =
+            await this.permissionValidationService.getBYOKConfig(
+                organizationAndTeamData,
+            );
+
+        const overrideModel = byokModelOverride?.trim();
+        this.byokConfig =
+            overrideModel && byokConfig?.main
+                ? {
+                      ...byokConfig,
+                      main: { ...byokConfig.main, model: overrideModel },
+                  }
+                : byokConfig;
     }
 
     /**
@@ -98,6 +116,7 @@ export abstract class BaseAgentProvider {
                         spanName,
                         runName,
                         attrs: spanAttrs,
+                        byokConfig: this.byokConfig,
                         exec: async (callbacks) => {
                             let builder = promptRunner
                                 .builder()

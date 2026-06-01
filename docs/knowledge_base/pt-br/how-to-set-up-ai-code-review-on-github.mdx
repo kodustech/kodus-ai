@@ -1,0 +1,30 @@
+---
+title: "Como configurar revisão de código com IA no GitHub"
+description: "Instale e configure o Kodus para repositórios GitHub e receba revisão de código automatizada com IA em cada pull request."
+---
+
+Configurar o Kodus no GitHub leva poucos minutos. Uma vez conectado, cada pull request é revisado automaticamente.
+
+## Passos
+
+1. **Crie uma conta** em [kodus.io](https://kodus.io) ou [hospede o Kodus por conta própria](/how_to_deploy/pt-br/deploy_kodus/generic_vm)
+2. **Conecte o GitHub** — instale o GitHub App do Kodus quando solicitado durante a configuração
+3. **Selecione os repositórios** — escolha quais repositórios o Kodus deve revisar
+4. **Abra um PR** — o Kodus o revisa automaticamente e posta comentários
+
+## O que você recebe
+
+- Revisões automatizadas em cada PR (ou sob demanda com `@kody start-review`)
+- Comentários postados diretamente no PR com sugestões de código
+- Regras personalizáveis, filtros de severidade e limites de sugestões
+- Validação de lógica de negócio contra tarefas vinculadas
+
+## Configuração personalizada
+
+Coloque um `kodus-config.yml` na raiz do seu repositório para personalizar o comportamento por repositório. O arquivo substitui as configurações da interface automaticamente.
+
+## Usando um Personal Access Token
+
+Para repositórios privados ou organizações com permissões mais rígidas, pode ser necessário configurar um Personal Access Token (PAT) do GitHub.
+
+Para o guia completo de configuração, consulte [Início Rápido](/how_to_use/pt-br/quickstart) e [Configuração do GitHub App](/how_to_deploy/pt-br/platforms/github/github_app).

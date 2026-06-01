@@ -19,6 +19,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
+import { useKodyRulesCount } from "@services/kodyRules/hooks";
 import type { useSuspenseGetParameterPlatformConfigs } from "@services/parameters/hooks";
 import { KodyLearningStatus } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
@@ -34,7 +35,7 @@ import {
 } from "../../code-review/_types";
 import { AddRepoModal } from "../copy-settings-modal";
 import { RouteButtonWithOverrideCount } from "../route-button-with-override-count";
-import { PerDirectory } from "./directory";
+import { PerDirectoryGroup } from "./directory-group";
 import { SidebarRepositoryOrDirectoryDropdown } from "./options-dropdown";
 
 const RepositoryCollapsibleItem = ({
@@ -70,6 +71,12 @@ const RepositoryCollapsibleItem = ({
             shouldFetchRepositoryCounts,
         );
 
+    const repositoryKodyRulesCount = useKodyRulesCount(
+        repository.id,
+        undefined,
+        shouldFetchRepositoryCounts,
+    );
+
     const repositoryCustomMessagesOverrideCount = hasRepositoryConfig
         ? (repositoryOverrideCountsData?.repositoryOverrideCount ?? 0)
         : 0;
@@ -100,6 +107,7 @@ const RepositoryCollapsibleItem = ({
     const overrideCount =
         repositoryConfigOverrideCount +
         repositoryCustomMessagesOverrideCount +
+        repositoryKodyRulesCount +
         nestedDirectoryOverrideCount;
 
     return (
@@ -172,25 +180,31 @@ const RepositoryCollapsibleItem = ({
                                         customMessagesOverrideCount={
                                             repositoryCustomMessagesOverrideCount
                                         }
+                                        kodyRulesOverrideCount={
+                                            repositoryKodyRulesCount
+                                        }
                                     />
                                 </SidebarMenuSubItem>
                             );
                         })}
 
-                    {repository.directories?.map((d) => {
+                    {repository.directories?.map((group) => {
                         return (
-                            <PerDirectory
-                                key={d.id}
-                                directory={d}
+                            <PerDirectoryGroup
+                                key={group.id}
+                                group={group}
                                 repository={repository}
                                 routes={routes}
-                                configs={d.configs}
+                                configs={group.configs}
                                 customMessagesOverrideCount={
-                                    directoryCustomMessageCounts.get(d.id) ?? 0
+                                    directoryCustomMessageCounts.get(
+                                        group.id,
+                                    ) ?? 0
                                 }
                             />
                         );
                     })}
+
                 </SidebarMenuSub>
             </CollapsibleContent>
         </Collapsible>

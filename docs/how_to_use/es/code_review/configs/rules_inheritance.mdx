@@ -1,0 +1,78 @@
+---
+title: "Herencia de Reglas"
+description: "Cómo las reglas Global → Repositorio → Directorio se heredan, y cómo detener o excluir la herencia en niveles específicos."
+---
+
+## Descripción General
+
+Por defecto, las Kody Rules se heredan hacia abajo en la jerarquía:
+
+**Global → Repositorio → Directorio**
+
+El conjunto de reglas efectivo en cada nivel es:
+- Las reglas definidas en ese nivel, más
+- Las reglas heredadas del nivel padre,
+- Menos cualquier regla explícitamente excluida en ese nivel.
+
+## Comportamiento Predeterminado
+
+- Las reglas globales se aplican a todos los repositorios y directorios por defecto.
+- Las reglas del repositorio heredan todas las reglas globales, más las reglas definidas específicamente para ese repositorio.
+- Las reglas del directorio heredan todas las reglas de su repositorio, más las reglas definidas específicamente para ese directorio.
+
+No se requiere ninguna acción para habilitar la herencia — es automática.
+
+## Romper la Herencia
+
+Hay dos formas de evitar que una regla sea heredada:
+
+### 1) Marcar una regla como no heredable (al momento de la creación)
+
+Al crear una regla en cualquier nivel (Global, Repositorio o Directorio), puedes marcarla como "no heredable".
+
+Efecto:
+- La regla se aplica solo en el nivel donde fue creada.
+- No aparece en los niveles hijos.
+
+Usa esto cuando una regla sea intencionalmente específica de un alcance particular y no deba fluir hacia abajo en la jerarquía.
+
+### 2) Excluir una regla padre de un nivel hijo
+
+Desde una configuración hija (Repositorio o Directorio), puedes excluir explícitamente una regla que de otro modo se heredaría del padre.
+
+Efecto:
+- La regla no se aplica en ese nivel hijo exacto.
+- La exclusión no se propaga más abajo — los nietos aún ven la regla del padre a menos que también la excluyan (o la regla fue creada como no heredable).
+
+Usa esto para ajustar el comportamiento de un repositorio o directorio específico sin afectar a otros hijos.
+
+## Ejemplos
+
+### Exclusión a nivel de repositorio
+
+Supongamos que existe una regla Global "Requerir pruebas para nuevos endpoints". En el repositorio "shop", excluyes esta regla a nivel de repositorio.
+
+Resultado:
+- A nivel de repositorio, la regla ya no se aplica.
+- Si tienes un directorio configurado dentro del mismo repositorio (p. ej., `apps/api`), ese directorio todavía hereda la regla Global y la aplicará — a menos que también la excluyas a nivel de directorio, o la regla Global original fue creada como no heredable.
+
+### Crear una regla Global no heredable
+
+Creas una regla Global y la marcas como no heredable.
+
+Resultado:
+- La regla se aplica solo a nivel Global.
+- Los repositorios y directorios no la heredan.
+
+## Consejos Prácticos
+
+- Mantén las reglas fundamentales a nivel Global para que todos los repositorios se beneficien por defecto.
+- Usa reglas no heredables para contextos muy específicos que no deberían afectar a los hijos.
+- Usa exclusiones a nivel hijo para hacer excepciones específicas sin impactar otros repositorios o directorios.
+
+## Relacionados
+
+- <a href="/how_to_use/es/code_review/configs/kody_rules">Descripción General de Kody Rules</a>
+- <a href="/how_to_use/es/code_review/configs/directory_level">Configuración a Nivel de Directorio</a>
+- <a href="/how_to_use/es/code_review/configs/inheritance_overrides">Herencia y Overrides de Configuración</a>
+- <a href="/how_to_use/es/code_review/configs/centralized_config">Configuración Centralizada</a> — gestiona reglas como archivos YAML bajo `.kody-rules/` en un único repositorio.

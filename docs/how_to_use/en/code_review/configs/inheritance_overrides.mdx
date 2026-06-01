@@ -1,0 +1,74 @@
+---
+title: "Config Inheritance & Overrides"
+description: "How Global → Repository → Directory settings inherit, override, and propagate."
+---
+
+## Overview
+
+Kodus configurations work across three levels: **Global**, **Repository**, and **Directory**.
+
+<Note>
+The most specific level wins: Directory > Repository > Global
+</Note>
+
+```
+Global
+ ├─ Repository A
+ │   ├─ Directory A1
+ │   └─ Directory A2
+ └─ Repository B
+```
+
+## How It Works
+
+Fields inherit from the parent level by default. When you change a field at Global, all repositories and directories without an override update automatically.
+
+<Info>
+Overrides are per field. You can override one field and inherit everything else.
+</Info>
+
+Once overridden, a field stops following the parent and uses its local value instead.
+
+## Examples
+
+<Tabs>
+  <Tab title="Global change propagates">
+    You change **Severity thresholds** at Global.
+    
+    All repositories and directories without an override update automatically. Overridden ones stay unchanged.
+  </Tab>
+
+  <Tab title="Repository override">
+    In Repository X, you override **Review start message**.
+    
+    Directories within Repository X now inherit from Repository X (unless they have their own override).
+  </Tab>
+
+  <Tab title="Return to inheritance">
+    In Repository Y, you remove the override for **Active categories**.
+    
+    The field follows Global again and receives future Global changes.
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+- Start at Global with strong defaults
+- Only override when you have a specific need for that repo/directory
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="If I change something at Global, will it break my local adjustments?">
+    No. Local overrides stay unchanged.
+  </Accordion>
+
+  <Accordion title="Can I override just one field and inherit the rest?">
+    Yes. Overrides are per field.
+  </Accordion>
+
+  <Accordion title="Does a Directory inherit from Repository or Global?">
+    From Repository first. If Repository has no override for that field, it inherits from Global.
+  </Accordion>
+</AccordionGroup>
+

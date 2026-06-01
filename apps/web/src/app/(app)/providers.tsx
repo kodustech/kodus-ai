@@ -25,6 +25,7 @@ type ProvidersProps = PropsWithChildren<{
     permissions: PermissionsMap;
     isBYOK: boolean;
     isTrial: boolean;
+    isEnterprise: boolean;
     featureFlags: Partial<{
         [K in keyof typeof FEATURE_FLAGS]: boolean;
     }>;
@@ -38,6 +39,7 @@ export function Providers({
     permissions,
     isBYOK,
     isTrial,
+    isEnterprise,
     featureFlags,
 }: ProvidersProps) {
     return (
@@ -47,7 +49,8 @@ export function Providers({
                     <AllTeamsProvider teams={teams}>
                         <SubsciptionStatusProvider
                             isBYOK={isBYOK}
-                            isTrial={isTrial}>
+                            isTrial={isTrial}
+                            isEnterprise={isEnterprise}>
                             <SelectedTeamProvider>
                                 <FeatureFlagsProvider
                                     featureFlags={featureFlags}>

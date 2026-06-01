@@ -1,0 +1,58 @@
+---
+title: "Configurações por Diretório"
+description: "Aplique configurações de code review personalizadas a pastas específicas do seu repositório. Ideal para monorepos."
+---
+
+## Visão Geral
+
+Aplique configurações de code review personalizadas a pastas específicas do seu repositório. Ideal para monorepos onde áreas diferentes possuem padrões ou responsabilidades distintas.
+
+Kody seleciona uma única configuração por PR: **Diretório** → **Repositório** → **Global**
+
+<Note>
+  Saiba como as configurações fluem entre os níveis em <a href="/how_to_use/pt-br/code_review/configs/inheritance_overrides">Herança e Sobrescrita de Configuração</a>.
+</Note>
+
+## Como Funciona
+
+- Configure qualquer pasta em qualquer profundidade (ex.: `api/src/services`)
+- Configure quantas pastas quiser
+- **Sem sobreposição**: se você configurar `api/src/services`, não poderá também configurar `api/src/services/users`
+
+### Regras de Seleção
+
+- **Um diretório configurado alterado**: Usa a configuração daquele diretório
+- **Nenhum diretório configurado alterado**: Usa a configuração do repositório (ou global se não houver configuração de repositório)
+- **Dois ou mais diretórios configurados alterados**: Escala para a configuração do repositório (ou global se não houver configuração de repositório)
+
+<Note>
+  Kody usa uma configuração por PR para manter as revisões previsíveis. Misturar configurações causa conflitos.
+</Note>
+
+## Exemplos
+
+<Tabs>
+  <Tab title="Único diretório configurado">
+    Você configurou `src/microservice-alpha`. O PR altera arquivos em `src/microservice-alpha` e pastas não configuradas.
+    
+    Usa a configuração de **microservice-alpha**.
+  </Tab>
+  <Tab title="Nenhum diretório configurado">
+    O PR toca apenas diretórios sem configurações específicas.
+    
+    Usa a configuração do **repositório** (ou **global** se não houver configuração de repositório).
+  </Tab>
+  <Tab title="Múltiplos diretórios configurados">
+    Você configurou `src/microservice-alpha` e `src/microservice-beta`. O PR toca ambos.
+    
+    Escala para a configuração do **repositório** (ou **global** se não houver configuração de repositório).
+  </Tab>
+</Tabs>
+
+## Configuração
+
+1. Abra as configurações de Code Review do seu repositório
+2. Adicione entradas de diretório e atribua configurações
+3. Salve as alterações
+
+Se você também usa `kodus-config.yml`, ele sobrescreve as configurações da interface web (veja Prioridade de Configuração nas configurações Gerais).

@@ -126,7 +126,7 @@ describe('DeleteIntegrationUseCase', () => {
             mockCreateOrUpdateParametersUseCase.execute,
         ).toHaveBeenCalledWith(
             expect.anything(), // ParametersKey.CENTRALIZED_CONFIG
-            { enabled: false, repository: null },
+            { enabled: false, repository: null, activePullRequest: null },
             { organizationId: MOCK_ORG_ID, teamId: MOCK_TEAM_ID },
         );
     }

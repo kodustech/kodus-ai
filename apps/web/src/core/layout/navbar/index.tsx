@@ -13,23 +13,25 @@ import {
 import { Spinner } from "@components/ui/spinner";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
+import { useQueryClient } from "@tanstack/react-query";
 import {
     GaugeIcon,
     GitPullRequestIcon,
     InfoIcon,
     LibraryBig,
     SlidersHorizontalIcon,
+    TerminalIcon,
 } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { ErrorBoundary } from "react-error-boundary";
 import { UserNav } from "src/core/layout/navbar/_components/user-nav";
 import { cn } from "src/core/utils/components";
+import { isCockpitTierAllowed } from "src/features/ee/cockpit/_helpers/tier-policy";
 import { SubscriptionBadge } from "src/features/ee/subscription/_components/subscription-badge";
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
 import { GithubStars } from "./_components/github-stars";
 import { IssuesCount } from "./_components/issues-count";
-import { PendingRulesNotification } from "./_components/pending-rules-notification";
+import { NotificationBell } from "./_components/notification-bell";
 import { VERSION_QUERY } from "./_components/version-info";
 
 export const NavMenu = () => {
@@ -42,6 +44,10 @@ export const NavMenu = () => {
     const canReadPullRequests = usePermission(
         Action.Read,
         ResourceType.PullRequests,
+    );
+    const canReadCliReviews = usePermission(
+        Action.Read,
+        ResourceType.CliReview,
     );
     const canReadCodeReviewSettings = usePermission(
         Action.Read,
@@ -69,11 +75,10 @@ export const NavMenu = () => {
             {
                 label: "Cockpit",
                 href: "/cockpit",
-                visible:
-                    subscription.license.valid &&
-                    subscription.license.subscriptionStatus !== "self-hosted" &&
-                    subscription.license.subscriptionStatus !==
-                        "licensed-self-hosted",
+                // Mirrors the /cockpit route guard (apps/web/.../cockpit/layout.tsx)
+                // and the backend tier-policy. Self-hosted on Enterprise gets the
+                // icon; unlicensed self-hosted / free_byok stays hidden.
+                visible: isCockpitTierAllowed(subscription.license),
                 icon: <GaugeIcon className="size-6" />,
             },
 
@@ -126,16 +131,29 @@ export const NavMenu = () => {
             });
         }
 
+        if (canReadCliReviews) {
+            items.push({
+                label: "CLI Reviews",
+                href: "/cli-reviews",
+                visible: canReadCliReviews,
+                icon: <TerminalIcon className="size-5" />,
+            });
+        }
+
         return items;
     }, [
         subscription.license.valid,
         subscription.license.subscriptionStatus,
+        "planType" in subscription.license
+            ? subscription.license.planType
+            : undefined,
         canReadCodeReviewSettings,
         canReadGitSettings,
         canReadBilling,
         canReadPlugins,
         canReadIssues,
         canReadPullRequests,
+        canReadCliReviews,
     ]);
 
     const isActive = (
@@ -198,7 +216,7 @@ export const NavMenu = () => {
 
                 <div className="flex items-center gap-2">
                     <SubscriptionBadge />
-                    <PendingRulesNotification />
+                    <NotificationBell />
                 </div>
 
                 <UserNav />

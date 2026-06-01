@@ -110,7 +110,9 @@ describe('Map-based Lookup Optimizations - Integration Tests', () => {
                     mockPullRequestService.updateSuggestion,
                 ).toHaveBeenCalledTimes(2);
 
-                // Verify correct IDs were updated
+                // Verify correct IDs were updated. Third arg is the
+                // org/team scope added by the cross-org leak fix in
+                // 57c3de5d1 (mongo writes scoped by organizationId).
                 expect(
                     mockPullRequestService.updateSuggestion,
                 ).toHaveBeenCalledWith(
@@ -118,6 +120,7 @@ describe('Map-based Lookup Optimizations - Integration Tests', () => {
                     expect.objectContaining({
                         implementationStatus: 'IMPLEMENTED',
                     }),
+                    mockOrganizationAndTeamData,
                 );
                 expect(
                     mockPullRequestService.updateSuggestion,
@@ -126,6 +129,7 @@ describe('Map-based Lookup Optimizations - Integration Tests', () => {
                     expect.objectContaining({
                         implementationStatus: 'IMPLEMENTED',
                     }),
+                    mockOrganizationAndTeamData,
                 );
 
                 expect(result).toEqual(implementedSuggestions);

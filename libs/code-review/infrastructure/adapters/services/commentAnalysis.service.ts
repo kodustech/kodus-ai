@@ -10,6 +10,7 @@ import { Injectable } from '@nestjs/common';
 import { v4 } from 'uuid';
 
 import { SUPPORTED_LANGUAGES } from '@libs/code-review/domain/contracts/SupportedLanguages';
+import { isKodyAuthoredBody } from '@libs/common/utils/kody-identifiers';
 import {
     CategorizedComment,
     UncategorizedComment,
@@ -100,6 +101,7 @@ export class CommentAnalysisService {
                     spanName,
                     runName,
                     attrs: spanAttrs,
+                    byokConfig,
                     exec: async (callbacks) => {
                         return promptRunner
                             .builder()
@@ -232,6 +234,7 @@ export class CommentAnalysisService {
                         type: promptRunner.executeMode,
                         commentsCount: filteredComments.length,
                     },
+                    byokConfig,
                     exec: async (callbacks) => {
                         return promptRunner
                             .builder()
@@ -297,6 +300,7 @@ export class CommentAnalysisService {
                             newRulesCount: generatedWithUuids.length,
                             existingRulesCount: existingRulesAsLibrary.length,
                         },
+                        byokConfig,
                         exec: async (callbacks) => {
                             return promptRunner
                                 .builder()
@@ -357,6 +361,7 @@ export class CommentAnalysisService {
                         type: promptRunner.executeMode,
                         candidateRulesCount: deduplicatedRules.length,
                     },
+                    byokConfig,
                     exec: async (callbacks) => {
                         return promptRunner
                             .builder()
@@ -493,6 +498,7 @@ export class CommentAnalysisService {
                     spanName,
                     runName,
                     attrs: spanAttrs,
+                    byokConfig,
                     exec: async (callbacks) => {
                         return promptRunner
                             .builder()
@@ -600,10 +606,16 @@ export class CommentAnalysisService {
                             comment?.user?.type?.toLowerCase() !== 'bot',
                     )
                     ?.filter(
-                        (comment) =>
-                            !comment?.body
-                                ?.toLowerCase()
-                                ?.includes('kody-codereview'),
+                        // Drop comments authored by Kody itself — otherwise
+                        // the rule-generator LLM learns from Kody's own
+                        // past reviews and creates duplicate rules on
+                        // subsequent onboardings (self-feedback loop).
+                        // Both provider signatures are checked centrally
+                        // via `isKodyAuthoredBody` — see
+                        // `libs/common/utils/kody-identifiers.ts` for why
+                        // bitbucket needs a different marker form than
+                        // github / gitlab / azure / forgejo.
+                        (comment) => !isKodyAuthoredBody(comment?.body),
                     )
                     ?.filter((comment) => comment?.body?.length > 100);
 
@@ -676,11 +688,14 @@ export class CommentAnalysisService {
         try {
             const total = files.length;
 
-            const count = files.reduce((acc, file) => {
-                const extension = file.filename.split('.').pop();
-                acc[extension] = (acc[extension] || 0) + 1;
-                return acc;
-            }, {});
+            const count = files.reduce<Record<string, number>>(
+                (acc, file) => {
+                    const extension = file.filename.split('.').pop();
+                    acc[extension] = (acc[extension] || 0) + 1;
+                    return acc;
+                },
+                {},
+            );
 
             return this.getPercentages(count, total);
         } catch (error) {

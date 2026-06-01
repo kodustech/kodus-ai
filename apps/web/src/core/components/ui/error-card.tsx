@@ -54,9 +54,8 @@ const ErrorCard = React.forwardRef<HTMLDivElement, ErrorCardProps>(
                 <AlertCircle className={cn(iconSize, "text-danger")} />
                 <span
                     className={cn(
-                        "text-text-secondary",
-                        variant === "card" && "max-w-[200px] text-sm",
-                        variant !== "card" && "text-sm",
+                        "text-text-secondary text-sm",
+                        variant === "card" && "max-w-md",
                     )}>
                     {message}
                 </span>

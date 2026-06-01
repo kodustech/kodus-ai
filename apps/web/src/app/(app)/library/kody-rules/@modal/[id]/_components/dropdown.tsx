@@ -13,7 +13,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@components/ui/popover";
-import { ChevronDown, Check } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import type { CodeReviewRepositoryConfig } from "src/app/(app)/settings/code-review/_types";
 import type { LiteralUnion } from "src/core/types";
 
@@ -45,7 +45,9 @@ export const SelectRepositoriesDropdown = ({
             id: LiteralUnion<"global">;
         }
     > = global
-        ? [{ id: "global", name: "Global", isSelected: false }].concat(_repositories)
+        ? [{ id: "global", name: "Global", isSelected: false }].concat(
+              _repositories,
+          )
         : _repositories;
 
     const matchesSearch = (repo: (typeof repositories)[0]) => {
@@ -90,63 +92,62 @@ export const SelectRepositoriesDropdown = ({
                 side="top"
                 sideOffset={10}
                 alignOffset={-40}
-                className="translate-x-6 w-72 p-0">
+                className="w-72 translate-x-6 p-0">
                 <Command filter={() => 1}>
                     <CommandInput
                         placeholder="Search repositories..."
                         onValueChange={setSearch}
                     />
 
+                    {(selectedRepos.length > 0 ||
+                        unselectedRepos.length > 0) && (
+                        <div className="flex justify-end gap-3 border-b px-3 py-1.5">
+                            {selectedRepos.length > 0 && (
+                                <button
+                                    type="button"
+                                    className="text-text-secondary hover:text-text-primary cursor-pointer text-xs font-medium"
+                                    onClick={() => {
+                                        const idsToRemove = new Set(
+                                            selectedRepos.map((r) => r.id),
+                                        );
+                                        setSelectedRepositoriesIds(
+                                            selectedRepositoriesIds.filter(
+                                                (id) => !idsToRemove.has(id),
+                                            ),
+                                        );
+                                    }}>
+                                    Clear selection
+                                    {search ? ` (${selectedRepos.length})` : ""}
+                                </button>
+                            )}
+                            {unselectedRepos.length > 0 && (
+                                <button
+                                    type="button"
+                                    className="text-primary-light hover:text-primary-dark cursor-pointer text-xs font-medium"
+                                    onClick={() => {
+                                        const idsToAdd = unselectedRepos.map(
+                                            (r) => r.id,
+                                        );
+                                        setSelectedRepositoriesIds([
+                                            ...selectedRepositoriesIds,
+                                            ...idsToAdd,
+                                        ]);
+                                    }}>
+                                    Select all
+                                    {search
+                                        ? ` (${unselectedRepos.length})`
+                                        : ""}
+                                </button>
+                            )}
+                        </div>
+                    )}
 
-                        {(selectedRepos.length > 0 || unselectedRepos.length > 0) && (
-                            <div className="flex justify-end gap-3 border-b px-3 py-1.5">
-                                {selectedRepos.length > 0 && (
-                                    <button
-                                        type="button"
-                                        className="cursor-pointer text-xs font-medium text-text-secondary hover:text-text-primary"
-                                        onClick={() => {
-                                            const idsToRemove = new Set(
-                                                selectedRepos
-                                                    .map((r) => r.id),
-                                            );
-                                            setSelectedRepositoriesIds(
-                                                selectedRepositoriesIds.filter(
-                                                    (id) => !idsToRemove.has(id),
-                                                ),
-                                            );
-                                        }}>
-                                        Clear selection
-                                        {search
-                                            ? ` (${selectedRepos.length})`
-                                            : ""}
-                                    </button>
-                                )}
-                                {unselectedRepos.length > 0 && (
-                                    <button
-                                        type="button"
-                                        className="cursor-pointer text-xs font-medium text-primary-light hover:text-primary-dark"
-                                        onClick={() => {
-                                            const idsToAdd = unselectedRepos.map(
-                                                (r) => r.id,
-                                            );
-                                            setSelectedRepositoriesIds([
-                                                ...selectedRepositoriesIds,
-                                                ...idsToAdd,
-                                            ]);
-                                        }}>
-                                        Select all
-                                        {search
-                                            ? ` (${unselectedRepos.length})`
-                                            : ""}
-                                    </button>
-                                )}
-                            </div>
-                        )}
+                    <CommandList className="max-h-[300px] overflow-y-auto">
+                        <CommandEmpty>No repository found.</CommandEmpty>
 
-                        <CommandList className="max-h-[300px] overflow-y-auto">
-                            <CommandEmpty>No repository found.</CommandEmpty>
-
-                        <div className="m-0 p-0 max-h-[220px] overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
+                        <div
+                            className="m-0 max-h-[220px] overflow-y-auto p-0"
+                            onWheel={(e) => e.stopPropagation()}>
                             {selectedRepos.length > 0 && (
                                 <CommandGroup heading="Selected">
                                     {selectedRepos.map((r) => (
@@ -163,14 +164,13 @@ export const SelectRepositoriesDropdown = ({
                                             <span className="flex flex-1 flex-col items-start gap-1 text-left">
                                                 <span>{r.name}</span>
                                                 {r.directories &&
-                                                    r.directories.length > 0 && (
+                                                    r.directories.length >
+                                                        0 && (
                                                         <div className="flex flex-wrap gap-1">
                                                             {r.directories
                                                                 .filter((d) =>
                                                                     selectedDirectoriesIds.some(
-                                                                        (
-                                                                            sd,
-                                                                        ) =>
+                                                                        (sd) =>
                                                                             sd.directoryId ===
                                                                             d.id,
                                                                     ),
@@ -181,7 +181,7 @@ export const SelectRepositoriesDropdown = ({
                                                                             d.id
                                                                         }
                                                                         className="text-text-tertiary text-xs">
-                                                                        {d.path}
+                                                                        {d.folders?.[0]?.path ?? d.name}
                                                                     </span>
                                                                 ))}
                                                         </div>
@@ -208,12 +208,16 @@ export const SelectRepositoriesDropdown = ({
                                             <span className="flex flex-1 flex-col items-start gap-1 text-left">
                                                 <span>{r.name}</span>
                                                 {r.directories &&
-                                                    r.directories.length > 0 && (
+                                                    r.directories.length >
+                                                        0 && (
                                                         <span className="text-text-tertiary text-xs">
-                                                            {r.directories.length}{" "}
+                                                            {
+                                                                r.directories
+                                                                    .length
+                                                            }{" "}
                                                             director
-                                                            {r.directories.length >
-                                                            1
+                                                            {r.directories
+                                                                .length > 1
                                                                 ? "ies"
                                                                 : "y"}
                                                         </span>
@@ -223,10 +227,8 @@ export const SelectRepositoriesDropdown = ({
                                     ))}
                                 </CommandGroup>
                             )}
-
                         </div>
-                        </CommandList>
-
+                    </CommandList>
                 </Command>
             </PopoverContent>
         </Popover>

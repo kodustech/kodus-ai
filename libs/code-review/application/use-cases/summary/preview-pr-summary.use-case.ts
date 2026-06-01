@@ -78,6 +78,15 @@ export class PreviewPrSummaryUseCase {
             generatePRSummary: true,
         };
 
+        // Resolve the platform so the prompt can hint the per-platform
+        // PR-description size limit. Failure to resolve isn't fatal —
+        // the soft hint just gets skipped and `fitPRDescription` still
+        // truncates at the adapter boundary if needed.
+        const platformType =
+            await this.codeManagementService.getTypeIntegration(
+                organizationAndTeamData,
+            );
+
         const prSummary = await this.commentManagerService.generateSummaryPR(
             pullRequest,
             repository,
@@ -89,6 +98,7 @@ export class PreviewPrSummaryUseCase {
             false,
             true,
             undefined,
+            platformType ?? undefined,
         );
 
         return prSummary;

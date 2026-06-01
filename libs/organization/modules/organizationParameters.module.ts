@@ -9,11 +9,13 @@ import { OrganizationParametersRepository } from '../infrastructure/adapters/rep
 import { CreateOrUpdateOrganizationParametersUseCase } from '../application/use-cases/organizationParameters/create-or-update.use-case';
 import { FindByKeyOrganizationParametersUseCase } from '../application/use-cases/organizationParameters/find-by-key.use-case';
 import { DeleteByokConfigUseCase } from '../application/use-cases/organizationParameters/delete-byok-config.use-case';
+import { GetLLMConfigStatusUseCase } from '../application/use-cases/organizationParameters/get-llm-config-status.use-case';
 import { IgnoreBotsUseCase } from '../application/use-cases/organizationParameters/ignore-bots.use-case';
 import {
     GET_COCKPIT_METRICS_VISIBILITY_USE_CASE_TOKEN,
     GetCockpitMetricsVisibilityUseCase,
     GetModelsByProviderUseCase,
+    TestByokConnectionUseCase,
 } from '../application/use-cases/organizationParameters';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
@@ -42,8 +44,10 @@ import { ProviderModule } from '@libs/core/infrastructure/services/providers/pro
         CreateOrUpdateOrganizationParametersUseCase,
         FindByKeyOrganizationParametersUseCase,
         DeleteByokConfigUseCase,
+        GetLLMConfigStatusUseCase,
         IgnoreBotsUseCase,
         GetModelsByProviderUseCase,
+        TestByokConnectionUseCase,
     ],
     exports: [
         ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
@@ -51,9 +55,11 @@ import { ProviderModule } from '@libs/core/infrastructure/services/providers/pro
         CreateOrUpdateOrganizationParametersUseCase,
         FindByKeyOrganizationParametersUseCase,
         DeleteByokConfigUseCase,
+        GetLLMConfigStatusUseCase,
         IgnoreBotsUseCase,
         GET_COCKPIT_METRICS_VISIBILITY_USE_CASE_TOKEN,
         GetModelsByProviderUseCase,
+        TestByokConnectionUseCase,
         ProviderModule, // Added
     ],
 })

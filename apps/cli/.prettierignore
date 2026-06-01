@@ -1,0 +1,6 @@
+dist
+node_modules
+coverage
+.vitest
+.DS_Store
+install.ps1

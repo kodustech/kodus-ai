@@ -1,0 +1,132 @@
+name: "MCP Manager: QA EC2 Deploy"
+
+# Ported 1:1 from kodustech/kodus-mcp-manager/.github/workflows/qa-ec2-deploy.yml
+# when that repo was merged into apps/mcp-manager. Keeps the SSH +
+# start-app.sh deploy pattern; the GitOps backend pipeline does not
+# (yet) own mcp-manager.
+#
+# Build context is the kodus-ai monorepo root, but the Dockerfile uses
+# `--target=mcp-manager` against the unified docker/Dockerfile (shared
+# with api/webhooks/worker), so we don't carry the original
+# DockerFiles/Dockerfile.prod anymore.
+
+on:
+    push:
+        branches:
+            - main
+        # Filter so unrelated kodus-ai changes don't trigger a redeploy.
+        # Anything that affects the mcp-manager image must be listed here.
+        paths:
+            - 'apps/mcp-manager/**'
+            - 'docker/Dockerfile'
+            - 'docker-bake.hcl'
+            - 'package.json'
+            - 'yarn.lock'
+            - 'tsconfig.json'
+            - 'tsconfig.build.json'
+            - 'tsconfig.migrations.json'
+            - 'nest-cli.json'
+            - '.github/workflows/qa-mcp-manager-deploy.yml'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    deployments: write
+
+jobs:
+    build_and_push_image:
+        name: Build and push image
+        runs-on: ubuntu-latest
+        environment: QA
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws-region: us-east-1
+
+            - name: Login to Amazon ECR
+              id: login-ecr
+              uses: aws-actions/amazon-ecr-login@v2
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Build, tag, and push image to Amazon ECR
+              env:
+                  ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+                  ECR_REPOSITORY: kodus-mcp-manager-qa
+                  IMAGE_TAG: ${{ github.sha }}
+              run: |
+                  docker buildx build \
+                      --file docker/Dockerfile \
+                      --target mcp-manager \
+                      --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+                      --cache-from type=gha,scope=mcp-manager-qa \
+                      --cache-to type=gha,scope=mcp-manager-qa,mode=max \
+                      --push \
+                      .
+
+            - name: Log out of Amazon ECR
+              if: always()
+              run: docker logout ${{ steps.login-ecr.outputs.registry }}
+
+    deploy_in_server:
+        name: Deploy in server
+        runs-on: ubuntu-latest
+        environment: QA
+        needs: build_and_push_image
+
+        steps:
+            - name: Get runner IP
+              run: |
+                  ip=$(curl -s https://ipinfo.io/ip)
+                  echo "runner_ip=$ip" >> $GITHUB_ENV
+
+            - name: Add Github Actions IP to Security group (SSH inbound)
+              env:
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+              run: |
+                  aws ec2 authorize-security-group-ingress \
+                      --group-id ${{ secrets.AWS_SECURITY_GROUP }} \
+                      --protocol tcp --port 22 \
+                      --cidr ${{ env.runner_ip }}/32
+
+            - name: Execute start-app.sh on EC2
+              uses: appleboy/ssh-action@v1.0.0
+              with:
+                  host: ${{ secrets.AWS_QA_HOST }}
+                  username: ${{ secrets.AWS_QA_USERNAME }}
+                  key: ${{ secrets.AWS_QA_KEY_SSH }}
+                  script: |
+                      cd ~/kodus-mcp-manager
+                      ./start-app.sh qa ${{ github.sha }} ${{ github.ref }}
+
+            - name: Remove Github Actions IP from security group
+              if: always()
+              env:
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+              run: |
+                  aws ec2 revoke-security-group-ingress \
+                      --group-id ${{ secrets.AWS_SECURITY_GROUP }} \
+                      --protocol tcp --port 22 \
+                      --cidr ${{ env.runner_ip }}/32
+
+            - name: Notify Discord
+              if: always()
+              uses: sarisia/actions-status-discord@v1.13.0
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK }}
+                  status: ${{ job.status }}
+                  content: ":clap: Build successful!"
+                  title: "Deploy QA: kodus-mcp-manager"
+                  username: GitHub Actions

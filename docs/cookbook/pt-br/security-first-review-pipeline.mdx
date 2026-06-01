@@ -1,0 +1,144 @@
+---
+title: "Pipeline de revisão com foco em segurança"
+description: "Configure Kody Rules focadas no OWASP top 10, detecção de segredos e padrões de codificação segura."
+icon: "shield-halved"
+---
+
+## Por que um pipeline focado em segurança
+
+A revisão de código genérica captura estilo e bugs. Mas vulnerabilidades de segurança — injeção SQL, segredos hardcoded, padrões de autenticação inseguros — precisam de regras dedicadas que tratem as descobertas como bloqueadores críticos.
+
+Este cookbook configura uma camada de segurança prioritária em cima da sua revisão existente.
+
+## Passo 1 — Habilite a análise de segurança
+
+Certifique-se de que a análise de segurança está habilitada:
+
+```yaml
+reviewOptions:
+  security: true
+```
+
+Isso fornece as verificações de segurança integradas do Kodus. As regras abaixo adicionam as políticas de segurança específicas do seu time por cima.
+
+## Passo 2 — Crie regras focadas no OWASP
+
+### Prevenção de injeção SQL
+
+```
+Name: No raw SQL queries
+Scope: File
+Paths: **/*.ts, **/*.js, **/*.py
+Severity: Critical
+Instructions:
+  Flag any use of string concatenation or template literals
+  to build SQL queries. Look for patterns like:
+  - `query("SELECT ... " + variable)`
+  - `query(\`SELECT ... ${variable}\`)`
+  - `execute(f"SELECT ... {variable}")`
+  Must use parameterized queries or an ORM instead.
+```
+
+### Detecção de segredos hardcoded
+
+```
+Name: No hardcoded secrets or credentials
+Scope: File
+Paths: **/*
+Severity: Critical
+Instructions:
+  Flag any string that looks like an API key, password,
+  token, or secret in fileDiff. Patterns to catch:
+  - Variables named *_KEY, *_SECRET, *_TOKEN, *_PASSWORD
+    assigned to string literals
+  - Strings matching patterns like "sk_live_", "ghp_",
+    "AKIA", "Bearer " followed by a long string
+  - Connection strings with embedded passwords
+  Secrets must come from environment variables or a vault.
+```
+
+### Bypass de autenticação
+
+```
+Name: Auth middleware must not be skipped
+Scope: Pull Request
+Severity: Critical
+Instructions:
+  Check pr_files_diff for any route or controller that
+  handles user data without auth middleware. Look for:
+  - New routes without @UseGuards, @Authenticated,
+    or equivalent decorators
+  - Middleware bypass patterns like skipAuth: true
+  - Public endpoints that access user-specific data
+  Reference @file:src/shared/auth/guards/ for the
+  approved auth patterns.
+```
+
+### Prevenção de XSS
+
+```
+Name: No dangerouslySetInnerHTML without sanitization
+Scope: File
+Paths: **/*.tsx, **/*.jsx
+Severity: Critical
+Instructions:
+  Flag any use of dangerouslySetInnerHTML in fileDiff.
+  If used, verify the input is sanitized with DOMPurify
+  or an equivalent library. Unsanitized HTML injection
+  is a critical XSS vulnerability.
+```
+
+## Passo 3 — Ensine Memories de segurança
+
+Crie convenções persistentes que se aplicam em todo lugar:
+
+```
+@kody remember: all user input must be validated and sanitized
+before use. Never trust client-side data.
+```
+
+```
+@kody remember: all API endpoints that handle sensitive data
+must use HTTPS only and include rate limiting.
+```
+
+```
+@kody remember: error messages must never expose stack traces,
+internal paths, or database details to the client.
+```
+
+## Passo 4 — Configure para tolerância zero
+
+Para regras de segurança, você quer que descobertas críticas bloqueiem:
+
+1. Habilite **Solicitar Alterações** nas configurações de fluxo de trabalho de PR para que o Kody solicite mudanças quando problemas críticos forem encontrados
+2. Defina as regras de segurança com severidade **Crítica** para que sempre apareçam acima de qualquer filtro de severidade
+3. NÃO defina um limite baixo em `maxSuggestions` — descobertas de segurança nunca devem ser suprimidas
+
+## Passo 5 — Adicione uma regra de auditoria de dependências (opcional)
+
+Se você usar plugins MCP, pode verificar dependências:
+
+```
+Name: No known vulnerable dependencies
+Scope: Pull Request
+Severity: Critical
+Instructions:
+  If pr_files_diff modifies package.json, requirements.txt,
+  or any dependency file, use @MCP to check for known
+  vulnerabilities in the added or updated packages.
+  Flag any dependency with known critical CVEs.
+```
+
+## Checklist
+
+- [ ] Análise de segurança habilitada em reviewOptions
+- [ ] Regra de injeção SQL cobre todo o código que interage com banco de dados
+- [ ] Regra de detecção de segredos cobre todos os tipos de arquivo
+- [ ] Regra de bypass de autenticação referencia seus padrões de autenticação reais
+- [ ] Regra de XSS cobre todos os arquivos de componentes frontend
+- [ ] Memories de segurança ensinam princípios gerais de codificação segura
+- [ ] Solicitar Alterações habilitado para descobertas críticas
+- [ ] Um PR de teste confirmou que as regras disparam corretamente
+
+Para mais informações sobre configuração de regras, consulte [Kody Rules](/how_to_use/pt-br/code_review/configs/kody_rules).

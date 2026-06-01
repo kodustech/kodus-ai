@@ -7,7 +7,7 @@ import { toast } from "@components/ui/toaster/use-toast";
 import { useGetCodeReviewLabels } from "@services/parameters/hooks";
 import { KodyLearningStatus } from "@services/parameters/types";
 import { RotateCcwIcon, SaveIcon } from "lucide-react";
-import { useFormContext, useWatch } from "react-hook-form";
+import { useFormContext } from "react-hook-form";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
 
@@ -17,13 +17,10 @@ import GeneratingConfig from "../../_components/generating-config";
 import { CodeReviewSaveButton } from "../../_components/save-button";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import { type CodeReviewFormType } from "../../_types";
-import {
-    useFeatureFlags,
-    usePlatformConfig,
-} from "../../../_components/context";
+import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
+import { usePlatformConfig } from "../../../_components/context";
 import { useCodeReviewRouteParams } from "../../../_hooks";
 import { AnalysisTypes } from "../general/_components/analysis-types";
-import { CodeReviewVersionSelector } from "../general/_components/code-review-version-selector";
 import {
     filterVisibleReviewLabels,
     mergeMissingReviewOptions,
@@ -31,16 +28,10 @@ import {
 
 export default function ReviewCategories() {
     const platformConfig = usePlatformConfig();
-    const { businessLogic } = useFeatureFlags();
     const form = useFormContext<CodeReviewFormType>();
     const { teamId } = useSelectedTeamId();
     const { repositoryId, directoryId } = useCodeReviewRouteParams();
-    const codeReviewVersion =
-        useWatch({
-            control: form.control,
-            name: "codeReviewVersion.value",
-        }) || "v2";
-    const { data: labels = [] } = useGetCodeReviewLabels(codeReviewVersion);
+    const { data: labels = [] } = useGetCodeReviewLabels("v2");
     const { saveSettings } = useCodeReviewSettingsMutation({
         teamId,
         repositoryId,
@@ -49,10 +40,8 @@ export default function ReviewCategories() {
     });
     const visibleLabelTypes = useMemo(
         () =>
-            filterVisibleReviewLabels(labels, businessLogic === true).map(
-                (label) => label.type,
-            ),
-        [businessLogic, labels],
+            filterVisibleReviewLabels(labels, true).map((label) => label.type),
+        [labels],
     );
 
     const handleSubmit = form.handleSubmit(async (formData) => {
@@ -64,23 +53,29 @@ export default function ReviewCategories() {
                     visibleLabelTypes,
                 ),
             };
-            await saveSettings(mergedFormData, {
+            const saveResult = await saveSettings(mergedFormData, {
                 prepare: (data) => {
                     const { language: _language, ...config } = data;
                     const unformatted = unformatConfig(config);
-                    const rawVersion = unformatted.codeReviewVersion;
-                    const codeReviewVersion =
-                        rawVersion === "legacy" ? "legacy" : "v2";
                     return {
                         savedFormData: data,
                         codeReviewConfig: {
                             ...unformatted,
-                            codeReviewVersion,
                             reviewOptions: unformatted.reviewOptions,
                         },
                     };
                 },
             });
+
+            if (saveResult.centralizedPr) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        saveResult.centralizedPr,
+                        "Change proposed through centralized pull request.",
+                    ),
+                );
+                return;
+            }
 
             toast({
                 description: "Settings saved",
@@ -146,9 +141,6 @@ export default function ReviewCategories() {
 
             <Page.Content>
                 <CentralizedConfigReadOnlyAlert />
-                <div data-field-name="codeReviewVersion">
-                    <CodeReviewVersionSelector />
-                </div>
                 <div data-field-name="analysisTypes">
                     <AnalysisTypes />
                 </div>

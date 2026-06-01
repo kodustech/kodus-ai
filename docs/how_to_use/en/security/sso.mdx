@@ -1,0 +1,49 @@
+---
+title: "Single Sign-On"
+description: "Enable Single Sign-On (SSO) for secure and efficient access to Kodus."
+---
+
+## Overview
+
+Single Sign-On (SSO) allows you to manage access to Kodus through a single identity provider, streamlining authentication and enhancing security.
+
+## Getting Started
+
+<Steps>
+    <Step title="Access SSO settings">
+        Navigate to your organization settings at
+        [app.kodus.io/organization/sso](https://app.kodus.io/organization/sso)
+    </Step>
+
+    <Step title="Fill in your IdP configuration">
+        Fill in your IdP's settings such as their Issuer id, their URL and the signing certificate. These can be filled in manually or by providing either your IdP's metadata URL or a metadata XML file.
+
+        <Info>
+            These values can usually be found in your IdP's documentation or in their admin console.
+        </Info>
+    </Step>
+
+    <Step title="Configure Kodus as a SP in your IdP">
+        Configure Kodus as a SP in your IdP by providing our entity ID (`kodus-orchestrator` by default) and your organization's callback URL found in the SSO settings page.
+
+        Make sure the name ID format is set to email.
+
+        <Warning>
+            Ensure you disable signing certificates in your IdP's SP configuration.
+        </Warning>
+    </Step>
+
+    <Step title="Enable and test SSO">
+        Enable SSO in Kodus and test the configuration by logging out and logging back in. When attempting to log in with an email domain associated with your IdP, you will have the option to log in via SSO.
+    </Step>
+
+</Steps>
+
+## Optional Configuration
+
+### Mapping Attributes
+
+You can map the following attributes from your IdP to Kodus users, improving the user experience.
+
+-   First Name, mapped to `firstName`
+-   Last Name, mapped to `lastName`

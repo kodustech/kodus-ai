@@ -1,5 +1,5 @@
-import { IntegrationConfigKey } from "@libs/core/domain/enums/Integration-config-key.enum";
-import { IntegrationConfigService } from "./integrationConfig.service";
+import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
+import { IntegrationConfigService } from './integrationConfig.service';
 
 const createDeferred = <T>() => {
     let resolve!: (value: T) => void;
@@ -10,16 +10,16 @@ const createDeferred = <T>() => {
     return { promise, resolve };
 };
 
-describe("IntegrationConfigService", () => {
-    it("waits for repository config updates before resolving", async () => {
+describe('IntegrationConfigService', () => {
+    it('waits for repository config updates before resolving', async () => {
         const deferred = createDeferred<any>();
         const repository = {
             savePrivateChannel: jest.fn(),
             findOneIntegrationConfigWithIntegrations: jest.fn(),
             find: jest.fn(),
             findOne: jest.fn().mockResolvedValue({
-                uuid: "config-1",
-                configValue: [{ id: "old-repo" }],
+                uuid: 'config-1',
+                configValue: [{ id: 'old-repo' }],
             }),
             findByOrganizationName: jest.fn(),
             findByInstallId: jest.fn(),
@@ -32,18 +32,18 @@ describe("IntegrationConfigService", () => {
 
         const service = new IntegrationConfigService(repository);
         const organizationAndTeamData = {
-            organizationId: "org-1",
-            teamId: "team-1",
+            organizationId: 'org-1',
+            teamId: 'team-1',
         };
         const updatedConfig = {
-            uuid: "config-1",
-            configValue: [{ id: "new-repo", selected: true }],
+            uuid: 'config-1',
+            configValue: [{ id: 'new-repo', selected: true }],
         };
 
         const updatePromise = service.createOrUpdateConfig(
             IntegrationConfigKey.REPOSITORIES,
-            [{ id: "new-repo", selected: true }],
-            "integration-1",
+            [{ id: 'new-repo', selected: true }],
+            'integration-1',
             organizationAndTeamData,
         );
 

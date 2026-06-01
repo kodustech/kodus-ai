@@ -1,0 +1,129 @@
+---
+title: "Kodus 用于 Monorepo"
+description: "配置目录级规则、路径特定覆盖和规则继承，以在 monorepo 中获得精确的代码审查。"
+icon: "folder-tree"
+---
+
+## 挑战
+
+在 monorepo 中，不同的包有不同的标准。React 前端关注组件模式，NestJS 后端关注依赖注入，共享库关注 API 稳定性。一刀切的审查行不通。
+
+## 策略概述
+
+Kodus 支持三个配置级别，自然映射到 monorepo：
+
+| 级别 | 适用于 | 示例 |
+|------|--------|------|
+| **组织** | 所有代码库 | "永远不要提交 `.env` 文件" |
+| **代码库** | 整个 monorepo | "使用约定式提交" |
+| **目录** | 特定包 | "React 组件必须使用 PascalCase" |
+
+## 步骤 1 — 映射您的包
+
+识别 monorepo 中的不同区域及其审查需求：
+
+```
+monorepo/
+├── apps/
+│   ├── web/          → React 规则、组件模式
+│   ├── api/          → NestJS 规则、架构边界
+│   └── mobile/       → React Native 规则
+├── libs/
+│   ├── shared/       → API 稳定性、破坏性变更检测
+│   └── ui/           → 设计系统合规
+└── infra/            → Terraform/IaC 规则
+```
+
+## 步骤 2 — 创建目录级配置
+
+前往**代码审查设置** → **代码库** → 点击目录进行配置。
+
+每个目录可以有自己的：
+- **Kody 规则**（文件级和 PR 级）
+- **审查选项**（启用哪些分析类型）
+- **建议控制**（严重性过滤器、最大建议数）
+- **忽略路径**
+
+## 步骤 3 — 编写有针对性的规则
+
+### 前端规则（范围：`apps/web/`）
+
+```
+名称：React 组件必须使用设计系统令牌
+范围：文件
+路径：apps/web/src/components/**/*.tsx
+严重性：高
+说明：
+  检查 fileDiff 中的硬编码颜色、间距或字体大小。
+  组件必须从 @file:libs/ui/src/tokens.ts 导入令牌。
+  标记不来自令牌文件的任何十六进制颜色、像素值或字体大小。
+```
+
+### 后端规则（范围：`apps/api/`）
+
+```
+名称：领域层不得从基础设施导入
+范围：文件
+路径：apps/api/src/domain/**/*.ts
+严重性：严重
+说明：
+  检查 fileDiff 中任何来自 "../infrastructure"、
+  "../../infrastructure" 或包含 "/infrastructure/" 的路径的导入。
+  领域模块只能依赖其他领域模块和共享接口。
+```
+
+### 共享库规则（范围：`libs/shared/`）
+
+```
+名称：公共 API 更改需要变更集
+范围：拉取请求
+严重性：高
+说明：
+  如果 pr_files_diff 修改了 libs/shared/src/index.ts 中的任何文件
+  或添加/删除了导出，检查 .changeset/ 目录中是否存在变更集文件。
+  如果缺少，标记为没有文档的潜在破坏性变更。
+```
+
+## 步骤 4 — 使用记忆处理跨领域约定
+
+某些约定适用于所有地方。将它们作为记忆教给 Kody：
+
+```
+@kody remember: in this monorepo, all packages use ESM imports.
+CommonJS require() is not allowed anywhere.
+```
+
+```
+@kody remember: shared libs must maintain backward compatibility.
+Any breaking change requires a major version bump and a changeset.
+```
+
+## 步骤 5 — 按目录配置建议控制
+
+高流量包可能需要更严格的限制：
+
+- **apps/web/** — 最多 5 个建议，中等严重性过滤（前端变化快）
+- **libs/shared/** — 最多 15 个建议，低严重性过滤（稳定性重要）
+- **infra/** — 最多 3 个建议，高严重性过滤（少但关键）
+
+## 步骤 6 — 忽略生成的路径
+
+添加 monorepo 特定的忽略以避免噪音：
+
+```yaml
+ignorePaths:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/*.generated.ts"
+  - "**/prisma/migrations/**"
+  - "**/coverage/**"
+```
+
+## 提示
+
+- 从每个目录 2-3 个规则开始，根据团队在审查中实际标记的内容进行扩展
+- 使用规则继承 — 组织级规则覆盖安全性，代码库级覆盖约定，目录级覆盖架构
+- 如果规则在一个包中触发过于频繁但在其他地方有效，从该规则中排除该目录而不是削弱规则
+
+有关目录配置的更多信息，请参阅[目录级配置](/how_to_use/en/code_review/configs/directory_level)。有关规则继承，请参阅[规则继承](/how_to_use/en/code_review/configs/rules_inheritance)。

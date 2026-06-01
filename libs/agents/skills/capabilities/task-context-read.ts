@@ -1548,7 +1548,7 @@ function extractContextCandidates(payload: unknown): Record<string, unknown>[] {
     };
 
     const visit = (value: unknown, depth: number): void => {
-        if (depth > 5 || value === null || value === undefined) {
+        if (depth > 8 || value === null || value === undefined) {
             return;
         }
 
@@ -1888,6 +1888,13 @@ function normalizeTextValue(value: unknown): string | undefined {
         return value.trim().length > 0 ? value : undefined;
     }
 
+    // Handle Atlassian Document Format (ADF) — Jira returns description as
+    // {type: "doc", content: [{type: "paragraph", content: [{type: "text", text: "..."}]}]}
+    const adf = extractAdfText(value);
+    if (adf) {
+        return adf;
+    }
+
     const rich = extractRichText(value);
     if (rich) {
         return rich;
@@ -1901,6 +1908,45 @@ function normalizeTextValue(value: unknown): string | undefined {
     }
 
     return undefined;
+}
+
+/**
+ * Extract plain text from Atlassian Document Format (ADF).
+ * ADF structure: {type: "doc", content: [{type: "paragraph"|"heading"|..., content: [{type: "text", text: "..."}]}]}
+ */
+function extractAdfText(value: unknown): string | undefined {
+    const record = asRecord(value);
+    if (
+        record.type !== 'doc' ||
+        !Array.isArray(record.content)
+    ) {
+        return undefined;
+    }
+
+    const lines: string[] = [];
+    const visitAdfNode = (node: unknown): void => {
+        const n = asRecord(node);
+        if (!n.type) return;
+
+        if (n.type === 'text' && typeof n.text === 'string') {
+            lines.push(n.text);
+            return;
+        }
+
+        if (Array.isArray(n.content)) {
+            for (const child of n.content) {
+                visitAdfNode(child);
+            }
+        }
+    };
+
+    for (const block of record.content as unknown[]) {
+        visitAdfNode(block);
+        lines.push('\n');
+    }
+
+    const result = lines.join('').replace(/\n{3,}/g, '\n\n').trim();
+    return result.length > 0 ? result : undefined;
 }
 
 function extractRichText(value: unknown): string | undefined {
@@ -2027,7 +2073,7 @@ function buildToolAliasKey(value: string): string {
         .filter((token) => token.length > 0)
         .filter((token) => !isAliasNoiseToken(token));
 
-    return tokens.join(' ');
+    return tokens.sort().join(' ');
 }
 
 function normalizeToolAliasToken(token: string): string {

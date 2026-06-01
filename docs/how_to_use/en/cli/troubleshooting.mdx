@@ -1,0 +1,131 @@
+---
+title: "Troubleshooting"
+description: "Common Kodus CLI errors, exit codes, and how to debug them."
+---
+
+Start any investigation with:
+
+```bash
+kodus status
+kodus auth status
+kodus review --verbose    # or any command with --verbose
+```
+
+`kodus status` shows the consolidated state (auth mode, org, repo, hook, version). `--verbose` prints the resolved API URL and per-request details.
+
+## Common Errors
+
+<AccordionGroup>
+  <Accordion title="Command not found: kodus">
+    The CLI isn't on your `PATH`. Reinstall with your package manager's global flag, or use `npx @kodus/cli <command>` for one-off runs.
+
+    - `npm install -g @kodus/cli`
+    - `yarn global add @kodus/cli`
+    - `pnpm add -g @kodus/cli`
+    - `bun add -g @kodus/cli`
+
+    If you installed via the skill installer, re-run `curl -fsSL https://review-skill.com/install | bash` to fix PATH entries.
+  </Accordion>
+
+  <Accordion title="AUTH_REQUIRED or 401 Unauthorized">
+    - Run `kodus auth status` to see the current mode.
+    - If using a team key, verify it's still active at <a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>.
+    - If using personal login, try `kodus auth login` again — the refresh token may have expired.
+    - For CI, confirm `KODUS_TOKEN` (or `KODUS_TEAM_KEY`) is set in the environment the pipeline runs in.
+    - If self-hosted, confirm `KODUS_API_URL` points to the correct instance.
+  </Accordion>
+
+  <Accordion title="NOT_IN_GIT_REPO">
+    `kodus review` requires a git working directory. `cd` into a repo or initialize one with `git init`. For `kodus config repo` commands, you can pass `owner/repo` explicitly instead of `.`.
+  </Accordion>
+
+  <Accordion title="Review takes very long or seems to hang">
+    Large branches (hundreds of files, thousands of lines) can take several minutes. The default request timeout is 60 minutes — you should see progress in verbose mode.
+
+    - Use `--verbose` to confirm the request is in flight.
+    - For very large diffs, prefer `--branch <base>` or `--commit <sha>` over working-tree mode: these let the backend clone the same commit instead of receiving inlined file contents.
+    - Override the timeout with `KODUS_REQUEST_TIMEOUT_MIN=90 kodus review` if needed.
+    - Split work across smaller branches when practical.
+  </Accordion>
+
+  <Accordion title="Files are being skipped from the review">
+    Review honors the `ignore-files` patterns configured in `kodus config repo`. List current settings with:
+
+    ```bash
+    kodus config repo show
+    ```
+
+    You can add or remove patterns:
+
+    ```bash
+    kodus config repo add-ignore-file . "**/*.generated.ts"
+    kodus config repo remove-ignore-file . "**/*.generated.ts"
+    ```
+
+    Binary files, images, and lockfiles are skipped by default.
+  </Accordion>
+
+  <Accordion title="Rate limit reached / Trial exhausted">
+    Trial mode allows 5 reviews per day. Sign in with `kodus auth login` or configure a team key via `kodus auth team-key --key kodus_xxxxx` to raise limits. `kodus auth status` prints your current usage.
+  </Accordion>
+
+  <Accordion title="API returned invalid response (expected JSON, got HTML)">
+    Your `KODUS_API_URL` is hitting a reverse proxy or Cloudflare Access page instead of the API. Check:
+
+    - The URL path (no stray `/api`, `/v1`, etc.).
+    - Cloudflare Access credentials (`CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`) if applicable.
+    - That the proxy forwards `Authorization` and `CF-Access-*` headers intact.
+  </Accordion>
+
+  <Accordion title="HTTPS required for API URL">
+    The CLI rejects non-HTTPS API URLs for everything except `localhost` and `127.0.0.1`. Provision a valid TLS certificate for your self-hosted instance, or use `http://localhost:<port>` for local development.
+  </Accordion>
+
+  <Accordion title="Pre-push hook is not running">
+    - Confirm installation: `kodus hook status`.
+    - Make sure `.git/hooks/pre-push` is executable.
+    - Other hook managers (Husky, Lefthook, pre-commit) may overwrite `.git/hooks/pre-push`. Either chain them or reinstall with `kodus hook install --force`.
+    - Skip the hook for a single push: `KODUS_SKIP_HOOK=1 git push`.
+  </Accordion>
+
+  <Accordion title="Decisions (memory) hooks aren't capturing">
+    - Run `kodus decisions status` to see which agents are wired up.
+    - Re-run `kodus decisions enable --force` to reinstall integration files.
+    - For Codex, ensure `~/.codex/config.toml` contains the `notify = ["kodus", "decisions", "capture", ...]` line, or pass `--codex-config <path>`.
+    - Check the agent actually emits turn-complete events (some older Claude Code configurations don't).
+  </Accordion>
+
+  <Accordion title="Device limit reached">
+    Self-hosted instances can enforce device limits per organization. Ask your admin to increase the limit or remove unused devices from the dashboard.
+  </Accordion>
+</AccordionGroup>
+
+## Exit Codes
+
+Use these in scripts and CI pipelines.
+
+| Code | Meaning                                                                |
+| ---- | ---------------------------------------------------------------------- |
+| `0`  | Success. No issues found, or issues were found but below `--fail-on`. |
+| `1`  | Issues found at or above the `--fail-on` severity.                     |
+| `2`  | CLI usage error (invalid flag, missing argument).                      |
+| `3`  | Authentication or authorization failure.                               |
+| `4`  | Network or API error (timeout, 5xx, invalid response).                 |
+| `5`  | Not in a git repository, or no changes to review.                      |
+
+<Tip>
+  For CI, pair `--fail-on error` with `--format json` and `--output review.json` to surface structured results as pipeline artifacts without affecting the exit code logic.
+</Tip>
+
+## Debugging Tips
+
+- **`--verbose` on any command** prints the resolved API URL, request IDs, and timings.
+- **`kodus schema`** outputs the machine-readable command schema — useful when your agent reports a missing flag.
+- **`--agent`** enforces deterministic, machine-readable output; combine with `--format json` when scripting.
+- **`KODUS_VERBOSE=true`** persists verbose mode across multiple commands in a session.
+
+## Getting Help
+
+- Report bugs: [github.com/kodustech/cli/issues](https://github.com/kodustech/cli/issues)
+- Feature requests, configuration questions: your Kodus account manager, or `support@kodus.io`.
+- For self-hosted deployments, include `kodus status --verbose` output when filing an issue.

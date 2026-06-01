@@ -1,0 +1,95 @@
+name: "E2E suite — typecheck, unit, integration"
+
+# Minimal token scope — CodeQL actions/missing-workflow-permissions.
+# These jobs only read the repo (checkout); provider/cloud creds come
+# from secrets, not GITHUB_TOKEN. No job writes back to the repo.
+permissions:
+    contents: read
+
+# Runs the hermetic part of the e2e suite (unit + integration tests against
+# in-process mock HTTP servers, dry-run of the full matrix, TypeScript
+# typecheck, actionlint on workflows). Triggered on every PR that touches
+# tests/e2e/ or release infrastructure. Does NOT run real droplet/cloud
+# E2E — that is done by e2e-self-hosted-matrix.yml and e2e-cloud.yml from
+# the release workflows.
+
+on:
+    pull_request:
+        paths:
+            - "tests/e2e/**"
+            - ".github/workflows/e2e-suite-tests.yml"
+            - ".github/workflows/selfhosted-build-push.yml"
+            - ".github/workflows/selfhosted-promote.yml"
+            - ".github/workflows/e2e-self-hosted-matrix.yml"
+            - ".github/workflows/e2e-cloud.yml"
+    push:
+        branches: [main]
+        paths:
+            - "tests/e2e/**"
+            - ".github/workflows/e2e-suite-tests.yml"
+            - ".github/workflows/selfhosted-build-push.yml"
+            - ".github/workflows/selfhosted-promote.yml"
+            - ".github/workflows/e2e-self-hosted-matrix.yml"
+            - ".github/workflows/e2e-cloud.yml"
+    workflow_dispatch:
+
+concurrency:
+    group: e2e-suite-tests-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    hermetic:
+        name: Hermetic e2e suite (no external infra)
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@v6.0.2
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+                  cache: "npm"
+                  cache-dependency-path: tests/e2e/package-lock.json
+
+            - name: Install
+              working-directory: tests/e2e
+              run: npm ci --no-audit --no-fund
+
+            - name: TypeScript typecheck
+              working-directory: tests/e2e
+              run: ./node_modules/.bin/tsc --noEmit
+
+            - name: Unit + integration tests (43 tests)
+              working-directory: tests/e2e
+              run: node --import tsx --test lib/__tests__/*.test.ts
+
+            - name: Dry-run fast matrix
+              working-directory: tests/e2e
+              run: ./node_modules/.bin/tsx cli/run-matrix.ts matrix/fast.yml --dry-run
+
+            - name: Upload dry-run evidence
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: e2e-suite-dry-run-evidence
+                  path: tests/e2e/evidence/
+                  retention-days: 7
+                  if-no-files-found: ignore
+
+    lint-workflows:
+        name: actionlint
+        runs-on: ubuntu-latest
+        timeout-minutes: 3
+        steps:
+            - uses: actions/checkout@v6.0.2
+
+            - name: Run actionlint on release workflows
+              uses: raven-actions/actionlint@v2
+              with:
+                  files: |
+                      .github/workflows/selfhosted-build-push.yml
+                      .github/workflows/selfhosted-promote.yml
+                      .github/workflows/e2e-self-hosted-matrix.yml
+                      .github/workflows/e2e-cloud.yml
+                      .github/workflows/e2e-suite-tests.yml
+                  shellcheck: false

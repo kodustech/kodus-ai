@@ -432,9 +432,12 @@ describe('CodeReviewPipelineObserver', () => {
         );
     });
 
-    it('should use correlationId as executionUuid if available', async () => {
+    it('should use correlationId as executionUuid when it is a valid UUID', async () => {
+        // The observer only falls back to correlationId when it looks like
+        // a real UUID — the CLI generates `corr_xxxx` strings that would
+        // otherwise break uuid-typed DB queries.
         context.pipelineMetadata!.lastExecution = undefined;
-        context.correlationId = 'correlation-uuid';
+        context.correlationId = 'a1b2c3d4-e5f6-7890-abcd-ef0123456789';
 
         await observer.onStageStart(
             'TestStage',
@@ -446,7 +449,7 @@ describe('CodeReviewPipelineObserver', () => {
             mockAutomationExecutionService.updateCodeReview,
         ).toHaveBeenCalledWith(
             expect.objectContaining({
-                uuid: 'correlation-uuid',
+                uuid: 'a1b2c3d4-e5f6-7890-abcd-ef0123456789',
             }),
             expect.objectContaining({ status: AutomationStatus.IN_PROGRESS }),
             'Starting...',
@@ -455,12 +458,44 @@ describe('CodeReviewPipelineObserver', () => {
         );
     });
 
-    it('should log stage as PARTIAL_ERROR if context has errors for the stage', async () => {
-        // Setup context with errors
+    it('should fall back to pullRequestNumber/repositoryId when correlationId is not a UUID', async () => {
+        // CLI-generated correlation ids like `corr_xxxx` must NOT be used as
+        // executionUuid — they break uuid-typed DB queries. The observer
+        // should fall back to the pr/repo composite filter instead.
+        context.pipelineMetadata!.lastExecution = undefined;
+        context.correlationId = 'corr_blrboR3jgLQ5_mnumj6d9';
+
+        await observer.onStageStart(
+            'TestStage',
+            context as CodeReviewPipelineContext,
+            observersContext,
+        );
+
+        expect(
+            mockAutomationExecutionService.updateCodeReview,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                pullRequestNumber: 123,
+                repositoryId: 'repo-1',
+            }),
+            expect.objectContaining({ status: AutomationStatus.IN_PROGRESS }),
+            'Starting...',
+            'TestStage',
+            undefined,
+        );
+    });
+
+    it('should log stage as PARTIAL_ERROR if context has errors with severity=partial for the stage', async () => {
+        // severity is required to disambiguate partial-vs-critical at the
+        // stage level — matches deriveFinalStatus in automationCodeReview.ts
+        // so the per-stage badge and the automation rollup agree. Without
+        // explicit severity, the default is 'critical' (per PipelineErrorSeverity)
+        // and the stage maps to ERROR.
         context.errors = [
             {
                 stage: 'TestStage',
                 error: new Error('Partial error'),
+                severity: 'partial',
             } as any,
         ];
 
@@ -540,6 +575,9 @@ describe('CodeReviewPipelineObserver', () => {
                     stage: 'ProcessFilesPrLevelReviewStage',
                     substage: 'kody-rules',
                     error: new Error('Timeout waiting for LLM response'),
+                    // kody-rules failure is auxiliary — the main review
+                    // still has value, so the stage degrades partially.
+                    severity: 'partial',
                 },
             ];
 
@@ -572,6 +610,10 @@ describe('CodeReviewPipelineObserver', () => {
                     stage: 'FinishCommentsStage',
                     substage: 'resolve-comment',
                     error: new Error('GitHub API rate limit exceeded'),
+                    // Posting comments fails but the review itself
+                    // completed — partial degradation, not a critical
+                    // failure of the review.
+                    severity: 'partial',
                 },
             ];
 

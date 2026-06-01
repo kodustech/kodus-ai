@@ -3,6 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { CentralizedConfigPrService } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
 import {
     CreateKodyRuleDto,
     KodyRuleSeverity,
@@ -13,6 +14,7 @@ import {
     IKodyRulesService,
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
+import { DeleteRuleInOrganizationByIdKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/delete-rule-in-organization-by-id.use-case';
 import {
     FindMemoriesResult,
     IKodyRule,
@@ -23,6 +25,8 @@ import {
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { buildKodyRuleCentralizedMutationRequest } from '@libs/centralized-config/utils/kody-rules-centralized-pr.builder';
+import { buildKodyRuleAppLink } from '@libs/ee/kodyRules/utils/build-rule-link';
 import { BaseResponse, McpToolDefinition } from '../types/mcp-tool.interface';
 import { wrapToolHandler } from '../utils/mcp-protocol.utils';
 
@@ -36,6 +40,7 @@ type KodyRuleInput = Required<
         | 'extendedContext'
         | 'reason'
         | 'severity'
+        | 'centralizedConfig'
         | 'sourcePath'
         | 'sourceAnchor'
         | 'contextReferenceId'
@@ -48,6 +53,9 @@ type KodyRuleInput = Required<
         | 'targetRuleUuid'
         | 'resolvedAt'
         | 'resolvedBy'
+        // MCP-created rules never come from the IDE-sync flow, so
+        // the `@kody-sync` pin doesn't apply.
+        | 'pinnedSync'
     >
 > & {
     severity: KodyRuleSeverity;
@@ -63,6 +71,7 @@ type KodyRuleMemoryInput = Required<
         | 'extendedContext'
         | 'reason'
         | 'severity'
+        | 'centralizedConfig'
         | 'sourcePath'
         | 'sourceAnchor'
         | 'contextReferenceId'
@@ -75,6 +84,7 @@ type KodyRuleMemoryInput = Required<
         | 'targetRuleUuid'
         | 'resolvedAt'
         | 'resolvedBy'
+        | 'pinnedSync'
     >
 >;
 
@@ -84,9 +94,14 @@ interface KodyRulesResponse extends BaseResponse {
 
 interface CreateKodyRuleResponse extends BaseResponse {
     data: Partial<IKodyRule>;
+    message?: string;
+    prUrl?: string;
+    link?: string;
 }
 
 interface CreateMemoryRuleResponse extends BaseResponse {
+    message?: string;
+    prUrl?: string;
     data: {
         uuid?: string;
         title?: string;
@@ -99,6 +114,11 @@ interface CreateMemoryRuleResponse extends BaseResponse {
     };
 }
 
+interface DeleteKodyRuleResponse extends BaseResponse {
+    message?: string;
+    prUrl?: string;
+}
+
 interface FindMemoriesResponse extends BaseResponse {
     data: FindMemoriesResult[];
 }
@@ -106,9 +126,12 @@ interface FindMemoriesResponse extends BaseResponse {
 @Injectable()
 export class KodyRulesTools {
     private readonly logger = createLogger(KodyRulesTools.name);
+
     constructor(
         @Inject(KODY_RULES_SERVICE_TOKEN)
         private readonly kodyRulesService: IKodyRulesService,
+        private readonly centralizedConfigPrService: CentralizedConfigPrService,
+        private readonly deleteRuleInOrganizationByIdKodyRulesUseCase: DeleteRuleInOrganizationByIdKodyRulesUseCase,
     ) {}
 
     getKodyRules(): McpToolDefinition {
@@ -125,7 +148,7 @@ export class KodyRulesTools {
         return {
             name: 'KODUS_GET_KODY_RULES',
             description:
-                'Get all active Kody Rules at organization level. Use this to see organization-wide coding standards, global rules that apply across all repositories, or when you need a complete overview of all active rules. Returns only ACTIVE status rules.',
+                'Get all Kody Rules at organization level. Use this to see organization-wide coding standards, global rules that apply across all repositories, or when you need a complete overview of rules. Returns rules with ACTIVE and PENDING status.',
             inputSchema,
             outputSchema: z.object({
                 success: z.boolean(),
@@ -175,7 +198,8 @@ export class KodyRulesTools {
 
                     const rules: Partial<IKodyRule>[] = allRules.filter(
                         (rule: Partial<IKodyRule>) =>
-                            rule.status === KodyRulesStatus.ACTIVE,
+                            rule.status === KodyRulesStatus.ACTIVE ||
+                            rule.status === KodyRulesStatus.PENDING,
                     );
 
                     return {
@@ -207,7 +231,7 @@ export class KodyRulesTools {
         return {
             name: 'KODUS_GET_KODY_RULES_REPOSITORY',
             description:
-                'Get active Kody Rules specific to a particular repository. Use this to see repository-specific coding standards, rules that only apply to one codebase, or when analyzing rules for a specific project. More focused than get_kody_rules.',
+                'Get Kody Rules specific to a particular repository. Use this to see repository-specific coding standards, rules that only apply to one codebase, or when analyzing rules for a specific project. More focused than get_kody_rules. Returns rules with ACTIVE and PENDING status.',
             inputSchema,
             outputSchema: z.object({
                 success: z.boolean(),
@@ -261,7 +285,8 @@ export class KodyRulesTools {
                             (rule: Partial<IKodyRule>) =>
                                 rule.repositoryId &&
                                 rule.repositoryId === params.repositoryId &&
-                                rule.status === KodyRulesStatus.ACTIVE,
+                                (rule.status === KodyRulesStatus.ACTIVE ||
+                                    rule.status === KodyRulesStatus.PENDING),
                         );
 
                     return {
@@ -307,7 +332,7 @@ export class KodyRulesTools {
                         .string()
                         .optional()
                         .describe(
-                            'Repository unique identifier - can be used with both scopes to limit rule to specific repository',
+                            'Repository unique identifier to limit the rule to a specific repository. By default, when creating a rule from a PR suggestion, use the current repository ID. If the user explicitly asks for a global rule (e.g., "for all repositories", "organization-wide", "global", "for the entire organization"), omit this field or do not provide it so the rule defaults to global scope.',
                         ),
                     path: z
                         .string()
@@ -366,6 +391,12 @@ export class KodyRulesTools {
                         })
                         .optional()
                         .describe('Rule inheritance settings'),
+                    teamId: z
+                        .string()
+                        .optional()
+                        .describe(
+                            'Team UUID used to evaluate centralized config and repository mappings for PR-based changes',
+                        ),
                 })
                 .describe(
                     'Complete rule definition with title, description, scope, and examples',
@@ -377,7 +408,7 @@ export class KodyRulesTools {
         return {
             name: 'KODUS_CREATE_KODY_RULE',
             description:
-                'Create a new Kody Rule with custom scope and severity. pull_request scope: analyzes entire PR context for PR-level rules. file scope: analyzes individual files one by one for file-level rules. Rule starts in pending status.',
+                'Create a new Kody Rule with custom scope and severity. pull_request scope: analyzes entire PR context for PR-level rules. file scope: analyzes individual files one by one for file-level rules. Rule starts in pending status and must be approved in the UI before it takes effect. After execution, ALWAYS inform the user of: (1) the rule was created and is pending approval, and (2) the provided link to open the pending Kody Rules page to review and approve it. If centralized config is enabled the rule will be published to a pull request pending to be approved instead, and a prUrl is returned.',
             inputSchema,
             outputSchema: z.object({
                 success: z.boolean(),
@@ -388,6 +419,14 @@ export class KodyRulesTools {
                     rule: z.string().optional(),
                     status: z.enum(KodyRulesStatus).optional(),
                 }),
+                message: z.string().optional(),
+                prUrl: z.string().optional(),
+                link: z
+                    .string()
+                    .optional()
+                    .describe(
+                        'Link to the pending Kody Rules page where the rule can be reviewed and approved',
+                    ),
             }),
             execute: wrapToolHandler(
                 async (args: InputType): Promise<CreateKodyRuleResponse> => {
@@ -397,6 +436,9 @@ export class KodyRulesTools {
                     } = {
                         organizationAndTeamData: {
                             organizationId: args.organizationId,
+                            ...(args.kodyRule.teamId
+                                ? { teamId: args.kodyRule.teamId }
+                                : {}),
                         },
                         kodyRule: {
                             title: args.kodyRule.title,
@@ -430,6 +472,35 @@ export class KodyRulesTools {
                         },
                     };
 
+                    const centralizedPr =
+                        await this.centralizedConfigPrService.createMutationPullRequestIfEnabled(
+                            buildKodyRuleCentralizedMutationRequest({
+                                centralizedConfigPrService:
+                                    this.centralizedConfigPrService,
+                                organizationAndTeamData:
+                                    params.organizationAndTeamData,
+                                repositoryId: params.kodyRule.repositoryId,
+                                ruleContent: params.kodyRule,
+                                ruleType: KodyRulesType.STANDARD,
+                                operation: 'create',
+                            }),
+                        );
+
+                    if (centralizedPr.mode === 'centralized-pr') {
+                        return {
+                            success: true,
+                            count: 1,
+                            data: {
+                                title: params.kodyRule.title,
+                                rule: params.kodyRule.rule,
+                                status: KodyRulesStatus.PENDING,
+                            },
+                            message: centralizedPr.message,
+                            prUrl: centralizedPr.prUrl,
+                            link: centralizedPr.prUrl,
+                        };
+                    }
+
                     const result: Partial<IKodyRule> =
                         await this.kodyRulesService.createOrUpdate(
                             params.organizationAndTeamData,
@@ -440,10 +511,31 @@ export class KodyRulesTools {
                             },
                         );
 
+                    const link = buildKodyRuleAppLink({
+                        repositoryId: result?.repositoryId,
+                        ruleId: result?.uuid,
+                        teamId: params.organizationAndTeamData.teamId,
+                        status: result?.status,
+                        tab: 'review-rules',
+                    });
+
+                    const awaitingApproval =
+                        result?.status === KodyRulesStatus.PENDING;
+                    const message = awaitingApproval
+                        ? 'Rule created and awaiting approval. Open the Kody Rules page to review and approve it.'
+                        : 'Rule created. You can open it directly from the provided link.';
+
                     return {
                         success: true,
                         count: 1,
-                        data: result,
+                        data: {
+                            uuid: result?.uuid,
+                            title: result?.title,
+                            rule: result?.rule,
+                            status: result?.status,
+                        },
+                        message,
+                        link,
                     };
                 },
             ),
@@ -492,7 +584,7 @@ export class KodyRulesTools {
                         .string()
                         .optional()
                         .describe(
-                            'Updated repository unique identifier - can be used with both scopes to limit rule to specific repository',
+                            'Updated repository unique identifier. Set to a specific repository ID to limit the rule to that repository, or set to "global" to make the rule apply to all repositories in the organization. Use "global" when the user asks for organization-wide, global, or all-repositories scope.',
                         ),
                     path: z
                         .string()
@@ -535,6 +627,12 @@ export class KodyRulesTools {
                         .describe(
                             'Updated rule status: active, pending, rejected, or deleted',
                         ),
+                    teamId: z
+                        .string()
+                        .optional()
+                        .describe(
+                            'Team UUID used to evaluate centralized config and repository mappings for PR-based changes',
+                        ),
                 })
                 .describe(
                     'Updated rule definition with fields to modify (only provided fields will be updated)',
@@ -546,7 +644,7 @@ export class KodyRulesTools {
         return {
             name: 'KODUS_UPDATE_KODY_RULE',
             description:
-                'Update an existing Kody Rule. Only the fields provided in kodyRule will be updated. Use this to modify rule details, change severity, scope, or status of existing rules.',
+                'Update an existing Kody Rule. Only the fields provided in kodyRule will be updated. Use this to modify rule details, change severity, scope, or status of existing rules. After execution, ALWAYS inform the user of the provided link to open the rule in the Kody Rules page. If centralized config is enabled the update will be published to a pull request pending to be approved instead, and a prUrl is returned.',
             inputSchema,
             outputSchema: z.object({
                 success: z.boolean(),
@@ -557,11 +655,22 @@ export class KodyRulesTools {
                     rule: z.string(),
                     status: z.enum(KodyRulesStatus),
                 }),
+                message: z.string().optional(),
+                prUrl: z.string().optional(),
+                link: z
+                    .string()
+                    .optional()
+                    .describe(
+                        'Link to open the updated Kody Rule in the app (or the pull request URL when centralized config is enabled)',
+                    ),
             }),
             execute: wrapToolHandler(
                 async (args: InputType): Promise<CreateKodyRuleResponse> => {
                     const organizationAndTeamData = {
                         organizationId: args.organizationId,
+                        ...(args.kodyRule.teamId
+                            ? { teamId: args.kodyRule.teamId }
+                            : {}),
                     };
 
                     const userInfo = {
@@ -601,17 +710,84 @@ export class KodyRulesTools {
                         }),
                     };
 
+                    const existingRule = await this.kodyRulesService.findById(
+                        args.ruleId,
+                    );
+
+                    if (!existingRule) {
+                        return {
+                            success: false,
+                            count: 0,
+                            data: { uuid: args.ruleId },
+                            message: `Rule with ID ${args.ruleId} not found.`,
+                        };
+                    }
+
+                    const mergedRule = {
+                        ...existingRule,
+                        ...kodyRule,
+                        uuid: args.ruleId,
+                        repositoryId:
+                            kodyRule.repositoryId ||
+                            existingRule.repositoryId ||
+                            'global',
+                        type: KodyRulesType.STANDARD,
+                        status:
+                            kodyRule.status ||
+                            existingRule.status ||
+                            KodyRulesStatus.PENDING,
+                    } as CreateKodyRuleDto;
+
+                    const centralizedPr =
+                        await this.centralizedConfigPrService.createMutationPullRequestIfEnabled(
+                            buildKodyRuleCentralizedMutationRequest({
+                                centralizedConfigPrService:
+                                    this.centralizedConfigPrService,
+                                organizationAndTeamData,
+                                repositoryId: mergedRule.repositoryId,
+                                ruleContent: mergedRule,
+                                ruleType: KodyRulesType.STANDARD,
+                                operation: 'update',
+                            }),
+                        );
+
+                    if (centralizedPr.mode === 'centralized-pr') {
+                        return {
+                            success: true,
+                            count: 1,
+                            data: {
+                                uuid: args.ruleId,
+                                title: mergedRule.title,
+                                rule: mergedRule.rule,
+                                status: mergedRule.status,
+                            },
+                            message: centralizedPr.message,
+                            prUrl: centralizedPr.prUrl,
+                            link: centralizedPr.prUrl,
+                        };
+                    }
+
                     const result =
                         await this.kodyRulesService.updateRuleWithLogging(
                             organizationAndTeamData,
-                            kodyRule,
+                            mergedRule,
                             userInfo,
                         );
+
+                    const link = buildKodyRuleAppLink({
+                        repositoryId: result?.repositoryId,
+                        ruleId: result?.uuid,
+                        teamId: organizationAndTeamData.teamId,
+                        status: result?.status,
+                        tab: 'review-rules',
+                    });
 
                     return {
                         success: true,
                         count: 1,
                         data: result,
+                        message: 'Rule updated. You can open it directly from the provided link.',
+                        link,
                     };
                 },
             ),
@@ -630,6 +806,12 @@ export class KodyRulesTools {
                 .describe(
                     'Rule UUID - unique identifier of the rule to be deleted',
                 ),
+            teamId: z
+                .string()
+                .optional()
+                .describe(
+                    'Team UUID used to evaluate centralized config and repository mappings for PR-based changes',
+                ),
         });
 
         type InputType = z.infer<typeof inputSchema>;
@@ -637,29 +819,34 @@ export class KodyRulesTools {
         return {
             name: 'KODUS_DELETE_KODY_RULE',
             description:
-                'Delete a Kody Rule permanently from the system. This action cannot be undone. Use this to remove rules that are no longer needed or relevant.',
+                'Delete a Kody Rule permanently from the system. This action cannot be undone. Use this to remove rules that are no longer needed or relevant. If centralized config is enabled the deletion will be published to a pull request pending to be approved.',
             inputSchema,
             outputSchema: z.object({
                 success: z.boolean(),
                 message: z.string().optional(),
+                prUrl: z.string().optional(),
             }),
             execute: wrapToolHandler(
-                async (args: InputType): Promise<BaseResponse> => {
-                    const organizationAndTeamData = {
-                        organizationId: args.organizationId,
-                    };
-
-                    const userInfo = {
-                        userId: 'kody-delete-mcp-tool',
-                        userEmail: 'kody@kodus.io',
-                    };
-
+                async (args: InputType): Promise<DeleteKodyRuleResponse> => {
                     const result =
-                        await this.kodyRulesService.deleteRuleWithLogging(
-                            organizationAndTeamData,
+                        await this.deleteRuleInOrganizationByIdKodyRulesUseCase.execute(
                             args.ruleId,
-                            userInfo,
+                            {
+                                source: 'cli',
+                                organizationId: args.organizationId,
+                                teamId: args.teamId,
+                                userId: 'kody-delete-mcp-tool',
+                                userEmail: 'kody@kodus.io',
+                            },
                         );
+
+                    if (typeof result !== 'boolean') {
+                        return {
+                            success: true,
+                            message: result.message,
+                            prUrl: result.prUrl,
+                        };
+                    }
 
                     return {
                         success: result,
@@ -725,7 +912,7 @@ export class KodyRulesTools {
         return {
             name: 'KODUS_CREATE_MEMORY',
             description:
-                'Capture a memory, preference, or coding rule derived from context to influence future interactions or code generation. Invoke this tool whenever the user demonstrates an explicit or implicit intent to save a memory, establish a convention, or note a preference. Focus on capturing the user intent rather than strictly evaluating it as a permanent architectural rule. After execution, ALWAYS inform the user of: (1) final decision/action (created or updated), (2) whether approval is required in UI, and (3) the provided link to navigate in UI. If status is pending, use the returned general memories page link (without ruleId/teamId); do not claim direct memory details link will work. AVOID: Transient task instructions ("Fix this now"), debugging chatter ("I see an error"), questions ("What is the deadline?"), or vague statements without clear actionable information.',
+                'Capture a memory, preference, or coding rule derived from context to influence future interactions or code generation. Invoke this tool whenever the user demonstrates an explicit or implicit intent to save a memory, establish a convention, or note a preference. Focus on capturing the user intent rather than strictly evaluating it as a permanent architectural rule. After execution, ALWAYS inform the user of: (1) final decision/action (created or updated), (2) whether approval is required in UI, and (3) the provided link to navigate in UI. If status is pending, use the returned general memories page link (without ruleId/teamId); do not claim direct memory details link will work. AVOID: Transient task instructions ("Fix this now"), debugging chatter ("I see an error"), questions ("What is the deadline?"), or vague statements without clear actionable information. If centralized config is enabled the memory rule will be published to a pull request pending to be approved.',
             inputSchema,
             outputSchema: z.object({
                 success: z.boolean(),
@@ -742,6 +929,8 @@ export class KodyRulesTools {
                         .string()
                         .describe('Link to view the memory in the system'),
                 }),
+                message: z.string().optional(),
+                prUrl: z.string().optional(),
             }),
             execute: wrapToolHandler(
                 async (args: InputType): Promise<CreateMemoryRuleResponse> => {

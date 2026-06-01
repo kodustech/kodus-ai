@@ -1,0 +1,151 @@
+---
+title: "Chutes — Subscription-Capped Inference for Open-Source Models"
+description: "Learn how to connect Chutes AI's subscription plans — covering DeepSeek, Llama, Qwen, MiniMax and more — to Kodus."
+icon: "cloud-bolt"
+---
+
+## How Chutes works
+
+Chutes AI is a decentralized serverless compute platform for open-source models. It exposes an **OpenAI-compatible** inference endpoint and offers **subscription plans** that bundle API usage up to a cap expressed as a multiple of the equivalent pay-per-token value — similar in structure to the Z.AI GLM Coding Plan, but covering the full open-source catalog (DeepSeek, Llama, Qwen, MiniMax, Kimi, and many more).
+
+Kodus talks to Chutes through the same OpenAI-compatible adapter it uses for everything else, so there are no code changes — just BYOK credentials.
+
+## Plans at a glance
+
+<Info>
+  Pricing and quota rules change. Always confirm at [chutes.ai/pricing](https://chutes.ai/pricing) before choosing a tier.
+</Info>
+
+Since early 2026, every Chutes subscription includes a usage allowance equal to **5× the equivalent pay-as-you-go value** of the tier, calculated from each model's per-million-token price.
+
+Representative tiers (confirm current numbers on the pricing page):
+
+| Tier | Monthly fee | Notes |
+| ---- | ----------- | ----- |
+| Base | ~$3/mo | Entry tier; limited model selection. |
+| Standard | ~$10/mo | Required for frontier models (DeepSeek V3, MiniMax M2.1, etc.). |
+| Pro | ~$20+/mo | Higher 5× cap for heavier review volume. |
+| Enterprise | custom | Contact Chutes. |
+
+- The 5× cap resets monthly and is computed against the same per-token prices you'd pay pay-as-you-go.
+- Some models require **Standard or higher** — the base tier does not carry frontier coding models.
+- Chutes marks some models with a `-TEE` suffix indicating trusted-execution-environment (confidential compute) variants.
+
+### Recommended models
+
+Chutes uses HuggingFace-style `org/model` identifiers, sometimes with a `-TEE` suffix for the confidential-compute variant:
+
+| Model id | Notes |
+| -------- | ----- |
+| `deepseek-ai/DeepSeek-V3-0324-TEE` | Frontier coding model; strong agentic behavior. Requires ≥ Standard. |
+| `moonshotai/Kimi-K2-Instruct` | Long-context Kimi K2 — great on large PRs. |
+| `Qwen/Qwen3-Coder-480B-A35B-Instruct` | Specialized coder. |
+| `chutes/MiniMaxAI/MiniMax-M2.1-TEE` | Alternative frontier option. |
+
+See the live list and current pricing at [llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models).
+
+## Creating an API Key
+
+<Warning>A Chutes account with an active subscription (or pay-as-you-go balance) is required.</Warning>
+
+1. Go to [chutes.ai](https://chutes.ai) and create an account.
+2. Subscribe to a tier at [chutes.ai/pricing](https://chutes.ai/pricing), or enable pay-as-you-go if you prefer.
+3. Open the developer console and create an API key. Copy it immediately.
+
+## Configure Chutes in Kodus
+
+### Option 1 — BYOK on Kodus Cloud (recommended)
+
+1. In the Kodus web UI, open **Settings → BYOK** ([app.kodus.io/organization/byok](https://app.kodus.io/organization/byok)).
+2. Chutes isn't in the curated catalog — click **Configure manually** at the bottom of the model list. Use `?slot=fallback` in the URL if configuring a fallback instead of the main model.
+3. Fill the wizard:
+
+   | Field | Value |
+   | --- | --- |
+   | **Provider** | `OpenAI Compatible` |
+   | **Base URL** | `https://llm.chutes.ai/v1` |
+   | **Model** | e.g. `deepseek-ai/DeepSeek-V3-0324-TEE` |
+   | **API Key** | your Chutes API key |
+   | **Max Concurrent Requests** | `3–5` is a safe start; raise if you don't hit cap (under Advanced settings) |
+
+4. Click **Test & save**. Kodus probes the endpoint and persists the config on success.
+
+<Tip>
+  The 5× cap is computed from per-token prices. Expensive frontier models burn through the cap faster than small ones — if you want to maximize reviews per dollar, pair Chutes with a cheaper model (Llama, Qwen smaller variants) for routine PRs and save the frontier models for complex reviews via a Kody rule or separate BYOK profile.
+</Tip>
+
+<Note>
+  Because Chutes runs on decentralized compute, cold-start and tail latency vary more than on dedicated providers. Configure an OpenAI or Anthropic key as **Fallback** so Kodus can fail over when a node is slow or the monthly cap is hit.
+</Note>
+
+### Option 2 — Self-hosted (environment variables)
+
+If you run Kodus in Fixed Mode (single global provider, no per-org BYOK), configure Chutes in the `.env` of your API + worker containers:
+
+```env
+# Chutes configuration (Fixed Mode)
+API_LLM_PROVIDER_MODEL="deepseek-ai/DeepSeek-V3-0324-TEE"   # any model id from the catalog
+API_OPENAI_FORCE_BASE_URL="https://llm.chutes.ai/v1"
+API_OPEN_AI_API_KEY="your-chutes-api-key"
+```
+
+<Note>
+  This path is only needed for self-hosted Kodus installs that deliberately disable BYOK. If BYOK is enabled on your self-hosted instance, prefer **Option 1** — the UI-based flow is the same as on Cloud.
+</Note>
+
+Restart the API and worker containers after editing `.env`, then verify:
+
+```bash
+docker-compose logs api worker | grep -iE "chutes|llm\.chutes"
+```
+
+For the full self-hosted setup (domains, security keys, database, webhooks, reverse proxy), follow the [generic VM deployment guide](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm) and only swap the LLM block for the one above.
+
+## When to pick Chutes
+
+- **You want the broadest open-source catalog at a subscription price** — frontier DeepSeek / MiniMax / Qwen at a flat fee with predictable caps.
+- **You care about confidential compute** — Chutes offers `-TEE` variants that run inside trusted execution environments, useful if your compliance posture requires it.
+- **You're running at low-to-mid volume** and fit within the 5× PAYG cap of a cheap tier.
+
+Pick Synthetic instead if you want a simpler flat subscription with no per-model cap math. Pick Z.AI if your preferred model is the GLM family specifically.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Model requires higher tier">
+    - Frontier models (DeepSeek V3, MiniMax M2.1, some Qwen variants) are gated to the Standard tier and above since Feb 2026.
+    - Either upgrade, or pick a model available on your current tier (smaller Llama or Qwen variants).
+  </Accordion>
+
+  <Accordion title="Monthly 5× cap reached">
+    - Check current usage in the Chutes dashboard.
+    - Switch temporarily to a cheaper model to extend the cap, or upgrade tier.
+    - Configure a `Fallback` BYOK provider so reviews keep running while you're capped.
+  </Accordion>
+
+  <Accordion title="401 / authentication errors">
+    - Confirm the key is active in the Chutes dashboard and the subscription is current.
+    - Make sure there are no trailing spaces or quotes in the `.env` value.
+  </Accordion>
+
+  <Accordion title="Model not found">
+    - Chutes uses the `org/model` format, with some variants ending in `-TEE` (confidential compute). Double-check exact capitalization at [llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models).
+  </Accordion>
+
+  <Accordion title="Slow or inconsistent latency">
+    - Chutes runs on decentralized compute, so tail latency is higher than on dedicated clouds.
+    - For latency-sensitive reviews, prefer dedicated providers; reserve Chutes for overnight or batch review jobs, or configure a fast provider as `Main` and Chutes as `Fallback`.
+  </Accordion>
+
+  <Accordion title="Connection errors">
+    - Confirm your server can reach `llm.chutes.ai`.
+    - Review API and worker logs for the exact upstream error.
+  </Accordion>
+</AccordionGroup>
+
+## Related
+
+- [Chutes pricing](https://chutes.ai/pricing)
+- [Chutes API reference](https://chutes.ai/docs/api-reference/overview)
+- [Live model catalog](https://llm.chutes.ai/v1/models)
+- [BYOK overview](/how_to_use/en/byok)

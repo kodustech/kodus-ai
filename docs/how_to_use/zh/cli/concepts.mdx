@@ -1,0 +1,146 @@
+---
+title: "核心概念"
+description: "充分利用 Kodus CLI 所需的心智模型。"
+---
+
+下面是贯穿整个 CLI 的核心概念。先读一次，后续文档会更易理解。
+
+## Diff 模式
+
+每次审查都需要回答一个问题：*变化了什么？* CLI 支持四种 diff 模式，每种模式的事实来源不同。
+
+| 模式 | 差异来源 | 是否内联文件 | 何时使用 |
+|------|----------|--------------|----------|
+| **工作目录**（默认） | 工作目录中的未提交变更 | 是 | 开发中，尚未暂存任何内容时。 |
+| **暂存区**（`--staged`） | `git diff --cached` | 是 | 即将提交 — 与 `git commit` 同样范围。 |
+| **分支**（`--branch <base>`） | `base..HEAD` 已提交的 diff | 否 | 对整个分支进行合并前审查。 |
+| **提交**（`--commit <sha>`） | 单个提交引入的 diff | 否 | 审核单个提交、cherry-pick 场景。 |
+
+<Tip>
+  **为什么内联很重要？** 工作目录和暂存区模式会连同文件内容一起发送，因为后端看不到您的未提交工作。分支和提交模式跳过内联 — 后端直接克隆相应提交。这就是为什么分支/提交审查在大型 diff 上仍然工作良好，而工作目录模式可能超过请求大小限制。
+</Tip>
+
+## 审查模式
+
+同一审查引擎，三种输出风格。
+
+- **交互式**（默认） — TUI 界面，列出文件、展开问题，逐一预览并应用修复。终端中最自然的工作方式。
+- **自动修复**（`--fix`） — 一次性应用所有可修复的问题，仅需一次确认。适合您信任规则、想要批量应用时。
+- **Prompt-only**（`--prompt-only`） — 为 AI 代理解析和执行而优化的精简结构化文本。在代理循环中搭配 `--fail-on`，审查完成时循环可干净退出。
+
+您也可以在任何命令上使用 `--format json` 或 `--format markdown`，用于非交互式消费者（CI、脚本、Webhook）。
+
+## 认证模式
+
+每台机器选择一种，CLI 会自动检测可用方式。
+
+- **试用** — 无需认证。每日 5 次审查，适合"先试一下"。
+- **个人登录**（`kodus auth login`） — 个人账户，令牌自动刷新。
+- **团队密钥**（`kodus auth team-key --key kodus_xxxxx`） — 团队共享的密钥，在仪表板生成。推荐用于 AI 代理和任何不希望交互式登录的场景。
+- **CI/CD 令牌**（`kodus auth token`） — 长效令牌，在已登录机器上生成，通过 `KODUS_TOKEN` 使用。
+
+完整决策树见 [快速开始](getting_started)。
+
+## Kody Rules
+
+**Kody Rule** 是 Kodus 审查器在每次审查中应用的结构化规则，可按仓库或团队全局作用。
+
+```
+Rule
+├── title          "生产代码中禁用 console.log"
+├── rule           "避免将 console.log 提交到代码库"
+├── severity       low | medium | high | critical
+├── scope          file | pull request
+├── path           **/*.ts       (文件匹配的 glob 模式)
+└── repo-id        <uuid> | global
+```
+
+规则叠加在通用 Kodus 审查之上 — AI 将其作为额外判据，而不是替代通用检查。
+
+可从仪表板或 CLI 通过 `kodus rules create|update|view` 管理规则。当您希望规则在版本控制中（脚本生成、入库、配置时重新应用）时，CLI 会非常有用。
+
+## 仓库设置
+
+Kodus 中的每个仓库都有控制审查行为的设置：忽略文件、基础分支模式、标题过滤器、功能开关。这些设置保存在 Kodus 后端，并在任何审查场景（Web PR、CLI 审查、代理循环）中生效。
+
+通过 CLI：
+
+```bash
+kodus config repo list                 # 查看已配置的仓库
+kodus config repo show                 # 查看当前仓库的设置
+kodus config repo setup                # 引导式向导
+kodus config repo set . reviewEnabled true
+kodus config repo add-ignore-file . "**/*.generated.ts"
+kodus config repo open                 # 跳转到 Web 仪表板
+```
+
+`kodus config repo` 和 `kodus config remote` 是同一命令组的别名。
+
+## 集中化配置（Centralized Config）
+
+通常，每个仓库的设置存在 Kodus 中。**集中化配置** 允许团队将这些设置存入一个单一事实源的 git 仓库 — 每次变更都成为对该仓库的 Pull Request，从而让审查配置本身也有审查与版本历史。
+
+启用、同步或查看状态：
+
+```bash
+kodus config centralized status
+kodus config centralized init owner/config-repo --sync-option pr
+kodus config centralized sync
+kodus config centralized disable
+```
+
+若团队需要对审查设置进行可审计、可版本控制的管理，使用集中化配置。若不需要此仪式，保留默认的单仓库设置即可。
+
+## 决策记忆（Decision Memory）
+
+决策记忆是 Kodus 持久化 AI 代理工作 *原因* 的方式 — 不仅是 diff，还包括推理、约束、考量的替代方案。
+
+启用后，Kodus 会为 Claude Code、Cursor 或 Codex 安装钩子，在每次 turn-complete 事件时触发，将结构化的决策捕获到：
+
+```
+.kody/
+├── pr/by-sha/<head-sha>.md    # PR 级别决策（与代码同版本控制）
+├── memory/<module-id>.md      # 模块级别决策（长期）
+└── modules.yml                # 模块配置
+```
+
+PR 级别记忆存在于分支上；PR 合并后，通过 `kodus decisions promote` 将其决策提升为模块级别记忆，以便未来对该模块的工作自动获得已积累的上下文。
+
+完整流程：[决策记忆](decision_memory)。
+
+## 业务验证（Business Validation）
+
+若 `kodus review` 问的是"代码质量是否良好？"，那么 `kodus pr business-validation` 问的是"这段 diff 是否真的做了任务要求的事？"。将它指向 Linear/Jira/URL 任务和 diff 来源（工作目录、暂存、分支、提交），它会根据任务的验收标准检查实现。
+
+```bash
+kodus pr business-validation --task-id KC-1441 --branch main
+kodus pr business-validation --task-url https://linear.app/… --staged
+```
+
+在合并前搭配一次预检，可在人工审查之前捕获"代码能跑，但不是任务要求"的情况。
+
+## AI 代理输出（`--prompt-only` 与 `--agent`）
+
+两个相关但职责不同的标志。
+
+- **`--prompt-only`** — 输出经过优化，便于 AI 代理解析和执行。仅适用于产生审查式输出的命令（`review`、`pr suggestions`）。
+- **`--agent`** — 全局标志，强制任意命令输出为 **确定性、机器可读** 的格式。当脚本或代理解析 CLI 输出时使用；常与 `--format json` 搭配。
+
+大多数代理集成只需要 `--prompt-only`。当您从一个外壳或 tool-calling 循环中编排 CLI、并且对输出格式有严格要求时，再考虑 `--agent`。
+
+## 下一步
+
+<CardGroup cols={2}>
+  <Card title="命令参考" icon="book" href="commands">
+    完整命令和标志列表。
+  </Card>
+  <Card title="AI 代理" icon="robot" href="ai_agents">
+    与编码代理构建审查-修复循环。
+  </Card>
+  <Card title="决策记忆" icon="brain" href="decision_memory">
+    跨分支捕获并提升代理决策。
+  </Card>
+  <Card title="故障排查" icon="life-ring" href="troubleshooting">
+    常见错误和退出码。
+  </Card>
+</CardGroup>

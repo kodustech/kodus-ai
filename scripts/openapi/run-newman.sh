@@ -4,8 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-COLLECTION_FILE=${1:-docs/openapi.postman_collection.json}
-ENV_FILE=${2:-docs/openapi.postman_environment.json}
+COLLECTION_FILE=${1:-docs-internal/openapi.postman_collection.json}
+ENV_FILE=${2:-docs-internal/openapi.postman_environment.json}
 
 if [ ! -f "$COLLECTION_FILE" ]; then
   echo "Collection not found: $COLLECTION_FILE"
@@ -15,7 +15,7 @@ fi
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "Environment not found: $ENV_FILE"
-  echo "Create from docs/openapi.postman_environment.example.json"
+  echo "Create from docs-internal/openapi.postman_environment.example.json"
   exit 1
 fi
 
@@ -77,6 +77,6 @@ npx --yes newman run "$COLLECTION_FILE" \
   --timeout-request 10000 \
   --timeout-script 10000 \
   --reporters cli,json \
-  --reporter-json-export docs/openapi.newman.json
+  --reporter-json-export docs-internal/openapi.newman.json
 
-echo "Newman report saved to docs/openapi.newman.json"
+echo "Newman report saved to docs-internal/openapi.newman.json"

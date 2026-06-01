@@ -1,0 +1,81 @@
+---
+title: "故障排除"
+description: "Kody 代码审查故障排除"
+---
+
+## Kody 代码审查不工作？修复常见问题的步骤
+
+### 令牌问题
+
+如果您通过令牌连接，请确保检查以下几点：
+
+- **GitHub 用户**：验证您的令牌已为您的组织启用：
+  1. 您必须是组织所有者。
+  2. 在 GitHub 中进入您组织的设置：
+     - 使用以下 URL 并将 `YOUR_ORG_NAME` 替换为您组织的名称：
+       <small>
+         `https://github.com/organizations/YOUR_ORG_NAME/settings/member_privileges`
+       </small>
+       。
+  3. 在 **Fine-Grained Personal Access Tokens** 下，确保选择了 **"Allow access via fine-grained personal access tokens"**。
+- **个人访问令牌（PAT）**：确认您的令牌已为您的组织配置并具有所需的权限。[管理令牌](https://github.com/settings/tokens?type=beta)。
+- **令牌过期**：确保您的令牌处于活动状态。[检查令牌状态](https://github.com/settings/tokens?type=beta)。
+
+<Frame caption="您的令牌应显示您组织的徽标。如果它显示您的个人资料图片，则您的令牌设置为个人访问而不是组织访问。">
+    ![令牌示例](/images/token.png)
+
+</Frame>
+
+---
+
+### 配置问题
+
+- **自动审查**：确保在您的[全局设置](https://app.kodus.io/automations/AutomationCodeReview/global/general)中启用了自动审查。如果禁用，请使用 `@kody start-review` 手动开始审查。
+- **审查类型**：确保至少选择了一种审查类型，以便 Kody 提供建议。[配置审查类型](https://app.kodus.io/automations/AutomationCodeReview/global/general)。
+- **分支审查**：默认情况下，Kody 审查合并到默认分支的 PR。要包括其他分支，请[更新您的配置](https://app.kodus.io/automations/AutomationCodeReview/global/general)。
+- **大型 PR**：请注意，具有大量更改的 PR 可能需要更长时间来处理。
+
+---
+
+### 全局与代码库设置
+
+Kody 使用分层配置系统。其工作原理如下：
+
+- **全局设置**：默认情况下应用于所有代码库。
+- **代码库特定设置**：如果已配置，它们将覆盖该特定代码库的全局设置。
+
+#### 故障排除步骤
+
+1. **检查全局配置**：查看并确认全局设置正确。[访问全局设置](https://app.kodus.io/automations/AutomationCodeReview/global/general)。
+2. **验证代码库设置**：
+   - 导航到设置中的 **By Repositories** 部分。
+   - 确认是否为相关代码库设置了自定义配置。
+3. **对齐或清除配置**：
+   - 要应用全局设置，请清除任何代码库特定的配置。
+   - 或者，调整代码库特定的设置以满足您的需求。
+
+#### 常见症状
+
+- 未为代码库触发自动审查。
+- Kody 应用意外的设置或建议。
+- 全局设置未反映在特定代码库中。
+
+
+## Kody 无响应或无评论
+
+完成此快速检查清单：
+
+1. PR 包含可审查的代码更改（不仅仅是文档或图像）？如果没有相关内容可供分析，Kody 可能会跳过。
+2. 分支在范围内？默认情况下，除非配置了其他基础分支，否则仅审查针对默认分支的 PR。
+3. **大型 PR：** Kody 审查最多 200 个**可审查文件**（应用忽略模式后）。示例：PR 有 250 个总文件，但 60 个是 `.lock` 文件 → Kody 审查剩余的 190 个文件 ✅
+4. 模式：如果禁用了自动审查，请使用 `@kody start-review` 手动触发。
+5. 推送节奏：如果使用自动暂停，请等待冷却时间或请求手动审查。
+6. 代码库覆盖：代码库特定的设置可以覆盖全局设置。根据需要清除或对齐它们。
+
+<Card title="审查模式与节奏" icon="clock" href="/how_to_use/en/code_review/configs/general">
+  检查自动审查、节奏和分支过滤器。
+</Card>
+
+<Card title="限制与定价" icon="scale-balanced" href="/how_to_use/en/pricing">
+  了解建议的限制以及它们如何影响审查。
+</Card>

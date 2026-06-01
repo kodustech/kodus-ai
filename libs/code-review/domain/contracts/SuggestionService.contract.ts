@@ -1,5 +1,5 @@
 import { BYOKConfig } from '@kodus/kodus-common/llm';
-import { CreateSandboxParams } from '@libs/code-review/domain/contracts/sandbox.provider';
+import { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
     CrossFileContextSnippet,
     RemoteCommands,
@@ -86,7 +86,7 @@ export interface ISuggestionService {
         memories?: Array<Partial<IKodyRule>>,
         externalReferences?: unknown[],
         externalReferenceErrors?: unknown[] | string,
-        sandboxCloneParams?: CreateSandboxParams,
+        getFreshCloneParams?: () => Promise<CreateSandboxParams>,
         documentationContext?: DocumentationContextItem[],
     ): Promise<any>;
 

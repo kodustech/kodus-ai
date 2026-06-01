@@ -41,6 +41,12 @@ export const checkStageMap = {
         summary:
             'An error occurred during the review. Please check the logs for details.',
     },
+    _pipelineEndPartial: {
+        name: 'Code Review Completed with Warnings',
+        title: 'Code Review Completed with Warnings',
+        summary:
+            'Review finished, but one or more non-critical stages failed. See details below.',
+    },
     _pipelineEndSkipped: {
         name: 'Code Review Skipped',
         title: 'Code Review Skipped',
@@ -411,7 +417,10 @@ export class PipelineChecksService implements IPipelineChecksService {
             }
         }
 
-        if (stageName === CheckStageNames._pipelineEndFailure) {
+        if (
+            stageName === CheckStageNames._pipelineEndFailure ||
+            stageName === CheckStageNames._pipelineEndPartial
+        ) {
             const shouldBuildFailureSummaryFromContext =
                 !summary || this.isGenericFailureMessage(summary);
 

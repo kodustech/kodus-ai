@@ -11,6 +11,7 @@ import { McpServerFactory } from './services/mcp-server.factory';
 import { McpServerService } from './services/mcp-server.service';
 import { CodeManagementTools, KodyRulesTools } from './tools';
 import { KodyIssuesTools } from './tools/kodyIssues.tools';
+import { CentralizedConfigModule } from '@libs/centralized-config/modules/centralized-config.module';
 
 @Module({})
 export class McpModule {
@@ -41,6 +42,7 @@ export class McpModule {
                 forwardRef(() => KodyRulesModule),
                 forwardRef(() => IssuesModule),
                 forwardRef(() => PullRequestsModule),
+                forwardRef(() => CentralizedConfigModule),
             );
 
             controllers.push(McpController);

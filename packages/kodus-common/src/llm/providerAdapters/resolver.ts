@@ -16,7 +16,7 @@ export interface ResolvedModelOptions {
     resolvedReasoningTokens?: number;
     supportsTemperature: boolean;
     supportsReasoning: boolean;
-    reasoningType?: 'level' | 'budget';
+    reasoningType?: 'level' | 'budget' | 'adaptive';
     resolvedReasoningLevel?: 'low' | 'medium' | 'high';
 }
 
@@ -66,7 +66,7 @@ export function resolveModelOptions(
             typeof maxBudget === 'number'
                 ? Math.min(maxBudget, boundedBudget)
                 : boundedBudget;
-    } else if (rc?.type === 'level') {
+    } else if (rc?.type === 'level' || rc?.type === 'adaptive') {
         const allowedLevels = rc.options;
         const desiredLevel = user.reasoningLevel ?? FALLBACK_LEVEL;
 
@@ -82,7 +82,7 @@ export function resolveModelOptions(
 
     const temperature = caps.supportsTemperature ? user.temperature : undefined;
 
-    const reasoningType: 'level' | 'budget' | undefined = rc?.type;
+    const reasoningType: 'level' | 'budget' | 'adaptive' | undefined = rc?.type;
 
     return {
         model,

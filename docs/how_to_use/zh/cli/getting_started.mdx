@@ -1,0 +1,180 @@
+---
+title: "快速开始"
+description: "安装 Kodus CLI，完成认证，并运行您的第一次审查。"
+---
+
+本指南让您在 5 分钟内完成从零到一次完整审查的流程。
+
+<Steps>
+  <Step title="安装">
+    <Tabs>
+      <Tab title="技能安装器（推荐）">
+        安装 CLI 并将 Kodus 技能部署到所有检测到的 AI 代理（Claude Code、Cursor、Codex、Windsurf）：
+
+        ```bash
+        curl -fsSL https://review-skill.com/install | bash
+        ```
+      </Tab>
+      <Tab title="npm">
+        ```bash
+        npm install -g @kodus/cli
+        ```
+      </Tab>
+      <Tab title="npx（无需安装）">
+        ```bash
+        npx @kodus/cli review
+        ```
+      </Tab>
+      <Tab title="curl">
+        ```bash
+        curl -fsSL https://raw.githubusercontent.com/kodustech/cli/main/install.sh | bash
+        ```
+      </Tab>
+    </Tabs>
+
+    <Note>需要 Node.js >= 20.0.0。</Note>
+
+    验证安装：
+
+    ```bash
+    kodus --version
+    kodus status
+    ```
+  </Step>
+
+  <Step title="认证">
+    根据您的使用场景选择。您也可以跳过认证，直接运行 `kodus review` — 试用模式每日有使用次数限制。
+
+    <Tabs>
+      <Tab title="独立开发者">
+        使用个人账户登录：
+
+        ```bash
+        kodus auth login
+        ```
+
+        令牌保存在 `~/.kodus/credentials.json`，并自动刷新。
+      </Tab>
+      <Tab title="团队（共享密钥）">
+        在 <a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a> 生成团队密钥并应用：
+
+        ```bash
+        kodus auth team-key --key kodus_xxxxx
+        ```
+
+        或者将以下引导命令分发给团队 — 一次性完成 CLI 安装并配置密钥：
+
+        ```bash
+        curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+        ```
+
+        <Warning>请在显示密钥时保存 — 之后将无法再次查看。</Warning>
+      </Tab>
+      <Tab title="AI 代理">
+        对于 AI 编码代理（Claude Code、Cursor、Codex），推荐使用团队密钥 — 无需个人登录，无交互提示。设置一次即可：
+
+        ```bash
+        export KODUS_TEAM_KEY=kodus_xxxxx
+        ```
+
+        将其添加到您的 shell 配置文件，使代理每次运行都能读取。
+      </Tab>
+      <Tab title="CI/CD">
+        在已登录的机器上生成长效令牌：
+
+        ```bash
+        kodus auth token
+        ```
+
+        在流水线中设置：
+
+        ```bash
+        export KODUS_TOKEN=<生成的令牌>
+        ```
+
+        完整 CI 示例参考 [自托管配置](self_hosted)。
+      </Tab>
+    </Tabs>
+
+    <Info>
+      **自托管 Kodus？** 在认证前先指向您的 API：
+
+      ```bash
+      export KODUS_API_URL=https://kodus-api.yourcompany.com
+      ```
+
+      除 `localhost` 外必须使用 HTTPS。
+    </Info>
+
+    确认认证状态：
+
+    ```bash
+    kodus auth status
+    ```
+  </Step>
+
+  <Step title="运行第一次审查">
+    在包含未提交变更的任意 git 仓库中：
+
+    ```bash
+    kodus review
+    ```
+
+    CLI 会分析您的工作目录差异，打印摘要，并（在交互模式下）允许您逐文件浏览、预览建议修复并应用。
+
+    常见变体：
+
+    ```bash
+    kodus review --staged             # 仅审查暂存文件
+    kodus review --branch main        # 将当前分支与 main 对比
+    kodus review --commit abc123      # 分析单个提交
+    kodus review --fix                # 自动应用所有可修复问题
+    kodus review --prompt-only        # 为 AI 代理优化的紧凑输出
+    kodus review --fail-on error      # 在 error 或更高级别时非零退出（适合 CI）
+    ```
+
+    <Tip>
+      工作目录审查（默认）和 `--staged` 会将文件内容内联到请求中，以便后端看到未提交的变更。`--branch` 和 `--commit` 模式跳过内联，因为后端可以自行获取相应提交 — 这使得这些模式在大型分支上表现良好。
+    </Tip>
+  </Step>
+
+  <Step title="选择下一步">
+    根据您的目标：
+
+    <CardGroup cols={2}>
+      <Card title="每次推送自动审查" icon="shield-check" href="commands#kodus-hook">
+        使用 `kodus hook install` 安装 pre-push 钩子。
+      </Card>
+      <Card title="在 CI 中运行审查" icon="infinity" href="self_hosted#ci-cd-integration">
+        GitHub Actions、GitLab CI 及通用流水线示例。
+      </Card>
+      <Card title="接入 AI 代理" icon="robot" href="ai_agents">
+        将 `--prompt-only` 接入 Claude Code、Cursor 或 Codex，实现自主修复循环。
+      </Card>
+      <Card title="配置仓库" icon="sliders" href="commands#kodus-config-repo">
+        从 CLI 管理忽略文件、基础分支及审查设置。
+      </Card>
+    </CardGroup>
+  </Step>
+</Steps>
+
+## 环境变量
+
+这些环境变量用于配置 CLI 行为。
+
+| 变量 | 描述 |
+|------|------|
+| `KODUS_API_URL` | API 端点（默认：`https://api.kodus.io`） |
+| `KODUS_TEAM_KEY` | 团队共享访问和 AI 代理的团队密钥 |
+| `KODUS_TOKEN` | 通过 `kodus auth token` 生成的 CI/CD 令牌 |
+| `KODUS_VERBOSE` | 设置为 `true` 以启用详细输出 |
+| `KODUS_SKIP_HOOK` | 设置为 `1` 以跳过单次 `git push` 的 pre-push 钩子 |
+| `KODUS_REQUEST_TIMEOUT_MIN` | 每次请求的超时时间（分钟，默认：`60`） |
+| `CF_ACCESS_CLIENT_ID` | Cloudflare Access 客户端 ID（用于 Zero Trust 后的 API） |
+| `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access 客户端密钥 |
+
+关于自托管配置、令牌和 Cloudflare Access，请参考 [自托管配置](self_hosted)。
+
+## 故障排查
+
+遇到错误？查看 [故障排查指南](troubleshooting) 了解常见症状和解决方案。

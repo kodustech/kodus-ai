@@ -1,0 +1,61 @@
+---
+title: "What is the difference between Review Rules and Memories"
+description: "Understand when to use Review Rules vs Memories in Kody for the best code review results."
+---
+
+In the Kody Rules UI, you configure two different things, and knowing when to use each one makes your code reviews more effective.
+
+A useful rule of thumb:
+
+- **Memories** teach Kody how your codebase works so future reviews and suggestions are more relevant.
+- **Review Rules** tell Kody what to flag when a PR does not match your standards.
+
+## Review Rules
+
+Review Rules are **traditional code review checks** that run during the dedicated code review stage. They analyze file diffs or the entire PR against your defined criteria.
+
+**Best for:**
+- Architecture boundaries ("domain layer must not import infrastructure")
+- Code patterns ("avoid `==` in loop conditions")
+- PR requirements ("every service file must have a test")
+- Structural validation using variables like `fileDiff`, `pr_files_diff`
+
+**How they work:**
+- Applied at file-level or PR-level scope
+- Run only during code review
+- Support file references (`@file`, `@repo`) and MCP functions
+- Produce suggestions with severity levels
+
+## Memories
+
+Memories are **persistent contextual instructions** injected across all interactions — code reviews, conversations, and AI suggestions. They represent the background knowledge Kody should carry about your codebase, conventions, and preferences.
+
+**Best for:**
+- Codebase context ("this repo mirrors a third-party API, so some external payload fields intentionally stay snake_case")
+- Suggestion preferences ("when suggesting JS utilities here, prefer native methods over Lodash")
+- Migration context ("the billing module is mid-migration, so prefer incremental fixes over broad refactors")
+- Architectural context ("this service follows hexagonal architecture and keeps adapters at the edge")
+
+**How they work:**
+- Injected as high-priority context in all prompts
+- Improve future suggestions by grounding Kody in repo-specific context
+- Created via conversation (`@kody remember: ...`) or manually in the UI
+- Scoped to directory, repository, or organization level
+- Kody auto-deduplicates and resolves conflicts between memories
+
+## When to use which
+
+| Scenario | Use |
+|----------|-----|
+| Check if a test file exists for every service | Review Rule |
+| "This repo mirrors an external API, so some response fields intentionally stay snake_case" | Memory |
+| PR description must follow a template | Review Rule |
+| "Tests in this service usually live next to implementation files, not in a central test folder" | Memory |
+| Flag imports that violate architecture layers | Review Rule |
+| "The auth module is mid-migration, so prefer incremental changes over broad refactors" | Memory |
+
+## Can I convert between them?
+
+Yes. In the Pending Memories modal, you can **convert a memory into a Review Rule** if you decide it needs more structured enforcement with file paths and severity levels.
+
+For details, see [Kody Rules](/how_to_use/en/code_review/configs/kody_rules).

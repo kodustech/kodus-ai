@@ -1,0 +1,54 @@
+---
+title: "Como criar regras personalizadas de revisão de código"
+description: "Defina regras adaptadas à arquitetura, padrões e preferências de codificação do seu time, aplicadas automaticamente em cada PR."
+---
+
+Cada time tem convenções que linters genéricos não cobrem — limites de arquitetura, padrões de nomenclatura, requisitos de testes ou restrições específicas do negócio. Regras personalizadas de revisão de código permitem codificar isso em verificações automatizadas.
+
+## Criando uma regra no Kodus
+
+1. Vá em **Configurações de Revisão de Código** → **Regras do Kody**
+2. Clique em **Adicionar Regra**
+3. Configure:
+   - **Nome** — o que a regra verifica (ex.: "Arquivos de serviço devem ter testes")
+   - **Escopo** — Nível de arquivo (analisa arquivos individuais) ou nível de PR (analisa o PR completo)
+   - **Caminho** — padrão glob para direcionar arquivos específicos (ex.: `src/services/**/*.ts`)
+   - **Severidade** — Crítica, Alta, Média ou Baixa
+   - **Instruções** — descrição detalhada do que verificar
+
+## O que torna as regras poderosas
+
+As regras podem acessar um contexto rico:
+
+- **Variáveis** como `fileDiff`, `pr_title`, `pr_description`, `pr_files_diff`
+- **Referências de arquivo** com `@file:caminho/para/arquivo.ts` para comparar com padrões
+- **Funções MCP** para buscar dados de ferramentas conectadas (Jira, estrutura do repositório, etc.)
+
+### Exemplo: Regra de limite arquitetural
+
+```
+Nome: A camada de domínio não deve depender da infraestrutura
+Escopo: Pull Request
+Instruções: Verifique pr_files_diff para qualquer importação em src/domain/
+que referencie src/infrastructure/. Consulte
+@file:docs/architecture.md para dependências permitidas.
+```
+
+### Exemplo: Regra de cobertura de testes
+
+```
+Nome: Todo serviço deve ter um arquivo de teste
+Escopo: Pull Request
+Instruções: Para cada arquivo modificado em src/services/,
+verifique se existe um arquivo de teste correspondente em test/services/.
+Use MCP para verificar a árvore de arquivos do repositório.
+```
+
+## Outras formas de adicionar regras
+
+- **Importar da Biblioteca de Regras** — navegue por regras comprovadas por linguagem e categoria
+- **Sincronizar de ferramentas de IDE** — importe regras automaticamente do Cursor, Copilot, Claude
+- **Regras de repositório** — defina regras em arquivos markdown no seu repositório
+- **Geração automática** — o Kody sugere regras baseadas no seu histórico de revisões
+
+Para a referência completa, consulte [Regras do Kody](/how_to_use/pt-br/code_review/configs/kody_rules).

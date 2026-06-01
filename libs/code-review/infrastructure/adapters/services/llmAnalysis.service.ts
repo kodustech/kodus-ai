@@ -16,7 +16,7 @@ import {
 import { ContextAugmentationsMap } from '@libs/ai-engine/infrastructure/adapters/services/context/interfaces/code-review-context-pack.interface';
 import { LLMResponseProcessor } from '@libs/ai-engine/infrastructure/adapters/services/llmResponseProcessor.transform';
 import { IAIAnalysisService } from '@libs/code-review/domain/contracts/AIAnalysisService.contract';
-import { CreateSandboxParams } from '@libs/code-review/domain/contracts/sandbox.provider';
+import { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
     CrossFileContextSnippet,
     RemoteCommands,
@@ -87,6 +87,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
             context,
         );
         const spanName = `${LLMAnalysisService.name}::${runName}`;
+        const byokConfigRef = context?.codeReviewConfig?.byokConfig;
         const spanAttrs = {
             type: promptRunner.executeMode,
             organizationId: organizationAndTeamData?.organizationId,
@@ -99,6 +100,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
                 spanName,
                 runName,
                 attrs: spanAttrs,
+                byokConfig: byokConfigRef,
                 exec: async (callbacks) => {
                     return await promptRunner
                         .builder()
@@ -211,6 +213,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
                 spanName,
                 runName,
                 attrs: spanAttrs,
+                byokConfig,
                 exec: async (callbacks) => {
                     const schema = z.object({
                         codeSuggestions: z.array(
@@ -490,6 +493,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
                 spanName,
                 runName,
                 attrs: spanAttrs,
+                byokConfig,
                 exec: async (callbacks) => {
                     return await promptRunner
                         .builder()
@@ -578,7 +582,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         memories?: Array<Partial<IKodyRule>>,
         externalReferences?: unknown[],
         externalReferenceErrors?: unknown[] | string,
-        sandboxCloneParams?: CreateSandboxParams,
+        getFreshCloneParams?: () => Promise<CreateSandboxParams>,
         documentationContext?: DocumentationContextItem[],
     ): Promise<ISafeguardResponse> {
         suggestions?.forEach((suggestion) => {
@@ -609,7 +613,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
                 memories,
                 externalReferences,
                 externalReferenceErrors,
-                sandboxCloneParams,
+                getFreshCloneParams,
                 documentationContext,
             });
         } catch (error) {

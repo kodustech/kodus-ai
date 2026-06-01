@@ -1,0 +1,191 @@
+name: "E2E: self-hosted matrix"
+
+# Minimal token scope — CodeQL actions/missing-workflow-permissions.
+# These jobs only read the repo (checkout); provider/cloud creds come
+# from secrets, not GITHUB_TOKEN. No job writes back to the repo.
+permissions:
+    contents: read
+
+# Runs the matrix runner (tests/e2e/cli/run-matrix.ts) against a self-hosted
+# stack provisioned from the given image tag. Spawns one ephemeral droplet
+# per (provider, license) cell defined in the matrix YAML, drives the
+# scenarios end to end through real provider APIs, then destroys the
+# droplet. Designed to be called by selfhosted-build-push.yml right after
+# an RC build, before any promotion is allowed.
+#
+# Inputs:
+#   image_tag    Image tag to test against (REQUIRED, e.g. selfhosted-1.42.0-rc.1)
+#   matrix_file  Path to a matrix YAML file in tests/e2e/matrix/ (default fast.yml)
+#   keep_running Optional — leave droplets alive after each cell for debug
+#
+# Required secrets:
+#   DIGITALOCEAN_TOKEN
+#   GH_TEST_TOKEN, GL_TEST_TOKEN, BB_TEST_USER, BB_TEST_APP_PASSWORD,
+#   AZ_TEST_TOKEN, and their *_TEST_REPO / *_TEST_PR_NUMBER companions
+#   SH_LICENSE_KEY_PAID, SH_LICENSE_KEY_FREE
+
+on:
+    workflow_call:
+        inputs:
+            image_tag:
+                description: "Image tag (e.g. selfhosted-1.42.0-rc.1 or 1.42.0-rc.1)"
+                required: true
+                type: string
+            matrix_file:
+                description: "Matrix YAML path under tests/e2e/"
+                required: false
+                default: matrix/fast.yml
+                type: string
+            keep_running:
+                description: "Skip droplet teardown"
+                required: false
+                default: false
+                type: boolean
+    workflow_dispatch:
+        inputs:
+            image_tag:
+                description: "Image tag (e.g. selfhosted-1.42.0-rc.1)"
+                required: true
+                type: string
+            matrix_file:
+                description: "Matrix YAML path under tests/e2e/"
+                required: false
+                default: matrix/fast.yml
+                type: string
+            keep_running:
+                description: "Skip droplet teardown"
+                required: false
+                default: false
+                type: boolean
+
+concurrency:
+    group: e2e-self-hosted-matrix-${{ inputs.image_tag }}
+    cancel-in-progress: true
+
+jobs:
+    matrix:
+        name: ${{ matrix.cell.provider }} × ${{ matrix.cell.license }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 40
+        strategy:
+            fail-fast: false
+            matrix:
+                cell:
+                    - { provider: github, license: license-paid }
+                    - { provider: gitlab, license: license-paid }
+                    - { provider: bitbucket, license: license-paid }
+                    - { provider: azure-devops, license: license-paid }
+                    - { provider: github, license: license-free }
+        steps:
+            - name: Checkout monorepo
+              uses: actions/checkout@v6.0.2
+
+            - name: Checkout kodus-installer (used by provisioning script)
+              uses: actions/checkout@v6.0.2
+              with:
+                  repository: kodustech/kodus-installer
+                  path: kodus-installer
+                  token: ${{ secrets.RELEASE_BOT_TOKEN }}
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+
+            - name: Install e2e deps
+              working-directory: tests/e2e
+              run: npm install --no-audit --no-fund
+
+            - name: Resolve cell-specific secrets
+              id: secrets
+              env:
+                  CELL_PROVIDER: ${{ matrix.cell.provider }}
+              run: |
+                  case "$CELL_PROVIDER" in
+                    github)        echo "needs=github" >> "$GITHUB_OUTPUT" ;;
+                    gitlab)        echo "needs=gitlab" >> "$GITHUB_OUTPUT" ;;
+                    bitbucket)     echo "needs=bitbucket" >> "$GITHUB_OUTPUT" ;;
+                    azure-devops)  echo "needs=azure-devops" >> "$GITHUB_OUTPUT" ;;
+                  esac
+
+            - name: Run provisioning + matrix runner
+              env:
+                  IMAGE_TAG: ${{ inputs.image_tag }}
+                  MATRIX_FILE: ${{ inputs.matrix_file }}
+                  LICENSE_MODE: ${{ matrix.cell.license }}
+                  KODUS_INSTALLER_PATH: ${{ github.workspace }}/kodus-installer
+                  TEST_VM_PROVIDER: digitalocean
+                  TEST_KEEP_RUNNING: ${{ inputs.keep_running && '1' || '0' }}
+
+                  DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+
+                  GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
+                  GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
+                  GH_TEST_PR_NUMBER: ${{ secrets.GH_TEST_PR_NUMBER }}
+
+                  GL_TEST_TOKEN: ${{ secrets.GL_TEST_TOKEN }}
+                  GL_TEST_REPO: ${{ secrets.GL_TEST_REPO }}
+                  GL_TEST_MR_IID: ${{ secrets.GL_TEST_MR_IID }}
+
+                  BB_TEST_USER: ${{ secrets.BB_TEST_USER }}
+                  BB_TEST_APP_PASSWORD: ${{ secrets.BB_TEST_APP_PASSWORD }}
+                  BB_TEST_REPO: ${{ secrets.BB_TEST_REPO }}
+                  BB_TEST_PR_ID: ${{ secrets.BB_TEST_PR_ID }}
+
+                  AZ_TEST_TOKEN: ${{ secrets.AZ_TEST_TOKEN }}
+                  AZ_TEST_ORG: ${{ secrets.AZ_TEST_ORG }}
+                  AZ_TEST_PROJECT: ${{ secrets.AZ_TEST_PROJECT }}
+                  AZ_TEST_REPO: ${{ secrets.AZ_TEST_REPO }}
+                  AZ_TEST_PR_ID: ${{ secrets.AZ_TEST_PR_ID }}
+
+                  SH_LICENSE_KEY_PAID: ${{ secrets.SH_LICENSE_KEY_PAID }}
+                  SH_LICENSE_KEY_FREE: ${{ secrets.SH_LICENSE_KEY_FREE }}
+
+                  TARGET_FILTER_PROVIDER: ${{ matrix.cell.provider }}
+              run: |
+                  # The provisioning script runs the full matrix file. To exercise
+                  # only this cell, narrow the matrix down to the current provider
+                  # using a synthesized matrix file. This keeps each shard fast.
+                  CELL_MATRIX=$(mktemp --suffix=.yml)
+                  cat >"$CELL_MATRIX" <<EOF
+                  id: shard-${{ matrix.cell.provider }}-${{ matrix.cell.license }}
+                  scenarios:
+                    - code-review-basic
+                    - kody-rules-create-and-apply
+                    - license-attribution
+                  cells:
+                    - target: self-hosted
+                      provider: ${{ matrix.cell.provider }}
+                      license: ${{ matrix.cell.license }}
+                  EOF
+                  export MATRIX_FILE="$CELL_MATRIX"
+                  ./tests/e2e/provisioning/self-hosted/vm.sh
+
+            - name: Upload evidence
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: e2e-self-hosted-${{ matrix.cell.provider }}-${{ matrix.cell.license }}
+                  path: tests/e2e/evidence/
+                  if-no-files-found: warn
+                  retention-days: 14
+
+    aggregate:
+        name: Aggregate evidence
+        runs-on: ubuntu-latest
+        needs: matrix
+        if: always()
+        steps:
+            - name: Download all evidence
+              uses: actions/download-artifact@v4
+              with:
+                  pattern: e2e-self-hosted-*
+                  merge-multiple: true
+                  path: evidence
+
+            - name: Upload combined evidence
+              uses: actions/upload-artifact@v4
+              with:
+                  name: e2e-self-hosted-matrix
+                  path: evidence/
+                  retention-days: 30

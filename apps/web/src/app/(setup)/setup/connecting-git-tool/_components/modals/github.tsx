@@ -26,11 +26,10 @@ import {
     DialogTitle,
 } from "src/core/components/ui/dialog";
 import { AuthMode, PlatformType } from "src/core/types";
-import { captureSegmentEvent } from "src/core/utils/segment";
 
 import {
-    getGithubTokenErrorMessage,
     getGithubTokenConfig,
+    getGithubTokenErrorMessage,
     isValidGithubEnterpriseUrl,
     resolveGithubTokenHost,
 } from "./github-token-config";
@@ -87,16 +86,6 @@ export const GithubTokenModal = (props: {
                 }),
                 organizationAndTeamData: {
                     teamId: props.teamId,
-                },
-            });
-
-            captureSegmentEvent({
-                userId: props?.userId!,
-                event: "setup_git_integration_success",
-                properties: {
-                    platform: "github",
-                    method: "token",
-                    teamId: props?.teamId,
                 },
             });
 

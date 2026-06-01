@@ -1,5 +1,6 @@
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { ReviewCadenceType } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { CheckIfPRCanBeApprovedCronProvider } from '../CheckIfPRCanBeApproved.cron';
 
 jest.mock('@kodus/flow', () => ({
@@ -71,6 +72,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId:
                 jest.fn().mockResolvedValue([]),
             find: jest.fn().mockResolvedValue([]),
+            findLatestExecutionByFilters: jest.fn().mockResolvedValue(null),
         } as any;
 
         const automationService = {
@@ -156,6 +158,116 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             }),
         );
         expect(deps.lock.release).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips approval when PR head has new commit since last reviewed commit', async () => {
+        const { cron, deps } = makeCron();
+
+        deps.automationExecutionService.findLatestExecutionByFilters = jest
+            .fn()
+            .mockResolvedValue({
+                dataExecution: { lastAnalyzedCommit: 'old-sha' },
+            });
+
+        deps.codeManagementService.getPullRequest = jest
+            .fn()
+            .mockResolvedValue({ head: { sha: 'new-sha' } });
+
+        deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+            [{ id: 'c-1', body: 'Resolved', isResolved: true }],
+        );
+
+        const result = await (cron as any).shouldApprovePR({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: makeOpenPr(77, 'repo-b'),
+            codeReviewConfig: {
+                reviewCadence: { type: ReviewCadenceType.AUTO_PAUSE },
+                configLevel: 'repository',
+            },
+            teamAutomationId: 'team-automation-1',
+        });
+
+        expect(result).toBe(false);
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('skips approval when reviewCadence exists but type is undefined', async () => {
+        const { cron, deps } = makeCron();
+
+        deps.automationExecutionService.findLatestExecutionByFilters = jest
+            .fn()
+            .mockResolvedValue({
+                dataExecution: { lastAnalyzedCommit: 'old-sha' },
+            });
+
+        deps.codeManagementService.getPullRequest = jest
+            .fn()
+            .mockResolvedValue({ head: { sha: 'new-sha' } });
+
+        deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+            [{ id: 'c-1', body: 'Resolved', isResolved: true }],
+        );
+
+        const result = await (cron as any).shouldApprovePR({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: makeOpenPr(77, 'repo-b'),
+            codeReviewConfig: {
+                reviewCadence: {},
+                configLevel: 'repository',
+            } as any,
+            teamAutomationId: 'team-automation-1',
+        });
+
+        expect(result).toBe(false);
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('approves when PR head matches last successful reviewed commit for automatic mode', async () => {
+        const { cron, deps } = makeCron();
+
+        deps.automationExecutionService.findLatestExecutionByFilters = jest
+            .fn()
+            .mockResolvedValue({
+                dataExecution: { lastAnalyzedCommit: 'same-sha' },
+            });
+
+        deps.codeManagementService.getPullRequest = jest
+            .fn()
+            .mockResolvedValue({ head: { sha: 'same-sha' } });
+
+        deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+            [{ id: 'c-1', body: 'Resolved', isResolved: true }],
+        );
+
+        deps.automationExecutionService.find.mockResolvedValue([]);
+
+        const result = await (cron as any).shouldApprovePR({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pr: makeOpenPr(77, 'repo-b'),
+            codeReviewConfig: {
+                reviewCadence: { type: ReviewCadenceType.AUTOMATIC },
+                configLevel: 'repository',
+            },
+            teamAutomationId: 'team-automation-1',
+        });
+
+        expect(result).toBe(true);
+        expect(
+            deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+        ).toHaveBeenCalled();
     });
 
     it('does not process a PR when the same repository+PR has in-progress execution', async () => {

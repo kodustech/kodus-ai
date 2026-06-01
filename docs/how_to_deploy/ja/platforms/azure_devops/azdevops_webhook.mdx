@@ -1,0 +1,130 @@
+---
+title: Webhookの作成
+icon: webhook
+---
+
+KodyはAzure DevOpsプロジェクトを接続する際に通常Webhookを自動的に作成します。このページでは、自動登録が行われなかった場合の**手動セットアップ**手順を説明します。これは主にセルフホスト型インストールや、KodyがユーザーのためにService Hookを作成できないAzureプロジェクトで発生します。
+
+<Note>
+  WebhookのURLはWebhooksサービス（ポート3332）に到達できる必要があります。APIドメインを使用するのは、リバースプロキシが`/.../webhook`パスをWebhooksサービスにルーティングする場合のみ機能します。
+</Note>
+
+## Azure ReposのWebhook URLには署名済みトークンが必要
+
+GitHub、GitLab、Bitbucket、Forgejoとは異なり、Azure ReposのWebhookリクエストには**暗号化された`token`クエリパラメーター**が含まれている必要があります。Kodusは受信リクエストごとにこのトークンを検証し、トークンなしのコールは`403 Unauthorized`で拒否されます。トークンはセルフホスト型セットアップ中にすでに設定した2つの環境変数から導出されます：
+
+- `CODE_MANAGEMENT_SECRET` — 32バイトの暗号化キー（16進数エンコード）。
+- `CODE_MANAGEMENT_WEBHOOK_TOKEN` — キーが暗号化するプレーンテキスト。
+
+したがって、Azure WebhookのURLは次のようになります：
+
+```
+https://kodus-api.yourdomain.com/azure-repos/webhook?token=<generated>
+```
+
+`<generated>`の値は、`CODE_MANAGEMENT_WEBHOOK_TOKEN`を`CODE_MANAGEMENT_SECRET`でAES-256-CBCを使用して暗号化し、`<ivHex>:<cipherHex>`の形式にフォーマットすることで生成されます。
+
+<Note>
+  KodyはUI駆動のインテグレーションフロー経由でWebhookを作成する際に、このトークンを自動的に生成します。Azure DevOpsでWebhookを手動登録する場合のみ、手動で生成する必要があります。
+</Note>
+
+## Webhookトークンの生成
+
+環境に合った方法を選択してください。どちらもKodusスタックがすでに設定している環境変数を使用します。リポジトリをクローンする**必要はありません**。
+
+### オプションA — 実行中のKodusコンテナ内で（推奨）
+
+すでに実行中の`api`コンテナに対してこれを実行します。環境変数はすでにスコープ内にあります：
+
+```bash
+docker compose exec api node -e "
+const crypto = require('crypto');
+const key = Buffer.from(process.env.CODE_MANAGEMENT_SECRET, 'hex');
+const iv = crypto.randomBytes(16);
+const c = crypto.createCipheriv('aes-256-cbc', key, iv);
+let e = c.update(process.env.CODE_MANAGEMENT_WEBHOOK_TOKEN, 'utf8', 'hex');
+e += c.final('hex');
+console.log(iv.toString('hex') + ':' + e);
+"
+```
+
+出力がWebhook URLに`?token=...`として貼り付ける値です。例：
+
+```
+8f3c1a4b9e2d6f8a1c3e5f7091a4b7c2:d1e9a23c78...
+```
+
+### オプションB — Nodeをローカルで使用（Dockerなし）
+
+Kodusスタックが実行中でない場合、または別のマシンでトークンを生成したい場合は、2つの環境変数をエクスポートして実行します：
+
+```bash
+export CODE_MANAGEMENT_SECRET="<.envと同じ値>"
+export CODE_MANAGEMENT_WEBHOOK_TOKEN="<.envと同じ値>"
+
+node -e "
+const crypto = require('crypto');
+const key = Buffer.from(process.env.CODE_MANAGEMENT_SECRET, 'hex');
+const iv = crypto.randomBytes(16);
+const c = crypto.createCipheriv('aes-256-cbc', key, iv);
+let e = c.update(process.env.CODE_MANAGEMENT_WEBHOOK_TOKEN, 'utf8', 'hex');
+e += c.final('hex');
+console.log(iv.toString('hex') + ':' + e);
+"
+```
+
+<Warning>
+  両方の環境変数の値は、実行中のKodus APIコンテナが使用しているものと**正確に**一致する必要があります。キーが一致しない場合、有効に見えるトークンが生成されますが、Kodusは`403 Unauthorized`で拒否します。
+</Warning>
+
+<Tip>
+  トークンは有効期限がありません。組織内のすべてのAzure ReposのWebhookに同じ生成値を再利用できます。`CODE_MANAGEMENT_SECRET`または`CODE_MANAGEMENT_WEBHOOK_TOKEN`をローテーションする場合のみ、ローテーションが必要です。
+</Tip>
+
+## Azure DevOpsでのWebhookサブスクリプションの作成
+
+1. Azure DevOpsプロジェクトに移動します。
+2. 左下隅の**Project settings**をクリックします。
+3. **General**の下で**Service hooks**を選択します。
+4. **+ Create subscription**をクリックします。
+5. Webhookを設定します：
+
+   - **Service:** **Web Hooks**
+   - **Trigger on this type of event:** サポートされているイベントの1つを選択（以下を参照）
+   - **URL:** トークンを付加したKodusのAzure Repos WebhookのURL：
+
+     ```
+     https://kodus-api.yourdomain.com/azure-repos/webhook?token=<generated>
+     ```
+
+   - **Filters**（オプション）: 必要に応じてリポジトリやブランチでフィルタリング。
+   - **Action:** 指定のURLにPOSTリクエストを送信。
+
+6. **Finish**をクリックします。
+
+イベントタイプごとに1つのサブスクリプションを作成します。Kodusは現在以下に対応しています：
+
+- `git.pullrequest.created` — プルリクエストの作成
+- `git.pullrequest.updated` — プルリクエストの更新
+- `git.pullrequest.merge.attempted` — プルリクエストのマージ試行
+- `ms.vss-code.git-pullrequest-comment-event` — プルリクエストへのコメント
+
+<Note>
+  URLがAzure DevOpsから到達可能で、ポート3332（直接またはリバースプロキシ経由）での受信POSTリクエストを受け付けることを確認してください。
+</Note>
+
+## トラブルシューティング
+
+<AccordionGroup>
+  <Accordion title="AzureがWebhookを送信するがKodusが403を返す">
+    `?token=`の値が欠落しているか、切り捨てられているか、または実行中のAPIが使用しているものとは異なる`CODE_MANAGEMENT_SECRET` / `CODE_MANAGEMENT_WEBHOOK_TOKEN`で生成されています。**オプションA**でトークンを再生成し（コンテナが実際に使用している環境変数と同じ変数で生成されることが保証されます）、AzureのサブスクリプションURLを更新してください。
+  </Accordion>
+
+  <Accordion title="Webhookが届かない">
+    Azure DevOpsは失敗した配信を限られた回数しかリトライしません。**Service hooks**ページを確認してください。正常に配信された場合は緑のチェックマークが表示されます。接続エラーで配信が失敗している場合は、URLがパブリックインターネットから到達可能で、リバースプロキシが`/.../webhook`パスをポート3332に転送していることを確認してください。
+  </Accordion>
+
+  <Accordion title="1つのイベントは機能するが他は機能しない">
+    各イベントタイプにはAzure DevOpsで独自のサブスクリプションが必要です。「Pull request created」のみ作成した場合、更新とコメントはレビューをトリガーしません。
+  </Accordion>
+</AccordionGroup>

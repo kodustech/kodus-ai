@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import axios, { AxiosInstance } from 'axios';
 
+import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { decrypt } from '@libs/common/utils/crypto';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
     AzureRepoChange,
@@ -330,17 +333,13 @@ export class AzureReposRequestHelper {
         projectId: string;
         subscriptionPayload: any;
     }): Promise<AzureRepoSubscription> {
-        try {
-            const instance = await this.azureRequest(params);
+        const instance = await this.azureRequest(params);
 
-            const res = await instance.post(
-                '/_apis/hooks/subscriptions?api-version=7.1',
-                params.subscriptionPayload,
-            );
-            return res.data;
-        } catch (error) {
-            throw new Error(error);
-        }
+        const res = await instance.post(
+            '/_apis/hooks/subscriptions?api-version=7.1',
+            params.subscriptionPayload,
+        );
+        return res.data;
     }
 
     async getLanguageRepository(params: {
@@ -391,6 +390,7 @@ export class AzureReposRequestHelper {
 
         const instance = axios.create({
             baseURL,
+            timeout: INTEGRATION_REQUEST_TIMEOUT_MS,
             headers: {
                 'Authorization': `Basic ${Buffer.from(`:${decrypt(token)}`).toString('base64')}`,
                 'Content-Type': 'application/json',
@@ -595,11 +595,13 @@ export class AzureReposRequestHelper {
                 return data;
             }
         } catch (error) {
-            // Verificar se recebemos um erro 404 (arquivo não encontrado)
             if (error.response && error.response.status === 404) {
-                throw new Error(
-                    `Arquivo não encontrado: ${params.filePath} no commit ${params.commitId}`,
+                const wrapped: Error & { status?: number } = new Error(
+                    `File not found: ${params.filePath} at commit ${params.commitId}`,
+                    { cause: error },
                 );
+                wrapped.status = 404;
+                throw wrapped;
             }
 
             // Verificar se é um erro de versão não encontrada
@@ -611,6 +613,7 @@ export class AzureReposRequestHelper {
             ) {
                 throw new Error(
                     `O commit ${params.commitId} não pode ser encontrado no repositório ou você não tem permissão para acessá-lo.`,
+                    { cause: error },
                 );
             }
 
@@ -654,6 +657,7 @@ export class AzureReposRequestHelper {
             ) {
                 throw new Error(
                     `Error fetching diff for file '${params.filePath || 'ALL'}' between ${params.baseCommit} and ${params.targetCommitId}.`,
+                    { cause: error },
                 );
             }
             throw error;
@@ -685,6 +689,7 @@ export class AzureReposRequestHelper {
             ) {
                 throw new Error(
                     `O commit ${params.commitId} não pode ser encontrado no repositório ou você não tem permissão para acessá-lo.`,
+                    { cause: error },
                 );
             }
 
@@ -839,7 +844,14 @@ export class AzureReposRequestHelper {
         const { data } = await instance.patch(
             `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/pullRequests/${params.prId}?api-version=7.1`,
             {
-                description: params.description,
+                // Azure rejects PR descriptions > 4000 chars with HTTP 400
+                // (`InvalidArgumentValueException`). Truncate at the
+                // adapter boundary so callers don't have to know about
+                // platform-specific limits.
+                description: fitPRDescription(
+                    params.description,
+                    PlatformType.AZURE_REPOS,
+                ),
             },
         );
 
@@ -905,12 +917,9 @@ export class AzureReposRequestHelper {
 
         const isDescriptor = /^(aad|msa|vss|svc)\./.test(params.identifier);
 
-        let url = '';
-        if (isDescriptor) {
-            url = `https://vssps.dev.azure.com/${params.orgName}/_apis/graph/users/${params.identifier}?api-version=7.1-preview.1`;
-        } else {
-            url = `https://vssps.dev.azure.com/${params.orgName}/_apis/graph/users?filterValue=${encodeURIComponent(params.identifier)}&api-version=7.1-preview.1`;
-        }
+        const url = isDescriptor
+            ? `https://vssps.dev.azure.com/${params.orgName}/_apis/graph/users/${params.identifier}?api-version=7.1-preview.1`
+            : `https://vssps.dev.azure.com/${params.orgName}/_apis/graph/users?filterValue=${encodeURIComponent(params.identifier)}&api-version=7.1-preview.1`;
 
         const { data } = await instance.get(url);
 
@@ -1016,27 +1025,23 @@ export class AzureReposRequestHelper {
     }
 
     mapAzureStatusToFileChangeStatus(status: string): FileChange['status'] {
-        switch (status.toLowerCase()) {
-            case 'add':
-            case 'added':
-                return 'added';
-            case 'edit':
-            case 'modified':
-                return 'modified';
-            case 'delete':
-            case 'removed':
-                return 'removed';
-            case 'rename':
-            case 'renamed':
-                return 'renamed';
-            case 'copy':
-            case 'copied':
-                return 'copied';
-            case 'unchanged':
-                return 'unchanged';
-            default:
-                return 'changed';
+        const tokens = new Set(
+            status.split(',').map((t) => t.trim().toLowerCase()),
+        );
+        if (tokens.has('delete') || tokens.has('removed')) return 'removed';
+        if (tokens.has('add') || tokens.has('added')) return 'added';
+        if (
+            tokens.has('rename') ||
+            tokens.has('renamed') ||
+            tokens.has('sourcerename') ||
+            tokens.has('targetrename')
+        ) {
+            return 'renamed';
         }
+        if (tokens.has('copy') || tokens.has('copied')) return 'copied';
+        if (tokens.has('edit') || tokens.has('modified')) return 'modified';
+        if (tokens.has('unchanged')) return 'unchanged';
+        return 'changed';
     }
 
     /**
@@ -1213,22 +1218,28 @@ export class AzureReposRequestHelper {
             '',
         );
 
-        const refsResponse = await instance.get(
-            `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/refs`,
-            {
-                params: {
-                    'filter': `heads/${normalizedBranch}`,
-                    'api-version': '7.1',
-                },
-            },
-        );
+        const sourceObjectId = await this.getBranchObjectId({
+            orgName: params.orgName,
+            token: params.token,
+            projectId: params.projectId,
+            repositoryId: params.repositoryId,
+            branchName: normalizedBranch,
+        });
 
-        const existingBranchRef = refsResponse.data?.value?.find(
-            (ref: { name?: string }) =>
-                ref?.name === `refs/heads/${normalizedBranch}`,
-        );
+        const baseObjectId =
+            !sourceObjectId && params.baseBranch
+                ? await this.getBranchObjectId({
+                      orgName: params.orgName,
+                      token: params.token,
+                      projectId: params.projectId,
+                      repositoryId: params.repositoryId,
+                      branchName: params.baseBranch,
+                  })
+                : null;
+
         const oldObjectId =
-            existingBranchRef?.objectId ||
+            sourceObjectId ||
+            baseObjectId ||
             '0000000000000000000000000000000000000000';
 
         const url = `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/pushes?api-version=7.1`;
@@ -1275,6 +1286,48 @@ export class AzureReposRequestHelper {
         return data;
     }
 
+    async branchExists(params: {
+        orgName: string;
+        token: string;
+        projectId: string;
+        repositoryId: string;
+        branchName: string;
+    }): Promise<boolean> {
+        const branchObjectId = await this.getBranchObjectId(params);
+        return Boolean(branchObjectId);
+    }
+
+    async getBranchObjectId(params: {
+        orgName: string;
+        token: string;
+        projectId: string;
+        repositoryId: string;
+        branchName: string;
+    }): Promise<string | null> {
+        const instance = await this.azureRequest(params);
+        const normalizedBranch = params.branchName.replace(
+            /^refs\/heads\//,
+            '',
+        );
+
+        const refsResponse = await instance.get(
+            `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/refs`,
+            {
+                params: {
+                    'filter': `heads/${normalizedBranch}`,
+                    'api-version': '7.1',
+                },
+            },
+        );
+
+        const branchRef = refsResponse.data?.value?.find(
+            (ref: { name?: string; objectId?: string }) =>
+                ref?.name === `refs/heads/${normalizedBranch}`,
+        );
+
+        return branchRef?.objectId || null;
+    }
+
     async createPullRequest(params: {
         orgName: string;
         token: string;
@@ -1302,7 +1355,10 @@ export class AzureReposRequestHelper {
             sourceRefName: `refs/heads/${normalizedSourceBranch}`,
             targetRefName: `refs/heads/${normalizedTargetBranch}`,
             title: params.title,
-            description: params.description || '',
+            description: fitPRDescription(
+                params.description || '',
+                PlatformType.AZURE_REPOS,
+            ),
         };
 
         const { data } = await instance.post(url, payload);

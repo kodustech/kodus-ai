@@ -1,0 +1,46 @@
+---
+title: 创建 Webhook
+icon: webhook
+---
+
+Kodus 通常会自动创建 webhook。如果没有发生，请按照以下步骤手动设置：
+
+<Note>
+  Webhook URL 必须指向 Webhooks 服务（端口 3332）。仅当反向代理将 `/.../webhook` 路径转发到 Webhooks 服务时，才能使用 API 域名。
+</Note>
+
+1. 导航到您的 Bitbucket 仓库
+2. 单击左侧边栏中的"仓库设置"
+3. 选择"Webhooks"
+4. 单击"添加 webhook"
+5. 是时候配置您的 webhook 了：
+
+   - **标题**：Kodus 代码审查
+   - **URL**：输入您想要接收通知的 URL，即您在 `.env` 文件中的 `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` 下放置的 URL
+   - **状态**：活动
+   - **SSL/TLS**：勾选启用 SSL 验证
+   - **触发器**：选择这些事件：
+        - 仓库：
+            - 推送
+            - 已更新
+            - 提交评论已创建
+            - 构建状态已创建
+            - 构建状态已更新
+        - 工单
+            - 已创建
+            - 已更新
+            - 评论已创建
+        - 拉取请求
+            - 已创建
+            - 已更新
+            - 已合并
+            - 已拒绝
+            - 评论已创建
+            - 评论已删除
+            - 评论已更新
+            - 评论已解决
+            - 评论已重新打开
+
+6. 单击"保存"
+
+就是这样！您已成功设置 webhook 以在 Bitbucket 仓库中进行代码审查。

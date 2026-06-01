@@ -190,6 +190,128 @@ describe('CodebaseSearchService', () => {
             expect(result.contexts).toEqual([]);
         });
 
+        // ─── Bug C1 regression: silent failure on auth/fatal errors ──────────
+        // The E2B sandbox layer sometimes swallows non-zero exit codes
+        // (git auth failures, fatal errors) and returns stderr as the resolved
+        // grep value instead of throwing. When that happens, the raw string
+        // contains "fatal: Authentication failed" / "exit code 128" / etc.
+        // Previously the service happily passed that to parseGrepOutput,
+        // which found no file:line:text matches, so the caller saw
+        // `{ success: true, contexts: [] }` — a silent failure that corrupts
+        // downstream LLM reviews (empty context → bad review).
+        describe('Bug C1 — silent failure on auth/fatal errors', () => {
+            it('fails when grep resolves with "fatal: Authentication failed" text', async () => {
+                const mockGrep = jest
+                    .fn()
+                    .mockResolvedValue(
+                        "fatal: Authentication failed for 'https://github.com/acme/secret.git'",
+                    );
+
+                const result = await service.search({
+                    query: 'anything',
+                    remoteCommands: {
+                        grep: mockGrep,
+                        read: jest.fn(),
+                        listDir: jest.fn(),
+                    },
+                });
+
+                expect(result.success).toBe(false);
+                expect(result.error).toMatch(/auth|fatal/i);
+                expect(result.contexts).toEqual([]);
+            });
+
+            it('fails when grep resolves with "exit code 128" text', async () => {
+                const mockGrep = jest
+                    .fn()
+                    .mockResolvedValue(
+                        'Error: command exited with exit code 128',
+                    );
+
+                const result = await service.search({
+                    query: 'anything',
+                    remoteCommands: {
+                        grep: mockGrep,
+                        read: jest.fn(),
+                        listDir: jest.fn(),
+                    },
+                });
+
+                expect(result.success).toBe(false);
+                expect(result.error).toMatch(/128|fatal|auth/i);
+                expect(result.contexts).toEqual([]);
+            });
+
+            it('fails when grep resolves with "could not read Username" (git prompt failure)', async () => {
+                const mockGrep = jest
+                    .fn()
+                    .mockResolvedValue(
+                        "fatal: could not read Username for 'https://github.com': terminal prompts disabled",
+                    );
+
+                const result = await service.search({
+                    query: 'anything',
+                    remoteCommands: {
+                        grep: mockGrep,
+                        read: jest.fn(),
+                        listDir: jest.fn(),
+                    },
+                });
+
+                expect(result.success).toBe(false);
+                expect(result.contexts).toEqual([]);
+            });
+
+            it('fails when grep throws an error with exit code 128', async () => {
+                const mockGrep = jest
+                    .fn()
+                    .mockRejectedValue(
+                        new Error(
+                            "Command failed with exit code 128: fatal: Authentication failed for 'https://github.com/acme/private.git'",
+                        ),
+                    );
+
+                const result = await service.search({
+                    query: 'anything',
+                    remoteCommands: {
+                        grep: mockGrep,
+                        read: jest.fn(),
+                        listDir: jest.fn(),
+                    },
+                });
+
+                expect(result.success).toBe(false);
+                expect(result.error).toBeDefined();
+            });
+
+            it('does NOT confuse a real match containing the word "fatal" with a fatal error', async () => {
+                // Regression: make sure we detect auth/fatal errors only when the
+                // raw output is NOT a valid rg line (file:line:text format).
+                const mockGrep = jest
+                    .fn()
+                    .mockResolvedValue(
+                        'src/errors.ts:42:  throw new FatalError("Authentication failed")',
+                    );
+                const mockRead = jest
+                    .fn()
+                    .mockResolvedValue(
+                        'line1\nline2\nthrow new FatalError("Authentication failed")\n',
+                    );
+
+                const result = await service.search({
+                    query: 'FatalError',
+                    remoteCommands: {
+                        grep: mockGrep,
+                        read: mockRead,
+                        listDir: jest.fn(),
+                    },
+                });
+
+                expect(result.success).toBe(true);
+                expect(result.contexts.length).toBeGreaterThan(0);
+            });
+        });
+
         it('should parse grep output and read context', async () => {
             const mockGrep = jest
                 .fn()

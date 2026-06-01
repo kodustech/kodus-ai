@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { EnterpriseTierGuard } from '@libs/ee/license/guards/enterprise-tier.guard';
 import {
     Action,
     ResourceType,
@@ -25,6 +26,7 @@ import { CodeReviewSettingsLogResponseDto } from '../dtos/code-review-settings-l
 
 @ApiTags('Code Review Logs')
 @ApiStandardResponses()
+@UseGuards(EnterpriseTierGuard)
 @Controller('user-log')
 export class CodeReviewSettingLogController {
     constructor(

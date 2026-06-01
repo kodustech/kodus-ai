@@ -1,0 +1,36 @@
+---
+title: "LinearをコードレビューツールにConnectする方法"
+description: "LinearをKodusにリンクして、AIコードレビューがイシュー要件に対してPRを自動的に検証するようにします。"
+---
+
+LinearをKodusに接続すると、Linearイシューに対する自動**ビジネスロジック検証**とコードレビュー提案のためのリッチなコンテキストが有効になります。
+
+## 接続方法
+
+1. **設定** → **プラグイン** に移動します
+2. 利用可能なプラグインで**Linear**を見つけます
+3. **接続**をクリックしてアクセスを認証します
+4. Kodusがアクセスできるワークスペースを選択します
+
+## 有効になる機能
+
+### 自動ビジネスロジック検証
+
+PRがLinearイシューにリンクされると、Kodusは自動的に：
+- イシューのタイトル、説明、受け入れ基準を取得
+- PRのdiffを要件と比較
+- 不足している実装とギャップを報告
+
+### オンデマンド検証
+
+PRコメントに任意のLinear URLを貼り付けます：
+
+```
+@kody -v business-logic https://linear.app/your-team/issue/TEAM-123
+```
+
+### リッチなコードレビューコンテキスト
+
+Linearが接続されると、Kodyはルールや会話でタスクコンテキストを参照できます。
+
+詳細については、[ビジネスロジック検証](/how_to_use/ja/code_review/business_logic_validation)と[プラグイン](/how_to_use/ja/code_review/plugins)を参照してください。

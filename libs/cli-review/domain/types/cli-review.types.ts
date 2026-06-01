@@ -50,6 +50,11 @@ export interface CliReviewConfig {
         bestPractices?: boolean;
     };
     rulesOnly?: boolean;
+    /**
+     * Fast mode: uses the agent engine with a capped step budget and skips
+     * heavy verification/recovery passes. Optimized for CLI pre-commit use
+     * where feedback latency matters more than maximum finding coverage.
+     */
     fast?: boolean;
     files?: CliFileInput[];
 }

@@ -11,7 +11,7 @@ import {
 } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import {
-    convertToHunksWithLinesNumbers,
+    convertToUnifiedDiffWithLineNumbers,
     handlePatchDeletions,
 } from '@libs/common/utils/patch';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -29,7 +29,16 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
     readonly label = 'Loading Files Context';
 
     private readonly logger = createLogger(FetchChangedFilesStage.name);
-    private maxFilesToAnalyze = 500;
+    /** Hard ceiling for the legacy engine (no chunking).
+     *  Lowered from 500 → 350 after the 2026-05-13 rate-limit incident:
+     *  PRs in the 351-500 range hit GitHub /contents once per file with
+     *  no shared cache, dominating quota during commercial hours. The
+     *  agent engine (with sandbox) doesn't suffer from this and keeps
+     *  its higher ceiling. */
+    private static readonly LEGACY_MAX_FILES = 350;
+    /** Higher ceiling for the agent engine, which chunks by token budget.
+     *  Still bounded to prevent abuse (huge auto-generated PRs). */
+    private static readonly AGENT_MAX_FILES = 2000;
 
     constructor(
         @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
@@ -87,22 +96,31 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
                 );
         }
 
-        // Aplicar filtro ignorePaths
         const ignorePaths = context.codeReviewConfig.ignorePaths || [];
         const filteredFiles =
             filesToProcess?.filter(
-                (file) => !isFileMatchingGlob(file.filename, ignorePaths),
+                (file) =>
+                    file.status !== 'removed' &&
+                    !isFileMatchingGlob(file.filename, ignorePaths),
             ) || [];
         const ignoredList =
-            filesToProcess?.filter((file) =>
-                isFileMatchingGlob(file.filename, ignorePaths),
+            filesToProcess?.filter(
+                (file) =>
+                    file.status === 'removed' ||
+                    isFileMatchingGlob(file.filename, ignorePaths),
             ) || [];
         const filesToAnalyze = filteredFiles;
+
+        const useAgentEngine = !!context.pipelineMetadata?.useAgentEngine;
+        const maxFiles = useAgentEngine
+            ? FetchChangedFilesStage.AGENT_MAX_FILES
+            : FetchChangedFilesStage.LEGACY_MAX_FILES;
 
         const validation = this.validateFiles(
             filesToProcess,
             filesToAnalyze,
             ignorePaths,
+            maxFiles,
         );
 
         if (!validation.canProceed) {
@@ -170,6 +188,7 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
         filesToProcess: FileChange[],
         filteredFiles: FileChange[],
         ignorePaths: string[],
+        maxFilesToAnalyze: number,
     ): IStageValidationResult {
         if (!filesToProcess || filesToProcess.length === 0) {
             return {
@@ -202,19 +221,19 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
             };
         }
 
-        if (filteredFiles.length > this.maxFilesToAnalyze) {
+        if (filteredFiles.length > maxFilesToAnalyze) {
             return {
                 canProceed: false,
                 details: {
                     reasonCode: AutomationMessage.TOO_MANY_FILES,
                     message: StageMessageHelper.skippedWithReason(
                         PipelineReasons.FILES.TOO_MANY,
-                        `Count: ${filteredFiles.length}, Limit: ${this.maxFilesToAnalyze}`,
+                        `Count: ${filteredFiles.length}, Limit: ${maxFilesToAnalyze}`,
                     ),
-                    technicalReason: `Count: ${filteredFiles.length}, Limit: ${this.maxFilesToAnalyze}`,
+                    technicalReason: `Count: ${filteredFiles.length}, Limit: ${maxFilesToAnalyze}`,
                     metadata: {
                         count: filteredFiles.length,
-                        limit: this.maxFilesToAnalyze,
+                        limit: maxFilesToAnalyze,
                     },
                 },
             };
@@ -244,7 +263,7 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
                     return file;
                 }
 
-                const patchWithLinesStr = convertToHunksWithLinesNumbers(
+                const patchWithLinesStr = convertToUnifiedDiffWithLineNumbers(
                     patchFormatted,
                     file,
                 );

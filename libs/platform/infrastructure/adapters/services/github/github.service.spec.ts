@@ -83,7 +83,9 @@ describe('GithubService', () => {
             organizationAndTeamData,
             repositories: [{ id: '1', name: 'repo-one' }],
         });
-        expect(integrationConfigService.createOrUpdateConfig).toHaveBeenCalledWith(
+        expect(
+            integrationConfigService.createOrUpdateConfig,
+        ).toHaveBeenCalledWith(
             IntegrationConfigKey.REPOSITORIES,
             nextRepositories,
             integration.uuid,
@@ -91,7 +93,8 @@ describe('GithubService', () => {
             undefined,
         );
         expect(
-            integrationConfigService.createOrUpdateConfig.mock.invocationCallOrder[0],
+            integrationConfigService.createOrUpdateConfig.mock
+                .invocationCallOrder[0],
         ).toBeLessThan(deleteWebhook.mock.invocationCallOrder[0]);
         expect(createPullRequestWebhook).toHaveBeenCalledWith({
             organizationAndTeamData,
@@ -119,5 +122,70 @@ describe('GithubService', () => {
 
         expect(deleteWebhook).not.toHaveBeenCalled();
         expect(createPullRequestWebhook).not.toHaveBeenCalled();
+    });
+
+    it('uploads delete operations with valid tree mode/type', async () => {
+        const octokitMock = {
+            rest: {
+                git: {
+                    getRef: jest.fn().mockResolvedValue({
+                        data: { object: { sha: 'base-sha' } },
+                    }),
+                    createBlob: jest.fn(),
+                    createTree: jest.fn().mockResolvedValue({
+                        data: { sha: 'tree-sha' },
+                    }),
+                    createCommit: jest.fn().mockResolvedValue({
+                        data: { sha: 'commit-sha' },
+                    }),
+                    updateRef: jest.fn().mockResolvedValue({}),
+                    createRef: jest.fn().mockResolvedValue({}),
+                },
+            },
+        };
+
+        jest.spyOn(service as any, 'getGithubAuthDetails').mockResolvedValue({
+            authMode: AuthMode.TOKEN,
+        });
+        jest.spyOn(service as any, 'instanceOctokit').mockResolvedValue(
+            octokitMock as any,
+        );
+        jest.spyOn(service as any, 'getCorrectOwner').mockResolvedValue(
+            'kodustech',
+        );
+
+        const result = await service.uploadFiles({
+            organizationAndTeamData,
+            repository: {
+                id: 'repo-1',
+                name: 'kodus',
+            },
+            branchName: 'main',
+            baseBranch: 'main',
+            files: [
+                {
+                    path: '.kody-rules/review/no-debug.yml',
+                    operation: 'delete',
+                },
+            ],
+            message: 'remove rule',
+        });
+
+        expect(result).toBe(true);
+        expect(octokitMock.rest.git.createBlob).not.toHaveBeenCalled();
+        expect(octokitMock.rest.git.createTree).toHaveBeenCalledWith(
+            expect.objectContaining({
+                owner: 'kodustech',
+                repo: 'kodus',
+                tree: [
+                    {
+                        path: '.kody-rules/review/no-debug.yml',
+                        mode: '100644',
+                        type: 'blob',
+                        sha: null,
+                    },
+                ],
+            }),
+        );
     });
 });

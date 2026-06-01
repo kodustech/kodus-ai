@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Alert, AlertDescription } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
 import { Card, CardHeader } from "@components/ui/card";
 import { FormControl } from "@components/ui/form-control";
@@ -13,16 +14,33 @@ import { Textarea } from "@components/ui/textarea";
 import { toast } from "@components/ui/toaster/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAsyncAction } from "@hooks/use-async-action";
-import { createOrUpdateSSOConfig } from "@services/ssoConfig/fetch";
-import { Save, Upload } from "lucide-react";
+import {
+    confirmSSODomainVerification,
+    createOrUpdateSSOConfig,
+    getSSOConnectionTestResult,
+    getSSODomainVerificationStatus,
+    startSSOConnectionTest,
+} from "@services/ssoConfig/fetch";
+import { AlertCircle, Save, Upload } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
+import { useConfig } from "@providers/ConfigProvider";
 import { useAuth } from "src/core/providers/auth.provider";
 import { publicDomainsSet } from "src/core/utils/email";
-import { pathToApiUrl } from "src/core/utils/helpers";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
-import { SSOConfig, SSOProtocol } from "src/lib/auth/types";
+import {
+    buildSSOConfigFingerprint,
+    normalizeDomains,
+} from "src/lib/auth/sso-fingerprint";
+import {
+    SSOConfig,
+    SSOConnectionTestSessionStatus,
+    SSOConnectionTestStatus,
+    SSODomainVerificationStatusItem,
+    SSOProtocol,
+} from "src/lib/auth/types";
 import { z } from "zod";
 
+import { DomainListManager } from "./_components/domain-list-manager";
 import {
     fetchAndParseMetadata,
     parseMetadataFromFile,
@@ -34,16 +52,51 @@ const createSsoSchema = (userDomain: string) =>
             active: z.boolean().optional(),
             providerConfig: z.object({
                 issuer: z.string().optional(),
-                idpIssuer: z.string().min(1, "Issuer is required"),
-                entryPoint: z.url("Must be a valid URL"),
-                cert: z.string().min(1, "Certificate is required"),
+                idpIssuer: z.string().default(""),
+                entryPoint: z.string().default(""),
+                cert: z.string().default(""),
                 identifierFormat: z.string().optional(),
             }),
             domains: z.array(z.string()),
         })
         .superRefine((data, ctx) => {
             if (data.active) {
-                const { domains } = data;
+                const { providerConfig, domains } = data;
+
+                if (!providerConfig.idpIssuer) {
+                    ctx.addIssue({
+                        code: "custom",
+                        message: "Issuer is required",
+                        path: ["providerConfig", "idpIssuer"],
+                    });
+                }
+
+                if (!providerConfig.entryPoint) {
+                    ctx.addIssue({
+                        code: "custom",
+                        message: "SSO URL is required",
+                        path: ["providerConfig", "entryPoint"],
+                    });
+                } else {
+                    try {
+                        new URL(providerConfig.entryPoint);
+                    } catch {
+                        ctx.addIssue({
+                            code: "custom",
+                            message: "Must be a valid URL",
+                            path: ["providerConfig", "entryPoint"],
+                        });
+                    }
+                }
+
+                if (!providerConfig.cert) {
+                    ctx.addIssue({
+                        code: "custom",
+                        message: "Certificate is required",
+                        path: ["providerConfig", "cert"],
+                    });
+                }
+
                 const validDomains = domains.filter((d) => d);
 
                 if (validDomains.length === 0) {
@@ -70,18 +123,30 @@ const createSsoSchema = (userDomain: string) =>
                         path: ["domains"],
                     });
                 }
-
-                if (validDomains.some((domain) => domain !== userDomain)) {
-                    ctx.addIssue({
-                        code: "custom",
-                        message: "You can only add your own domain.",
-                        path: ["domains"],
-                    });
-                }
             }
         });
 
-type SsoFormData = z.infer<ReturnType<typeof createSsoSchema>>;
+type SsoFormData = z.input<ReturnType<typeof createSsoSchema>>;
+
+const SAML_EMAIL_IDENTIFIER_FORMAT =
+    "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress";
+
+interface SSOTestDraftStorage {
+    active?: boolean;
+    providerConfig?: SsoFormData["providerConfig"];
+    domains?: string[];
+}
+
+const buildSSOTestDraftKey = (organizationId?: string) =>
+    `sso-test-draft:${organizationId || "unknown"}`;
+
+const toSamlProviderConfig = (config?: SsoFormData["providerConfig"]) => ({
+    idpIssuer: config?.idpIssuer || "",
+    entryPoint: config?.entryPoint || "",
+    cert: config?.cert || "",
+    identifierFormat: config?.identifierFormat,
+    issuer: config?.issuer,
+});
 
 export const ClientSsoOrganizationSettingsPage = (props: {
     email: string;
@@ -89,14 +154,40 @@ export const ClientSsoOrganizationSettingsPage = (props: {
     uuid?: string;
 }) => {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { organizationId } = useAuth();
+    const { apiPublicUrl } = useConfig();
+    const ssoTestSessionId = searchParams.get("ssoTestSessionId");
+    const domainVerificationToken = searchParams.get("domainVerificationToken");
     const [metadataUrl, setMetadataUrl] = useState<string>("");
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
-
-    const callbackUrl = pathToApiUrl(
-        `/auth/sso/saml/callback/${organizationId}`,
+    const [isTestingConnection, setIsTestingConnection] = useState(false);
+    const [
+        domainVerificationStatusByDomain,
+        setDomainVerificationStatusByDomain,
+    ] = useState<Record<string, SSODomainVerificationStatusItem>>({});
+    const [latestSuccessfulTestSessionId, setLatestSuccessfulTestSessionId] =
+        useState<string | null>(null);
+    const [validatedFingerprint, setValidatedFingerprint] = useState<string>(
+        props.ssoConfig.connectionTest?.status ===
+            SSOConnectionTestStatus.SUCCESS
+            ? props.ssoConfig.connectionTest.configFingerprint
+            : "",
     );
+
+    // SAML ACS URL displayed for the customer to paste into their IdP.
+    // Must be (1) absolute — the IdP is an external system and can't
+    // resolve relative paths — and (2) point at the API's public
+    // origin directly, NOT at the same-origin /api/proxy/api/*
+    // mount. The proxy is for browser fetches; SAML is a stateful
+    // server-side flow that requires session cookies on the API's
+    // own origin. See ssoLogin in lib/auth/fetchers.ts for the
+    // matching reasoning on the initiation side.
+    const callbackUrl =
+        apiPublicUrl && organizationId
+            ? `${apiPublicUrl.replace(/\/$/, "")}/auth/sso/saml/callback/${organizationId}`
+            : "";
 
     const userDomain = props.email.split("@")[1];
     const form = useForm<SsoFormData>({
@@ -110,7 +201,7 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                 cert: props.ssoConfig.providerConfig?.cert || "",
                 identifierFormat:
                     props.ssoConfig.providerConfig?.identifierFormat ||
-                    "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+                    SAML_EMAIL_IDENTIFIER_FORMAT,
                 issuer:
                     props.ssoConfig.providerConfig.issuer ||
                     "kodus-orchestrator",
@@ -125,46 +216,386 @@ export const ClientSsoOrganizationSettingsPage = (props: {
     const {
         control,
         handleSubmit,
+        reset,
         setValue,
         watch,
         formState: { errors, isDirty, isValid },
     } = form;
 
-    // Set the identifier format to the required SAML format
-    useEffect(() => {
-        setValue(
-            "providerConfig.identifierFormat",
-            "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+    const isEnabled = watch("active");
+    const watchedProviderConfig = watch("providerConfig");
+    const watchedDomains = watch("domains");
+
+    const currentFingerprint = useMemo(() => {
+        return buildSSOConfigFingerprint({
+            protocol: SSOProtocol.SAML,
+            providerConfig: toSamlProviderConfig(watchedProviderConfig),
+            domains: watchedDomains || [],
+        });
+    }, [watchedProviderConfig, watchedDomains]);
+
+    const candidateDomains = useMemo(
+        () => normalizeDomains(watchedDomains || []),
+        [watchedDomains],
+    );
+
+    const persistedFingerprint = useMemo(() => {
+        return buildSSOConfigFingerprint({
+            protocol: SSOProtocol.SAML,
+            providerConfig: toSamlProviderConfig(
+                props.ssoConfig.providerConfig,
+            ),
+            domains:
+                props.ssoConfig.domains.length > 0
+                    ? props.ssoConfig.domains
+                    : [userDomain],
+        });
+    }, [props.ssoConfig.domains, props.ssoConfig.providerConfig, userDomain]);
+
+    const hasUnsavedChangesComparedToPersistedConfig =
+        currentFingerprint !== persistedFingerprint ||
+        Boolean(isEnabled) !== Boolean(props.ssoConfig.active);
+
+    const needsConnectionRetest =
+        Boolean(isEnabled) && currentFingerprint !== validatedFingerprint;
+
+    const unverifiedDomains = useMemo(() => {
+        return candidateDomains.filter(
+            (domain) => !domainVerificationStatusByDomain[domain]?.verified,
         );
-    }, [setValue]);
+    }, [candidateDomains, domainVerificationStatusByDomain]);
+
+    const needsDomainVerification =
+        Boolean(isEnabled) && unverifiedDomains.length > 0;
+
+    useEffect(() => {
+        const entries =
+            props.ssoConfig.domainVerification?.verifiedDomains?.map(
+                (record) => [
+                    record.domain,
+                    {
+                        domain: record.domain,
+                        verified: true,
+                        verifiedAt: record.verifiedAt,
+                        verifiedByEmail: record.verifiedByEmail,
+                    } satisfies SSODomainVerificationStatusItem,
+                ],
+            ) || [];
+
+        setDomainVerificationStatusByDomain(Object.fromEntries(entries));
+    }, [props.ssoConfig.domainVerification]);
+
+    useEffect(() => {
+        if (!organizationId) {
+            return;
+        }
+
+        try {
+            const draftRaw = window.localStorage.getItem(
+                buildSSOTestDraftKey(organizationId),
+            );
+
+            if (!draftRaw) {
+                return;
+            }
+
+            const parsedDraft = JSON.parse(draftRaw) as SSOTestDraftStorage;
+
+            if (!parsedDraft || !parsedDraft.providerConfig) {
+                return;
+            }
+
+            reset({
+                active: parsedDraft.active,
+                providerConfig: {
+                    issuer: parsedDraft.providerConfig.issuer,
+                    idpIssuer: parsedDraft.providerConfig.idpIssuer || "",
+                    entryPoint: parsedDraft.providerConfig.entryPoint || "",
+                    cert: parsedDraft.providerConfig.cert || "",
+                    identifierFormat: SAML_EMAIL_IDENTIFIER_FORMAT,
+                },
+                domains: parsedDraft.domains || [userDomain],
+            });
+        } catch (error) {
+            console.error("Failed to restore SSO test draft", error);
+        }
+    }, [organizationId, reset, userDomain]);
+
+    useEffect(() => {
+        if (!ssoTestSessionId) {
+            return;
+        }
+
+        let ignore = false;
+
+        const loadTestResult = async () => {
+            try {
+                const result =
+                    await getSSOConnectionTestResult(ssoTestSessionId);
+
+                if (ignore) {
+                    return;
+                }
+
+                if (result.status === SSOConnectionTestSessionStatus.SUCCESS) {
+                    setValidatedFingerprint(result.configFingerprint);
+                    setLatestSuccessfulTestSessionId(result.sessionId);
+                    toast({
+                        title: "Connection verified",
+                        description:
+                            "SSO test succeeded. You can now save and enable SSO.",
+                        variant: "success",
+                    });
+                } else if (
+                    result.status === SSOConnectionTestSessionStatus.FAILED
+                ) {
+                    toast({
+                        title: "SSO test failed",
+                        description:
+                            result.failureMessage ||
+                            "Unable to validate the SSO connection with the current draft settings.",
+                        variant: "danger",
+                    });
+                }
+            } catch (error: any) {
+                toast({
+                    title: "Could not load test result",
+                    description:
+                        error?.response?.data?.message ||
+                        "The SSO test session is no longer available. Run the test again.",
+                    variant: "danger",
+                });
+            } finally {
+                router.replace("/organization/sso");
+            }
+        };
+
+        loadTestResult();
+
+        return () => {
+            ignore = true;
+        };
+    }, [router, ssoTestSessionId]);
+
+    useEffect(() => {
+        if (!domainVerificationToken) {
+            return;
+        }
+
+        let ignore = false;
+
+        const confirmToken = async () => {
+            try {
+                const result = await confirmSSODomainVerification(
+                    domainVerificationToken,
+                );
+
+                if (ignore) {
+                    return;
+                }
+
+                setDomainVerificationStatusByDomain((prev) => ({
+                    ...prev,
+                    [result.domain]: {
+                        domain: result.domain,
+                        verified: true,
+                        verifiedAt: result.verifiedAt,
+                        verifiedByEmail: result.verifiedByEmail,
+                    },
+                }));
+
+                toast({
+                    title: "Domain verified",
+                    description: `${result.domain} was verified successfully.`,
+                    variant: "success",
+                });
+            } catch (error: any) {
+                toast({
+                    title: "Domain verification failed",
+                    description:
+                        error?.response?.data?.message ||
+                        "The verification link is invalid or expired.",
+                    variant: "danger",
+                });
+            } finally {
+                router.replace("/organization/sso");
+            }
+        };
+
+        confirmToken();
+
+        return () => {
+            ignore = true;
+        };
+    }, [domainVerificationToken, router]);
+
+    useEffect(() => {
+        if (!candidateDomains.length) {
+            return;
+        }
+
+        let ignore = false;
+
+        const loadDomainVerificationStatus = async () => {
+            try {
+                const result =
+                    await getSSODomainVerificationStatus(candidateDomains);
+
+                if (ignore) {
+                    return;
+                }
+
+                const map = Object.fromEntries(
+                    result.map((item) => [item.domain, item]),
+                );
+
+                setDomainVerificationStatusByDomain((prev) => {
+                    const next = { ...prev };
+
+                    for (const [domain, status] of Object.entries(map)) {
+                        const previousStatus = prev[domain];
+
+                        if (previousStatus?.verified && !status.verified) {
+                            // Keep persisted verified status when cache has no record.
+                            continue;
+                        }
+
+                        next[domain] =
+                            status as SSODomainVerificationStatusItem;
+                    }
+
+                    return next;
+                });
+            } catch (error) {
+                console.error(
+                    "Failed to load domain verification status",
+                    error,
+                );
+            }
+        };
+
+        loadDomainVerificationStatus();
+
+        return () => {
+            ignore = true;
+        };
+    }, [candidateDomains]);
 
     const [saveSettings, { loading: isLoadingSubmitButton }] = useAsyncAction(
         async (data: SsoFormData) => {
             try {
-                await createOrUpdateSSOConfig({
+                const canAttachTestSession =
+                    currentFingerprint === validatedFingerprint &&
+                    !!latestSuccessfulTestSessionId;
+
+                const updated = await createOrUpdateSSOConfig({
                     protocol: SSOProtocol.SAML,
-                    providerConfig: data.providerConfig,
+                    providerConfig: toSamlProviderConfig(data.providerConfig),
                     active: data.active,
                     uuid: props.uuid,
                     domains: data.domains,
+                    testSessionId: canAttachTestSession
+                        ? latestSuccessfulTestSessionId || undefined
+                        : undefined,
                 });
+
+                if (
+                    updated.connectionTest?.status ===
+                    SSOConnectionTestStatus.SUCCESS
+                ) {
+                    setValidatedFingerprint(
+                        updated.connectionTest.configFingerprint,
+                    );
+                }
+
+                setLatestSuccessfulTestSessionId(null);
+
+                if (organizationId) {
+                    window.localStorage.removeItem(
+                        buildSSOTestDraftKey(organizationId),
+                    );
+                }
 
                 await revalidateServerSidePath("/organization/sso");
                 router.refresh();
+                form.reset(data);
                 toast({
                     description: "SSO settings saved",
                     variant: "success",
                 });
             } catch (error: any) {
+                const code =
+                    error?.response?.data?.code ||
+                    error?.response?.data?.error?.code;
+                const message =
+                    error?.response?.data?.message ||
+                    error?.message ||
+                    "Unable to save SSO settings";
+
                 toast({
                     title: "Error",
-                    description: error.message,
+                    description:
+                        code === "SSO_TEST_REQUIRED"
+                            ? "Run a successful SSO connection test before enabling SSO."
+                            : message,
                     variant: "danger",
                 });
                 console.error(error);
             }
         },
     );
+
+    const handleConnectionTest = async () => {
+        const isFormValid = await form.trigger();
+
+        if (!isFormValid) {
+            toast({
+                title: "Review SSO settings",
+                description:
+                    "Fix validation errors before running the connection test.",
+                variant: "danger",
+            });
+            return;
+        }
+
+        const values = form.getValues();
+        setIsTestingConnection(true);
+
+        try {
+            if (organizationId) {
+                window.localStorage.setItem(
+                    buildSSOTestDraftKey(organizationId),
+                    JSON.stringify({
+                        active: values.active,
+                        providerConfig: values.providerConfig,
+                        domains: values.domains,
+                    } satisfies SSOTestDraftStorage),
+                );
+            }
+
+            const result = await startSSOConnectionTest({
+                protocol: SSOProtocol.SAML,
+                providerConfig: toSamlProviderConfig(values.providerConfig),
+                domains: values.domains,
+            });
+
+            if (!result.redirectUrl) {
+                throw new Error("No redirect URL provided by server");
+            }
+
+            router.push(result.redirectUrl);
+        } catch (error: any) {
+            console.error(error);
+            setIsTestingConnection(false);
+            toast({
+                title: "Could not start SSO test",
+                description:
+                    error?.response?.data?.message ||
+                    "Please verify the draft settings and try again.",
+                variant: "danger",
+            });
+        }
+    };
 
     const handleMetadataFetch = async () => {
         if (!metadataUrl) return;
@@ -238,7 +669,13 @@ export const ClientSsoOrganizationSettingsPage = (props: {
         fileInputRef.current?.click();
     };
 
-    const isEnabled = watch("active");
+    const hasDomainMismatch =
+        Boolean(isEnabled) &&
+        !!userDomain &&
+        (watchedDomains
+            ?.filter((d) => d)
+            .some((d) => d.toLowerCase() !== userDomain.toLowerCase()) ??
+            false);
 
     return (
         <Page.Root>
@@ -247,12 +684,28 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                     <Page.Title>SSO Settings</Page.Title>
                     <Page.HeaderActions>
                         <Button
+                            type="button"
+                            size="md"
+                            variant="secondary"
+                            onClick={handleConnectionTest}
+                            loading={isTestingConnection}
+                            disabled={
+                                isLoadingSubmitButton || isTestingConnection
+                            }>
+                            Test connection
+                        </Button>
+                        <Button
                             type="submit"
                             size="md"
                             variant="primary"
                             leftIcon={<Save />}
                             disabled={
-                                !isDirty || !isValid || isLoadingSubmitButton
+                                (!isDirty &&
+                                    !hasUnsavedChangesComparedToPersistedConfig) ||
+                                !isValid ||
+                                isLoadingSubmitButton ||
+                                (isEnabled && needsConnectionRetest) ||
+                                needsDomainVerification
                             }
                             loading={isLoadingSubmitButton}>
                             Save settings
@@ -295,6 +748,32 @@ export const ClientSsoOrganizationSettingsPage = (props: {
 
                                 {isEnabled && (
                                     <div className="space-y-6 border-t border-gray-200 pt-6">
+                                        {needsConnectionRetest && (
+                                            <Alert variant="warning">
+                                                <AlertCircle />
+                                                <AlertDescription>
+                                                    Run "Test connection" and
+                                                    complete a successful IdP
+                                                    login before saving enabled
+                                                    SSO settings.
+                                                </AlertDescription>
+                                            </Alert>
+                                        )}
+
+                                        {needsDomainVerification && (
+                                            <Alert variant="warning">
+                                                <AlertCircle />
+                                                <AlertDescription>
+                                                    Verify each domain before
+                                                    enabling SSO. Pending
+                                                    domains:{" "}
+                                                    {unverifiedDomains.join(
+                                                        ", ",
+                                                    )}
+                                                </AlertDescription>
+                                            </Alert>
+                                        )}
+
                                         <div className="grid grid-cols-1 gap-6 sm:grid-cols-1">
                                             <div className="space-y-4">
                                                 <FormControl.Root>
@@ -549,7 +1028,9 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                                                     )}
                                                 />
                                                 <div className="bg-muted text-muted-foreground flex h-10 items-center rounded-md border px-3 py-2 text-sm">
-                                                    urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress
+                                                    {
+                                                        SAML_EMAIL_IDENTIFIER_FORMAT
+                                                    }
                                                 </div>
                                                 <FormControl.Helper>
                                                     The identifier format is
@@ -574,63 +1055,47 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                                                     fieldState,
                                                 }) => (
                                                     <>
-                                                        <Input
-                                                            placeholder="e.g., yourcompany.com"
-                                                            error={
+                                                        <DomainListManager
+                                                            domains={
+                                                                field.value ||
+                                                                []
+                                                            }
+                                                            onDomainsChange={
+                                                                field.onChange
+                                                            }
+                                                            statusByDomain={
+                                                                domainVerificationStatusByDomain
+                                                            }
+                                                            errorMessage={
                                                                 fieldState.error
-                                                            }
-                                                            value={
-                                                                field.value?.join(
-                                                                    ",",
-                                                                ) ?? ""
-                                                            }
-                                                            onChange={(e) => {
-                                                                const inputValue =
-                                                                    e.target
-                                                                        .value;
-
-                                                                if (
-                                                                    inputValue ===
-                                                                    ""
-                                                                ) {
-                                                                    field.onChange(
-                                                                        [],
-                                                                    );
-                                                                    return;
-                                                                }
-
-                                                                const domains =
-                                                                    e.target.value
-                                                                        .split(
-                                                                            /\s*,\s*/,
-                                                                        )
-                                                                        .map(
-                                                                            (
-                                                                                d,
-                                                                            ) =>
-                                                                                d.trim(),
-                                                                        );
-                                                                field.onChange(
-                                                                    domains,
-                                                                );
-                                                            }}
-                                                            className="mt-3"
-                                                        />
-                                                        <FormControl.Error>
-                                                            {
-                                                                errors.domains
                                                                     ?.message
                                                             }
-                                                        </FormControl.Error>
-                                                        <FormControl.Helper>
-                                                            Enter domains
-                                                            separated by commas.
-                                                            Only users with
-                                                            email addresses from
-                                                            these domains will
-                                                            be able to sign in
-                                                            via SSO.
-                                                        </FormControl.Helper>
+                                                            hasDomainMismatch={
+                                                                hasDomainMismatch
+                                                            }
+                                                            userDomain={
+                                                                userDomain
+                                                            }
+                                                            onAutoVerified={(
+                                                                record,
+                                                            ) =>
+                                                                setDomainVerificationStatusByDomain(
+                                                                    (prev) => ({
+                                                                        ...prev,
+                                                                        [record.domain]:
+                                                                        {
+                                                                            domain: record.domain,
+                                                                            verified:
+                                                                                true,
+                                                                            verifiedAt:
+                                                                                record.verifiedAt,
+                                                                            verifiedByEmail:
+                                                                                record.contactEmail,
+                                                                        },
+                                                                    }),
+                                                                )
+                                                            }
+                                                        />
                                                     </>
                                                 )}
                                             />

@@ -21,6 +21,16 @@ export interface IKodyRulesRepository {
         organizationId: string,
     ): Promise<KodyRulesEntity | null>;
 
+    /**
+     * Count rules for an organization matching an optional status.
+     * Implemented server-side via aggregation so callers don't need
+     * to load the full embedded rules array just to read a number.
+     */
+    countRules(
+        organizationId: string,
+        status?: KodyRulesStatus,
+    ): Promise<number>;
+
     update(
         uuid: string,
         updateData: Partial<IKodyRules>,

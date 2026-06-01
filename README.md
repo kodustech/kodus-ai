@@ -25,7 +25,7 @@ AI Code Review with Full Control Over Model Choice and Costs.
 - **Zero Markup on LLM Costs**: You pay model providers directly. No hidden multipliers.
 - **Learns from Your Context**: Kody adapts to your architecture, standards, and workflow.
 - **You Set the Rules**: Define custom review rules in plain language.
-- **Privacy & Security**: Source code is not used to train models, data is encrypted in transit and at rest, and self-hosted runners are supported.
+- **Privacy & Security**: Source code is not used to train models, data is encrypted in transit and at rest, and self-hosted runners are supported. Self-hosted instances send one anonymous heartbeat per day (aggregated counters only — no code, names, or identifiers); opt out with `KODUS_TELEMETRY_DISABLED=true`. See [Anonymous Telemetry](https://docs.kodus.io/how_to_deploy/en/deploy_kodus/telemetry).
 - **Native Git Workflow**: Works directly in PRs with GitHub, GitLab, Bitbucket, and Azure Repos.
 - **CLI + CI/CD Ready**: Run reviews locally and in pipelines.
 - **Operational Impact**: Track technical debt and delivery metrics while keeping review quality high.

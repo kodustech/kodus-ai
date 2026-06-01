@@ -20,15 +20,20 @@ import { Label } from "@components/ui/label";
 import { magicModal } from "@components/ui/magic-modal";
 import { Markdown } from "@components/ui/markdown";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
+import { toast } from "@components/ui/toaster/use-toast";
 import {
     applyPendingKodyRules,
     convertPendingUpdatesToMemories as convertPendingUpdatesToMemoriesRequest,
     discardPendingKodyRules,
 } from "@services/kodyRules/fetch";
 import { KodyRule, KodyRuleRequestType } from "@services/kodyRules/types";
+import { isCentralizedPrResponse } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
+import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { pluralize } from "src/core/utils/string";
+
+import { getCentralizedPrToastPayload } from "../_utils/centralized-pr-feedback";
 
 type ModalTab = "new" | "updates";
 
@@ -75,6 +80,25 @@ const EmptyStateCard = ({ message }: { message: string }) => (
         </CardContent>
     </Card>
 );
+
+const mergeUniqueRulesByUuid = (
+    currentRules: KodyRule[],
+    incomingRules: KodyRule[],
+) => {
+    const mergedByUuid = new Map<string, KodyRule>();
+    const rulesWithoutUuid: KodyRule[] = [];
+
+    for (const rule of [...currentRules, ...incomingRules]) {
+        if (!rule.uuid) {
+            rulesWithoutUuid.push(rule);
+            continue;
+        }
+
+        mergedByUuid.set(rule.uuid, rule);
+    }
+
+    return [...mergedByUuid.values(), ...rulesWithoutUuid];
+};
 
 const NewMemoryCard = ({
     memory,
@@ -367,10 +391,12 @@ export const PendingMemoriesModal = ({
     pendingNewMemories,
     pendingUpdates,
     activeMemories,
+    refreshRulesList,
 }: {
     pendingNewMemories: KodyRule[];
     pendingUpdates: KodyRule[];
     activeMemories: KodyRule[];
+    refreshRulesList: () => Promise<void>;
 }) => {
     const [activeTab, setActiveTab] = useState<ModalTab>(
         pendingNewMemories.length > 0 ? "new" : "updates",
@@ -388,6 +414,7 @@ export const PendingMemoriesModal = ({
     const [hasChanges, setHasChanges] = useState(false);
     const [selectedNewIds, setSelectedNewIds] = useState<string[]>([]);
     const [selectedUpdateIds, setSelectedUpdateIds] = useState<string[]>([]);
+    const { teamId } = useSelectedTeamId();
     const canEdit = usePermission(
         Action.Update,
         ResourceType.CodeReviewSettings,
@@ -435,7 +462,15 @@ export const PendingMemoriesModal = ({
     const applyPendingItems = async (ids: string[]) => {
         magicModal.lock();
         try {
-            await applyPendingKodyRules(ids);
+            const response = await applyPendingKodyRules(teamId, ids);
+            if (isCentralizedPrResponse(response)) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        response,
+                        "Change proposed through centralized pull request.",
+                    ),
+                );
+            }
             setHasChanges(true);
             setNewMemories((previous) =>
                 previous.filter((rule) => !ids.includes(rule.uuid || "")),
@@ -452,6 +487,7 @@ export const PendingMemoriesModal = ({
         } catch (error) {
             console.error("Error applying pending items:", error);
         } finally {
+            await refreshRulesList();
             magicModal.unlock();
         }
     };
@@ -459,7 +495,7 @@ export const PendingMemoriesModal = ({
     const discardPendingItems = async (ids: string[]) => {
         magicModal.lock();
         try {
-            await discardPendingKodyRules(ids);
+            await discardPendingKodyRules(teamId, ids);
             setHasChanges(true);
             setNewMemories((previous) =>
                 previous.filter((rule) => !ids.includes(rule.uuid || "")),
@@ -476,6 +512,7 @@ export const PendingMemoriesModal = ({
         } catch (error) {
             console.error("Error discarding pending items:", error);
         } finally {
+            await refreshRulesList();
             magicModal.unlock();
         }
     };
@@ -483,36 +520,45 @@ export const PendingMemoriesModal = ({
     const convertPendingItemsToMemories = async (ids: string[]) => {
         magicModal.lock();
         try {
-            await convertPendingUpdatesToMemoriesRequest(ids);
+            const response = await convertPendingUpdatesToMemoriesRequest(
+                teamId,
+                ids,
+            );
+
+            if (isCentralizedPrResponse(response)) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        response,
+                        "Change proposed through centralized pull request.",
+                    ),
+                );
+            } else {
+                const convertedMemories = response.filter(
+                    (rule) =>
+                        rule.requestType !== KodyRuleRequestType.MEMORY_UPDATE,
+                );
+
+                if (convertedMemories.length > 0) {
+                    setNewMemories((currentMemories) =>
+                        mergeUniqueRulesByUuid(
+                            currentMemories,
+                            convertedMemories,
+                        ),
+                    );
+                }
+            }
+
             setHasChanges(true);
-
-            setUpdates((currentUpdates) => {
-                const remainingUpdates: KodyRule[] = [];
-                const rulesToConvert: KodyRule[] = [];
-
-                for (const rule of currentUpdates) {
-                    if (ids.includes(rule.uuid || "")) {
-                        rulesToConvert.push(rule);
-                    } else {
-                        remainingUpdates.push(rule);
-                    }
-                }
-
-                if (rulesToConvert.length > 0) {
-                    setNewMemories((currentMems) => [
-                        ...currentMems,
-                        ...rulesToConvert,
-                    ]);
-                }
-
-                return remainingUpdates;
-            });
+            setUpdates((currentUpdates) =>
+                currentUpdates.filter((rule) => !ids.includes(rule.uuid || "")),
+            );
             setSelectedUpdateIds((selected) =>
                 selected.filter((id) => !ids.includes(id)),
             );
         } catch (error) {
             console.error("Error converting pending items to memories:", error);
         } finally {
+            await refreshRulesList();
             magicModal.unlock();
         }
     };

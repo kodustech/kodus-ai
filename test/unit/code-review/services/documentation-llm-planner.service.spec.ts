@@ -2,6 +2,16 @@ import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { DocumentationLLMPlannerService } from '@libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service';
 import { RepositoryPackageReference } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { ObservabilityService } from '@libs/core/log/observability.service';
+
+function buildObservabilityMock(): ObservabilityService {
+    return {
+        runLLMInSpan: jest.fn(async ({ exec }) => {
+            const result = await exec([]);
+            return { result };
+        }),
+    } as unknown as ObservabilityService;
+}
 
 describe('DocumentationLLMPlannerService', () => {
     function buildPromptRunnerMock(payloads: any[]): PromptRunnerService {
@@ -42,6 +52,7 @@ describe('DocumentationLLMPlannerService', () => {
         const payloads: any[] = [];
         const service = new DocumentationLLMPlannerService(
             buildPromptRunnerMock(payloads),
+            buildObservabilityMock(),
         );
 
         const packages: RepositoryPackageReference[] = [
@@ -133,7 +144,7 @@ describe('DocumentationLLMPlannerService', () => {
             }),
         } as unknown as PromptRunnerService;
 
-        const service = new DocumentationLLMPlannerService(promptRunner);
+        const service = new DocumentationLLMPlannerService(promptRunner, buildObservabilityMock());
 
         const result = await service.planDocumentationByFile({
             packages: [
@@ -161,6 +172,7 @@ describe('DocumentationLLMPlannerService', () => {
         const payloads: any[] = [];
         const service = new DocumentationLLMPlannerService(
             buildPromptRunnerMock(payloads),
+            buildObservabilityMock(),
         );
 
         const packages: RepositoryPackageReference[] = [
@@ -240,7 +252,7 @@ describe('DocumentationLLMPlannerService', () => {
             })),
         } as unknown as PromptRunnerService;
 
-        const service = new DocumentationLLMPlannerService(promptRunner);
+        const service = new DocumentationLLMPlannerService(promptRunner, buildObservabilityMock());
 
         const result = await service.planDocumentationByFile({
             packages: [
@@ -274,6 +286,7 @@ describe('DocumentationLLMPlannerService', () => {
         const payloads: any[] = [];
         const service = new DocumentationLLMPlannerService(
             buildPromptRunnerMock(payloads),
+            buildObservabilityMock(),
         );
 
         const longFileContent = `HEADER\n${'a'.repeat(12000)}\nFOOTER`;

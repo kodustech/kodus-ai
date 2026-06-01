@@ -1,0 +1,59 @@
+---
+title: "Bitbucket API Token"
+---
+
+## Introduction
+
+To enable Kody to perform automatic code reviews on Bitbucket Cloud, you need to generate an **API Token**. This token allows Kody to access your repositories, pull requests, webhooks, issues, pipelines etc., with the specific permissions listed below.
+
+---
+
+## Generating the API Token in Bitbucket
+
+1. Open the [Atlassian API tokens page](https://id.atlassian.com/manage-profile/security/api-tokens) directly (or, from your Atlassian profile, navigate to **Security → API tokens**).
+2. Click **Create API token with scopes**.
+3. Give the token a name (for example `kody_code_review`) and set an expiration date.
+4. If prompted, select **Bitbucket** as the application.
+5. Select all the required scopes (see below).
+6. Review your choices, then click **Create token**.
+7. **Copy** the token immediately and store it securely — after creation you will not be able to view it again.
+
+---
+
+## Required Scopes for Kody
+
+The token must include **all** of the following scopes for full functionality with Kody:
+
+| Scope                         | Purpose / What it Enables                                                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| `read:user:bitbucket`         | Read basic user or account information.                                                     |
+| `read:workspace:bitbucket`    | Read information about the workspace (projects, members, repositories).                     |
+| `read:project:bitbucket`      | Read metadata about projects.                                                               |
+| `read:repository:bitbucket`   | Read code, branches, source files in repositories.                                          |
+| `write:repository:bitbucket`  | Modify repository contents where needed (comments, file updates, etc.).                     |
+| `admin:repository:bitbucket`  | Administrative operations on repository: manage webhooks, permissions, repository settings. |
+| `read:pullrequest:bitbucket`  | View pull requests, their statuses, comments.                                               |
+| `write:pullrequest:bitbucket` | Create or modify pull request comments; approve, decline or merge PRs.                      |
+| `read:issue:bitbucket`        | Read issue tracker information.                                                             |
+| `read:webhook:bitbucket`      | View existing webhooks and their settings.                                                  |
+| `write:webhook:bitbucket`     | Create or update webhooks.                                                                  |
+| `read:pipeline:bitbucket`     | Read status/logs of pipelines associated with repositories or PRs.                          |
+
+> ⚠️ Ensure you grant only these necessary permissions; avoid granting more than required to reduce security risk.
+
+---
+
+## Adding the Token to Kody
+
+- Once the token is generated with all the required scopes, paste it into the **Kody integration / automation setup screen** when enabling the Bitbucket integration.
+- Make sure the token has `admin:repository:bitbucket` (or equivalent) if Kody needs to configure webhooks or listen for pull request events.
+
+---
+
+## Important Notes
+
+- The token will be **displayed only once** upon creation. Save it securely, because you will **not** be able to view it again.
+- Set an **expiry date** if possible, to limit the token’s lifetime.
+- If the token is ever compromised, revoke it immediately and create a new one.
+- Periodically audit the tokens and their scopes to confirm they are still necessary and valid.
+- Check whether your Bitbucket plan / account allows all the above scopes; some scopes (project, workspace, admin) may depend on subscription / permissions.

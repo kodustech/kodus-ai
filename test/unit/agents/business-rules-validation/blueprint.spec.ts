@@ -1068,7 +1068,7 @@ describe('business-rules blueprint', () => {
             }),
         });
 
-        expect(result.skippedAt).toBe('validateContext');
+        expect(result.skippedAt).toBe('validatePullRequestDiff');
         expect(fetcher.callTool).toHaveBeenCalledWith(
             'KODUS_GET_PULL_REQUEST_DIFF',
             expect.any(Object),
@@ -1143,14 +1143,14 @@ describe('business-rules blueprint', () => {
             },
         });
 
-        expect(result.skippedAt).toBe('validateContext');
+        expect(result.skippedAt).toBe('validateTaskContext');
         expect(result.context.validationResult).toEqual(
             expect.objectContaining({
                 needsMoreInfo: true,
                 mode: 'limitation_response',
                 reason: 'task_context_weak',
                 taskContextStatus: 'weak',
-                prDiffStatus: 'usable',
+                prDiffStatus: 'missing',
             }),
         );
         expect(result.context.formattedResponse).toBeUndefined();

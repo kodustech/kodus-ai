@@ -1,0 +1,125 @@
+---
+title: "Kodus + flujo de trabajo de sprint"
+description: "Integra la validación de lógica de negocio en tu ciclo de sprint para que cada PR sea validado contra los requisitos de la tarea antes del merge."
+icon: "arrows-spin"
+---
+
+## La brecha en la mayoría de los flujos de trabajo de sprint
+
+Los equipos registran los requisitos en Jira, Linear o Notion. Los desarrolladores los implementan en PRs. Pero nadie verifica sistemáticamente si el PR realmente cubre todos los criterios de aceptación — hasta que QA encuentra las brechas en staging.
+
+Este cookbook cierra ese ciclo validando los PRs contra los requisitos de las tareas de forma automática.
+
+## El flujo de trabajo
+
+```
+Tarea creada (Jira/Linear/Notion)
+    ↓
+Desarrollador implementa → Abre PR
+    ↓
+Kodus automáticamente:
+  1. Obtiene el contexto de la tarea desde la herramienta vinculada
+  2. Compara el diff del PR contra los criterios de aceptación
+  3. Reporta implementaciones faltantes o parciales
+    ↓
+Desarrollador atiende los hallazgos → Revalida
+    ↓
+Merge con confianza
+```
+
+## Paso 1 — Conecta tu herramienta de gestión de tareas
+
+Ve a **Configuración** → **Plugins** y conecta tu herramienta:
+
+- **Jira** — para equipos que usan Atlassian
+- **Linear** — para equipos que usan Linear
+- **Notion** — para equipos que usan Notion como gestor de tareas
+- **ClickUp** — para equipos que usan ClickUp
+
+Una vez conectada, Kodus puede obtener automáticamente el contexto de la tarea durante las revisiones.
+
+## Paso 2 — Habilita la validación de lógica de negocio
+
+Está habilitada por defecto, pero verifica:
+
+```yaml
+reviewOptions:
+  business_logic: true
+```
+
+## Paso 3 — Escribe buenos criterios de aceptación
+
+La calidad de la validación depende completamente de la calidad de las descripciones de tus tareas. Kodus clasifica el contexto de la tarea como:
+
+| Calidad | Qué significa | Qué hacer |
+|---------|--------------|-----------|
+| **Completo** | Título + descripción + criterios de aceptación | Mejores resultados — validación criterio por criterio |
+| **Parcial** | Título + descripción, sin criterios | Buenos resultados — análisis basado en comportamiento |
+| **Mínimo** | Solo un título | Resultados pobres — solo se marcan las brechas obvias |
+
+**Plantilla para tareas en Jira/Linear:**
+
+```
+## Description
+Brief context about what needs to change and why.
+
+## Acceptance Criteria
+1. Users with role "admin" can delete any comment
+2. Users can only edit their own comments within 24 hours
+3. Deleted comments show "[removed]" placeholder
+4. Audit log records who deleted what and when
+5. API returns 403 for unauthorized delete attempts
+```
+
+## Paso 4 — Usa la validación bajo demanda durante el desarrollo
+
+Antes de marcar un PR como listo, los desarrolladores pueden hacer una autocomprobación:
+
+```
+@kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292
+```
+
+Esto detecta brechas temprano, antes de que el revisor siquiera mire el PR.
+
+## Paso 5 — Enseña convenciones del sprint como Memorias
+
+```
+@kody remember: every PR must be linked to a Jira ticket.
+PRs without a linked ticket should be flagged.
+```
+
+```
+@kody remember: acceptance criteria marked as "out of scope"
+in the ticket should not be flagged as missing.
+```
+
+## Paso 6 — Crea una regla de requisito de PR
+
+```
+Name: PR must reference a task
+Scope: Pull Request
+Severity: Medium
+Instructions:
+  Check pr_description and pr_title for a task reference
+  (e.g., KC-1234, TEAM-456, or a URL to Jira/Linear/Notion).
+  If no task reference is found, flag it and ask the developer
+  to link the relevant task for business logic validation.
+```
+
+## El resultado
+
+Tras la configuración, cada PR en tu sprint recibe:
+
+1. **Revisión de calidad de código** — seguridad, rendimiento, estilo (Kodus estándar)
+2. **Validación de lógica de negocio** — ¿están implementados todos los criterios de aceptación?
+3. **Detección de alcance incorrecto** — ¿este PR está trabajando en la tarea correcta?
+
+QA encuentra menos brechas, las demos del sprint van más fluidas y el "creía que eso estaba hecho" se vuelve poco frecuente.
+
+## Consejos
+
+- Anima al equipo a escribir criterios de aceptación numerados — obtienen la mejor validación
+- Usa la validación bajo demanda durante el desarrollo, no solo en el momento de la revisión
+- Si un PR intencionalmente no cubre todos los criterios (entrega por fases), anótalo en la descripción del PR para que Kody pueda tenerlo en cuenta
+
+Para más detalles, consulta [Validación de lógica de negocio](/how_to_use/es/code_review/business_logic_validation).

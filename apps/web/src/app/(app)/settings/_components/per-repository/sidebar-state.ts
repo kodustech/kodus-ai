@@ -42,7 +42,7 @@ export const buildPerRepositorySidebarItems = (
             directories: repository.directories.map((directory) => ({
                 id: directory.id,
                 name: directory.name,
-                path: directory.path,
+                path: directory.folders?.[0]?.path ?? '',
                 overrideCount: countConfigOverrides(
                     directory.configs,
                     FormattedConfigLevel.DIRECTORY,

@@ -11,6 +11,10 @@ export function buildRequiredMcpFeedback(params: {
 }): string {
     void params.userLanguage;
 
+    const requiredLabels = params.requiredMcps.length
+        ? params.requiredMcps.map((mcp) => mcp.label).join(', ')
+        : 'Task Management';
+
     const requiredList = params.requiredMcps.length
         ? params.requiredMcps
               .map((mcp) =>
@@ -21,7 +25,15 @@ export function buildRequiredMcpFeedback(params: {
               .join('\n')
         : '- **Task Management** (Jira, Linear, Notion)';
 
-    return `## 🔌 MCP Integration Required
+    // One-line summary at the very top so downstream consumers (pipeline
+    // stages, UI status bubbles) can surface the real reason without having
+    // to parse markdown. firstNonEmptyLine in BusinessLogicValidationStage
+    // picks up this line verbatim.
+    const summary = `MCP integration required: no compatible provider is connected. Required: ${requiredLabels}. Available: ${formatAvailableProviders(params.availableProviders)}.`;
+
+    return `${summary}
+
+## 🔌 MCP Integration Required
 
 Business validation compares the PR implementation with task/ticket requirements.
 I could not fetch task context because no compatible MCP integration is currently connected.
@@ -44,7 +56,11 @@ export function buildMcpConnectionFailureFeedback(params: {
 }): string {
     void params.userLanguage;
 
-    return `## ⚠️ MCP Connection Failed
+    const summary = `MCP connection failed: connected providers did not expose the tools this skill needs. Available: ${formatAvailableProviders(params.availableProviders)}.`;
+
+    return `${summary}
+
+## ⚠️ MCP Connection Failed
 
 MCP integrations are configured, but I couldn't connect to any provider right now.
 

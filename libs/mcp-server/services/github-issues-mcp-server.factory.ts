@@ -44,11 +44,7 @@ export class GithubIssuesMcpServerFactory {
         );
 
         for (const tool of this.getRegisteredTools()) {
-            server.registerTool(
-                tool.name,
-                tool.config,
-                tool.execute,
-            );
+            server.registerTool(tool.name, tool.config, tool.execute);
         }
 
         const transport = new StreamableHTTPServerTransport({

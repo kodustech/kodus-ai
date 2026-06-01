@@ -1,6 +1,5 @@
 import { OrgSettingsLogHandler } from '@libs/ee/codeReviewSettingsLog/infrastructure/adapters/services/orgSettingsLog.handler';
 
-
 import {
     createMockUnifiedLogHandler,
     createBaseParams,

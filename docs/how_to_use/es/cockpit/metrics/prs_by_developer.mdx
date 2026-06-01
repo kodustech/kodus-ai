@@ -1,0 +1,100 @@
+---
+title: "PRs por Desarrollador"
+description: "Rastrea los Pull Requests completados por desarrollador agrupados por semana"
+---
+
+## Qué son los PRs por Desarrollador
+
+Los PRs por Desarrollador miden el número de Pull Requests **cerrados** completados por cada miembro del equipo, agrupados por semana. Esta métrica se centra en los resultados reales y el trabajo completado, brindándote información sobre la productividad individual del desarrollador y la distribución de la carga de trabajo del equipo.
+
+## Cómo lo Calculamos
+
+Rastreamos automáticamente cada Pull Request cerrado y los agrupamos por desarrollador y semana, comenzando el lunes. Esto te da una vista clara de quién está completando trabajo y cuándo.
+
+**Lo que Rastreamos:**
+- **PRs Cerrados**: Cada PR que ha sido completado (fusionado o cerrado)
+- **Atribución al Desarrollador**: Quién fue el autor de cada PR completado
+- **Agregación Semanal**: Agrupado por semana comenzando el lunes
+- **Recuento de Completados**: Número de PRs finalizados por desarrollador por semana
+
+**Lo que No Contamos:**
+- PRs abiertos o en borrador
+- PRs sin una fecha de cierre válida
+- Trabajo incompleto o abandonado
+
+**Cómo se Calcula:**
+```
+PRs Semanales por Desarrollador = COUNT(PRs cerrados) por desarrollador por semana
+```
+
+Agrupamos los datos por semana comenzando el lunes para brindarte información semanal consistente e identificar tendencias a lo largo del tiempo.
+
+## Por qué es Importante
+
+Comprender la finalización de PRs por desarrollador te ayuda a:
+
+- **Medir el Rendimiento Individual**: Ver quién está completando más trabajo
+- **Identificar Patrones de Productividad**: Comprender los ritmos y tendencias semanales
+- **Equilibrar la Carga de Trabajo**: Distribuir el trabajo de manera más equitativa en el equipo
+- **Rastrear el Rendimiento del Equipo**: Monitorear la velocidad y el rendimiento general del equipo
+
+### Impacto en la Gestión del Equipo
+
+- **Asignación de Recursos**: Distribuir mejor el trabajo según la capacidad individual
+- **Reconocimiento del Rendimiento**: Reconocer a los de alto rendimiento y sus contribuciones
+- **Identificación de Cuellos de Botella**: Encontrar dónde el trabajo se atasca o se retrasa
+- **Planificación del Equipo**: Establecer expectativas realistas para los plazos del proyecto
+
+### Distribución del Equipo
+- **Equilibrada**: Trabajo distribuido uniformemente entre los miembros del equipo
+- **Concentrada**: Pocos desarrolladores gestionando la mayor parte del trabajo
+- **Fragmentada**: Trabajo distribuido demasiado disperso entre muchos desarrolladores
+
+## Cómo Mejorar
+
+### Aumentar el Rendimiento Individual
+- **Metas Claras**: Establecer objetivos específicos y alcanzables para cada desarrollador
+- **Desarrollo de Habilidades**: Proporcionar formación en áreas que los frenan
+- **Optimización de Herramientas**: Asegurarse de que los desarrolladores tengan las herramientas y el acceso correctos
+- **Reducción de Bloqueos**: Eliminar los obstáculos que impiden la finalización del trabajo
+
+### Mejorar el Equilibrio del Equipo
+- **Distribución del Trabajo**: Distribuir el trabajo de manera más equitativa en el equipo
+- **Formación Cruzada**: Ayudar a los desarrolladores a trabajar en diferentes áreas
+- **Programación en Pareja**: Fomentar la colaboración y el intercambio de conocimientos
+- **Mentoría**: Los desarrolladores senior ayudan a los miembros junior del equipo
+
+### Optimizar el Flujo de Trabajo
+- **Procesos Claros**: Definir cómo fluye el trabajo a través del equipo
+- **Automatización**: Reducir las tareas manuales y repetitivas
+- **Comunicación**: Mejorar la coordinación del equipo y el intercambio de información
+- **Eficiencia de la Revisión**: Optimizar el proceso de revisión de código
+
+## Diferencias Clave con la Actividad del Desarrollador
+
+| **Aspecto** | **Actividad del Desarrollador** | **PRs por Desarrollador** |
+|-------------|------------------------|---------------------------|
+| **Estado del PR** | ❌ Sin filtrado | ✅ `status = 'closed'` |
+| **Base de Fecha** | Fecha de **creación** | Fecha de **completado** |
+| **Agregación** | Por **fecha específica** | Por **semana** |
+| **Enfoque** | Actividad de creación | Resultados completados |
+
+## Patrones Comunes
+
+### Desarrolladores de Alto Rendimiento
+- **Características**: Completan consistentemente muchos PRs por semana
+- **Beneficios**: Impulsan la velocidad del equipo, establecen estándares de rendimiento
+- **Riesgos**: Posible agotamiento, silos de conocimiento
+- **Gestión**: Asegurar un ritmo sostenible, compartir conocimientos
+
+### Desarrolladores de Bajo Rendimiento
+- **Características**: Completan menos PRs por semana
+- **Posibles Causas**: Curva de aprendizaje, tareas complejas, factores externos
+- **Apoyo**: Proporcionar mentoría, simplificar tareas, verificar bloqueos
+- **Metas**: Establecer objetivos de mejora incremental
+
+## Consideraciones de Contexto
+- **Tamaño del PR**: Un desarrollador con menos pero más grandes PRs puede ser igualmente productivo
+- **Complejidad**: Algunos trabajos naturalmente toman más tiempo en completarse
+- **Rol en el Equipo**: Los diferentes roles pueden tener diferentes patrones de PR
+- **Fase del Proyecto**: El rendimiento varía durante las diferentes fases de desarrollo

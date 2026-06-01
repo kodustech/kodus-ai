@@ -89,6 +89,23 @@ export default function SubscriptionLayout({
                                                 setQuery(e.target.value)
                                             }
                                         />
+
+                                        {selectedTab === tabs.admins && (
+                                            <Button
+                                                size="md"
+                                                variant="helper"
+                                                leftIcon={<PlusIcon />}
+                                                disabled={!canCreate}
+                                                onClick={() => {
+                                                    magicModal.show(() => (
+                                                        <InviteModal
+                                                            teamId={teamId}
+                                                        />
+                                                    ));
+                                                }}>
+                                                Invite member
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
                             </TabsList>

@@ -1,0 +1,147 @@
+---
+title: "Synthetic — Suscripción a Tarifa Plana para Modelos de Código Abierto"
+description: "Aprende a conectar la API basada en suscripción de Synthetic.new — que incluye Kimi, DeepSeek, Qwen Coder, GLM y más — a Kodus."
+icon: "infinity"
+---
+
+## Cómo funciona Synthetic
+
+Synthetic es un servicio de suscripción que ejecuta LLMs de código abierto para codificación en infraestructura dedicada y los sirve a través de una API **compatible con OpenAI** (y compatible con Anthropic). En lugar de pagar por token, pagas una **suscripción mensual fija** y obtienes un generoso presupuesto de límite de tasa que cubre cada modelo en la plataforma.
+
+Está posicionado como una alternativa directa a los planes de $20/mes y $200/mes de Claude para desarrolladores que hacen mucha codificación: el mismo precio, límites de tasa varias veces mayores y tu elección de modelos de código abierto.
+
+Kodus llega a Synthetic a través del endpoint compatible con OpenAI, por lo que no hay cambios de adaptador — solo credenciales BYOK.
+
+## Planes de un vistazo
+
+<Info>
+  Los precios y los límites de tasa cambian. Siempre confirma en [synthetic.new/pricing](https://synthetic.new/pricing) antes de elegir un nivel.
+</Info>
+
+### Suscripción (recomendada para revisión de código)
+
+| Plan | Precio | Límite de tasa |
+| ---- | ------ | -------------- |
+| **Mensual** | ~$30/mes ($1/día) | ~500 mensajes por ventana de 5 horas |
+| **Enterprise / basado en uso** | contactar a Synthetic | opción de pago por token |
+
+- Todos los modelos estándar están cubiertos por la suscripción — elige cualquiera de ellos cambiando el campo `model`.
+- Los límites de tasa se aplican en una **ventana continua de 5 horas**, no por mes — planifica la concurrencia para que quepa dentro de esa ventana.
+- Synthetic no entrena con tus prompts/completaciones y elimina los datos de la API en 14 días.
+
+### Modelos recomendados
+
+Synthetic expone modelos usando un prefijo estilo HuggingFace (`hf:org/model`). Algunas opciones sólidas para revisión de código:
+
+| ID del modelo | Notas |
+| ------------- | ----- |
+| `hf:zai-org/GLM-4.6` | Familia GLM; equilibrado para revisión de propósito general. |
+| `hf:moonshotai/Kimi-K2-Instruct` | Kimi K2 de contexto largo — excelente en PRs grandes. |
+| `hf:Qwen/Qwen3-Coder-480B-A35B-Instruct` | Codificador especializado robusto. |
+| `hf:deepseek-ai/DeepSeek-V3.1` | DeepSeek V3.1; comportamiento agéntico/de codificación robusto. |
+
+Consulta el catálogo completo en [dev.synthetic.new/docs/openai/models](https://dev.synthetic.new/docs/openai/models).
+
+## Crear una clave de API
+
+<Warning>Se requiere una cuenta de Synthetic con una suscripción activa para usar la API.</Warning>
+
+1. Ve a [synthetic.new](https://synthetic.new) y regístrate o inicia sesión.
+2. Suscríbete a un plan en [synthetic.new/pricing](https://synthetic.new/pricing).
+3. Abre la consola de desarrollador y crea una clave de API. Cópiala de inmediato — no verás la clave completa nuevamente.
+
+## Configurar Synthetic en Kodus
+
+El flujo principal es BYOK en Kodus Cloud. Las instalaciones con alojamiento autónomo pueden usar variables de entorno como opción secundaria.
+
+### Opción 1 — BYOK en Kodus Cloud (recomendado)
+
+1. En la interfaz web de Kodus, abre **Configuración → BYOK** ([app.kodus.io/organization/byok](https://app.kodus.io/organization/byok)).
+2. Synthetic no está en el catálogo curado — haz clic en **Configure manually** al final de la lista de modelos. Usa `?slot=fallback` en la URL si estás configurando un respaldo en lugar del modelo principal.
+3. Completa el asistente:
+
+   | Campo | Valor |
+   | --- | --- |
+   | **Proveedor** | `OpenAI Compatible` |
+   | **URL base** | `https://api.synthetic.new/openai/v1` |
+   | **Modelo** | por ejemplo, `hf:zai-org/GLM-4.6` (usa el prefijo `hf:` y la ruta completa de HuggingFace) |
+   | **Clave de API** | tu clave de API de Synthetic |
+   | **Máx. de solicitudes concurrentes** | comienza con `3–5` para ajustarse al presupuesto de 5 horas en PRs más grandes (en configuración avanzada) |
+
+4. Haz clic en **Test & save**. Kodus verifica el endpoint y persiste la configuración si tiene éxito. 401 significa que la clave es incorrecta; 404 suele significar que la URL base o la ruta del modelo son incorrectas.
+
+<Tip>
+  El presupuesto de 500 mensajes cada 5 horas es por suscripción, no por PR. Para equipos que hacen revisión continua intensa, mantén `Max Concurrent Requests` lo suficientemente bajo para que un PR grande con múltiples archivos no consuma toda la ventana, o distribuye el trabajo entre varias suscripciones.
+</Tip>
+
+<Note>
+  Configura Synthetic como **Principal** y mantén una clave de OpenAI o Anthropic como **Respaldo** — cuando la ventana de 5 horas se llene, Kodus conmuta automáticamente y las revisiones siguen fluyendo.
+</Note>
+
+### Opción 2 — Alojamiento autónomo (variables de entorno)
+
+Si ejecutas Kodus en Modo Fijo (proveedor global único, sin BYOK por organización), configura Synthetic en el `.env` de tus contenedores de API + worker:
+
+```env
+# Configuración de Synthetic (Modo Fijo)
+API_LLM_PROVIDER_MODEL="hf:zai-org/GLM-4.6"                    # cualquier ID de modelo del catálogo
+API_OPENAI_FORCE_BASE_URL="https://api.synthetic.new/openai/v1"
+API_OPEN_AI_API_KEY="your-synthetic-api-key"
+```
+
+<Note>
+  Esta opción solo es necesaria para instalaciones de Kodus con alojamiento autónomo que deshabilitan deliberadamente el BYOK. Si el BYOK está habilitado en tu instancia con alojamiento autónomo, prefiere la **Opción 1** — el flujo basado en la interfaz es el mismo que en Cloud.
+</Note>
+
+Reinicia los contenedores de API y worker después de editar `.env`, luego verifica:
+
+```bash
+docker-compose logs api worker | grep -iE "synthetic|api\.synthetic"
+```
+
+Para la configuración completa con alojamiento autónomo (dominios, claves de seguridad, base de datos, webhooks, proxy inverso), sigue la [guía de despliegue en VM genérica](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm) y solo reemplaza el bloque LLM con el anterior.
+
+## Cuándo elegir Synthetic
+
+- **Tu modelo principal es de código abierto** (Kimi, DeepSeek, Qwen Coder, GLM) y quieres una sola factura a tarifa plana en lugar de gestionar el gasto por token de cada proveedor.
+- **Estás comparando con Claude Max ($200/mes)** para el rendimiento de revisiones — Synthetic a $30/mes ofrece varias veces el presupuesto de límite de tasa para modelos de codificación de capacidad similar.
+- **Quieres una postura de datos sólida** — Synthetic es explícito sobre no-entrenamiento y retención de prompts/completaciones por 14 días.
+
+Elige pago por token (Moonshot, Fireworks, Together, Groq) si tu tráfico es irregular, o una suscripción diferente (Z.AI GLM Coding Plan) si específicamente quieres la familia GLM con compromisos por niveles.
+
+## Solución de problemas
+
+<AccordionGroup>
+  <Accordion title="429 Demasiadas solicitudes dentro de la ventana de 5 horas">
+    - El presupuesto de la suscripción es por **ventana continua de 5 horas**, no por hora ni por mes. Verifica cuántas solicitudes has enviado recientemente en el panel de Synthetic.
+    - Espera a que avance la ventana, reduce `Max Concurrent Requests` en BYOK, o actualiza/apila planes.
+    - Configura un proveedor BYOK de `Respaldo` para que las revisiones sigan funcionando mientras estás limitado por tasa.
+  </Accordion>
+
+  <Accordion title="Errores 401 / de autenticación">
+    - Confirma que la clave esté activa y la suscripción esté vigente en el panel de Synthetic.
+    - Asegúrate de que no haya espacios al final ni comillas en el valor del `.env`.
+  </Accordion>
+
+  <Accordion title="Modelo no encontrado">
+    - Synthetic usa el formato `hf:org/model`. Omitir el prefijo `hf:` o usar una capitalización diferente resultará en error 404.
+    - Verifica en [dev.synthetic.new/docs/openai/models](https://dev.synthetic.new/docs/openai/models).
+  </Accordion>
+
+  <Accordion title="Arranque en frío lento en la primera llamada">
+    - Algunos modelos más grandes pueden tardar en arrancar la primera vez que se usan después de un período de inactividad.
+    - Si la latencia de la primera llamada está bloqueando las verificaciones de salud de Kodus, calienta el modelo enviando una solicitud de prueba pequeña antes de abrir PRs.
+  </Accordion>
+
+  <Accordion title="Errores de conexión">
+    - Confirma que tu servidor pueda alcanzar `api.synthetic.new`.
+    - Revisa los registros de la API y del worker para ver el error upstream exacto.
+  </Accordion>
+</AccordionGroup>
+
+## Relacionado
+
+- [Precios de Synthetic](https://synthetic.new/pricing)
+- [Documentación de la API de Synthetic](https://dev.synthetic.new/docs/api/getting-started)
+- [Catálogo de modelos de Synthetic](https://dev.synthetic.new/docs/openai/models)
+- [Resumen de BYOK](/how_to_use/es/byok)

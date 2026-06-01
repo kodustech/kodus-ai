@@ -18,7 +18,7 @@ const buildConfig = () => ({
                 {
                     id: 'dir-1',
                     name: 'src',
-                    path: '/src',
+                    folders: [{ id: 'f-1', name: 'src', path: '/src' }],
                     configs: {
                         automatedReviewActive: {
                             value: true,
@@ -46,7 +46,7 @@ const buildConfig = () => ({
                 {
                     id: 'dir-3',
                     name: 'packages',
-                    path: '/packages',
+                    folders: [{ id: 'f-3', name: 'packages', path: '/packages' }],
                     configs: {},
                 },
             ],
@@ -68,14 +68,14 @@ describe('buildPerRepositorySidebarItems', () => {
                         name: 'src',
                         path: '/src',
                         overrideCount: 1,
-                        configs: {
+                        configs: expect.objectContaining({
                             automatedReviewActive: {
                                 value: true,
                                 level: 'directory',
                                 overriddenValue: false,
                                 overriddenLevel: 'repository',
                             },
-                        },
+                        }),
                     },
                 ],
             },

@@ -4,7 +4,7 @@ name: "Backend: QA GitOps Deploy"
 
 on:
     push:
-        branches: [main]
+        branches: [ main ]
         paths:
             - "apps/api/**"
             - "apps/worker/**"
@@ -34,6 +34,12 @@ env:
     IMAGE_TAG: ${{ github.event.inputs.image_tag || github.sha }}
     BUILDX_PLATFORMS: linux/arm64
     BUILDX_CACHE_SCOPE: kodus-ai-arm64
+    # The runner is linux/amd64 but our images are pushed arm64-only.
+    # Without this, Trivy tries to resolve a child manifest for its own
+    # platform inside the manifest list and fails with "no child with
+    # platform linux/amd64". Trivy CLI picks up `TRIVY_PLATFORM` env to
+    # mean `--platform`, so all three scan steps inherit it.
+    TRIVY_PLATFORM: linux/arm64
 
     # ECR repositories (required)
     ECR_REPOSITORY_API: ${{ vars.ECR_REPOSITORY_API }}
@@ -54,10 +60,13 @@ jobs:
         permissions:
             contents: write
             id-token: write
+            # Required by github/codeql-action/upload-sarif to publish
+            # Trivy findings to the repo's Security tab.
+            security-events: write
 
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4.2.2
+              uses: actions/checkout@v6.0.2
 
             - name: Validate required secrets
               run: |
@@ -94,32 +103,35 @@ jobs:
                   repositories: ${{ env.INFRA_REPO_NAME }}
 
             - name: Configure AWS Credentials (OIDC)
-              uses: aws-actions/configure-aws-credentials@v4.1.0
+              uses: aws-actions/configure-aws-credentials@v6.1.0
               with:
                   role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
                   aws-region: ${{ secrets.AWS_REGION }}
 
             - name: Login to Amazon ECR
               id: login-ecr
-              uses: aws-actions/amazon-ecr-login@v2.0.1
+              uses: aws-actions/amazon-ecr-login@v2.1.4
 
             - name: Mask ECR registry
               run: echo "::add-mask::${{ steps.login-ecr.outputs.registry }}"
 
             - name: Set up QEMU
-              uses: docker/setup-qemu-action@v3.2.0
+              uses: docker/setup-qemu-action@v4.0.0
               with:
                   platforms: arm64
 
             - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v3.10.0
+              uses: docker/setup-buildx-action@v4.0.0
 
             - name: Build, tag, and push (api/webhooks/worker)
               env:
                   ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-                  API_TAGS: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_API }}:${{ env.IMAGE_TAG }}
-                  WEBHOOKS_TAGS: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_WEBHOOKS }}:${{ env.IMAGE_TAG }}
-                  WORKER_TAGS: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_WORKER }}:${{ env.IMAGE_TAG }}
+                  API_TAGS: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_API
+                      }}:${{ env.IMAGE_TAG }}
+                  WEBHOOKS_TAGS: ${{ steps.login-ecr.outputs.registry }}/${{
+                      env.ECR_REPOSITORY_WEBHOOKS }}:${{ env.IMAGE_TAG }}
+                  WORKER_TAGS: ${{ steps.login-ecr.outputs.registry }}/${{
+                      env.ECR_REPOSITORY_WORKER }}:${{ env.IMAGE_TAG }}
               run: |
                   set -euo pipefail
 
@@ -144,8 +156,64 @@ jobs:
                     -t "$ECR_REGISTRY/${{ env.ECR_REPOSITORY_WORKER }}:qa-latest" \
                     "$WORKER_TAGS"
 
+            # ---- CVE scan -----------------------------------------------------
+            # See selfhosted-build-push.yml for flag rationale. Advisory-only
+            # (`exit-code: 0`) until backlog triage — flip to `1` to block.
+            - name: Trivy scan — kodus-ai-api
+              uses: aquasecurity/trivy-action@v0.36.0
+              with:
+                  image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_API
+                      }}:${{ env.IMAGE_TAG }}
+                  format: "sarif"
+                  output: "trivy-api.sarif"
+                  severity: "CRITICAL,HIGH"
+                  ignore-unfixed: true
+                  exit-code: "0"
+
+            - name: Trivy scan — kodus-ai-webhooks
+              uses: aquasecurity/trivy-action@v0.36.0
+              with:
+                  image-ref: ${{ steps.login-ecr.outputs.registry }}/${{
+                      env.ECR_REPOSITORY_WEBHOOKS }}:${{ env.IMAGE_TAG }}
+                  format: "sarif"
+                  output: "trivy-webhooks.sarif"
+                  severity: "CRITICAL,HIGH"
+                  ignore-unfixed: true
+                  exit-code: "0"
+
+            - name: Trivy scan — kodus-ai-worker
+              uses: aquasecurity/trivy-action@v0.36.0
+              with:
+                  image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_WORKER
+                      }}:${{ env.IMAGE_TAG }}
+                  format: "sarif"
+                  output: "trivy-worker.sarif"
+                  severity: "CRITICAL,HIGH"
+                  ignore-unfixed: true
+                  exit-code: "0"
+
+            # CodeQL Action v4 rejects multiple SARIF runs sharing a
+            # category — one upload step per image with its own category.
+            - name: Upload Trivy SARIF — api
+              uses: github/codeql-action/upload-sarif@v4
+              with:
+                  sarif_file: trivy-api.sarif
+                  category: trivy-qa-api
+
+            - name: Upload Trivy SARIF — webhooks
+              uses: github/codeql-action/upload-sarif@v4
+              with:
+                  sarif_file: trivy-webhooks.sarif
+                  category: trivy-qa-webhooks
+
+            - name: Upload Trivy SARIF — worker
+              uses: github/codeql-action/upload-sarif@v4
+              with:
+                  sarif_file: trivy-worker.sarif
+                  category: trivy-qa-worker
+
             - name: Checkout infra repo
-              uses: actions/checkout@v4.2.2
+              uses: actions/checkout@v6.0.2
               with:
                   repository: ${{ env.INFRA_REPO }}
                   ref: ${{ env.INFRA_BASE_BRANCH }}

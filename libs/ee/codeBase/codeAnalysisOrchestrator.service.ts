@@ -7,7 +7,6 @@ import { LLM_ANALYSIS_SERVICE_TOKEN } from '@libs/code-review/infrastructure/ada
 import {
     AIAnalysisResult,
     AnalysisContext,
-    CodeReviewVersion,
     FileChangeContext,
     ReviewModeResponse,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -33,31 +32,15 @@ export class CodeAnalysisOrchestrator {
         context: AnalysisContext,
     ): Promise<AIAnalysisResult | null> {
         try {
-            let result = null;
-
-            if (
-                context?.codeReviewConfig?.codeReviewVersion ===
-                CodeReviewVersion.v2
-            ) {
-                result =
-                    await this.standardLLMAnalysisService.analyzeCodeWithAI_v2(
-                        organizationAndTeamData,
-                        prNumber,
-                        fileContext,
-                        reviewModeResponse,
-                        context,
-                        context.codeReviewConfig?.byokConfig,
-                    );
-            } else {
-                result =
-                    await this.standardLLMAnalysisService.analyzeCodeWithAI(
-                        organizationAndTeamData,
-                        prNumber,
-                        fileContext,
-                        reviewModeResponse,
-                        context,
-                    );
-            }
+            const result =
+                await this.standardLLMAnalysisService.analyzeCodeWithAI_v2(
+                    organizationAndTeamData,
+                    prNumber,
+                    fileContext,
+                    reviewModeResponse,
+                    context,
+                    context.codeReviewConfig?.byokConfig,
+                );
 
             if (!result) {
                 this.logger.log({

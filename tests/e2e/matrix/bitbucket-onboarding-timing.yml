@@ -1,0 +1,17 @@
+id: bitbucket-onboarding-timing
+description: |
+  Single-scenario probe to isolate where the 70-112s bitbucket
+  finish-onboarding latency comes from. Pairs with the [TIMING:
+  onboarding] logs added in finish-onboarding.use-case.ts. Run
+  once after `yarn selfhosted:deploy --name matrix`, then tail
+  the api container for per-step breakdown:
+
+      docker logs --since 5m kodus-api | grep TIMING:onboarding
+
+  Not for CI — exists only as an investigation aid.
+scenarios:
+    - onboarding-webhook-registration
+cells:
+    - target: self-hosted
+      provider: bitbucket
+      license: license-paid

@@ -1,0 +1,14 @@
+description: Frozen-evidence promotion eval
+
+providers:
+  - id: file://agent-provider.js
+    config:
+      label: gpt-5.4-promotion
+      provider: openai
+      model: gpt-5.4
+      apiKeyEnv: API_OPEN_AI_API_KEY
+
+prompts:
+  - file://prompt-loader.js
+
+tests: file://datasets/smoke.json

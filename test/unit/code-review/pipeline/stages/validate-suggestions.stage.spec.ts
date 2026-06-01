@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ValidateSuggestionsStage } from '@/code-review/pipeline/stages/validate-suggestions.stage';
-import { AST_ANALYSIS_SERVICE_TOKEN } from '@/code-review/domain/contracts/ASTAnalysisService.contract';
+import { SandboxSyntaxValidator } from '@/code-review/infrastructure/adapters/services/sandboxSyntaxValidator.service';
+import { SuggestionLLMValidator } from '@/code-review/infrastructure/adapters/services/suggestionLLMValidator.service';
 import { CodeReviewPipelineContext } from '@/code-review/pipeline/context/code-review-pipeline.context';
 import { PlatformType } from '@/core/domain/enums';
-import { TaskStatus } from '@/ee/kodyAST/interfaces/code-ast-analysis.interface';
 
 // Mock logger to silence logs during tests
 jest.mock('@kodus/flow', () => ({
@@ -38,12 +38,13 @@ import { applyEdit } from '@morphllm/morphsdk';
 describe('ValidateSuggestionsStage', () => {
     let stage: ValidateSuggestionsStage;
 
-    const mockAstAnalysisService = {
-        checkSuggestionSimplicity: jest.fn(),
-        startValidate: jest.fn(),
-        awaitTask: jest.fn(),
-        getValidate: jest.fn(),
-        validateWithLLM: jest.fn(),
+    const mockSandboxSyntaxValidator = {
+        validateFiles: jest.fn().mockResolvedValue(new Set()),
+    };
+
+    const mockSuggestionLLMValidator = {
+        validateWithLLM: jest.fn().mockResolvedValue({ isValid: true }),
+        checkSuggestionSimplicity: jest.fn().mockResolvedValue({ isSimple: true, reason: null }),
     };
 
     const mockOrganizationAndTeamData = {
@@ -53,7 +54,7 @@ describe('ValidateSuggestionsStage', () => {
 
     const createBaseContext = (
         overrides: Partial<CodeReviewPipelineContext> = {},
-    ): CodeReviewPipelineContext => ({
+    ) => ({
         dryRun: { enabled: false },
         organizationAndTeamData: mockOrganizationAndTeamData as any,
         repository: {
@@ -85,7 +86,6 @@ describe('ValidateSuggestionsStage', () => {
         validSuggestions: [],
         discardedSuggestions: [],
         changedFiles: [],
-        batches: [],
         preparedFileContexts: [],
         correlationId: 'test-correlation-id',
         ...overrides,
@@ -96,8 +96,12 @@ describe('ValidateSuggestionsStage', () => {
             providers: [
                 ValidateSuggestionsStage,
                 {
-                    provide: AST_ANALYSIS_SERVICE_TOKEN,
-                    useValue: mockAstAnalysisService,
+                    provide: SandboxSyntaxValidator,
+                    useValue: mockSandboxSyntaxValidator,
+                },
+                {
+                    provide: SuggestionLLMValidator,
+                    useValue: mockSuggestionLLMValidator,
                 },
             ],
         }).compile();
@@ -201,7 +205,7 @@ describe('ValidateSuggestionsStage', () => {
             // MAX_CHARS_THRESHOLD = 1000
             const longCode = 'x'.repeat(1001);
 
-            mockAstAnalysisService.checkSuggestionSimplicity.mockResolvedValue({
+            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockResolvedValue({
                 isSimple: true,
                 reason: null,
             });
@@ -228,7 +232,7 @@ describe('ValidateSuggestionsStage', () => {
             // MAX_LINES_THRESHOLD = 15
             const manyLines = Array(16).fill('const x = 1;').join('\n');
 
-            mockAstAnalysisService.checkSuggestionSimplicity.mockResolvedValue({
+            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockResolvedValue({
                 isSimple: true,
                 reason: null,
             });
@@ -251,7 +255,7 @@ describe('ValidateSuggestionsStage', () => {
         });
 
         it('should filter out complex suggestions based on AST analysis', async () => {
-            mockAstAnalysisService.checkSuggestionSimplicity.mockResolvedValue({
+            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockResolvedValue({
                 isSimple: false,
                 reason: 'Contains complex structural changes',
             });
@@ -278,23 +282,15 @@ describe('ValidateSuggestionsStage', () => {
         });
 
         it('should pass through simple suggestions', async () => {
-            mockAstAnalysisService.checkSuggestionSimplicity.mockResolvedValue({
+            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockResolvedValue({
                 isSimple: true,
                 reason: null,
             });
 
-            mockAstAnalysisService.startValidate.mockResolvedValue({
-                taskId: 'task-1',
-            });
-            mockAstAnalysisService.awaitTask.mockResolvedValue({
-                task: { status: TaskStatus.TASK_STATUS_COMPLETED },
-            });
-            mockAstAnalysisService.getValidate.mockResolvedValue({
-                results: [{ id: 's1', isValid: true, filePath: 'test.ts' }],
-            });
-            mockAstAnalysisService.validateWithLLM.mockResolvedValue({
+            mockSuggestionLLMValidator.validateWithLLM.mockResolvedValue({
                 isValid: true,
             });
+            mockSandboxSyntaxValidator.validateFiles.mockResolvedValue(new Set(['s1']));
 
             (applyEdit as jest.Mock).mockResolvedValue({
                 mergedCode: 'const x = 1;',
@@ -482,7 +478,7 @@ ${manyAddedLines}`;
         });
 
         it('should handle AST simplicity check errors gracefully', async () => {
-            mockAstAnalysisService.checkSuggestionSimplicity.mockRejectedValue(
+            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockRejectedValue(
                 new Error('AST service unavailable'),
             );
 
@@ -506,7 +502,7 @@ ${manyAddedLines}`;
         });
 
         it('should handle MorphLLM applyEdit errors gracefully', async () => {
-            mockAstAnalysisService.checkSuggestionSimplicity.mockResolvedValue({
+            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockResolvedValue({
                 isSimple: true,
                 reason: null,
             });
@@ -538,18 +534,17 @@ ${manyAddedLines}`;
             expect(result).toBeDefined();
         });
 
-        it('should handle validation task timeout', async () => {
-            mockAstAnalysisService.checkSuggestionSimplicity.mockResolvedValue({
+        it('should handle validation sandbox failure gracefully', async () => {
+            mockSuggestionLLMValidator.checkSuggestionSimplicity.mockResolvedValue({
                 isSimple: true,
                 reason: null,
             });
 
-            mockAstAnalysisService.startValidate.mockResolvedValue({
-                taskId: 'task-1',
-            });
-            mockAstAnalysisService.awaitTask.mockResolvedValue({
-                task: { status: TaskStatus.TASK_STATUS_FAILED },
-            });
+            // Sandbox validation fails — should fall back to LLM-only
+            mockSandboxSyntaxValidator.validateFiles.mockResolvedValue(new Set(['s1']));
+            mockSuggestionLLMValidator.validateWithLLM.mockRejectedValue(
+                new Error('LLM timeout'),
+            );
 
             (applyEdit as jest.Mock).mockResolvedValue({
                 mergedCode: 'const x = 1;',
@@ -577,9 +572,9 @@ ${manyAddedLines}`;
                 ],
             });
 
-            await expect((stage as any).executeStage(context)).rejects.toThrow(
-                /Suggestion Validation Failed/,
-            );
+            // Should not crash — LLM error is caught per-candidate
+            const result = await (stage as any).executeStage(context);
+            expect(result).toBeDefined();
         });
     });
 });

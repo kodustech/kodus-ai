@@ -1,0 +1,48 @@
+---
+title: "How to fix webhook issues with GitHub or GitLab"
+description: "Debug and resolve webhook connectivity problems between your Git provider and Kodus."
+---
+
+Webhooks are how Kodus knows when a PR is opened or updated. If they're not working, reviews won't trigger.
+
+## Diagnosing the issue
+
+### GitHub
+
+1. Go to your repository **Settings** → **Webhooks**
+2. Find the Kodus webhook
+3. Click on it and check **Recent Deliveries**
+4. Look for failed deliveries (non-2xx status codes)
+
+### GitLab
+
+1. Go to your project **Settings** → **Webhooks**
+2. Find the Kodus webhook
+3. Check the delivery history for errors
+
+## Common fixes
+
+### Webhook URL is wrong or outdated
+
+If you changed your Kodus deployment URL, update the webhook URL in your Git provider settings.
+
+### SSL certificate issues
+
+If you're self-hosting, ensure your SSL certificate is valid. GitHub and GitLab reject webhooks with invalid certificates.
+
+### Firewall blocking
+
+If Kodus is behind a firewall, ensure your Git provider's IP ranges can reach the webhook endpoint.
+
+### Webhook was deleted
+
+Re-register the webhook by going through the Kodus setup flow again, or manually add the webhook URL.
+
+## Testing
+
+Most Git providers let you **redeliver** a recent webhook payload. Use this to test without creating a new PR.
+
+For platform-specific guides, see:
+- [GitHub webhooks](/how_to_deploy/en/platforms/github/github_webhook)
+- [GitLab webhooks](/how_to_deploy/en/platforms/gitlab/gitlab_webhook)
+- [Bitbucket webhooks](/how_to_deploy/en/platforms/bitbucket/bitbucket_webhook)

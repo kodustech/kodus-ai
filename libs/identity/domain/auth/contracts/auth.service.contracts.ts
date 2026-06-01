@@ -21,4 +21,5 @@ export interface IAuthService {
     verifyForgotPassToken(token: string): Promise<any>;
     verifyEmailToken(token: string): Promise<any>;
     createEmailToken(userId: string, email: string): Promise<string>;
+    createHelpdeskToken(user: Partial<IUser>): Promise<string>;
 }

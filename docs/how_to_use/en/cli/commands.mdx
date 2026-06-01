@@ -1,0 +1,528 @@
+---
+title: "Command Reference"
+description: "Complete reference for all Kodus CLI commands, flags, and options."
+---
+
+## Global Flags
+
+These flags are available on all commands:
+
+| Flag              | Short | Default    | Description                                   |
+| ----------------- | ----- | ---------- | --------------------------------------------- |
+| `--format <fmt>`  | `-f`  | `terminal` | Output format: `terminal`, `json`, `markdown` |
+| `--output <file>` | `-o`  | —          | Save output to a file                         |
+| `--verbose`       | `-v`  | `false`    | Verbose output                                |
+| `--quiet`         | `-q`  | `false`    | Quiet mode (errors only)                      |
+| `--agent`         | —     | `false`    | Agent mode: deterministic machine-readable output |
+
+---
+
+## `kodus review`
+
+Analyzes modified files for code quality issues, bugs, security vulnerabilities, and style violations.
+
+### Usage
+
+```bash
+kodus review                          # Review working tree changes (interactive)
+kodus review [files...]               # Review specific files
+kodus review --staged                 # Review staged files only
+kodus review --branch main            # Compare against a branch
+kodus review --commit abc123          # Analyze a specific commit
+kodus review --fix                    # Auto-apply all fixable issues
+kodus review --prompt-only            # Output optimized for AI agents
+```
+
+### Flags
+
+| Flag                   | Short | Description                                                 |
+| ---------------------- | ----- | ----------------------------------------------------------- |
+| `--staged`             | `-s`  | Analyze only staged files                                   |
+| `--commit <sha>`       | `-c`  | Analyze diff from a specific commit                         |
+| `--branch <name>`      | `-b`  | Compare current branch against specified branch             |
+| `--rules-only`         | —     | Review using only configured rules (no general suggestions) |
+| `--fast`               | —     | Fast mode: quicker analysis with lighter checks             |
+| `--interactive`        | `-i`  | Interactive mode: navigate and apply fixes                  |
+| `--fix`                | —     | Automatically apply all fixable issues                      |
+| `--prompt-only`        | —     | Output optimized for AI agents                              |
+| `--fail-on <severity>` | —     | Exit with code 1 if issues meet or exceed severity          |
+| `--context <file>`     | —     | Custom context file to include in review                    |
+| `--fields <csv>`       | —     | Select response fields (JSON/agent mode), e.g. `summary,issues.file` |
+
+### Review Modes
+
+<Tabs>
+  <Tab title="Interactive (Default)">
+    Navigate files with issue counts, preview suggested fixes, and apply them one by one.
+
+    ```bash
+    kodus review
+    ```
+
+  </Tab>
+  <Tab title="Auto-fix">
+    Applies all fixable issues at once with a confirmation prompt.
+
+    ```bash
+    kodus review --fix
+    ```
+
+  </Tab>
+  <Tab title="AI Agent">
+    Minimal, structured output designed for Claude Code, Cursor, or Windsurf. Enables autonomous review-fix loops.
+
+    ```bash
+    kodus review --prompt-only
+    ```
+
+  </Tab>
+</Tabs>
+
+---
+
+## `kodus pr suggestions`
+
+Fetch AI-powered suggestions for open pull requests.
+
+### Usage
+
+```bash
+kodus pr suggestions --pr-url https://github.com/org/repo/pull/42
+kodus pr suggestions --pr-number 42 --repo-id <id>
+kodus pr suggestions --pr-number 42 --repo-id <id> --severity error,warning
+kodus pr suggestions --pr-number 42 --repo-id <id> --format json
+```
+
+### Flags
+
+| Flag                   | Description                                |
+| ---------------------- | ------------------------------------------ |
+| `--pr-url <url>`       | Pull request URL                           |
+| `--pr-number <number>` | Pull request number (requires `--repo-id`) |
+| `--repo-id <id>`       | Repository ID for the pull request         |
+| `--severity <list>`    | Comma-separated severities to include      |
+| `--category <list>`    | Comma-separated categories to include      |
+| `--fields <csv>`       | Select response fields (JSON/agent mode), e.g. `summary,issues.file` |
+
+---
+
+## `kodus pr business-validation`
+
+Validate a local diff against the business rules/acceptance criteria of a task. Useful before merging to confirm the implementation matches the task intent.
+
+### Usage
+
+```bash
+kodus pr business-validation --task-url https://linear.app/team/issue/KC-1441
+kodus pr business-validation --task-id KC-1441 --staged
+kodus pr business-validation --task-id KC-1441 --branch main
+kodus pr business-validation --task-id KC-1441 --commit abc123
+kodus pr business-validation --task-id KC-1441 --dry-run
+```
+
+### Flags
+
+| Flag                 | Short | Description                                                        |
+| -------------------- | ----- | ------------------------------------------------------------------ |
+| `--task-url <url>`   | —     | Task URL to append to the validation command                       |
+| `--task-id <id>`     | —     | Task ID or issue key (e.g. `KC-1441`) to append                    |
+| `--staged`           | `-s`  | Use only staged changes                                            |
+| `--commit <sha>`     | `-c`  | Use diff from a specific commit                                    |
+| `--branch <name>`    | `-b`  | Compare current branch against a base branch                       |
+| `--dry-run`          | —     | Print payload without executing the API call                       |
+
+---
+
+## `kodus auth`
+
+Manage authentication with the Kodus API.
+
+### `auth login`
+
+```bash
+kodus auth login                              # Interactive login
+kodus auth login -e user@mail.com -p password # Non-interactive
+```
+
+| Flag                    | Short | Description      |
+| ----------------------- | ----- | ---------------- |
+| `--email <email>`       | `-e`  | Account email    |
+| `--password <password>` | `-p`  | Account password |
+
+### `auth logout`
+
+```bash
+kodus auth logout
+```
+
+Removes local authentication (login and team key).
+
+### `auth status`
+
+```bash
+kodus auth status
+```
+
+Shows authentication mode, email, token validity, organizations, trial status, and usage limits.
+
+### `auth team-key`
+
+```bash
+kodus auth team-key --key kodus_xxxxx
+```
+
+Authenticate using a shared team API key. Can also be set via the `KODUS_TEAM_KEY` environment variable.
+
+### `auth team-status`
+
+```bash
+kodus auth team-status
+```
+
+Shows team authentication details (organization and team name).
+
+### `auth token`
+
+```bash
+kodus auth token
+```
+
+Generates a CI/CD token for use in automated pipelines. Use with the `KODUS_TOKEN` environment variable.
+
+---
+
+## `kodus hook`
+
+Manage pre-push Git hooks for automatic code review before pushing.
+
+### `hook install`
+
+```bash
+kodus hook install                    # Default: fail-on critical, fast mode enabled
+kodus hook install --fail-on error    # Block pushes on error severity
+kodus hook install --no-fast          # Disable fast mode
+kodus hook install --force            # Overwrite existing hook
+```
+
+| Flag                   | Default    | Description                               |
+| ---------------------- | ---------- | ----------------------------------------- |
+| `--fail-on <severity>` | `critical` | Minimum severity to block push            |
+| `--fast` / `--no-fast` | `true`     | Enable/disable fast mode                  |
+| `--force`              | —          | Overwrite existing hook without prompting |
+
+### `hook uninstall`
+
+```bash
+kodus hook uninstall
+```
+
+Removes the pre-push hook installed by Kodus.
+
+### `hook status`
+
+```bash
+kodus hook status
+```
+
+Shows hook status, fail-on severity, fast mode setting, and path.
+
+### Skipping the Hook
+
+```bash
+KODUS_SKIP_HOOK=1 git push
+```
+
+---
+
+## `kodus decisions`
+
+Capture and persist AI agent decisions into your repository for future reference. Decisions are stored as structured markdown in `.kody/`.
+
+### `decisions enable`
+
+```bash
+kodus decisions enable                                    # All agents
+kodus decisions enable --agents claude,cursor            # Specific agents
+kodus decisions enable --agents codex --codex-config ~/.codex/config.toml
+kodus decisions enable --force                           # Overwrite existing config
+```
+
+| Flag                    | Default                | Description                      |
+| ----------------------- | ---------------------- | -------------------------------- |
+| `--agents <agents>`     | `claude,cursor,codex`  | Comma-separated agent list       |
+| `--codex-config <path>` | `~/.codex/config.toml` | Path to Codex config             |
+| `--force`               | —                      | Overwrite existing `modules.yml` |
+
+### `decisions disable`
+
+```bash
+kodus decisions disable
+```
+
+Removes all decision hooks. Preserved data in `.kody/` is not deleted.
+
+### `decisions status`
+
+```bash
+kodus decisions status
+```
+
+Shows PR memory, sessions, last SHA, agent, and module config.
+
+### `decisions show`
+
+```bash
+kodus decisions show                  # Current branch PR memory
+kodus decisions show auth             # Module decisions for 'auth'
+kodus decisions show feat/new-api     # PR decisions for a specific branch
+```
+
+### `decisions promote`
+
+```bash
+kodus decisions promote                                   # Current branch, all modules
+kodus decisions promote --branch feat/auth                # Specific branch
+kodus decisions promote --branch feat/auth --modules auth,users
+```
+
+| Flag              | Description                                       |
+| ----------------- | ------------------------------------------------- |
+| `--branch <name>` | Branch name (default: current branch)             |
+| `--modules <ids>` | Comma-separated module IDs (default: all matched) |
+
+Promotes PR-level decisions to long-term module memory.
+
+---
+
+## `kodus config centralized`
+
+Manage centralized configuration from the CLI.
+
+### Usage
+
+```bash
+kodus config centralized status
+kodus config centralized init [owner/repo] --sync-option <pr|manual>
+kodus config centralized sync
+kodus config centralized disable
+kodus config centralized download --out ./centralized-config.zip
+```
+
+### Subcommands
+
+| Subcommand              | Description                                                                   |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| `status`                | Show whether centralized config is enabled and the selected source repository |
+| `init [repository]`     | Enable centralized config for a selected repository                           |
+| `sync`                  | Run centralized config sync on demand                                         |
+| `disable`               | Disable centralized config and clear selected repository                      |
+| `download --out <path>` | Download centralized config ZIP bundle                                        |
+
+### Flags
+
+| Flag                           | Applies To                  | Description                       |
+| ------------------------------ | --------------------------- | --------------------------------- |
+| `--sync-option <pr \| manual>` | `init`                      | Sync strategy. Default is `pr`    |
+| `--out <path>`                 | `download`                  | Required output path for ZIP file |
+| `--json`                       | all centralized subcommands | Output structured JSON            |
+
+For a complete walkthrough, see: [/how_to_use/en/code_review/configs/centralized_config#cli-dedicated-section](/how_to_use/en/code_review/configs/centralized_config#cli-dedicated-section)
+
+---
+
+## `kodus config repo`
+
+Inspect and update repository settings stored in Kodus. Team-key auth is required. Use `.` to target the current repository.
+
+<Note>`kodus config repo` and `kodus config remote` are aliases for the same command group.</Note>
+
+### Usage
+
+```bash
+kodus config repo add                                   # Add current repo to Kodus
+kodus config repo add owner/repo                        # Add a specific repo
+kodus config repo list                                  # List configured repos
+kodus config repo show                                  # Show current repo settings
+kodus config repo setup                                 # Guided setup wizard
+kodus config repo set . reviewEnabled true              # Set a setting directly
+kodus config repo open                                  # Open the Kodus dashboard
+kodus config repo add-ignore-file . "**/*.generated.ts"
+kodus config repo add-base-branch . "release/*"
+kodus config repo add-ignore-title . "^WIP:"
+```
+
+### Subcommands
+
+| Subcommand                                         | Description                                                                 |
+| -------------------------------------------------- | --------------------------------------------------------------------------- |
+| `add [repository]`                                 | Add a repository to Kodus (shortcut: `kodus config -r [repository]`)       |
+| `list`                                             | List repositories configured in Kodus                                       |
+| `show [repository]`                                | Show repository settings                                                    |
+| `setup [repository]`                               | Run a guided repository setup wizard                                        |
+| `set [repository] <key> <value>`                   | Set a repository setting directly                                           |
+| `open [repository]`                                | Open the Kodus dashboard for advanced settings                              |
+| `add-pattern [repository] <field> <pattern>`       | Add a pattern to a list field (`ignore-files`, `base-branches`, `ignore-titles`) |
+| `remove-pattern [repository] <field> <pattern>`    | Remove a pattern from a list field                                          |
+| `add-ignore-file [repository] <pattern>`           | Shortcut: add a pattern to ignored file patterns                            |
+| `remove-ignore-file [repository] <pattern>`        | Shortcut: remove an ignored file pattern                                    |
+| `add-base-branch [repository] <pattern>`           | Shortcut: add a base branch pattern                                         |
+| `remove-base-branch [repository] <pattern>`        | Shortcut: remove a base branch pattern                                      |
+| `add-ignore-title [repository] <pattern>`          | Shortcut: add an ignored title pattern                                      |
+| `remove-ignore-title [repository] <pattern>`       | Shortcut: remove an ignored title pattern                                   |
+
+### Flags
+
+| Flag          | Applies To | Description                         |
+| ------------- | ---------- | ----------------------------------- |
+| `--no-prompt` | `add`      | Skip the post-add setup prompt      |
+
+---
+
+## `kodus rules`
+
+Create, update, and view Kody Rules — structured rules that Kodus applies during review.
+
+### Usage
+
+```bash
+kodus rules view                                         # View all rules for your team
+kodus rules view --repo-id <id>                          # Filter by repository
+kodus rules view --uuid <rule-uuid>                      # Fetch a single rule
+kodus rules create --title "No console.log" --rule "Avoid leaving console.log in committed code" --severity high
+kodus rules update --uuid <rule-uuid> --severity critical
+```
+
+### Subcommands
+
+| Subcommand | Description            |
+| ---------- | ---------------------- |
+| `create`   | Create a new Kody Rule |
+| `update`   | Update an existing rule |
+| `view`     | View Kody Rules        |
+
+### `rules create` Flags
+
+| Flag                    | Default     | Description                                     |
+| ----------------------- | ----------- | ----------------------------------------------- |
+| `--title <title>`       | —           | Rule title                                      |
+| `--rule <rule>`         | —           | Rule content/description                        |
+| `--repo-id <id>`        | `global`    | Repository ID (or `global` to apply to all repos) |
+| `--severity <severity>` | `medium`    | `low`, `medium`, `high`, `critical`             |
+| `--scope <scope>`       | `file`      | `pull request` or `file`                        |
+| `--path <glob>`         | `**/*`      | Glob pattern for file targeting                 |
+| `--json`                | `false`     | Output created rule as JSON                     |
+
+### `rules update` Flags
+
+| Flag                    | Description                                     |
+| ----------------------- | ----------------------------------------------- |
+| `--uuid <uuid>`         | Rule UUID to update (required)                  |
+| `--repo-id <id>`        | Updated repository ID                           |
+| `--title <title>`       | Updated title                                   |
+| `--rule <rule>`         | Updated content/description                     |
+| `--severity <severity>` | Updated severity                                |
+| `--scope <scope>`       | Updated scope                                   |
+| `--path <glob>`         | Updated glob pattern                            |
+| `--json`                | Output updated rule as JSON                     |
+
+### `rules view` Flags
+
+| Flag             | Description                    |
+| ---------------- | ------------------------------ |
+| `--uuid <uuid>`  | Fetch a single rule by UUID    |
+| `--repo-id <id>` | Filter rules by repository ID  |
+| `--json`         | Output rules as JSON           |
+
+---
+
+## `kodus skills`
+
+Inspect and install the agent skills bundled with the CLI (Claude Code, Cursor, Codex).
+
+### Usage
+
+```bash
+kodus skills list                                        # List bundled skills
+kodus skills install                                     # Install into detected agent roots
+kodus skills install --dry-run                           # Preview changes
+kodus skills resync                                      # Re-sync bundled skills
+kodus skills uninstall                                   # Remove bundled skills
+```
+
+### Subcommands
+
+| Subcommand  | Description                                                                 |
+| ----------- | --------------------------------------------------------------------------- |
+| `list`      | List bundled skills available in this CLI package                           |
+| `sync`      | Sync bundled skills to detected local agent directories                     |
+| `resync`    | Re-sync bundled skills to detected local agent directories                  |
+| `install`   | Install bundled skills into detected agent roots (creates dirs as needed)   |
+| `uninstall` | Uninstall bundled managed skills from detected agent directories            |
+
+### Flags
+
+| Flag        | Applies To                    | Description                                    |
+| ----------- | ----------------------------- | ---------------------------------------------- |
+| `--dry-run` | `install`, `sync`, `resync`, `uninstall` | Show planned changes without writing files |
+
+<Tip>For full multi-agent bootstrap, prefer the platform installer (`curl -fsSL https://review-skill.com/install | bash`). `kodus skills` covers local re-sync and cleanup.</Tip>
+
+---
+
+## `kodus status`
+
+Show a consolidated Kodus status: auth mode, organization, repository, hook, decisions, bundled skills, and CLI version.
+
+```bash
+kodus status
+```
+
+Useful as a first diagnostic when something misbehaves or when onboarding a new machine.
+
+---
+
+## `kodus update`
+
+Update the Kodus CLI to the latest version from npm.
+
+```bash
+kodus update
+```
+
+Resolves the correct global install command for your package manager (`npm`, `yarn`, `pnpm`, `bun`) and runs it. If an installer script was used, the CLI points you to the re-run command instead.
+
+---
+
+## `kodus subscribe`
+
+Opens the Kodus pricing/upgrade page in your browser.
+
+```bash
+kodus subscribe
+```
+
+---
+
+## Severity Levels
+
+Issues are categorized by severity, from most to least critical:
+
+| Level      | Description                                                      |
+| ---------- | ---------------------------------------------------------------- |
+| `critical` | Major security or stability issues requiring immediate attention |
+| `error`    | Significant bugs or problems                                     |
+| `warning`  | Potential issues worth addressing                                |
+| `info`     | Suggestions and best practices                                   |
+
+## Issue Categories
+
+| Category                 | Description                            |
+| ------------------------ | -------------------------------------- |
+| `security_vulnerability` | Security-related issues                |
+| `bug`                    | Potential bugs                         |
+| `performance`            | Performance optimization opportunities |
+| `code_quality`           | Code quality improvements              |
+| `best_practices`         | Best practice violations               |
+| `complexity`             | Code complexity issues                 |
+| `maintainability`        | Maintainability concerns               |
+| `style`                  | Code style issues                      |

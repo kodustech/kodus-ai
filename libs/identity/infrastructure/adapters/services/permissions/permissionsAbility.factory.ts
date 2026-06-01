@@ -6,8 +6,8 @@ import {
 import {
     Action,
     ResourceType,
-    Role,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
+import { ROLE_POLICIES } from '@libs/identity/domain/permissions/policies/role-policies';
 import { AppAbility } from '@libs/identity/domain/permissions/types/permissions.types';
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { Inject, Injectable } from '@nestjs/common';
@@ -77,80 +77,21 @@ export class PermissionsAbilityFactory {
             can(action, subject, finalConditions);
         };
 
-        switch (userRole) {
-            case Role.OWNER:
-                canInOrg(Action.Manage, ResourceType.All);
-                break;
+        // Roles and their grants are defined declaratively in ROLE_POLICIES
+        // (framework-free, shared with the frontend) so there is a single
+        // source of truth. Here we just translate each rule into a CASL grant.
+        const policy = ROLE_POLICIES[userRole];
 
-            case Role.REPO_ADMIN:
-                canInRepo(
-                    Action.Read,
-                    ResourceType.CodeReviewSettings,
-                    {},
-                    true,
-                );
-                canInRepo(Action.Update, ResourceType.CodeReviewSettings);
-                canInRepo(Action.Create, ResourceType.CodeReviewSettings);
-
-                canInRepo(Action.Read, ResourceType.KodyRules, {}, true);
-                canInRepo(Action.Update, ResourceType.KodyRules);
-                canInRepo(Action.Create, ResourceType.KodyRules);
-                canInRepo(Action.Delete, ResourceType.KodyRules);
-
-                canInRepo(Action.Read, ResourceType.Cockpit);
-
-                canInOrg(Action.Read, ResourceType.Issues);
-                canInRepo(Action.Update, ResourceType.Issues);
-                canInRepo(Action.Create, ResourceType.Issues);
-
-                canInOrg(Action.Read, ResourceType.IssuesSettings);
-                canInOrg(Action.Update, ResourceType.IssuesSettings);
-                canInOrg(Action.Create, ResourceType.IssuesSettings);
-
-                canInRepo(Action.Read, ResourceType.Logs, {}, true);
-
-                canInRepo(Action.Read, ResourceType.PullRequests);
-
-                canInOrg(Action.Read, ResourceType.GitSettings);
-
-                canInOrg(Action.Read, ResourceType.PluginSettings);
-                break;
-
-            case Role.BILLING_MANAGER:
-                canInOrg(Action.Read, ResourceType.CodeReviewSettings);
-                canInOrg(Action.Read, ResourceType.KodyRules);
-
-                canInOrg(Action.Manage, ResourceType.Billing);
-
-                canInOrg(Action.Read, ResourceType.GitSettings);
-
-                canInOrg(Action.Read, ResourceType.PluginSettings);
-
-                canInOrg(Action.Read, ResourceType.UserSettings);
-
-                canInOrg(Action.Read, ResourceType.IssuesSettings);
-
-                canInOrg(Action.Read, ResourceType.Logs);
-                break;
-
-            case Role.CONTRIBUTOR:
-                canInRepo(
-                    Action.Read,
-                    ResourceType.CodeReviewSettings,
-                    {},
-                    true,
-                );
-
-                canInRepo(Action.Read, ResourceType.KodyRules, {}, true);
-
-                canInRepo(Action.Read, ResourceType.Issues);
-
-                canInOrg(Action.Read, ResourceType.IssuesSettings);
-                break;
-
-            default:
-                cannot(Action.Manage, ResourceType.All);
-                break;
+        if (!policy) {
+            cannot(Action.Manage, ResourceType.All);
+        } else {
+            for (const rule of policy) {
+                if (rule.scope === 'repo') {
+                    canInRepo(rule.action, rule.resource, {}, rule.global);
+                } else {
+                    canInOrg(rule.action, rule.resource);
+                }
+            }
         }
 
         return build() as AppAbility;

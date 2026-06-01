@@ -50,7 +50,6 @@ describe('code review settings shell helpers', () => {
                 runOnDraft: createFormattedValue(true),
                 ideRulesSyncEnabled: createFormattedValue(false),
                 enableCommittableSuggestions: createFormattedValue(false),
-                crossFileDependenciesAnalysis: createFormattedValue(false),
                 codeReviewVersion: createFormattedValue('v2'),
                 showToggleCodeReviewVersion: true,
             },

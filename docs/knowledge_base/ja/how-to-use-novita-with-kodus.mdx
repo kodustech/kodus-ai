@@ -1,0 +1,158 @@
+---
+title: "Novita AI - サーバーレスGPUプラットフォーム"
+description: "KodusでNovitaのモデルを使用する方法を学びます"
+icon: "server"
+---
+
+## Novitaの動作方法
+
+NovitaはAI向けのサーバーレスインフラプラットフォームで、低レイテンシとコスト削減でオープンソースモデルをスケールするよう設計されています。Llama、Mistral、Claude、Stable Diffusionなどを含む数百の本番対応モデルをサポートし、DevOpsのオーバーヘッドなしに最適化されたAPI、オンデマンドGPU、カスタムモデルデプロイメントを提供します。
+
+## 推奨モデル
+
+100k以上のコンテキストウィンドウを持つ優れたコーディングモデルを推奨します。
+
+<Info>
+  {" "}
+  より最新の情報については、[NovitaのWebサイト](https://novita.ai/models/llm)をご覧ください。{" "}
+</Info>
+
+| モデル                              | 価格    | コンテキストウィンドウ |
+| ---------------------------------- | ---------- | -------------- |
+| **Deepseek v3 0324** `推奨` | $0.33/1.3  | 約128kトークン   |
+| **Deepseek R1 0528**               | $0.7/2.5   | 約128kトークン   |
+| **Llama 4 Maverick Instruct**      | $0.17/0.85 | 約100kトークン   |
+
+## APIキーの作成
+
+<Warning>APIキーを作成するにはNovitaアカウントが必要です。</Warning>
+
+[NovitaのAPIキーページ](https://novita.ai/settings/key-management)に直接アクセスして新しいAPIキーを作成します。
+
+または、以下の手順に従ってください：
+
+1. Novitaコンソールに移動します
+2. "API キーを管理"ボタンをクリックするか、プロフィール画像をクリックしてAPIキーに移動します
+3. "新しいキーを追加"をクリックして「Kodus」または好きな名前を入力します
+4. "確認"をクリックします
+5. APIキーをコピーして安全な場所に保存します
+
+
+
+<Snippet file="deploy-basic-setup.mdx" />
+
+### 環境ファイルでNovitaを設定する
+
+`.env` ファイルを編集してコア設定を構成します。**LLMインテグレーション**には、Novitaを固定モードで使用します：
+
+```env
+# コアシステム設定（ドメインを更新）
+WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
+WEB_PORT_API=443                               
+NEXTAUTH_URL="https://kodus-web.yourdomain.com"
+
+# セキュリティキー（上記のopensslコマンドで生成）
+WEB_NEXTAUTH_SECRET="your-generated-secret"
+API_CRYPTO_KEY="your-generated-hex-key"
+API_JWT_SECRET="your-generated-secret"
+API_JWT_REFRESH_SECRET="your-generated-secret"
+
+# データベース設定
+API_PG_DB_PASSWORD="your-secure-db-password"
+API_MG_DB_PASSWORD="your-secure-db-password"
+
+# Novita設定（固定モード） 
+API_LLM_PROVIDER_MODEL="deepseek-v3-0324"                    # 好みのモデルを選択
+API_OPENAI_FORCE_BASE_URL="https://api.novita.ai/v3/openai"  # Novita API URL
+API_OPEN_AI_API_KEY="your-novita-api-key"                    # Novita APIキー
+
+# Gitプロバイダーのwebhook（プロバイダーを選択）
+API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
+# または API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
+# または GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
+```
+
+<Note>
+  WebhookのURLはWebhooksサービス（ポート3332）に到達できる必要があります。専用webhooksドメインを使用するか、リバースプロキシで `/.../webhook` をポート3332にルーティングします。
+</Note>
+
+<Info>
+  **固定モードはNovitaに最適です**。OpenAI互換のAPIを提供し、必要なAPIキーは1つだけです。これによりセットアップが大幅に簡略化されます。
+</Info>
+
+<Snippet file="deploy-installation.mdx" />
+
+### 6. リバースプロキシのセットアップ（本番環境向け）
+
+WebhookとExternal Accessには、Nginxを設定します：
+
+```nginx
+# Webアプリ（ポート3000）
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com;
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# API（ポート3001）  
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com;
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Novita統合の確認
+
+基本的なインストール確認に加えて、Novitaが動作していることを確認します：
+
+```bash
+# Novita API接続を具体的に確認
+docker-compose logs api worker | grep -i novita
+```
+
+<Tip>
+  SSLセットアップ、モニタリング、高度な設定の詳細については、[完全なデプロイガイド](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm)を参照してください。
+</Tip>
+
+### トラブルシューティング
+
+<AccordionGroup>
+  <Accordion title="APIキーの問題">
+    - APIキーが[Novitaコンソール](https://novita.ai/settings/key-management)で正しくアクティブであることを確認します
+    - Novitaアカウントに十分なクレジットがあるか確認します
+    - `.env` ファイルに余分なスペースがないことを確認します
+  </Accordion>
+  
+  <Accordion title="モデルが見つからない">
+    - 設定のモデル名が正しくスペルされていることを確認します
+    - Novitaプランでモデルが利用可能であることを確認します
+    - 推奨リストの別のモデルで試してください
+  </Accordion>
+  
+  <Accordion title="接続エラー">
+    - サーバーが `api.novita.ai` にアクセスできるインターネット接続を持っていることを確認します
+    - ファイアウォールの制限がないか確認します
+    - 詳細なエラーメッセージについてAPI/ワーカーログを確認します
+  </Accordion>
+</AccordionGroup>

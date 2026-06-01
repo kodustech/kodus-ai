@@ -12,6 +12,11 @@ import type { IntegrationModel } from './integration.model';
 })
 @Index('IDX_integration_configs_team', ['team'], { concurrent: true })
 @Index('IDX_integration_configs_key', ['configKey'], { concurrent: true })
+@Index('idx_integration_configs_key_team_int', [
+    'configKey',
+    'team',
+    'integration',
+])
 export class IntegrationConfigModel extends CoreModel {
     @Column({
         type: 'enum',

@@ -1,0 +1,42 @@
+---
+title: "如何将 Jira 连接到代码审查工具"
+description: "链接 Jira 到 Kodus，使 AI 代码审查自动根据任务需求和验收标准验证 PR。"
+---
+
+将 Jira 连接到 Kodus 启用两个强大功能：根据 Jira 工单的自动**业务逻辑验证**，以及为代码审查建议提供更丰富的上下文。
+
+## 如何连接
+
+1. 前往**设置** → **插件**
+2. 找到**Jira**
+3. 点击**连接**并授权访问您的 Jira 工作区
+4. 选择 Kodus 可以访问的项目
+
+## 启用的功能
+
+### 自动业务逻辑验证
+
+当 PR 关联到 Jira 工单时，Kodus 自动：
+- 获取工单标题、描述和验收标准
+- 将 PR 差异与需求进行比较
+- 报告缺失的实现、范围不匹配和差距
+
+### 按需验证
+
+在 PR 评论中粘贴任何 Jira URL：
+
+```
+@kody -v business-logic https://your-org.atlassian.net/browse/PROJ-123
+```
+
+### 更丰富的代码审查上下文
+
+连接 Jira 后，Kody 可以在规则中使用 MCP 函数获取任务上下文、检查问题状态和交叉引用需求。
+
+## 要求
+
+- Jira Cloud 或 Jira Data Center
+- OAuth 或 API 令牌访问
+- 读取相关项目的权限
+
+有关业务逻辑验证的详情，请参阅[业务逻辑验证](/how_to_use/en/code_review/business_logic_validation)。有关插件设置，请参阅[插件](/how_to_use/en/code_review/plugins)。

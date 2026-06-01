@@ -1,21 +1,70 @@
+# Dependencies & build output
 node_modules
 **/node_modules
 dist
+**/dist
 **/.next
-logs
-tmp
-.dockerignore
-Dockerfile*
-DockerFiles
-docker-compose*.yml
+**/.turbo
+**/.swc
+**/.vercel
+*.tsbuildinfo
+
+# Tooling state that has no business inside build contexts
 .git
 .github
 .husky
 .vscode
 .idea
-*.md
+.cursor
+
+# Docker/compose artifacts (don't COPY them into images we're building)
+.dockerignore
+Dockerfile*
+DockerFiles
+docker-compose*.yml
+
+# Git worktrees — full repo copies that would otherwise balloon the context
+.worktrees
+
+# Logs, caches and scratch space
+logs
+tmp
 coverage
-test
-*.log
-.env*
 .build_cache
+*.log
+
+# Docs, tests, evals and external sandbox tooling aren't needed at runtime
+*.md
+test
+docs
+docs-internal
+evals
+specs
+e2b-sandbox
+stress-test-prs.ts
+ormlogs.log
+# Schema-as-code preview output (regenerated locally, never shipped)
+.env-preview
+poc-env
+# Dev-only tooling for generating benchmark PRs — not called by the runtime
+scripts/pr-creator
+# CLI app is a standalone tool (apps/cli/), not part of the API/worker/web/
+# webhooks/mcp-manager runtime. Skipped from build context to reduce context
+# transfer time. If you ever build a Docker image FOR the CLI, override this
+# in a Dockerfile-specific .dockerignore.
+apps/cli
+
+# Env files — never ship these into an image, INCLUDING nested ones.
+# Plain `.env` only matches the context root — Docker's .dockerignore is
+# not recursive by default — so scripts/pr-creator/.env (with real tokens)
+# was being copied into the image. `**/.env*` catches every nesting level.
+**/.env
+**/.env.*
+!**/.env.example
+
+!apps/web/.env
+!apps/web/.env.production
+
+# macOS finder droppings leak into images through nested COPYs the same
+# way .env files did — catch them explicitly.
+**/.DS_Store

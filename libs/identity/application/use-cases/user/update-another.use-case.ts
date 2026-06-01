@@ -24,6 +24,8 @@ import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
 import { UserRoleChangeLogParams } from '@libs/ee/codeReviewSettingsLog/infrastructure/adapters/services/userManagementLog.handler';
 import { ActionType } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
+import { NotificationService } from '@libs/notifications/application/notification.service';
+import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 
 @Injectable()
 export class UpdateAnotherUserUseCase implements IUseCase {
@@ -43,6 +45,8 @@ export class UpdateAnotherUserUseCase implements IUseCase {
         private readonly teamMembersService: ITeamMemberService,
 
         private readonly eventEmitter: EventEmitter2,
+
+        private readonly notificationService: NotificationService,
     ) {}
 
     async execute(
@@ -135,6 +139,35 @@ export class UpdateAnotherUserUseCase implements IUseCase {
                     AuditLogEvents.USER_ROLE_CHANGE,
                     logParams,
                 );
+
+                // Notify the affected user. Best-effort: emit failures
+                // don't break the role-change flow.
+                try {
+                    await this.notificationService.emit({
+                        event: NotificationEvent.ORG_ROLE_CHANGED,
+                        payload: {
+                            previousRole: String(previousRole ?? 'unknown'),
+                            newRole: String(role),
+                            changedBy: actingUser?.email ?? userId,
+                            organizationName: organization.name ?? '',
+                        },
+                        organizationId,
+                        recipients: {
+                            kind: 'user',
+                            userId: targetUserId,
+                        },
+                    });
+                } catch (notifyError) {
+                    this.logger.error({
+                        message:
+                            'Failed to emit org.role_changed notification',
+                        error:
+                            notifyError instanceof Error
+                                ? notifyError
+                                : new Error(String(notifyError)),
+                        context: UpdateAnotherUserUseCase.name,
+                    });
+                }
             }
 
             return updatedUser.toObject();

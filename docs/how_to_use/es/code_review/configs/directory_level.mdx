@@ -1,0 +1,58 @@
+---
+title: "Configuración a Nivel de Directorio"
+description: "Aplica configuraciones de revisión de código personalizadas a carpetas específicas de tu repositorio. Ideal para monorepos."
+---
+
+## Descripción General
+
+Aplica configuraciones de revisión de código personalizadas a carpetas específicas de tu repositorio. Ideal para monorepos donde diferentes áreas tienen estándares o propietarios distintos.
+
+Kody selecciona una única configuración por PR: **Directorio** → **Repositorio** → **Global**
+
+<Note>
+  Aprende cómo fluyen los ajustes entre niveles en <a href="/how_to_use/es/code_review/configs/inheritance_overrides">Herencia y Overrides de Configuración</a>.
+</Note>
+
+## Cómo Funciona
+
+- Configura cualquier carpeta a cualquier profundidad (p. ej., `api/src/services`)
+- Configura tantas carpetas como quieras
+- **Sin superposición**: si configuras `api/src/services`, no puedes también configurar `api/src/services/users`
+
+### Reglas de Selección
+
+- **Un directorio configurado afectado**: Usa la configuración de ese directorio
+- **Ningún directorio configurado afectado**: Usa la configuración del repositorio (o la global si no hay configuración de repositorio)
+- **Dos o más directorios configurados afectados**: Escala a la configuración del repositorio (o la global si no hay configuración de repositorio)
+
+<Note>
+  Kody usa una configuración por PR para mantener las revisiones predecibles. Mezclar configuraciones causa conflictos.
+</Note>
+
+## Ejemplos
+
+<Tabs>
+  <Tab title="Un directorio configurado afectado">
+    Configuraste `src/microservice-alpha`. El PR cambia archivos en `src/microservice-alpha` y carpetas no configuradas.
+    
+    Usa la configuración de **microservice-alpha**.
+  </Tab>
+  <Tab title="Ningún directorio configurado afectado">
+    El PR solo toca directorios sin configuraciones específicas.
+    
+    Usa la configuración del **repositorio** (o la **global** si no hay configuración de repositorio).
+  </Tab>
+  <Tab title="Múltiples directorios configurados afectados">
+    Configuraste `src/microservice-alpha` y `src/microservice-beta`. El PR toca ambos.
+    
+    Escala a la configuración del **repositorio** (o la **global** si no hay configuración de repositorio).
+  </Tab>
+</Tabs>
+
+## Configuración
+
+1. Abre la configuración de Code Review de tu repositorio
+2. Agrega entradas de directorio y asigna configuraciones
+3. Guarda los cambios
+
+Si también usas `kodus-config.yml`, anula los ajustes de la interfaz web (consulta Prioridad de Configuración en los ajustes Generales).

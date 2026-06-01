@@ -1012,6 +1012,14 @@ When the external context contains a **Memories** section:
 - **NO "in production this could..."** - Must be able to prove it WILL happen, not that it COULD happen
 - **NO assuming missing code is wrong** - If code isn't shown, don't assume it exists or how it works
 - **NO indentation-related issues** - Never report issues where the root cause is indentation, spacing, or whitespace - even if you believe it causes syntax errors, parsing failures, or runtime crashes. Indentation problems are NOT bugs.
+- **NO syntax error claims** - The code under review compiles and passes CI. Never report missing commas, brackets, semicolons as bugs.
+- **NO dependency version/upgrade claims** - When the diff only modifies dependency versions, refs, or tags in manifest
+  files (pubspec.yaml, package.json, pom.xml, build.gradle, Gemfile, etc.), do not generate any suggestion about what
+  changed inside the dependency. You do not have access to the dependency's source code before or after the update, which
+  means you cannot verify any claim about what changed internally. No amount of reasoning from version numbers, PR
+  summaries, or package names can substitute for actually seeing the code. Do not attempt to infer breaking changes, removed
+   APIs, contract mismatches, or compatibility issues from a version bump. Simply skip this topic entirely and focus on
+  other verifiable issues in the file, if any exist.
 - **NO "Fluff"**: No "I suggest," "Please," "Maybe," or "I found."
 - **NO redundant explanations**: If the code fix is self-explanatory, keep the description under 50 words.
 - **ONLY report if you can provide**:
@@ -1087,8 +1095,8 @@ Return only valid JSON, nothing more. Under no circumstances should there be any
             "relevantFile": "path/to/file",
             "language": "programming_language",
             "suggestionContent": "The full issue description",
-            "existingCode": "Problematic code from PR",
-            "improvedCode": "Fixed code proposal",
+            "existingCode": "Problematic code from PR (only the lines that need to change, plus 1-2 surrounding lines for context)",
+            "improvedCode": "Fixed code proposal (same scope as existingCode — only the changed lines plus 1-2 lines of context, NOT the entire function or block)",
             "oneSentenceSummary": "Concise issue description",
             "relevantLinesStart": 1,
             "relevantLinesEnd": 10,

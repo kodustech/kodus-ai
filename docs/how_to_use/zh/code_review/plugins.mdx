@@ -1,0 +1,73 @@
+---
+title: "插件 [Beta]"
+description: "插件是将外部业务上下文直接引入 Kody 审查工作流程的一种方式。"
+---
+
+<Callout icon="alien" iconType="regular">这是一个 beta 功能。它尚未准备好用于生产，可能无法按预期工作。</Callout>
+
+## 概述
+
+插件让您将外部业务上下文直接引入 Kody 的审查工作流程。它们通过来自 Jira 等工具的数据扩展 Kody 的理解，因此反馈和操作与您团队的流程保持一致。
+
+## 什么是插件
+
+插件是由 Kodus 策划的模型上下文协议（MCP）服务器。每个插件公开特定功能——如获取任务或检查规范——Kody 可以在与您协作处理拉取请求时使用这些功能。
+
+## Kodus MCP
+
+每个工作区都已连接 Kodus MCP。它聚合了每个受支持的 Git 提供商的安全适配器——GitHub、GitLab、Bitbucket 和 Azure DevOps——因此您永远不需要安装单独的代码操作插件。
+
+除了源代码控制之外，Kodus MCP 还解锁了第一方自动化：
+
+- 直接从审查线程管理 Kody 规则（创建、编辑或删除）。
+- 当您需要在自动流程之外进行自定义后续操作时，手动打开 Kody 工单。
+
+## 在建议中使用插件
+
+<img src="https://kodus.io/wp-content/uploads/2025/10/comment-mcp.gif" alt="在建议中使用插件的示例" />
+
+
+通过在评论中明确提及 Kody 来与代码审查建议中的插件交互。一旦调用，Kody 调用相关插件并在同一线程中回复。
+
+### 示例提示
+
+- `@kody, update this kody rule to ignore test files`
+- `@kody, move this task https://jira.com/task-123 to DONE`
+
+这些提示将讨论保持在上下文中，并让团队成员在 PR 内跟踪完整对话。
+
+## 验证业务逻辑
+
+当您希望 Kody 将拉取请求与规范进行比较时，请使用 `@kody -v business-logic` 命令。内联提供规范内容或共享链接：
+
+- `@kody -v business-logic https://jira.com/task-123`
+
+Kody 将通过插件获取引用的规范，并确认实现是否与记录的行为匹配。
+
+<Card title="业务逻辑验证指南" icon="shield-check" href="/how_to_use/en/code_review/business_logic_validation">
+    探索有关 `@kody -v business-logic` 的前提条件和故障排除的深入演练。
+</Card>
+
+## 控制访问
+
+Kody 只能看到您为每个工作区启用的工具。安装对您的工作流程重要的插件，并保持其他所有内容私密。
+
+## 自定义插件
+
+当您需要超出策划目录的功能时，引入您自己的 MCP 服务器。
+
+1. 在工作区内打开插件目录，然后点击 **Add Custom Plugin**。
+2. 提供端点详细信息：
+   - **插件名称**（必需）和可选的 **描述**，以帮助团队成员理解集成。
+   - 可选的 **Logo URL**，用于在目录中显示可识别的图标。
+   - 托管您的服务器的 MCP **URL** 以及预期的 **协议**（HTTP 或 WebSocket）。
+   - 任何所需的 **授权**方法或用于身份验证的自定义标头。
+3. 点击 **Create Plugin** 以立即使其在当前工作区内可供 Kody 使用。
+
+自定义插件遵循与策划集成相同的权限模型：只有安装了插件的工作区才能调用它，并且 Kody 永远不会访问您未明确配置的端点。
+
+## 提示
+
+- 每次请求只提及 Kody 一次，以便正确的插件运行而不重复。
+- 保持链接对您的工作区可访问；Kody 需要权限才能通过插件访问目标资源。
+- 定期查看插件目录——随着 Kodus 策划更多 MCP 服务器，会添加新的集成。

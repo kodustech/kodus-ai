@@ -1,0 +1,381 @@
+{/* AUTO-GENERATED from kodus-ai/.env.schema. Do NOT edit. */}
+
+## Environment
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_NODE_ENV` | – | enum(development,production,test) | ⚙️ Both | Runtime mode. In the kodus-ai dev tree this stays `development` (verbose logs, host-only auth cookies, dev-seed endpoints enabled). For self-hosted the installer ships `production` because every self-hosted deployment IS a production environment: with `development` the SSO handoff cookie is emitted without a Domain attribute and without the Secure flag (auth.controller.ts:287,292 + derive-sso-cookie-domain.ts:33), so the browser stores it host-only on the API origin and the front-end on a different subdomain can't read it — hard regression for any customer using SSO. Cloud envs are templated by infra-as-code, not this file. |
+| `API_DATABASE_ENV` | – | enum(development,production,test) | ⚙️ Both | Database environment selector — affects SSL defaults. |
+| `API_DATABASE_DISABLE_SSL` | – | boolean | ⚙️ Both | When DATABASE_ENV=production, set this to 'true' to disable SSL. Self-hosted ships a local Postgres container with no SSL, so the installer default flips this to true. Cloud (AWS RDS, etc) keeps SSL on. Covers ALL data sources (default + analytics) — individual API_PG_DB_SSL only flipped the primary connection, which is why the api still crashed on the analytics connection in the past. |
+| `API_LOG_LEVEL` | – | enum(error,warn,info,debug) | ⚙️ Both | Log verbosity. Cloud runs at info; self-hosted defaults to error to keep disk usage and noise low for users without log aggregation. |
+| `API_LOG_PRETTY` | – | boolean | ⚙️ Both | Pretty-print logs (dev) vs JSON (prod). |
+| `API_CLOUD_MODE` | – | boolean | ☁️ Cloud | Cloud-only — billing + analytics. Self-hosted MUST keep false. |
+| `BETA_FEATURES` | – | boolean | 🏠 Self-hosted | Self-hosted opt-in for `beta`-stage features in the catalog (release/features.yaml). Default (unset / false) keeps the operator on generally-available features only. Set to `true` to receive features Kodus has shipped to cloud customers but not yet promoted to GA. Cloud uses the per-org `release_track` column instead and ignores this flag. |
+| `RELEASE_VERSION` | – | string | ☁️ Cloud | Released version tag, set by CI on prod builds. |
+| `KODUS_LICENSE_KEY` | – | secret | 🏢 Self-hosted Enterprise | Self-hosted license key. Unlocks enterprise features. EE-only — documented in the docs reference; does not appear in either default .env.example. |
+| `API_DEVELOPMENT_MODE` | – | boolean | ☁️ Cloud | Dev-only bypass of permission validation. Cloud devs only. |
+| `RUN_MIGRATIONS` | – | boolean | ⚙️ Both | Run TypeORM migrations on container boot (OLTP + analytics warehouse + mcp-manager). Default true so a fresh install boots into a usable state without an extra step. Set to false to manage migrations manually (e.g. blue/green deploys where you run them out-of-band). |
+| `RUN_SEEDS` | – | boolean | ⚙️ Both | Run database seeds on container boot. Required for first-time setup (creates default org, admin role, etc). Idempotent — safe to leave on. |
+| `USE_LOCAL_DB` | – | boolean | 🏠 Self-hosted | When true, the installer's docker-compose spins up a local Postgres container. Set to false to point at an externally-managed Postgres (managed RDS/Supabase/Neon/Railway). Read by kodus-installer/scripts/ install.sh + doctor.sh; not consumed by kodus-ai itself. |
+| `USE_LOCAL_RABBITMQ` | – | boolean | 🏠 Self-hosted | Same logic as USE_LOCAL_DB but for RabbitMQ. False if you bring your own broker (CloudAMQP, AWS MQ, etc). |
+
+## Server
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `GLOBAL_API_CONTAINER_NAME` | – | string | ⚙️ Both |  |
+| `API_HOST` | – | string | ⚙️ Both |  |
+| `API_PORT` | – | port | ⚙️ Both |  |
+| `API_WEBHOOKS_PORT` | – | port | ⚙️ Both |  |
+| `API_RATE_MAX_REQUEST` | – | number | ⚙️ Both |  |
+| `API_RATE_INTERVAL` | – | number | ⚙️ Both | Rate limit interval in milliseconds. |
+| `API_URL` | – | url | 🏢 ☁️ Cloud | Public URL of the API. Required by EE SSO/SAML (libs/ee/sso/) — must be the browser-reachable URL that IdPs redirect back to. Cloud sets via infra; self-hosted Enterprise sets in their .env when enabling SSO. |
+| `API_FRONTEND_URL` | – | url | ⚙️ Both | Public URL of the web frontend. |
+
+## API Docs (Swagger / OpenAPI)
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_DOCS_ENABLED` | – | boolean | ⚙️ Both |  |
+| `API_DOCS_PATH` | – | string | ⚙️ Both |  |
+| `API_DOCS_SPEC_PATH` | – | string | ⚙️ Both |  |
+| `API_DOCS_BASIC_USER` | – | string | ⚙️ Both | Basic auth user for /docs (leave empty to keep it open). |
+| `API_DOCS_BASIC_PASS` | – | secret | ⚙️ Both |  |
+
+## Postgres (primary OLTP)
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `DATABASE_URL` | – | secret (url) | ⚙️ Both (opt-in) | Postgres connection URI — alternative to API_PG_DB_*. When set, the app IGNORES the individual host/port/user/pass/database vars below and connects via this URI instead. Useful for managed Postgres providers (Heroku, Railway, Supabase, RDS) that hand you a single string. Hierarchy: DATABASE_URL → API_PG_DB_URL → individual vars. |
+| `API_PG_DB_URL` | – | secret (url) | ⚙️ Both (opt-in) | Redundant alias for DATABASE_URL — same effect, second in the lookup chain. |
+| `API_PG_DB_HOST` | – | string | ⚙️ Both |  |
+| `API_PG_DB_PORT` | – | port | ⚙️ Both |  |
+| `API_PG_DB_USERNAME` | – | string | ⚙️ Both |  |
+| `API_PG_DB_PASSWORD` | ✅ | secret | ⚙️ Both |  |
+| `API_PG_DB_DATABASE` | – | string | ⚙️ Both |  |
+
+## MongoDB
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `MONGODB_URI` | – | secret (url) | ⚙️ Both (opt-in) | Mongo connection URI — alternative to API_MG_DB_*. When set, IGNORES the individual vars and connects via this URI. Useful for Atlas / managed Mongo. Hierarchy: MONGODB_URI → API_MG_DB_URI → individual vars. |
+| `API_MG_DB_URI` | – | secret (url) | ⚙️ Both (opt-in) | Redundant alias for MONGODB_URI — same effect, second in the lookup chain. |
+| `API_MG_DB_HOST` | – | string | ⚙️ Both |  |
+| `API_MG_DB_PORT` | – | port | ⚙️ Both |  |
+| `API_MG_DB_USERNAME` | – | string | ⚙️ Both |  |
+| `API_MG_DB_PASSWORD` | ✅ | secret | ⚙️ Both |  |
+| `API_MG_DB_DATABASE` | – | string | ⚙️ Both |  |
+| `API_MG_DB_AUTH_SOURCE` | – | string | ⚙️ Both |  |
+| `API_MG_DB_PRODUCTION_CONFIG` | – | string | ⚙️ Both | Used when API_NODE_ENV=production. |
+
+## RabbitMQ
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_RABBITMQ_ENABLED` | – | boolean | ⚙️ Both |  |
+| `RABBITMQ_DEFAULT_USER` | – | string | ⚙️ Both |  |
+| `RABBITMQ_DEFAULT_PASS` | – | secret | ⚙️ Both |  |
+| `RABBITMQ_HOSTNAME` | – | string | ⚙️ Both |  |
+| `API_RABBITMQ_URI` | – | secret (url) | ⚙️ Both | Connection URI — keep in sync with user/pass/hostname above. |
+
+## Workflow Queue tuning
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `WORKER_ROLE` | ✅ | enum(code-review,analytics) | ⚙️ Both | Selects which workload this worker container handles. The kodus-worker image refuses to boot without this — and the queues it owns (workflow.jobs.*) are created on its first connection, so if the worker dies on boot the api/webhooks fail with QueueBind 404 on every webhook event. Self-hosted deployments only run the code-review role; analytics is a cloud worker. |
+| `WORKFLOW_QUEUE_WORKER_PREFETCH` | – | number | ⚙️ Both |  |
+| `WORKFLOW_QUEUE_PUBLISHER_PREFETCH` | – | number | ⚙️ Both |  |
+| `WORKFLOW_QUEUE_WEBHOOK_PREFETCH` | – | number | ⚙️ Both |  |
+| `WORKFLOW_QUEUE_CODE_REVIEW_PREFETCH` | – | number | ⚙️ Both |  |
+| `WORKFLOW_QUEUE_WEBHOOK_PROCESS_TIMEOUT_MS` | – | number | ⚙️ Both |  |
+| `WORKFLOW_QUEUE_CODE_REVIEW_PROCESS_TIMEOUT_MS` | – | number | ⚙️ Both |  |
+| `WORKFLOW_OUTBOX_MAX_ATTEMPTS` | – | number | ⚙️ Both | Max retries before a message is marked FAILED. |
+
+## JWT
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_JWT_EXPIRES_IN` | – | string | ⚙️ Both |  |
+| `API_JWT_SECRET` | ✅ | secret | ⚙️ Both |  |
+| `API_JWT_REFRESH_SECRET` | ✅ | secret | ⚙️ Both | JWT refresh token signing secret. Read by libs/core/infrastructure/config/ loaders/jwt.config.loader.ts. Note: name is API_JWT_REFRESH_SECRET (with underscore). The legacy name API_JWT_REFRESHSECRET (without underscore) was a typo and is no longer read by code. |
+| `API_JWT_REFRESH_EXPIRES_IN` | – | string | ⚙️ Both | Cloud uses long-lived refresh (365d); self-hosted hardens to 7d. Override either side here without touching the other. |
+| `API_JWT_PRIVATE_KEY` | – | secret | ☁️ Cloud | RSA private key (PEM) used to sign RS256 tokens for integrated products (e.g. kodus-helpdesk cloud SSO). Newlines must be escaped as \\n in the env value. The matching public key is configured in the consuming service. |
+| `API_CRYPTO_KEY` | ✅ | secret | ⚙️ Both | Symmetric key for column-level encryption (DB). |
+
+## LLM providers
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_OPEN_AI_API_KEY` | – | secret | ⚙️ Both | OpenAI API key. Required when API_LLM_PROVIDER_MODEL targets an OpenAI model. |
+| `API_OPENAI_FORCE_BASE_URL` | – | url | ⚙️ Both | OpenAI-compatible endpoint override (e.g. point to a local model proxy). |
+| `API_TRUST_JSON_SCHEMA_BASE_URLS` | – | string | ⚙️ Both | Comma-separated baseURL substrings trusted for native json_schema structured output on BYOK openai_compatible providers. A capability allowlist: when a BYOK baseURL contains one of these, the code review agent sends response_format=json_schema instead of the slower json_object fallback. Leave empty unless you run a non-vLLM but schema-capable proxy. |
+| `API_LLM_PROVIDER_MODEL` | – | string | ⚙️ Both | Force a specific model. "auto" = router picks per task. |
+| `API_LLM_TEMPERATURE_OVERRIDE` | – | number | ⚙️ Both | Override the temperature for every LLM call (env-mode self-hosted only). Set this if `API_LLM_PROVIDER_MODEL` points at a reasoning/thinking model whose API restricts temperature (Moonshot's `kimi-k2.6` and `kimi-k2-thinking*` only accept temperature=1; OpenAI's o1 family is similar). When unset/empty, Kodus auto-clamps a small list of known reasoning models to 1 and falls through to each prompt's `setTemperature()` for everything else. Consumed by libs/code-review/.../env-llm-config.ts and surfaced in get-llm-config-status so the dashboard can explain why every prompt ignores its hard-coded temperature. |
+| `API_ANTHROPIC_API_KEY` | – | secret | ☁️ Cloud |  |
+| `API_GOOGLE_AI_API_KEY` | – | secret | ☁️ Cloud | Optional secondary providers — appear commented in the installer template. |
+| `GEMINI_API_KEY` | – | secret | ☁️ Cloud |  |
+| `API_VERTEX_AI_API_KEY` | – | secret | ☁️ Cloud | Service Account JSON (base64-encoded) for Vertex AI. |
+| `API_VERTEX_AI_LOCATION` | – | string | ☁️ Cloud |  |
+| `API_GOOGLE_AI_PROVIDER` | – | enum(gemini,vertex) | ☁️ Cloud | Google AI provider: gemini (AI Studio) or vertex (Vertex AI). |
+| `API_NOVITA_AI_API_KEY` | – | secret | ☁️ Cloud |  |
+| `API_GROQ_BASE_URL` | – | url | ☁️ Cloud |  |
+| `API_GROQ_API_KEY` | – | secret | ☁️ Cloud |  |
+| `API_CEREBRAS_BASE_URL` | – | url | ☁️ Cloud |  |
+| `API_CEREBRAS_API_KEY` | – | secret | ☁️ Cloud |  |
+| `API_OPEN_ROUTER_API_KEY` | – | secret | ☁️ Cloud | OpenRouter API key. Used by BYOK provider in libs/organization/.../get-models-by-provider.use-case.ts. |
+| `API_MORPHLLM_API_KEY` | – | secret | ⚙️ Both (opt-in) | MorphLLM (fast-apply model). When set, the review pipeline uses MorphLLM to apply LLM-suggested code edits automatically and reliably (better than letting the main LLM rewrite files). Used in libs/code-review/pipeline/stages/validate-suggestions.stage.ts. Without it, the "apply suggested fix" feature falls back to the main LLM with lower accuracy. |
+| `API_EXA_KEY` | – | secret | ⚙️ Both (opt-in) | Exa (semantic web search). When set, code-review agents can search external documentation during review (e.g. fetch docs about a library API the PR uses). Used in libs/code-review/infrastructure/adapters/services/documentation- search-exa.service.ts and the agent providers. Without it, agents skip the documentation-fetching loop and review using only repo context. |
+
+## Git providers — webhooks + OAuth
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `GLOBAL_GITHUB_CLIENT_ID` | – | string | ☁️ Cloud | Optional Git provider OAuth/App config — documented for self-hosted users in the docs reference, not in the default installer template. |
+| `API_GITHUB_CLIENT_SECRET` | – | secret | ☁️ Cloud |  |
+| `API_GITHUB_PRIVATE_KEY` | – | secret | ☁️ Cloud |  |
+| `API_GITHUB_CODE_MANAGEMENT_WEBHOOK` | – | url | ⚙️ Both |  |
+| `GITHUB_TOKEN` | – | secret | ☁️ Cloud |  |
+| `API_GITHUB_APP_ID` | – | string | ☁️ Cloud |  |
+| `GLOBAL_GITLAB_CLIENT_ID` | – | string | ☁️ Cloud |  |
+| `GLOBAL_GITLAB_CLIENT_SECRET` | – | secret | ☁️ Cloud |  |
+| `GLOBAL_GITLAB_REDIRECT_URL` | – | url | ☁️ Cloud |  |
+| `API_GITLAB_CODE_MANAGEMENT_WEBHOOK` | – | url | ⚙️ Both |  |
+| `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` | – | url | ⚙️ Both |  |
+| `GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK` | – | url | ⚙️ Both |  |
+| `API_FORGEJO_CODE_MANAGEMENT_WEBHOOK` | – | url | ⚙️ Both |  |
+| `CODE_MANAGEMENT_SECRET` | ✅ | secret | ⚙️ Both | Shared secret used to sign internal webhook calls. |
+| `CODE_MANAGEMENT_WEBHOOK_TOKEN` | – | secret | ⚙️ Both |  |
+
+## Observability
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `LANGFUSE_TRACING` | – | boolean | ⚙️ Both (opt-in) | Langfuse tracing — opt-in for self-hosted (cloud Langfuse needs the user's own keys; default is to leave it off in self-hosted). |
+| `LANGFUSE_PUBLIC_KEY` | – | string | ⚙️ Both (opt-in) |  |
+| `LANGFUSE_SECRET_KEY` | – | secret | ⚙️ Both (opt-in) |  |
+| `LANGFUSE_BASE_URL` | – | url | ⚙️ Both (opt-in) |  |
+| `LANGFUSE_ENVIRONMENT` | – | string | ⚙️ Both (opt-in) |  |
+| `API_BETTERSTACK_DSN` | – | secret (url) | ☁️ Cloud | BetterStack / Sentry — Kodus-internal incident reporting. Cloud-only. |
+| `SENTRY_RELEASE` | – | string | ☁️ Cloud |  |
+| `PYROSCOPE_SERVER_ADDRESS` | – | url | ☁️ Cloud | Pyroscope profiling — opt-in for self-hosted (requires extra container). |
+| `PYROSCOPE_HEAP_PROFILING` | – | boolean | ☁️ Cloud |  |
+| `API_POSTHOG_KEY` | – | secret | ☁️ Cloud | PostHog — Kodus-internal product analytics. Cloud-only. |
+
+## Sandbox (cross-file context, agent verification)
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `SANDBOX_PROVIDER` | – | enum(auto,e2b,local,none) | ⚙️ Both | Provider: auto \| e2b \| local \| none. |
+| `API_E2B_KEY` | – | secret | ⚙️ Both | Required when SANDBOX_PROVIDER=e2b. |
+| `API_E2B_TEMPLATE_ID` | – | string | ☁️ Cloud |  |
+| `API_E2B_TEMPLATE_GRAPH_ID` | – | string | ☁️ Cloud |  |
+
+## Cron schedules (UTC)
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_CRON_SYNC_CODE_REVIEW_REACTIONS` | – | cron | ⚙️ Both | Daily at 00:00. |
+| `API_CRON_KODY_LEARNING` | – | cron | ⚙️ Both | Saturday at 00:00. |
+| `API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED` | – | cron | ⚙️ Both | Every 2 minutes. |
+| `API_CRON_WEEKLY_RECAP` | – | cron | ⚙️ Both | Friday at 09:00 UTC — weekly recap email. |
+
+## Email (Resend — https://resend.com / SMTP)
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_NOTIFICATION_EMAIL_PROVIDER` | – | enum(resend,smtp) | ⚙️ Both | Notifications email provider |
+| `RESEND_API_KEY` | – | secret | ⚙️ Both | Resend — Kodus-managed email sender. |
+| `API_USER_INVITE_BASE_URL` | – | url | ⚙️ Both |  |
+| `API_SMTP_HOST` | – | string | 🏠 Self-hosted | SMTP host |
+| `API_SMTP_PORT` | – | number | 🏠 Self-hosted | SMTP port |
+| `API_SMTP_SECURE` | – | boolean | 🏠 Self-hosted | SMTP secure mode |
+| `API_SMTP_USER` | – | string | 🏠 Self-hosted | SMTP user |
+| `API_SMTP_PASS` | – | secret | 🏠 Self-hosted | SMTP password |
+| `API_SMTP_FROM` | – | email | 🏠 Self-hosted | SMTP notifications sender email |
+
+## AWS / S3
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_AWS_REGION` | – | string | ☁️ Cloud | S3 / AWS — Kodus-managed asset bucket. Cloud-only. |
+| `API_AWS_USERNAME` | – | string | ☁️ Cloud |  |
+| `API_AWS_PASSWORD` | – | secret | ☁️ Cloud |  |
+| `API_AWS_BUCKET_NAME_ASSISTANT` | – | string | ☁️ Cloud |  |
+
+## Web frontend
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `WEB_NODE_ENV` | – | enum(self-hosted,development,production) | ⚙️ Both |  |
+| `WEB_HOSTNAME_API` | – | string | ⚙️ Both |  |
+| `WEB_PORT_API` | – | port | ⚙️ Both |  |
+| `WEB_PORT` | – | port | ⚙️ Both |  |
+| `WEB_NEXTAUTH_SECRET` | ✅ | secret | ⚙️ Both | Generate with: openssl rand -base64 32. Must equal NEXTAUTH_SECRET — the installer's generate-secrets.sh mirrors them automatically. |
+| `NEXTAUTH_URL` | – | url | ⚙️ Both |  |
+| `WEB_GITHUB_INSTALL_URL` | – | url | ☁️ Cloud |  |
+| `WEB_OAUTH_GITHUB_CLIENT_ID` | – | string | ☁️ Cloud |  |
+| `WEB_OAUTH_GITHUB_CLIENT_SECRET` | – | secret | ☁️ Cloud |  |
+
+## Support links (cosmetic)
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `WEB_SUPPORT_DOCS_URL` | – | url | ⚙️ Both |  |
+| `WEB_SUPPORT_DISCORD_INVITE_URL` | – | url | ⚙️ Both |  |
+| `WEB_SUPPORT_TALK_TO_FOUNDER_URL` | – | url | ☁️ Cloud |  |
+| `ANALYTICS_PG_DB_HOST` | – | string | 🏢 ☁️ Cloud | Connection to the analytics Postgres (separate from main OLTP). |
+| `ANALYTICS_PG_DB_PORT` | – | port | 🏢 ☁️ Cloud |  |
+| `ANALYTICS_PG_DB_USERNAME` | – | string | 🏢 ☁️ Cloud |  |
+| `ANALYTICS_PG_DB_PASSWORD` | – | secret | 🏢 ☁️ Cloud |  |
+| `ANALYTICS_PG_DB_DATABASE` | – | string | 🏢 ☁️ Cloud |  |
+| `ANALYTICS_PG_DB_SCHEMA` | – | string | 🏢 ☁️ Cloud | Schema name in the analytics Postgres (default: analytics). Legacy alias of API_PG_ANALYTICS_SCHEMA — both work; loader prefers ANALYTICS_PG_DB_* when set, then falls back to API_PG_ANALYTICS_*. |
+| `ANALYTICS_PG_POOL_MAX` | – | string | 🏢 ☁️ Cloud | Upper bound on the analytics Postgres pool. |
+| `ANALYTICS_INGESTION_CRON` | – | cron | 🏢 ☁️ Cloud | Cron expression — analytics ingestion. Default = every 30 min. |
+| `ANALYTICS_INGESTION_DISABLED` | – | boolean | ☁️ Cloud | Kill switch for the ingestion cron regardless of role. |
+| `ANALYTICS_CLASSIFIER_CRON` | – | cron | 🏢 ☁️ Cloud | Cron — LLM-based PR type classifier (analytics worker role). |
+| `ANALYTICS_CLASSIFIER_DISABLED` | – | boolean | ☁️ Cloud | Kill switch for the classifier. |
+| `API_PG_ANALYTICS_HOST` | – | string | 🏢 ☁️ Cloud | Alternative naming used by some loaders. Verify if duplicate of ANALYTICS_PG_DB_*. |
+| `API_PG_ANALYTICS_PORT` | – | port | 🏢 ☁️ Cloud |  |
+| `API_PG_ANALYTICS_USERNAME` | – | string | 🏢 ☁️ Cloud |  |
+| `API_PG_ANALYTICS_PASSWORD` | – | secret | 🏢 ☁️ Cloud |  |
+| `API_PG_ANALYTICS_DATABASE` | – | string | 🏢 ☁️ Cloud |  |
+| `API_PG_ANALYTICS_SCHEMA` | – | string | 🏢 ☁️ Cloud | Schema name for analytics tables (default: "analytics"). |
+
+## BetterStack heartbeats (cloud-only)
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_BETTERSTACK_API_TOKEN` | – | secret | ☁️ Cloud |  |
+| `API_BETTERSTACK_HEARTBEAT_ERROR_RATE_URL` | – | url | ☁️ Cloud |  |
+| `API_BETTERSTACK_HEARTBEAT_OUTBOX_URL` | – | url | ☁️ Cloud |  |
+| `API_BETTERSTACK_HEARTBEAT_REVIEW_MONITOR_URL` | – | url | ☁️ Cloud |  |
+| `API_BETTERSTACK_HEARTBEAT_WEBHOOK_URL` | – | url | ☁️ Cloud |  |
+
+## Cloud-only services (Kodus-managed)
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_SIGNUP_NOTIFICATION_WEBHOOK` | – | url | ☁️ Cloud | n8n internal lifecycle webhook (Kodus telemetry pipeline). |
+| `WEB_TERMS_AND_CONDITIONS` | – | url | ☁️ Cloud | Kodus T&C URL shown in the cloud frontend. |
+| `WEB_POSTHOG_KEY` | – | secret | ☁️ Cloud | Frontend product analytics (PostHog). |
+| `GLOBAL_BILLING_CONTAINER_NAME` | – | string | ☁️ Cloud | Billing service (Kodus-managed cloud-only). |
+| `GLOBAL_KODUS_SERVICE_BILLING` | – | string | ☁️ Cloud |  |
+| `WEB_HOSTNAME_BILLING` | – | string | ☁️ Cloud |  |
+| `WEB_PORT_BILLING` | – | port | ☁️ Cloud |  |
+| `API_BILLING_WEBHOOK_SECRET` | – | secret | ☁️ Cloud | Shared secret used to verify HMAC-SHA256 signatures on inbound notification webhooks from the billing service (e.g. payment-failed, trial-expiring). |
+
+## Optional advanced config — documented in docs, not in default template
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_GOOGLE_CLIENT_ID` | – | string | ☁️ Cloud | Google OAuth (social login). Self-hosted user fills in if they want it. |
+| `API_GOOGLE_CLIENT_SECRET` | – | secret | ☁️ Cloud |  |
+| `API_GITLAB_TOKEN_URL` | – | url | ☁️ Cloud | GitLab OAuth token URL override. |
+| `WEB_OAUTH_GITLAB_CLIENT_ID` | – | string | ☁️ Cloud |  |
+| `WEB_OAUTH_GITLAB_CLIENT_SECRET` | – | secret | ☁️ Cloud |  |
+| `WEB_GITLAB_OAUTH_URL` | – | url | ☁️ Cloud |  |
+| `WEB_GITLAB_SCOPES` | – | string | ☁️ Cloud |  |
+| `WEB_BITBUCKET_INSTALL_URL` | – | url | ☁️ Cloud |  |
+| `WEB_HOSTNAME_MCP_MANAGER` | – | string | ⚙️ Both | MCP Manager service container — built and deployed alongside the other kodus-ai apps (apps/mcp-manager). Cloud reads these for in-network routing; self-hosted's installer wires them in docker-compose. |
+| `WEB_PORT_MCP_MANAGER` | – | port | ⚙️ Both |  |
+| `GLOBAL_MCP_MANAGER_CONTAINER_NAME` | – | string | ⚙️ Both |  |
+
+## Doc links shown in the UI when configuring providers
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `WEB_TOKEN_DOCS_GITHUB` | – | url | ⚙️ Both |  |
+| `WEB_TOKEN_DOCS_GITLAB` | – | url | ⚙️ Both |  |
+| `WEB_TOKEN_DOCS_BITBUCKET` | – | url | ⚙️ Both |  |
+| `WEB_TOKEN_DOCS_AZUREREPOS` | – | url | ⚙️ Both |  |
+| `WEB_TOKEN_DOCS_FORGEJO` | – | url | ⚙️ Both |  |
+
+## Cockpit / analytics service — Self-hosted Enterprise
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `GLOBAL_ANALYTICS_CONTAINER_NAME` | – | string | 🏢 ☁️ Cloud |  |
+| `WEB_ANALYTICS_HOSTNAME` | – | string | 🏢 ☁️ Cloud |  |
+| `WEB_ANALYTICS_SECRET` | – | secret | 🏢 ☁️ Cloud |  |
+| `WEB_PORT_ANALYTICS` | – | port | 🏢 ☁️ Cloud |  |
+| `API_MCP_SERVER_ENABLED` | – | boolean | ⚙️ Both | Enables the MCP integration in kodus-ai (calls into the MCP Manager service). When false, MCP-related code paths are skipped entirely. |
+| `API_KODUS_SERVICE_MCP_MANAGER` | – | url | ⚙️ Both | Address of the kodus-mcp-manager service (sibling container). kodus-ai calls this URL to provision MCP servers per organization. In docker-compose self-hosted installs, the worker and mcp-manager run in sibling containers — `localhost` inside the worker resolves to the worker itself, not to the mcp-manager, and pipeline stages that call `MCPManagerService.getConnections()` 400 with ECONNREFUSED. Always use the compose service name (`kodus-mcp-manager`) so the request reaches the right container. |
+| `API_KODUS_MCP_SERVER_URL` | – | url | ⚙️ Both | Public URL where MCP clients (e.g. Cursor/Claude Desktop) connect to consume MCP tools exposed by kodus-ai itself. |
+| `API_MCP_MANAGER_LOG_LEVEL` | – | enum(error,warn,info,debug) | 🏠 Self-hosted | Log verbosity for the MCP Manager container. |
+| `API_MCP_MANAGER_PORT` | – | port | 🏠 Self-hosted |  |
+| `API_MCP_MANAGER_NODE_ENV` | – | string | 🏠 Self-hosted |  |
+| `API_MCP_MANAGER_DATABASE_ENV` | – | string | 🏠 Self-hosted |  |
+| `API_MCP_MANAGER_CORS_ORIGINS` | – | string | 🏠 Self-hosted | Comma-separated allowed origins for the MCP Manager HTTP server. |
+| `API_MCP_MANAGER_JWT_SECRET` | – | secret | 🏠 Self-hosted | Generate with: openssl rand -base64 32 |
+| `API_MCP_MANAGER_COMPOSIO_BASE_URL` | – | url | 🏠 Self-hosted | Composio (third-party MCP marketplace) — optional, leave empty to disable. |
+| `API_MCP_MANAGER_COMPOSIO_API_KEY` | – | secret | 🏠 Self-hosted |  |
+| `API_MCP_MANAGER_MCP_PROVIDERS` | – | string | 🏠 Self-hosted | Comma-separated list of MCP providers to enable: kodusmcp,composio,custom. |
+| `API_MCP_MANAGER_REDIRECT_URI` | – | url | 🏠 Self-hosted | OAuth redirect URI used by MCP Manager when wiring providers via the web UI. |
+| `API_MCP_MANAGER_PG_DB_SCHEMA` | – | string | 🏠 Self-hosted | Postgres schema name used by MCP Manager (shares the main DB). |
+| `API_MCP_MANAGER_ENCRYPTION_SECRET` | – | secret | ⚙️ Both | Symmetric key used by MCP Manager to encrypt tokens at rest. Generate with: openssl rand -base64 32 |
+
+## Auth — additional libs that read their own env keys
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `NEXTAUTH_SECRET` | ✅ | secret | ⚙️ Both | NextAuth.js secret — separate from WEB_NEXTAUTH_SECRET. Some NextAuth code paths (server-side session, JWT signing) read NEXTAUTH_SECRET directly even when the rest of the app uses WEB_NEXTAUTH_SECRET. Set both to the same value to keep them aligned (the installer's generate-secrets.sh does the mirroring automatically). |
+
+## Postgres — extra flags
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_PG_DB_SSL` | – | boolean | ⚙️ Both | Force-enable SSL on the main Postgres connection. When unset, SSL is inferred from API_DATABASE_ENV (production/homolog → on; dev → off). Use this only when you need to override the inferred default. |
+
+## API Docs — additional config
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_DOCS_BASE_URL` | – | url | ⚙️ Both | Override the base URL Swagger UI advertises in the spec — useful when the API sits behind a proxy and the UI is loaded from a different host. |
+| `API_DOCS_SERVER_URLS` | – | string | ⚙️ Both | Comma-separated list of server URLs to advertise in the OpenAPI spec (matches the OpenAPI `servers` array). Format: "url1,url2\|description2". |
+
+## Cron schedules — cloud-only crons
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_CRON_CLASSIFY_ORPHANED_SESSIONS` | – | cron | ⚙️ Both | Reclassifies orphaned (no-PR) review sessions every 15 minutes. Cloud-only feature. |
+| `API_CRON_SSO_TEST_SESSION_CLEANUP` | – | cron | ☁️ Cloud | Daily cleanup of expired SSO test sessions (1 AM UTC). |
+| `WORKFLOW_QUEUE_CHECK_IMPLEMENTATION_PREFETCH` | – | number | ⚙️ Both (opt-in) | Per-handler prefetch (in-flight messages) for the check-implementation workflow handler. |
+| `WORKFLOW_QUEUE_CHECK_IMPLEMENTATION_TIMEOUT_MS` | – | number | ⚙️ Both (opt-in) | Hard timeout (ms) for a check-implementation handler invocation. |
+| `WORKFLOW_QUEUE_FEEDBACK_PREFETCH` | – | number | ⚙️ Both (opt-in) | Per-handler prefetch for the feedback workflow handler. |
+| `WORKFLOW_QUEUE_HANDLER_TIMEOUT_MS` | – | number | ⚙️ Both (opt-in) | Hard timeout (ms) for any workflow handler invocation (fallback). |
+| `WORKFLOW_QUEUE_WORKER_MAX_RETRIES` | – | number | ⚙️ Both (opt-in) | Max retries before a workflow message is sent to the DLQ. |
+| `WORKFLOW_QUEUE_WORKER_RETRY_DELAY_MS` | – | number | ⚙️ Both (opt-in) | Backoff between worker retries, in milliseconds. |
+| `WORKFLOW_QUEUE_AUTO_SCALE_ENABLED` | – | boolean | ⚙️ Both (opt-in) | Auto-scale: enable adaptive worker pool based on queue depth. |
+| `WORKFLOW_QUEUE_AUTO_SCALE_MIN_WORKERS` | – | number | ⚙️ Both (opt-in) | Auto-scale: lower bound on worker count. |
+| `WORKFLOW_QUEUE_AUTO_SCALE_MAX_WORKERS` | – | number | ⚙️ Both (opt-in) | Auto-scale: upper bound on worker count. |
+| `WORKFLOW_QUEUE_AUTO_SCALE_QUEUE_THRESHOLD` | – | number | ⚙️ Both (opt-in) | Auto-scale: spin up another worker when queue depth exceeds this. |
+| `WORKFLOW_QUEUE_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | – | number | ⚙️ Both (opt-in) | Circuit breaker: open after N consecutive handler failures. |
+| `WORKFLOW_QUEUE_CIRCUIT_BREAKER_TIMEOUT_MS` | – | number | ⚙️ Both (opt-in) | Circuit breaker: hold open for this long (ms) before half-open probe. |
+
+## Misc runtime flags
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_AGENT_REVIEW_ENABLED` | – | boolean | ⚙️ Both | Force the new agent-based code review engine on for ALL orgs in this instance (bypasses the PostHog feature flag). Set "true" to enable. Read by libs/core/providers/code-review-pipeline.provider.ee.ts — .ee.ts file means it only takes effect in EE contexts. |
+| `API_RABBITMQ_WAIT` | – | boolean | ⚙️ Both | Wait for RabbitMQ to become reachable before completing app boot. |
+| `API_WORKER_DRAIN_TIMEOUT_MS` | – | number | ⚙️ Both | Worker drain timeout (ms) — how long to keep accepting in-flight jobs during graceful shutdown before forcing exit. |
+
+## Self-hosted telemetry
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `KODUS_TELEMETRY_DISABLED` | – | boolean | ⚙️ Both | Opt out of the daily anonymous heartbeat sent to telemetry.kodus.io. Cloud is unaffected — the cron skips when API_CLOUD_MODE=true regardless. Self-hosted operators flip this to "true" to disable. The payload is aggregated counters (active users, PRs reviewed, repos connected, etc.) plus runtime metadata (Node version, OS, deployment). It never includes emails, repo/branch/PR names, code, or any identifying data. Full schema published at https://github.com/kodustech/kodus-beacon/blob/main/docs/api.md |
+
+## MCP — additional client config
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `API_MCP_MANAGER_BACKEND_URL` | – | url | ☁️ Cloud | Backend URL the mcp-manager service exposes for upstream callers (cloud-internal). Distinct from API_KODUS_SERVICE_MCP_MANAGER which is the address kodus-ai uses to call mcp-manager. |
+
+## Web — additional pages/services
+
+| Variable | Required | Type | Scope | Description |
+| --- | --- | --- | --- | --- |
+| `WEB_HOSTNAME_HELPDESK` | – | string | ⚙️ Both | Helpdesk service hostname (web frontend reads this to render help links). |
+| `WEB_PORT_HELPDESK` | – | port | ⚙️ Both |  |
+| `WEB_RULE_FILES_DOCS` | – | url | ⚙️ Both | Documentation URL for the rule-files detection feature, shown in the web UI when a user is configuring code review rules. |

@@ -10,13 +10,31 @@ import {
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 
-const GPT_5_1_PRICING = {
-    INPUT_PER_MILLION: 1.25,
-    OUTPUT_PER_MILLION: 10.0,
-};
+import {
+    ModelPricingInfo,
+    TokenPrice,
+    TokenPricingUseCase,
+} from './token-pricing.use-case';
 
 const PERIOD_DAYS = 14;
 const PROJECTION_DAYS = 30;
+
+type ModelUsageAgg = {
+    input: number;
+    output: number;
+    outputReasoning: number;
+    cacheRead: number;
+    cacheWrite: number;
+};
+
+type UsageRow = {
+    input: number;
+    output: number;
+    outputReasoning: number;
+    cacheRead?: number;
+    cacheWrite?: number;
+    model?: string;
+};
 
 @Injectable()
 export class CostEstimateUseCase {
@@ -26,6 +44,8 @@ export class CostEstimateUseCase {
 
         @Inject(PULL_REQUESTS_SERVICE_TOKEN)
         private readonly pullRequestsService: IPullRequestsService,
+
+        private readonly tokenPricingUseCase: TokenPricingUseCase,
     ) {}
 
     async execute(organizationId: string): Promise<CostEstimateContract> {
@@ -47,13 +67,7 @@ export class CostEstimateUseCase {
 
         const developerCount = Math.max(uniqueDevelopers, 1);
 
-        const inputCost =
-            (totals.inputTokens / 1_000_000) *
-            GPT_5_1_PRICING.INPUT_PER_MILLION;
-        const outputCost =
-            (totals.outputTokens / 1_000_000) *
-            GPT_5_1_PRICING.OUTPUT_PER_MILLION;
-        const totalCost14Days = inputCost + outputCost;
+        const totalCost14Days = await this.computeTotalCost(usageByPr);
 
         const estimatedMonthlyCost =
             totalCost14Days * (PROJECTION_DAYS / PERIOD_DAYS);
@@ -99,25 +113,103 @@ export class CostEstimateUseCase {
         return { start, end };
     }
 
-    private aggregateTokenUsage(
-        usages: { input: number; output: number; outputReasoning: number }[],
-    ) {
+    private aggregateTokenUsage(usages: UsageRow[]) {
         const totals = {
             inputTokens: 0,
             outputTokens: 0,
             reasoningTokens: 0,
             totalTokens: 0,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
         };
 
         for (const usage of usages) {
             totals.inputTokens += usage.input;
             totals.outputTokens += usage.output;
             totals.reasoningTokens += usage.outputReasoning;
+            totals.cacheReadTokens += usage.cacheRead ?? 0;
+            totals.cacheWriteTokens += usage.cacheWrite ?? 0;
         }
 
-        totals.totalTokens =
-            totals.inputTokens + totals.outputTokens + totals.reasoningTokens;
+        // outputTokens already includes reasoningTokens for every provider we
+        // ship (Gemini API, OpenAI o-series, Anthropic thinking). Keep total
+        // as input + output so we don't double-count.
+        totals.totalTokens = totals.inputTokens + totals.outputTokens;
         return totals;
+    }
+
+    /**
+     * Bucket usage by model, fetch per-model pricing from the catalog, and
+     * sum billed cost across all models. Each model is priced independently
+     * because rates vary by ~10x across providers — averaging into one flat
+     * rate (the old behavior) drops the signal entirely.
+     */
+    private async computeTotalCost(usages: UsageRow[]): Promise<number> {
+        if (usages.length === 0) return 0;
+
+        const perModel = new Map<string, ModelUsageAgg>();
+        for (const row of usages) {
+            const key = (row.model && row.model.trim()) || '(unknown)';
+            const agg = perModel.get(key) ?? {
+                input: 0,
+                output: 0,
+                outputReasoning: 0,
+                cacheRead: 0,
+                cacheWrite: 0,
+            };
+            agg.input += row.input;
+            agg.output += row.output;
+            agg.outputReasoning += row.outputReasoning;
+            agg.cacheRead += row.cacheRead ?? 0;
+            agg.cacheWrite += row.cacheWrite ?? 0;
+            perModel.set(key, agg);
+        }
+
+        let total = 0;
+        for (const [model, agg] of perModel) {
+            total += await this.costForModel(model, agg);
+        }
+        return total;
+    }
+
+    private async costForModel(
+        model: string,
+        agg: ModelUsageAgg,
+    ): Promise<number> {
+        if (model === '(unknown)') return 0;
+
+        const info = await this.tokenPricingUseCase.execute(model);
+        const rates = info.pricing;
+
+        // Tier selection: when the catalog defines a separate rate above
+        // 200K prompt tokens (only Gemini Pro today), use it for any workload
+        // whose total input in the window is big enough that the median call
+        // is likely above the threshold. Code-review workloads always clear
+        // this bar; anything else is an overestimate of at most ~2x, which
+        // is acceptable for an ESTIMATE endpoint.
+        const shouldUseAbove200k = agg.input > 200_000;
+
+        const pick = (price: TokenPrice) =>
+            shouldUseAbove200k && typeof price.above200k === 'number'
+                ? price.above200k
+                : price.default;
+
+        const inputRate = pick(rates.input);
+        const outputRate = pick(rates.output);
+        const cacheReadRate = pick(rates.cacheRead);
+        const cacheWriteRate = pick(rates.cacheWrite);
+
+        // Cache reads are a subset of input tokens — subtract them from the
+        // billable-at-full-price pool so we don't charge input AND cache for
+        // the same tokens.
+        const uncachedInput = Math.max(0, agg.input - agg.cacheRead);
+
+        return (
+            uncachedInput * inputRate +
+            agg.cacheRead * cacheReadRate +
+            agg.cacheWrite * cacheWriteRate +
+            agg.output * outputRate
+        );
     }
 
     private async countUniqueDevelopers(
@@ -145,3 +237,5 @@ export class CostEstimateUseCase {
         return Math.round(value * 100) / 100;
     }
 }
+
+export { ModelPricingInfo };

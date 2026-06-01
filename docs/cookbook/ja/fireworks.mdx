@@ -1,0 +1,180 @@
+---
+title: "Fireworks AI - 高速推論プラットフォーム"
+description: "Fireworks AIのモデルをKodusで使用する方法"
+icon: "fire"
+---
+
+## Fireworks AIの仕組み
+
+Fireworks AIは生成AIのための最速の推論プラットフォームで、魔法のようなAIアプリケーションを数秒で構築・実行するように設計されています。このプラットフォームは、DeepSeek、Llama、Qwen、Mistralなどの人気オープンソースモデルへのサーバーレスアクセスを、最適化された速度、高スループット、最小限のレイテンシで提供します。GPU管理の複雑さなしに、信頼性が高く超高速のAIインフラを必要とする開発者のために構築されています。
+
+## 推奨モデル
+
+競争力のある価格設定と高いコンテキストウィンドウを持つ優れたコーディングモデルを推奨します。
+
+<Info>
+  最新情報については、[Fireworks AIの価格ページ](https://fireworks.ai/pricing) をご覧ください。
+</Info>
+
+| モデル                              | 価格（100万トークン） | コンテキストウィンドウ |
+| ---------------------------------- | ------------------- | -------------- |
+| **Llama 4 Maverick** `recommended` | $0.22/$0.88         | 約131kトークン   |
+| **Llama 4 Scout**                  | $0.15/$0.60         | 約131kトークン   |
+| **DeepSeek V3**                    | $0.90               | 約128kトークン   |
+| **Qwen3 235B**                     | $0.22/$0.88         | 約131kトークン   |
+
+## APIキーの作成
+
+<Warning>APIキーを作成するにはFireworks AIアカウントが必要です。</Warning>
+
+[Fireworks AI Console](https://app.fireworks.ai) に直接アクセスして新しいAPIキーを作成してください。
+
+または、以下の手順に従ってください：
+
+1. [app.fireworks.ai](https://app.fireworks.ai) にアクセスしてアカウントを作成するかサインインする
+2. ログイン後、アカウント設定の **API Keys** ページに移動する
+3. **「Create API Key」** ボタンをクリックする
+4. キーに説明的な名前を付ける（例：「Kodus」または任意の名前）
+5. **「Create」** をクリックしてキーを生成する
+6. APIキーをすぐにコピーして安全な場所に保存する — 再度表示することはできません
+
+<Info>
+  新しいアカウントには、プロジェクトを始めるための$1の無料クレジットが付いています。
+</Info>
+
+## 使用方法
+
+<Snippet file="deploy-basic-setup.mdx" />
+
+### 環境ファイルでFireworks AIを設定する
+
+`.env` ファイルを編集してコア設定を行います。**LLMインテグレーション**には、固定モードでFireworks AIを使用します：
+
+```env
+# コアシステム設定（ドメインを更新してください）
+WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
+WEB_PORT_API=443                               
+NEXTAUTH_URL="https://kodus-web.yourdomain.com"
+
+# セキュリティキー（上記のopensslコマンドで生成）
+WEB_NEXTAUTH_SECRET="your-generated-secret"
+API_CRYPTO_KEY="your-generated-hex-key"
+API_JWT_SECRET="your-generated-secret"
+API_JWT_REFRESH_SECRET="your-generated-secret"
+
+# データベース設定
+API_PG_DB_PASSWORD="your-secure-db-password"
+API_MG_DB_PASSWORD="your-secure-db-password"
+
+# Fireworks AI設定（固定モード） 
+API_LLM_PROVIDER_MODEL="accounts/fireworks/models/llama4-maverick-instruct-basic"  # 希望するモデルを選択
+API_OPENAI_FORCE_BASE_URL="https://api.fireworks.ai/inference/v1"                  # Fireworks AI API URL  
+API_OPEN_AI_API_KEY="your-fireworks-api-key"                                       # Your Fireworks AI API Key
+
+# Gitプロバイダーのウェブフック（プロバイダーを選択）
+API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
+# または API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
+# または GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
+```
+
+<Note>
+  ウェブフックURLはWebhooksサービス（ポート3332）に到達する必要があります。専用のウェブフックドメインを使用するか、リバースプロキシで `/.../webhook` をポート3332にルーティングしてください。
+</Note>
+
+<Info>
+  **固定モードはFireworks AIに最適です。** 超高速の推論速度と最先端のオープンソースモデルへのアクセスを持つOpenAI互換のAPIを、ゼロセットアップ時間で提供します。
+</Info>
+
+<Snippet file="deploy-installation.mdx" />
+
+### リバースプロキシのセットアップ（本番環境向け）
+
+ウェブフックと外部アクセスのためにNginxを設定します：
+
+```nginx
+# Webアプリ（ポート3000）
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com;
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# API（ポート3001）  
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com;
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Fireworks AIインテグレーションの確認
+
+基本インストールの確認に加えて、Fireworks AIが動作していることを確認します：
+
+```bash
+# Fireworks AI API接続を具体的に確認する
+docker-compose logs api worker | grep -i fireworks
+```
+
+<Tip>
+  SSLセットアップ、監視、高度な設定の詳細については、[完全なデプロイガイド](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm) を参照してください。
+</Tip>
+
+### トラブルシューティング
+
+<AccordionGroup>
+  <Accordion title="APIキーの問題">
+    - [Fireworks AI Console](https://app.fireworks.ai) でAPIキーが正しく有効であることを確認する
+    - Fireworks AIアカウントに十分なクレジットがあるか確認する
+    - `.env` ファイルに余分なスペースがないことを確認する
+    - 新しいアカウントには$1の無料クレジットが付いています
+  </Accordion>
+  
+  <Accordion title="モデルが見つからない">
+    - 設定でモデル名が正しくスペルされているか確認する
+    - Fireworks AIの現在のモデルライブラリでモデルが利用可能か確認する
+    - 推奨リストの別のモデルを試してみる
+    - [Fireworks AIのモデルドキュメント](https://docs.fireworks.ai/getting-started/recommended-open-models) を確認する
+  </Accordion>
+  
+  <Accordion title="接続エラー">
+    - サーバーが `api.fireworks.ai` にアクセスするインターネット接続があることを確認する
+    - ファイアウォールの制限がないか確認する
+    - 詳細なエラーメッセージについてAPI/ワーカーログを確認する
+    - 正しいAPIエンドポイントを使用していることを確認する
+  </Accordion>
+  
+  <Accordion title="パフォーマンスの問題">
+    - Fireworks AIは業界最高水準の速度と最小限のレイテンシを提供します
+    - 最適なパフォーマンスのためにネットワーク接続を確認する
+    - エンタープライズワークロードには専用デプロイの使用を検討する
+    - APIコールを最適化するために使用パターンを監視する
+  </Accordion>
+  
+  <Accordion title="レート制限">
+    - Fireworks AIはサーバーレスインフラストラクチャで高いレート制限を提供します
+    - Fireworks AIダッシュボードで現在の使用量を確認する
+    - より高いスループットのために専用デプロイへのアップグレードを検討する
+    - エンタープライズのレート制限調整についてはFireworks AIサポートに連絡する
+  </Accordion>
+</AccordionGroup>

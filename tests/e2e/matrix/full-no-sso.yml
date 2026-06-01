@@ -1,0 +1,98 @@
+id: full
+description: |
+    Full tier — strict superset of fast.yml plus the lifecycle scenarios
+    (upgrade N-1 → N, SSO cookie-domain + multi-user, Stripe billing).
+    Run before retagging an RC to the customer-visible semver tag and
+    on a nightly cadence.
+
+    Invariant: every scenario AND cell in fast.yml is also here. If you
+    add something to fast.yml, mirror it here too — otherwise we ship
+    RCs that passed PR checks but were never exercised in the release
+    gate.
+
+# Order matters: onboarding-webhook-registration runs first per cell —
+# if the provider's webhook isn't registered after onboarding, every
+# downstream scenario times out instead of failing fast.
+scenarios:
+    # ----- mirrors fast.yml (keep in sync) -----
+    - onboarding-webhook-registration
+    - code-review-basic
+    # @kody review / @kody start-review command path. Disables
+    # automatedReviewActive at the org level first, then opens a PR
+    # and posts the comment, so the review under test can only come
+    # from the command. Covers all 4 providers.
+    - command-review
+    - kody-rules-create-and-apply
+    - license-attribution
+    # Per-seat gate: appliesTo restricts to self-hosted × github × license-paid
+    # (one cell). Skipped automatically when SH_LICENSE_KEY_PATH (default
+    # ~/.kodus-dev/license-seats1.jwt) isn't available — see run-matrix.ts.
+    - per-seat-license-toggle
+
+    # ----- lifecycle scenarios that justify the full tier -----
+    - upgrade-n-1-to-n
+    # SSO cookie-domain regression. Restricted by appliesTo to a single
+    # cell (self-hosted × github × license-paid); spins up its own
+    # dedicated droplet (--name sso-e2e) with Caddy + Keycloak on
+    # sslip.io. Full-only because LE issuance + droplet boot adds
+    # ~7-8 min on first run. Validated end-to-end on 2026-05-19.
+    # SSO multi-user flows (admin SSO login + sign-in CTA + new-user
+    # signup via SSO + removed-user rejection). Reuses the
+    # `sso-e2e` droplet — runs after sso-cookie-domain so the second
+    # cell skips droplet provisioning entirely.
+    # Stripe billing lifecycle (Checkout, Portal, downgrade). Cloud-only
+    # via dedicated tenants seeded by setup-tenants.ts; test mode so the
+    # card 4242 4242 4242 4242 completes synchronously, then we poll the
+    # billing API until the webhook lands.
+    - stripe-billing
+
+cells:
+    # ---------- self-hosted (mirrors fast.yml) ----------
+    - target: self-hosted
+      provider: github
+      license: license-paid
+    - target: self-hosted
+      provider: gitlab
+      license: license-paid
+    - target: self-hosted
+      provider: bitbucket
+      license: license-paid
+    - target: self-hosted
+      provider: azure-devops
+      license: license-paid
+    - target: self-hosted
+      provider: github
+      license: license-free
+
+    # ---------- cloud (mirrors fast.yml) ----------
+    - target: cloud
+      provider: github
+      license: paid
+    - target: cloud
+      provider: gitlab
+      license: paid
+    - target: cloud
+      provider: bitbucket
+      license: paid
+    - target: cloud
+      provider: azure-devops
+      license: paid
+    - target: cloud
+      provider: github
+      license: free
+    - target: cloud
+      provider: github
+      license: trial
+    # Community plan: post-trial tenant that configured its own LLM API
+    # key (BYOK). Free in Stripe terms but reviews still work (with the
+    # 10-rule limit). Distinct from `free` (= trial expired, no BYOK,
+    # gate blocks).
+    - target: cloud
+      provider: github
+      license: community-byok
+    # GitHub App (OAuth installation) variant. Same rationale as in
+    # fast.yml — covers the authenticateWithCodeOauth code path that
+    # the PAT cells don't exercise. Cloud-only.
+    - target: cloud
+      provider: github-app
+      license: paid

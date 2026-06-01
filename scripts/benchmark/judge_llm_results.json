@@ -1,0 +1,22 @@
+[
+  {"pr_index": 0, "tp": 3, "fp": 1, "fn": 0, "golden_total": 3, "cand_total": 4, "matches": "G0->C2 G1->C0 G2->C1"},
+  {"pr_index": 1, "tp": 3, "fp": 3, "fn": 0, "golden_total": 3, "cand_total": 6, "matches": "G0->C4 G1->C2 G2->C5"},
+  {"pr_index": 2, "tp": 2, "fp": 5, "fn": 1, "golden_total": 3, "cand_total": 7, "matches": "G1->C6 G2->C2"},
+  {"pr_index": 3, "tp": 1, "fp": 2, "fn": 2, "golden_total": 3, "cand_total": 3, "matches": "G1->C0"},
+  {"pr_index": 4, "tp": 1, "fp": 4, "fn": 4, "golden_total": 5, "cand_total": 5, "matches": "G1->C2"},
+  {"pr_index": 5, "tp": 1, "fp": 4, "fn": 1, "golden_total": 2, "cand_total": 5, "matches": "G0->C4"},
+  {"pr_index": 6, "tp": 0, "fp": 4, "fn": 2, "golden_total": 2, "cand_total": 4, "matches": ""},
+  {"pr_index": 7, "tp": 0, "fp": 2, "fn": 1, "golden_total": 1, "cand_total": 2, "matches": ""},
+  {"pr_index": 8, "tp": 3, "fp": 4, "fn": 0, "golden_total": 3, "cand_total": 7, "matches": "G0->C4 G1->C5 G2->C1"},
+  {"pr_index": 9, "tp": 1, "fp": 4, "fn": 1, "golden_total": 2, "cand_total": 5, "matches": "G0->C4"},
+  {"pr_index": 10, "tp": 2, "fp": 4, "fn": 0, "golden_total": 2, "cand_total": 6, "matches": "G0->C5 G1->C3"},
+  {"pr_index": 11, "tp": 4, "fp": 7, "fn": 2, "golden_total": 6, "cand_total": 12, "matches": "G0->C7 G1->C11 G4->C5 G5->C0"},
+  {"pr_index": 12, "tp": 1, "fp": 2, "fn": 1, "golden_total": 2, "cand_total": 4, "matches": "G1->C2"},
+  {"pr_index": 13, "tp": 1, "fp": 3, "fn": 3, "golden_total": 4, "cand_total": 4, "matches": "G3->C2"},
+  {"pr_index": 14, "tp": 4, "fp": 5, "fn": 1, "golden_total": 5, "cand_total": 9, "matches": "G0->C6 G2->C7 G3->C8 G4->C0"},
+  {"pr_index": 15, "tp": 2, "fp": 4, "fn": 0, "golden_total": 2, "cand_total": 6, "matches": "G0->C1 G1->C0"},
+  {"pr_index": 16, "tp": 1, "fp": 3, "fn": 1, "golden_total": 2, "cand_total": 4, "matches": "G1->C0"},
+  {"pr_index": 17, "tp": 0, "fp": 0, "fn": 2, "golden_total": 2, "cand_total": 0, "matches": ""},
+  {"pr_index": 18, "tp": 2, "fp": 5, "fn": 0, "golden_total": 2, "cand_total": 7, "matches": "G0->C3 G1->C6"},
+  {"pr_index": 19, "tp": 0, "fp": 0, "fn": 1, "golden_total": 1, "cand_total": 0, "matches": ""}
+]

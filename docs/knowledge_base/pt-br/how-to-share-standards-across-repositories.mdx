@@ -1,0 +1,44 @@
+---
+title: "Como compartilhar padrões de codificação entre repositórios"
+description: "Use herança de regras e regras em nível de organização para manter padrões de codificação consistentes em todos os seus repositórios."
+---
+
+Quando você tem múltiplos repositórios, manter padrões de codificação consistentes é um desafio. O Kodus suporta herança de regras para que você possa definir regras uma vez e aplicá-las em todos os lugares.
+
+## Regras em nível de organização
+
+Crie regras no nível da organização e elas se aplicam automaticamente a todos os repositórios:
+
+1. Vá em **Configurações de Revisão de Código** → **Global** → **Regras do Kody**
+2. Crie suas regras — elas se aplicam a todos os repositórios da organização
+3. Repositórios individuais podem herdar, sobrescrever ou excluir regras específicas
+
+## Herança de regras
+
+As regras fluem de organização → repositório → diretório:
+
+- **Regras de organização** se aplicam em todos os lugares por padrão
+- **Regras de repositório** podem sobrescrever ou estender as regras da organização
+- **Regras de diretório** podem se especializar ainda mais para caminhos específicos
+
+Um repositório pode **excluir** uma regra herdada se ela não se aplicar àquela base de código.
+
+## Referências entre repositórios
+
+Use `@repo:org/project` nas instruções de regras para referenciar arquivos de outros repositórios:
+
+```
+Garanta que os endpoints de API sigam o padrão definido em @repo:team/api-standards.
+```
+
+Isso permite manter um repositório central de padrões que todas as regras referenciam.
+
+## Memórias em toda a organização
+
+Memórias com escopo de **nível de organização** se aplicam em todos os repositórios. Por exemplo:
+
+```
+@kody remember: em todos os repositórios, usamos o formato ESLint flat config.
+```
+
+Para detalhes, consulte [Herança de Regras](/how_to_use/pt-br/code_review/configs/rules_inheritance).

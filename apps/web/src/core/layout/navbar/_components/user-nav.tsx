@@ -11,7 +11,8 @@ import {
     SettingsIcon,
     UserIcon,
 } from "lucide-react";
-import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
+import { useAllTeams } from "src/core/providers/all-teams-context";
+import { useAuth } from "src/core/providers/auth.provider";
 import { Avatar, AvatarFallback } from "src/core/components/ui/avatar";
 import { Button } from "src/core/components/ui/button";
 import {
@@ -24,16 +25,14 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "src/core/components/ui/dropdown-menu";
-import { useAllTeams } from "src/core/providers/all-teams-context";
-import { useAuth } from "src/core/providers/auth.provider";
 import { useSubscriptionStatus } from "src/core/providers/byok.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { TEAM_STATUS } from "src/core/types";
 import { isSelfHosted } from "src/core/utils/self-hosted";
+
 import { VersionInfo } from "./version-info";
 
 export function UserNav() {
-    const { tokenUsagePage } = useFeatureFlags();
     const { email } = useAuth();
     const { teams } = useAllTeams();
     const { teamId, setTeamId } = useSelectedTeamId();
@@ -42,7 +41,7 @@ export function UserNav() {
         ResourceType.OrganizationSettings,
     );
     const canReadLogs = usePermission(Action.Read, ResourceType.Logs);
-    const { isBYOK, isTrial } = useSubscriptionStatus();
+    const { isBYOK, isTrial, isEnterprise } = useSubscriptionStatus();
 
     const handleChangeWorkspace = (teamId: string) => {
         setTeamId(teamId);
@@ -112,7 +111,7 @@ export function UserNav() {
                     </Link>
                 )}
 
-                {canReadLogs && (
+                {(isEnterprise || isTrial) && canReadLogs && (
                     <Link href="/user-logs">
                         <DropdownMenuItem leftIcon={<ActivityIcon />}>
                             Activity Logs
@@ -120,9 +119,7 @@ export function UserNav() {
                     </Link>
                 )}
 
-                {(isSelfHosted || isBYOK || isTrial) &&
-                    tokenUsagePage &&
-                    canReadLogs && (
+                {canReadLogs && (
                         <Link href="/token-usage">
                             <DropdownMenuItem leftIcon={<ChartColumn />}>
                                 Token Usage

@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 const loggerMock = {
     log: jest.fn(),
     error: jest.fn(),
@@ -5,7 +7,12 @@ const loggerMock = {
     debug: jest.fn(),
 };
 
-const toShapeMock = jest.fn((schema) => schema);
+const emptyZodShape = { __placeholder: z.string().optional() };
+const toShapeMock = jest.fn(() => emptyZodShape);
+
+const mockRegisterTool = jest.fn();
+const mockConnect = jest.fn();
+const mockClose = jest.fn();
 
 jest.mock('@kodus/flow', () => ({
     createLogger: () => loggerMock,
@@ -13,6 +20,20 @@ jest.mock('@kodus/flow', () => ({
 
 jest.mock('../../types/mcp-tool.interface', () => ({
     toShape: (schema: unknown) => toShapeMock(schema),
+}));
+
+jest.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
+    McpServer: jest.fn().mockImplementation(() => ({
+        registerTool: mockRegisterTool,
+        connect: mockConnect,
+        close: mockClose,
+    })),
+}));
+
+jest.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
+    StreamableHTTPServerTransport: jest.fn().mockImplementation(() => ({
+        close: jest.fn(),
+    })),
 }));
 
 describe('McpServerFactory', () => {
@@ -41,14 +62,12 @@ describe('McpServerFactory', () => {
         const first = await factory.create();
         const second = await factory.create();
 
+        // toShape is called once per schema field (input + output) and cached for the second create()
         expect(toShapeMock).toHaveBeenCalledTimes(2);
         expect(first.server).toBeDefined();
         expect(second.server).toBeDefined();
-
-        await first.transport.close();
-        await first.server.close();
-        await second.transport.close();
-        await second.server.close();
+        // registerTool should be called once per create()
+        expect(mockRegisterTool).toHaveBeenCalledTimes(2);
     });
 
     it('fails fast when a tool input schema cannot be converted', async () => {

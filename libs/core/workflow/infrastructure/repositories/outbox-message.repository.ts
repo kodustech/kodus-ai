@@ -41,6 +41,9 @@ export class OutboxMessageRepository implements IOutboxMessageRepository {
                 routingKey: message.routingKey,
                 payload: message.payload,
                 status: OutboxStatus.READY,
+                ...(message.nextAttemptAt
+                    ? { nextAttemptAt: message.nextAttemptAt }
+                    : {}),
             });
 
             const saved = await repo.save(model);

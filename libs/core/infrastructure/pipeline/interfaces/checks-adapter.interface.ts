@@ -8,6 +8,7 @@ export enum CheckStatus {
 export enum CheckConclusion {
     SUCCESS = 'SUCCESS',
     FAILURE = 'FAILURE',
+    NEUTRAL = 'NEUTRAL',
     SKIPPED = 'SKIPPED',
 }
 

@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
+import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
 import { CacheService } from '@libs/core/cache/cache.service';
 import {
@@ -24,6 +25,7 @@ import {
     PullRequestState,
 } from '@libs/core/domain/enums';
 import {
+    CommentResult,
     Repository,
     ReviewComment,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -62,7 +64,10 @@ import { GitlabAuthDetail } from '@libs/integrations/domain/authIntegrations/typ
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 import { IntegrationEntity } from '@libs/integrations/domain/integrations/entities/integration.entity';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
-import { CodeManagementConnectionStatus } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
+import {
+    CodeManagementConnectionStatus,
+    PullRequestFileChange,
+} from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
 import {
     PullRequest,
@@ -92,7 +97,6 @@ export class GitlabService implements Omit<
     | 'getAuthenticationOAuthToken'
     | 'getCommitsByReleaseMode'
     | 'getDataForCalculateDeployFrequency'
-    | 'requestChangesPullRequest'
 > {
     private readonly logger = createLogger(GitlabService.name);
 
@@ -291,10 +295,29 @@ export class GitlabService implements Omit<
                 gitlabAuthDetail.authMode === AuthMode.OAUTH
                     ? gitlabAuthDetail.accessToken
                     : decrypt(gitlabAuthDetail.accessToken),
-            ...(gitlabAuthDetail.host && { host: gitlabAuthDetail.host }),
+            ...(gitlabAuthDetail.host && {
+                host: this.getGitlabWebBaseUrl(gitlabAuthDetail.host),
+            }),
             queryTimeout: 600000,
             camelize: false,
         });
+    }
+
+    private normalizeGitlabHost(host?: string): string | undefined {
+        if (!host?.trim()) {
+            return undefined;
+        }
+
+        const normalized = host.trim().replace(/\/+$/, '');
+        const withProtocol = /^https?:\/\//i.test(normalized)
+            ? normalized
+            : `https://${normalized}`;
+
+        return withProtocol;
+    }
+
+    private getGitlabWebBaseUrl(host?: string): string {
+        return this.normalizeGitlabHost(host) || 'https://gitlab.com';
     }
 
     async findRepositoryByName(params: {
@@ -355,7 +378,7 @@ export class GitlabService implements Omit<
         description?: string;
         commitMessage?: string;
         author?: { name: string; email?: string };
-        files: { path: string; content: string }[];
+        files: PullRequestFileChange[];
     }): Promise<Partial<PullRequest> | null> {
         const {
             organizationAndTeamData,
@@ -443,7 +466,7 @@ export class GitlabService implements Omit<
         repository: { id: string; name: string };
         branchName?: string;
         baseBranch?: string;
-        files: { path: string; content: string }[];
+        files: PullRequestFileChange[];
         message?: string;
         author?: { name: string; email?: string };
     }): Promise<boolean> {
@@ -476,12 +499,25 @@ export class GitlabService implements Omit<
 
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
-            const commitOptions =
+            const branchAlreadyExists =
                 resolvedBranchName === resolvedBaseBranch
+                    ? true
+                    : await this.checkGitlabBranchExists(
+                          gitlabAPI,
+                          repository.id,
+                          resolvedBranchName,
+                      );
+
+            const commitOptions =
+                resolvedBranchName === resolvedBaseBranch || branchAlreadyExists
                     ? undefined
                     : {
                         startBranch: resolvedBaseBranch,
                     };
+
+            const fileExistsReferenceBranch = branchAlreadyExists
+                ? resolvedBranchName
+                : resolvedBaseBranch;
 
             const tokenAuthorIdentity =
                 gitlabAuthDetail.authMode === AuthMode.TOKEN && author?.name
@@ -491,16 +527,72 @@ export class GitlabService implements Omit<
                     }
                     : undefined;
 
+            const fileExistsEntries = await Promise.all(
+                files.map(async (file) => {
+                    const operation = file.operation || 'upsert';
+
+                    if (operation === 'upsert' || operation === 'delete') {
+                        const exists = await this.checkGitlabFileExists(
+                            gitlabAPI,
+                            repository.id,
+                            fileExistsReferenceBranch,
+                            file.path,
+                        );
+
+                        return [file.path, exists] as const;
+                    }
+
+                    return [file.path, false] as const;
+                }),
+            );
+
+            const fileExistsByPath = new Map(fileExistsEntries);
+
+            const actions = files
+                .map((file) => {
+                    const operation = file.operation || 'upsert';
+                    const fileExists = fileExistsByPath.get(file.path) === true;
+
+                    if (operation === 'delete') {
+                        if (!fileExists) {
+                            return null;
+                        }
+
+                        return {
+                            action: 'delete' as const,
+                            filePath: file.path,
+                        };
+                    }
+
+                    if (typeof file.content !== 'string') {
+                        throw new Error(
+                            `File content is required for upsert operation: ${file.path}`,
+                        );
+                    }
+
+                    return {
+                        action: fileExists
+                            ? ('update' as const)
+                            : ('create' as const),
+                        filePath: file.path,
+                        content: file.content,
+                        encoding: 'text' as const,
+                    };
+                })
+                .filter(
+                    (action): action is NonNullable<typeof action> =>
+                        action !== null,
+                );
+
+            if (actions.length === 0) {
+                return true;
+            }
+
             const res = await gitlabAPI.Commits.create(
                 repository.id,
                 resolvedBranchName,
                 resolvedMessage,
-                files.map((f) => ({
-                    action: 'create',
-                    filePath: f.path,
-                    content: f.content,
-                    encoding: 'text',
-                })),
+                actions,
                 {
                     ...(commitOptions || {}),
                     ...(tokenAuthorIdentity || {}),
@@ -521,6 +613,64 @@ export class GitlabService implements Omit<
             });
             return false;
         }
+    }
+
+    private async checkGitlabBranchExists(
+        gitlabAPI: any,
+        repositoryId: string,
+        branchName: string,
+    ): Promise<boolean> {
+        try {
+            await gitlabAPI.Branches.show(repositoryId, branchName);
+            return true;
+        } catch (error) {
+            if (this.isGitlabNotFoundError(error)) {
+                return false;
+            }
+
+            throw error;
+        }
+    }
+
+    private async checkGitlabFileExists(
+        gitlabAPI: any,
+        repositoryId: string,
+        branchName: string,
+        filePath: string,
+    ): Promise<boolean> {
+        try {
+            await gitlabAPI.RepositoryFiles.show(
+                repositoryId,
+                filePath,
+                branchName,
+            );
+            return true;
+        } catch (error) {
+            if (this.isGitlabNotFoundError(error)) {
+                return false;
+            }
+
+            throw error;
+        }
+    }
+
+    private isGitlabNotFoundError(error: unknown): boolean {
+        const candidate = error as
+            | {
+                  status?: number;
+                  statusCode?: number;
+                  response?: { status?: number };
+                  cause?: { response?: { status?: number } };
+              }
+            | undefined;
+
+        const status =
+            candidate?.status ||
+            candidate?.statusCode ||
+            candidate?.response?.status ||
+            candidate?.cause?.response?.status;
+
+        return status === 404;
     }
 
     private async handleIntegration(
@@ -663,12 +813,11 @@ export class GitlabService implements Omit<
 
     async authenticateWithToken(params: any): Promise<any> {
         try {
-            let host = 'https://gitlab.com/api/v4/user';
             const { token, host: hostParam } = params;
+            const normalizedHost = this.normalizeGitlabHost(hostParam);
+            const userApiUrl = `${this.getGitlabWebBaseUrl(hostParam)}/api/v4/user`;
 
-            host = hostParam ? `${hostParam}/api/v4/user` : host;
-
-            const testResponse = await axios.get(host, {
+            const testResponse = await axios.get(userApiUrl, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
@@ -682,7 +831,7 @@ export class GitlabService implements Omit<
             const authDetails = {
                 accessToken: encrypt(token),
                 authMode: params?.authMode || AuthMode.OAUTH,
-                host: hostParam ?? '',
+                host: normalizedHost ?? '',
             };
 
             const checkRepos = await this.checkRepositoryPermissions({
@@ -856,6 +1005,7 @@ export class GitlabService implements Omit<
                                 return {
                                     id: project.id.toString(),
                                     name: project.path_with_namespace,
+                                    full_name: project.path_with_namespace,
                                     http_url: project.http_url_to_repo,
                                     avatar_url: project.namespace?.avatar_url,
                                     organizationName: project.namespace?.name,
@@ -899,6 +1049,7 @@ export class GitlabService implements Omit<
                                 return {
                                     id: project.id.toString(),
                                     name: project.path_with_namespace,
+                                    full_name: project.path_with_namespace,
                                     http_url: project.http_url_to_repo,
                                     avatar_url: project.namespace?.avatar_url,
                                     organizationName: project.namespace?.name,
@@ -1260,9 +1411,28 @@ export class GitlabService implements Omit<
 
         const repositories = integrationConfig.configValue;
         const users = [];
+        const batchSize = 10;
 
-        for (const repository of repositories) {
-            users.push(...(await gitlabAPI.Projects.allUsers(repository.id)));
+        for (let i = 0; i < repositories.length; i += batchSize) {
+            const batch = repositories.slice(i, i + batchSize);
+            const results = await Promise.allSettled(
+                batch.map((repository) =>
+                    gitlabAPI.Projects.allUsers(repository.id),
+                ),
+            );
+
+            results.forEach((result, index) => {
+                if (result.status === 'fulfilled') {
+                    users.push(...result.value);
+                } else {
+                    this.logger.error({
+                        message: 'Failed to fetch users for repository',
+                        context: GitlabService.name,
+                        error: result.reason,
+                        metadata: { repositoryId: batch[index].id },
+                    });
+                }
+            });
         }
 
         // Removing duplicates based on a unique identifier, such as 'id'
@@ -1564,12 +1734,30 @@ export class GitlabService implements Omit<
         projectId: string,
         merge_number: number,
     ): Promise<any> {
-        const files = await gitlab.MergeRequests.allDiffs(
-            projectId,
-            merge_number,
-        );
+        try {
+            const files = await gitlab.MergeRequests.allDiffs(
+                projectId,
+                merge_number,
+            );
 
-        return files;
+            return files;
+        } catch (error) {
+            if (
+                error?.cause?.response?.status === 404 ||
+                error?.status === 404
+            ) {
+                // Fallback for GitLab < 15.7 where /diffs endpoint doesn't exist
+                const mr = await gitlab.MergeRequests.showChanges(
+                    projectId,
+                    merge_number,
+                    { accessRawDiffs: true },
+                );
+
+                return mr.changes || [];
+            }
+
+            throw error;
+        }
     }
 
     async countChangesInMergeRequest(
@@ -1736,10 +1924,28 @@ export class GitlabService implements Omit<
 
         // 4. Get the MR diffs to filter out files that came from merge commits
         // MergeRequests.allDiffs only returns files that belong to the MR (relative to target branch)
-        const mrDiffs = await gitlabAPI.MergeRequests.allDiffs(
-            repository.id,
-            prNumber,
-        );
+        // Fallback to showChanges for GitLab < 15.7 where /diffs endpoint doesn't exist
+        let mrDiffs: Array<{ new_path: string }>;
+        try {
+            mrDiffs = await gitlabAPI.MergeRequests.allDiffs(
+                repository.id,
+                prNumber,
+            );
+        } catch (error) {
+            if (
+                error?.cause?.response?.status === 404 ||
+                error?.status === 404
+            ) {
+                const mr = await gitlabAPI.MergeRequests.showChanges(
+                    repository.id,
+                    prNumber,
+                    { accessRawDiffs: true },
+                );
+                mrDiffs = mr.changes || [];
+            } else {
+                throw error;
+            }
+        }
 
         const mrFileNames = new Set(mrDiffs.map((f) => f.new_path));
 
@@ -1787,6 +1993,21 @@ export class GitlabService implements Omit<
         return `\`\`\`${language}\n${code}\n\`\`\``;
     }
 
+    private dedentCode(code: string): string {
+        const lines = code.split('\n');
+        const indents = lines
+            .filter((line) => line.trim().length > 0)
+            .map((line) => line.match(/^[ \t]*/)?.[0].length ?? 0);
+        if (indents.length === 0) return code;
+        const minIndent = Math.min(...indents);
+        if (minIndent === 0) return code;
+        return lines
+            .map((line) =>
+                line.length >= minIndent ? line.slice(minIndent) : line,
+            )
+            .join('\n');
+    }
+
     formatSub(text: string) {
         return `<sub>${text}</sub>\n\n`;
     }
@@ -1803,9 +2024,9 @@ export class GitlabService implements Omit<
             : '';
         const codeBlock = lineComment?.body?.improvedCode
             ? this.formatCodeBlock(
-                repository?.language?.toLowerCase(),
-                lineComment?.body?.improvedCode,
-            )
+                  repository?.language?.toLowerCase(),
+                  this.dedentCode(lineComment?.body?.improvedCode),
+              )
             : '';
         const suggestionContent = lineComment?.body?.suggestionContent || '';
         const actionStatement = lineComment?.body?.actionStatement
@@ -2338,32 +2559,73 @@ export class GitlabService implements Omit<
                 },
             });
 
-            const commitDetails = await Promise.all(
-                commits.map(async (commit) => {
-                    const user = await this.getUserByEmailOrNameWithRetry({
-                        organizationAndTeamData,
+            const authorKey = (email?: string, name?: string) =>
+                `${(email || '').toLowerCase()}|${name || ''}`;
+            const uniqueAuthors = new Map<
+                string,
+                { email?: string; userName?: string }
+            >();
+            for (const commit of commits) {
+                const key = authorKey(
+                    commit?.author_email,
+                    commit?.author_name,
+                );
+                if (!uniqueAuthors.has(key)) {
+                    uniqueAuthors.set(key, {
                         email: commit?.author_email,
                         userName: commit?.author_name,
                     });
+                }
+            }
 
-                    return {
-                        sha: commit?.id,
-                        message: commit?.message,
-                        created_at: commit?.created_at,
-                        author: {
-                            name: commit?.author_name,
-                            email: commit?.author_email,
-                            date: commit?.authored_date,
-                            username: user ? user.username : null,
-                            id: user && user.id ? user.id : null,
-                        },
-                        parents:
-                            commit?.parent_ids
-                                ?.map((p) => ({ sha: p ?? '' }))
-                                ?.filter((p) => p.sha) ?? [],
-                    };
-                }),
-            );
+            const USER_LOOKUP_CONCURRENCY = 5;
+            const authorEntries = Array.from(uniqueAuthors.entries());
+            const userByAuthorKey = new Map<string, any>();
+            for (
+                let i = 0;
+                i < authorEntries.length;
+                i += USER_LOOKUP_CONCURRENCY
+            ) {
+                const batch = authorEntries.slice(
+                    i,
+                    i + USER_LOOKUP_CONCURRENCY,
+                );
+                const results = await Promise.all(
+                    batch.map(([key, a]) =>
+                        this.getUserByEmailOrNameWithRetry({
+                            organizationAndTeamData,
+                            email: a.email,
+                            userName: a.userName || '',
+                        }).then((user) => [key, user] as const),
+                    ),
+                );
+                for (const [key, user] of results) {
+                    userByAuthorKey.set(key, user);
+                }
+            }
+
+            const commitDetails = commits.map((commit) => {
+                const user = userByAuthorKey.get(
+                    authorKey(commit?.author_email, commit?.author_name),
+                );
+
+                return {
+                    sha: commit?.id,
+                    message: commit?.message,
+                    created_at: commit?.created_at,
+                    author: {
+                        name: commit?.author_name,
+                        email: commit?.author_email,
+                        date: commit?.authored_date,
+                        username: user ? user.username : null,
+                        id: user && user.id ? user.id : null,
+                    },
+                    parents:
+                        commit?.parent_ids
+                            ?.map((p) => ({ sha: p ?? '' }))
+                            ?.filter((p) => p.sha) ?? [],
+                };
+            });
 
             const sortedCommits = commitDetails.sort((a, b) => {
                 return (
@@ -2457,7 +2719,10 @@ export class GitlabService implements Omit<
                 (comment) => comment.id === filters.discussionId,
             )?.notes[0];
 
-            if (filters?.discussionId === undefined) {
+            if (
+                filters?.discussionId === undefined ||
+                filters.discussionId === ''
+            ) {
                 return comments;
             } else {
                 return comments
@@ -2467,6 +2732,7 @@ export class GitlabService implements Omit<
                             id: note.id,
                             body: note.body,
                             createdAt: note.created_at,
+                            discussionId: filters.discussionId ?? comment.id,
                             originalCommit: {
                                 body: originalCommit.body,
                                 id: originalCommit.id,
@@ -2524,7 +2790,9 @@ export class GitlabService implements Omit<
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
             await gitlabAPI.MergeRequests.edit(repository.id, prNumber, {
-                description: summary, // Set the new description here
+                // Truncate at the adapter boundary so the per-platform limit
+                // is enforced consistently — see fit-pr-description.ts.
+                description: fitPRDescription(summary, PlatformType.GITLAB),
             });
         } catch (error) {
             this.logger.error({
@@ -2546,7 +2814,6 @@ export class GitlabService implements Omit<
             repository,
             prNumber,
             body,
-            inReplyToId,
             discussionId,
         } = params;
 
@@ -2561,7 +2828,6 @@ export class GitlabService implements Omit<
                 repository.id,
                 prNumber,
                 discussionId,
-                inReplyToId,
                 body,
             );
 
@@ -2933,9 +3199,11 @@ export class GitlabService implements Omit<
                 throw new Error('GitLab authentication details not found');
             }
 
-            // Construct the full GitLab URL
-            const gitlabHost = gitlabAuthDetail.host || 'gitlab.com';
-            const fullGitlabUrl = `https://${gitlabHost}/${params?.repository?.fullName}`;
+            const encodedPath = (params?.repository?.fullName || '')
+                .split('/')
+                .map(encodeURIComponent)
+                .join('/');
+            const fullGitlabUrl = `${this.getGitlabWebBaseUrl(gitlabAuthDetail.host)}/${encodedPath}`;
 
             return {
                 organizationId: params.organizationAndTeamData.organizationId,
@@ -3108,6 +3376,89 @@ export class GitlabService implements Omit<
             });
             return null;
         }
+    }
+
+    async requestChangesPullRequest(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        prNumber: number;
+        repository: { id: string; name: string };
+        criticalComments: CommentResult[];
+    }) {
+        try {
+            const {
+                organizationAndTeamData,
+                prNumber,
+                repository,
+                criticalComments,
+            } = params;
+
+            const gitlabAuthDetail = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
+
+            // Unapprove MR if previously approved
+            // On GitLab CE this may fail with 403 (Premium-only feature)
+            try {
+                await gitlabAPI.MergeRequestApprovals.unapprove(
+                    repository.id,
+                    prNumber,
+                );
+            } catch (unapproveError) {
+                this.logger.warn({
+                    message: `Could not unapprove MR #${prNumber} (may require GitLab Premium)`,
+                    context: GitlabService.name,
+                    serviceName: 'GitlabService requestChangesPullRequest',
+                    error: unapproveError,
+                    metadata: params,
+                });
+            }
+
+            const listOfCriticalIssues = this.getListOfCriticalIssues(
+                criticalComments,
+            );
+
+            const requestChangeBodyTitle =
+                '# Found critical issues please review the requested changes';
+
+            const formattedBody =
+                `${requestChangeBodyTitle}\n\n${listOfCriticalIssues}`.trim();
+
+            await gitlabAPI.MergeRequestDiscussions.create(
+                repository.id,
+                prNumber,
+                formattedBody,
+            );
+
+            this.logger.log({
+                message: `Requested changes on MR #${prNumber} with ${criticalComments.length} critical issues`,
+                context: GitlabService.name,
+                serviceName: 'GitlabService requestChangesPullRequest',
+                metadata: params,
+            });
+        } catch (error) {
+            this.logger.error({
+                message: `Error requesting changes on MR #${params.prNumber}`,
+                context: GitlabService.name,
+                serviceName: 'GitlabService requestChangesPullRequest',
+                error: error,
+                metadata: params,
+            });
+            throw error;
+        }
+    }
+
+    private getListOfCriticalIssues(
+        criticalComments: CommentResult[],
+    ): string {
+        return criticalComments
+            .map((comment) => {
+                const summary =
+                    comment.comment?.suggestion?.oneSentenceSummary ?? '';
+                return `- ${summary}`;
+            })
+            .join('\n');
     }
 
     async getAllCommentsInPullRequest(params: {
@@ -3373,6 +3724,69 @@ export class GitlabService implements Omit<
             });
             return null;
         }
+    }
+
+    /**
+     * GitLab webhooks expose `payload.user` as the actor that fired the hook
+     * (the pusher on a sync, the commenter on a Note Hook), not the MR author.
+     * Other providers' webhooks expose the PR author directly, so license
+     * validation works there. This resolves the real author by `author_id`
+     * (only field GitLab gives us in the payload) and caches the result.
+     *
+     * On a Note Hook, `object_attributes.author_id` is the *commenter*, so we
+     * must prefer `merge_request.author_id` whenever a `merge_request` block
+     * is present in the payload.
+     */
+    async resolveMrAuthorFromWebhookPayload(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        payload: any;
+    }): Promise<any | null> {
+        const { payload, organizationAndTeamData } = params;
+
+        const authorId =
+            payload?.merge_request?.author_id ??
+            payload?.object_attributes?.author_id;
+
+        if (!authorId || !organizationAndTeamData?.organizationId) {
+            return null;
+        }
+
+        const cacheKey = `gitlab-mr-author-${organizationAndTeamData.organizationId}-${authorId}`;
+
+        try {
+            const cached = await this.cacheService.getFromCache<any>(cacheKey);
+            if (cached) {
+                return cached;
+            }
+        } catch (cacheError) {
+            this.logger.warn({
+                message: 'Error reading MR author from cache',
+                context: GitlabService.name,
+                serviceName: 'GitlabService resolveMrAuthorFromWebhookPayload',
+                error: cacheError,
+            });
+        }
+
+        const author = await this.getUserById({
+            organizationAndTeamData,
+            userId: String(authorId),
+        });
+
+        if (author) {
+            try {
+                await this.cacheService.addToCache(cacheKey, author, 1800000);
+            } catch (cacheError) {
+                this.logger.warn({
+                    message: 'Error caching MR author',
+                    context: GitlabService.name,
+                    serviceName:
+                        'GitlabService resolveMrAuthorFromWebhookPayload',
+                    error: cacheError,
+                });
+            }
+        }
+
+        return author ?? null;
     }
 
     async getCurrentUser(params: {
@@ -4441,5 +4855,21 @@ ${copyPrompt}
         }
 
         return copyPrompt;
+    }
+
+    async getRepositoryContentBatch(
+        _params: any,
+    ): Promise<Map<string, any> | null> {
+        // Not implemented for GitLab — callers fall back to per-file
+        // `getRepositoryContentFile`.
+        return null;
+    }
+
+    async getUsersByUsername(
+        _params: any,
+    ): Promise<Map<string, any> | null> {
+        // Not implemented for GitLab — callers fall back to per-user
+        // `getUserByUsername`.
+        return null;
     }
 }

@@ -1,0 +1,153 @@
+---
+title: "代码库规则"
+description: "使用结构化的 markdown 文件直接在代码库中创建自定义 Kody 规则。"
+---
+
+<Info>
+代码库规则使用与 IDE 规则文件检测相同的自动同步机制。在设置中启用"从代码库自动同步规则"以激活这两个功能。请参阅<a href="/how_to_use/en/code_review/configs/rules_file_detection">规则文件检测</a>进行设置。
+</Info>
+
+## 如何使用
+您可以通过将结构化的 markdown 文件放置在特定目录中,直接在代码库中创建自定义 Kody 规则。这允许您对规则进行版本控制并与团队共享。
+
+### 同步
+- **自动检测**:启用后自动检测和同步代码库规则
+- **手动同步**:在任何规则文件中添加 `@kody-sync` 以单独同步(即使禁用自动同步也有效)
+- **Web 应用程序**:同步的规则显示在您的 Kodus web 应用程序仪表板中
+- **实时更新**:当拉取请求关闭时同步规则文件的更改
+
+## 文件位置
+
+将您的规则文件放在以下目录之一:
+- `.kody/rules/**/*.md`
+- `rules/**/*.md`
+
+## 规则模板
+
+每个规则文件必须遵循此确切的模板结构:
+
+```markdown
+---
+title: "<规则名称>"
+scope: "file"            # "file" 或 "pull_request"
+path: []                 # glob 列表。示例: ["**/*.ts", "apps/web/**"]
+severity_min: "high"     # "low", "medium", "high", "critical"
+languages: []            # 可选。例如: ["jsts", "go", "php", "ruby", "java", "csharp", "dart", "kotlin", "rust"]
+buckets: []              # 可选。例如: ["style-conventions", "error-handling", "security"]
+uuid: ""                 # 可选。用于稳定的规则 ID
+enabled: true            # 可选
+---
+
+## Instructions
+描述要审查什么以及如何决定。直接客观。
+- 关注安全性、性能和公共契约影响。
+- 在适用时给出团队偏好或模式。
+- 如果是 PR 规则,解释在变更集中要考虑什么。
+
+## Examples
+
+### Bad example
+\`\`\`lang
+// 在此粘贴违反规则的简短反例
+\`\`\`
+
+### Good example
+\`\`\`lang
+// 在此粘贴遵循规则的简短示例
+\`\`\`
+```
+## 模板字段
+
+### 必需字段
+
+| 字段 | 描述 | 值 |
+|-------|-------------|---------|
+| `title` | 界面中显示的规则名称 | 任何描述性字符串 |
+| `scope` | 规则分析范围 | `"file"` 或 `"pull_request"` |
+| `path` | 规则适用的文件路径 | glob 模式数组 |
+| `severity_min` | 最低严重性级别 | `"low"`, `"medium"`, `"high"`, `"critical"` |
+
+## 示例规则
+
+### 文件级规则示例
+```markdown
+---
+title: "避免在生产代码中使用 console.log"
+scope: "file"
+path: ["src/**/*.ts", "src/**/*.tsx"]
+severity_min: "medium"
+languages: ["jsts"]
+buckets: ["style-conventions"]
+enabled: true
+---
+
+## Instructions
+检查生产 TypeScript/JavaScript 文件中的 console.log 语句。
+- console.log 不应出现在生产代码中
+- 改用适当的日志库
+- 仅在开发工具中允许 console.log
+
+## Examples
+
+### Bad example
+\`\`\`typescript
+function processUser(user: User) {
+  console.log('Processing user:', user.id);
+  return user.process();
+}
+\`\`\`
+
+### Good example
+\`\`\`typescript
+import { logger } from './logger';
+
+function processUser(user: User) {
+  logger.info('Processing user:', user.id);
+  return user.process();
+}
+\`\`\`
+```
+
+### 拉取请求级规则示例
+```markdown
+---
+title: "新 API 端点必须有测试"
+scope: "pull_request"
+path: ["**/*"]
+severity_min: "high"
+buckets: ["testing"]
+enabled: true
+---
+
+## Instructions
+当添加新 API 端点时,确保 PR 中包含相应的测试。
+- 检查控制器中的新路由定义
+- 验证新端点存在测试文件
+- 确保包含正面和负面测试用例
+
+## Examples
+
+### Bad example
+添加了新端点 `/api/users/profile` 但 PR 中未包含测试文件。
+
+### Good example
+添加了新端点 `/api/users/profile`,并带有相应的测试文件 `tests/api/users/profile.test.ts`,涵盖成功和错误情况。
+```
+
+## 设置要求
+
+要使用代码库规则,您有两个选项:
+
+### 选项 1:启用自动同步(推荐)
+1. **启用规则文件检测**:在设置中切换"从代码库自动同步规则"
+2. **创建规则文件**:将 `.md` 文件放在 `.kody/rules/**` 或 `rules/**` 目录中
+3. **自动同步**:当 PR 关闭时所有规则文件同步
+
+### 选项 2:手动同步(选择性)
+1. **创建规则文件**:将 `.md` 文件放在 `.kody/rules/**` 或 `rules/**` 目录中
+2. **添加同步标记**:在规则文件中的任何位置包含 `@kody-sync`
+3. **提交更改**:仅标记的文件将同步(自动同步切换保持关闭)
+
+<Tip>
+代码库规则使用与<a href="/how_to_use/en/code_review/configs/rules_file_detection">规则文件检测</a>相同的同步机制。使用手动同步(`@kody-sync`)可以选择性地同步特定规则,而无需启用自动同步。
+</Tip>

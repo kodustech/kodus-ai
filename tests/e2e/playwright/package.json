@@ -1,0 +1,13 @@
+{
+    "name": "kodus-e2e-playwright",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "smoke": "node ui-smoke.mjs",
+        "signup": "node signup.mjs"
+    },
+    "dependencies": {
+        "playwright": "^1.48.0"
+    }
+}

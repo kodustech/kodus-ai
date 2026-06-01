@@ -24,35 +24,35 @@ describe('AggregateResultsStage', () => {
 
     const createBaseContext = (
         overrides: Partial<CodeReviewPipelineContext> = {},
-    ): CodeReviewPipelineContext => ({
-        dryRun: { enabled: false },
-        organizationAndTeamData: mockOrganizationAndTeamData as any,
-        repository: { id: 'repo-1', name: 'test-repo' } as any,
-        branch: 'main',
-        pullRequest: {
-            number: 123,
-            title: 'Test PR',
-            base: { repo: { fullName: 'org/repo' }, ref: 'main' },
-            repository: {} as any,
-            isDraft: false,
-            stats: {
-                total_additions: 10,
-                total_deletions: 5,
-                total_files: 2,
-                total_lines_changed: 15,
+    ) =>
+        ({
+            dryRun: { enabled: false },
+            organizationAndTeamData: mockOrganizationAndTeamData as any,
+            repository: { id: 'repo-1', name: 'test-repo' } as any,
+            branch: 'main',
+            pullRequest: {
+                number: 123,
+                title: 'Test PR',
+                base: { repo: { fullName: 'org/repo' }, ref: 'main' },
+                repository: {} as any,
+                isDraft: false,
+                stats: {
+                    total_additions: 10,
+                    total_deletions: 5,
+                    total_files: 2,
+                    total_lines_changed: 15,
+                },
             },
-        },
-        teamAutomationId: 'team-auto-1',
-        origin: 'github',
-        action: 'opened',
-        platformType: PlatformType.GITHUB,
-        batches: [],
-        preparedFileContexts: [],
-        validSuggestions: [],
-        discardedSuggestions: [],
-        correlationId: 'test-correlation-id',
-        ...overrides,
-    });
+            teamAutomationId: 'team-auto-1',
+            origin: 'github',
+            action: 'opened',
+            platformType: PlatformType.GITHUB,
+            preparedFileContexts: [],
+            validSuggestions: [],
+            discardedSuggestions: [],
+            correlationId: 'test-correlation-id',
+            ...overrides,
+        }) as CodeReviewPipelineContext;
 
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({

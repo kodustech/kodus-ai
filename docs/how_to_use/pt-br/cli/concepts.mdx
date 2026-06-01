@@ -1,0 +1,146 @@
+---
+title: "Conceitos"
+description: "Modelos mentais para aproveitar ao máximo o Kodus CLI."
+---
+
+Um breve tour pelas ideias que aparecem em todo o CLI. Leia isso uma vez e o restante da documentação fará mais sentido.
+
+## Modos de Diff
+
+Cada revisão precisa responder a uma pergunta: *o que mudou?* O CLI suporta quatro modos de diff, cada um com uma fonte de verdade diferente.
+
+| Modo                | Fonte do diff                                 | Inclui arquivos? | Quando usar                                            |
+| ------------------- | --------------------------------------------- | ---------------- | ------------------------------------------------------ |
+| **Árvore de trabalho** (padrão) | Alterações não commitadas no seu diretório de trabalho | Sim | Durante o desenvolvimento, antes de fazer stage.  |
+| **Staged** (`--staged`)    | `git diff --cached`                           | Sim            | Prestes a commitar — mesmo escopo que `git commit`.    |
+| **Branch** (`--branch <base>`) | Diff commitado `base..HEAD`              | Não            | Revisão pré-merge de toda a branch.                    |
+| **Commit** (`--commit <sha>`) | O diff introduzido por um único commit     | Não            | Auditar um commit, revisão de cherry-pick.             |
+
+<Tip>
+  **Por que a inclusão de arquivos importa?** Revisões de árvore de trabalho e staged enviam o conteúdo dos arquivos junto com o diff porque o backend não pode ver seu trabalho não commitado. Os modos branch e commit ignoram a inclusão — o backend clona o mesmo commit diretamente. É por isso que revisões de branch/commit funcionam em diffs grandes onde revisões de árvore de trabalho ultrapassariam os limites de tamanho de requisição.
+</Tip>
+
+## Modos de Revisão
+
+Três estilos de saída, mesma revisão subjacente.
+
+- **Interativo** (padrão) — uma TUI que lista arquivos, expande problemas e aplica correções uma de cada vez com visualização prévia. A forma natural de trabalhar em um terminal.
+- **Correção automática** (`--fix`) — aplica todos os problemas corrigíveis de uma vez, com uma única confirmação. Use quando confiar nas regras e quiser aplicar em lote.
+- **Apenas prompt** (`--prompt-only`) — texto mínimo e estruturado projetado para agentes de IA analisarem e agirem. Combine com `--fail-on` em um loop de agente para que o loop termine de forma limpa quando a revisão estiver clean.
+
+Você também pode usar `--format json` ou `--format markdown` com qualquer comando para consumidores não interativos (CI, scripts, webhooks).
+
+## Modos de Autenticação
+
+Escolha um por máquina. O CLI detecta automaticamente o que está disponível.
+
+- **Trial** — sem autenticação. 5 revisões por dia. Bom para "experimentar uma vez".
+- **Login pessoal** (`kodus auth login`) — uma conta individual. Tokens são atualizados automaticamente.
+- **Chave de equipe** (`kodus auth team-key --key kodus_xxxxx`) — uma chave compartilhada para uma equipe, gerada no painel. Recomendada para agentes de IA e onde não se deseja logins interativos.
+- **Token CI/CD** (`kodus auth token`) — um token de longa duração para pipelines. Gerado de uma máquina com login, usado via `KODUS_TOKEN`.
+
+Veja [Primeiros Passos](getting_started) para a árvore de decisão completa.
+
+## Kody Rules
+
+Uma **Kody Rule** é uma regra estruturada que o revisor do Kodus aplica durante cada revisão, com escopo para um repositório ou global para sua equipe.
+
+```
+Rule
+├── title          "No console.log in production code"
+├── rule           "Avoid leaving console.log in committed code"
+├── severity       low | medium | high | critical
+├── scope          file | pull request
+├── path           **/*.ts       (glob para seleção de arquivos)
+└── repo-id        <uuid> | global
+```
+
+As regras se sobrepõem à revisão geral do Kodus — a IA as usa como critérios adicionais, não como substitutos.
+
+Gerencie regras pelo painel ou pelo CLI com `kodus rules create|update|view`. O CLI é útil quando você quer regras em controle de versão (gere-as a partir de um script, faça check-in em um repositório, reaplicar na provisionamento).
+
+## Configurações de Repositório
+
+Cada repositório no Kodus tem configurações que governam como as revisões se comportam: arquivos ignorados, padrões de branch base, filtros de título, alternâncias de recursos. Elas ficam no backend do Kodus e são espelhadas em qualquer lugar onde o repositório é revisado (PRs na web, revisões CLI, loops de agentes).
+
+Pelo CLI:
+
+```bash
+kodus config repo list                 # Ver seus repositórios configurados
+kodus config repo show                 # Ver configurações do repositório atual
+kodus config repo setup                # Assistente guiado
+kodus config repo set . reviewEnabled true
+kodus config repo add-ignore-file . "**/*.generated.ts"
+kodus config repo open                 # Ir para o painel web
+```
+
+`kodus config repo` e `kodus config remote` são aliases para o mesmo grupo de comandos.
+
+## Configuração Centralizada
+
+Normalmente, as configurações de cada repositório ficam no Kodus. A **Configuração Centralizada** permite que uma equipe armazene essas configurações em um único repositório git como fonte de verdade — cada alteração se torna um pull request contra esse repositório, dando-lhe histórico de revisão e versão sobre sua configuração de revisão.
+
+Habilitar, sincronizar ou inspecionar estado:
+
+```bash
+kodus config centralized status
+kodus config centralized init owner/config-repo --sync-option pr
+kodus config centralized sync
+kodus config centralized disable
+```
+
+Use a Configuração Centralizada quando sua equipe quiser controle auditável e versionado sobre as configurações de revisão. Mantenha o padrão (configurações por repositório no Kodus) quando essa cerimônia for desnecessária.
+
+## Decision Memory
+
+Decision Memory é a forma do Kodus persistir o *raciocínio* por trás do trabalho do agente de IA — não apenas o diff, mas o "porquê".
+
+Quando habilitado, o Kodus instala hooks no Claude Code, Cursor ou Codex que disparam em cada evento de turno completo e capturam decisões estruturadas para:
+
+```
+.kody/
+├── pr/by-sha/<head-sha>.md    # Decisões de nível de PR (versionadas com o código)
+├── memory/<module-id>.md      # Decisões de nível de módulo (longo prazo)
+└── modules.yml                # Configuração de módulos
+```
+
+A memória de nível de PR fica na branch. Quando um PR é mesclado, promova suas decisões para a memória de nível de módulo (`kodus decisions promote`) para que trabalhos futuros nesse módulo comecem com o contexto acumulado.
+
+Guia completo: [Decision Memory](decision_memory).
+
+## Validação de Negócio
+
+Enquanto `kodus review` pergunta "este código está bom?", `kodus pr business-validation` pergunta "este diff faz o que a tarefa disse para fazer?". Você o aponta para uma tarefa baseada em Linear/Jira/URL e uma fonte de diff (árvore de trabalho, staged, branch, commit) e ele verifica a implementação em relação aos critérios de aceitação da tarefa.
+
+```bash
+kodus pr business-validation --task-id KC-1441 --branch main
+kodus pr business-validation --task-url https://linear.app/… --staged
+```
+
+Combine com uma verificação pré-merge para detectar "o código funciona, mas não é o que foi pedido" antes da revisão humana.
+
+## Saída para Agente de IA (`--prompt-only` e `--agent`)
+
+Duas flags relacionadas, trabalhos diferentes.
+
+- **`--prompt-only`** — a saída é otimizada para um agente de IA analisar e agir. Funciona apenas em comandos que produzem saída no estilo de revisão (`review`, `pr suggestions`).
+- **`--agent`** — flag global que força saída **determinística e legível por máquina** em qualquer comando. Use quando um script ou agente analisa a saída do CLI; combine com `--format json` para maior rigor.
+
+A maioria das integrações de agentes precisa apenas de `--prompt-only`. Recorra a `--agent` quando estiver orquestrando o CLI a partir de um harness ou um loop de chamada de ferramentas com expectativas de formato rígidas.
+
+## Próximos Passos
+
+<CardGroup cols={2}>
+  <Card title="Referência de Comandos" icon="book" href="commands">
+    Listagem completa de comandos e flags.
+  </Card>
+  <Card title="Agentes de IA" icon="robot" href="ai_agents">
+    Construa loops de revisão e correção com agentes de programação.
+  </Card>
+  <Card title="Decision Memory" icon="brain" href="decision_memory">
+    Capture e promova decisões de agentes entre branches.
+  </Card>
+  <Card title="Solução de Problemas" icon="life-ring" href="troubleshooting">
+    Erros comuns e códigos de saída.
+  </Card>
+</CardGroup>

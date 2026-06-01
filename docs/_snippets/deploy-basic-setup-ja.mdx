@@ -1,0 +1,131 @@
+## システム要件
+
+<AccordionGroup>
+  <Accordion title="推奨ハードウェア">
+    デフォルトの `local` サンドボックスモード（kodus-graph + cross-file
+    コンテキストが worker コンテナ内で実行される）を想定したサイジング。
+
+    - **CPU**: 2 コア以上（~100k LOC を超えるリポジトリでは 4 コア以上を推奨）
+    - **RAM**: 8GB 以上（大規模リポジトリで `local` サンドボックスを使う場合は 16GB を推奨）
+    - **ストレージ**: 60GB 以上の空き容量（Postgres が AST グラフのキャッシュを保持。
+      リポジトリ数と PR 量に応じて増加）
+  </Accordion>
+  <Accordion title="必要なソフトウェア">
+    - **Docker**（最新の安定版）と Compose プラグイン
+    - **ドメイン名または固定 IP** — クラウド Git プロバイダー
+      （GitHub.com、GitLab.com など）から webhook を受信したい場合
+  </Accordion>
+  <Accordion title="必要なポート">
+    デフォルトのホストポートマッピング — 競合する場合は `.env` で調整。
+
+    - **3000** — Kodus Web App
+    - **3001** — API
+    - **3332** — Webhooks
+    - **5432** — PostgreSQL
+    - **27017** — MongoDB
+    - **5672, 15672, 15692** — RabbitMQ（AMQP、管理 UI、メトリクス）
+    - **3101** — MCP Manager _（`API_MCP_SERVER_ENABLED=true` の場合のみ）_
+  </Accordion>
+  <Accordion title="サービス">
+    `./scripts/install.sh` が `.env` に基づいて起動するサービス。
+
+    **コア（常時起動）:**
+    - `api` — メインバックエンド
+    - `worker` — code review ジョブ
+    - `webhooks` — Git プロバイダー webhook レシーバー
+    - `kodus-web` — Next.js フロントエンド
+    - `db_kodus_postgres`、`db_kodus_mongodb`、`rabbitmq` —
+      ローカルインフラ。マネージドインスタンスを指す場合は
+      `USE_LOCAL_DB=false` / `USE_LOCAL_RABBITMQ=false` でスキップ。
+
+    **オプション:**
+    - `kodus-mcp-manager` — Model Context Protocol ブローカー。
+      `API_MCP_SERVER_ENABLED=true` で有効化。
+      [MCP Manager](/how_to_deploy/ja/deploy_kodus/mcp_manager) を参照。
+    - `worker-analytics` — Cockpit 取り込み（DORA メトリクス、PR
+      classifier）。**セルフホスト Enterprise 専用**、デフォルトでは
+      組み込まれません。
+      [Analytics Worker](/how_to_deploy/ja/deploy_kodus/analytics_worker) を参照。
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  Code review はサンドボックス内で実行される AST グラフ + cross-file
+  コンテキストを使用します — `local`（デフォルト、worker 内で実行）または
+  `e2b`（有料リモートサンドボックス）。モード、キャッシュの動作、各モードの
+  選択基準については [Sandbox & AST Graph](/how_to_deploy/ja/deploy_kodus/sandbox)
+  を参照してください。
+</Note>
+
+<Note>
+  **クラウドベースのGitサービス（GitHub、GitLab、Bitbucket）やクラウドLLMプロバイダー（OpenAI、Anthropicなど）に接続する場合は、インターネットアクセスが必要です。** ネットワーク内の自己ホスト型GitツールやオンプレミスLLMを使用する場合、外部インターネットアクセスはオプションです。
+</Note>
+
+## ドメイン名の設定（オプション）
+
+クラウドベースのGitプロバイダー（GitHub、GitLab、Bitbucket）とKodusを統合する予定がある場合は、Kodus WebアプリとそのAPI両方に公開URLが必要です。これにより、サーバーがコードレビュー機能に必要なwebhookを受信できるようになり、アプリケーションが正しく動作します。
+
+2つのサブドメインを設定することをお勧めします：
+- Webアプリケーション用（例：`kodus-web.yourdomain.com`）
+- API用（例：`kodus-api.yourdomain.com`）
+
+Webhookは別サービス（ポート3332）で処理されます。以下のいずれかを選択できます：
+- 専用のwebhookサブドメインを使用する（例：`kodus-webhooks.yourdomain.com`）
+- APIドメインを引き続き使用し、リバースプロキシで`/github/webhook`、`/gitlab/webhook`などをwebhookサービスにルーティングする
+
+両方のサブドメインのDNS Aレコードをサーバーのipアドレスに向ける必要があります。このガイドの後半で、これらのサブドメインへのリクエストを正しい内部サービスにルーティングするリバースプロキシ（Nginx）を設定します。この設定はwebhookや認証を含む完全な機能に不可欠です。
+
+> **注意**: ネットワーク内の自己ホスト型Gitツールのみに接続し、公開アクセスやwebhookが不要な場合は、よりシンプルな設定が可能ですが、このガイドは公開デプロイに焦点を当てています。
+
+## セットアップ
+
+<Steps>
+  <Step title="インストーラーリポジトリをクローン">
+    ```bash
+    git clone https://github.com/kodustech/kodus-installer.git
+    cd kodus-installer
+    ```
+  </Step>
+  <Step title="環境変数ファイルのサンプルをコピー">
+    ```bash
+    cp .env.example .env
+    ```
+  </Step>
+  <Step title="必要な環境変数のセキュアキーを生成">
+    ```bash
+    ./generate-keys.sh
+    ```
+  </Step>
+  <Step title="環境変数ファイルを編集">
+    お好みのテキストエディタで`.env`に値を設定します。
+    ```bash
+    nano .env
+    ```
+
+    詳細な手順については、[環境変数の設定](/how_to_deploy/ja/deploy_kodus/generic_vm#environment-variables-configuration)を参照してください。
+  </Step>
+
+  <Step title="インストーラーを実行">
+    ```bash
+    ./scripts/install.sh
+    ```
+  </Step>
+  <Step title="完了 🎉">
+  完了すると、Kodusサービスがマシン上で実行されます。
+  以下のスクリプトでインストールを確認できます：
+  ```bash
+  ./scripts/doctor.sh
+  ```
+  </Step>
+  <Step title="Webインターフェースにアクセス">
+    Webインターフェースに初めてアクセスする際は、以下の設定が必要です：
+
+1. **管理者アカウントの作成** - システムへのフルアクセス権を持つ最初のユーザーになります
+2. **Gitプロバイダーの設定** - 画面の指示に従ってGitHub、GitLab、またはBitbucketを接続します
+3. **リポジトリの選択** - Kodyがレビューするコードリポジトリを選択します
+
+<Info>
+  初期設定プロセスの詳細な手順については、[クイックスタートガイド](/how_to_use/ja/quickstart)を参照してください。
+</Info>
+  </Step>
+</Steps>

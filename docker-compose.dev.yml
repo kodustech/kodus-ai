@@ -1,9 +1,23 @@
+# Bound the per-container json log file size on EVERY host. OrbStack
+# defaults to a sensible cap (max-size 20m, max-file 5), but vanilla
+# Docker on Linux applies NO rotation by default — MongoDB's verbose
+# stdout filled `/var/lib/docker/containers/<id>/<id>-json.log` to tens
+# of GB on a teammate's machine and corrupted the partition before we
+# noticed. Shipping the cap in compose makes the fix portable across
+# Mac/Linux/CI without per-machine daemon.json edits.
+x-logging: &default-logging
+    driver: json-file
+    options:
+        max-size: '20m'
+        max-file: '5'
+
 x-app-service-template: &app-service-defaults
     build:
         context: .
         dockerfile: docker/Dockerfile.dev
         args:
             - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
+    image: kodus-ai-dev:latest
     env_file:
         - ${ENV_FILE:-.env}
     environment:
@@ -13,10 +27,13 @@ x-app-service-template: &app-service-defaults
     volumes:
         - .:/usr/src/app:delegated
         - node_modules_cache:/usr/src/app/node_modules
+        - yarn_cache:/yarn-cache
+        - logs_data:/usr/src/app/logs
         - yalc_store:/root/.yalc
     networks:
         - kodus-backend-services
         - shared-network
+    logging: *default-logging
 
 services:
     #----------------------------------------------------------------
@@ -25,15 +42,35 @@ services:
     kodus-api:
         <<: *app-service-defaults
         container_name: kodus_api
+        depends_on:
+            rabbitmq:
+                condition: service_healthy
+                # Optional so the compose file still validates when the
+                # `local-db` profile is not active (e.g. pointing at an
+                # external RabbitMQ). When the local rabbitmq IS running,
+                # docker waits for its healthcheck before starting.
+                required: false
         ports:
+            # Host-side port vars (`<HOST>_PORT:-default`) let parallel
+            # worktrees coexist by overriding to a per-slot offset (e.g.
+            # `.env.local` in worktree B sets API_DEBUG_PORT=9329 etc).
+            # Container-side ports stay fixed because each container has
+            # its own network namespace.
             - '${API_PORT:-3001}:${API_PORT:-3001}'
-            - '9229:9229'
-            - '8000:8000'
+            - '${API_DEBUG_PORT:-9229}:9229'
+            - '${API_METRICS_PORT:-8000}:8000'
         command: yarn start:dev:api
         deploy:
             resources:
                 limits:
-                    memory: 1.5G
+                    # Dev mode with ts-node-dev + Sentry + observability
+                    # + in-memory Nest DI graph routinely climbs past
+                    # 1.5G under modest load; the 1.5G cap caused the
+                    # container to OOM repeatedly mid-session, making
+                    # every /api/proxy/* call 500 while migrations
+                    # re-ran on the restart. Bumped to 3G with matching
+                    # V8 heap ceiling so normal activity has headroom.
+                    memory: 3G
                 reservations:
                     memory: 512M
         healthcheck:
@@ -48,7 +85,7 @@ services:
             start_period: 180s
         environment:
             - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
-            - NODE_OPTIONS=--max-old-space-size=1200 --max-semi-space-size=64
+            - NODE_OPTIONS=--max-old-space-size=2560 --max-semi-space-size=64
             - DEBUG_PORT=9229
             - API_LOG_PRETTY=true
             - CHOKIDAR_USEPOLLING=false
@@ -61,13 +98,25 @@ services:
     worker:
         <<: *app-service-defaults
         container_name: kodus_worker
+        depends_on:
+            rabbitmq:
+                condition: service_healthy
+                # Optional so the compose file still validates when the
+                # `local-db` profile is not active (e.g. pointing at an
+                # external RabbitMQ). When the local rabbitmq IS running,
+                # docker waits for its healthcheck before starting.
+                required: false
         volumes:
             - .:/usr/src/app:delegated
             - node_modules_cache:/usr/src/app/node_modules:nocopy
+            - yarn_cache:/yarn-cache
+            - logs_data:/usr/src/app/logs
             - yalc_store:/root/.yalc
         ports:
-            - '9231:9231'
-            - '8001:8001'
+            # See kodus-api comment on host-side port parametrization for
+            # worktree coexistence.
+            - '${API_WORKER_DEBUG_PORT:-9231}:9231'
+            - '${API_WORKER_METRICS_PORT:-8001}:8001'
         command: yarn start:dev:worker
         deploy:
             resources:
@@ -76,31 +125,126 @@ services:
                 reservations:
                     memory: 512M
         healthcheck:
-            test: ['CMD', 'node', '-e', 'process.exit(0)']
+            # `node -e 'process.exit(0)'` always passed regardless of app
+            # state — combined with the silent OOM bug fixed above, the
+            # container could be in a restart loop and still report
+            # healthy. pgrep matches the actual nest watch process so a
+            # crashed dev server is detected. procps is installed in the
+            # dev image (see Dockerfile.dev).
+            test: ['CMD-SHELL', 'pgrep -f "nest start worker" >/dev/null']
             interval: 30s
             timeout: 10s
             retries: 3
             start_period: 60s
         environment:
             - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
-            - NODE_OPTIONS=--max-semi-space-size=64
+            # V8 heap kept below the 2G container cap (with ~500M headroom
+            # for native modules, thread stacks, and Node runtime overhead).
+            # Previously set to 4096M, which let V8 try to grow past the
+            # cgroup limit — kernel OOM-killed the process silently while
+            # the trivial healthcheck kept reporting "healthy".
+            - NODE_OPTIONS=--max-old-space-size=1536 --max-semi-space-size=64
             - DEBUG_PORT=9231
             - COMPONENT_TYPE=worker
             - API_LOG_PRETTY=true
+            - PYROSCOPE_SERVER_ADDRESS=${PYROSCOPE_SERVER_ADDRESS:-http://pyroscope:4040}
+            - PYROSCOPE_HEAP_PROFILING=${PYROSCOPE_HEAP_PROFILING:-false}
+            - WORKER_ROLE=code-review
+
+    # Analytics-only worker — isolates the cockpit ingestion cron from
+    # the code review event loop / pools. Runs in both cloud and
+    # self-hosted so the topology stays identical across environments
+    # (same pipeline, same bugs, same fixes — see issue #951).
+    worker-analytics:
+        <<: *app-service-defaults
+        container_name: kodus_analytics_worker
+        # Opt-in. Default `yarn docker:start` leaves this off — the cockpit
+        # ingestion cron isn't useful for most dev flows and costs ~700 MiB
+        # idle (Nest DI + ts-node-dev watch). Bring it up explicitly via
+        # `KODUS_DEV_EXTRAS=analytics yarn docker:start` (or `=extras` for
+        # all opt-in services).
+        profiles:
+            - analytics
+            - extras
+        depends_on:
+            rabbitmq:
+                condition: service_healthy
+                required: false
+        volumes:
+            - .:/usr/src/app:delegated
+            - node_modules_cache:/usr/src/app/node_modules:nocopy
+            - yarn_cache:/yarn-cache
+            - logs_data:/usr/src/app/logs
+            - yalc_store:/root/.yalc
+        ports:
+            # See kodus-api comment on host-side port parametrization for
+            # worktree coexistence. Container side is 8001 (same as the
+            # code-review worker — they're the same image; only WORKER_ROLE
+            # differs); host side is offset to 8011 so both workers can
+            # publish metrics in parallel.
+            - '${API_WORKER_ANALYTICS_DEBUG_PORT:-9241}:9241'
+            - '${API_WORKER_ANALYTICS_METRICS_PORT:-8011}:8001'
+        command: yarn start:dev:worker
+        deploy:
+            resources:
+                limits:
+                    # Bumped from 1G after a smoke test on the heap-fixed
+                    # config showed steady-state RSS around 900MiB (~90%
+                    # of a 1G cap) — too tight for the cron-driven
+                    # analytics ingestion pipeline to absorb spikes.
+                    # Heap remains capped at 768M (see env block below);
+                    # the extra 0.5G is headroom for native modules,
+                    # thread stacks, and ingestion buffers.
+                    memory: 1.5G
+                reservations:
+                    memory: 256M
+        healthcheck:
+            # See worker service for rationale — pgrep replaces the
+            # always-passing trivial check.
+            test: ['CMD-SHELL', 'pgrep -f "nest start worker" >/dev/null']
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 60s
+        environment:
+            - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
+            # V8 heap kept below the 1G container cap. 1536M heap on a
+            # 1G cgroup let V8 grow past the limit and triggered silent
+            # OOM kills — see worker service comment.
+            - NODE_OPTIONS=--max-old-space-size=768 --max-semi-space-size=64
+            - DEBUG_PORT=9241
+            - COMPONENT_TYPE=worker
+            - API_LOG_PRETTY=true
+            - WORKER_ROLE=analytics
+            - ANALYTICS_INGESTION_CRON=${ANALYTICS_INGESTION_CRON:-}
+            - ANALYTICS_CLASSIFIER_CRON=${ANALYTICS_CLASSIFIER_CRON:-}
+            - ANALYTICS_CLASSIFIER_DISABLED=${ANALYTICS_CLASSIFIER_DISABLED:-}
             - PYROSCOPE_SERVER_ADDRESS=${PYROSCOPE_SERVER_ADDRESS:-http://pyroscope:4040}
             - PYROSCOPE_HEAP_PROFILING=${PYROSCOPE_HEAP_PROFILING:-false}
 
     webhooks:
         <<: *app-service-defaults
         container_name: kodus_webhooks
+        depends_on:
+            rabbitmq:
+                condition: service_healthy
+                # Optional so the compose file still validates when the
+                # `local-db` profile is not active (e.g. pointing at an
+                # external RabbitMQ). When the local rabbitmq IS running,
+                # docker waits for its healthcheck before starting.
+                required: false
         volumes:
             - .:/usr/src/app:delegated
             - node_modules_cache:/usr/src/app/node_modules:nocopy
+            - yarn_cache:/yarn-cache
+            - logs_data:/usr/src/app/logs
             - yalc_store:/root/.yalc
         ports:
+            # See kodus-api comment on host-side port parametrization for
+            # worktree coexistence.
             - '${API_WEBHOOKS_PORT:-3332}:${API_WEBHOOKS_PORT:-3332}'
-            - '9232:9232'
-            - '8002:8002'
+            - '${API_WEBHOOKS_DEBUG_PORT:-9232}:9232'
+            - '${API_WEBHOOKS_METRICS_PORT:-8002}:8002'
         command: yarn start:dev:webhooks
         deploy:
             resources:
@@ -109,18 +253,85 @@ services:
                 reservations:
                     memory: 256M
         healthcheck:
-            test: ['CMD', 'node', '-e', 'process.exit(0)']
+            # See worker service for rationale — pgrep replaces the
+            # always-passing trivial check.
+            test: ['CMD-SHELL', 'pgrep -f "nest start webhooks" >/dev/null']
             interval: 30s
             timeout: 10s
             retries: 3
             start_period: 60s
         environment:
             - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
-            - NODE_OPTIONS=--max-semi-space-size=64
+            # V8 heap kept below the 1G container cap. 4096M heap on a
+            # 1G cgroup let V8 grow past the limit and triggered silent
+            # OOM kills — see worker service comment.
+            - NODE_OPTIONS=--max-old-space-size=768 --max-semi-space-size=64
             - DEBUG_PORT=9232
             - API_LOG_PRETTY=true
             - PYROSCOPE_SERVER_ADDRESS=${PYROSCOPE_SERVER_ADDRESS:-http://pyroscope:4040}
             - PYROSCOPE_HEAP_PROFILING=${PYROSCOPE_HEAP_PROFILING:-false}
+
+    mcp-manager:
+        <<: *app-service-defaults
+        image: kodus-ai-mcp-manager:latest
+        container_name: kodus-mcp-manager
+        # Opt-in. Default `yarn docker:start` leaves this off — the web UI
+        # degrades gracefully (MCP setup/plugins pages show empty state).
+        # Bring it up via `KODUS_DEV_EXTRAS=mcp yarn docker:start` (or
+        # `=extras` for all opt-in services).
+        profiles:
+            - mcp
+            - extras
+        ports:
+            # See kodus-api comment on host-side port parametrization for
+            # worktree coexistence.
+            - '${API_MCP_MANAGER_PORT:-3101}:${API_MCP_MANAGER_PORT:-3101}'
+            - '${API_MCP_MANAGER_DEBUG_PORT:-9230}:9230'
+        # mcp-manager owns its own schema. ensure-schema + migration
+        # run inline before the dev server boots (see fix(mcp-manager):
+        # isolate migration ownership from API entrypoint). The api
+        # service's dev-entrypoint.sh no longer touches it.
+        command: sh -c 'yarn mcp-manager:ensure-schema && yarn mcp-manager:migration:run:internal && yarn start:dev:mcp-manager'
+        deploy:
+            resources:
+                limits:
+                    memory: 1G
+                reservations:
+                    memory: 256M
+        healthcheck:
+            test:
+                [
+                    'CMD-SHELL',
+                    'node -e "const http=require(''http''); const port=process.env.API_MCP_MANAGER_PORT||3101; const req=http.get({host:''127.0.0.1'', port, path:''/health'', timeout:2000}, (res)=>process.exit(res.statusCode===200?0:1)); req.on(''error'', ()=>process.exit(1)); req.on(''timeout'', ()=>{ req.destroy(); process.exit(1); });"',
+                ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 60s
+        environment:
+            # mcp-manager always runs its own ensure-schema + migration
+            # via the `command:` above (and via prod-entrypoint-mcp-manager
+            # in prod). We force RUN_MIGRATIONS=false here so the shared
+            # dev-entrypoint.sh doesn't ALSO run the API/analytics
+            # migrations from inside this container — those belong to the
+            # api/worker services, not here.
+            - RUN_MIGRATIONS=false
+            # V8 heap kept below the 1G container cap with headroom for
+            # native modules and runtime overhead.
+            - NODE_OPTIONS=--max-old-space-size=768 --max-semi-space-size=64
+            - DEBUG_PORT=9230
+            - API_MCP_MANAGER_PORT=${API_MCP_MANAGER_PORT:-3101}
+            - API_MCP_MANAGER_LOG_LEVEL=${API_MCP_MANAGER_LOG_LEVEL:-info}
+            - API_MCP_MANAGER_NODE_ENV=${API_MCP_MANAGER_NODE_ENV:-development}
+            - API_MCP_MANAGER_DATABASE_ENV=${API_MCP_MANAGER_DATABASE_ENV:-development}
+            - API_MCP_MANAGER_CORS_ORIGINS=${API_MCP_MANAGER_CORS_ORIGINS:-*}
+            - API_MCP_MANAGER_JWT_SECRET=${API_MCP_MANAGER_JWT_SECRET:-}
+            - API_MCP_MANAGER_ENCRYPTION_SECRET=${API_MCP_MANAGER_ENCRYPTION_SECRET:-}
+            - API_MCP_MANAGER_PG_DB_SCHEMA=${API_MCP_MANAGER_PG_DB_SCHEMA:-mcp-manager}
+            - API_MCP_MANAGER_MCP_PROVIDERS=${API_MCP_MANAGER_MCP_PROVIDERS:-kodusmcp,composio,custom}
+            - API_MCP_MANAGER_REDIRECT_URI=${API_MCP_MANAGER_REDIRECT_URI:-http://localhost:3000/setup/mcp/oauth}
+            - API_MCP_MANAGER_COMPOSIO_BASE_URL=${API_MCP_MANAGER_COMPOSIO_BASE_URL:-https://backend.composio.dev/api/v3}
+            - API_MCP_MANAGER_COMPOSIO_API_KEY=${API_MCP_MANAGER_COMPOSIO_API_KEY:-}
 
     #----------------------------------------------------------------
     # Web Frontend
@@ -139,6 +350,14 @@ services:
             - ${ENV_FILE:-.env}
         volumes:
             - ./apps/web:/usr/src/app:delegated
+            # Mount shared monorepo libs at the location apps/web's
+            # tsconfig path `@libs/*` (= "../../libs/*" relative to
+            # apps/web baseUrl) resolves to inside the container —
+            # `/usr/src/app/../../libs/` = `/usr/libs/`. Without this,
+            # web server components that import from `@libs/feature-gate`
+            # fail with "module not found" because the libs/ directory
+            # only lives on the host bind-mount of `apps/web`.
+            - ./libs:/usr/libs:delegated
             - web_node_modules_cache:/usr/src/app/node_modules
             - web_next_cache:/usr/src/app/.next
             - yalc_store:/root/.yalc
@@ -168,13 +387,20 @@ services:
                     memory: 2G
                 reservations:
                     memory: 512M
+        logging: *default-logging
 
     #----------------------------------------------------------------
     # Observability & Profiling
     #----------------------------------------------------------------
     pyroscope:
+        # `profiling` is the historic, explicit profile (activated by
+        # `ENABLE_PROFILING=true` or `yarn docker:start:profiling`).
+        # `extras` is the new umbrella alongside mcp-manager and
+        # worker-analytics — `yarn docker:start:full` brings everything
+        # up in one command.
         profiles:
             - profiling
+            - extras
             - infra
         image: docker.io/grafana/pyroscope:latest
         container_name: pyroscope
@@ -185,14 +411,12 @@ services:
         networks:
             - kodus-backend-services
         restart: unless-stopped
+        logging: *default-logging
 
     #----------------------------------------------------------------
     # Databases & Infrastructure
     #----------------------------------------------------------------
     rabbitmq:
-        profiles:
-            - local-db
-            - infra
         build:
             context: ./docker/rabbitMQ
             dockerfile: Dockerfile
@@ -202,6 +426,11 @@ services:
             - '5672:5672'
             - '15672:15672'
             - '15692:15692'
+        environment:
+            - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER:-dev}
+            - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS:-devpass}
+            - RABBITMQ_HOSTNAME=${RABBITMQ_HOSTNAME:-rabbitmq}
+            - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit disk_free_limit 1000000000 -rabbit heartbeat 60
         volumes:
             - rabbitmq-data:/var/lib/rabbitmq
         restart: unless-stopped
@@ -223,17 +452,11 @@ services:
             nofile:
                 soft: 65536
                 hard: 65536
-        environment:
-            RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-dev}
-            RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-devpass}
-            RABBITMQ_HOSTNAME: ${RABBITMQ_HOSTNAME:-rabbitmq}
-            RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: '-rabbit heartbeat 60'
+        logging: *default-logging
+
         command: /usr/local/bin/init-definitions.sh
 
     db_postgres:
-        profiles:
-            - local-db
-            - infra
         image: docker.io/pgvector/pgvector:pg16
         container_name: db_postgres
         ports:
@@ -258,11 +481,9 @@ services:
             timeout: 3s
             retries: 20
             start_period: 10s
+        logging: *default-logging
 
     db_mongodb:
-        profiles:
-            - local-db
-            - infra
         image: docker.io/mongo:8
         container_name: mongodb
         ports:
@@ -286,10 +507,13 @@ services:
             timeout: 5s
             retries: 20
             start_period: 20s
+        logging: *default-logging
 
 volumes:
     yalc_store:
     node_modules_cache:
+    yarn_cache:
+    logs_data:
     web_node_modules_cache:
     web_next_cache:
     pgdata:

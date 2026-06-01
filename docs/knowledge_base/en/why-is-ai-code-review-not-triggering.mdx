@@ -1,0 +1,58 @@
+---
+title: "Why is my AI code review not triggering"
+description: "Common reasons and fixes when Kodus doesn't automatically review your pull requests."
+---
+
+If Kodus isn't reviewing your PRs, check these common causes:
+
+## 1. Automated review is disabled
+
+Verify that automated reviews are enabled:
+- Go to **Code Review Settings** → **General**
+- Check that **Automated Review** is turned on
+- Or verify in `kodus-config.yml`:
+
+```yaml
+automatedReviewActive: true
+```
+
+## 2. Webhook is not configured
+
+Kodus needs webhooks to know when a PR is opened or updated:
+- Go to your Git provider's webhook settings
+- Verify the Kodus webhook URL is registered and active
+- Check for failed delivery attempts
+
+## 3. PR title matches an ignored keyword
+
+If the PR title contains an ignored keyword, Kodus skips the review:
+
+```yaml
+ignoredTitleKeywords:
+  - "release"
+  - "WIP"
+```
+
+Check your `ignoredTitleKeywords` setting.
+
+## 4. Base branch is not monitored
+
+By default, Kodus reviews PRs targeting the default branch. If your PR targets a different branch, add it to `baseBranches`:
+
+```yaml
+baseBranches:
+  - develop
+  - staging
+```
+
+## 5. Review cadence is set to manual
+
+If review cadence is set to **Manual**, Kodus only reviews when you comment `@kody start-review`.
+
+## 6. Auto-pause is active
+
+If you've pushed multiple times quickly, auto-pause may have kicked in. Wait for the cooldown period or comment `@kody start-review` to trigger manually.
+
+## Still not working?
+
+Try commenting `@kody start-review` on the PR to trigger a manual review. If that doesn't work, check the [Troubleshooting guide](/how_to_use/en/code_review/troubleshooting).

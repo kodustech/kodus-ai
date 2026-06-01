@@ -1,0 +1,49 @@
+---
+title: "Inicio de Sesión Único"
+description: "Habilita el Inicio de Sesión Único (SSO) para un acceso seguro y eficiente a Kodus."
+---
+
+## Descripción General
+
+El Inicio de Sesión Único (SSO) te permite gestionar el acceso a Kodus a través de un único proveedor de identidad, simplificando la autenticación y mejorando la seguridad.
+
+## Primeros Pasos
+
+<Steps>
+    <Step title="Acceder a la configuración de SSO">
+        Navega a la configuración de tu organización en
+        [app.kodus.io/organization/sso](https://app.kodus.io/organization/sso)
+    </Step>
+
+    <Step title="Completa la configuración de tu IdP">
+        Completa la configuración de tu IdP, como su ID de emisor, su URL y el certificado de firma. Estos pueden completarse manualmente o proporcionando la URL de metadatos de tu IdP o un archivo XML de metadatos.
+
+        <Info>
+            Estos valores generalmente se encuentran en la documentación de tu IdP o en su consola de administración.
+        </Info>
+    </Step>
+
+    <Step title="Configura Kodus como SP en tu IdP">
+        Configura Kodus como SP en tu IdP proporcionando nuestro ID de entidad (`kodus-orchestrator` de forma predeterminada) y la URL de callback de tu organización que se encuentra en la página de configuración de SSO.
+
+        Asegúrate de que el formato del ID de nombre esté configurado como correo electrónico.
+
+        <Warning>
+            Asegúrate de deshabilitar los certificados de firma en la configuración SP de tu IdP.
+        </Warning>
+    </Step>
+
+    <Step title="Habilitar y probar SSO">
+        Habilita SSO en Kodus y prueba la configuración cerrando sesión e iniciando sesión nuevamente. Al intentar iniciar sesión con un dominio de correo electrónico asociado a tu IdP, tendrás la opción de iniciar sesión mediante SSO.
+    </Step>
+
+</Steps>
+
+## Configuración Opcional
+
+### Mapeo de Atributos
+
+Puedes mapear los siguientes atributos de tu IdP a los usuarios de Kodus, mejorando la experiencia del usuario.
+
+-   Nombre, mapeado a `firstName`
+-   Apellido, mapeado a `lastName`

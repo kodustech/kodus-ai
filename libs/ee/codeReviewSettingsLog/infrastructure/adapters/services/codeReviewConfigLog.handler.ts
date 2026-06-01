@@ -73,9 +73,6 @@ const PROPERTY_CONFIGS: Record<string, PropertyConfig> = {
     'showStatusFeedback': {
         actionDescription: 'Show Status Feedback',
     },
-    'crossFileDependenciesAnalysis': {
-        actionDescription: 'Crossfile Dependencies Analysis',
-    },
     'enableCommittableSuggestions': {
         actionDescription: 'Committable Suggestions',
     },

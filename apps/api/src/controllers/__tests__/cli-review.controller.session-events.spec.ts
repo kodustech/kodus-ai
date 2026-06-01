@@ -49,6 +49,9 @@ describe('CliReviewController.ingestSessionEvent', () => {
 
         controller = new CliReviewController(
             {} as any, // executeCliReviewUseCase
+            { execute: jest.fn() } as any, // enqueueCliReviewUseCase
+            { execute: jest.fn() } as any, // getCliReviewJobStatusUseCase
+            { execute: jest.fn() } as any, // waitForCliReviewJobUseCase
             ingestUseCase as any, // ingestSessionEventUseCase
             {} as any, // submitCliSessionCaptureUseCase
             {} as any, // trialRateLimiter

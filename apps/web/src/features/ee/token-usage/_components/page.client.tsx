@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@components/ui/card";
-import { BaseUsageContract, ModelPricingInfo } from "@services/usage/types";
+import {
+    BaseUsageContract,
+    ModelPricingInfo,
+    TokenPrice,
+} from "@services/usage/types";
 import { DateRangePicker } from "src/features/ee/cockpit/_components/date-range-picker";
 
 import { useTokenUsageFilters } from "../_hooks/filter.hook";
@@ -12,32 +16,50 @@ import { Filters } from "./filters";
 import { NoData } from "./no-data";
 import { SummaryCards } from "./summary-cards";
 
-const calculateCost = (
-    model: ModelPricingInfo,
-    inputTokens: number,
-    outputTokens: number,
-    outputReasoningTokens: number,
-) => {
+type UsageForCost = {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+};
+
+/**
+ * Cost math MUST stay in sync with the backend `CostEstimateUseCase`:
+ *  - Reasoning tokens are already inside outputTokens (do NOT add them again).
+ *  - Cache reads are a subset of input — subtract before billing.
+ *  - Use the >200K tier rate when the aggregate input suggests calls
+ *    routinely exceed that threshold (matches backend heuristic).
+ */
+const pickRate = (price: TokenPrice | undefined, useAbove200k: boolean) => {
+    if (!price) return 0;
+    if (useAbove200k && typeof price.above200k === "number") {
+        return price.above200k;
+    }
+    return price.default ?? 0;
+};
+
+const calculateCost = (model: ModelPricingInfo, usage: UsageForCost) => {
     if (!model || !model.pricing) {
-        return {
-            inputCost: 0,
-            outputCost: 0,
-            outputReasoningCost: 0,
-            totalCost: 0,
-        };
+        return { inputCost: 0, outputCost: 0, cacheCost: 0, totalCost: 0 };
     }
 
-    const inputCost = model.pricing.prompt * (inputTokens ?? 0);
-    const outputCost = model.pricing.completion * (outputTokens ?? 0);
-    const outputReasoningCost =
-        model.pricing.internal_reasoning * (outputReasoningTokens ?? 0);
-    const totalCost = inputCost + outputCost + outputReasoningCost;
+    const useAbove200k = usage.input > 200_000;
+    const inputRate = pickRate(model.pricing.input, useAbove200k);
+    const outputRate = pickRate(model.pricing.output, useAbove200k);
+    const cacheReadRate = pickRate(model.pricing.cacheRead, useAbove200k);
+    const cacheWriteRate = pickRate(model.pricing.cacheWrite, useAbove200k);
+
+    const uncachedInput = Math.max(0, usage.input - usage.cacheRead);
+    const inputCost = uncachedInput * inputRate;
+    const outputCost = usage.output * outputRate;
+    const cacheCost =
+        usage.cacheRead * cacheReadRate + usage.cacheWrite * cacheWriteRate;
 
     return {
         inputCost,
         outputCost,
-        outputReasoningCost,
-        totalCost,
+        cacheCost,
+        totalCost: inputCost + outputCost + cacheCost,
     };
 };
 
@@ -73,12 +95,9 @@ export const TokenUsagePageClient = ({
                 output: 0,
                 total: 0,
                 outputReasoning: 0,
-                inputCost: 0,
-                outputCost: 0,
-                outputReasoningCost: 0,
+                cacheRead: 0,
+                cacheWrite: 0,
                 totalCost: 0,
-                usageByModel: {},
-                costByModel: {},
             };
         }
 
@@ -89,6 +108,8 @@ export const TokenUsagePageClient = ({
                 output: number;
                 total: number;
                 outputReasoning: number;
+                cacheRead: number;
+                cacheWrite: number;
             }
         > = {};
 
@@ -98,6 +119,8 @@ export const TokenUsagePageClient = ({
                 output: 0,
                 total: 0,
                 outputReasoning: 0,
+                cacheRead: 0,
+                cacheWrite: 0,
             };
         });
 
@@ -108,6 +131,8 @@ export const TokenUsagePageClient = ({
                 usageByModel[day.model].total += day?.total ?? 0;
                 usageByModel[day.model].outputReasoning +=
                     day?.outputReasoning ?? 0;
+                usageByModel[day.model].cacheRead += day?.cacheRead ?? 0;
+                usageByModel[day.model].cacheWrite += day?.cacheWrite ?? 0;
             }
         });
 
@@ -115,23 +140,27 @@ export const TokenUsagePageClient = ({
         let totalOutput = 0;
         let totalTokens = 0;
         let totalOutputReasoning = 0;
+        let totalCacheRead = 0;
+        let totalCacheWrite = 0;
         let totalCostAllModels = 0;
 
         for (const model of selectedModels) {
             const modelUsage = usageByModel[model];
             const modelPricing = pricing[model];
             if (modelUsage && modelPricing) {
-                const cost = calculateCost(
-                    modelPricing,
-                    modelUsage.input,
-                    modelUsage.output,
-                    modelUsage.outputReasoning,
-                );
+                const cost = calculateCost(modelPricing, {
+                    input: modelUsage.input,
+                    output: modelUsage.output,
+                    cacheRead: modelUsage.cacheRead,
+                    cacheWrite: modelUsage.cacheWrite,
+                });
 
                 totalInput += modelUsage.input;
                 totalOutput += modelUsage.output;
                 totalTokens += modelUsage.total;
                 totalOutputReasoning += modelUsage.outputReasoning;
+                totalCacheRead += modelUsage.cacheRead;
+                totalCacheWrite += modelUsage.cacheWrite;
                 totalCostAllModels += cost.totalCost;
             }
         }
@@ -141,6 +170,8 @@ export const TokenUsagePageClient = ({
             output: totalOutput,
             total: totalTokens,
             outputReasoning: totalOutputReasoning,
+            cacheRead: totalCacheRead,
+            cacheWrite: totalCacheWrite,
             totalCost: totalCostAllModels,
         };
     }, [filteredData, selectedModels, pricing]);

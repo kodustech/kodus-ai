@@ -1,0 +1,34 @@
+---
+title: "更新"
+description: "更新您的 Kodus 安装。"
+icon: "arrow-up"
+---
+
+<Note>
+  包含自托管匿名遥测的版本默认启用,每天向 `telemetry.kodus.io` 发送一次
+  心跳,仅包含聚合计数器 — 不包含代码、名称或标识符。使用
+  `yarn telemetry:preview` 检查将发送的内容,或设置
+  `KODUS_TELEMETRY_DISABLED=true` 选择退出。完整 schema 和策略请参阅
+  [匿名遥测](/how_to_deploy/zh/deploy_kodus/telemetry)。
+</Note>
+
+要将您的 Kodus 安装更新到最新版本：
+
+```bash
+# 导航到您的 Kodus 安装目录
+cd kodus-installer
+
+# 从仓库拉取最新更改
+git pull
+
+# 如果您从 1.x 升级，请使用新的 2.0 变量更新您的 .env
+#（RabbitMQ、MCP Manager 和 webhook）。
+
+# 重新运行安装器以拉取镜像、启动服务并运行迁移
+./scripts/install.sh
+
+# 可选：运行诊断
+./scripts/doctor.sh
+```
+
+

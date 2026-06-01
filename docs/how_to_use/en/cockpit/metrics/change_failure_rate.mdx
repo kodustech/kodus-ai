@@ -1,0 +1,68 @@
+---
+title: "Bug Ratio"
+description: "Measure the percentage of PRs that are bug fixes (also known as Change Failure Rate)"
+---
+
+## What is Bug Ratio
+
+Bug Ratio measures the percentage of Pull Requests that are bug fixes or corrections in relation to the total number of PRs. This metric helps you understand how much of your development effort is spent fixing issues versus building new features. It can also be read as "Change Failure Rate" - the rate at which changes result in failures.
+
+## How We Calculate It
+
+We automatically identify which PRs are bug fixes using AI language models (LLM) that analyze the Pull Request names and descriptions. The system then calculates the percentage of bug-related work relative to your total PR activity.
+
+**What We Track:**
+- PRs identified as bug fixes by AI analysis
+- Total number of PRs in the period
+- The percentage of bug-related work
+
+**How It's Calculated:**
+```
+Bug Ratio = (Bug Fix PRs) ÷ (Total PRs) × 100
+```
+
+For example, if 3 out of 15 PRs are identified as bug fixes, your bug ratio is 20%.
+
+**How We Identify Bug Fixes:**
+We use advanced language models to analyze PR titles and automatically classify them. The AI looks for patterns like:
+- "Fix bug in..." or "Bug fix for..."
+- "Resolve issue with..." or "Fix problem in..."
+- "Patch for..." or "Hotfix:..."
+
+## Why It Matters
+
+The Bug Ratio is a key indicator of your team's development focus and code quality. Understanding this ratio helps you:
+
+- **Development Focus**: See how much time is spent fixing vs. building
+- **Code Quality**: Identify if you're spending too much time on bugs
+- **Process Improvement**: Understand if your development process needs optimization
+- **Resource Planning**: Plan how much effort to allocate to bug fixes
+
+## How to Improve
+
+- Implement comprehensive testing strategies (unit, integration, E2E)
+- Use automated tools (linters, static analyzers) pre-production
+- Ensure thorough code reviews for all changes
+- Break large features into smaller, testable pieces
+- Use feature flags for safer deployments
+- Conduct post-incident reviews to prevent recurrence
+
+## Best Practices for PR Naming
+
+To help the AI accurately identify bug fixes, consider these naming conventions:
+
+### Good Bug Fix PR Names
+- "Fix: User login fails with invalid credentials"
+- "Bug fix: Memory leak in data processing module"
+- "Resolve issue: API returns 500 error for large requests"
+- "Patch: Fix null pointer exception in user service"
+
+### Avoid Vague Names
+- "Fix stuff" or "Bug fix"
+- "Update code" or "Improve performance"
+- "Fix things" or "Resolve issues"
+
+### Feature vs Bug Fix
+- **Bug Fix**: "Fix: Payment validation fails for expired cards"
+- **Feature**: "Add: New payment method support"
+- **Improvement**: "Enhance: Payment validation error messages"

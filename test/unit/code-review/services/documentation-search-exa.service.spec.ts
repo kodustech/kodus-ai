@@ -1,6 +1,7 @@
 import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { DocumentationSearchCacheService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-cache.service';
 import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
+import { ObservabilityService } from '@libs/core/log/observability.service';
 import { ConfigService } from '@nestjs/config';
 
 const exaSearchMock = jest.fn();
@@ -10,6 +11,15 @@ jest.mock('exa-js', () => {
         search: exaSearchMock,
     }));
 });
+
+function buildObservabilityMock(): ObservabilityService {
+    return {
+        runLLMInSpan: jest.fn(async ({ exec }) => {
+            const result = await exec([]);
+            return { result };
+        }),
+    } as unknown as ObservabilityService;
+}
 
 describe('DocumentationSearchExaService', () => {
     function buildCacheServiceMock(params?: { cachedItem?: any }) {
@@ -56,6 +66,7 @@ describe('DocumentationSearchExaService', () => {
             configService,
             cacheService as unknown as DocumentationSearchCacheService,
             promptRunnerService,
+            buildObservabilityMock(),
         );
 
         const result = await service.searchByFilePlan({
@@ -100,6 +111,7 @@ describe('DocumentationSearchExaService', () => {
             configService,
             cacheService as unknown as DocumentationSearchCacheService,
             promptRunnerService,
+            buildObservabilityMock(),
         );
 
         const result = await service.searchByFilePlan({
@@ -152,6 +164,7 @@ describe('DocumentationSearchExaService', () => {
             configService,
             cacheService as unknown as DocumentationSearchCacheService,
             promptRunnerService,
+            buildObservabilityMock(),
         );
 
         const result = await service.searchByFilePlan({
@@ -194,6 +207,7 @@ describe('DocumentationSearchExaService', () => {
             configService,
             cacheService as unknown as DocumentationSearchCacheService,
             promptRunnerService,
+            buildObservabilityMock(),
         );
 
         const queryTasks = Array.from({ length: 7 }).map((_, index) => ({

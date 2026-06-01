@@ -116,9 +116,16 @@ async function computeTokenProjection(
                 pricingMap[model] = {
                     id: model,
                     pricing: {
+                        input: { default: pricing.prompt },
+                        output: { default: pricing.completion },
+                        cacheRead: { default: 0 },
+                        cacheWrite: { default: 0 },
                         prompt: pricing.prompt,
                         completion: pricing.completion,
-                        internal_reasoning: pricing.completion, // Same as completion
+                        // Reasoning is already inside outputTokens for our
+                        // providers; same rate as completion keeps the split
+                        // below neutral.
+                        internal_reasoning: pricing.completion,
                     },
                 };
             }

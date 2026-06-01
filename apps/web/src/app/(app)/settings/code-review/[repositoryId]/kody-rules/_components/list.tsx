@@ -1,7 +1,9 @@
 "use client";
 
-import { type KodyRule } from "@services/kodyRules/types";
-import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
+import {
+    type KodyRule,
+    type KodyRuleWithInheritanceDetails,
+} from "@services/kodyRules/types";
 
 import { KodyRuleItem } from "./item";
 
@@ -10,14 +12,24 @@ type KodyRulesListProps = {
     tab: "review-rules" | "memories";
     onAnyChange: () => void;
     showSuggestionsButton?: boolean;
+    /** Optional bulk-selection wiring. When omitted the list renders
+     *  without checkboxes. */
+    bulkSelection?: {
+        selection: ReadonlySet<string>;
+        onToggle: (ruleId: string) => void;
+        isEligible: (rule: KodyRuleWithInheritanceDetails) => boolean;
+    };
+    /** Repo's `ideRulesSyncEnabled`; forwarded to each row's OriginBadge. */
+    syncEnabledForRepo?: boolean;
 };
 
 export const KodyRulesList = ({
     rules,
     tab,
     onAnyChange,
+    bulkSelection,
+    syncEnabledForRepo,
 }: KodyRulesListProps) => {
-    const { kodyRuleSuggestions } = useFeatureFlags();
     const entityLabel = tab === "memories" ? "memories" : "rules";
 
     if (rules.length === 0) {
@@ -30,17 +42,33 @@ export const KodyRulesList = ({
 
     return (
         <div className="grid grid-cols-2 gap-2">
-            {rules.map((rule) => (
-                <KodyRuleItem
-                    key={rule.uuid}
-                    rule={rule}
-                    tab={tab}
-                    onAnyChange={onAnyChange}
-                    showSuggestionsButton={
-                        tab === "review-rules" && kodyRuleSuggestions
-                    }
-                />
-            ))}
+            {rules.map((rule) => {
+                const selection =
+                    bulkSelection && rule.uuid
+                        ? {
+                              isSelected: bulkSelection.selection.has(
+                                  rule.uuid,
+                              ),
+                              eligible: bulkSelection.isEligible(
+                                  rule as KodyRuleWithInheritanceDetails,
+                              ),
+                              onToggle: () =>
+                                  bulkSelection.onToggle(rule.uuid as string),
+                          }
+                        : undefined;
+
+                return (
+                    <KodyRuleItem
+                        key={rule.uuid}
+                        rule={rule}
+                        tab={tab}
+                        onAnyChange={onAnyChange}
+                        showSuggestionsButton={tab === "review-rules"}
+                        selection={selection}
+                        syncEnabledForRepo={syncEnabledForRepo}
+                    />
+                );
+            })}
         </div>
     );
 };

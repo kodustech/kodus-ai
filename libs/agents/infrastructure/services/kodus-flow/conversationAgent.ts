@@ -20,7 +20,13 @@ import {
 
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
+import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { BaseAgentProvider } from './base-agent.provider';
+import {
+    CONVERSATION_FALLBACK_MESSAGE,
+    normalizeConversationResponse,
+} from './conversation-response.util';
+import { buildNativeToolConfigs } from './native-tools.factory';
 
 @Injectable()
 export class ConversationAgentProvider extends BaseAgentProvider {
@@ -110,6 +116,7 @@ export class ConversationAgentProvider extends BaseAgentProvider {
     private async initialize(
         organizationAndTeamData: OrganizationAndTeamData,
         userLanguage: string,
+        sandbox?: SandboxInstance,
     ) {
         await this.createMCPAdapter(organizationAndTeamData);
         await this.createOrchestration();
@@ -122,6 +129,26 @@ export class ConversationAgentProvider extends BaseAgentProvider {
                 message: 'MCP offline, prosseguindo.',
                 context: ConversationAgentProvider.name,
                 error,
+            });
+        }
+
+        // Register native tools (grep, readFile, listDir, exec) backed by the
+        // sandbox. Sandbox is captured by closure so each tool call hits the
+        // sandbox provided in this request — concurrent @kody requests on
+        // different PRs share NO sandbox state.
+        if (sandbox) {
+            const nativeTools = buildNativeToolConfigs(sandbox);
+            for (const cfg of nativeTools) {
+                this.orchestration.createTool(cfg);
+            }
+            this.logger.log({
+                message: 'Native sandbox tools registered',
+                context: ConversationAgentProvider.name,
+                metadata: {
+                    sandboxType: sandbox.type,
+                    toolCount: nativeTools.length,
+                    toolNames: nativeTools.map((t) => t.name),
+                },
             });
         }
 
@@ -156,9 +183,10 @@ export class ConversationAgentProvider extends BaseAgentProvider {
             organizationAndTeamData: OrganizationAndTeamData;
             prepareContext?: any;
             thread?: Thread;
+            sandbox?: SandboxInstance;
         },
     ) {
-        const { organizationAndTeamData, prepareContext, thread } =
+        const { organizationAndTeamData, prepareContext, thread, sandbox } =
             context || ({} as any);
         try {
             if (
@@ -187,12 +215,13 @@ export class ConversationAgentProvider extends BaseAgentProvider {
 
             await this.fetchBYOKConfig(organizationAndTeamData);
 
-            await this.initialize(organizationAndTeamData, userLanguage);
+            await this.initialize(organizationAndTeamData, userLanguage, sandbox);
 
             const preparedPrompt = this.buildPromptWithMemoryBootstrap(
                 prompt,
                 prepareContext,
                 organizationAndTeamData,
+                sandbox,
             );
 
             const result = await this.orchestration.callAgent(
@@ -222,9 +251,24 @@ export class ConversationAgentProvider extends BaseAgentProvider {
                 },
             });
 
-            return typeof result.result === 'string'
-                ? result.result
-                : JSON.stringify(result.result);
+            const response = normalizeConversationResponse(result.result);
+
+            if (response === null) {
+                this.logger.warn({
+                    message: 'Conversation agent produced no usable response',
+                    context: ConversationAgentProvider.name,
+                    serviceName: ConversationAgentProvider.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        thread,
+                        rawResult: result.result,
+                        rawResultType: typeof result.result,
+                    },
+                });
+                return CONVERSATION_FALLBACK_MESSAGE;
+            }
+
+            return response;
         } catch (error) {
             this.logger.error({
                 message: 'Error during conversation agent execution',
@@ -240,6 +284,7 @@ export class ConversationAgentProvider extends BaseAgentProvider {
         prompt: string,
         prepareContext: any,
         organizationAndTeamData: OrganizationAndTeamData,
+        sandbox?: SandboxInstance,
     ): string {
         const organizationId =
             organizationAndTeamData?.organizationId?.toString() || '';
@@ -253,17 +298,33 @@ export class ConversationAgentProvider extends BaseAgentProvider {
             limit: 20,
         };
 
-        const instructions = [
+        const sections: string[] = [
             'CRITICAL FIRST ACTION (MANDATORY):',
             '- Before any reasoning, analysis, or other tool call, invoke KODUS_FIND_MEMORIES.',
             '- Use this exact payload as your first memory lookup:',
             JSON.stringify(memoryPayload, null, 2),
             '- If the tool fails, is unavailable, or returns no matches, continue normally.',
             '- If matches are found, treat them as high-priority context constraints for your response.',
-            '',
-            'USER PROMPT:',
-            prompt,
-        ].join('\n');
+        ];
+
+        // When a sandbox is available, the orchestration has registered native
+        // repo-aware tools (grep, readFile, listDir, exec). Tell the agent so
+        // it actually uses them instead of guessing from the prompt alone.
+        if (sandbox && sandbox.type !== 'null') {
+            sections.push(
+                '',
+                'REPOSITORY TOOLS (available — use them to ground your answer in real code):',
+                '- grep({ pattern, path?, glob? }): regex search across the repo. First reach for this when the user asks about code, config, or behavior.',
+                '- readFile({ path, start, end }): read a file slice between two 1-indexed line numbers. Use after grep to inspect the matched site.',
+                '- listDir({ path, maxDepth }): list files/folders to explore unfamiliar areas of the repo.',
+                '- exec({ command }): run a read-only shell command (e.g. `git log`, `cat package.json`) for ad-hoc inspection.',
+                '- Prefer multiple short tool calls over one long shell invocation. Cite file paths and line numbers in your final reply.',
+            );
+        }
+
+        sections.push('', 'USER PROMPT:', prompt);
+
+        const instructions = sections.join('\n');
 
         return instructions;
     }

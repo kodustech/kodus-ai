@@ -5,7 +5,6 @@ import { Heading } from "@components/ui/heading";
 import { Switch } from "@components/ui/switch";
 import { useSuspenseGetConnections } from "@services/setup/hooks";
 import { Controller, useFormContext } from "react-hook-form";
-import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { PlatformType } from "src/core/types";
 import { safeArray } from "src/core/utils/safe-array";
@@ -26,11 +25,6 @@ export const EnableCommittableSuggestions = () => {
     const { teamId } = useSelectedTeamId();
     const connections = useSuspenseGetConnections(teamId);
     const isCodeManagementGithub = hasGithubConnection(connections);
-    const { committableSuggestions } = useFeatureFlags();
-
-    if (!committableSuggestions) {
-        return null;
-    }
 
     return (
         <div className="flex flex-col gap-2">

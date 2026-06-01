@@ -1,0 +1,32 @@
+---
+title: "Asignación Automática de Licencias"
+---
+
+La función de Asignación Automática de Licencias simplifica la gestión de licencias de desarrolladores dentro de tu organización. En lugar de asignar licencias manualmente a cada desarrollador, Kodus puede asignar automáticamente una licencia a los colaboradores activos.
+
+## Cómo Funciona
+
+Cuando está habilitada, Kodus monitorea la actividad de pull requests en tus repositorios.
+
+-   **Asignación Automática:** Si un usuario crea más de un pull request, Kodus verifica si hay espacios de licencia disponibles en tu organización.
+    -   Si hay un espacio disponible, la licencia se asigna automáticamente al usuario y sus PRs serán revisados.
+    -   Si no hay espacios disponibles, Kodus reaccionará al pull request con un emoji de pulgar hacia abajo (👎) en Github o un emoji de candado (🔒) en Gitlab para indicar que la revisión no pudo realizarse por falta de licencias.
+
+## Usuarios Ignorados
+
+Puedes configurar una lista de **Usuarios Ignorados**. Estos usuarios quedarán excluidos del proceso de asignación automática.
+
+-   **Sin Revisiones:** Los pull requests creados por usuarios ignorados no serán revisados por Kodus.
+-   **Sin Reacciones:** Kodus no reaccionará a sus PRs, incluso si superan el límite de PRs. Será como si Kodus ignorara el PR por completo.
+
+Esto es útil para bots, cuentas de servicio o miembros específicos del equipo que no requieren revisiones de código.
+
+## Configuración
+
+Para habilitar y configurar la Asignación Automática de Licencias:
+
+1. Ve a tu **Configuración de Revisión de Código**.
+2. Navega a la pestaña **Suscripción**.
+3. Localiza la sección **Asignación automática de licencias**.
+    - Usa el interruptor para habilitar o deshabilitar la función.
+    - Si está habilitada, puedes seleccionar usuarios para agregarlos a la lista de **Usuarios Ignorados**.

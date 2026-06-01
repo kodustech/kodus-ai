@@ -1,0 +1,115 @@
+---
+title: "General"
+---
+
+## Core Settings
+
+<Note>
+  Kodus has three config levels: Global, Repository, and Directory. Learn how they work in <a href="/how_to_use/en/code_review/configs/inheritance_overrides">Config Inheritance & Overrides</a>.
+</Note>
+
+### Config Priority
+`kodus-config.yml` in your repo root overrides web settings. No setup needed—just commit the file.
+
+<Accordion title="Sample kodus-config.yml">
+```yaml
+version: '1.2'
+summary:
+  generatePRSummary: true
+  customInstructions: ''
+  behaviourForExistingDescription: concatenate
+ignorePaths:
+  - yarn.lock
+  - package-lock.json
+  - package.json
+  - .env
+baseBranches: []
+reviewOptions:
+  security: true
+  code_style: true
+  kody_rules: true
+  refactoring: true
+  error_handling: true
+  maintainability: true
+  potential_issues: true
+  documentation_and_comments: true
+  performance_and_optimization: true
+  business_logic: true
+suggestionControl:
+  groupingMode: full
+  limitationType: pr
+  maxSuggestions: 9
+  severityLevelFilter: medium
+ignoredTitleKeywords: []
+automatedReviewActive: true
+pullRequestApprovalActive: false
+isRequestChangesActive: false
+llmGeneratedMemoriesRequireApproval: false
+```
+</Accordion>
+
+## Review Behavior
+
+### Automated Review
+
+Kody can review PRs automatically when opened, or only when you comment `@kody start-review`.
+
+<Info>
+  This affects the **initial review** only. For subsequent commits, see Review Cadence below.
+</Info>
+
+#### Review Cadence
+
+How Kody handles reviews on subsequent commits:
+
+<Tabs>
+  <Tab title="Automatic">
+    Review every new push. Continuous feedback on all changes.
+  </Tab>
+  
+  <Tab title="Auto-pause">
+    Pause reviews during rapid consecutive pushes (e.g., 3 pushes in 15 minutes). Prevents spam during active coding.
+    
+    Defaults: 3 pushes / 15 minutes
+  </Tab>
+  
+  <Tab title="Manual">
+    Only run follow-up reviews when you comment `@kody start-review`.
+  </Tab>
+</Tabs>
+
+### PR Workflow
+
+#### Auto-approve PRs
+Kody approves PRs when no issues are found.
+
+**Platforms:** GitHub, GitLab, Bitbucket
+
+#### Request Changes
+Kody requests changes when finding critical issues.
+
+**Platforms:** GitHub, Bitbucket
+
+### Skip Conditions
+
+**Ignored Files:** Use glob patterns (e.g., `**/*.js`), one per line. Default: `yarn.lock`, `package-lock.json`, `package.json`, `.env`
+
+**Ignored Titles:** Skip PRs with specific keywords (case-insensitive, max 100 chars)
+
+**Base Branches:** Additional branches to review besides default (dev, release, master)
+
+## Analysis Types
+
+### Code Quality
+- Security: SQL injection, XSS, security threats
+- Performance: Caching, query optimization, speed improvements
+- Error Handling: Exception management, error messages
+- Potential Issues: Null pointers, resource leaks, infinite loops
+
+### Code Structure
+- Refactoring: Code organization, function size, duplication
+- Maintainability: Future-proof code patterns
+- Code Style: Consistent formatting and standards
+- Documentation: Clear comments and API docs
+- Kody Rules: Custom rule enforcement
+- Business Logic: Validates PR implementation against task requirements and acceptance criteria

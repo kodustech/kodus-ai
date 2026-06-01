@@ -16,9 +16,9 @@ describe('PlatformIntegrationFactory', () => {
         });
 
         it('should throw error for unregistered type', () => {
-            expect(() =>
-                factory.getCodeManagementService('UNKNOWN'),
-            ).toThrow("Repository service for type 'UNKNOWN' not found.");
+            expect(() => factory.getCodeManagementService('UNKNOWN')).toThrow(
+                "Repository service for type 'UNKNOWN' not found.",
+            );
         });
 
         it('should return the correct service for a registered type', () => {

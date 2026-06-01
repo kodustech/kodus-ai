@@ -1,0 +1,597 @@
+[
+  {
+    "pr_index": 0,
+    "golden_idx": 0,
+    "golden": "Django querysets do not support negative slicing",
+    "candidate_idx": 0,
+    "candidate": "WHAT: organization_context.member is accessed without a null check when checking for global access. WHY: Triggers an AttributeError and 500 error for superusers who are not members of the organization they are attempting to view. HOW: Add a null check for organization_context.member before accessing its attributes. enable_advanced = request.user.is_superuser or (organization_context.member and org"
+  },
+  {
+    "pr_index": 0,
+    "golden_idx": 0,
+    "golden": "Django querysets do not support negative slicing",
+    "candidate_idx": 1,
+    "candidate": "WHAT: math.floor and math.ceil are called directly on a datetime object in OptimizedCursorPaginator.get_item_key without numeric conversion. WHY: Causes a TypeError and 500 Internal Server Error when the optimized_pagination flag is used on the audit logs endpoint, as audit logs use datetime keys. HOW: Convert the datetime value to a float timestamp before applying math functions, similar to the i"
+  },
+  {
+    "pr_index": 0,
+    "golden_idx": 0,
+    "golden": "Django querysets do not support negative slicing",
+    "candidate_idx": 2,
+    "candidate": "WHAT: User-controlled cursor offset is passed to QuerySet slicing without non-negative validation when is_prev is true. WHY: Allows an attacker to trigger a Django AssertionError and cause a 500 Internal Server Error by providing a forged cursor with a negative offset (e.g., ?cursor=0:-1:1). HOW: Ensure offset is always non-negative by applying max(0, offset) regardless of the is_prev state. **Als"
+  },
+  {
+    "pr_index": 0,
+    "golden_idx": 0,
+    "golden": "Django querysets do not support negative slicing",
+    "candidate_idx": 3,
+    "candidate": "WHAT: OptimizedCursorPaginator passes raw cursor values to the database without type conversion in the value_from_cursor and build_queryset paths. WHY: Unlike the existing DateTimePaginator, this creates a type mismatch (float vs. timestamp) in the extra() filter clause, which forces the database to perform full table scans instead of using the datetime index on large audit datasets. HOW: Override"
+  },
+  {
+    "pr_index": 0,
+    "golden_idx": 1,
+    "golden": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+    "candidate_idx": 0,
+    "candidate": "WHAT: organization_context.member is accessed without a null check when checking for global access. WHY: Triggers an AttributeError and 500 error for superusers who are not members of the organization they are attempting to view. HOW: Add a null check for organization_context.member before accessing its attributes. enable_advanced = request.user.is_superuser or (organization_context.member and org"
+  },
+  {
+    "pr_index": 0,
+    "golden_idx": 1,
+    "golden": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+    "candidate_idx": 1,
+    "candidate": "WHAT: math.floor and math.ceil are called directly on a datetime object in OptimizedCursorPaginator.get_item_key without numeric conversion. WHY: Causes a TypeError and 500 Internal Server Error when the optimized_pagination flag is used on the audit logs endpoint, as audit logs use datetime keys. HOW: Convert the datetime value to a float timestamp before applying math functions, similar to the i"
+  },
+  {
+    "pr_index": 0,
+    "golden_idx": 1,
+    "golden": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+    "candidate_idx": 2,
+    "candidate": "WHAT: User-controlled cursor offset is passed to QuerySet slicing without non-negative validation when is_prev is true. WHY: Allows an attacker to trigger a Django AssertionError and cause a 500 Internal Server Error by providing a forged cursor with a negative offset (e.g., ?cursor=0:-1:1). HOW: Ensure offset is always non-negative by applying max(0, offset) regardless of the is_prev state. **Als"
+  },
+  {
+    "pr_index": 0,
+    "golden_idx": 1,
+    "golden": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+    "candidate_idx": 3,
+    "candidate": "WHAT: OptimizedCursorPaginator passes raw cursor values to the database without type conversion in the value_from_cursor and build_queryset paths. WHY: Unlike the existing DateTimePaginator, this creates a type mismatch (float vs. timestamp) in the extra() filter clause, which forces the database to perform full table scans instead of using the datetime index on large audit datasets. HOW: Override"
+  },
+  {
+    "pr_index": 0,
+    "golden_idx": 2,
+    "golden": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+    "candidate_idx": 0,
+    "candidate": "WHAT: organization_context.member is accessed without a null check when checking for global access. WHY: Triggers an AttributeError and 500 error for superusers who are not members of the organization they are attempting to view. HOW: Add a null check for organization_context.member before accessing its attributes. enable_advanced = request.user.is_superuser or (organization_context.member and org"
+  },
+  {
+    "pr_index": 0,
+    "golden_idx": 2,
+    "golden": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+    "candidate_idx": 1,
+    "candidate": "WHAT: math.floor and math.ceil are called directly on a datetime object in OptimizedCursorPaginator.get_item_key without numeric conversion. WHY: Causes a TypeError and 500 Internal Server Error when the optimized_pagination flag is used on the audit logs endpoint, as audit logs use datetime keys. HOW: Convert the datetime value to a float timestamp before applying math functions, similar to the i"
+  },
+  {
+    "pr_index": 0,
+    "golden_idx": 2,
+    "golden": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+    "candidate_idx": 2,
+    "candidate": "WHAT: User-controlled cursor offset is passed to QuerySet slicing without non-negative validation when is_prev is true. WHY: Allows an attacker to trigger a Django AssertionError and cause a 500 Internal Server Error by providing a forged cursor with a negative offset (e.g., ?cursor=0:-1:1). HOW: Ensure offset is always non-negative by applying max(0, offset) regardless of the is_prev state. **Als"
+  },
+  {
+    "pr_index": 0,
+    "golden_idx": 2,
+    "golden": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+    "candidate_idx": 3,
+    "candidate": "WHAT: OptimizedCursorPaginator passes raw cursor values to the database without type conversion in the value_from_cursor and build_queryset paths. WHY: Unlike the existing DateTimePaginator, this creates a type mismatch (float vs. timestamp) in the extra() filter clause, which forces the database to perform full table scans instead of using the datetime index on large audit datasets. HOW: Override"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 0,
+    "golden": "Django querysets do not support negative slicing",
+    "candidate_idx": 0,
+    "candidate": "OptimizedCursorPaginator.get_result incorrectly compares len(results) with offset + limit + extra, which is logically flawed when offset is non-zero. Slicing queryset[start:stop] returns at most (stop - start) items, so the count should be compared directly to limit + extra to determine if an additional row was fetched for lookahead. elif len(results) == limit + extra: results = results[:-1]"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 0,
+    "golden": "Django querysets do not support negative slicing",
+    "candidate_idx": 1,
+    "candidate": "The eviction limit of 1000 is hardcoded in the Lua script, ignoring the max_segment_spans configuration. This means the buffer will always evict to 1000 spans regardless of the value passed to the SpansBuffer constructor, leading to inconsistent behavior. -- Limit should be passed as an argument to the script if span_count > tonumber(ARGV[5]) then redis.call(\"zpopmin\", set_key, span_count - tonumb"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 0,
+    "golden": "Django querysets do not support negative slicing",
+    "candidate_idx": 2,
+    "candidate": "The `organization_context.member` object is accessed without checking if it is `None`, which occurs when a superuser is not a member of the organization. enable_advanced = request.user.is_superuser or (organization_context.member and organization_context.member.has_global_access)"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 0,
+    "golden": "Django querysets do not support negative slicing",
+    "candidate_idx": 3,
+    "candidate": "WHAT: ZUNIONSTORE is called for every span ingestion to merge child sets into the segment root. WHY: Sorted Set unions are O(N) operations; performing this for every span in a trace results in O(N^2) total work, which is significantly more expensive than the previous Set-based approach and can saturate Redis CPU when processing large payloads. HOW: Batch the merges or use a more efficient data str"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 0,
+    "golden": "Django querysets do not support negative slicing",
+    "candidate_idx": 4,
+    "candidate": "A user-controlled negative offset in the cursor will cause an `AssertionError` when applied to a Django QuerySet if `is_prev` is True. **Also found in:** - `src/sentry/api/paginator.py:880-882` start_offset = max(0, offset) stop = start_offset + limit + extra"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 0,
+    "golden": "Django querysets do not support negative slicing",
+    "candidate_idx": 5,
+    "candidate": "WHAT: math.floor() and math.ceil() will raise a TypeError when applied to datetime objects. WHY: The OptimizedCursorPaginator is used in the audit logs endpoint where the sort key is a datetime, causing a guaranteed crash during item key generation. HOW: Implement datetime-to-float conversion in get_item_key, similar to DateTimePaginator, or ensure the input is numeric. **Also found in:** - `src/s"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 1,
+    "golden": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+    "candidate_idx": 0,
+    "candidate": "OptimizedCursorPaginator.get_result incorrectly compares len(results) with offset + limit + extra, which is logically flawed when offset is non-zero. Slicing queryset[start:stop] returns at most (stop - start) items, so the count should be compared directly to limit + extra to determine if an additional row was fetched for lookahead. elif len(results) == limit + extra: results = results[:-1]"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 1,
+    "golden": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+    "candidate_idx": 1,
+    "candidate": "The eviction limit of 1000 is hardcoded in the Lua script, ignoring the max_segment_spans configuration. This means the buffer will always evict to 1000 spans regardless of the value passed to the SpansBuffer constructor, leading to inconsistent behavior. -- Limit should be passed as an argument to the script if span_count > tonumber(ARGV[5]) then redis.call(\"zpopmin\", set_key, span_count - tonumb"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 1,
+    "golden": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+    "candidate_idx": 2,
+    "candidate": "The `organization_context.member` object is accessed without checking if it is `None`, which occurs when a superuser is not a member of the organization. enable_advanced = request.user.is_superuser or (organization_context.member and organization_context.member.has_global_access)"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 1,
+    "golden": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+    "candidate_idx": 3,
+    "candidate": "WHAT: ZUNIONSTORE is called for every span ingestion to merge child sets into the segment root. WHY: Sorted Set unions are O(N) operations; performing this for every span in a trace results in O(N^2) total work, which is significantly more expensive than the previous Set-based approach and can saturate Redis CPU when processing large payloads. HOW: Batch the merges or use a more efficient data str"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 1,
+    "golden": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+    "candidate_idx": 4,
+    "candidate": "A user-controlled negative offset in the cursor will cause an `AssertionError` when applied to a Django QuerySet if `is_prev` is True. **Also found in:** - `src/sentry/api/paginator.py:880-882` start_offset = max(0, offset) stop = start_offset + limit + extra"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 1,
+    "golden": "When requests are authenticated with API keys or org auth tokens (which have user_id=None), organization_context.member is None. Line 71 attempts to access organization_context.member.has_global_access without checking if member is None, causing an AttributeError crash when optimized_pagination=true is used, even though the request passed all permission checks with valid org:write scope.",
+    "candidate_idx": 5,
+    "candidate": "WHAT: math.floor() and math.ceil() will raise a TypeError when applied to datetime objects. WHY: The OptimizedCursorPaginator is used in the audit logs endpoint where the sort key is a datetime, causing a guaranteed crash during item key generation. HOW: Implement datetime-to-float conversion in get_item_key, similar to DateTimePaginator, or ensure the input is numeric. **Also found in:** - `src/s"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 2,
+    "golden": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+    "candidate_idx": 0,
+    "candidate": "OptimizedCursorPaginator.get_result incorrectly compares len(results) with offset + limit + extra, which is logically flawed when offset is non-zero. Slicing queryset[start:stop] returns at most (stop - start) items, so the count should be compared directly to limit + extra to determine if an additional row was fetched for lookahead. elif len(results) == limit + extra: results = results[:-1]"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 2,
+    "golden": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+    "candidate_idx": 1,
+    "candidate": "The eviction limit of 1000 is hardcoded in the Lua script, ignoring the max_segment_spans configuration. This means the buffer will always evict to 1000 spans regardless of the value passed to the SpansBuffer constructor, leading to inconsistent behavior. -- Limit should be passed as an argument to the script if span_count > tonumber(ARGV[5]) then redis.call(\"zpopmin\", set_key, span_count - tonumb"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 2,
+    "golden": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+    "candidate_idx": 2,
+    "candidate": "The `organization_context.member` object is accessed without checking if it is `None`, which occurs when a superuser is not a member of the organization. enable_advanced = request.user.is_superuser or (organization_context.member and organization_context.member.has_global_access)"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 2,
+    "golden": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+    "candidate_idx": 3,
+    "candidate": "WHAT: ZUNIONSTORE is called for every span ingestion to merge child sets into the segment root. WHY: Sorted Set unions are O(N) operations; performing this for every span in a trace results in O(N^2) total work, which is significantly more expensive than the previous Set-based approach and can saturate Redis CPU when processing large payloads. HOW: Batch the merges or use a more efficient data str"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 2,
+    "golden": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+    "candidate_idx": 4,
+    "candidate": "A user-controlled negative offset in the cursor will cause an `AssertionError` when applied to a Django QuerySet if `is_prev` is True. **Also found in:** - `src/sentry/api/paginator.py:880-882` start_offset = max(0, offset) stop = start_offset + limit + extra"
+  },
+  {
+    "pr_index": 1,
+    "golden_idx": 2,
+    "golden": "get_item_key assumes a numeric key, but the paginator is used with order_by=-datetime in the audit logs endpoint; calling math.floor/ceil on a datetime will raise a TypeError.",
+    "candidate_idx": 5,
+    "candidate": "WHAT: math.floor() and math.ceil() will raise a TypeError when applied to datetime objects. WHY: The OptimizedCursorPaginator is used in the audit logs endpoint where the sort key is a datetime, causing a guaranteed crash during item key generation. HOW: Implement datetime-to-float conversion in get_item_key, similar to DateTimePaginator, or ensure the input is numeric. **Also found in:** - `src/s"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 0,
+    "golden": "sample_rate = 0.0 is falsy and skipped",
+    "candidate_idx": 0,
+    "candidate": "The `invalidate_upsampling_cache` function and its caching strategy are ineffective for a global allowlist. Since the cache key includes a hash of the specific `project_ids` in a query, invalidating only the current allowlist does not clear stale entries for other previously queried combinations of projects. Additionally, this function is currently unused and should be either correctly implemented"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 0,
+    "golden": "sample_rate = 0.0 is falsy and skipped",
+    "candidate_idx": 1,
+    "candidate": "The substring check in `_is_error_focused_query` is easily bypassed by including \"event.type:error\" as a literal value in any filter (e.g., `tag:\"event.type:error\"`). Allows an attacker to trigger the upsampling transformation on non-error datasets, which combined with the removal of `ifNull` in the aggregation, results in event counts being incorrectly reported as zero. # Check for the presence o"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 0,
+    "golden": "sample_rate = 0.0 is falsy and skipped",
+    "candidate_idx": 2,
+    "candidate": "The `_get_event_stats` function uses the `dataset` variable from the outer scope instead of the `scoped_dataset` passed as an argument. This logic error causes upsampling transformations to be applied to transaction datasets when the original request was for the `discover` dataset, resulting in incorrect zeroed-out counts. should_upsample = is_errors_query_for_error_upsampled_projects( snuba_param"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 0,
+    "golden": "sample_rate = 0.0 is falsy and skipped",
+    "candidate_idx": 3,
+    "candidate": "WHAT: Redis caching is applied to a check that is already efficiently handled by Sentry's in-memory options system. WHY: The roundtrip to Redis (1ms+) is significantly slower than the in-memory allowlist check (<0.1ms), resulting in a net performance loss for a function called multiple times per request. HOW: Remove the Redis `cache.get/set` logic and rely on the existing in-memory options cache. "
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 0,
+    "golden": "sample_rate = 0.0 is falsy and skipped",
+    "candidate_idx": 4,
+    "candidate": "WHAT: `_are_all_projects_error_upsampled` performs an O(N*M) membership check by iterating over a list allowlist. WHY: For organizations with large project counts or allowlists, this linear search becomes a CPU bottleneck on the hot path. HOW: Convert the `allowlist` list to a `set` once before checking project memberships. allowlist = set(options.get(\"issues.client_error_sampling.project_allowlis"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 0,
+    "golden": "sample_rate = 0.0 is falsy and skipped",
+    "candidate_idx": 5,
+    "candidate": "The `upsampled_count` aggregation was changed to `sum(sample_weight)` without a null-handling fallback. This causes events with a `NULL` `sample_weight` (common in historical data) to be excluded from the sum, resulting in a reported count of 0 instead of the actual event count. Reverting to `ifNull(Column(\"sample_weight\"), 1)` ensures that unsampled events are correctly counted as 1. **Also found"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 0,
+    "golden": "sample_rate = 0.0 is falsy and skipped",
+    "candidate_idx": 6,
+    "candidate": "WHAT: The cache key uses Python's built-in `hash()` function on a tuple of project IDs. WHY: Python 3 hash randomization makes this value inconsistent across different worker processes, causing the shared Redis cache to have a near-zero hit rate while being polluted with redundant keys. HOW: Use a stable hashing algorithm like `hashlib.md5` or a canonical string representation if caching is truly "
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 1,
+    "golden": "Using Python’s built-in hash() to build cache keys is non-deterministic across processes (hash randomization), so keys won’t match across workers and invalidate_upsampling_cache may fail to delete them. Use a deterministic serialization of project_ids for the cache key.",
+    "candidate_idx": 0,
+    "candidate": "The `invalidate_upsampling_cache` function and its caching strategy are ineffective for a global allowlist. Since the cache key includes a hash of the specific `project_ids` in a query, invalidating only the current allowlist does not clear stale entries for other previously queried combinations of projects. Additionally, this function is currently unused and should be either correctly implemented"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 1,
+    "golden": "Using Python’s built-in hash() to build cache keys is non-deterministic across processes (hash randomization), so keys won’t match across workers and invalidate_upsampling_cache may fail to delete them. Use a deterministic serialization of project_ids for the cache key.",
+    "candidate_idx": 1,
+    "candidate": "The substring check in `_is_error_focused_query` is easily bypassed by including \"event.type:error\" as a literal value in any filter (e.g., `tag:\"event.type:error\"`). Allows an attacker to trigger the upsampling transformation on non-error datasets, which combined with the removal of `ifNull` in the aggregation, results in event counts being incorrectly reported as zero. # Check for the presence o"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 1,
+    "golden": "Using Python’s built-in hash() to build cache keys is non-deterministic across processes (hash randomization), so keys won’t match across workers and invalidate_upsampling_cache may fail to delete them. Use a deterministic serialization of project_ids for the cache key.",
+    "candidate_idx": 2,
+    "candidate": "The `_get_event_stats` function uses the `dataset` variable from the outer scope instead of the `scoped_dataset` passed as an argument. This logic error causes upsampling transformations to be applied to transaction datasets when the original request was for the `discover` dataset, resulting in incorrect zeroed-out counts. should_upsample = is_errors_query_for_error_upsampled_projects( snuba_param"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 1,
+    "golden": "Using Python’s built-in hash() to build cache keys is non-deterministic across processes (hash randomization), so keys won’t match across workers and invalidate_upsampling_cache may fail to delete them. Use a deterministic serialization of project_ids for the cache key.",
+    "candidate_idx": 3,
+    "candidate": "WHAT: Redis caching is applied to a check that is already efficiently handled by Sentry's in-memory options system. WHY: The roundtrip to Redis (1ms+) is significantly slower than the in-memory allowlist check (<0.1ms), resulting in a net performance loss for a function called multiple times per request. HOW: Remove the Redis `cache.get/set` logic and rely on the existing in-memory options cache. "
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 1,
+    "golden": "Using Python’s built-in hash() to build cache keys is non-deterministic across processes (hash randomization), so keys won’t match across workers and invalidate_upsampling_cache may fail to delete them. Use a deterministic serialization of project_ids for the cache key.",
+    "candidate_idx": 4,
+    "candidate": "WHAT: `_are_all_projects_error_upsampled` performs an O(N*M) membership check by iterating over a list allowlist. WHY: For organizations with large project counts or allowlists, this linear search becomes a CPU bottleneck on the hot path. HOW: Convert the `allowlist` list to a `set` once before checking project memberships. allowlist = set(options.get(\"issues.client_error_sampling.project_allowlis"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 1,
+    "golden": "Using Python’s built-in hash() to build cache keys is non-deterministic across processes (hash randomization), so keys won’t match across workers and invalidate_upsampling_cache may fail to delete them. Use a deterministic serialization of project_ids for the cache key.",
+    "candidate_idx": 5,
+    "candidate": "The `upsampled_count` aggregation was changed to `sum(sample_weight)` without a null-handling fallback. This causes events with a `NULL` `sample_weight` (common in historical data) to be excluded from the sum, resulting in a reported count of 0 instead of the actual event count. Reverting to `ifNull(Column(\"sample_weight\"), 1)` ensures that unsampled events are correctly counted as 1. **Also found"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 1,
+    "golden": "Using Python’s built-in hash() to build cache keys is non-deterministic across processes (hash randomization), so keys won’t match across workers and invalidate_upsampling_cache may fail to delete them. Use a deterministic serialization of project_ids for the cache key.",
+    "candidate_idx": 6,
+    "candidate": "WHAT: The cache key uses Python's built-in `hash()` function on a tuple of project IDs. WHY: Python 3 hash randomization makes this value inconsistent across different worker processes, causing the shared Redis cache to have a near-zero hit rate while being polluted with redundant keys. HOW: Use a stable hashing algorithm like `hashlib.md5` or a canonical string representation if caching is truly "
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 2,
+    "golden": "The upsampling eligibility check passes the outer dataset instead of the actual dataset used by scoped_dataset. In paths where the query ultimately runs against discover (e.g., dashboard split) while the original dataset is metrics, upsampling may be skipped even when all projects are allowlisted.",
+    "candidate_idx": 0,
+    "candidate": "The `invalidate_upsampling_cache` function and its caching strategy are ineffective for a global allowlist. Since the cache key includes a hash of the specific `project_ids` in a query, invalidating only the current allowlist does not clear stale entries for other previously queried combinations of projects. Additionally, this function is currently unused and should be either correctly implemented"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 2,
+    "golden": "The upsampling eligibility check passes the outer dataset instead of the actual dataset used by scoped_dataset. In paths where the query ultimately runs against discover (e.g., dashboard split) while the original dataset is metrics, upsampling may be skipped even when all projects are allowlisted.",
+    "candidate_idx": 1,
+    "candidate": "The substring check in `_is_error_focused_query` is easily bypassed by including \"event.type:error\" as a literal value in any filter (e.g., `tag:\"event.type:error\"`). Allows an attacker to trigger the upsampling transformation on non-error datasets, which combined with the removal of `ifNull` in the aggregation, results in event counts being incorrectly reported as zero. # Check for the presence o"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 2,
+    "golden": "The upsampling eligibility check passes the outer dataset instead of the actual dataset used by scoped_dataset. In paths where the query ultimately runs against discover (e.g., dashboard split) while the original dataset is metrics, upsampling may be skipped even when all projects are allowlisted.",
+    "candidate_idx": 2,
+    "candidate": "The `_get_event_stats` function uses the `dataset` variable from the outer scope instead of the `scoped_dataset` passed as an argument. This logic error causes upsampling transformations to be applied to transaction datasets when the original request was for the `discover` dataset, resulting in incorrect zeroed-out counts. should_upsample = is_errors_query_for_error_upsampled_projects( snuba_param"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 2,
+    "golden": "The upsampling eligibility check passes the outer dataset instead of the actual dataset used by scoped_dataset. In paths where the query ultimately runs against discover (e.g., dashboard split) while the original dataset is metrics, upsampling may be skipped even when all projects are allowlisted.",
+    "candidate_idx": 3,
+    "candidate": "WHAT: Redis caching is applied to a check that is already efficiently handled by Sentry's in-memory options system. WHY: The roundtrip to Redis (1ms+) is significantly slower than the in-memory allowlist check (<0.1ms), resulting in a net performance loss for a function called multiple times per request. HOW: Remove the Redis `cache.get/set` logic and rely on the existing in-memory options cache. "
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 2,
+    "golden": "The upsampling eligibility check passes the outer dataset instead of the actual dataset used by scoped_dataset. In paths where the query ultimately runs against discover (e.g., dashboard split) while the original dataset is metrics, upsampling may be skipped even when all projects are allowlisted.",
+    "candidate_idx": 4,
+    "candidate": "WHAT: `_are_all_projects_error_upsampled` performs an O(N*M) membership check by iterating over a list allowlist. WHY: For organizations with large project counts or allowlists, this linear search becomes a CPU bottleneck on the hot path. HOW: Convert the `allowlist` list to a `set` once before checking project memberships. allowlist = set(options.get(\"issues.client_error_sampling.project_allowlis"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 2,
+    "golden": "The upsampling eligibility check passes the outer dataset instead of the actual dataset used by scoped_dataset. In paths where the query ultimately runs against discover (e.g., dashboard split) while the original dataset is metrics, upsampling may be skipped even when all projects are allowlisted.",
+    "candidate_idx": 5,
+    "candidate": "The `upsampled_count` aggregation was changed to `sum(sample_weight)` without a null-handling fallback. This causes events with a `NULL` `sample_weight` (common in historical data) to be excluded from the sum, resulting in a reported count of 0 instead of the actual event count. Reverting to `ifNull(Column(\"sample_weight\"), 1)` ensures that unsampled events are correctly counted as 1. **Also found"
+  },
+  {
+    "pr_index": 2,
+    "golden_idx": 2,
+    "golden": "The upsampling eligibility check passes the outer dataset instead of the actual dataset used by scoped_dataset. In paths where the query ultimately runs against discover (e.g., dashboard split) while the original dataset is metrics, upsampling may be skipped even when all projects are allowlisted.",
+    "candidate_idx": 6,
+    "candidate": "WHAT: The cache key uses Python's built-in `hash()` function on a tuple of project IDs. WHY: Python 3 hash randomization makes this value inconsistent across different worker processes, causing the shared Redis cache to have a near-zero hit rate while being polluted with redundant keys. HOW: Use a stable hashing algorithm like `hashlib.md5` or a canonical string representation if caching is truly "
+  },
+  {
+    "pr_index": 3,
+    "golden_idx": 0,
+    "golden": "Null reference if github_authenticated_user state is missing",
+    "candidate_idx": 0,
+    "candidate": "The `state` parameter in `OAuthLoginView` uses the predictable `pipeline.signature` instead of a cryptographically secure random value tied to the user session. This allows an attacker to perform an OAuth CSRF attack, potentially linking their own GitHub installation to a victim's Sentry organization by crafting a callback URL with a valid `code` and the known `state` hash. if not request.GET.get("
+  },
+  {
+    "pr_index": 3,
+    "golden_idx": 0,
+    "golden": "Null reference if github_authenticated_user state is missing",
+    "candidate_idx": 1,
+    "candidate": "`GitHubInstallation.dispatch` skips the security verification of the authenticated user against the installation 'sender' if the `Integration` record is not found in the database. This creates a race condition where an attacker can bypass the intended security check by finishing the installation pipeline before Sentry's asynchronous webhook has created the record. integration = Integration.objects"
+  },
+  {
+    "pr_index": 3,
+    "golden_idx": 0,
+    "golden": "Null reference if github_authenticated_user state is missing",
+    "candidate_idx": 2,
+    "candidate": "WHAT: `Integration.objects.get` is called twice and queries by `external_id` without the `provider` field. WHY: This triggers redundant database round trips and forces two full table scans on `sentry_integration` because `external_id` is not the leading column of the composite index, leading to significant latency as the table grows. HOW: Fetch the `Integration` object once using `provider='github"
+  },
+  {
+    "pr_index": 3,
+    "golden_idx": 1,
+    "golden": "OAuth state uses pipeline.signature (static) instead of a per-request random value",
+    "candidate_idx": 0,
+    "candidate": "The `state` parameter in `OAuthLoginView` uses the predictable `pipeline.signature` instead of a cryptographically secure random value tied to the user session. This allows an attacker to perform an OAuth CSRF attack, potentially linking their own GitHub installation to a victim's Sentry organization by crafting a callback URL with a valid `code` and the known `state` hash. if not request.GET.get("
+  },
+  {
+    "pr_index": 3,
+    "golden_idx": 1,
+    "golden": "OAuth state uses pipeline.signature (static) instead of a per-request random value",
+    "candidate_idx": 1,
+    "candidate": "`GitHubInstallation.dispatch` skips the security verification of the authenticated user against the installation 'sender' if the `Integration` record is not found in the database. This creates a race condition where an attacker can bypass the intended security check by finishing the installation pipeline before Sentry's asynchronous webhook has created the record. integration = Integration.objects"
+  },
+  {
+    "pr_index": 3,
+    "golden_idx": 1,
+    "golden": "OAuth state uses pipeline.signature (static) instead of a per-request random value",
+    "candidate_idx": 2,
+    "candidate": "WHAT: `Integration.objects.get` is called twice and queries by `external_id` without the `provider` field. WHY: This triggers redundant database round trips and forces two full table scans on `sentry_integration` because `external_id` is not the leading column of the composite index, leading to significant latency as the table grows. HOW: Fetch the `Integration` object once using `provider='github"
+  },
+  {
+    "pr_index": 3,
+    "golden_idx": 2,
+    "golden": "The code attempts to access integration.metadata[sender][login] without checking for the existence of the sender key. This causes a KeyError for integrations where the sender metadata was not set during creation",
+    "candidate_idx": 0,
+    "candidate": "The `state` parameter in `OAuthLoginView` uses the predictable `pipeline.signature` instead of a cryptographically secure random value tied to the user session. This allows an attacker to perform an OAuth CSRF attack, potentially linking their own GitHub installation to a victim's Sentry organization by crafting a callback URL with a valid `code` and the known `state` hash. if not request.GET.get("
+  },
+  {
+    "pr_index": 3,
+    "golden_idx": 2,
+    "golden": "The code attempts to access integration.metadata[sender][login] without checking for the existence of the sender key. This causes a KeyError for integrations where the sender metadata was not set during creation",
+    "candidate_idx": 1,
+    "candidate": "`GitHubInstallation.dispatch` skips the security verification of the authenticated user against the installation 'sender' if the `Integration` record is not found in the database. This creates a race condition where an attacker can bypass the intended security check by finishing the installation pipeline before Sentry's asynchronous webhook has created the record. integration = Integration.objects"
+  },
+  {
+    "pr_index": 3,
+    "golden_idx": 2,
+    "golden": "The code attempts to access integration.metadata[sender][login] without checking for the existence of the sender key. This causes a KeyError for integrations where the sender metadata was not set during creation",
+    "candidate_idx": 2,
+    "candidate": "WHAT: `Integration.objects.get` is called twice and queries by `external_id` without the `provider` field. WHY: This triggers redundant database round trips and forces two full table scans on `sentry_integration` because `external_id` is not the leading column of the composite index, leading to significant latency as the table grows. HOW: Fetch the `Integration` object once using `provider='github"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 0,
+    "golden": "Race condition: Multiple concurrent requests could pass the device count check simultaneously and create devices beyond the limit. Consider using a database transaction or lock.",
+    "candidate_idx": 0,
+    "candidate": "The `localCache` entry is set before calling the database to enforce the device limit, allowing blocked devices to bypass the limit on subsequent requests. Because `tagDeviceUI` returns early if the device ID is found in the cache, any device that triggers the limit once will be allowed to authenticate on its next attempt (e.g., after a page refresh) because the cache entry was already created. if"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 0,
+    "golden": "Race condition: Multiple concurrent requests could pass the device count check simultaneously and create devices beyond the limit. Consider using a database transaction or lock.",
+    "candidate_idx": 1,
+    "candidate": "The device limit check is skipped entirely if the `X-Grafana-Device-Id` header is missing. This allows any anonymous user to bypass the configured limit by simply stripping the header from their requests, effectively making the limit enforcement optional for clients. func (a *AnonDeviceService) TagDevice(ctx context.Context, httpReq *http.Request, kind anonymous.DeviceKind) error { deviceID := htt"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 0,
+    "golden": "Race condition: Multiple concurrent requests could pass the device count check simultaneously and create devices beyond the limit. Consider using a database transaction or lock.",
+    "candidate_idx": 2,
+    "candidate": "Anonymous authentication fails when the device limit is reached, allowing a Denial of Service (DoS) attack. An unauthenticated attacker can spoof arbitrary device IDs to exhaust the limit and block access for all other anonymous users because the limit is enforced by blocking the authentication process. if err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil {"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 0,
+    "golden": "Race condition: Multiple concurrent requests could pass the device count check simultaneously and create devices beyond the limit. Consider using a database transaction or lock.",
+    "candidate_idx": 3,
+    "candidate": "TagDevice is called synchronously in the Authenticate hot path, blocking anonymous requests on database operations that were previously asynchronous. This increases tail latency and can lead to thread exhaustion if the database is slow or under heavy load, even when no device limit is configured. Revert to asynchronous execution (goroutine) when no device limit is set, or at least ensure that gene"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 0,
+    "golden": "Race condition: Multiple concurrent requests could pass the device count check simultaneously and create devices beyond the limit. Consider using a database transaction or lock.",
+    "candidate_idx": 4,
+    "candidate": "CreateOrUpdateDevice performs a SELECT COUNT(*) on every cache miss when deviceLimit > 0, which is inefficient and does not scale well with large datasets. This triggers a synchronous database scan for every new or recurring anonymous session (on cache miss), creating a bottleneck as the number of devices grows. Attempt to update the existing device first and only perform the count if the update f"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 1,
+    "golden": "Anonymous authentication now fails entirely if anonDeviceService.TagDevice returns ErrDeviceLimitReached. Previously, device tagging was asynchronous and non-blocking. This change prevents anonymous users from authenticating when the device limit is reached.",
+    "candidate_idx": 0,
+    "candidate": "The `localCache` entry is set before calling the database to enforce the device limit, allowing blocked devices to bypass the limit on subsequent requests. Because `tagDeviceUI` returns early if the device ID is found in the cache, any device that triggers the limit once will be allowed to authenticate on its next attempt (e.g., after a page refresh) because the cache entry was already created. if"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 1,
+    "golden": "Anonymous authentication now fails entirely if anonDeviceService.TagDevice returns ErrDeviceLimitReached. Previously, device tagging was asynchronous and non-blocking. This change prevents anonymous users from authenticating when the device limit is reached.",
+    "candidate_idx": 1,
+    "candidate": "The device limit check is skipped entirely if the `X-Grafana-Device-Id` header is missing. This allows any anonymous user to bypass the configured limit by simply stripping the header from their requests, effectively making the limit enforcement optional for clients. func (a *AnonDeviceService) TagDevice(ctx context.Context, httpReq *http.Request, kind anonymous.DeviceKind) error { deviceID := htt"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 1,
+    "golden": "Anonymous authentication now fails entirely if anonDeviceService.TagDevice returns ErrDeviceLimitReached. Previously, device tagging was asynchronous and non-blocking. This change prevents anonymous users from authenticating when the device limit is reached.",
+    "candidate_idx": 2,
+    "candidate": "Anonymous authentication fails when the device limit is reached, allowing a Denial of Service (DoS) attack. An unauthenticated attacker can spoof arbitrary device IDs to exhaust the limit and block access for all other anonymous users because the limit is enforced by blocking the authentication process. if err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil {"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 1,
+    "golden": "Anonymous authentication now fails entirely if anonDeviceService.TagDevice returns ErrDeviceLimitReached. Previously, device tagging was asynchronous and non-blocking. This change prevents anonymous users from authenticating when the device limit is reached.",
+    "candidate_idx": 3,
+    "candidate": "TagDevice is called synchronously in the Authenticate hot path, blocking anonymous requests on database operations that were previously asynchronous. This increases tail latency and can lead to thread exhaustion if the database is slow or under heavy load, even when no device limit is configured. Revert to asynchronous execution (goroutine) when no device limit is set, or at least ensure that gene"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 1,
+    "golden": "Anonymous authentication now fails entirely if anonDeviceService.TagDevice returns ErrDeviceLimitReached. Previously, device tagging was asynchronous and non-blocking. This change prevents anonymous users from authenticating when the device limit is reached.",
+    "candidate_idx": 4,
+    "candidate": "CreateOrUpdateDevice performs a SELECT COUNT(*) on every cache miss when deviceLimit > 0, which is inefficient and does not scale well with large datasets. This triggers a synchronous database scan for every new or recurring anonymous session (on cache miss), creating a bottleneck as the number of devices grows. Attempt to update the existing device first and only perform the count if the update f"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 2,
+    "golden": "This call won’t compile: dbSession.Exec(args...) is given a []interface{} where the first element is the query, but Exec’s signature requires a first parameter of type string (not an interface{} splat).",
+    "candidate_idx": 0,
+    "candidate": "The `localCache` entry is set before calling the database to enforce the device limit, allowing blocked devices to bypass the limit on subsequent requests. Because `tagDeviceUI` returns early if the device ID is found in the cache, any device that triggers the limit once will be allowed to authenticate on its next attempt (e.g., after a page refresh) because the cache entry was already created. if"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 2,
+    "golden": "This call won’t compile: dbSession.Exec(args...) is given a []interface{} where the first element is the query, but Exec’s signature requires a first parameter of type string (not an interface{} splat).",
+    "candidate_idx": 1,
+    "candidate": "The device limit check is skipped entirely if the `X-Grafana-Device-Id` header is missing. This allows any anonymous user to bypass the configured limit by simply stripping the header from their requests, effectively making the limit enforcement optional for clients. func (a *AnonDeviceService) TagDevice(ctx context.Context, httpReq *http.Request, kind anonymous.DeviceKind) error { deviceID := htt"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 2,
+    "golden": "This call won’t compile: dbSession.Exec(args...) is given a []interface{} where the first element is the query, but Exec’s signature requires a first parameter of type string (not an interface{} splat).",
+    "candidate_idx": 2,
+    "candidate": "Anonymous authentication fails when the device limit is reached, allowing a Denial of Service (DoS) attack. An unauthenticated attacker can spoof arbitrary device IDs to exhaust the limit and block access for all other anonymous users because the limit is enforced by blocking the authentication process. if err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil {"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 2,
+    "golden": "This call won’t compile: dbSession.Exec(args...) is given a []interface{} where the first element is the query, but Exec’s signature requires a first parameter of type string (not an interface{} splat).",
+    "candidate_idx": 3,
+    "candidate": "TagDevice is called synchronously in the Authenticate hot path, blocking anonymous requests on database operations that were previously asynchronous. This increases tail latency and can lead to thread exhaustion if the database is slow or under heavy load, even when no device limit is configured. Revert to asynchronous execution (goroutine) when no device limit is set, or at least ensure that gene"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 2,
+    "golden": "This call won’t compile: dbSession.Exec(args...) is given a []interface{} where the first element is the query, but Exec’s signature requires a first parameter of type string (not an interface{} splat).",
+    "candidate_idx": 4,
+    "candidate": "CreateOrUpdateDevice performs a SELECT COUNT(*) on every cache miss when deviceLimit > 0, which is inefficient and does not scale well with large datasets. This triggers a synchronous database scan for every new or recurring anonymous session (on cache miss), creating a bottleneck as the number of devices grows. Attempt to update the existing device first and only perform the count if the update f"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 3,
+    "golden": "Returning ErrDeviceLimitReached when no rows were updated is misleading; the device might not exist.",
+    "candidate_idx": 0,
+    "candidate": "The `localCache` entry is set before calling the database to enforce the device limit, allowing blocked devices to bypass the limit on subsequent requests. Because `tagDeviceUI` returns early if the device ID is found in the cache, any device that triggers the limit once will be allowed to authenticate on its next attempt (e.g., after a page refresh) because the cache entry was already created. if"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 3,
+    "golden": "Returning ErrDeviceLimitReached when no rows were updated is misleading; the device might not exist.",
+    "candidate_idx": 1,
+    "candidate": "The device limit check is skipped entirely if the `X-Grafana-Device-Id` header is missing. This allows any anonymous user to bypass the configured limit by simply stripping the header from their requests, effectively making the limit enforcement optional for clients. func (a *AnonDeviceService) TagDevice(ctx context.Context, httpReq *http.Request, kind anonymous.DeviceKind) error { deviceID := htt"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 3,
+    "golden": "Returning ErrDeviceLimitReached when no rows were updated is misleading; the device might not exist.",
+    "candidate_idx": 2,
+    "candidate": "Anonymous authentication fails when the device limit is reached, allowing a Denial of Service (DoS) attack. An unauthenticated attacker can spoof arbitrary device IDs to exhaust the limit and block access for all other anonymous users because the limit is enforced by blocking the authentication process. if err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil {"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 3,
+    "golden": "Returning ErrDeviceLimitReached when no rows were updated is misleading; the device might not exist.",
+    "candidate_idx": 3,
+    "candidate": "TagDevice is called synchronously in the Authenticate hot path, blocking anonymous requests on database operations that were previously asynchronous. This increases tail latency and can lead to thread exhaustion if the database is slow or under heavy load, even when no device limit is configured. Revert to asynchronous execution (goroutine) when no device limit is set, or at least ensure that gene"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 3,
+    "golden": "Returning ErrDeviceLimitReached when no rows were updated is misleading; the device might not exist.",
+    "candidate_idx": 4,
+    "candidate": "CreateOrUpdateDevice performs a SELECT COUNT(*) on every cache miss when deviceLimit > 0, which is inefficient and does not scale well with large datasets. This triggers a synchronous database scan for every new or recurring anonymous session (on cache miss), creating a bottleneck as the number of devices grows. Attempt to update the existing device first and only perform the count if the update f"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 4,
+    "golden": "Time window calculation inconsistency: Using device.UpdatedAt.UTC().Add(-anonymousDeviceExpiration) as the lower bound but device.UpdatedAt as the current time may not match the intended logic. Consider using time.Now().UTC() consistently.",
+    "candidate_idx": 0,
+    "candidate": "The `localCache` entry is set before calling the database to enforce the device limit, allowing blocked devices to bypass the limit on subsequent requests. Because `tagDeviceUI` returns early if the device ID is found in the cache, any device that triggers the limit once will be allowed to authenticate on its next attempt (e.g., after a page refresh) because the cache entry was already created. if"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 4,
+    "golden": "Time window calculation inconsistency: Using device.UpdatedAt.UTC().Add(-anonymousDeviceExpiration) as the lower bound but device.UpdatedAt as the current time may not match the intended logic. Consider using time.Now().UTC() consistently.",
+    "candidate_idx": 1,
+    "candidate": "The device limit check is skipped entirely if the `X-Grafana-Device-Id` header is missing. This allows any anonymous user to bypass the configured limit by simply stripping the header from their requests, effectively making the limit enforcement optional for clients. func (a *AnonDeviceService) TagDevice(ctx context.Context, httpReq *http.Request, kind anonymous.DeviceKind) error { deviceID := htt"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 4,
+    "golden": "Time window calculation inconsistency: Using device.UpdatedAt.UTC().Add(-anonymousDeviceExpiration) as the lower bound but device.UpdatedAt as the current time may not match the intended logic. Consider using time.Now().UTC() consistently.",
+    "candidate_idx": 2,
+    "candidate": "Anonymous authentication fails when the device limit is reached, allowing a Denial of Service (DoS) attack. An unauthenticated attacker can spoof arbitrary device IDs to exhaust the limit and block access for all other anonymous users because the limit is enforced by blocking the authentication process. if err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil {"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 4,
+    "golden": "Time window calculation inconsistency: Using device.UpdatedAt.UTC().Add(-anonymousDeviceExpiration) as the lower bound but device.UpdatedAt as the current time may not match the intended logic. Consider using time.Now().UTC() consistently.",
+    "candidate_idx": 3,
+    "candidate": "TagDevice is called synchronously in the Authenticate hot path, blocking anonymous requests on database operations that were previously asynchronous. This increases tail latency and can lead to thread exhaustion if the database is slow or under heavy load, even when no device limit is configured. Revert to asynchronous execution (goroutine) when no device limit is set, or at least ensure that gene"
+  },
+  {
+    "pr_index": 4,
+    "golden_idx": 4,
+    "golden": "Time window calculation inconsistency: Using device.UpdatedAt.UTC().Add(-anonymousDeviceExpiration) as the lower bound but device.UpdatedAt as the current time may not match the intended logic. Consider using time.Now().UTC() consistently.",
+    "candidate_idx": 4,
+    "candidate": "CreateOrUpdateDevice performs a SELECT COUNT(*) on every cache miss when deviceLimit > 0, which is inefficient and does not scale well with large datasets. This triggers a synchronous database scan for every new or recurring anonymous session (on cache miss), creating a bottleneck as the number of devices grows. Attempt to update the existing device first and only perform the count if the update f"
+  }
+]

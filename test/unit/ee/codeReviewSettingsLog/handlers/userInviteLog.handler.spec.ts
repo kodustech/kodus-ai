@@ -1,6 +1,5 @@
 import { UserInviteLogHandler } from '@libs/ee/codeReviewSettingsLog/infrastructure/adapters/services/userInviteLog.handler';
 
-
 import {
     createMockUnifiedLogHandler,
     createBaseParams,

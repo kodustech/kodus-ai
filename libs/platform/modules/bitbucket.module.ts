@@ -7,6 +7,8 @@ import { AuthIntegrationModule } from '@libs/integrations/modules/authIntegratio
 import { GlobalCacheModule } from '@libs/core/cache/cache.module';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
+import { BitbucketCloudService } from '../infrastructure/adapters/services/bitbucket/bitbucket-cloud.service';
+import { BitbucketDataCenterService } from '../infrastructure/adapters/services/bitbucket/bitbucket-data-center.service';
 
 @Module({
     imports: [
@@ -17,7 +19,11 @@ import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
         forwardRef(() => CodebaseModule),
         forwardRef(() => McpCoreModule),
     ],
-    providers: [BitbucketService],
+    providers: [
+        BitbucketService,
+        BitbucketCloudService,
+        BitbucketDataCenterService,
+    ],
     exports: [BitbucketService],
 })
 export class BitbucketModule {}

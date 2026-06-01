@@ -5,7 +5,9 @@
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## Kodgranskning slutförd! 🔥\n\nKodgranskningen slutfördes framgångsrikt baserat på dina nuvarande konfigurationer.\n\n",
-        "withoutComments": "# Kody-granskning slutförd\n**Bra nyheter!** 🎉\nInga problem hittades som matchar dina nuvarande granskningskonfigurationer.\n\nFortsätt det utmärkta arbetet! 🚀"
+        "withoutComments": "# Kody-granskning slutförd\n**Bra nyheter!** 🎉\nInga problem hittades som matchar dina nuvarande granskningskonfigurationer.\n\nFortsätt det utmärkta arbetet! 🚀",
+        "withErrors": "## Code Review Could Not Complete ⚠️\n\nThe review failed before suggestions could be generated.\n\n**Reason:** {{errorMessage}}\n\nAfter fixing the issue, comment `@kody review` on this PR to re-run the review.\n\n",
+        "partialErrorsNotice": "\n\n> ⚠️ Note: some checks couldn't be completed in this run, so auto-approval (when enabled) was skipped. Check the details at {{dashboardUrl}} and then comment `@kody review` on this PR to retry once the issue is resolved.\n"
     },
     "pullRequestSummaryMarkdown": {
         "title": "PR-sammanfattning (Kommentar skapad av [Kody](https://kodus.io) 🤖)",

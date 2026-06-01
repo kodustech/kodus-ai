@@ -126,13 +126,18 @@ export class GitlabMappedPlatform implements IMappedPlatform {
             return null;
         }
 
-        switch (params?.payload?.object_attributes?.action) {
+        const action =
+            params?.payload?.object_attributes?.action ??
+            params?.payload?.action ??
+            params?.payload?.event_type;
+
+        switch (action) {
             case 'open':
                 return MappedAction.OPENED;
             case 'update':
                 return MappedAction.UPDATED;
             default:
-                return params?.payload?.object_attributes?.action;
+                return action;
         }
     }
 }

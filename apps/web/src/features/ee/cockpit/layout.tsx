@@ -14,6 +14,7 @@ import { CockpitNoDataBanner } from "./_components/no-data-banner";
 import { RepositoryPicker } from "./_components/repository-picker";
 import { tabs, type TabValue } from "./_constants";
 import { extractApiData } from "./_helpers/api-data-extractor";
+import { isCockpitTierAllowed } from "./_helpers/tier-policy";
 import { getAnalyticsStatus } from "./_services/analytics/fetch";
 import { AnalyticsNotAvailable } from "./not-available";
 
@@ -61,14 +62,11 @@ export default async function Layout({
         teamId: selectedTeamId,
     }).catch(() => null);
 
-    if (
-        !organizationLicense ||
-        !organizationLicense.valid ||
-        organizationLicense.subscriptionStatus === "self-hosted" ||
-        (organizationLicense.subscriptionStatus === "active" &&
-            organizationLicense.planType === "free_byok")
-    )
-        redirect("/settings/git");
+    // Cockpit is scoped to Teams cloud + Enterprise (cloud and
+    // self-hosted). Trials count as Teams-cloud. See
+    // `libs/cockpit/domain/tier-policy.ts` for the authoritative rule
+    // — keep both copies aligned.
+    if (!isCockpitTierAllowed(organizationLicense)) redirect("/settings/git");
 
     const [analyticsResult, metricsVisibility] = await Promise.all([
         getAnalyticsStatus().catch(() => ({ hasData: false })),

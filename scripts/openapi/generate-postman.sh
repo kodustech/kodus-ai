@@ -4,19 +4,19 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-if [ ! -f docs/openapi.json ]; then
-  echo "docs/openapi.json not found. Run: yarn openapi:export"
+if [ ! -f docs-internal/openapi.json ]; then
+  echo "docs-internal/openapi.json not found. Run: yarn openapi:export"
   exit 1
 fi
 
 npx --yes openapi-to-postmanv2 \
-  -s docs/openapi.json \
-  -o docs/openapi.postman_collection.json \
+  -s docs-internal/openapi.json \
+  -o docs-internal/openapi.postman_collection.json \
   -p
 
 node <<'NODE'
 const fs = require('fs');
-const path = 'docs/openapi.postman_collection.json';
+const path = 'docs-internal/openapi.postman_collection.json';
 if (!fs.existsSync(path)) {
   process.exit(0);
 }
@@ -257,8 +257,8 @@ if (Array.isArray(collection.item)) {
 fs.writeFileSync(path, JSON.stringify(collection, null, 2));
 NODE
 
-if [ ! -f docs/openapi.postman_environment.example.json ]; then
-  cat <<'JSON' > docs/openapi.postman_environment.example.json
+if [ ! -f docs-internal/openapi.postman_environment.example.json ]; then
+  cat <<'JSON' > docs-internal/openapi.postman_environment.example.json
 {
   "name": "local",
   "values": [
@@ -284,4 +284,4 @@ if [ ! -f docs/openapi.postman_environment.example.json ]; then
 JSON
 fi
 
-echo "Postman collection generated at docs/openapi.postman_collection.json"
+echo "Postman collection generated at docs-internal/openapi.postman_collection.json"

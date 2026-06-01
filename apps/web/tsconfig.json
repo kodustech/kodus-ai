@@ -1,5 +1,6 @@
 {
     "compilerOptions": {
+        "ignoreDeprecations": "6.0",
         "target": "ES2022",
         "lib": ["dom", "dom.iterable", "ES2022"],
         "allowJs": true,
@@ -21,8 +22,11 @@
             "@utils": ["src/core/util/*"],
             "@hooks/*": ["src/core/hooks/*"],
             "@components/*": ["src/core/components/*"],
+            "@providers/*": ["src/core/providers/*"],
+            "@config/*": ["src/core/config/*"],
             "@enums": ["src/core/enums"],
-            "@assets/*": ["public/assets/*"]
+            "@assets/*": ["public/assets/*"],
+            "@libs/*": ["../../libs/*"]
         },
         "incremental": true,
         "plugins": [
@@ -36,7 +40,8 @@
         "env.d.ts",
         "**/*.ts",
         "**/*.tsx",
-        ".next/types/**/*.ts"
+        ".next/types/**/*.ts",
+        "../../libs/feature-gate/**/*.ts"
     ],
     "exclude": ["node_modules", "test/*"]
 }

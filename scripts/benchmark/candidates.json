@@ -1,0 +1,525 @@
+[
+  {
+    "pr_title": "Enhanced Pagination Performance for High-Volume Audit Logs",
+    "pr_url": "https://github.com/ai-code-review-benchmark/sentry/pull/179",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Optimize spans buffer insertion with eviction during insert",
+    "pr_url": "https://github.com/ai-code-review-benchmark/sentry/pull/180",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The code incorrectly assumes that Django QuerySets support negative indexing for slicing, similar to Python lists. This is not the case; attempting to use a negative index in a queryset slice will raise an `AssertionError`. This affects both `DateTimePaginator` and `OptimizedCursorPaginator`, and will cause a server error (HTTP 500) whenever a",
+        "location": "src/sentry/api/paginator.py:182"
+      },
+      {
+        "comment": "The script has been updated to use Sorted Set commands (e.g., `zcard`) on `span_key` and `parent_key`. However, during a rolling deployment, older versions of the application may still be writing to these keys as Sets. Executing a `zcard` command on a key holding a Set will cause a `WRONGTYPE` error from Redis, leading to the failure of this sc",
+        "location": "src/sentry/scripts/spans/add-buffer.lua:47"
+      }
+    ]
+  },
+  {
+    "pr_title": "feat(upsampling) - Support upsampled error count with performance optimizations",
+    "pr_url": "https://github.com/ai-code-review-benchmark/sentry/pull/181",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "GitHub OAuth Security Enhancement",
+    "pr_url": "https://github.com/ai-code-review-benchmark/sentry/pull/182",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Violates rule 'Follow error handling conventions': The exception during the token exchange with GitHub is silently swallowed. This hides the root cause of potential failures (e.g., network errors, API changes, decoding issues). The original exception should be logged or wrapped to pre",
+        "location": "src/sentry/integrations/github/integration.py:429"
+      }
+    ]
+  },
+  {
+    "pr_title": "Replays Self-Serve Bulk Delete System",
+    "pr_url": "https://github.com/ai-code-review-benchmark/sentry/pull/183",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The current implementation for validating browser reports stops and returns an error upon encountering the first invalid report in a batch. According to the Browser Reporting API specification, a 4xx response instructs the browser not to resend the batch. This can lead to the loss of all other valid reports that were included in the same reques",
+        "location": "src/sentry/issues/endpoints/browser_reporting_collector.py:120"
+      },
+      {
+        "comment": "The `BrowserReportSerializer` allows reports that have neither an `age` nor a `timestamp` field to pass validation because both fields are optional. The previous implementation required a `timestamp`. A report without any time information is likely to be invalid or useless for processing. An object-level validation should be added to ensure at",
+        "location": "src/sentry/issues/endpoints/browser_reporting_collector.py:60"
+      }
+    ]
+  },
+  {
+    "pr_title": "Span Buffer Multiprocess Enhancement with Health Monitoring",
+    "pr_url": "https://github.com/ai-code-review-benchmark/sentry/pull/184",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The `join` method's shutdown logic can hang if a child process is unresponsive. The loop `while process.is_alive()...` waits for the process to exit naturally before attempting to terminate it. If the process is stuck, this can block shutdown until the overall timeout is reached. Instead, `process.join()` should be called with a calculated time",
+        "location": "src/sentry/spans/consumers/process/flusher.py:347"
+      },
+      {
+        "comment": "A race condition exists where a process can terminate naturally between the `is_alive()` check and the `process.terminate()` call. This leads to `terminate()` being called on a non-existent process, which raises an `OSError` and crashes the consumer during shutdown. The fix is to wrap the `terminate()` call in a `try...except` block to graceful",
+        "location": "src/sentry/spans/consumers/process/flusher.py:347"
+      }
+    ]
+  },
+  {
+    "pr_title": "feat(ecosystem): Implement cross-system issue synchronization",
+    "pr_url": "https://github.com/ai-code-review-benchmark/sentry/pull/185",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "ref(crons): Reorganize incident creation / issue occurrence logic",
+    "pr_url": "https://github.com/ai-code-review-benchmark/sentry/pull/186",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The loop iterates through every check-in that contributed to the monitor failure and creates a separate issue occurrence for each one. This is redundant and can lead to multiple alerts for a single incident. A single occurrence should be generated for the monitor failure event, using the check-in that triggered the state change.  ```python",
+        "location": "src/sentry/monitors/logic/incidents.py:100"
+      }
+    ]
+  },
+  {
+    "pr_title": "feat(uptime): Add ability to use queues to manage parallelism",
+    "pr_url": "https://github.com/ai-code-review-benchmark/sentry/pull/187",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "feat(workflow_engine): Add in hook for producing occurrences from the stateful detector",
+    "pr_url": "https://github.com/ai-code-review-benchmark/sentry/pull/188",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "In `test_state_results_multi_group`, the test data packet for `group_2` has a value of `10`. However, when building the expected `occurrence_2` for assertion, the value `6` is used. This is likely a copy-paste error from `group_1`.  Currently, this doesn't cause a test failure because `build_mock_occurrence_and_event` doesn't use the `value` pa",
+        "location": "tests/sentry/workflow_engine/processors/test_detector.py:192"
+      }
+    ]
+  },
+  {
+    "pr_title": "Anonymous: Add configurable device limit",
+    "pr_url": "https://github.com/ai-code-review-benchmark/grafana-codex/pull/621",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The `UPDATE` query in `updateDevice` includes a check on `updated_at`. This prevents 'reviving' a device for a user who has been inactive for more than 30 days when the device limit is met. If a user has an existing `device_id`, they should always be able to update their record, regardless of when they were last seen. The check for the number o",
+        "location": "pkg/services/anonymous/anonimpl/anonstore/database.go:78"
+      },
+      {
+        "comment": "Violates rule 'Follow error handling conventions': The error returned from `TagDevice` is logged but then swallowed, except for `ErrDeviceLimitReached`. This prevents callers from handling other potential errors, such as database connectivity issues. The error should be returned to en",
+        "location": "pkg/services/anonymous/anonimpl/client.go:50"
+      }
+    ]
+  },
+  {
+    "pr_title": "AuthZService: improve authz caching",
+    "pr_url": "https://github.com/ai-code-review-benchmark/grafana-codex/pull/622",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Plugins: Chore: Renamed instrumentation middleware to metrics middleware",
+    "pr_url": "https://github.com/ai-code-review-benchmark/grafana-codex/pull/623",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The refactoring has removed the logic that adds the `traceID` to plugin request logs. This information is valuable for tracing and debugging. The `traceID` should be added to the context along with the other contextual attributes in the `instrumentContext` function.  To fix this, import the `tracing` package and add the `traceID` to the context",
+        "location": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go:37"
+      }
+    ]
+  },
+  {
+    "pr_title": "Advanced Query Processing Architecture",
+    "pr_url": "https://github.com/ai-code-review-benchmark/grafana-codex/pull/624",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The filtering for an empty `expr` should occur *after* template variables have been applied. This ensures that if a template variable resolves to an empty string, the query is correctly filtered out before being processed further.  ```typescript   const queries = request.targets     .filter((query) => !query.hide)     .map((query) => datasource",
+        "location": "public/app/plugins/datasource/loki/querySplitting.ts:296"
+      },
+      {
+        "comment": "The filtering for an empty `expr` should occur *after* template variables have been applied. This is a regression from the previous implementation, which could lead to queries with empty expressions being passed to `splitQueriesByStreamShard` if they become empty after variable substitution.  ```typescript   const queries = request.targets",
+        "location": "public/app/plugins/datasource/loki/shardQuerySplitting.ts:49"
+      }
+    ]
+  },
+  {
+    "pr_title": "Notification Rule Processing Engine",
+    "pr_url": "https://github.com/ai-code-review-benchmark/grafana-codex/pull/625",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Dual Storage Architecture",
+    "pr_url": "https://github.com/ai-code-review-benchmark/grafana-codex/pull/626",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The current implementation spawns a new goroutine for every legacy write operation (`Create`, `Update`, `Delete`). Under high write load, this unbounded creation of goroutines can lead to excessive memory consumption, CPU scheduler contention, and potential resource exhaustion, threatening server stability. To fix this, the legacy writes should",
+        "location": "pkg/apiserver/rest/dualwriter_mode3.go:57"
+      },
+      {
+        "comment": "There are several places where the wrong metrics function is called, which will result in corrupted and misleading metrics.   1. In `Create` (line 45) and `Update` (line 129), on a storage operation error, `recordLegacyDuration` is called instead of `recordStorageDuration`. 2. In `DeleteCollection` (line 166), for the legacy operation, `recordS",
+        "location": "pkg/apiserver/rest/dualwriter_mode3.go:45"
+      },
+      {
+        "comment": "In `Create`, `Delete`, `Update`, and `DeleteCollection`, the legacy storage operations are performed in a goroutine. If these operations fail, the error is used to update a metric but is never logged. This is a regression from the previous implementation, where legacy storage errors were logged. Silently ignoring these errors will make it extre",
+        "location": "pkg/apiserver/rest/dualwriter_mode3.go:56"
+      }
+    ]
+  },
+  {
+    "pr_title": "Database Performance Optimizations",
+    "pr_url": "https://github.com/ai-code-review-benchmark/grafana-codex/pull/627",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The logic to construct the SQL query for SQLite when the batch size is large is flawed. It adds a trailing comma to the list of IDs in the `IN` clause, which will result in a SQL syntax error. The `values` string should be constructed without the trailing comma.  ```go if len(ids) > 1 { \tvar builder strings.Builder \tbuilder.WriteString(fmt.Spri",
+        "location": "pkg/services/annotations/annotationsimpl/xorm_store.go:612"
+      }
+    ]
+  },
+  {
+    "pr_title": "Frontend Asset Optimization",
+    "pr_url": "https://github.com/ai-code-review-benchmark/grafana-codex/pull/548",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Advanced SQL Analytics Framework",
+    "pr_url": "https://github.com/ai-code-review-benchmark/grafana-codex/pull/628",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The current implementation of `enableSqlExpressions` incorrectly negates the feature flag check and has a logical structure that causes it to always return `false`. This completely disables the SQL expression functionality. The function should directly return the value of the feature flag check.  ```go func enableSqlExpressions(h *ExpressionQue",
+        "location": "pkg/expr/reader.go:200"
+      }
+    ]
+  },
+  {
+    "pr_title": "Unified Storage Performance Optimizations",
+    "pr_url": "https://github.com/ai-code-review-benchmark/grafana-codex/pull/629",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The lock within `BuildIndex` was moved to only protect the final cache write. However, this re-introduces a race condition where multiple concurrent callers can trigger the expensive index-building process for the same resource. This leads to redundant CPU and I/O work. The lock should be acquired at the beginning of the function to ensure that",
+        "location": "pkg/storage/unified/search/bleve.go:85"
+      }
+    ]
+  },
+  {
+    "pr_title": "FEATURE: automatically downsize large images",
+    "pr_url": "https://github.com/ai-code-review-benchmark/discourse-cursor/pull/261",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The `OptimizedImage.downsize` method is being called with `\"80%\"`, which is being passed as a geometry/dimension argument to `convert`, not as a quality setting. This will result in unexpected resizing behavior (e.g., to 80% of original dimensions) rather than reducing file size by adjusting quality.  To correctly reduce the file size, you shou",
+        "location": "app/controllers/uploads_controller.rb:67"
+      },
+      {
+        "comment": "Violates rule 'Follow error handling conventions': The `FileHelper.download` call is followed by `rescue nil`, which silently swallows any potential errors during the download process (e.g., network issues, timeouts, file not found). Errors should be handled explicitly, logged, or re-",
+        "location": "app/controllers/uploads_controller.rb:55"
+      }
+    ]
+  },
+  {
+    "pr_title": "FEATURE: per-topic unsubscribe option in emails",
+    "pr_url": "https://github.com/ai-code-review-benchmark/discourse-cursor/pull/262",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Add comprehensive email validation for blocked users",
+    "pr_url": "https://github.com/ai-code-review-benchmark/discourse-cursor/pull/263",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Enhance embed URL handling and validation system",
+    "pr_url": "https://github.com/ai-code-review-benchmark/discourse-cursor/pull/264",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Optimize header layout performance with flexbox mixins",
+    "pr_url": "https://github.com/ai-code-review-benchmark/discourse-cursor/pull/265",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The `-webkit-box-ordinal-group` and `-moz-box-ordinal-group` properties from the 2009 Flexbox specification do not support values less than 1. The modern `order` property allows any integer. This mixin should account for that difference to avoid generating invalid CSS for older browsers when a value like `0` is passed. The fix ensures that any",
+        "location": "app/assets/stylesheets/common/foundation/mixins.scss:131"
+      }
+    ]
+  },
+  {
+    "pr_title": "UX: show complete URL path if website domain is same as instance domain",
+    "pr_url": "",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "scale-color $lightness must use $secondary for dark themes",
+    "pr_url": "https://github.com/ai-code-review-benchmark/discourse-cursor/pull/266",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The lightness values for the light and dark themes appear to have been swapped. The original code used `scale-color($primary, $lightness: 30%)` for the light theme. The new code changes this to `70%` for the light theme and `30%` for the dark theme. This will unintentionally make the link text much lighter in the light theme, likely causing con",
+        "location": "app/assets/stylesheets/desktop/topic-post.scss:291"
+      },
+      {
+        "comment": "The color for `.group-member-info .name` in the light theme has been unintentionally changed. Previously, it used a lightness of `30%`, which made it distinct from the `.title` element's color (`50%`). With this change, the lightness for `.name` is now `50%`, making its color identical to `.title`. This appears to be a regression. The original",
+        "location": "app/assets/stylesheets/desktop/user.scss:522"
+      },
+      {
+        "comment": "The lightness values for the light and dark themes appear to have been swapped. The original code used `scale-color($primary, $lightness: 70%)`. The new code changes this to `30%` for the light theme and `70%` for the dark theme. This will unintentionally make the text much darker in the light theme. To preserve the original look, the lightness",
+        "location": "app/assets/stylesheets/mobile/modal.scss:102"
+      },
+      {
+        "comment": "The color for `h3` elements inside a `.onebox` was unintentionally changed for the light theme. The original lightness was `20%`, but it has been changed to `50%`, making it significantly lighter and identical to the `h4` element's color. The corresponding desktop stylesheet (`desktop/topic-post.scss`) correctly preserves the `20%` lightness. T",
+        "location": "app/assets/stylesheets/mobile/topic-post.scss:182"
+      },
+      {
+        "comment": "The color for `.group-member-info .name` in the light theme has been unintentionally changed, similar to the desktop stylesheet. It previously used a lightness of `30%`, but is now set to `50%`, making its color identical to the `.title` element. This appears to be a regression. The original `30%` lightness should be preserved for the light the",
+        "location": "app/assets/stylesheets/mobile/user.scss:497"
+      }
+    ]
+  },
+  {
+    "pr_title": "FIX: proper handling of group memberships",
+    "pr_url": "https://github.com/ai-code-review-benchmark/discourse-cursor/pull/267",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The calculation for `totalPages` is incorrect. It fails when the number of members (`user_count`) is a non-zero multiple of the page size (`limit`). For example, with 50 members and a limit of 50, the current logic calculates 2 pages instead of 1. This allows the user to navigate to a final, empty page.  Using `Math.ceil()` for the division wil",
+        "location": "app/assets/javascripts/admin/controllers/admin-group.js.es6:13"
+      },
+      {
+        "comment": "The `addMembers` method calls `self.findMembers()` to refresh the member list, but it does not return the promise from this call within the `.then()` block. As a result, the promise returned by `addMembers` resolves as soon as the `PUT` request completes, not after the member list has been refreshed.  This can lead to race conditions and preven",
+        "location": "app/assets/javascripts/discourse/models/group.js:58"
+      }
+    ]
+  },
+  {
+    "pr_title": "FEATURE: Localization fallbacks (server-side)",
+    "pr_url": "https://github.com/ai-code-review-benchmark/discourse-cursor/pull/268",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "FEATURE: Can edit category/host relationships for embedding",
+    "pr_url": "https://github.com/ai-code-review-benchmark/discourse-cursor/pull/269",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The `category` property on the `host` model is being set using `this.get('categoryId')`, which is the value from the component's state *before* the save operation. If a user deselects a category, `this.get('categoryId')` will be `null`. The server, however, correctly defaults a blank `category_id` to the `uncategorized_category_id`. The model r",
+        "location": "app/assets/javascripts/admin/components/embeddable-host.js.es6:40"
+      },
+      {
+        "comment": "The code `type.replace('_', '-')` will only replace the first underscore in the `type` string. While this works for 'embeddable_host', it would not work correctly for a hypothetical future model name like `some_other_model`, which would be incorrectly converted to `some-other_model`.  To make this code more robust and prevent future bugs, use a",
+        "location": "app/assets/javascripts/discourse/adapters/rest.js.es6:22"
+      }
+    ]
+  },
+  {
+    "pr_title": "Async import of the appStore packages",
+    "pr_url": "https://github.com/ai-code-review-benchmark/cal.com/pull/210",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Violates rule 'Follow error handling conventions': The dynamic import `await appStore[...]` can reject if the module is not found or contains an error during initialization. This promise rejection is not handled within the `getCalendar` function, which will cause an unhandled promise",
+        "location": "packages/app-store/_utils/getCalendar.ts:15"
+      },
+      {
+        "comment": "Violates rule 'Follow error handling conventions': Using an `async` callback with `Array.prototype.forEach` is an anti-pattern for error handling. The `forEach` method does not wait for the promises returned by the callback to resolve. As a result, any promise rejection within the `as",
+        "location": "packages/app-store/vital/lib/reschedule.ts:131"
+      }
+    ]
+  },
+  {
+    "pr_title": "feat: 2fa backup codes",
+    "pr_url": "https://github.com/ai-code-review-benchmark/cal.com/pull/211",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "When a user has exhausted all backup codes, the database contains an array of `null`s. The current logic incorrectly returns an \"IncorrectBackupCode\" error. A check should be added after decryption to verify if any valid codes remain, and return a `MissingBackupCodes` error if not. This mirrors the issue in the login flow.  ```typescript     co",
+        "location": "apps/web/pages/api/auth/two-factor/totp/disable.ts:64"
+      },
+      {
+        "comment": "When a user has exhausted all backup codes, the database contains an array of `null`s. The current logic incorrectly returns an \"IncorrectBackupCode\" error. A check should be added after decryption to verify if any valid codes remain, and throw a `MissingBackupCodes` error if not.  ```typescript         const backupCodes = JSON.parse(",
+        "location": "packages/features/auth/lib/next-auth-options.ts:146"
+      }
+    ]
+  },
+  {
+    "pr_title": "fix: handle collective multiple host on destinationCalendar",
+    "pr_url": "https://github.com/ai-code-review-benchmark/cal.com/pull/212",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "When `externalCalendarId` is not provided, the logic to find a calendar to update is flawed. The condition `cal.externalId === externalCalendarId` will evaluate to `cal.externalId === null` (or undefined), which is unlikely to find a match. This breaks the fallback behavior of updating the event on a default or primary calendar.  The logic shou",
+        "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:256"
+      },
+      {
+        "comment": "Similar to the `updateEvent` method, the logic to find a calendar for deletion is flawed when `externalCalendarId` is not provided. The condition `cal.externalId === externalCalendarId` will not work when `externalCalendarId` is null or undefined.  The logic should be corrected to provide a proper fallback, such as finding the calendar associat",
+        "location": "packages/app-store/googlecalendar/lib/CalendarService.ts:317"
+      },
+      {
+        "comment": "The code saves only the first destination calendar (`evt.destinationCalendar[0]`) when creating a booking. This results in the loss of destination calendar information for all other hosts in a collective event, defeating the purpose of this feature. The booking's `references` should be used to store a link to each calendar the event was created",
+        "location": "packages/features/bookings/lib/handleNewBooking.ts:1879"
+      }
+    ]
+  },
+  {
+    "pr_title": "feat: convert InsightsBookingService to use Prisma.sql raw queries",
+    "pr_url": "https://github.com/ai-code-review-benchmark/cal.com/pull/213",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Comprehensive workflow reminder management for booking lifecycle events",
+    "pr_url": "https://github.com/ai-code-review-benchmark/cal.com/pull/214",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "When fetching organization-level workflows with a team filter (`input.teamId`), the query also includes workflows from any other team the current user is a member of. This leads to irrelevant workflows being displayed, which can be confusing for the user.  The query for `activeOnTeams` should be more restrictive when a `teamId` is provided. The",
+        "location": "packages/trpc/server/routers/viewer/workflows/list.handler.ts:71"
+      },
+      {
+        "comment": "Violates rule 'Follow error handling conventions': The `deleteAllWorkflowReminders` function catches errors from reminder deletion promises but only logs them instead of re-throwing. This swallows the error, preventing callers from handling the failure. Errors should be propagated up",
+        "location": "packages/trpc/server/routers/viewer/workflows/util.ts:377"
+      }
+    ]
+  },
+  {
+    "pr_title": "Advanced date override handling and timezone compatibility improvements",
+    "pr_url": "https://github.com/ai-code-review-benchmark/cal.com/pull/215",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Using `Date.prototype.toString()` for date-time calculations is unreliable because its output format is implementation-dependent. This can lead to parsing errors or incorrect timezone offset calculations if the code runs in an environment that produces an unexpected string format. Pass the `Date` object directly to `dayjs` for robust and unambi",
+        "location": "packages/lib/slots.ts:213"
+      },
+      {
+        "comment": "Day.js objects are being compared using strict equality (`===`), which checks if they are the same object instance, not if they represent the same time. This will cause the check to fail even if the start and end times are identical. Use the `.isSame()` method for value-based comparison.  ```typescript if (dayjs(date.start).add(utcOffset, \"minu",
+        "location": "packages/trpc/server/routers/viewer/slots.ts:116"
+      },
+      {
+        "comment": "The check against working hours compares the UTC time of the slot (`slotStartTime`) with `workingHour` ranges, which are in the user's local timezone. This will lead to incorrect availability. Additionally, the `end` variable is calculated using `slotStartTime` instead of the slot's actual end time, which is a logic error.  To fix this, the use",
+        "location": "packages/trpc/server/routers/viewer/slots.ts:145"
+      }
+    ]
+  },
+  {
+    "pr_title": "OAuth credential sync and app integration enhancements",
+    "pr_url": "https://github.com/ai-code-review-benchmark/cal.com/pull/216",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "SMS workflow reminder retry count tracking",
+    "pr_url": "https://github.com/ai-code-review-benchmark/cal.com/pull/217",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Violates rule 'Follow error handling conventions': The error in the `catch` block is logged to the console but not re-thrown. This swallows the error, preventing it from propagating and being handled properly. The error should be re-thrown or wrapped in a custom error to ensure the fa",
+        "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts:199"
+      }
+    ]
+  },
+  {
+    "pr_title": "Add guest management functionality to existing bookings",
+    "pr_url": "https://github.com/ai-code-review-benchmark/cal.com/pull/218",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Violates rule 'Follow error handling conventions': The error in the `try...catch` block is silently swallowed. Only a generic message is logged to the console, and the original error information is lost. The function then continues to return a success message, even though sending emai",
+        "location": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts:171"
+      }
+    ]
+  },
+  {
+    "pr_title": "feat: add calendar cache status and actions (#22532)",
+    "pr_url": "https://github.com/ai-code-review-benchmark/cal.com/pull/219",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The logic to determine `isLoadingSelectedDateSlots` is flawed. If a date is selected, but the data for it is not yet present in either `selectedDateSlots` or `monthSlots`, the function incorrectly returns `false`. It should return the actual loading state from the query, `_isLoadingSelectedDateSlots`, to ensure the UI shows a loading state whil",
+        "location": "apps/web/components/booking/pages/AvailabilityPage.tsx:175"
+      },
+      {
+        "comment": "Violates rule 'Follow error handling conventions': The error is caught and logged, but the function then returns a default empty array (`localCache`). This swallows the error, and the calling function has no indication that the operation failed, which can lead to silent failures and i",
+        "location": "packages/core/CalendarManager.ts:182"
+      }
+    ]
+  },
+  {
+    "pr_title": "Fixing Re-authentication with passkeys",
+    "pr_url": "https://github.com/ai-code-review-benchmark/keycloak/pull/183",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The string comparison `webauthnAuth.getCredentialType().equals(...)` is not null-safe. If `getCredentialType()` were to return `null`, this would cause a `NullPointerException`. This check is part of security logic that determines whether to bypass password authentication. For robustness and security, string literals or other known non-null obj",
+        "location": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java:78"
+      }
+    ]
+  },
+  {
+    "pr_title": "Add caching support for IdentityProviderStorageProvider.getForLogin operations",
+    "pr_url": "https://github.com/ai-code-review-benchmark/keycloak/pull/184",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Add AuthzClientCryptoProvider for authorization client cryptographic operations",
+    "pr_url": "https://github.com/ai-code-review-benchmark/keycloak/pull/185",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Add rolling-updates feature flag and compatibility framework",
+    "pr_url": "https://github.com/ai-code-review-benchmark/keycloak/pull/186",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Add Client resource type and scopes to authorization schema",
+    "pr_url": "https://github.com/ai-code-review-benchmark/keycloak/pull/187",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Add Groups resource type and scopes to authorization schema",
+    "pr_url": "https://github.com/ai-code-review-benchmark/keycloak/pull/188",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Add HTML sanitizer for translated message resources",
+    "pr_url": "https://github.com/ai-code-review-benchmark/keycloak/pull/189",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Implement access token context encoding framework",
+    "pr_url": "https://github.com/ai-code-review-benchmark/keycloak/pull/190",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Implement recovery key support for user storage providers",
+    "pr_url": "https://github.com/ai-code-review-benchmark/keycloak/pull/191",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Fix concurrent group access to prevent NullPointerException",
+    "pr_url": "https://github.com/ai-code-review-benchmark/keycloak/pull/192",
+    "tool": "kodus",
+    "issues": []
+  }
+]

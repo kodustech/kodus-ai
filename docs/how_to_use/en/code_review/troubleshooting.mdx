@@ -1,0 +1,82 @@
+---
+title: "Troubleshooting"
+description: "Troubleshooting Kody Code Review"
+---
+
+## Kody Code Review Not Working? Steps to Fix Common Issues
+
+### Token Issues
+
+If you're connected via a token, ensure these points are checked:
+
+- **GitHub Users**: Verify that your token is enabled for your organization:
+  1. You must be the organization owner.
+  2. Go to your organization's settings in GitHub:
+     - Use the following URL and replace `YOUR_ORG_NAME` with the name of your organization:
+       <small>
+         `https://github.com/organizations/YOUR_ORG_NAME/settings/member_privileges`
+       </small>
+       .
+  3. Under **Fine-Grained Personal Access Tokens**, ensure **"Allow access via fine-grained personal access tokens"** is selected.
+- **Personal Access Token (PAT)**: Confirm that your token is configured for your organization and has the required permissions. [Manage tokens](https://github.com/settings/tokens?type=beta).
+- **Token Expiry**: Make sure your token is active. [Check token status](https://github.com/settings/tokens?type=beta).
+
+<Frame caption="Your token should display your organization's logo. If it shows your personal profile picture, your token is set to personal access instead of organizational access.
+">
+    ![Token Example](/images/token.png)
+
+</Frame>
+
+---
+
+### Configuration Issues
+
+- **Automated Reviews**: Ensure automated reviews are enabled in your [Global Settings](https://app.kodus.io/automations/AutomationCodeReview/global/general). If disabled, start reviews manually with `@kody start-review`.
+- **Review Types**: Ensure at least one review type is selected for Kody to provide suggestions. [Configure review types](https://app.kodus.io/automations/AutomationCodeReview/global/general).
+- **Branch Reviews**: By default, Kody reviews PRs merged into the default branch. To include additional branches, [update your configuration](https://app.kodus.io/automations/AutomationCodeReview/global/general).
+- **Large PRs**: Be aware that PRs with a high number of changes may take longer to process.
+
+---
+
+### Global vs. Repository Settings
+
+Kody uses a hierarchical configuration system. Here's how it works:
+
+- **Global Settings**: Applied to all repositories by default.
+- **Repository-Specific Settings**: If configured, they will override global settings for that specific repository.
+
+#### Steps to Troubleshoot
+
+1. **Check Global Configuration**: Review and confirm global settings are correct. [Access Global Settings](https://app.kodus.io/automations/AutomationCodeReview/global/general).
+2. **Verify Repository Settings**:
+   - Navigate to the **By Repositories** section in your settings.
+   - Confirm if custom configurations are set for the repository in question.
+3. **Align or Clear Configurations**:
+   - To apply global settings, clear any repository-specific configurations.
+   - Alternatively, adjust the repository-specific settings to meet your needs.
+
+#### Common Symptoms
+
+- Automated reviews are not triggered for a repository.
+- Kody applies unexpected settings or suggestions.
+- Global settings are not reflected in specific repositories.
+
+
+## No Response or No Comments from Kody
+
+Work through this quick checklist:
+
+1. PR contains reviewable code changes (not only docs or images)? Kody may skip if there's nothing relevant to analyze.
+2. Branch is in scope? By default, only PRs targeting the default branch are reviewed unless additional base branches are configured.
+3. **Large PRs:** Kody reviews PRs with up to 200 **reviewable files** (after applying ignore patterns). Example: PR with 250 total files but 60 are `.lock` files → Kody reviews the remaining 190 files ✅
+4. Mode: If automated reviews are disabled, trigger manually with `@kody start-review`.
+5. Push cadence: If using auto-pause, wait for the cool-down or request a manual review.
+6. Repository overrides: Repo-specific settings can override global ones. Clear or align them as needed.
+
+<Card title="Review Modes & Cadence" icon="clock" href="/how_to_use/en/code_review/configs/general">
+  Check automated review, cadence, and branch filters.
+</Card>
+
+<Card title="Limits & Pricing" icon="scale-balanced" href="/how_to_use/en/pricing">
+  Learn about suggested limits and how they affect reviews.
+</Card>

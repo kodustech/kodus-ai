@@ -1,6 +1,7 @@
 import {
     hasKodyMarker,
     hasReviewMarker,
+    isForceReviewCommand,
     isKodyMentionNonReview,
     isReviewCommand,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
@@ -167,6 +168,51 @@ describe('codeCommentMarkers', () => {
         it('should return false for null/undefined', () => {
             expect(hasKodyMarker(null)).toBe(false);
             expect(hasKodyMarker(undefined)).toBe(false);
+        });
+    });
+
+    describe('isForceReviewCommand', () => {
+        it('should return true for "@kody review --force"', () => {
+            expect(isForceReviewCommand('@kody review --force')).toBe(true);
+        });
+
+        it('should return true for "@kody start-review --force"', () => {
+            expect(isForceReviewCommand('@kody start-review --force')).toBe(
+                true,
+            );
+        });
+
+        it('should accept single-dash and trailing text', () => {
+            expect(isForceReviewCommand('@kody review -force')).toBe(true);
+            expect(
+                isForceReviewCommand('@kody review --force please retry'),
+            ).toBe(true);
+        });
+
+        it('should be case-insensitive', () => {
+            expect(isForceReviewCommand('@KODY REVIEW --FORCE')).toBe(true);
+        });
+
+        it('should return false for plain review commands', () => {
+            expect(isForceReviewCommand('@kody review')).toBe(false);
+            expect(isForceReviewCommand('@kody start-review')).toBe(false);
+        });
+
+        it('should not match "force" embedded mid-word', () => {
+            expect(isForceReviewCommand('@kody review --forced')).toBe(false);
+        });
+
+        it('should return false for null/undefined/empty', () => {
+            expect(isForceReviewCommand(null)).toBe(false);
+            expect(isForceReviewCommand(undefined)).toBe(false);
+            expect(isForceReviewCommand('')).toBe(false);
+        });
+
+        it('isReviewCommand should still match when --force is present', () => {
+            // Force is a *flag on top of* a review command; both helpers
+            // must agree so the handler still routes it as a review.
+            expect(isReviewCommand('@kody review --force')).toBe(true);
+            expect(isReviewCommand('@kody start-review --force')).toBe(true);
         });
     });
 

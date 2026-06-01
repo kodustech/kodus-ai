@@ -5,6 +5,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PipelineStateManager } from '../engine/state/pipeline-state-manager.service';
 import { EventBufferService } from '../engine/event-buffer.service';
 
+// Infrastructure - Services
+import { DistributedLockService } from '../infrastructure/distributed-lock.service';
+
 // Infrastructure - Repositories & Models
 import { WorkflowJobModel } from '../infrastructure/repositories/schemas/workflow-job.model';
 import { WorkflowJobRepository } from '../infrastructure/repositories/workflow-job.repository';
@@ -47,6 +50,9 @@ const coreProviders = [
     // Engine
     PipelineStateManager,
     EventBufferService,
+
+    // Distributed Lock
+    DistributedLockService,
 ];
 
 @Global()

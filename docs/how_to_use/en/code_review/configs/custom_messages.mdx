@@ -1,0 +1,96 @@
+---
+title: "Custom Messages"
+description: "Configure personalized start and end review messages for Kody"
+---
+
+## Overview
+
+Customize the messages that Kody sends at the beginning and end of code reviews. This feature allows you to personalize the communication style and add specific context or instructions for your team.
+
+## Default Behavior
+
+When you haven't customized any messages, Kody works as follows:
+
+1. **Initial Message**: Kody sends a standard start review message
+2. **Suggestions**: Kody provides all code review suggestions
+3. **Final Message**: Kody updates the initial message with a summary of the review
+
+## Custom Message Behavior
+
+Once you edit either the start or end review message for the first time, Kody's behavior changes to:
+
+1. **Initial Message**: Kody sends your custom start review message
+2. **Suggestions**: Kody provides all code review suggestions
+3. **Final Message**: Kody sends your custom end review message (without updating the initial message)
+
+This creates a complete timeline: **Initial Message → Suggestions → Final Message**
+
+## Message Configuration Options
+
+### Message Behavior
+
+Use the **Message behavior** dropdown to decide when Kody should post your custom
+start and end messages:
+
+- **Important:** Messages are only sent when a review actually runs.  
+  If your review cadence is **Manual**, messages are posted only when someone runs `@kody start-review`.
+
+- **Every push**: Kody posts the start message when the pull request opens and
+  repeats the start/end pair after every new push **that triggers a review**.
+  This happens automatically only when cadence is **Automatic** or **Auto-pause**.
+- **Only when opened**: Kody sends the start and end messages only once, right
+  after the first review run. If cadence is **Manual**, the first review run is
+  when you call `@kody start-review`. Future pushes just add review suggestions
+  plus the usual reaction so authors know the review reran.
+- **Off**: Custom messages are disabled. Kody still runs the review and posts
+  suggestions, but no start or end messages are sent.
+
+When the behavior is `Every push` or `Only when opened`, Kody uses whichever
+templates you have filled in. If you only customize the start message, only that
+message is sent; same for the end message. This keeps the familiar timeline of
+**Initial Message → Suggestions → Final Message** whenever the behavior allows
+messages to be posted.
+
+**Example (Manual cadence)**  
+PR opened → no message yet  
+`@kody start-review` → start message → suggestions → end message
+
+## Dynamic Context
+
+You can enhance your custom messages with dynamic context using the **Add Context** button. This allows you to include:
+
+### changedFiles
+
+A summary of changed files, showing additions and deletions per file. This provides a detailed breakdown of what was modified in the pull request.
+
+### changedSummary
+
+A comprehensive summary of all changes in the pull request, giving an overview of the entire modification scope.
+
+### reviewOptions
+
+A reflection of the team's configured review settings, showing which analysis types are enabled or disabled for the review.
+
+### reviewCadence
+
+Provides the exact follow-up review policy so authors know what happens after
+the first automated review:
+
+- **Automatic**: Kody re-reviews every push as soon as it lands.
+- **Auto-pause**: Kody re-reviews pushes automatically, but if it detects a
+  "push burst" (for example, 3 pushes within 15 minutes, based on your
+  thresholds) it pauses follow-up reviews until you resume them. The cadence
+  context includes the push and time limits so the team knows when the pause can
+  be triggered.
+- **Manual**: Kody waits for someone to run `@kody start-review` before doing
+  another pass.
+
+<Info>
+  These context variables will be automatically populated with the actual data
+  from your pull request when Kody sends the message.
+</Info>
+
+<Note>
+  You can always revert to the default behavior by disabling both custom
+  messages or clearing the message content.
+</Note>{" "}

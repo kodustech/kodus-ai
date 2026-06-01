@@ -42,7 +42,7 @@ export class AxiosUrlValidator {
         // Ex: http://internal, https://localhost, etc (mesmo sem protocolo completo)
         const suspiciousPatterns = [
             /^https?:\/\//i, // Já coberto acima, mas incluído para clareza
-            /^\/\/[^\/]/, // Protocol-relative
+            /^\/\/[^/]/, // Protocol-relative
             /^:\d+/, // Port-only
         ];
 

@@ -1,4 +1,8 @@
 import { Entity } from '@libs/core/domain/interfaces/entity';
+import {
+    DEFAULT_RELEASE_TRACK,
+    type ReleaseTrack,
+} from '@libs/feature-gate/domain/release-track';
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { ITeam } from '@libs/organization/domain/team/interfaces/team.interface';
 
@@ -9,6 +13,7 @@ export class OrganizationEntity implements Entity<IOrganization> {
     private _name: string;
     private _tenantName: string;
     private _status: boolean;
+    private _releaseTrack: ReleaseTrack;
     private _users?: Partial<IUser>[];
     private _teams?: Partial<ITeam>[];
 
@@ -17,6 +22,8 @@ export class OrganizationEntity implements Entity<IOrganization> {
         this._name = organization.name;
         this._tenantName = organization.tenantName || this.generateTenantName();
         this._status = organization.status;
+        this._releaseTrack =
+            organization.releaseTrack ?? DEFAULT_RELEASE_TRACK;
         this._users = organization.users;
         this._teams = organization.teams;
     }
@@ -47,6 +54,10 @@ export class OrganizationEntity implements Entity<IOrganization> {
         return this._status;
     }
 
+    public get releaseTrack(): ReleaseTrack {
+        return this._releaseTrack;
+    }
+
     public get user() {
         return this._users;
     }
@@ -61,6 +72,7 @@ export class OrganizationEntity implements Entity<IOrganization> {
             name: this._name,
             tenantName: this._tenantName,
             status: this._status,
+            releaseTrack: this._releaseTrack,
             users: this._users,
             teams: this._teams,
         };
@@ -72,6 +84,7 @@ export class OrganizationEntity implements Entity<IOrganization> {
             name: this._name,
             tenantName: this._tenantName,
             status: this._status,
+            releaseTrack: this._releaseTrack,
             users: this._users,
             teams: this._teams,
         };

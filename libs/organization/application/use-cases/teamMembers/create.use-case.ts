@@ -34,10 +34,14 @@ export class CreateOrUpdateTeamMembersUseCase implements IUseCase {
     public async execute(teamId: string, members: IMembers[]): Promise<any> {
         try {
             const result: IUpdateOrCreateMembersResponse =
-                await this.teamMembersService.updateOrCreateMembers(members, {
-                    organizationId: this.request.user.organization.uuid,
-                    teamId,
-                });
+                await this.teamMembersService.updateOrCreateMembers(
+                    members,
+                    {
+                        organizationId: this.request.user.organization.uuid,
+                        teamId,
+                    },
+                    this.request.user.email,
+                );
 
             if (result?.results?.length > 0) {
                 try {

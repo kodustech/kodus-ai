@@ -1,0 +1,78 @@
+---
+title: "Primeros Pasos"
+---
+
+<Steps>
+  <Step title="Crear una Cuenta">
+    Regístrate ingresando tu nombre, correo electrónico y contraseña, o usa un proveedor social como Google, GitHub o GitLab.
+  </Step>
+
+  <Step title="Configurar una Herramienta de Gestión de Código">
+    <AccordionGroup>
+        <Accordion title="Configurar GitHub" icon="github">
+            Conecta GitHub mediante OAuth o token:
+              - **OAuth (Recomendado)**: Haz clic en el botón "via OAuth". Serás redirigido a la página de autenticación de GitHub.
+                - ✅ Kody aparece como un bot dedicado en los PRs
+                - ✅ Mejor registro de auditoría (distinción clara entre revisiones humanas y de IA)
+                - Requiere permisos de `owner` para tu organización
+                - Otorga acceso a todos los repositorios que quieras que Kody analice (puedes ajustarlo después)
+              - **Token**: Las revisiones aparecen bajo tu nombre de usuario. <a href="/how_to_use/es/code_review/general_config/github_pat">Visita la página de Configuración de Token de GitHub para instrucciones detalladas.</a>
+
+            <Note>¿Usas GitHub Enterprise? Agrega a la lista de permitidos la IP de Kodus `52.55.217.197` en el firewall de tu red antes de conectar.</Note>
+        </Accordion>
+
+        <Accordion title="Configurar GitLab" icon="gitlab">
+            Conecta GitLab mediante OAuth o token:
+              - **OAuth (Recomendado)**: Haz clic en el botón "via OAuth" y serás redirigido a la página de autenticación de GitLab.
+                - ✅ Kody aparece como un bot dedicado en los PRs
+                - Otorga acceso a todos los repositorios que quieras que Kody analice (puedes ajustarlo después)
+              - **Token**: Las revisiones aparecen bajo tu nombre de usuario. <a href="/how_to_use/es/code_review/general_config/gitlab_pat">Visita la página de Configuración de Token de GitLab para instrucciones detalladas.</a>
+
+            <Note>¿Usas una instancia auto-alojada de GitLab? Agrega a la lista de permitidos la IP de Kodus `52.55.217.197` en el firewall de tu red antes de conectar.</Note>
+        </Accordion>
+              <Accordion title="Configurar Bitbucket" icon="bitbucket">
+            Conecta Bitbucket mediante OAuth o token:
+              - **Token**: <a href="/how_to_use/es/code_review/general_config/bitbucket_pat">Visita la página de Configuración de Token de Bitbucket para instrucciones detalladas.</a>
+
+            <Note>¿Usas Bitbucket Data Center (auto-alojado)? Agrega a la lista de permitidos la IP de Kodus `52.55.217.197` en el firewall de tu red antes de conectar.</Note>
+        </Accordion>
+        <Accordion title="Configurar Azure DevOps" icon="microsoft">
+            Conecta Azure DevOps mediante OAuth o token:
+              - **Token**: <a href="/how_to_use/es/code_review/general_config/azure_devops_pat">Visita la página de Configuración de Token de Azure DevOps para instrucciones detalladas.</a>
+
+            <Note>¿Usas Azure DevOps Server (auto-alojado)? Agrega a la lista de permitidos la IP de Kodus `52.55.217.197` en el firewall de tu red antes de conectar.</Note>
+        </Accordion>
+    </AccordionGroup>
+
+
+  </Step>
+
+<Step title="Seleccionar Repositorios">
+  Elige los repositorios a los que quieres que Kody acceda para revisiones automatizadas e
+  información accionable.
+</Step>
+
+<Step title="Ejecutar Tu Primera Revisión de PR">
+  Selecciona un pull request (PR) para que Kody lo revise. Esto mostrará el poder de
+  las revisiones de código automatizadas. Una vez seleccionado, Kody realizará la revisión directamente
+  en tu herramienta de Git. No te preocupes, esto es solo para la primera vez: después de eso,
+  Kody revisará automáticamente cada PR que abras.
+</Step>
+<Step title="¡Disfruta las Revisiones Automatizadas de Kody! 🔥">
+  Siéntate y deja que Kody optimice tu proceso de revisión con sugerencias inteligentes
+  e información accionable.
+</Step>
+
+</Steps>
+
+## Próximos Pasos
+
+<CardGroup cols={1}>
+  <Card
+    title="Configura Kody con las Reglas de Tu Equipo"
+    icon="Hand-love"
+    href="code_review/configs/kody_rules"
+  >
+    Aprende cómo configurar Kody con las reglas de tu equipo.
+  </Card>
+</CardGroup>

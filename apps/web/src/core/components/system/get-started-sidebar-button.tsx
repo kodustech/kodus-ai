@@ -22,53 +22,52 @@ import { UserRole } from "@enums";
 import { useEffectOnce } from "@hooks/use-effect-once";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { useAuth } from "src/core/providers/auth.provider";
+import { useConfig } from "@providers/ConfigProvider";
 import { cn } from "src/core/utils/components";
 import { ClientSideCookieHelpers } from "src/core/utils/cookie";
+import type { PublicConfig } from "@config/publicConfig";
 
-const TASKS = [
-    {
-        label: "Create a Kody Rule",
-        key: "get-started/create-kody-rule",
-        href: "/settings/code-review/global/kody-rules",
-    },
-    {
-        label: "Adjust your workspace settings",
-        key: "get-started/adjust-workspace-settings",
-        href: "/settings/code-review/global/general",
-    },
-    {
-        label: "Connect a new repository",
-        key: "get-started/connect-new-repository",
-        href: "/settings/git",
-    },
-    {
-        label: "Explore our docs",
-        key: "get-started/explore-docs",
-        href: process.env.WEB_SUPPORT_DOCS_URL as `https://`,
-    },
-    {
-        label: "Invite a teammate to Kodus",
-        key: "get-started/invite-teammate",
-        href: "/settings/subscription?tab=admins",
-    },
-] as const satisfies Array<
-    | {
-          label: string;
-          key: `get-started/${string}`;
-          href: `/${string}`;
-      }
-    | {
-          label: string;
-          key: `get-started/${string}`;
-          href: `https://${string}` | `http://${string}`;
-      }
->;
+// TASKS is built per-render so the "Explore our docs" href can come from
+// useConfig() instead of process.env (which used to inline at build time).
+function buildTasks(cfg: PublicConfig) {
+    return [
+        {
+            label: "Create a Kody Rule",
+            key: "get-started/create-kody-rule",
+            href: "/settings/code-review/global/kody-rules",
+        },
+        {
+            label: "Adjust your workspace settings",
+            key: "get-started/adjust-workspace-settings",
+            href: "/settings/code-review/global/general",
+        },
+        {
+            label: "Connect a new repository",
+            key: "get-started/connect-new-repository",
+            href: "/settings/git",
+        },
+        {
+            label: "Explore our docs",
+            key: "get-started/explore-docs",
+            href: cfg.supportDocsUrl as `https://${string}`,
+        },
+        {
+            label: "Invite a teammate to Kodus",
+            key: "get-started/invite-teammate",
+            href: "/settings/subscription?tab=admins",
+        },
+    ] as const;
+}
 
-const MAX = TASKS.length;
+type Task = ReturnType<typeof buildTasks>[number];
+
 const HIDDEN_STATE_KEY = "get-started/hidden";
 
 export const GetStartedSidebarButton = () => {
     const { role } = useAuth();
+    const cfg = useConfig();
+    const TASKS = buildTasks(cfg);
+    const MAX = TASKS.length;
     if (role !== UserRole.OWNER) return null;
 
     const [isOpen, _setIsOpen] = useState(false);
@@ -81,7 +80,7 @@ export const GetStartedSidebarButton = () => {
                     ClientSideCookieHelpers(current.key).get() === "true";
                 return acc;
             },
-            {} as Record<(typeof TASKS)[number]["key"], boolean>,
+            {} as Record<Task["key"], boolean>,
         ),
     );
 
@@ -117,7 +116,7 @@ export const GetStartedSidebarButton = () => {
         _setIsVisible(false);
     };
 
-    const setTaskCompletion = (key: (typeof TASKS)[number]["key"]) => {
+    const setTaskCompletion = (key: Task["key"]) => {
         ClientSideCookieHelpers(key).set("true");
 
         _setTasksCompletion((tc) => {

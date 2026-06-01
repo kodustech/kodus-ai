@@ -1,3 +1,7 @@
+export const DOCUMENTATION_PACKAGE_DISCOVERY_SERVICE_TOKEN = Symbol.for(
+    'DocumentationPackageDiscoveryService',
+);
+
 import { createLogger } from '@kodus/flow';
 import {
     IPullRequestManagerService,

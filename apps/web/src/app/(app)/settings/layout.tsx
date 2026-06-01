@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import {
+    getLLMConfigStatus,
+    getLLMProviderModels,
+} from "@services/organizationParameters/fetch";
+import {
     getDefaultCodeReviewParameterNoCache,
     getFormattedCodeReviewParameterNoCache,
     getPlatformConfigParameterNoCache,
@@ -44,14 +48,35 @@ export default async function Layout({ children }: React.PropsWithChildren) {
         return null;
     }
 
-    const [initialShellConfig, initialDefaultConfig, initialPlatformConfig] =
-        await Promise.all([
-            getFormattedCodeReviewParameterNoCache(initialTeamId),
-            getDefaultCodeReviewParameterNoCache(),
-            getPlatformConfigParameterNoCache(initialTeamId),
-        ]);
+    // Resolved first (fast DB read) so the provider's model catalog can be
+    // fetched in parallel with the config fetches below, hiding its latency.
+    const initialLLMConfigStatus = await getLLMConfigStatus().catch(() => null);
+    const byokProvider =
+        initialLLMConfigStatus?.byok?.configured &&
+        initialLLMConfigStatus.byok.providerId
+            ? initialLLMConfigStatus.byok.providerId
+            : undefined;
 
-    if (!initialShellConfig || !initialDefaultConfig || !initialPlatformConfig) {
+    const [
+        initialShellConfig,
+        initialDefaultConfig,
+        initialPlatformConfig,
+        initialByokModels,
+    ] = await Promise.all([
+        getFormattedCodeReviewParameterNoCache(initialTeamId),
+        getDefaultCodeReviewParameterNoCache(),
+        getPlatformConfigParameterNoCache(initialTeamId),
+        // Drives the BYOK model selector's catalog. Empty on error / no BYOK.
+        byokProvider
+            ? getLLMProviderModels(byokProvider).catch(() => [])
+            : Promise.resolve([]),
+    ]);
+
+    if (
+        !initialShellConfig ||
+        !initialDefaultConfig ||
+        !initialPlatformConfig
+    ) {
         return null;
     }
 
@@ -64,7 +89,11 @@ export default async function Layout({ children }: React.PropsWithChildren) {
                 initialTeamId={initialTeamId}
                 initialConfigValue={initialShellConfig.configValue}
                 initialDefaultConfig={initialDefaultConfig}
-                initialPlatformConfig={initialPlatformConfig}>
+                initialPlatformConfig={initialPlatformConfig}
+                initialModelData={{
+                    llmConfigStatus: initialLLMConfigStatus,
+                    byokModels: initialByokModels,
+                }}>
                 {children}
             </SettingsLayout>
         </PageBoundary>

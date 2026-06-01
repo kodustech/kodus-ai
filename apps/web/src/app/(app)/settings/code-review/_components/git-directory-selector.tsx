@@ -20,11 +20,13 @@ const LazyTreeFolder = ({
     loadDirectory,
     repository,
     repositoryId,
+    excludeGroupId,
 }: {
     directory: DirectoryItem;
     loadDirectory: (path: string | null) => Promise<DirectoryItem[]>;
     repository: any;
     repositoryId: string;
+    excludeGroupId?: string;
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const path = `/${directory.path}`;
@@ -37,7 +39,12 @@ const LazyTreeFolder = ({
     );
 
     const isDisabled = safeArray(repository?.directories).some(
-        (d: any) => path.startsWith(`${d.path}/`) || path === d.path,
+        (group: any) =>
+            group.id !== excludeGroupId &&
+            safeArray(group.folders).some(
+                (f: any) =>
+                    path.startsWith(`${f.path}/`) || path === f.path,
+            ),
     );
 
     return (
@@ -64,6 +71,7 @@ const LazyTreeFolder = ({
                         loadDirectory={loadDirectory}
                         repository={repository}
                         repositoryId={repositoryId}
+                        excludeGroupId={excludeGroupId}
                     />
                 ))}
 
@@ -76,9 +84,11 @@ const LazyTreeFolder = ({
 
 export const GitDirectorySelector = ({
     repositoryId,
+    excludeGroupId,
     ...props
 }: {
     repositoryId: string;
+    excludeGroupId?: string;
 } & React.ComponentProps<typeof Tree.Root>) => {
     const { teamId } = useSelectedTeamId();
     const { configValue } = useSuspenseGetCodeReviewParameter(teamId);
@@ -111,6 +121,7 @@ export const GitDirectorySelector = ({
                             loadDirectory={loadDirectory}
                             repository={repository}
                             repositoryId={repositoryId}
+                            excludeGroupId={excludeGroupId}
                         />
                     );
                 })}

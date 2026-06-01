@@ -6,6 +6,7 @@ import { WebhookContextService } from '@libs/platform/application/services/webho
 import { ChatWithKodyFromGitUseCase } from '@libs/platform/application/use-cases/codeManagement/chatWithKodyFromGit.use-case';
 import { SavePullRequestUseCase } from '@libs/platformData/application/use-cases/pullRequests/save.use-case';
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
+import { OUTBOX_MESSAGE_REPOSITORY_TOKEN } from '@libs/core/workflow/domain/contracts/outbox-message.repository.contract';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CodeManagementService } from '../../adapters/services/codeManagement.service';
@@ -56,6 +57,10 @@ describe('AzureReposPullRequestHandler', () => {
                 {
                     provide: PULL_REQUESTS_SERVICE_TOKEN,
                     useValue: pullRequestsService,
+                },
+                {
+                    provide: OUTBOX_MESSAGE_REPOSITORY_TOKEN,
+                    useValue: {},
                 },
             ],
         }).compile();

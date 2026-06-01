@@ -1,0 +1,27 @@
+---
+title: "Como configurar revisão de código com IA no GitLab"
+description: "Instale e configure o Kodus para projetos GitLab e receba revisão de código automatizada com IA em cada merge request."
+---
+
+O Kodus integra-se com o GitLab via OAuth e webhooks. Uma vez configurado, os merge requests são revisados automaticamente.
+
+## Passos
+
+1. **Crie uma conta** em [kodus.io](https://kodus.io) ou [hospede o Kodus por conta própria](/how_to_deploy/pt-br/deploy_kodus/generic_vm)
+2. **Conecte o GitLab** — autorize via OAuth durante a configuração
+3. **Configure os webhooks** — siga a configuração guiada para habilitar eventos de merge request
+4. **Selecione os projetos** — escolha quais projetos GitLab o Kodus deve revisar
+5. **Abra um merge request** — o Kodus o revisa automaticamente
+
+## O que você recebe
+
+- Revisões automatizadas em cada MR
+- Comentários postados diretamente no merge request
+- Regras personalizáveis e controles de sugestões
+- Validação de lógica de negócio contra tarefas vinculadas
+
+## Configuração personalizada
+
+Coloque um `kodus-config.yml` na raiz do seu repositório para personalizar o comportamento por projeto.
+
+Para o guia completo de configuração, consulte [GitLab OAuth](/how_to_deploy/pt-br/platforms/gitlab/gitlab_oauth) e [GitLab Webhooks](/how_to_deploy/pt-br/platforms/gitlab/gitlab_webhook).

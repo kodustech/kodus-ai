@@ -3,6 +3,7 @@ import {
     IsArray,
     IsBoolean,
     IsEnum,
+    IsIn,
     IsNumber,
     IsObject,
     IsOptional,
@@ -229,6 +230,20 @@ class V2PromptOverridesGenerationDto {
     main?: string;
 }
 
+class V2PromptOverridesLevelDto {
+    @IsOptional()
+    @IsString()
+    critical?: string;
+
+    @IsOptional()
+    @IsString()
+    issue?: string;
+
+    @IsOptional()
+    @IsString()
+    warning?: string;
+}
+
 class V2PromptOverridesDto {
     @IsOptional()
     @ValidateNested()
@@ -239,6 +254,11 @@ class V2PromptOverridesDto {
     @ValidateNested()
     @Type(() => V2PromptOverridesSeverityDto)
     severity?: V2PromptOverridesSeverityDto;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => V2PromptOverridesLevelDto)
+    level?: V2PromptOverridesLevelDto;
 
     @IsOptional()
     @ValidateNested()
@@ -365,6 +385,17 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsBoolean()
     ideRulesSyncEnabled?: boolean;
 
+    /**
+     * Only consulted when `ideRulesSyncEnabled` transitions from `true` to
+     * `false`. Picks what happens to imported rules. See
+     * `IdeSyncDisableAction` for semantics. Defaults to `'keep'` (least
+     * destructive) when callers omit it — historically this transition
+     * silently deleted rules, which surprised users.
+     */
+    @IsOptional()
+    @IsIn(['keep', 'pause', 'delete'])
+    ideSyncDisableAction?: 'keep' | 'pause' | 'delete';
+
     @IsOptional()
     @IsBoolean()
     kodyRulesGeneratorEnabled?: boolean;
@@ -416,9 +447,13 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsBoolean()
     enableCommittableSuggestions?: boolean;
 
+    /**
+     * BYOK main-model override for code reviews. Empty string '' means
+     * "inherit" (directory -> repository -> the BYOK-settings main model).
+     */
     @IsOptional()
-    @IsBoolean()
-    crossFileDependenciesAnalysis?: boolean;
+    @IsString()
+    byokModel?: string;
 }
 
 export class CreateOrUpdateCodeReviewParameterDto {
@@ -456,4 +491,10 @@ export class CreateOrUpdateCodeReviewParameterDto {
     @IsOptional()
     @ApiPropertyOptional({ example: 'src/services' })
     directoryPath?: string;
+
+    @IsArray()
+    @IsString({ each: true })
+    @IsOptional()
+    @ApiPropertyOptional({ example: ['/src/services', '/src/controllers'] })
+    directoryPaths?: string[];
 }

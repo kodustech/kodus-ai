@@ -1,0 +1,138 @@
+---
+title: "安全优先的审查流程"
+description: "设置专注于 OWASP Top 10、密钥检测和安全编码模式的 Kody 规则。"
+icon: "shield-halved"
+---
+
+## 为什么需要安全优先的流程
+
+通用代码审查捕获风格和 bug。但安全漏洞 — SQL 注入、硬编码密钥、不安全的认证模式 — 需要专门的规则，将发现视为关键阻断。
+
+此 cookbook 在现有审查之上设置安全优先层。
+
+## 步骤 1 — 启用安全分析
+
+确保安全分析已启用：
+
+```yaml
+reviewOptions:
+  security: true
+```
+
+这提供 Kodus 的内置安全检查。以下规则在此基础上添加团队的特定安全策略。
+
+## 步骤 2 — 创建 OWASP 专项规则
+
+### SQL 注入防护
+
+```
+名称：禁止原始 SQL 查询
+范围：文件
+路径：**/*.ts, **/*.js, **/*.py
+严重性：严重
+说明：
+  标记任何使用字符串拼接或模板字面量构建 SQL 查询的情况。
+  查找模式如：
+  - `query("SELECT ... " + variable)`
+  - `query(\`SELECT ... ${variable}\`)`
+  - `execute(f"SELECT ... {variable}")`
+  必须使用参数化查询或 ORM。
+```
+
+### 硬编码密钥检测
+
+```
+名称：禁止硬编码密钥或凭据
+范围：文件
+路径：**/*
+严重性：严重
+说明：
+  标记 fileDiff 中看起来像 API 密钥、密码、令牌或密钥的任何字符串。
+  需要捕获的模式：
+  - 名为 *_KEY、*_SECRET、*_TOKEN、*_PASSWORD 且赋值为字符串字面量的变量
+  - 匹配 "sk_live_"、"ghp_"、"AKIA"、"Bearer " 后跟长字符串的模式
+  - 包含嵌入密码的连接字符串
+  密钥必须来自环境变量或保管库。
+```
+
+### 认证绕过
+
+```
+名称：不得跳过认证中间件
+范围：拉取请求
+严重性：严重
+说明：
+  检查 pr_files_diff 中是否有任何处理用户数据但没有认证中间件的路由或控制器。
+  查找：
+  - 没有 @UseGuards、@Authenticated 或等效装饰器的新路由
+  - 中间件绕过模式如 skipAuth: true
+  - 访问用户特定数据的公共端点
+  参考 @file:src/shared/auth/guards/ 了解批准的认证模式。
+```
+
+### XSS 防护
+
+```
+名称：禁止未经清理的 dangerouslySetInnerHTML
+范围：文件
+路径：**/*.tsx, **/*.jsx
+严重性：严重
+说明：
+  标记 fileDiff 中任何使用 dangerouslySetInnerHTML 的情况。
+  如果使用，验证输入是否已使用 DOMPurify 或等效库进行清理。
+  未清理的 HTML 注入是严重的 XSS 漏洞。
+```
+
+## 步骤 3 — 教授安全记忆
+
+创建适用于所有地方的持久约定：
+
+```
+@kody remember: all user input must be validated and sanitized
+before use. Never trust client-side data.
+```
+
+```
+@kody remember: all API endpoints that handle sensitive data
+must use HTTPS only and include rate limiting.
+```
+
+```
+@kody remember: error messages must never expose stack traces,
+internal paths, or database details to the client.
+```
+
+## 步骤 4 — 配置零容忍
+
+对于安全规则，您希望关键发现能够阻断：
+
+1. 在 PR 工作流设置中启用**请求更改**，使 Kody 在发现严重问题时请求更改
+2. 将安全规则设置为**严重**级别，使它们始终高于任何严重性过滤器
+3. 不要设置低的 `maxSuggestions` 限制 — 安全发现永远不应被抑制
+
+## 步骤 5 — 添加依赖审计规则（可选）
+
+如果您使用 MCP 插件，可以检查依赖项：
+
+```
+名称：禁止已知漏洞的依赖项
+范围：拉取请求
+严重性：严重
+说明：
+  如果 pr_files_diff 修改了 package.json、requirements.txt
+  或任何依赖文件，使用 @MCP 检查添加或更新的包中是否存在
+  已知漏洞。标记任何具有已知严重 CVE 的依赖项。
+```
+
+## 检查清单
+
+- [ ] reviewOptions 中启用安全分析
+- [ ] SQL 注入规则覆盖所有数据库交互代码
+- [ ] 密钥检测规则覆盖所有文件类型
+- [ ] 认证绕过规则引用实际的认证模式
+- [ ] XSS 规则覆盖所有前端组件文件
+- [ ] 安全记忆教授一般安全编码原则
+- [ ] 为严重发现启用请求更改
+- [ ] 测试 PR 确认规则正确触发
+
+有关配置规则的更多信息，请参阅 [Kody 规则](/how_to_use/en/code_review/configs/kody_rules)。

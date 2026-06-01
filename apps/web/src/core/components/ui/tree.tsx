@@ -1,10 +1,11 @@
 "use client";
 
-import { Children, createContext, useState } from "react";
+import { Children, createContext, use, useState } from "react";
 import { ChevronDownIcon, FolderIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
 import { Button } from "./button";
+import { Checkbox } from "./checkbox";
 import {
     Collapsible,
     CollapsibleContent,
@@ -12,18 +13,53 @@ import {
 } from "./collapsible";
 import { RadioGroup } from "./radio-group";
 
-const TreeContext = createContext({ multiple: false });
+const TreeContext = createContext<{
+    multiple: boolean;
+    values: string[];
+    onToggle: (value: string) => void;
+}>({ multiple: false, values: [], onToggle: () => {} });
 
-const TreeRoot = (
-    props: React.PropsWithChildren & {
-        multiple?: false;
-        value: string | undefined;
-        onValueChange: (value: string) => void;
-    },
-) => {
+type TreeRootSingleProps = React.PropsWithChildren & {
+    multiple?: false;
+    value: string | undefined;
+    onValueChange: (value: string) => void;
+};
+
+type TreeRootMultipleProps = React.PropsWithChildren & {
+    multiple: true;
+    value: string[];
+    onValueChange: (value: string[]) => void;
+};
+
+const TreeRoot = (props: TreeRootSingleProps | TreeRootMultipleProps) => {
+    if (props.multiple) {
+        const handleToggle = (val: string) => {
+            const current = props.value;
+            if (current.includes(val)) {
+                props.onValueChange(current.filter((v) => v !== val));
+            } else {
+                props.onValueChange([...current, val]);
+            }
+        };
+
+        return (
+            <div className="text-sm">
+                <TreeContext
+                    value={{
+                        multiple: true,
+                        values: props.value,
+                        onToggle: handleToggle,
+                    }}>
+                    {props.children}
+                </TreeContext>
+            </div>
+        );
+    }
+
     return (
         <div className="text-sm">
-            <TreeContext value={{ multiple: props.multiple ?? false }}>
+            <TreeContext
+                value={{ multiple: false, values: [], onToggle: () => {} }}>
                 <RadioGroup.Root
                     className="gap-0"
                     value={props.value}
@@ -45,6 +81,7 @@ const TreeFolder = (
     },
 ) => {
     const [open, setOpen] = useState(false);
+    const ctx = use(TreeContext);
 
     const hasChildren =
         props.hasChildren ?? Children.toArray(props.children).some((c) => !!c);
@@ -54,17 +91,28 @@ const TreeFolder = (
         props.onOpenChange?.(newOpen);
     };
 
+    const isChecked = ctx.multiple && ctx.values.includes(props.value);
+
     return (
         <Collapsible
             open={open}
             onOpenChange={handleOpenChange}
             disabled={!hasChildren}>
             <div className="flex w-fit items-center gap-3">
-                <RadioGroup.Item
-                    value={props.value}
-                    className="peer"
-                    disabled={props.disabled}
-                />
+                {ctx.multiple ? (
+                    <Checkbox
+                        checked={isChecked}
+                        disabled={props.disabled}
+                        onCheckedChange={() => ctx.onToggle(props.value)}
+                        className="peer"
+                    />
+                ) : (
+                    <RadioGroup.Item
+                        value={props.value}
+                        className="peer"
+                        disabled={props.disabled}
+                    />
+                )}
 
                 <CollapsibleTrigger asChild>
                     <Button
@@ -73,7 +121,10 @@ const TreeFolder = (
                         data-disabled={undefined}
                         className={cn(
                             "flex items-center px-0 py-0 font-medium",
-                            "peer-data-[state=checked]:text-text-primary",
+                            (ctx.multiple ? isChecked : false) &&
+                                "text-text-primary",
+                            !ctx.multiple &&
+                                "peer-data-[state=checked]:text-text-primary",
                         )}>
                         <div className="flex items-center gap-2">
                             <FolderIcon className="size-5" />

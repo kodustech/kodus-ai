@@ -1,0 +1,68 @@
+---
+title: "Cómo enseñarle a la IA las convenciones de codificación de tu equipo"
+description: "Usa Memorias para que Kody aprenda tus preferencias de codificación, decisiones de arquitectura y convenciones del equipo a través de una conversación natural."
+---
+
+Cada equipo tiene contexto no escrito — preferencias tecnológicas, convenciones de nomenclatura, decisiones de arquitectura, detalles de migración. En lugar de documentarlo todo desde el principio, puedes enseñárselo a Kody mediante una conversación natural para que las futuras revisiones sean más relevantes y desaparezcan las sugerencias repetitivas de poco valor.
+
+## Cómo funciona
+
+Cuando hablas con Kody en los comentarios de un PR, detecta cuándo estás declarando contexto del código o una preferencia del equipo y lo guarda automáticamente como una **Memoria**. Las Memorias se aplican luego como contexto de alta prioridad en todas las revisiones de código y conversaciones futuras.
+
+### Enseñanza explícita
+
+Dile directamente a Kody que recuerde algo:
+
+```
+@kody remember: este repositorio refleja una API de terceros, así que algunos campos del payload se mantienen intencionalmente en snake_case.
+```
+
+```
+@kody please remember: este servicio sigue arquitectura hexagonal y deja los adapters en los bordes.
+```
+
+### Aprendizaje implícito
+
+Expresa una preferencia de forma natural — Kody la capta:
+
+```
+@kody este repositorio refleja una API de terceros, así que algunos campos del payload se mantienen intencionalmente en snake_case.
+```
+
+```
+@kody en este servicio, las pruebas suelen vivir junto a los archivos de implementación y no en una carpeta central de tests.
+```
+
+```
+@kody el módulo de facturación está a mitad de una migración, así que convienen cambios incrementales y no refactors amplios.
+```
+
+## Qué no guardará Kody
+
+Kody es selectivo respecto a lo que se convierte en memoria:
+
+- Instrucciones temporales ("arregla esto ahora", "omite esto por hoy")
+- Preguntas ("¿cuál es el plazo?")
+- Conversaciones de depuración ("veo un error")
+- Declaraciones vagas sin información accionable
+- Solicitudes con alcance a un solo PR o tarea
+
+## Alcances de memoria
+
+Cada memoria se aplica en un nivel específico:
+
+| Alcance | Ejemplo |
+|---------|---------|
+| **Directorio** | "En `src/components/ui`, usar siempre nuestros tokens del sistema de diseño" |
+| **Repositorio** | "Este repositorio usa arquitectura hexagonal" |
+| **Organización** | "Todos los repositorios usan ESLint flat config" |
+
+## Flujo de aprobación
+
+Si deseas revisar las memorias generadas por IA antes de que entren en vigor, activa la **aprobación de memorias generadas por LLM** en la configuración. Las memorias entrarán en estado pendiente hasta que las apruebes.
+
+## Gestionar memorias
+
+Ve a **Configuración de Revisión de Código** → **Kody Rules** → pestaña **Memorias** para ver, editar o eliminar memorias. También puedes crear memorias manualmente desde la interfaz.
+
+Para más detalles, consulta [Kody Rules — Memorias](/how_to_use/es/code_review/configs/kody_rules#memories).

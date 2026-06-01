@@ -1,0 +1,139 @@
+---
+title: "Onboarding a new team"
+description: "Step-by-step guide to set up Kodus for a new team — from connecting repos to teaching your first conventions."
+icon: "users-gear"
+---
+
+## Overview
+
+Getting a new team up and running with Kodus takes about 30 minutes. This guide walks through the complete setup so your team gets value from the first PR.
+
+## Step 1 — Create and configure the workspace
+
+1. Sign up at [kodus.io](https://kodus.io) or access your self-hosted instance
+2. Create a new workspace for your team
+3. Connect your Git provider (GitHub, GitLab, Bitbucket, or Azure DevOps)
+4. Select the repositories to monitor
+
+## Step 2 — Set the review baseline
+
+Start with sensible defaults before customizing:
+
+```yaml
+# kodus-config.yml — drop this in each repo root
+reviewOptions:
+  security: true
+  code_style: true
+  kody_rules: true
+  refactoring: true
+  error_handling: true
+  maintainability: true
+  potential_issues: true
+  performance_and_optimization: true
+  business_logic: true
+
+suggestionControl:
+  groupingMode: full
+  limitationType: pr
+  maxSuggestions: 9
+  severityLevelFilter: medium
+
+automatedReviewActive: true
+```
+
+This gives you automated reviews with a reasonable suggestion limit. Adjust after a week based on feedback.
+
+## Step 3 — Import existing rules from IDE tools
+
+If your team already uses Cursor, Copilot, or Claude rules:
+
+1. Go to **Code Review Settings** → **Kody Rules**
+2. Kodus detects `.cursorrules`, `.github/copilot-instructions.md`, and `.claude` files
+3. Import the ones that make sense for code review
+
+This avoids having to rewrite rules from scratch.
+
+## Step 4 — Teach your top 5 conventions
+
+Don't try to encode everything on day one. Start with the 5 conventions your team argues about most:
+
+```
+@kody remember: we use camelCase for variables and PascalCase for types.
+```
+
+```
+@kody remember: all API responses use the standard envelope format
+{ data, error, meta }.
+```
+
+```
+@kody remember: we prefer composition over inheritance.
+Use interfaces and dependency injection.
+```
+
+```
+@kody remember: every public function must have JSDoc with
+@param and @returns descriptions.
+```
+
+```
+@kody remember: database queries go through the repository layer only.
+No direct DB access from services or controllers.
+```
+
+These become Memories that apply immediately to all reviews.
+
+## Step 5 — Create 2-3 critical rules
+
+Add rules for things that must never happen:
+
+```
+Name: No console.log in production code
+Scope: File
+Paths: src/**/*.ts
+Severity: High
+Instructions: Flag any console.log, console.warn, or console.error
+in fileDiff. Use the project logger instead.
+Exclude test files (*.spec.ts, *.test.ts).
+```
+
+```
+Name: No hardcoded API URLs
+Scope: File
+Paths: src/**/*.ts
+Severity: Critical
+Instructions: Flag any hardcoded URL (http:// or https://)
+in fileDiff that looks like an API endpoint.
+URLs must come from environment variables or config files.
+```
+
+## Step 6 — Connect task management (optional but recommended)
+
+Connect Jira, Linear, Notion, or ClickUp in **Settings** → **Plugins** to enable business logic validation. This lets Kodus check if PRs implement what the tasks describe.
+
+## Step 7 — Run a pilot PR
+
+Open a test PR and verify:
+
+- [ ] Kodus comments appear on the PR
+- [ ] Suggestions are relevant and at the right severity
+- [ ] Your custom rules fire when they should
+- [ ] Memories are reflected in the review context
+
+## Step 8 — Gather feedback after one week
+
+After a week of reviews, check in with the team:
+
+- Are there too many suggestions? → Raise `severityLevelFilter` or lower `maxSuggestions`
+- Are rules too noisy? → Narrow the file paths or add exclusions
+- Missing important patterns? → Add new rules or Memories
+- Want auto-generated rules? → Click **Generate Kody Rules** to get suggestions from review history
+
+## Tips
+
+- Don't overload with rules on day one — start small and grow
+- Let the team teach Kody naturally through conversation before formalizing as rules
+- Use `@kody start-review` for the first few PRs so the team sees Kodus in action
+- Enable LLM-generated memories approval if you want to review what Kody learns
+
+For the full setup guide, see [Quickstart](/how_to_use/en/quickstart).

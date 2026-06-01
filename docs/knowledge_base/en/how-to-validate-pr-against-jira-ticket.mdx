@@ -1,0 +1,41 @@
+---
+title: "How to validate if a PR implements a Jira ticket"
+description: "Use Kodus to compare your pull request against Jira acceptance criteria and catch missing requirements before merging."
+---
+
+You wrote the code, but did it actually implement everything the Jira ticket asked for? Business Logic Validation compares your PR diff against the task requirements and flags anything missing, incomplete, or misaligned.
+
+## How it works
+
+1. **Connect the Jira plugin** in your workspace's [Plugins](/how_to_use/en/code_review/plugins) page
+2. Comment on your PR:
+
+```
+@kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292
+```
+
+3. Kody fetches the Jira ticket (title, description, acceptance criteria), reads the PR diff, and compares them
+
+## What you get
+
+Kody produces a structured report with:
+
+- **Status** — Issues Found or Compliant
+- **Findings** with severity levels:
+  - **MUST_FIX** — a required business rule is not implemented
+  - **SUGGESTION** — an edge case or robustness point is not covered
+  - **INFO** — useful observation that doesn't block compliance
+- **Requirement tracing** — each finding quotes the exact requirement from the Jira ticket
+- **Requirements Verified** — what was correctly implemented, with file/line references
+
+## Automatic validation
+
+With `business_logic: true` in your review options (enabled by default), Kody automatically validates against linked tasks during every PR review — no manual command needed.
+
+## Tips for best results
+
+- Add **acceptance criteria** to your Jira tickets — tasks with explicit criteria get criterion-by-criterion validation
+- If the PR scope doesn't match the ticket, Kody detects the **scope mismatch** instead of producing misleading findings
+- You can re-run the validation after addressing findings to confirm compliance
+
+For details, see [Business Logic Validation](/how_to_use/en/code_review/business_logic_validation).

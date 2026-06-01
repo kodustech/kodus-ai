@@ -1,0 +1,74 @@
+---
+title: "Plugins"
+description: "Plugins são uma forma de trazer contexto de negócio externo diretamente para o fluxo de revisão de Kody."
+tag: 'beta'
+---
+
+<Callout icon="alien" iconType="regular">Este é um recurso beta. Ainda não está pronto para produção e pode não funcionar conforme o esperado.</Callout>
+
+## Visão Geral
+
+Os Plugins permitem trazer contexto de negócio externo diretamente para o fluxo de revisão de Kody. Eles ampliam a compreensão de Kody com dados de ferramentas como Jira, para que o feedback e as ações permaneçam alinhados com os processos da sua equipe.
+
+## O Que São os Plugins
+
+Os Plugins são servidores Model Context Protocol (MCP) curados pelo Kodus. Cada plugin expõe capacidades específicas — como buscar tarefas ou verificar especificações — que Kody pode usar ao colaborar com você em pull requests.
+
+## Kodus MCP
+
+Todo workspace é fornecido com o Kodus MCP já conectado. Ele agrega adaptadores seguros para cada provedor Git suportado — GitHub, GitLab, Bitbucket e Azure DevOps — para que você nunca precise instalar plugins separados de manipulação de código.
+
+Além do controle de versão, o Kodus MCP desbloqueia automações nativas:
+
+- Gerencie regras Kody diretamente de uma thread de revisão (criar, editar ou remover).
+- Abra issues do Kody manualmente quando precisar de um acompanhamento personalizado fora do fluxo automatizado.
+
+## Usando Plugins em Sugestões
+
+<img src="https://kodus.io/wp-content/uploads/2025/10/comment-mcp.gif" alt="Example of using a plugin in a suggestion" />
+
+
+Interaja com um plugin dentro de uma sugestão de code review mencionando Kody explicitamente no seu comentário. Uma vez invocada, Kody chama o plugin relevante e responde na mesma thread.
+
+### Exemplos de prompts
+
+- `@kody, update this kody rule to ignore test files`
+- `@kody, move this task https://jira.com/task-123 to DONE`
+
+Esses prompts mantêm a discussão em contexto e permitem que os colegas de equipe acompanhem toda a conversa dentro do PR.
+
+## Validando Regras de Negócio
+
+Use o comando `@kody -v business-logic` quando quiser que Kody compare um pull request com uma especificação. Forneça o conteúdo da spec diretamente ou compartilhe um link:
+
+- `@kody -v business-logic https://jira.com/task-123`
+
+Kody buscará a especificação referenciada pelo plugin e confirmará se a implementação corresponde ao comportamento documentado.
+
+<Card title="Guia de Validação de Regras de Negócio" icon="shield-check" href="/how_to_use/pt-br/code_review/business_logic_validation">
+    Explore o guia detalhado com pré-requisitos e solução de problemas para `@kody -v business-logic`.
+</Card>
+
+## Controlando o Acesso
+
+Kody vê apenas as ferramentas que você habilita para cada workspace. Instale os plugins que importam para o seu fluxo de trabalho e mantenha todo o resto privado.
+
+## Plugins Personalizados
+
+Traga seus próprios servidores MCP quando precisar de capacidades além do catálogo curado.
+
+1. Abra o catálogo de plugins dentro do seu workspace e clique em **Adicionar Plugin Personalizado**.
+2. Forneça os detalhes do endpoint:
+   - **Nome do Plugin** (obrigatório) e **Descrição** opcional para ajudar os colegas de equipe a entender a integração.
+   - **URL do Logo** opcional para um ícone reconhecível no catálogo.
+   - A **URL** MCP que hospeda seu servidor junto com o **Protocolo** esperado (HTTP ou WebSocket).
+   - Qualquer método de **Autorização** necessário ou cabeçalhos personalizados para autenticação.
+3. Clique em **Criar Plugin** para torná-lo imediatamente disponível para Kody no workspace atual.
+
+Os plugins personalizados seguem o mesmo modelo de permissões das integrações curadas: apenas os workspaces onde o plugin está instalado podem invocá-lo, e Kody nunca acessa endpoints que você não configurou explicitamente.
+
+## Dicas
+
+- Mencione Kody apenas uma vez por solicitação para que o plugin correto seja executado sem duplicação.
+- Mantenha os links acessíveis ao seu workspace; Kody precisa de permissão para acessar o recurso de destino pelo plugin.
+- Revise o catálogo de plugins periodicamente — novas integrações são adicionadas conforme o Kodus cura servidores MCP adicionais.

@@ -1,5 +1,10 @@
 import { Column, Entity, Index, OneToMany } from 'typeorm';
 
+import {
+    DEFAULT_RELEASE_TRACK,
+    RELEASE_TRACKS,
+    type ReleaseTrack,
+} from '@libs/feature-gate/domain/release-track';
 import type { SSOConfigModel } from '@libs/ee/sso/repositories/ssoConfig.model';
 import type { UserModel } from '@libs/identity/infrastructure/adapters/repositories/schemas/user.model';
 import type { AuthIntegrationModel } from '@libs/integrations/infrastructure/adapters/repositories/schemas/authIntegration.model';
@@ -13,6 +18,9 @@ import { CoreModel } from '@libs/core/infrastructure/repositories/model/typeOrm'
 @Entity('organizations')
 @Index('IDX_organizations_status', ['status'], { concurrent: true })
 @Index('IDX_organizations_tenant', ['tenantName'], { concurrent: true })
+@Index('IDX_organizations_release_track', ['releaseTrack'], {
+    concurrent: true,
+})
 export class OrganizationModel extends CoreModel {
     @Column()
     name: string;
@@ -22,6 +30,14 @@ export class OrganizationModel extends CoreModel {
 
     @Column({ default: true })
     public status: boolean;
+
+    @Column({
+        name: 'release_track',
+        type: 'enum',
+        enum: RELEASE_TRACKS,
+        default: DEFAULT_RELEASE_TRACK,
+    })
+    releaseTrack: ReleaseTrack;
 
     @OneToMany('TeamModel', 'organization')
     teams: TeamModel[];

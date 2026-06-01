@@ -128,9 +128,7 @@ describe('mcp-controller.helper', () => {
             'Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID',
         );
         expect(res.setHeader).toHaveBeenCalledWith('Allow', 'POST');
-        expect(res.status).toHaveBeenCalledWith(
-            HttpStatus.METHOD_NOT_ALLOWED,
-        );
+        expect(res.status).toHaveBeenCalledWith(HttpStatus.METHOD_NOT_ALLOWED);
         expect(res.json).toHaveBeenCalledWith(
             expect.objectContaining({
                 error: expect.objectContaining({

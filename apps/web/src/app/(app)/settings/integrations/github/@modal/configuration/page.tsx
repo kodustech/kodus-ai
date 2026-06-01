@@ -31,8 +31,6 @@ import { ParametersConfigKey } from "@services/parameters/types";
 import { useAuth } from "src/core/providers/auth.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { IntegrationCategory } from "src/core/types";
-import { captureSegmentEvent } from "src/core/utils/segment";
-
 export default function Github() {
     const router = useRouter();
     const { teamId } = useSelectedTeamId();
@@ -118,14 +116,6 @@ export default function Github() {
             title: "Repositories saved",
         });
 
-        captureSegmentEvent({
-            userId: userId!,
-            event: "select_repositories_changed",
-            properties: {
-                platform: "github",
-                newQuantityOfRepositories: selectedRepositories.length,
-            },
-        });
 
         await invalidateQueries({
             type: "all",

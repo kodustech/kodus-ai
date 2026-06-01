@@ -1,0 +1,79 @@
+---
+title: "Arquitetura do Kodus"
+description: "Uma análise aprofundada da infraestrutura técnica do Kodus."
+icon: "puzzle-piece"
+---
+
+## Visão Geral
+
+Este documento descreve a arquitetura que sustenta a infraestrutura do Kodus. Nosso sistema é construído sobre uma arquitetura distribuída que utiliza contêinerização e segmentação de rede para garantir máxima escalabilidade, segurança e manutenibilidade.
+
+## Redes e Componentes Principais
+
+A infraestrutura é dividida em redes Docker que separam o acesso público
+do tráfego interno entre serviços:
+
+- shared-network: Serviços públicos e roteamento de borda
+- kodus-backend-services: Comunicação interna entre serviços
+- monitoring-network: Tráfego de métricas e observabilidade (opcional)
+
+## Componentes
+
+```mermaid
+graph LR
+    Web[Kodus Web App] --> API[API Service]
+    API --> RabbitMQ[(RabbitMQ)]
+    Webhooks[Webhooks Service] --> API
+    API --> Worker[Worker Service]
+    Worker --> RabbitMQ
+    API --> Postgres[(Postgres)]
+    API --> Mongo[(MongoDB)]
+    Worker --> Postgres
+    Worker --> Mongo
+```
+
+### 1. Aplicação Web do Kodus
+
+Nossa plataforma frontend é construída com Next.js, oferecendo uma experiência de usuário fluida por meio de comunicação direta com nossa camada de API.
+
+### 2. Serviços de Backend Principais
+
+O stack 2.0 divide as responsabilidades do backend em serviços dedicados:
+
+- API: Camada de serviço central responsável pela lógica de negócios e processamento de requisições
+- Worker: Processamento assíncrono para filas e tarefas em segundo plano
+- Webhooks: Serviço dedicado para webhooks de provedores Git
+
+### 3. MCP Manager
+
+O MCP Manager cataloga provedores e integrações, e os disponibiliza para o Kodus para que
+as equipes possam instalar MCPs pela tela de Plugins.
+
+### 4. Armazenamentos de Dados
+
+O Kodus utiliza dois bancos de dados:
+
+- Postgres: Dados relacionais e metadados de embeddings
+- MongoDB: Armazenamento flexível de documentos
+
+### 5. Mensageria e Observabilidade
+
+O RabbitMQ é obrigatório na versão 2.0, fornecendo comunicação assíncrona confiável
+entre a API, o worker e os webhooks.
+
+Prometheus e Grafana são opcionais e utilizados para monitoramento e visualização.
+
+### 6. Serviços Auxiliares (Kodus Cloud)
+
+O Kodus Cloud inclui serviços auxiliares de código fechado (faturamento, analytics e
+integrações de chat) que não são necessários para implantações self-hosted.
+
+## Próximos Passos
+<CardGroup cols={2}>
+  <Card title="Executar o Kodus Localmente" icon="laptop" href="/how_to_deploy/pt-br/local_quickstart/orchestrator">
+    Ideal para desenvolvimento local e para se familiarizar com o stack completo do Kodus.
+  </Card>
+  <Card title="Implantar o Kodus em Produção" icon="rocket" href="/how_to_deploy/pt-br/deploy_kodus/generic_vm">
+    Perfeito para implantação em produção e para aproveitar todas as capacidades do Kodus.
+  </Card>
+</CardGroup>

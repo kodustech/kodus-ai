@@ -1,0 +1,167 @@
+---
+title: "Guia de Solução de Problemas"
+description: "Resolva problemas comuns com o Kodus."
+icon: "headset"
+---
+
+## Soluções Rápidas
+
+### "Executar diagnósticos"
+
+O instalador inclui um script de diagnóstico que verifica o stack e configurações incorretas comuns.
+
+```bash
+cd kodus-installer
+./scripts/doctor.sh
+```
+
+### "Não consigo acessar a interface web"
+
+1. Verifique se os contêineres estão em execução:
+
+```bash
+docker-compose ps kodus-web
+```
+
+2. Verifique se as portas estão mapeadas corretamente:
+
+```bash
+docker-compose port kodus-web 3000
+```
+
+3. Verifique os logs do contêiner web:
+
+```bash
+docker-compose logs kodus-web
+```
+
+### "Erros de Edge Runtime nos logs do `kodus-web`"
+
+Se você vir erros como `A Node.js API is used ... not supported in the Edge Runtime` (frequentemente com um rastreamento de importação do `axios`), parte da aplicação web está sendo executada no Edge Runtime, que não suporta APIs do Node.js.
+
+1. Atualize para a imagem mais recente do `kodus-web` (re-execute o instalador ou rode `docker-compose pull kodus-web` e `docker-compose up -d`).
+2. Se estiver compilando a partir do código-fonte, certifique-se de que as rotas de auth/server sejam executadas no runtime do Node.js (defina `export const runtime = "nodejs"` e evite `runtime = "edge"` nessas rotas).
+3. Reconstrua e reinicie o contêiner.
+
+### "Os webhooks Git não estão funcionando"
+
+1. Verifique a configuração do seu domínio:
+
+```bash
+curl -I https://your-domain.com
+```
+
+2. Verifique os logs de webhooks para tentativas de webhook:
+
+```bash
+docker-compose logs webhooks | grep webhook
+```
+
+3. Verifique a configuração do seu proxy reverso:
+
+```bash
+sudo nginx -t
+```
+
+### "Problemas de conexão com o banco de dados"
+
+1. Verifique o status dos contêineres do banco de dados:
+
+```bash
+docker-compose ps db_kodus_postgres
+docker-compose ps db_kodus_mongodb
+```
+
+2. Verifique os logs do banco de dados:
+
+```bash
+docker-compose logs db_kodus_postgres
+docker-compose logs db_kodus_mongodb
+```
+
+3. Teste as conexões com o banco de dados:
+
+```bash
+docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
+docker-compose exec db_kodus_mongodb mongosh -u $API_MG_DB_USERNAME -p $API_MG_DB_PASSWORD
+```
+
+### "Migração falhou por tipo vector ausente"
+
+Se você encontrar o erro "type vector does not exist" durante as migrações, isso ocorre porque a extensão pgvector não está habilitada no seu banco de dados PostgreSQL. Veja como corrigir:
+
+1. Conecte-se ao seu banco de dados PostgreSQL:
+
+```bash
+docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
+```
+
+2. Habilite a extensão pgvector:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+3. Após habilitar a extensão, tente executar suas migrações novamente:
+
+```bash
+docker-compose exec api npm run migration:run
+```
+
+Se ainda estiver enfrentando problemas, você pode verificar se a extensão está corretamente instalada:
+
+```sql
+SELECT * FROM pg_extension WHERE extname = 'vector';
+```
+
+## Problemas Comuns
+
+### Problemas com RabbitMQ
+
+Se você estiver vendo erros na fila de mensagens:
+
+1. Verifique o status do RabbitMQ:
+
+```bash
+docker-compose logs rabbitmq
+```
+
+2. Acesse o console de gerenciamento em `http://localhost:15672` para verificar filas e conexões
+
+3. Reinicie o serviço se necessário:
+
+```bash
+docker-compose restart rabbitmq
+```
+
+### Problemas de Recursos
+
+Se os serviços estiverem lentos ou travando:
+
+1. Verifique o uso de recursos:
+
+```bash
+docker stats
+```
+
+2. Verifique os limites dos contêineres:
+
+```bash
+docker inspect $(docker-compose ps -q api) | grep -A 5 "Resources"
+```
+
+3. Ajuste os limites de recursos no docker-compose.yml se necessário
+
+## Obtendo Ajuda
+
+### O que Incluir em Solicitações de Suporte
+
+- A mensagem de erro exata
+- Logs relevantes dos serviços afetados
+- Seu método de implantação (CLI, VM, etc.)
+- Passos para reproduzir o problema
+
+### Onde Obter Ajuda
+
+- [Comunidade Discord](https://discord.gg/TFZBRk9fT6)
+- [Issues no GitHub](https://github.com/kodustech/kodus-installer/issues)

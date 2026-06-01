@@ -1,0 +1,276 @@
+---
+title: "集中設定"
+description: "すべてのコードレビュー設定と Kody ルールを 1 つのリポジトリでコードとして管理します。変更はマージ後に自動的に同期され、ロールアウトは UI または CLI から制御されます。"
+---
+
+集中設定を使用すると、Web UI でリポジトリごとに編集する代わりに、すべてのコードレビュー設定とすべての Kody ルールを**1 つのリポジトリ**に保持できます。各変更はそのリポジトリのプルリクエストを通じて流れ、レビュー設定のバージョン履歴、レビュー、ロールバックが可能になります。
+
+次の場合に使用します：
+
+- 多くのリポジトリ全体のレビュー動作に対する単一の信頼できる情報源が必要な場合。
+- コードとしてのコードレビュー：履歴、PR レビュー、ロールバック、CI 検証。
+- 組織全体で一貫した Kody ルール（レビュールールとメモリ）が必要な場合。
+- CLI または CI 主導の設定変更が必要な場合。
+
+## 仕組み
+
+1. 集中設定を保持する 1 つのリポジトリを選択します。
+2. UI で集中設定を有効にし、そのリポジトリを指定します。
+3. **初期同期モード**を選択します：
+   - `pr` — Kodus は現在の有効な設定とルールで初期化 PR を開きます。
+   - `manual` — Kodus はファイルを生成します。チームはファイルをダウンロードして PR を開きます。
+4. 最初のマージ後、集中リポジトリへの将来のすべてのマージが Kodus への変更を自動的に伝播します。
+
+集中リポジトリは、フォルダーレイアウトを通じて Kodus のスコープ階層（グローバル → リポジトリ → ディレクトリ）を反映します。
+
+## リポジトリレイアウト
+
+集中リポジトリは、フォルダーパスを使用してファイルをスコープにマッピングします。レイアウトはレビュー設定（`kodus-config.yml`）と Kody ルール（`.kody-rules/`）の両方をカバーします。
+
+<Note>
+リポジトリ名は任意です。組織に合ったものを選んでください。以下では慣例として `kodus-config` を使用します。
+</Note>
+
+```
+kodus-config/
+├── kodus-config.yml                      ← グローバル設定
+├── .kody-rules/
+│   ├── review/                           ← グローバルレビュールール
+│   │   └── require-tests-for-endpoints.yml
+│   └── memories/                         ← グローバルメモリ
+│       └── logging-convention.yml
+│
+├── backend-api/                          ← Kodus リポジトリに一致
+│   ├── kodus-config.yml                  ← リポジトリレベルのオーバーライド
+│   ├── .kody-rules/
+│   │   ├── review/
+│   │   │   └── no-raw-sql.yml
+│   │   └── memories/
+│   │       └── auth-module-layout.yml
+│   │
+│   └── src/auth/                         ← リポジトリのサブディレクトリに一致
+│       ├── kodus-config.yml              ← ディレクトリレベルのオーバーライド
+│       └── .kody-rules/
+│           ├── review/
+│           └── memories/
+│
+└── frontend-web/
+    └── kodus-config.yml
+```
+
+ルール：
+
+- 集中リポジトリの**ルート**にある `kodus-config.yml` はグローバルに適用されます。
+- Kodus リポジトリの名前と一致するトップレベルフォルダー（例：`backend-api/`）は、そのリポジトリにファイルをスコープします。
+- リポジトリフォルダー内のネストされたパス（例：`backend-api/src/auth/`）は、そのディレクトリにファイルをスコープし、Web UI と同じ継承モデルに従います。
+- `.kody-rules/review/` 下のルールは**レビュールール**になり、`.kody-rules/memories/` 下のルールは**メモリ**になります。
+
+一致するスコープのないファイルは同期時に無視されます。
+
+## 設定ファイル
+
+各 `kodus-config.yml` は[一般設定](/how_to_use/ja/code_review/configs/general)に記載されているリポジトリごとの `kodus-config.yml` と同じスキーマを使用します。フィールドはファイルが存在するフォルダーのレベルで適用され、通常の継承ルールに従います（[設定の継承とオーバーライド](/how_to_use/ja/code_review/configs/inheritance_overrides)を参照）。
+
+最小限の例：
+
+```yaml
+version: '1.2'
+reviewOptions:
+  security: true
+  kody_rules: true
+  error_handling: true
+suggestionControl:
+  groupingMode: full
+  limitationType: pr
+  maxSuggestions: 9
+  severityLevelFilter: medium
+ignorePaths:
+  - yarn.lock
+  - package-lock.json
+automatedReviewActive: true
+```
+
+## Kody ルールファイル
+
+各ルールは `.kody-rules/review/`（標準ルール）または `.kody-rules/memories/`（メモリ）下の単一の YAML ファイルです。ファイル名は任意です。Kodus はルールを `title` フィールドとルールと共に保存された正規ファイルパスで識別します。
+
+レビュールールの例（`.kody-rules/review/require-tests-for-endpoints.yml`）：
+
+```yaml
+title: Require tests for new endpoints
+rule: |
+  Every new HTTP endpoint handler must include at least one integration test
+  that exercises the happy path and one common failure mode.
+severity: high
+scope: pull_request
+path: apps/api/**
+examples:
+  - snippet: |
+      // endpoint added with matching *.spec.ts
+    isCorrect: true
+  - snippet: |
+      // endpoint added with no test file touched in the PR
+    isCorrect: false
+inheritance:
+  inheritable: true
+  exclude: []
+  include: []
+```
+
+完全なフィールドリファレンスについては[Kody ルール概要](/how_to_use/ja/code_review/configs/kody_rules)を、`inheritance.inheritable`、`exclude`、`include` の動作については[ルール継承](/how_to_use/ja/code_review/configs/rules_inheritance)を参照してください。
+
+## UI ワークフロー
+
+**設定 → コードレビュー → 一般**から：
+
+1. **集中設定**を開きます。
+2. 集中設定を有効にします。
+3. ソースリポジトリを選択します。
+4. **初期同期方法**を選択します：
+   - 自動（今すぐ PR を作成）
+   - 手動（後で同期）
+5. 保存してステータスを確認します。
+
+## 有効時の Web UI の動作
+
+集中設定が有効な場合、設定の信頼できる情報源は集中リポジトリです。Web UI はこれを反映します：
+
+- **リポジトリ、ディレクトリ、グローバルのコードレビュー設定**は Web UI で読み取り専用になります。集中リポジトリで PR を開いて編集してください。
+- **Kody ルールと PR メッセージ**は Web UI で引き続き編集可能です。編集を保存してもルールを直接変更しません。Kodus は提案された変更を含むプルリクエストを集中リポジトリで開きます。PR がマージされると、変更が有効になります。
+
+これにより、ルールとメッセージのビジュアル編集体験を維持しながら、「すべてがレビューされバージョン管理される」という保証が保たれます。
+
+### UI のルールとリポジトリのルールは共存します
+
+集中設定を有効にしても、以前に Web UI で作成されたルールは**削除されません**。また、UI から新しいルールを作成することも**妨げません**。両方のソースが同じ有効ルールのプールに供給されます：
+
+- 集中リポジトリからインポートされたルールはステータス `SYNCED` で保存されます。
+- Web UI で直接作成されたルールはそれらと共存し、有効なまま維持されます。
+- レビュー時、Kodus はソースに関係なくデータベースから **すべての有効なルール** を読み込みます。UI にのみ存在するルールは、リポジトリにのみ存在するルールとまったく同じように適用されます。
+- `PENDING_ADD` ステータスのルール（UI/CLI の編集で PR を開いたが、まだマージされていない）は、PR がマージされてステータスが `SYNCED` に遷移するまでレビューから **除外** されます。
+
+実務上：集中リポジトリを手動でブートストラップし、UI に既に存在していたルールが含まれていなかった場合、そのルールは引き続き動作します — ただしリポジトリでバージョン管理されないだけです。バージョン管理下に置くには、UI で一度編集する（PR が開かれます）か、`init` を使用して Kodus が既存のすべてのルールを初期化 PR にまとめるようにしてください。
+
+## 同期状態
+
+集中設定から来る各ルールは、ステータスを通じてライフサイクルを追跡します：
+
+| ステータス | 意味 |
+|---|---|
+| `SYNCED` | Kodus 内のルールが集中リポジトリのファイルと一致している。 |
+| `PENDING_ADD` | UI/CLI 経由で新しいルールが作成され PR が開かれた。ファイルはまだデフォルトブランチに存在しない。 |
+| `PENDING_EDIT` | UI/CLI 経由で編集が提案され PR が開かれている。既存のファイルはまだ更新されていない。 |
+| `PENDING_DELETE` | UI/CLI 経由で削除が提案され PR が開かれている。ファイルはまだデフォルトブランチに存在する。 |
+
+`PENDING_*` は対応する PR がマージされると `SYNCED` に戻ります。
+
+## 同期モード
+
+<Tabs>
+  <Tab title="PR（デフォルト）">
+    Kodus は現在の有効な設定とルールで初期化プルリクエストを自動的に開きます。
+  </Tab>
+  <Tab title="手動">
+    Kodus はファイルを生成しますが PR を開きません。ダウンロードバンドルを使用してファイルをエクスポートし、自分で PR を開いてマージしてください。
+  </Tab>
+</Tabs>
+
+## 設定バンドルのダウンロード
+
+現在の設定とルールを反映した生成済み `kodus-config.yml` ファイルと `.kody-rules/` ツリーを含む ZIP をダウンロードできます。
+
+以下の場合に使用します：
+
+- 生成された設定の監査。
+- 別のチームとのセットアップアーティファクトの共有。
+- ロールアウト前のローカルバックアップの保持。
+- `manual` モードでの集中リポジトリのブートストラップ。
+
+## 集中設定の無効化
+
+集中設定を無効にすると、選択されたソースリポジトリがクリアされ、すべてのリポジトリが標準の非集中動作（Web UI で設定を編集、オプションでリポジトリごとの `kodus-config.yml`）に戻ります。
+
+同期されたルールと設定は Kodus に残ります。無効化時に削除されません。
+
+## CLI
+
+以下のコマンドを使用して、ターミナルワークフローと CI スクリプトから集中設定を管理します。
+
+### 要件
+
+- チームキー認証。
+- Kodus で少なくとも 1 つの選択されたリポジトリ。
+
+以下で認証します：
+
+```bash
+kodus auth team-key --key <your-key>
+```
+
+### ステータスの確認
+
+```bash
+kodus config centralized status
+```
+
+### 集中設定の初期化
+
+```bash
+kodus config centralized init [owner/repo] --sync-option <pr|manual>
+```
+
+注意事項：
+
+- `--sync-option` のデフォルトは `pr` です。
+- インタラクティブなターミナルでリポジトリが省略された場合、CLI は選択を促します。
+- 非インタラクティブ環境では、リポジトリを指定する必要があります。
+
+例：
+
+```bash
+kodus config centralized init kodustech/kodus-config --sync-option pr
+kodus config centralized init kodustech/kodus-config --sync-option manual
+```
+
+### 同期の実行
+
+```bash
+kodus config centralized sync
+```
+
+### 集中設定の無効化
+
+```bash
+kodus config centralized disable
+```
+
+### 設定 ZIP のダウンロード
+
+```bash
+kodus config centralized download --out ./centralized-config.zip
+```
+
+注意事項：
+
+- `--out` は必須です。
+- 出力は生成された設定ファイルと `.kody-rules/` ツリーを含む ZIP バンドルです。
+
+### JSON 出力
+
+すべての集中コマンドは `--json` による構造化出力をサポートします。
+
+```bash
+kodus config centralized status --json
+kodus config centralized init kodustech/kodus-config --sync-option pr --json
+kodus config centralized sync --json
+kodus config centralized disable --json
+kodus config centralized download --out ./centralized-config.zip --json
+```
+
+## 関連情報
+
+- [一般設定](/how_to_use/ja/code_review/configs/general)
+- [設定の継承とオーバーライド](/how_to_use/ja/code_review/configs/inheritance_overrides)
+- [Kody ルール概要](/how_to_use/ja/code_review/configs/kody_rules)
+- [ルール継承](/how_to_use/ja/code_review/configs/rules_inheritance)
+- [CLI コマンドリファレンス](/how_to_use/ja/cli/commands)

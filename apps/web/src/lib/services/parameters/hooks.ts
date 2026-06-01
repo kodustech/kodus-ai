@@ -142,8 +142,7 @@ export const useSuspenseGetDefaultCodeReviewParameter = (
 
 export const useGetCodeReviewLabels = (codeReviewVersion?: string) => {
     // Normalize any unknown version (e.g. "v3-agent") to "v2"; only "legacy" is the other valid option
-    const normalizedVersion =
-        codeReviewVersion === "legacy" ? "legacy" : "v2";
+    const normalizedVersion = codeReviewVersion === "legacy" ? "legacy" : "v2";
     const params = {
         params: { codeReviewVersion: normalizedVersion },
     };

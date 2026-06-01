@@ -1,0 +1,118 @@
+---
+title: 创建 GitHub App
+icon: github
+---
+
+如果您想通过 GitHub App 运行 Kody，需要创建一个 GitHub App。此应用使 Kody 能够与您的仓库交互、管理拉取请求并接收 webhooks。
+
+<Note>如果您想为平台用户启用“使用 GitHub 登录”，那是单独的 OAuth App 流程，不会干扰 GitHub App 的权限。本指南专注于功能集成。参见 <a href="/how_to_deploy/zh/platforms/github/github_oauth">GitHub OAuth App</a>。</Note>
+
+## 先决条件
+
+准备好您的应用域名：
+
+- **WEB_DOMAIN**：您的前端 URL（例如 `https://app.yourdomain.com` 或 `http://localhost:3000`）
+- **API_DOMAIN**：您的后端/API URL（例如 `https://api.yourdomain.com` 或 `http://localhost:3000` 用于单仓库/代理设置）
+- **WEBHOOK_DOMAIN**（可选）：用于 webhook 的公共域名（例如 `https://kodus-webhooks.yourdomain.com`）。如果您在 API 域名上路由 `/.../webhook`，也可以使用 `API_DOMAIN`。
+
+## 步骤 1：创建 GitHub App
+
+1. 在 GitHub 上，转到 **设置** > **开发者设置** > **GitHub Apps**
+2. 点击 **新建 GitHub App**
+3. 根据您的偏好填写基本信息（名称、主页 URL）
+
+<img src="https://success.skyhighsecurity.com/@api/deki/files/66490/Click_newGithubApp.png?revision=1" alt="GitHub Apps 设置页中的“New GitHub App”按钮" />
+
+## 步骤 2：配置回调和设置 URL
+
+<img src="https://kodus.io/wp-content/uploads/2026/01/githuapp-urls.gif" alt="GitHub App Webhook" />
+
+这一步对于确保安装和重定向正常工作至关重要。填写以下字段，将 `WEB_DOMAIN` 替换为您的实际 URL：
+
+- **回调 URL**：
+  ```
+  WEB_DOMAIN/api/auth/callback/github
+  ```
+  此 URL 用于完成授权流程。
+
+- **设置 URL**：
+  ```
+  WEB_DOMAIN/setup/github
+  ```
+
+- 勾选选项：**Redirect on update**（更新时重定向）
+  这确保安装应用后，用户被重定向回 Kodus 以完成设置。
+
+## 步骤 3：配置 Webhook
+
+Webhook 通知 Kodus 关于拉取请求中的事件。
+
+<Note>
+  Webhook 由独立服务处理（端口 3332）。如果这里使用 API 域名，请确保反向代理将 `/github/webhook` 路径转发到 Webhooks 服务；否则请使用独立的 webhook 域名。
+</Note>
+
+- **Webhook URL**：
+  ```
+  WEBHOOK_DOMAIN/github/webhook
+  ```
+
+- 确保 **Active** 选项已勾选
+
+## 步骤 4：收集凭据并添加到 .env
+
+<img src="https://kodus.io/wp-content/uploads/2026/01/gthubapp-env.gif" alt="GitHub App Webhook" />
+
+现在您需要获取 GitHub 生成的凭据并将其添加到您的 Kodus 环境变量中。
+
+### App ID
+
+在应用"关于"页面的顶部，复制 **App ID**。
+
+添加到您的 `.env`：
+```
+API_GITHUB_APP_ID=your_app_id_here
+```
+
+### Client Secret
+
+转到 **Client secrets** 部分并点击 **Generate a new client secret**。
+
+复制生成的值。
+
+添加到您的 `.env`：
+```
+API_GITHUB_CLIENT_SECRET=your_client_secret_here
+```
+
+### Private Key
+
+滚动到页面底部并点击 **Generate a private key**。
+
+这将下载一个 `.pem` 文件。使用文本编辑器打开此文件并复制整个内容。
+
+添加到您的 `.env`：
+```
+API_GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY----- ..."
+```
+
+### 安装 URL
+
+打开您的 GitHub App，点击 **Install App**。从浏览器地址栏复制安装 URL（形如 `https://github.com/apps/<app-slug>/installations/new`）。
+
+添加到您的 `.env`：
+```
+WEB_GITHUB_INSTALL_URL="https://github.com/apps/your-app/installations/new"
+```
+
+## 环境变量摘要
+
+最后，您的配置文件应包含：
+
+```bash
+API_GITHUB_APP_ID=123456
+API_GITHUB_CLIENT_SECRET=example_secret_123
+API_GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY----- ..."
+WEB_GITHUB_INSTALL_URL="https://github.com/apps/your-app/installations/new"
+```
+
+在 GitHub 上点击 **Save Changes**（保存更改）并重启您的 Kodus 应用程序以应用更改。

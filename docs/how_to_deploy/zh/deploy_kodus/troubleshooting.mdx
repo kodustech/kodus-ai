@@ -1,0 +1,167 @@
+---
+title: "故障排除指南"
+description: "解决 Kodus 的常见问题。"
+icon: "headset"
+---
+
+## 快速修复
+
+### "运行诊断"
+
+安装器附带了检查堆栈和常见错误配置的医生脚本。
+
+```bash
+cd kodus-installer
+./scripts/doctor.sh
+```
+
+### "我无法访问 Web 界面"
+
+1. 检查容器是否正在运行：
+
+```bash
+docker-compose ps kodus-web
+```
+
+2. 验证端口是否正确映射：
+
+```bash
+docker-compose port kodus-web 3000
+```
+
+3. 检查 Web 容器日志：
+
+```bash
+docker-compose logs kodus-web
+```
+
+### "Web 日志出现 Edge Runtime 错误"
+
+如果您看到错误，如 `A Node.js API is used ... not supported in the Edge Runtime`（通常带有 `axios` 导入跟踪），则 Web 应用程序的一部分在 Edge Runtime 中运行，该运行时不支持 Node.js API。
+
+1. 更新到最新的 `kodus-web` 镜像（重新运行安装器或运行 `docker-compose pull kodus-web` 和 `docker-compose up -d`）。
+2. 如果您是从源代码构建，请确保 auth/server 路由在 Node.js 运行时上运行（设置 `export const runtime = "nodejs"` 并在这些路由上避免 `runtime = "edge"`）。
+3. 重新构建并重启容器。
+
+### "Git webhook 不工作"
+
+1. 验证您的域名设置：
+
+```bash
+curl -I https://your-domain.com
+```
+
+2. 检查 webhook 日志中的 webhook 尝试：
+
+```bash
+docker-compose logs webhooks | grep webhook
+```
+
+3. 验证您的反向代理配置：
+
+```bash
+sudo nginx -t
+```
+
+### "数据库连接问题"
+
+1. 检查数据库容器状态：
+
+```bash
+docker-compose ps db_kodus_postgres
+docker-compose ps db_kodus_mongodb
+```
+
+2. 验证数据库日志：
+
+```bash
+docker-compose logs db_kodus_postgres
+docker-compose logs db_kodus_mongodb
+```
+
+3. 测试数据库连接：
+
+```bash
+docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
+docker-compose exec db_kodus_mongodb mongosh -u $API_MG_DB_USERNAME -p $API_MG_DB_PASSWORD
+```
+
+### "由于缺少向量类型导致迁移失败"
+
+如果您在迁移期间遇到错误 "type vector does not exist"，这是因为您的 PostgreSQL 数据库中未启用 pgvector 扩展。以下是修复方法：
+
+1. 连接到您的 PostgreSQL 数据库：
+
+```bash
+docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
+```
+
+2. 启用 pgvector 扩展：
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+3. 启用扩展后，再次尝试运行迁移：
+
+```bash
+docker-compose exec api npm run migration:run
+```
+
+如果您仍然遇到问题，可以验证扩展是否已正确安装：
+
+```sql
+SELECT * FROM pg_extension WHERE extname = 'vector';
+```
+
+## 常见问题
+
+### RabbitMQ 问题
+
+如果您看到消息队列错误：
+
+1. 检查 RabbitMQ 状态：
+
+```bash
+docker-compose logs rabbitmq
+```
+
+2. 访问位于 `http://localhost:15672` 的管理控制台以验证队列和连接
+
+3. 如果需要，重启服务：
+
+```bash
+docker-compose restart rabbitmq
+```
+
+### 资源问题
+
+如果服务缓慢或崩溃：
+
+1. 检查资源使用情况：
+
+```bash
+docker stats
+```
+
+2. 验证容器限制：
+
+```bash
+docker inspect $(docker-compose ps -q api) | grep -A 5 "Resources"
+```
+
+3. 如果需要，在 docker-compose.yml 中调整资源限制
+
+## 获取帮助
+
+### 支持请求中应包含的内容
+
+- 确切的错误消息
+- 受影响服务的相关日志
+- 您的部署方法（CLI、VM 等）
+- 重现问题的步骤
+
+### 在哪里获取帮助
+
+- [Discord 社区](https://discord.gg/TFZBRk9fT6)
+- [GitHub Issues](https://github.com/kodustech/kodus-installer/issues)

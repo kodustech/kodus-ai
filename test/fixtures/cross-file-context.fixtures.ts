@@ -170,7 +170,6 @@ export function createCliCrossFileBaseContext(
 
     return {
         ...base,
-        isFastMode: false,
         isTrialMode: false,
         startTime: Date.now(),
         correlationId: 'cli-correlation-id',

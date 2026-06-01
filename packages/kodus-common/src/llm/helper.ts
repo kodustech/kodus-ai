@@ -97,6 +97,16 @@ const getChatAnthropic = (options?: Partial<FactoryArgs>) => {
 };
 
 const getChatGemini = (options?: Partial<FactoryArgs>) => {
+    // Route to Vertex AI when configured via env (default: gemini)
+    const googleProvider = process.env.API_GOOGLE_AI_PROVIDER || 'gemini';
+    if (googleProvider === 'vertex' && process.env.API_VERTEX_AI_API_KEY) {
+        try {
+            return getChatVertexAI(options);
+        } catch {
+            // Vertex config failed, fall through to AI Studio
+        }
+    }
+
     const defaultOptions = {
         model: MODEL_STRATEGIES[LLMModelProvider.GEMINI_2_5_PRO].modelName,
         temperature: 0,

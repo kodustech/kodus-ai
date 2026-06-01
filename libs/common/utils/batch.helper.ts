@@ -9,11 +9,10 @@ export function createOptimizedBatches<T>(
     const minBatchSize = options?.minBatchSize ?? 20;
     const maxBatchSize = options?.maxBatchSize ?? 30;
 
-    let numBatches = 1;
     let batchSize = totalItems;
 
     if (totalItems > minBatchSize) {
-        numBatches = Math.ceil(totalItems / minBatchSize);
+        let numBatches = Math.ceil(totalItems / minBatchSize);
         batchSize = Math.ceil(totalItems / numBatches);
 
         if (batchSize > maxBatchSize) {

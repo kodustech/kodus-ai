@@ -22,6 +22,41 @@ export interface IPeriodFilter {
     dateType: 'created' | 'updated';
 }
 
+/**
+ * Domain-level operation accepted by `bulkApplyFileChanges`.
+ *
+ * The repository translates each variant into a Mongo `bulkWrite`
+ * op. Variants are intentionally narrow:
+ *  - `addFile` pushes a new file onto `files`.
+ *  - `updateFile` updates the matched file's primitive fields
+ *    in-place via positional `$` operator (no suggestion mutation).
+ *  - `addSuggestions` pushes one or more suggestions onto an
+ *    existing file's `suggestions` array.
+ *
+ * The caller is responsible for pre-computing ids (see
+ * `newSubDocumentId`) so that downstream reads can reference them.
+ */
+export type FileBulkOp =
+    | { kind: 'addFile'; file: IFile }
+    | {
+          kind: 'updateFile';
+          fileId: string;
+          data: Partial<Omit<IFile, 'id' | 'suggestions'>>;
+      }
+    | { kind: 'addSuggestions'; fileId: string; suggestions: ISuggestion[] };
+
+export interface BulkApplyError {
+    opIndex: number;
+    code?: number;
+    message: string;
+}
+
+export interface BulkApplyResult {
+    attempted: number;
+    modified: number;
+    errors: BulkApplyError[];
+}
+
 export interface IPullRequestsRepository {
     getNativeCollection(): any;
 
@@ -89,6 +124,7 @@ export interface IPullRequestsRepository {
         prnumber: number,
         repositoryName: string,
         filePath: string,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<IFile | null>;
     findSuggestionsByPRAndFilename(
         prNumber: number,
@@ -127,12 +163,48 @@ export interface IPullRequestsRepository {
         pullRequestNumber: number,
         repositoryName: string,
         newFile: Omit<IFile, 'id'>,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null>;
+
+    /**
+     * Issue #1107: collapse the N+1 file/suggestion loop into a
+     * single set of chunked `bulkWrite` calls. See impl for details.
+     *
+     * `organizationId` is part of the filter on every chunked op so
+     * a stale or malformed `prUuid` from one tenant can never write
+     * to another tenant's document.
+     */
+    bulkApplyFileChanges(
+        prUuid: string,
+        organizationId: string,
+        ops: FileBulkOp[],
+    ): Promise<BulkApplyResult>;
+
+    /**
+     * Server-side aggregation over `files.added/deleted/changes`.
+     * Used to recompute PR totals from ground truth without reading
+     * the full sub-document array. Tenant-scoped — see
+     * `bulkApplyFileChanges` for the rationale.
+     */
+    computeFileTotals(
+        prUuid: string,
+        organizationId: string,
+    ): Promise<{
+        totalAdded: number;
+        totalDeleted: number;
+        totalChanges: number;
+    }>;
+
+
+    /** Generates a stable id for file/suggestion sub-documents. */
+    newSubDocumentId(): string;
+
     addSuggestionToFile(
         fileId: string,
         newSuggestion: Omit<ISuggestion, 'id'>,
         pullRequestNumber: number,
         repositoryName: string,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null>;
     findRecentByRepositoryId(
         organizationId: string,
@@ -147,10 +219,12 @@ export interface IPullRequestsRepository {
     updateFile(
         fileId: string,
         updateData: Partial<IFile>,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null>;
     updateSuggestion(
         suggestionId: string,
         updateData: Partial<ISuggestion>,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null>;
     updateSyncedSuggestionsFlag(
         pullRequestNumbers: number[],

@@ -17,13 +17,22 @@ export interface DocumentationPlannerPayload {
     file: DocumentationPlannerFilePayload;
 }
 
+/**
+ * Hard cap on queries the planner may emit per file. Keeps Exa fan-out
+ * bounded — the per-file planner runs for every changed file and each
+ * queryTask becomes one Exa API call.
+ */
+export const MAX_QUERY_TASKS_PER_FILE = 3;
+
 export const DocumentationPlannerSchema = z.object({
-    queryTasks: z.array(
-        z.object({
-            packageName: z.string().min(1),
-            query: z.string().min(1),
-        }),
-    ),
+    queryTasks: z
+        .array(
+            z.object({
+                packageName: z.string().min(1),
+                query: z.string().min(1),
+            }),
+        )
+        .max(MAX_QUERY_TASKS_PER_FILE),
 });
 
 export type DocumentationPlannerSchemaType = z.infer<
@@ -66,6 +75,7 @@ Rules:
 - Each queryTask must contain both packageName and query. Do not return unpaired package or query arrays.
 - Every query string must include: the language, the package name, and an explicit preference for official documentation.
 - Preferred query template: "Language: <language>. Package: <package>. <specific API/use-case>. Prefer official vendor/maintainer documentation."
+- Hard cap: return AT MOST ${MAX_QUERY_TASKS_PER_FILE} queryTasks for this file. If more candidates would qualify, drop the lowest-priority ones (utilities, types, low-complexity deps). Quality over quantity.
 
 Target file: ${payload.file.filePath}
 Language: ${payload.file.language}

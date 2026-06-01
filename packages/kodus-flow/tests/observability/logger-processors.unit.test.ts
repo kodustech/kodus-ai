@@ -48,7 +48,11 @@ describe('log processors', () => {
         expect(processor.process).toHaveBeenCalledWith(
             'warn',
             'object processor',
-            { password: '[REDACTED]', ok: true, component: 'object-processor-test' },
+            {
+                password: '[REDACTED]',
+                ok: true,
+                component: 'object-processor-test',
+            },
             undefined,
         );
     });

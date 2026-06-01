@@ -1,4 +1,5 @@
 import { ConfirmEmailUseCase } from './confirm-email.use-case';
+import { CreateHelpdeskTokenUseCase } from './create-helpdesk-token.use-case';
 import { ForgotPasswordUseCase } from './forgotPasswordUseCase';
 import { LoginUseCase } from './login.use-case';
 import { LogoutUseCase } from './logout.use-case';
@@ -18,4 +19,5 @@ export const UseCases = [
     SignUpUseCase,
     ConfirmEmailUseCase,
     ResendEmailUseCase,
+    CreateHelpdeskTokenUseCase,
 ];

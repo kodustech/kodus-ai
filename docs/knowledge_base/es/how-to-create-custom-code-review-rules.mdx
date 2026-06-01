@@ -1,0 +1,54 @@
+---
+title: "Cómo crear reglas de revisión de código personalizadas"
+description: "Define reglas adaptadas a la arquitectura, los patrones y las preferencias de codificación de tu equipo, que se aplican automáticamente en cada PR."
+---
+
+Cada equipo tiene convenciones que los linters genéricos no cubren — límites de arquitectura, patrones de nomenclatura, requisitos de pruebas o restricciones específicas del negocio. Las reglas de revisión de código personalizadas te permiten codificar estas convenciones en verificaciones automatizadas.
+
+## Crear una regla en Kodus
+
+1. Ve a **Configuración de Revisión de Código** → **Kody Rules**
+2. Haz clic en **Agregar Regla**
+3. Configura:
+   - **Nombre** — qué verifica la regla (por ejemplo, "Los archivos de servicio deben tener pruebas")
+   - **Alcance** — A nivel de archivo (analiza archivos individuales) o a nivel de PR (analiza el PR completo)
+   - **Ruta** — patrón glob para apuntar a archivos específicos (por ejemplo, `src/services/**/*.ts`)
+   - **Severidad** — Crítica, Alta, Media o Baja
+   - **Instrucciones** — descripción detallada de qué verificar
+
+## Qué hace que las reglas sean poderosas
+
+Las reglas pueden acceder a un contexto enriquecido:
+
+- **Variables** como `fileDiff`, `pr_title`, `pr_description`, `pr_files_diff`
+- **Referencias a archivos** con `@file:ruta/al/archivo.ts` para comparar contra patrones
+- **Funciones MCP** para obtener datos de herramientas conectadas (Jira, estructura del repositorio, etc.)
+
+### Ejemplo: Regla de límite de arquitectura
+
+```
+Nombre: La capa de dominio no debe depender de la infraestructura
+Alcance: Pull Request
+Instrucciones: Verificar en pr_files_diff si hay alguna importación en src/domain/
+que haga referencia a src/infrastructure/. Consultar
+@file:docs/architecture.md para las dependencias permitidas.
+```
+
+### Ejemplo: Regla de cobertura de pruebas
+
+```
+Nombre: Cada servicio debe tener un archivo de prueba
+Alcance: Pull Request
+Instrucciones: Para cada archivo modificado en src/services/,
+verificar que exista un archivo de prueba correspondiente en test/services/.
+Usar MCP para revisar el árbol de archivos del repositorio.
+```
+
+## Más formas de agregar reglas
+
+- **Importar desde la Biblioteca de Reglas** — navega por reglas probadas por lenguaje y categoría
+- **Sincronizar desde herramientas de IDE** — importa automáticamente reglas desde Cursor, Copilot, Claude
+- **Reglas de repositorio** — define reglas en archivos markdown en tu repositorio
+- **Generación automática** — Kody sugiere reglas basadas en tu historial de revisiones
+
+Para la referencia completa, consulta [Kody Rules](/how_to_use/es/code_review/configs/kody_rules).

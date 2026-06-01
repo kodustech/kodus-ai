@@ -1,0 +1,139 @@
+---
+title: "Funções do Workspace"
+description: "Saiba mais sobre o controle de acesso baseado em funções (RBAC) nos workspaces do Kodus, incluindo as diferentes funções de usuário e suas permissões."
+---
+
+<Note>
+**Membros do Workspace vs. Licenças de PR**: São completamente separados e não se afetam.
+
+- **Membros do Workspace**: Admins que configuram as configurações do Kodus (ilimitado)
+- **Licenças de PR**: Desenvolvedores da sua organização Git que recebem revisões do Kody (baseado no seu plano)
+</Note>
+
+## Entendendo as Licenças de PR
+
+As licenças de PR são detectadas automaticamente a partir dos seus repositórios Git com base nos desenvolvedores que abriram PRs nos últimos meses.
+
+**Por que um desenvolvedor não está aparecendo?** Se um desenvolvedor não está aparecendo na sua contagem de licenças de PR, significa que o Kody não está instalado em um repositório onde esse desenvolvedor abriu PRs.
+
+**Exemplo:** Você pode ter 1 admin de workspace gerenciando as configurações, enquanto 20 desenvolvedores recebem revisões automatizadas. Todos os planos incluem PRs ilimitados — seu plano apenas determina quais desenvolvedores têm acesso a revisões.
+
+## Visão Geral
+
+Os workspaces do Kodus suportam **Controle de Acesso Baseado em Funções (RBAC)**, permitindo gerenciar permissões de usuário e níveis de acesso dentro da sua organização. Cada membro do workspace pode receber uma das quatro funções distintas, cada uma com permissões e capacidades específicas.
+
+## Funções Disponíveis
+
+Cada função fornece diferentes níveis de acesso e capacidades dentro do workspace:
+
+### Owner (Proprietário)
+
+**Acesso administrativo completo** ao workspace e todos os seus recursos. Pode visualizar, editar e excluir todas as configurações em todos os repositórios.
+
+
+
+### Billing Manager (Gestor de Cobrança)
+
+**Acesso de gerenciamento financeiro e de cobrança** com acesso ao gerenciamento de faturamento/assinatura e acesso de visualização à maioria das configurações, mas sem acesso de edição às configurações de revisão de código.
+
+### Repository Admin (Admin de Repositório)
+
+**Acesso de gerenciamento de repositório** focado no gerenciamento de configurações de revisão de código para os repositórios que possui, com acesso completo a issues, cockpit e plugins.
+
+### Contributor (Colaborador)
+
+**Acesso básico** para membros da equipe que precisam visualizar configurações de repositórios aos quais estão atribuídos. Limitado a acesso somente de visualização para a maioria dos recursos.
+
+## Matriz de Permissões por Função
+
+Aqui está um detalhamento do que cada função pode fazer, com base na matriz de permissões real:
+
+<Snippet file="rbac-matrix-generated.mdx" />
+
+## Gerenciando Membros do Workspace
+
+### Adicionando Novos Membros
+
+1. Navegue até a seção **Membros** do seu workspace
+2. Clique no botão **"Convidar membro"**
+3. Insira o endereço de e-mail do membro
+4. Selecione a função adequada para o novo membro
+5. Envie o convite
+
+### Auto-Join para Membros do Workspace
+
+Habilite o auto-join para permitir que usuários com domínios de e-mail correspondentes entrem no seu workspace automaticamente.
+
+**Como habilitar:**
+1. Vá para [Configurações da Organização](https://app.kodus.io/organization/general)
+2. Habilite o auto-join para sua organização
+3. Atualmente funciona apenas com o domínio de e-mail da sua conta registrada
+4. Precisa de um domínio diferente? Entre em contato conosco na comunidade
+
+**Como funciona:**
+- Usuários que se cadastram com o seu domínio de e-mail podem escolher entrar na sua organização
+- Eles devem confirmar o e-mail após escolher entrar
+- Todos os usuários de auto-join entram com a função de **Contributor** sem acesso a repositórios
+- Como Owner, você precisa atribuí-los a repositórios e ajustar sua função, se necessário
+
+### Alterando Funções de Membros
+
+1. Vá para a seção **Membros** do seu workspace
+2. Encontre o membro cuja função deseja alterar
+3. Clique no dropdown de função atual
+4. Selecione a nova função das opções disponíveis
+5. A alteração entra em vigor imediatamente
+
+### Removendo Membros
+
+1. Na seção **Membros**, localize o membro a ser removido
+2. Clique no menu **"Ações"** (três pontos)
+3. Selecione **"Remover do workspace"**
+4. Confirme a remoção no diálogo
+
+## Considerações de Segurança
+
+1. **Princípio do Menor Privilégio**: Sempre atribua a função com o mínimo de permissões necessárias
+2. **Auditorias Regulares**: Revise periodicamente as funções dos membros e ajuste conforme necessário
+3. **Revisões de Acesso**: Realize revisões trimestrais de acesso e permissões do workspace
+4. **Revogação Imediata**: Remova o acesso imediatamente quando um membro sair da organização
+
+## Solução de Problemas
+
+<AccordionGroup>
+  <Accordion title="Não consigo convidar novos membros para o workspace">
+    **Soluções:**
+    - Verifique se você tem a função de Owner ou Repository Admin
+    - Verifique se o seu workspace atingiu algum limite do sistema
+    - Certifique-se de que você tem as permissões corretas na sua conta
+  </Accordion>
+
+  <Accordion title="Um membro não consegue editar configurações de revisão de código">
+    **Soluções:**
+    - Confirme que o membro tem a função Repository Admin ou Owner para o repositório específico
+    - Verifique se o membro tem permissões "own" para o repositório que deseja editar
+    - Verifique se a atribuição de função do membro está correta
+  </Accordion>
+
+  <Accordion title="Informações de faturamento não são visíveis para um membro da equipe">
+    **Soluções:**
+    - Certifique-se de que o membro tem a função Owner ou Billing Manager
+    - Verifique se os recursos de faturamento estão habilitados para o seu workspace
+    - Verifique se o acesso do membro não foi restringido
+  </Accordion>
+
+  <Accordion title="Um membro não consegue acessar os recursos do cockpit">
+    **Soluções:**
+    - Confirme que o membro tem a função Repository Admin ou Owner
+    - Verifique se o membro está atribuído aos repositórios que deseja acessar
+    - Verifique se a atribuição de função do membro está correta
+  </Accordion>
+
+  <Accordion title="Um desenvolvedor não está aparecendo nas licenças de PR">
+    **Soluções:**
+    - Verifique se o Kody está instalado nos repositórios onde este desenvolvedor abre PRs
+    - Verifique se o desenvolvedor abriu PRs nos últimos meses
+    - Lembre-se: as licenças de PR vêm da atividade Git, não dos membros do workspace
+    - Certifique-se de que o webhook do repositório está configurado corretamente
+  </Accordion>
+</AccordionGroup>

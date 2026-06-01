@@ -42,6 +42,14 @@ import {
     BackoffOptions,
 } from '@libs/common/utils/polling';
 import { formatHeartbeatContext } from '@libs/core/infrastructure/incident/heartbeat-context.util';
+import {
+    ISandboxLeaseManager,
+    SANDBOX_LEASE_MANAGER_TOKEN,
+} from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
+import {
+    SANDBOX_INVALIDATE_ROUTING_KEY,
+    SandboxInvalidatePayload,
+} from '@libs/sandbox/domain/events/sandbox-invalidate.event';
 
 /**
  * Backoff configuration for outbox relay.
@@ -56,6 +64,16 @@ const OUTBOX_BACKOFF: BackoffOptions = {
 
 const DEFAULT_OUTBOX_MAX_ATTEMPTS = 10;
 const DEFAULT_OUTBOX_PUBLISH_TIMEOUT_MS = 15000;
+
+export const INBOX_REAPER_CONSUMER_TIMEOUTS = {
+    'workflow-job-consumer.webhook': 20 * 60 * 1000,
+    'workflow-job-consumer.check_implementation': 20 * 60 * 1000,
+    'workflow-job-consumer.code_review': 2.5 * 60 * 60 * 1000,
+    'workflow-job-consumer.ast_graph_build': 30 * 60 * 1000,
+    'workflow-job-consumer.ast_graph_incremental': 15 * 60 * 1000,
+    'workflow-events-stage-completed': 20 * 60 * 1000,
+    'workflow-events-ast': 20 * 60 * 1000,
+} as const;
 
 function parsePositiveIntEnv(envKey: string, fallback: number): number {
     const raw = process.env[envKey];
@@ -108,6 +126,8 @@ export class OutboxRelayService
         private readonly observability: ObservabilityService,
         private readonly configService: ConfigService,
         private readonly distributedLockService: DistributedLockService,
+        @Inject(SANDBOX_LEASE_MANAGER_TOKEN)
+        private readonly sandboxLeaseManager: ISandboxLeaseManager,
         @Optional()
         private readonly incidentManager?: IncidentManagerService,
     ) {}
@@ -244,7 +264,9 @@ export class OutboxRelayService
 
         try {
             const reclaimed =
-                await this.outboxRepository.reclaimStaleMessages(fiveMinutesAgo);
+                await this.outboxRepository.reclaimStaleMessages(
+                    fiveMinutesAgo,
+                );
 
             if (reclaimed > 0) {
                 this.logger.log({
@@ -278,7 +300,9 @@ export class OutboxRelayService
      * Uses consumer-specific timeouts based on the type of work:
      * - Webhooks: 20 minutes (job timeout is 10min + margin)
      * - Check implementation: 20 minutes (job timeout is 10min + margin)
-     * - Code reviews: 12 hours (very conservative to avoid reprocessing without checkpoints)
+     * - Code reviews: 2.5 hours (2h job timeout + margin)
+     * - AST build/incremental: 30/15 minutes (job timeout + margin)
+     * - Workflow events: 20 minutes
      *
      * PERFORMANCE NOTE: Uses separate queries per consumer for better index utilization.
      * Requires partial indexes:
@@ -291,6 +315,7 @@ export class OutboxRelayService
      *   CREATE INDEX CONCURRENTLY idx_inbox_codereview_stale
      *     ON kodus_workflow.inbox_messages (lockedAt)
      *     WHERE consumerId = 'workflow-job-consumer.code_review' AND status = 'PROCESSING';
+     *   Add equivalent partial indexes for AST/event consumers if reclaim volume grows.
      */
     @Cron(CronExpression.EVERY_5_MINUTES)
     async reclaimStaleInbox(): Promise<void> {
@@ -309,18 +334,8 @@ export class OutboxRelayService
                     let totalReclaimed = 0;
                     const startTime = Date.now();
 
-                    // Define timeouts per consumer type
-                    // Each timeout is ~1.5-2x the actual job timeout to account for overhead
-                    const consumerTimeouts = {
-                        'workflow-job-consumer.webhook': 20 * 60 * 1000, // 20 minutes
-                        'workflow-job-consumer.check_implementation':
-                            20 * 60 * 1000, // 20 minutes
-                        'workflow-job-consumer.code_review':
-                            12 * 60 * 60 * 1000, // 12 hours (very conservative to avoid reprocessing without checkpoints)
-                    };
-
                     const reclaimResults = await Promise.allSettled(
-                        Object.entries(consumerTimeouts).map(
+                        Object.entries(INBOX_REAPER_CONSUMER_TIMEOUTS).map(
                             async ([consumerId, timeoutMs]) => {
                                 const threshold = new Date(
                                     Date.now() - timeoutMs,
@@ -389,11 +404,13 @@ export class OutboxRelayService
                             this.incidentManager
                                 ?.failHeartbeat(
                                     'API_BETTERSTACK_HEARTBEAT_OUTBOX_URL',
-                                    `High inbox reclaim rate for ${consumerId}: ${reclaimed} stale messages reclaimed. Possible cause: worker crashes, memory issues, or job timeouts. ${this.formatContext({
-                                        monitor: 'inbox_reclaim_rate',
-                                        consumerId,
-                                        reclaimed,
-                                    })}`,
+                                    `High inbox reclaim rate for ${consumerId}: ${reclaimed} stale messages reclaimed. Possible cause: worker crashes, memory issues, or job timeouts. ${this.formatContext(
+                                        {
+                                            monitor: 'inbox_reclaim_rate',
+                                            consumerId,
+                                            reclaimed,
+                                        },
+                                    )}`,
                                 )
                                 .catch((err) => {
                                     this.logger.error({
@@ -487,6 +504,51 @@ export class OutboxRelayService
     }
 
     private async processMessage(message: OutboxMessageModel): Promise<void> {
+        // Sandbox invalidation is consumed in-process — never published to RabbitMQ.
+        // This branch must come BEFORE the observability span to avoid span overhead on
+        // a non-broker path, and before the broker connectivity check below.
+        if (message.routingKey === SANDBOX_INVALIDATE_ROUTING_KEY) {
+            const payload =
+                message.payload as unknown as SandboxInvalidatePayload;
+            try {
+                await this.sandboxLeaseManager.invalidate(payload.prKey);
+                await this.outboxRepository.markAsSent(message.uuid);
+                this.logger.log({
+                    message: '[SANDBOX-RELAY] Sandbox invalidated via outbox',
+                    context: OutboxRelayService.name,
+                    metadata: {
+                        prKey: payload.prKey,
+                        reason: payload.reason,
+                    },
+                });
+            } catch (error) {
+                // Use the standard backoff path — same as publish failures.
+                const delayMs = calculateBackoffInterval(
+                    message.attempts,
+                    OUTBOX_BACKOFF,
+                );
+                const nextAttemptAt = new Date(Date.now() + delayMs);
+                await this.outboxRepository.markAsFailed(
+                    message.uuid,
+                    error instanceof Error ? error.message : String(error),
+                    nextAttemptAt,
+                );
+                this.logger.error({
+                    message:
+                        '[SANDBOX-RELAY] Failed to invalidate sandbox via outbox — retrying',
+                    context: OutboxRelayService.name,
+                    error: error instanceof Error ? error : undefined,
+                    metadata: {
+                        messageUuid: message.uuid,
+                        prKey: payload.prKey,
+                        attempts: message.attempts,
+                    },
+                });
+                throw error;
+            }
+            return;
+        }
+
         return await this.observability.runInSpan(
             'workflow.outbox.publish',
             async (span) => {
@@ -614,12 +676,14 @@ export class OutboxRelayService
                         this.incidentManager
                             ?.failHeartbeat(
                                 'API_BETTERSTACK_HEARTBEAT_OUTBOX_URL',
-                                `Outbox message permanently failed: ${message.uuid} (job: ${jobId || 'N/A'}) after ${this.maxAttemptsOutbox} attempts. Exchange: ${message.exchange}, Routing: ${message.routingKey}. Error: ${error.message}. ${this.formatContext({
-                                    monitor: 'outbox_permanent_failure',
-                                    instanceId: this.instanceId,
-                                    messageId: message.uuid,
-                                    jobId,
-                                })}`,
+                                `Outbox message permanently failed: ${message.uuid} (job: ${jobId || 'N/A'}) after ${this.maxAttemptsOutbox} attempts. Exchange: ${message.exchange}, Routing: ${message.routingKey}. Error: ${error.message}. ${this.formatContext(
+                                    {
+                                        monitor: 'outbox_permanent_failure',
+                                        instanceId: this.instanceId,
+                                        messageId: message.uuid,
+                                        jobId,
+                                    },
+                                )}`,
                             )
                             .catch((err) => {
                                 this.logger.error({

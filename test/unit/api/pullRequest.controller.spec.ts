@@ -677,7 +677,7 @@ describe('PullRequestController', () => {
                 }),
             );
 
-            const result = await controller.getSuggestionsByPullRequest(
+            const _result = await controller.getSuggestionsByPullRequest(
                 PR_URL,
                 undefined,
                 undefined,

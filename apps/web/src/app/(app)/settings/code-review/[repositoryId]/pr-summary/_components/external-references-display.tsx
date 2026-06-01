@@ -177,11 +177,33 @@ export function ExternalReferencesDisplay({
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <div className="text-text-secondary hover:text-text-primary flex cursor-help items-center gap-1 text-xs transition-colors">
-                            <CheckCircle className="h-3 w-3 text-green-500" />
-                            <span>
-                                Found {references.length} reference
-                                {references.length > 1 ? "s" : ""}:{" "}
-                                {references.map((r) => r.filePath).join(", ")}
+                            <CheckCircle className="h-3 w-3 shrink-0 text-green-500" />
+                            <span className="truncate">
+                                {(() => {
+                                    // Compact mode used to inline every
+                                    // file path joined by ", ", which on
+                                    // a rule with 30+ references blew
+                                    // the card height to 3-4× its
+                                    // siblings (quintoandar feedback).
+                                    // Show a couple of file names as a
+                                    // teaser plus the count; the full
+                                    // list lives in the tooltip below.
+                                    const TEASER = 2;
+                                    const teaser = references
+                                        .slice(0, TEASER)
+                                        .map((r) =>
+                                            r.filePath.split("/").pop(),
+                                        )
+                                        .filter(Boolean)
+                                        .join(", ");
+                                    const extra =
+                                        references.length - TEASER > 0
+                                            ? ` +${references.length - TEASER} more`
+                                            : "";
+                                    return references.length === 1
+                                        ? `Found 1 reference: ${teaser}`
+                                        : `Found ${references.length} references: ${teaser}${extra}`;
+                                })()}
                             </span>
                         </div>
                     </TooltipTrigger>

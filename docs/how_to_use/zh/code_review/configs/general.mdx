@@ -1,0 +1,115 @@
+---
+title: "通用设置"
+---
+
+## 核心设置
+
+<Note>
+  Kodus 有三个配置级别:全局、代码库和目录。了解它们如何工作,请参阅<a href="/how_to_use/en/code_review/configs/inheritance_overrides">配置继承与覆盖</a>。
+</Note>
+
+### 配置优先级
+代码库根目录中的 `kodus-config.yml` 会覆盖网页设置。无需设置——只需提交文件即可。
+
+<Accordion title="示例 kodus-config.yml">
+```yaml
+version: '1.2'
+summary:
+  generatePRSummary: true
+  customInstructions: ''
+  behaviourForExistingDescription: concatenate
+ignorePaths:
+  - yarn.lock
+  - package-lock.json
+  - package.json
+  - .env
+baseBranches: []
+reviewOptions:
+  security: true
+  code_style: true
+  kody_rules: true
+  refactoring: true
+  error_handling: true
+  maintainability: true
+  potential_issues: true
+  documentation_and_comments: true
+  performance_and_optimization: true
+  business_logic: true
+suggestionControl:
+  groupingMode: full
+  limitationType: pr
+  maxSuggestions: 9
+  severityLevelFilter: medium
+ignoredTitleKeywords: []
+automatedReviewActive: true
+pullRequestApprovalActive: false
+isRequestChangesActive: false
+llmGeneratedMemoriesRequireApproval: false
+```
+</Accordion>
+
+## 审查行为
+
+### 自动审查
+
+Kody 可以在 PR 打开时自动审查,或仅在您评论 `@kody start-review` 时审查。
+
+<Info>
+  这仅影响**初始审查**。对于后续提交,请参阅下面的审查节奏。
+</Info>
+
+#### 审查节奏
+
+Kody 如何处理后续提交的审查:
+
+<Tabs>
+  <Tab title="自动">
+    审查每次新推送。对所有更改提供持续反馈。
+  </Tab>
+
+  <Tab title="自动暂停">
+    在快速连续推送期间暂停审查(例如,15 分钟内 3 次推送)。防止在活跃编码期间产生垃圾信息。
+
+    默认值:3 次推送 / 15 分钟
+  </Tab>
+
+  <Tab title="手动">
+    仅在您评论 `@kody start-review` 时运行后续审查。
+  </Tab>
+</Tabs>
+
+### PR 工作流
+
+#### 自动批准 PR
+当未发现问题时,Kody 会批准 PR。
+
+**平台:** GitHub, GitLab, Bitbucket
+
+#### 请求更改
+当发现严重问题时,Kody 会请求更改。
+
+**平台:** GitHub, Bitbucket
+
+### 跳过条件
+
+**忽略的文件:** 使用 glob 模式(例如 `**/*.js`),每行一个。默认:`yarn.lock`, `package-lock.json`, `package.json`, `.env`
+
+**忽略的标题:** 跳过包含特定关键字的 PR(不区分大小写,最多 100 个字符)
+
+**基础分支:** 除默认分支外还要审查的其他分支(dev, release, master)
+
+## 分析类型
+
+### 代码质量
+- 安全性:SQL 注入、XSS、安全威胁
+- 性能:缓存、查询优化、速度改进
+- 错误处理:异常管理、错误消息
+- 潜在问题:空指针、资源泄漏、无限循环
+
+### 代码结构
+- 重构:代码组织、函数大小、重复
+- 可维护性:面向未来的代码模式
+- 代码风格:一致的格式和标准
+- 文档:清晰的注释和 API 文档
+- Kody 规则:自定义规则执行
+- 业务逻辑:验证 PR 实现是否符合任务需求和验收标准

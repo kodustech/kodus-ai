@@ -6,7 +6,62 @@ import { ConnectionString } from 'connection-string';
 import { DatabaseConnection } from '@libs/core/infrastructure/config/types';
 
 import { createLogger } from '@kodus/flow';
-import { TokenTrackingHandler } from '@kodus/kodus-common/llm';
+import { TokenTrackingHandler, BYOKConfig } from '@kodus/kodus-common/llm';
+import { CallbackHandler as LangfuseCallbackHandler } from '@langfuse/langchain';
+import { shouldTrace } from './langfuse';
+
+/**
+ * Narrow projection of BYOKConfig that carries only the fields the
+ * observability layer actually needs (provider + model). Everything else —
+ * including `apiKey` — is intentionally excluded so that even if a future
+ * code change logs the value (span attributes, debug logs, error dumps),
+ * customer API keys cannot leak.
+ */
+type BYOKConfigSafeView = {
+    main?: { provider: string; model: string };
+    fallback?: { provider: string; model: string };
+};
+
+/**
+ * Strip everything from a BYOKConfig except provider + model on main/fallback.
+ * Returns `undefined` when the input is nullish so downstream code can short-
+ * circuit exactly as before.
+ */
+function toSafeByokView(
+    byokConfig?: BYOKConfig,
+): BYOKConfigSafeView | undefined {
+    if (!byokConfig) return undefined;
+    const view: BYOKConfigSafeView = {};
+    if (byokConfig.main?.model && byokConfig.main?.provider) {
+        view.main = {
+            provider: byokConfig.main.provider,
+            model: byokConfig.main.model,
+        };
+    }
+    if (byokConfig.fallback?.model && byokConfig.fallback?.provider) {
+        view.fallback = {
+            provider: byokConfig.fallback.provider,
+            model: byokConfig.fallback.model,
+        };
+    }
+    return view.main || view.fallback ? view : undefined;
+}
+
+/**
+ * Resolves a raw model name (from LangChain) to include the BYOK provider prefix.
+ * Matches against main and fallback configs to pick the correct provider.
+ */
+function resolveModelName(
+    rawModel: string,
+    byokView?: BYOKConfigSafeView,
+): string {
+    if (!byokView) return rawModel;
+    if (byokView.main?.model === rawModel)
+        return `${byokView.main.provider}:${rawModel}`;
+    if (byokView.fallback?.model === rawModel)
+        return `${byokView.fallback.provider}:${rawModel}`;
+    return rawModel;
+}
 
 export type TokenUsage = {
     input_tokens?: number;
@@ -159,10 +214,11 @@ export class ObservabilityService implements OnModuleInit {
                 this.logger.error({
                     message: 'Error initializing observability',
                     context: ObservabilityService.name,
-                    error,
+                    error: this.safeErrorForLog(error),
                     metadata: {
                         serviceName: options.serviceName,
                         host: config.host,
+                        hasUrl: !!config.url,
                         database: config.database,
                     },
                 });
@@ -273,15 +329,29 @@ export class ObservabilityService implements OnModuleInit {
 
     createLLMTracking(runName?: string) {
         const tracker = new TokenTrackingHandler();
+        const callbacks: any[] = [tracker];
+        if (shouldTrace()) {
+            callbacks.push(
+                new LangfuseCallbackHandler({
+                    tags: runName ? [runName] : undefined,
+                }),
+            );
+        }
 
         const finalize = async ({
             metadata,
             runName: explicitName,
             reset,
+            byokConfig: finalizeByokConfig,
         }: {
             metadata?: Record<string, any>;
             runName?: string;
             reset?: boolean;
+            // Accepts the narrowed safe view (provider + model only). Callers
+            // that pass a full BYOKConfig must project through
+            // `toSafeByokView` first — see `runLLMInSpan`. Keeping the type
+            // narrow here prevents API keys from entering this scope at all.
+            byokConfig?: BYOKConfigSafeView;
         } = {}) => {
             const obs = this.getObsInstance();
             const span = obs.getCurrentSpan();
@@ -294,6 +364,14 @@ export class ObservabilityService implements OnModuleInit {
 
             const s = this.summarize(usages);
 
+            // Resolve model names with BYOK provider prefix when available.
+            const resolvedModels = s.modelsArr.map((m) =>
+                resolveModelName(m, finalizeByokConfig),
+            );
+            const resolvedModel = resolvedModels.length
+                ? resolvedModels.join(',')
+                : undefined;
+
             if (span) {
                 span.setAttributes({
                     'gen_ai.usage.total_tokens': s.totalTokens,
@@ -302,8 +380,8 @@ export class ObservabilityService implements OnModuleInit {
                     ...(s.reasoningTokens > 0 && {
                         'gen_ai.usage.reasoning_tokens': s.reasoningTokens,
                     }),
-                    ...(s.modelsArr.length && {
-                        'gen_ai.response.model': s.modelsArr.join(','),
+                    ...(resolvedModel && {
+                        'gen_ai.response.model': resolvedModel,
                     }),
                     ...(runKey && { 'gen_ai.run.id': runKey }),
                     ...((explicitName ?? runName ?? resolvedName) && {
@@ -335,16 +413,28 @@ export class ObservabilityService implements OnModuleInit {
             };
         };
 
-        return { callbacks: [tracker], tracker, finalize };
+        return { callbacks, tracker, finalize };
     }
 
     async runLLMInSpan<T>(params: {
         spanName: string;
         runName?: string;
         attrs?: Record<string, any>;
+        byokConfig?: BYOKConfig;
         exec: (callbacks: any[]) => Promise<T>;
     }): Promise<{ result: T; usage: any }> {
-        const { spanName, runName, attrs, exec } = params;
+        const {
+            spanName,
+            runName,
+            attrs,
+            byokConfig: spanByokConfig,
+            exec,
+        } = params;
+        // Scrub the BYOK config immediately so nothing downstream in this
+        // span scope — including future debug logs or span attributes —
+        // can see the customer's API key. Only provider + model names ride
+        // through to `finalize`, which is all the model-name resolver needs.
+        const safeByokView = toSafeByokView(spanByokConfig);
         const obs = this.getObsInstance();
         const span = obs.startSpan(spanName);
 
@@ -365,6 +455,7 @@ export class ObservabilityService implements OnModuleInit {
                 const usage = await finalize({
                     metadata: attrs,
                     reset: true,
+                    byokConfig: safeByokView,
                 });
                 return { result, usage };
             });
@@ -444,9 +535,13 @@ export class ObservabilityService implements OnModuleInit {
     }
 
     public buildConnectionString(config: DatabaseConnection): string {
+        if (config?.url) {
+            return config.url;
+        }
+
         if (!config?.host) {
             throw new Error(
-                'ObservabilityService: invalid or missing host in DatabaseConnection',
+                'ObservabilityService: invalid DatabaseConnection — provide either `url` or `host`',
             );
         }
 
@@ -559,9 +654,28 @@ export class ObservabilityService implements OnModuleInit {
         };
     }
 
+    private redactConnectionString(value: string | undefined): string | undefined {
+        if (!value) return value;
+        return value.replace(
+            /\b(mongodb(?:\+srv)?:\/\/)[^\s:@/]+:[^\s@/]+@/gi,
+            '$1***:***@',
+        );
+    }
+
+    private safeErrorForLog(err: unknown): Error {
+        const source = err instanceof Error ? err : new Error(String(err));
+        const redacted = new Error(
+            this.redactConnectionString(source.message) ?? '',
+        );
+        redacted.name = source.name;
+        redacted.stack = this.redactConnectionString(source.stack);
+        return redacted;
+    }
+
     private makeKey(config: DatabaseConnection, serviceName: string): string {
         return JSON.stringify({
-            h: config.host,
+            u: config.url ?? null,
+            h: config.host ?? null,
             p: config.port ?? null,
             db: config.database ?? null,
             s: serviceName,

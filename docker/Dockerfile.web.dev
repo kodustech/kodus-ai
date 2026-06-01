@@ -1,5 +1,14 @@
-# Development stage for kodus-web (Next.js)
-FROM docker.io/library/node:22.22.0-slim
+# syntax=docker/dockerfile:1.7
+# Development stage for kodus-web (Next.js).
+#
+# The application code is provided at runtime via the bind mount declared
+# in docker-compose.dev.yml (./apps/web:/usr/src/app) and node_modules is
+# supplied by the named volume `web_node_modules_cache`. The install here
+# only exists to seed the node_modules volume the first time it's created
+# — afterwards the volume persists across container restarts. That's why
+# there's no `COPY . .` (the bind mount would overwrite it anyway).
+
+FROM docker.io/library/node:22.22.2-slim
 
 WORKDIR /usr/src/app
 
@@ -8,14 +17,11 @@ ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 
-# Copy only the files needed for dependency installation
 COPY package*.json yarn.lock ./
 
-# Install dependencies
-RUN yarn install --frozen-lockfile
-
-# Keep a local fallback for scenarios without bind mount.
-COPY . .
+RUN --mount=type=cache,target=/yarn-cache,sharing=locked \
+    YARN_CACHE_FOLDER=/yarn-cache \
+    yarn install --frozen-lockfile
 
 EXPOSE 3000
 

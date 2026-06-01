@@ -1,0 +1,44 @@
+---
+title: "Cómo compartir estándares de codificación entre repositorios"
+description: "Usa la herencia de reglas y las reglas a nivel de organización para mantener estándares de codificación coherentes en todos tus repositorios."
+---
+
+Cuando tienes múltiples repositorios, mantener la coherencia de los estándares de codificación es un desafío. Kodus admite la herencia de reglas para que puedas definir reglas una vez y aplicarlas en todos lados.
+
+## Reglas a nivel de organización
+
+Crea reglas a nivel de organización y se aplican automáticamente a todos los repositorios:
+
+1. Ve a **Configuración de Revisión de Código** → **Global** → **Kody Rules**
+2. Crea tus reglas — se aplican a todos los repositorios de la organización
+3. Los repositorios individuales pueden heredar, anular o excluir reglas específicas
+
+## Herencia de reglas
+
+Las reglas fluyen desde la organización → repositorio → directorio:
+
+- Las **reglas de organización** se aplican en todos lados por defecto
+- Las **reglas de repositorio** pueden anular o extender las reglas de la organización
+- Las **reglas de directorio** pueden especializarse aún más para rutas específicas
+
+Un repositorio puede **excluir** una regla heredada si no aplica a esa base de código.
+
+## Referencias entre repositorios
+
+Usa `@repo:org/proyecto` en las instrucciones de la regla para referenciar archivos de otros repositorios:
+
+```
+Asegurarse de que los endpoints de la API sigan el patrón definido en @repo:team/api-standards.
+```
+
+Esto te permite mantener un repositorio central de estándares al que todas las reglas hacen referencia.
+
+## Memorias en toda la organización
+
+Las Memorias con alcance de **nivel de organización** se aplican en todos los repositorios. Por ejemplo:
+
+```
+@kody remember: en todos los repositorios usamos el formato de ESLint flat config.
+```
+
+Para más detalles, consulta [Herencia de Reglas](/how_to_use/es/code_review/configs/rules_inheritance).

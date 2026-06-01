@@ -1,0 +1,44 @@
+---
+title: "コードレビューに独自のLLMプロバイダーを使用できますか"
+description: "独自のAPIキーを持ち込み、KodusでのAI搭載コードレビューに好みのLLMプロバイダーを選択します。"
+---
+
+はい。Kodus はすべてのプランで Bring Your Own Key（BYOK）をサポートしており、好みの LLM プロバイダーを使用できます。プロバイダーに直接支払うため、Kodus はトークンに上乗せ料金を請求せず、APIキーを平文で見ることも決してありません。
+
+## 動作方法
+
+1. **設定 → BYOK** を開きます（[app.kodus.io/organization/byok](https://app.kodus.io/organization/byok)）
+2. キュレートされたカタログから**推奨モデル**を選ぶか、他のプロバイダー/エンドポイントには **Configure manually** をクリックします
+3. APIキーを貼り付けて **Test & save** をクリック — Kodus は永続化する前に安価なメタデータ呼び出しでキーを検証します
+
+## キュレートされた推奨モデル
+
+事前チューニングされたデフォルト（temperature、最大トークン、reasoning レベル）を持つ、クリックすぐに使えるカード：
+
+- Claude Sonnet 4.6 / Opus 4.7（Anthropic）
+- Gemini 3.1 Pro custom tools（Google）
+- GPT-5.4（OpenAI）
+- Kimi K2.6 Coding（Moonshot AI — Developer API または Kimi Code Plan）
+- GLM 5.1（Z.ai — Developer API または Coding Plan）
+
+このリストにないモデルについては、**Configure manually** ウィザードが OpenAI、Anthropic、Google、OpenRouter、Novita、または OpenAI 互換エンドポイントをステップごとにガイドします。
+
+## 独自のプロバイダーを使用する理由
+
+- **データ管理** — リクエストはプロバイダーに直接送信されます
+- **コスト管理** — 既存の請求関係を使用、上乗せ料金なし
+- **モデル選択** — コードベースに最適なモデルを選びます
+- **コンプライアンス** — AI ツール使用に関する社内要件を満たします
+- **フォールバックレジリエンス** — メイン + フォールバックを設定してプロバイダー障害中もレビューを継続
+
+## セルフホスト型 LLM プロバイダー
+
+Kodus をセルフホストする場合、BYOK を以下のようなセルフホストまたはアグリゲーターエンドポイントに向けることができます：
+
+- Novita、Groq、Together AI、Fireworks AI
+- Chutes、Synthetic
+- 独自の Ollama / vLLM / TGI インスタンス（`OpenAI Compatible` プロバイダー経由）
+
+セットアップガイドについては、[クックブック](/cookbook/ja/novita) とナレッジベースのプロバイダー固有のドキュメントを参照してください。
+
+完全な BYOK フロー（カタログ、手動ウィザード、プランセレクター、高度なチューニング）については、[Bring Your Own Key](/how_to_use/ja/byok) を参照してください。

@@ -11,7 +11,9 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 
+import { deriveSsoCookieDomain } from '../utils/derive-sso-cookie-domain';
 import { ConfirmEmailUseCase } from '@libs/identity/application/use-cases/auth/confirm-email.use-case';
+import { CreateHelpdeskTokenUseCase } from '@libs/identity/application/use-cases/auth/create-helpdesk-token.use-case';
 import { ForgotPasswordUseCase } from '@libs/identity/application/use-cases/auth/forgotPasswordUseCase';
 import { LoginUseCase } from '@libs/identity/application/use-cases/auth/login.use-case';
 import { LogoutUseCase } from '@libs/identity/application/use-cases/auth/logout.use-case';
@@ -23,8 +25,10 @@ import { SignUpUseCase } from '@libs/identity/application/use-cases/auth/signup.
 
 import { SSOCheckUseCase } from '@libs/ee/sso/use-cases/sso-check.use-case';
 import { SSOLoginUseCase } from '@libs/ee/sso/use-cases/sso-login.use-case';
+import { SamlAuthGuard } from '@libs/ee/sso/guards/saml-auth.guard';
+import { SSOTestSessionService } from '@libs/ee/sso/services/sso-test-session.service';
+import { mapSSOError } from '@libs/ee/sso/utils/sso-error.util';
 import { SignUpDTO } from '@libs/identity/dtos/create-user-organization.dto';
-import { AuthGuard } from '@nestjs/passport';
 import { CreateUserOrganizationOAuthDto } from '../dtos/create-user-organization-oauth.dto';
 import {
     ApiBody,
@@ -70,6 +74,8 @@ export class AuthController {
         private readonly resendEmailUseCase: ResendEmailUseCase,
         private readonly ssoLoginUseCase: SSOLoginUseCase,
         private readonly ssoCheckUseCase: SSOCheckUseCase,
+        private readonly ssoTestSessionService: SSOTestSessionService,
+        private readonly createHelpdeskTokenUseCase: CreateHelpdeskTokenUseCase,
     ) {}
 
     @Post('login')
@@ -187,6 +193,25 @@ export class AuthController {
         );
     }
 
+    @Get('helpdesk-token')
+    @ApiBearerAuth('jwt')
+    @ApiOperation({
+        summary: 'Generate helpdesk SSO token',
+        description:
+            'Generate a short-lived RS256 token for authenticating with kodus-helpdesk.',
+    })
+    @ApiOkResponse({
+        schema: {
+            type: 'object',
+            properties: { token: { type: 'string' } },
+        },
+    })
+    async getHelpdeskToken(@Req() req: Request) {
+        return this.createHelpdeskTokenUseCase.execute(
+            (req as any).user,
+        );
+    }
+
     @Get('sso/check')
     @Public()
     @ApiOperation({
@@ -200,7 +225,7 @@ export class AuthController {
 
     @Get('sso/login/:organizationId')
     @Public()
-    @UseGuards(AuthGuard('saml'))
+    @UseGuards(SamlAuthGuard)
     @ApiParam({ name: 'organizationId', required: true })
     @ApiOperation({
         summary: 'SSO login',
@@ -212,7 +237,7 @@ export class AuthController {
 
     @Post('sso/saml/callback/:organizationId')
     @Public()
-    @UseGuards(AuthGuard('saml'))
+    @UseGuards(SamlAuthGuard)
     @ApiParam({ name: 'organizationId', required: true })
     @ApiOperation({
         summary: 'SSO callback',
@@ -223,29 +248,74 @@ export class AuthController {
         @Res() res: Response,
         @Param('organizationId') organizationId: string,
     ) {
-        const { accessToken, refreshToken } =
-            await this.ssoLoginUseCase.execute(req.user, organizationId);
-
         const frontendUrl = process.env.API_FRONTEND_URL;
+        const relayState =
+            (req.body?.RelayState as string) ||
+            (req.query?.RelayState as string);
 
         if (!frontendUrl) {
             throw new Error('Frontend URL not found');
         }
 
-        const payload = JSON.stringify({ accessToken, refreshToken });
+        try {
+            if (relayState) {
+                const testSession =
+                    await this.ssoTestSessionService.getSession(relayState);
 
-        res.cookie('sso_handoff', payload, {
-            httpOnly: false,
-            secure: process.env.API_NODE_ENV !== 'development',
-            sameSite: 'lax',
-            path: '/',
-            maxAge: 15 * 1000,
-            domain:
-                process.env.API_NODE_ENV !== 'development'
-                    ? '.kodus.io'
-                    : undefined,
-        });
+                if (
+                    testSession &&
+                    testSession.organizationId === organizationId
+                ) {
+                    await this.ssoTestSessionService.markSessionSuccess(
+                        relayState,
+                    );
 
-        return res.redirect(`${frontendUrl}/sso-callback`);
+                    return res.redirect(
+                        `${frontendUrl}/organization/sso?ssoTestSessionId=${encodeURIComponent(relayState)}`,
+                    );
+                }
+            }
+
+            const { accessToken, refreshToken } =
+                await this.ssoLoginUseCase.execute(req.user, organizationId);
+
+            const payload = JSON.stringify({ accessToken, refreshToken });
+
+            const cookieDomain = deriveSsoCookieDomain({
+                apiHost: req.get('host')?.split(':')[0] ?? '',
+                frontendUrl,
+                nodeEnv: process.env.API_NODE_ENV,
+            });
+
+            res.cookie('sso_handoff', payload, {
+                httpOnly: false,
+                secure: process.env.API_NODE_ENV !== 'development',
+                sameSite: 'lax',
+                path: '/',
+                maxAge: 15 * 1000,
+                domain: cookieDomain,
+            });
+
+            return res.redirect(`${frontendUrl}/sso-callback`);
+        } catch (error) {
+            const mappedError = mapSSOError(error);
+
+            if (relayState) {
+                await this.ssoTestSessionService.markSessionFailed(relayState, {
+                    failureCode: mappedError.failureCode,
+                    failureMessage: mappedError.message,
+                });
+
+                return res.redirect(
+                    `${frontendUrl}/organization/sso?ssoTestSessionId=${encodeURIComponent(relayState)}`,
+                );
+            }
+
+            const reasonMessage = encodeURIComponent(mappedError.message);
+
+            return res.redirect(
+                `${frontendUrl}/sign-in?reason=${mappedError.reasonCode}&reasonMessage=${reasonMessage}`,
+            );
+        }
     }
 }

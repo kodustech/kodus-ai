@@ -1,0 +1,149 @@
+---
+title: "Flujo de Revisión de Código"
+---
+
+## Descripción General
+
+Kody revisa tus PRs automáticamente o bajo demanda, agrega sugerencias claras y ayuda a tu equipo a decidir cuándo hacer el merge. A continuación se muestra la vista simple orientada al usuario sobre cómo funciona.
+
+Referencia: <a href="https://www.figma.com/board/ZZJcIJMJWGuyzRGMh3w5di/Kodus-Code-Review-Flow?node-id=4-274" target="_blank">Tablero en Figma</a>
+
+## Cuándo Ejecuta Kody
+
+- PR abierto
+- Nuevo commit subido al PR (dependiendo de la cadencia)
+- Activación manual vía comentario: `@kody start-review`
+
+## Cuándo Omite Kody
+
+- Sin nuevos commits desde la última ejecución
+- Solo commits de merge sin cambios efectivos
+- Todos los archivos modificados son ignorados por los patrones configurados
+- El PR supera el límite de archivos configurado
+- Configuración inválida o faltante
+
+## Qué Hace Kody
+
+- Resuelve qué configuración aplica (global → repo → directorio) y la valida
+- Recopila los diffs y el contexto relevantes para este PR
+- Ejecuta verificaciones a nivel de PR (p. ej., reglas personalizadas y análisis entre archivos cuando está habilitado)
+- Revisa los archivos modificados con foco en el diff
+- Filtra y prioriza sugerencias para reducir el ruido (relevancia, severidad, deduplicación, salvaguardas)
+- Publica comentarios en línea y, cuando corresponda, un resumen a nivel de PR
+- Opcionalmente aprueba o solicita cambios si esas políticas están habilitadas
+- Recuerda el último commit analizado para mantener los seguimientos incrementales
+
+## Qué Recibes
+
+- Comentarios en línea con sugerencias concretas
+- Resumen opcional a nivel de PR con aspectos destacados
+- Estado opcional: aprobado o cambios solicitados (si está habilitado)
+
+## Reacciones de Estado
+
+Kody usa reacciones con emojis para mostrar el estado en vivo de tu revisión de código directamente en tu proveedor de Git. Sin necesidad de adivinar si está trabajando, terminó o tuvo un problema. Siempre reemplaza el emoji anterior con el estado más reciente (por ejemplo: 🚀 → 🎉, 👀, 👎 o 😕).
+
+<Note>
+  Compatible con GitHub y GitLab. Azure DevOps y Bitbucket aún no soportan
+  reacciones.
+</Note>
+
+### Qué significa cada emoji
+
+- 🚀 Procesando — Kody está trabajando en tu código:
+  - Analizando archivos
+  - Verificando reglas y políticas
+  - Generando sugerencias
+- 🎉 Completado — Revisión finalizada:
+  - Todos los comentarios publicados
+  - Análisis completo
+  - Puedes revisar las sugerencias
+- 👀 Omitido — La revisión fue omitida. Razones comunes incluyen:
+  - Sin nuevos commits desde la última ejecución
+  - Solo commits de merge detectados
+  - El PR/MR supera el límite de archivos configurado
+  - Sin archivos relevantes para revisar (patrones ignorados)
+  - Rama no configurada para revisión
+  - PR/MR en modo borrador (si está configurado para omitir borradores)
+- 👎 Sin licencia — El usuario no tiene licencia:
+  - Kody no puede ejecutarse sin una licencia válida
+  - Asegúrate de que el usuario que abrió el PR/MR tenga una licencia asignada
+  - Opcionalmente, habilita [Asignación Automática de Licencia](/how_to_use/es/auto_license_assignment) para asignar licencias automáticamente
+- 😕 Error — Algo salió mal:
+  - Problema técnico temporal durante la revisión
+  - Inténtalo de nuevo; únete a nuestra [comunidad de Discord](https://discord.gg/TFZBRk9fT6) si persiste
+
+### Dónde aparecen las reacciones
+
+- Revisión automática (PR abierto o nuevo commit): reacción en la descripción del PR/MR (parte superior del hilo)
+- Revisión manual (comentario `@kody start-review`): reacción en tu comentario donde invocaste a Kody
+
+### Escenarios de ejemplo
+
+- Nuevo PR (automático): 🚀 mientras ejecuta → 🎉 cuando termina
+- Comando manual: 🚀 en tu comentario → 🎉 cuando termina
+- Sin cambios desde la última ejecución: reacción 👀
+- Usuario sin licencia: reacción 👎
+- Problema temporal: reacción 😕
+
+### Preguntas Frecuentes
+
+**No veo reacciones**
+
+- GitHub/GitLab: ✅ | Azure DevOps/Bitbucket: ❌ (aún no soportado)
+
+**¿Por qué cambió el emoji?**
+
+- Normal — Kody reemplaza el estado anterior (🚀 → 🎉/👀/😕)
+
+**Vi 👀 pero quería una revisión**
+
+- Probablemente omitido: sin nuevos commits, solo merge, archivos ignorados o límite de archivos
+- Solución: comenta `@kody start-review`
+
+**Vi 👎**
+
+- El usuario que abrió el PR/MR no tiene licencia
+- Solución: asigna una licencia o habilita [Asignación Automática de Licencia](/how_to_use/es/auto_license_assignment)
+
+**Vi 😕**
+
+- Reintenta con `@kody start-review`. Si persiste, consulta [Solución de Problemas](/how_to_use/es/code_review/troubleshooting) o [Discord](https://discord.gg/TFZBRk9fT6)
+
+## Configuraciones Relevantes
+
+- Revisiones automatizadas vs manuales y cadencia de seguimiento
+- Patrones de ignorado y ramas base en el alcance
+- Reglas personalizadas y análisis entre archivos
+- Controles de sugerencias: filtro de severidad, agrupación y máximo de sugerencias
+- Límites de archivos y tiempos de espera
+
+<CardGroup cols={2}>
+  <Card
+    title="Configuración General"
+    icon="sliders"
+    href="/how_to_use/es/code_review/configs/general"
+  >
+    Configura modos, cadencia, ramas y opciones de sugerencias
+  </Card>
+  <Card
+    title="Política de Revisión"
+    icon="shield-check"
+    href="/how_to_use/es/code_review/policy"
+  >
+    Entiende las sugerencias vs el bloqueo y cuándo habilitar cada uno
+  </Card>
+  <Card
+    title="Solución de Problemas"
+    icon="triangle-exclamation"
+    href="/how_to_use/es/code_review/troubleshooting"
+  >
+    Soluciona problemas comunes y aprende sobre los límites
+  </Card>
+</CardGroup>
+
+## Consejos
+
+- Mantén los PRs pequeños — los diffs grandes reducen la calidad de la revisión
+- Vincula especificaciones/tickets en la descripción del PR
+- Vuelve a ejecutar con `@kody start-review` después de abordar el feedback

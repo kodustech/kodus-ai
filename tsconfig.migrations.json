@@ -19,6 +19,10 @@
     "include": [
         "libs/core/infrastructure/database/typeorm/ormconfig.ts",
         "libs/core/infrastructure/database/typeorm/migrations/**/*",
-        "libs/core/infrastructure/database/typeorm/seed/seed.ts"
+        "libs/core/infrastructure/database/typeorm/seed/seed.ts",
+        "apps/mcp-manager/src/config/typeorm.config.ts",
+        "apps/mcp-manager/src/database/migrations/**/*",
+        "apps/mcp-manager/src/**/*.entity.ts",
+        "scripts/mcp-manager/ensure-schema.cli.ts"
     ]
 }

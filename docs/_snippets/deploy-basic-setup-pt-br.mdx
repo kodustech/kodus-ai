@@ -1,0 +1,128 @@
+## Requisitos do Sistema
+
+<AccordionGroup>
+  <Accordion title="Hardware Recomendado">
+    Dimensionado para o modo de sandbox `local` padrão (kodus-graph +
+    contexto cross-file rodam dentro do container worker).
+
+    - **CPU**: 2+ núcleos (4+ recomendado para repos acima de ~100k LOC)
+    - **RAM**: 8GB+ (16GB recomendado ao rodar o sandbox `local` em repos grandes)
+    - **Armazenamento**: 60GB+ de espaço livre (Postgres guarda o cache do AST graph;
+      cresce com a quantidade de repos e volume de PRs)
+  </Accordion>
+  <Accordion title="Software Necessário">
+    - **Docker** (última versão estável) com plugin Compose
+    - **Nome de domínio ou IP fixo** se você quer receber webhooks de
+      provedores Git na nuvem (GitHub.com, GitLab.com, etc.)
+  </Accordion>
+  <Accordion title="Portas Necessárias">
+    Mapeamentos padrão de porta no host — ajuste no `.env` em caso de conflito.
+
+    - **3000** — Kodus Web App
+    - **3001** — API
+    - **3332** — Webhooks
+    - **5432** — PostgreSQL
+    - **27017** — MongoDB
+    - **5672, 15672, 15692** — RabbitMQ (AMQP, painel, métricas)
+    - **3101** — MCP Manager _(só se `API_MCP_SERVER_ENABLED=true`)_
+  </Accordion>
+  <Accordion title="Serviços">
+    O que `./scripts/install.sh` sobe, baseado no seu `.env`.
+
+    **Core (sempre ligados):**
+    - `api` — backend principal
+    - `worker` — jobs de code review
+    - `webhooks` — receptor de webhooks de provedores Git
+    - `kodus-web` — frontend Next.js
+    - `db_kodus_postgres`, `db_kodus_mongodb`, `rabbitmq` —
+      infraestrutura local. Pule com `USE_LOCAL_DB=false` /
+      `USE_LOCAL_RABBITMQ=false` pra apontar pra instâncias gerenciadas.
+
+    **Opcionais:**
+    - `kodus-mcp-manager` — broker do Model Context Protocol. Habilite
+      com `API_MCP_SERVER_ENABLED=true`. Veja [MCP Manager](/how_to_deploy/pt-br/deploy_kodus/mcp_manager).
+    - `worker-analytics` — ingestão do Cockpit (métricas DORA, PR
+      classifier). **Exclusivo do self-hosted Enterprise**, não vem por padrão.
+      Veja [Analytics Worker](/how_to_deploy/pt-br/deploy_kodus/analytics_worker).
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  Code review usa um AST graph + contexto cross-file que roda em um
+  sandbox — `local` (default, dentro do worker) ou `e2b` (sandbox remoto
+  pago). Veja [Sandbox & AST Graph](/how_to_deploy/pt-br/deploy_kodus/sandbox)
+  pra entender os modos, comportamento de cache, e quando escolher cada um.
+</Note>
+
+<Note>
+  **Acesso à internet é necessário se você planeja conectar a serviços Git na nuvem (GitHub, GitLab, Bitbucket) ou provedores de LLM na nuvem (OpenAI, Anthropic, etc.).** Para ferramentas Git auto-hospedadas e LLMs on-premise dentro da sua rede, o acesso externo à internet é opcional.
+</Note>
+
+## Configuração de Domínio (Opcional)
+
+Se você planeja integrar o Kodus com provedores Git na nuvem (GitHub, GitLab ou Bitbucket), precisará de URLs públicas tanto para o Kodus Web App quanto para sua API. Isso permite que seu servidor receba webhooks para o correto funcionamento da Revisão de Código e garante o comportamento correto da aplicação.
+
+Recomendamos configurar dois subdomínios:
+- Um para o Aplicativo Web, ex.: `kodus-web.seudominio.com`.
+- Um para a API, ex.: `kodus-api.seudominio.com`.
+
+Os webhooks são gerenciados por um serviço separado (porta 3332). Você pode:
+- Usar um subdomínio dedicado para webhooks, ex.: `kodus-webhooks.seudominio.com`, ou
+- Continuar usando o domínio da API e rotear `/github/webhook`, `/gitlab/webhook`, etc. para o serviço de webhooks no seu proxy reverso.
+
+Ambos os subdomínios devem ter registros DNS A apontando para o endereço IP do seu servidor. Mais adiante neste guia, configuraremos um proxy reverso (Nginx) para rotear as requisições desses subdomínios para os serviços internos corretos. Esta configuração é essencial para a funcionalidade completa, incluindo webhooks e autenticação.
+
+> **Nota**: Se você estiver conectando apenas a ferramentas Git auto-hospedadas na sua rede e não precisar de acesso público ou webhooks, poderá usar uma configuração mais simples, mas este guia foca em implantações com acesso público.
+
+## Configuração
+
+<Steps>
+  <Step title="Clonar o repositório do instalador">
+    ```bash
+    git clone https://github.com/kodustech/kodus-installer.git
+    cd kodus-installer
+    ```
+  </Step>
+  <Step title="Copiar o arquivo de ambiente de exemplo">
+    ```bash
+    cp .env.example .env
+    ```
+  </Step>
+  <Step title="Gerar chaves seguras para as variáveis de ambiente necessárias">
+    ```bash
+    ./generate-keys.sh
+    ```
+  </Step>
+  <Step title="Editar o arquivo de ambiente">
+    Edite o `.env` com seus valores usando seu editor de texto preferido. 
+    ```bash
+    nano .env
+    ```
+
+    Consulte [Configuração de Variáveis de Ambiente](/how_to_deploy/pt-br/deploy_kodus/generic_vm#environment-variables-configuration) para instruções detalhadas.  
+  </Step>
+
+  <Step title="Executar o instalador">
+    ```bash
+    ./scripts/install.sh
+    ```
+  </Step>
+  <Step title="Sucesso 🎉">
+  Quando concluído, os serviços do Kodus devem estar rodando na sua máquina.
+  Você pode verificar a instalação usando o seguinte script:
+  ```bash
+  ./scripts/doctor.sh
+  ```
+  </Step>
+  <Step title="Acessar a interface web">
+    Ao acessar a interface web pela primeira vez, você precisará:
+
+1. **Criar sua conta de administrador** - Este será o primeiro usuário com acesso completo ao sistema
+2. **Configurar seu provedor Git** - Conecte o GitHub, GitLab ou Bitbucket seguindo as instruções na tela
+3. **Selecionar repositórios** para análise - Escolha quais repositórios de código o Kody irá revisar
+
+<Info>
+  Para etapas detalhadas sobre o processo de configuração inicial, consulte nosso [Guia de Início Rápido](/how_to_use/pt-br/quickstart).
+</Info>
+  </Step>
+</Steps>

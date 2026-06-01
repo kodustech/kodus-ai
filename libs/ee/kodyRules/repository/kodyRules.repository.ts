@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, PipelineStage } from 'mongoose';
 
 import {
     mapSimpleModelsToEntities,
@@ -137,6 +137,43 @@ export class KodyRulesRepository implements IKodyRulesRepository {
             .findOne({ organizationId })
             .exec();
         return doc ? mapSimpleModelToEntity(doc, KodyRulesEntity) : null;
+    }
+
+    async countRules(
+        organizationId: string,
+        status?: KodyRulesStatus,
+    ): Promise<number> {
+        // Count via aggregation so the doc itself (which embeds the
+        // full rules array — can be large on active orgs) never leaves
+        // MongoDB just to return a single number. Requires the
+        // organizationId index from kodyRules.model.ts for sub-ms
+        // lookups.
+        const pipeline: PipelineStage[] = [
+            { $match: { organizationId } },
+        ];
+        if (status) {
+            pipeline.push(
+                { $project: {
+                    total: {
+                        $size: {
+                            $filter: {
+                                input: { $ifNull: ['$rules', []] },
+                                as: 'rule',
+                                cond: { $eq: ['$$rule.status', status] },
+                            },
+                        },
+                    },
+                } },
+            );
+        } else {
+            pipeline.push(
+                { $project: { total: { $size: { $ifNull: ['$rules', []] } } } },
+            );
+        }
+        const [result] = await this.kodyRulesModel
+            .aggregate<{ total: number }>(pipeline)
+            .exec();
+        return result?.total ?? 0;
     }
     //#endregion
 

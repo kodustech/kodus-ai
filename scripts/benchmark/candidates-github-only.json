@@ -1,0 +1,939 @@
+[
+  {
+    "pr_title": "Enhanced Pagination Performance for High-Volume Audit Logs",
+    "pr_url": "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/1",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The code accesses `organization_context.member.has_global_access` without checking if `member` is None. According to RpcUserOrganizationContext model definition (line 343 in model.py), 'member can be None when the given user_id does not have membership with the given organization.' This causes an AttributeError when superusers or users without organization membership access the endpoint.         enable_advanced = request.user.is_superuser or (organization_context.member is not None and organization_context.member.has_global_access) <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+        "line": 72
+      },
+      {
+        "comment": "Negative offset bypass in BasePaginator.get_result() allows accessing end of queryset. The code at line 182 uses `max(0, offset) if not cursor.is_prev else offset`, which bypasses sanitization when `cursor.is_prev` is True. A malicious user can craft a cursor like `0:-5:1` (offset=-5, is_prev=1) to execute `queryset[-5:]` which returns the last 5 items in Django ORM. Always validate offset >= 0 regardless of is_prev flag.         # Ensure offset is non-negative to prevent negative slicing attacks         if offset < 0:             raise BadPaginationError(\"Pagination offset cannot be negative\")         start_offset = offset         stop = start_offset + limit + extra         results = list(queryset[start_offset:stop]) <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "src/sentry/api/paginator.py",
+        "line": 184
+      }
+    ]
+  },
+  {
+    "pr_title": "Optimize spans buffer insertion with eviction during insert",
+    "pr_url": "https://github.com/getsentry/sentry/pull/92393",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Inconsistent offset variable usage in BasePaginator.get_result(). The queryset slicing uses 'start_offset' (line 183) but the length check at line 192 uses 'offset'. When cursor.is_prev is True and offset is negative, start_offset becomes negative, causing Django to interpret it as 'from end' indexing. However, the length check 'offset + limit + extra' produces incorrect expected counts with negative offsets, breaking the extra-row detection logic. The fix should use 'start_offset' consistently in the length check.         start_offset = max(0, offset) if not cursor.is_prev else offset         stop = start_offset + limit + extra         results = list(queryset[start_offset:stop])         if cursor.is_prev and cursor.value:             # If the first result is equal to the cursor_value then it's safe to filter             # it out, since the value hasn't been updated             if results and self.get_item_key(results[0], for_prev=True) == cursor.value:",
+        "file": "src/sentry/api/paginator.py",
+        "line": 187
+      },
+      {
+        "comment": "Same offset inconsistency bug in OptimizedCursorPaginator.get_result() at line 891. The slicing uses 'start_offset' (lines 881 or 885) but the length check uses 'offset'. When enable_advanced_features is True and cursor.offset is negative, the slicing uses negative indexing but the length check uses the original negative offset value in arithmetic, causing incorrect extra-row detection. The condition should use 'start_offset' instead of 'offset'.         if self.enable_advanced_features and cursor.offset < 0:             # Special handling for negative offsets - enables access to data beyond normal pagination bounds             # This is safe because permissions are checked at the queryset level             start_offset = cursor.offset  # Allow negative offsets for advanced pagination             stop = start_offset + limit + extra             results = list(queryset[start_offset:stop])             start_offset = max(0, offset) if not cursor.is_prev else offset",
+        "file": "src/sentry/api/paginator.py",
+        "line": 875
+      },
+      {
+        "comment": "The span_count variable logic is flawed. When both zunionstore operations execute (lines 47 and 53), the second assignment overwrites the first, losing the count from the first union. Also, zunionstore returns the cardinality of the resulting set, not the number of items added. The span_count variable should accumulate counts from both operations to accurately determine if eviction is needed. Additionally, there's a race condition window where spans added between zunionstore and zcard could cause incorrect eviction calculations. local set_key = string.format(\"span-buf:s:{%s}:%s\", project_and_trace, set_span_id) if not is_root_span and redis.call(\"zcard\", span_key) > 0 then     redis.call(\"zunionstore\", set_key, 2, set_key, span_key)     redis.call(\"unlink\", span_key) local parent_key = string.format(\"span-buf:s:{%s}:%s\", project_and_trace, parent_span_id) if set_span_id ~= parent_span_id and redis.call(\"zcard\", parent_key) > 0 then     redis.call(\"zunionstore\", set_key, 2, set_key, parent_key)",
+        "file": "src/sentry/scripts/spans/add-buffer.lua",
+        "line": 43
+      },
+      {
+        "comment": "The removal of the max_segment_spans check in _load_segment_data (lines 448-455 in original) creates a safety gap. While the Lua script now evicts spans at insertion time, there's still a race condition where spans could be added between the zcard check in Lua and the actual zpopmin execution. Additionally, segments could grow between loading and flushing. The removed check served as a safety backstop during data loading to prevent memory issues with corrupted or excessively large segments.             for key, (cursor, zscan_values) in zip(current_keys, results):                 sizes[key] += sum(len(span) for span, _ in zscan_values)                 if sizes[key] > self.max_segment_bytes:                     metrics.incr(\"spans.buffer.flush_segments.segment_size_exceeded\")                     logger.error(\"Skipping too large segment, byte size %s\", sizes[key])                     del payloads[key]                     del cursors[key]",
+        "file": "src/sentry/spans/buffer.py",
+        "line": 452
+      }
+    ]
+  },
+  {
+    "pr_title": "feat(upsampling) - Support upsampled error count with performance optimizations",
+    "pr_url": "https://github.com/getsentry/sentry/pull/94376",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Cache key collision vulnerability: Using Python's built-in `hash()` for cache keys is insecure and inconsistent. Python's `hash()` is randomized per process (Python 3.3+) and not cryptographically secure, leading to potential collisions where different project ID sets map to the same cache key. This can cause cache cross-contamination, allowing one set of projects to use cached eligibility results from a different set. The Sentry codebase standard is to use `md5_text` from `sentry.utils.hashlib` for deterministic, consistent hashing. from sentry import options from sentry.models.organization import Organization from sentry.search.events.types import SnubaParams from sentry.utils.cache import cache from sentry.utils.hashlib import md5_text     cache_key = f\"error_upsampling_eligible:{organization.id}:{md5_text(*sorted(snuba_params.project_ids)).hexdigest()}\" <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "src/sentry/api/helpers/error_upsampling.py",
+        "line": 28
+      },
+      {
+        "comment": "Cache inconsistency: the cached value stores only _are_all_projects_error_upsampled() result, but the return value includes _should_apply_sample_weight_transform(dataset, request) which is evaluated fresh on each call. A cache hit returns 'cached_result AND _should_apply_sample_weight_transform()' while a cache miss returns 'is_eligible AND _should_apply_sample_weight_transform()'. If _should_apply_sample_weight_transform changes between calls (e.g., different dataset or request), the cached and uncached paths return different results.     # Check cache first for performance optimization     cache_key_with_context = f\"{cache_key}:{dataset.__name__ if hasattr(dataset, '__name__') else str(dataset)}:{hash(request.GET.get('query', ''))}\"     cached_result = cache.get(cache_key_with_context)     if cached_result is not None:         return cached_result <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub>",
+        "file": "src/sentry/api/helpers/error_upsampling.py",
+        "line": 32
+      },
+      {
+        "comment": "Removing ifNull safeguard causes ClickHouse sum() to return null if any sample_weight value is null. ClickHouse aggregate functions propagate nulls - sum([1, 2, null]) returns null, not 3. The docstring assumption that 'no additional null checks are needed' is incorrect because schema existence doesn't guarantee non-null values. Legacy data, ingestion race conditions, or backfill operations may contain null sample_weight values.                     snql_aggregate=lambda args, alias: Function(                         [Function(\"sum\", [Function(\"ifNull\", [Column(\"sample_weight\"), 0])])], <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "src/sentry/search/events/datasets/discover.py",
+        "line": 1050
+      }
+    ]
+  },
+  {
+    "pr_title": "GitHub OAuth Security Enhancement",
+    "pr_url": "https://github.com/getsentry/sentry/pull/67876",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Timing attack vulnerability in OAuth state parameter comparison. The direct string comparison (`!=`) at line 412 leaks timing information that could allow an attacker to guess the state parameter value character-by-character through statistical analysis of response times. This defeats the CSRF protection provided by the state parameter. Use Django's `constant_time_compare` or `hmac.compare_digest` for secure comparison, as done elsewhere in the codebase (e.g., in `src/sentry/integrations/github/webhook.py` line 587).         # At this point, we are past the GitHub \"authorize\" step         from django.utils.crypto import constant_time_compare         if not constant_time_compare(request.GET.get(\"state\", \"\"), pipeline.signature):             return error(request, self.active_organization) <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "src/sentry/integrations/github/integration.py",
+        "line": 413
+      },
+      {
+        "comment": "Potential KeyError vulnerability when accessing nested dictionary keys. The code at lines 501-505 accesses `integration.metadata[\"sender\"][\"login\"]` without checking if these keys exist. If an integration exists but was created without sender metadata (e.g., through a different code path or corrupted data), this will raise an unhandled KeyError causing a 500 error. Use `.get()` methods with proper error handling to gracefully handle missing keys.         # Check that the authenticated GitHub user is the same as who installed the app.         sender_login = integration.metadata.get(\"sender\", {}).get(\"login\")         if not sender_login or pipeline.fetch_state(\"github_authenticated_user\") != sender_login:             return error(request, self.active_organization) <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "src/sentry/integrations/github/integration.py",
+        "line": 506
+      }
+    ]
+  },
+  {
+    "pr_title": "Replays Self-Serve Bulk Delete System",
+    "pr_url": "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/5",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The `timestamp` field from nodestore event data is typically stored as an ISO format string, but `ErrorEvent` TypedDict expects a float. This causes type mismatch when sorting error events and comparing with segment timestamps. The code should convert the timestamp to float.             ErrorEvent(                 category=\"error\",                 id=event_id,                 title=data.get(\"title\", \"\"),                 timestamp=float(data.get(\"timestamp\", 0.0)),                 message=data.get(\"message\", \"\"),             for event_id, data in zip(error_ids, events.values())",
+        "file": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+        "line": 120
+      }
+    ]
+  },
+  {
+    "pr_title": "Span Buffer Multiprocess Enhancement with Health Monitoring",
+    "pr_url": "https://github.com/getsentry/sentry/pull/93824",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Missing minimum value validation for flusher-processes CLI option. Negative values cause `range(num_processes)` to be empty, resulting in no flusher processes being created and data loss (spans stuck in Redis). Use `click.IntRange(min=1)` to enforce positive values.             click.Option(                 [\"--flusher-processes\", \"flusher_processes\"],                 type=click.IntRange(min=1),                 help=\"Maximum number of processes for the span flusher. Defaults to 1.\", <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "src/sentry/consumers/__init__.py",
+        "line": 437
+      },
+      {
+        "comment": "Off-by-one error in process restart limit check. The condition `self.process_restarts[process_index] > MAX_PROCESS_RESTARTS` evaluates to False when restarts equals MAX_PROCESS_RESTARTS (e.g., 10 > 10 is False), allowing the restart to proceed. Then the counter is incremented. This allows MAX_PROCESS_RESTARTS+1 restarts total. Change to `>=` or increment before checking.             if self.process_restarts[process_index] >= MAX_PROCESS_RESTARTS:                 raise RuntimeError(                     f\"flusher process for shards {shards} crashed repeatedly ({cause}), restarting consumer\"             self.process_restarts[process_index] += 1 <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "src/sentry/spans/consumers/process/flusher.py",
+        "line": 251
+      },
+      {
+        "comment": "Resource leak in join() method. When the deadline expires, the `break` statement exits the for-loop without terminating remaining processes. This leaves child processes running as zombies. The break should be removed or replaced with logic that still terminates all remaining processes.         for process_index, process in self.processes.items():             while process.is_alive() and (deadline is None or deadline > time.time()):                 time.sleep(0.1)             if isinstance(process, multiprocessing.Process):                 process.terminate() <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub>",
+        "file": "src/sentry/spans/consumers/process/flusher.py",
+        "line": 347
+      }
+    ]
+  },
+  {
+    "pr_title": "feat(ecosystem): Implement cross-system issue synchronization",
+    "pr_url": "https://github.com/getsentry/sentry/pull/77754",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The default value `timezone.now()` is evaluated at class definition time, not at instance creation. This causes all AssignmentSource instances to have the same timestamp from when the module was first imported. Use `field(default_factory=timezone.now)` to ensure a fresh timestamp for each instance. @dataclass(frozen=True) class AssignmentSource:     source_name: str     integration_id: int     queued: datetime = field(default_factory=timezone.now) <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub>",
+        "file": "src/sentry/integrations/services/assignment_source.py",
+        "line": 1
+      }
+    ]
+  },
+  {
+    "pr_title": "ref(crons): Reorganize incident creation / issue occurrence logic",
+    "pr_url": "https://github.com/getsentry/sentry/pull/80528",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "feat(uptime): Add ability to use queues to manage parallelism",
+    "pr_url": "https://github.com/getsentry/sentry/pull/95633",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "feat(workflow_engine): Add in hook for producing occurrences from the stateful detector",
+    "pr_url": "https://github.com/getsentry/sentry/pull/80168",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Anonymous: Add configurable device limit",
+    "pr_url": "https://github.com/grafana/grafana/pull/79265",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Device ownership verification missing in updateDevice. When device limit is reached, the updateDevice function updates any existing device record matching the provided device_id without verifying the requester owns that device. An attacker can overwrite legitimate users' device records by sending requests with their device IDs, pushing victims over the limit and blocking their authentication. // updateDevice updates a device if it exists and has been updated between the given times. // Requires clientIP verification to prevent device spoofing attacks. func (s *AnonDBStore) updateDevice(ctx context.Context, device *Device) error { \tconst query = `UPDATE anon_device SET client_ip = ?, user_agent = ?, updated_at = ?",
+        "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "line": 72
+      },
+      {
+        "comment": "Race condition in updateDevice BETWEEN clause logic. The WHERE clause checks `updated_at BETWEEN ? AND ?` using time windows calculated from `device.UpdatedAt` (which is time.Now() from the caller). This compares the DB record's timestamp against a window based on the incoming request time, not the stored record's actual time. If the device exists in DB but was last updated outside this window, the UPDATE affects 0 rows and incorrectly returns ErrDeviceLimitReached. The logic should check device existence with `SELECT 1 FROM anon_device WHERE device_id = ?` first, then UPDATE if found. \t// Check if device exists first, then update \targs := []interface{}{device.ClientIP, device.UserAgent, device.UpdatedAt.UTC(), device.DeviceID} <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "line": 81
+      }
+    ]
+  },
+  {
+    "pr_title": "AuthZService: improve authz caching",
+    "pr_url": "https://github.com/grafana/grafana/pull/103633",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Cache key collision vulnerability in userPermDenialCacheKey. The function uses simple string concatenation with underscores: `namespace + \".perm_\" + userUID + \"_\" + action + \"_\" + name + \"_\" + parent`. Since name and parent come from user-controlled request fields (req.Name, req.Folder) and can contain underscores, an attacker can craft values that collide with other users' cache keys. Example: name='dash_1', parent='fold' collides with name='dash', parent='1_fold'. This could allow cache poisoning to block access to resources the attacker shouldn't affect. func userPermDenialCacheKey(namespace, userUID, action, name, parent string) string { \t// Use a delimiter that cannot appear in input values, or hash the components \treturn fmt.Sprintf(\"%s.perm_%s_%s_%s_%s\", namespace, userUID, action, name, parent) <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "pkg/services/authz/rbac/cache.go",
+        "line": 32
+      }
+    ]
+  },
+  {
+    "pr_title": "Plugins: Chore: Renamed instrumentation middleware to metrics middleware",
+    "pr_url": "https://github.com/grafana/grafana/pull/76186",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The traceID extraction from context and addition to log params was present in the old InstrumentationMiddleware but is missing from the new ContextualLoggerMiddleware. The traceID should be added to the contextual attributes so it appears in logs. // instrumentContext adds a contextual logger with plugin and request details to the given context. func instrumentContext(ctx context.Context, endpoint string, pCtx backend.PluginContext) context.Context { \tp := []any{\"endpoint\", endpoint, \"pluginId\", pCtx.PluginID} \tif pCtx.DataSourceInstanceSettings != nil { \t\tp = append(p, \"dsName\", pCtx.DataSourceInstanceSettings.Name) \t\tp = append(p, \"dsUID\", pCtx.DataSourceInstanceSettings.UID) \tif pCtx.User != nil {",
+        "file": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+        "line": 37
+      }
+    ]
+  },
+  {
+    "pr_title": "Advanced Query Processing Architecture",
+    "pr_url": "https://github.com/grafana/grafana/pull/107534",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Redundant template variable interpolation when called from shard splitting. The runSplitQuery function now calls applyTemplateVariables on all queries, but when invoked from runShardSplitQuery (via splitQueriesByStreamShard → runNextRequest), these queries have already been interpolated. This causes double interpolation with multiplicative overhead - for N queries split into G groups, the work is N + (N×G) instead of N. Evidence: the test was changed from expecting interpolateVariablesInQueries called 1 time to applyTemplateVariables called 5 times for just 1 original query split into 5 shard groups. ```typescript   const queries = request.targets     .filter((query) => !query.hide)     .filter((query) => query.expr)     .map((query) => request.skipInterpolation ? query : datasource.applyTemplateVariables(query, request.scopedVars, request.filters)); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub>",
+        "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+        "line": 299
+      }
+    ]
+  },
+  {
+    "pr_title": "Notification Rule Processing Engine",
+    "pr_url": "https://github.com/grafana/grafana/pull/106778",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The pause menu item condition incorrectly gates on `rulerRule` being defined, preventing pause/resume functionality in the list view where only `promRule` is available. The condition `rulerRuleType.grafana.rule(rulerRule)` returns false when `rulerRule` is undefined, even though `canPause` may be true for Grafana rules via the grafanaPauseAbility. Since `usePauseRuleInGroup` only requires the rule UID (available in promRule.uid), the pause functionality should work with GrafanaPromRuleDTO. Consider updating the condition to also allow pausing when `promRule` is a Grafana rule and the group origin is 'grafana'. ```typescript {canPause && groupIdentifier.groupOrigin === 'grafana' && (   <MenuItemPauseRule      rule={rulerRule}      promRule={prometheusRuleType.grafana.rule(promRule) ? promRule : undefined}     groupIdentifier={groupIdentifier}      onPauseChange={onPauseChange}",
+        "file": "public/app/features/alerting/unified/components/rule-viewer/AlertRuleMenu.tsx",
+        "line": 103
+      }
+    ]
+  },
+  {
+    "pr_title": "Dual Storage Architecture",
+    "pr_url": "https://github.com/grafana/grafana/pull/90045",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "DeleteCollection spawns an async goroutine that calls Legacy.DeleteCollection without bounds. DeleteCollection operations can be very expensive (deleting hundreds/thousands of objects). Running this asynchronously without rate limiting compounds the goroutine explosion risk and can overwhelm the legacy storage backend. // Consider synchronous execution for DeleteCollection or strict concurrency limits // DeleteCollection can be extremely expensive and should not run unbounded func (d *DualWriterMode3) DeleteCollection(ctx context.Context, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, listOptions *metainternalversion.ListOptions) (runtime.Object, error) { \t// ... synchronous storage delete ... \t// Run legacy DeleteCollection synchronously or with strict semaphore \t// to prevent overwhelming the legacy backend \tgo func() {",
+        "file": "pkg/apiserver/rest/dualwriter_mode3.go",
+        "line": 168
+      }
+    ]
+  },
+  {
+    "pr_title": "Database Performance Optimizations",
+    "pr_url": "https://github.com/grafana/grafana/pull/80329",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "SQL injection vulnerability in deleteByIDs function when using SQLite. When batch size exceeds 999, IDs are directly concatenated into SQL using fmt.Sprintf with %d formatter. While IDs are int64 from database, this bypasses parameterized query protection and is fragile. Use proper parameter binding or ensure IDs are strictly validated before embedding. \tif r.db.GetDBType() == migrator.SQLite && r.cfg.AnnotationCleanupJobBatchSize > sqliteParameterLimit { \t\t// Split into multiple smaller batches that stay within SQLite parameter limit \t\tvar totalAffected int64 \t\tfor i := 0; i < len(ids); i += sqliteParameterLimit { \t\t\tend := i + sqliteParameterLimit \t\t\tif end > len(ids) { \t\t\t\tend = len(ids)",
+        "file": "pkg/services/annotations/annotationsimpl/xorm_store.go",
+        "line": 614
+      }
+    ]
+  },
+  {
+    "pr_title": "Frontend Asset Optimization",
+    "pr_url": "https://github.com/grafana/grafana/pull/90939",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Advanced SQL Analytics Framework",
+    "pr_url": "https://github.com/grafana/grafana/pull/94942",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Logic error in `enableSqlExpressions`: The function always returns `false` regardless of the feature toggle state. The negation operator `!` inverts the boolean, and both code paths return `false`. This makes the SQL expressions feature permanently disabled. The function should return `true` when the feature flag is enabled globally. func enableSqlExpressions(h *ExpressionQueryReader) bool { \treturn h.features.IsEnabledGlobally(featuremgmt.FlagSqlExpressions) <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "pkg/expr/reader.go",
+        "line": 200
+      }
+    ]
+  },
+  {
+    "pr_title": "Unified Storage Performance Optimizations",
+    "pr_url": "https://github.com/grafana/grafana/pull/97529",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Initialization order change creates potential race condition. The PR reorders initialization so `initWatcher()` is called AFTER `s.search.init(ctx)`, but also adds a direct `s.Init(ctx)` call in `NewResourceServer`. The reordering means the watcher starts after search initialization, which could cause missed events during startup. Additionally, since `Init` uses `sync.Once`, calling it from both `NewResourceServer` and later by callers may hide initialization errors or cause unexpected behavior depending on which call happens first. \t\t// Start watching for changes BEFORE search init to avoid missing events \t\tif s.initErr == nil { \t\t\ts.initErr = s.initWatcher() \t\t// initialize the search index \t\tif s.initErr == nil && s.search != nil { \t\t\ts.initErr = s.search.init(ctx) <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "pkg/storage/unified/resource/server.go",
+        "line": 311
+      },
+      {
+        "comment": "Race condition in BuildIndex: Moving the lock to only protect the cache write allows concurrent goroutines to create duplicate indexes for the same key. Between checking if an index exists and writing to the cache, another goroutine can create an index for the same key, causing resource leaks and duplicate work. Need to either hold the lock for the entire function or check if key exists before writing. func (b *bleveBackend) BuildIndex(ctx context.Context, \tkey resource.NamespacedResource, \tsize int64, \tresourceVersion int64, \tfields resource.SearchableDocumentFields, \tbuilder func(index resource.ResourceIndex) (int64, error), ) (resource.ResourceIndex, error) {",
+        "file": "pkg/storage/unified/search/bleve.go",
+        "line": 104
+      },
+      {
+        "comment": "Data race in TotalDocs: The function reads from b.cache map without holding the read lock while BuildIndex may be concurrently writing to the map. This is unsafe concurrent map access that can cause panics or data corruption. // TotalDocs returns the total number of documents across all indices func (b *bleveBackend) TotalDocs() int64 { \tb.cacheMu.RLock() \tdefer b.cacheMu.RUnlock() \tvar totalDocs int64 \tfor _, v := range b.cache { \t\tc, err := v.index.DocCount()",
+        "file": "pkg/storage/unified/search/bleve.go",
+        "line": 142
+      }
+    ]
+  },
+  {
+    "pr_title": "FEATURE: automatically downsize large images",
+    "pr_url": "https://github.com/discourse/discourse/commit/ffbaf8c54269df2ce510de91245760fddce09896",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Client-side security control bypass: Hardcoded 10MB limit (10 * 1024 KB) replaces dynamic lookup of Discourse.SiteSettings['max_' + type + '_size_kb']. This client-side validation change bypasses the admin-configured upload size limits, allowing users to attempt uploads larger than the configured maximum before server-side rejection. ```javascript     var maxSizeKB = Discourse.SiteSettings['max_' + type + '_size_kb']; <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/assets/javascripts/discourse/lib/utilities.js",
+        "line": 182
+      },
+      {
+        "comment": "Client-side security control bypass: Hardcoded 10MB limit for HTTP 413 error messages replaces dynamic lookup of Discourse.SiteSettings.max_image_size_kb. The error message displays incorrect limit information to users and hardcodes values that should respect administrator-configured security settings. ```javascript           var maxSizeKB = Discourse.SiteSettings.max_image_size_kb; <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/assets/javascripts/discourse/lib/utilities.js",
+        "line": 246
+      },
+      {
+        "comment": "Silent failure on downsize error: `OptimizedImage.downsize` returns a boolean indicating success/failure, but the return value is never checked. If downsizing fails (ImageMagick error, invalid image, etc.), the corrupted tempfile is still passed to `Upload.create_for`. Additionally, the loop only decrements `attempt` after calling downsize, but doesn't check if the file actually got smaller - if downsize fails repeatedly, it will still try 5 times unnecessarily. Check the return value and handle failures appropriately.       if tempfile && tempfile.size > 0 && SiteSetting.max_image_size_kb > 0 && FileHelper.is_image?(filename)         attempt = 5         while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes           success = OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: SiteSetting.allow_animated_thumbnails)           break unless success           attempt -= 1 <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "app/controllers/uploads_controller.rb",
+        "line": 70
+      },
+      {
+        "comment": "Fixed-percentage downsizing loop may fail to converge within 5 iterations. A 100MB file reduced by 20% each iteration: 100→80→64→51→41→33MB still exceeds a typical 10MB limit after 5 attempts. Each iteration spawns an ImageMagick convert process which is CPU-intensive. The loop should calculate the required scale factor based on current size vs target size rather than using a fixed 80%.         target_size = SiteSetting.max_image_size_kb.kilobytes         if tempfile.size > target_size           scale = Math.sqrt(target_size.to_f / tempfile.size) * 100           scale = 50 if scale < 50  # minimum 50% to prevent excessive degradation           OptimizedImage.downsize(tempfile.path, tempfile.path, \"#{scale}%\", allow_animation: SiteSetting.allow_animated_thumbnails) <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub>",
+        "file": "app/controllers/uploads_controller.rb",
+        "line": 69
+      },
+      {
+        "comment": "Security control bypass: Hardcoded 10.megabytes download limit replaces the admin-configurable SiteSetting.max_image_size_kb.kilobytes. This allows API uploads via URL to download files up to 10MB regardless of the configured site limit, potentially exceeding administrator-intended restrictions and allowing larger attack payloads than security policy permits.         tempfile = FileHelper.download(url, SiteSetting.max_image_size_kb.kilobytes, \"discourse-upload-#{type}\") rescue nil <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/controllers/uploads_controller.rb",
+        "line": 55
+      },
+      {
+        "comment": "Method redefinition bug: The second `downsize` method (line 149) overwrites the first (line 145) in Ruby. The existing caller in resize_emoji.rb calls `downsize(path, path, 100, 100, opts)` with width/height as separate parameters. After this change, the call will assign `dimensions=100` and `opts=100` (integer instead of hash), causing `opts[:allow_animation]` to fail. Remove the duplicate method definition and update the first to accept dimensions string, or rename the new method to avoid collision.   def self.downsize(from, to, dimensions, opts={})     optimize(\"downsize\", from, to, dimensions, opts) <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/models/optimized_image.rb",
+        "line": 151
+      }
+    ]
+  },
+  {
+    "pr_title": "FEATURE: per-topic unsubscribe option in emails",
+    "pr_url": "https://github.com/discourse/discourse/commit/6669a2d94d76eea3b99b8c476d12b1eb66726b07",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "XSS vulnerability: The title property is injected directly into HTML without escaping via `buffer.push(\"<h4 class='title'>\" + title + \"</h4>\")`. If an attacker can control the title (through topic names, category names, or other user-controlled inputs), they can inject arbitrary HTML/JavaScript. This should use proper HTML escaping or the framework's built-in safe string mechanisms. ```javascript     const title = this.get('title');     if (title) {       buffer.push(\"<h4 class='title'>\" + Handlebars.Utils.escapeExpression(title) + \"</h4>\"); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/assets/javascripts/discourse/components/dropdown-button.js.es6",
+        "line": 30
+      },
+      {
+        "comment": "TopicUser.find_by() returns nil if no record exists for the user/topic pair. The code immediately accesses tu.notification_level without checking for nil, causing NoMethodError when users unsubscribe from topics they haven't interacted with. Need to handle the nil case by either creating a TopicUser record first or returning early with an error.     tu = TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id])       # User hasn't interacted with this topic before, create a muted record       tu = TopicUser.new(user_id: current_user.id, topic_id: params[:topic_id], notification_level: TopicUser.notification_levels[:muted])     elsif tu.notification_level > TopicUser.notification_levels[:regular] <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/controllers/topics_controller.rb",
+        "line": 98
+      },
+      {
+        "comment": "CSRF vulnerability: The unsubscribe action is accessible via GET request and modifies persistent state (notification_level), but skip_before_filter :check_xhr makes it vulnerable to CSRF attacks. Since browsers automatically follow links (including in image tags, iframes, or malicious links), an attacker can trick a logged-in user into unsubscribing from topics without their consent. The route should use POST/PUT instead of GET for state-changing operations, or maintain strict XHR/CSRF token verification.   skip_before_filter :check_xhr, only: [:show, :feed]   # Note: unsubscribe moved to POST with proper CSRF protection <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/controllers/topics_controller.rb",
+        "line": 32
+      },
+      {
+        "comment": "Missing authorization check: The unsubscribe action doesn't verify if the user can actually see the topic (no guardian.ensure_can_see! check). While TopicView.new raises InvalidAccess for private topics, the notification settings are modified before this check completes, potentially allowing users to probe for private topic existence or manipulate settings on inaccessible topics.   def unsubscribe     @topic_view = TopicView.new(params[:topic_id], current_user)     guardian.ensure_can_see!(@topic_view.topic)     if slugs_do_not_match || (!request.format.json? && params[:slug].blank?)       return redirect_to @topic_view.topic.unsubscribe_url, status: 301     tu = TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id]) <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "app/controllers/topics_controller.rb",
+        "line": 106
+      },
+      {
+        "comment": "State-changing GET request: The unsubscribe routes use GET HTTP method but modify server state (notification levels). This violates HTTP semantics and REST principles, creating CSRF vulnerabilities. State-changing operations should use POST or PUT methods.   post \"t/:slug/:topic_id/unsubscribe\" => \"topics#unsubscribe\", constraints: {topic_id: /\\d+/}   post \"t/:topic_id/unsubscribe\" => \"topics#unsubscribe\", constraints: {topic_id: /\\d+/} <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "config/routes.rb",
+        "line": 441
+      }
+    ]
+  },
+  {
+    "pr_title": "Add comprehensive email validation for blocked users",
+    "pr_url": "https://github.com/discourse/discourse/commit/5f8a130277dbddc95d133cd2832be639baf89213",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Logic error: `rejectedEmails` check occurs before OAuth `authOptions` validation. If a user tries a blocked email, then authenticates via OAuth with the same email, the validation incorrectly fails because rejectedEmails check short-circuits first. OAuth-validated emails should bypass local blocklist checks. ```javascript     if ((this.get('authOptions.email') === email) && this.get('authOptions.email_valid')) {       return Discourse.InputValidation.create({         reason: I18n.t('user.email.authenticated', {           provider: this.get('authOptions.auth_provider')     if (this.get('rejectedEmails').contains(email.toLowerCase())) {       return Discourse.InputValidation.create({",
+        "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+        "line": 78
+      },
+      {
+        "comment": "Case sensitivity bug: `contains(email)` is case-sensitive, but email addresses should be case-insensitive. If 'Test@Example.com' is rejected, 'test@example.com' bypasses the client-side check and requires another server round-trip. ```javascript     if (this.get('rejectedEmails').contains(email.toLowerCase())) { <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+        "line": 69
+      },
+      {
+        "comment": "Race condition in `should_block?` method: `match_count += 1` followed by `save` is not atomic. Concurrent requests can cause lost updates to the counter. Use `increment_counter` or wrap in a transaction with locking instead.   def self.should_block?(email)     record = BlockedEmail.where(email: email).first       BlockedEmail.increment_counter(:match_count, record.id)       record.update_column(:last_match_at, Time.zone.now)     record && record.action_type == actions[:block] <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub>",
+        "file": "app/models/blocked_email.rb",
+        "line": 19
+      },
+      {
+        "comment": "Incomplete regex escaping: `gsub('.', '\\.')` only escapes dots but not other regex special characters like `*`, `+`, `?`, `()`, `[]`, `$`, `^`, `|`. If the site setting contains these characters, the regex may fail to compile or match incorrectly.   def email_in_restriction_setting?(setting, value)     domains = setting.split('|').map { |d| Regexp.escape(d.strip) }.join('|')     regexp = Regexp.new(\"@(#{domains})\", true)     value =~ regexp <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "lib/validators/email_validator.rb",
+        "line": 22
+      }
+    ]
+  },
+  {
+    "pr_title": "Enhance embed URL handling and validation system",
+    "pr_url": "https://github.com/discourse/discourse/commit/4f8aed295a29954023b2849c060ef4fb299d1b5d",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Host validation bypass: String comparison using != is vulnerable to subdomain attacks. If embeddable_host is 'eviltrout.com', an attacker can bypass validation with 'eviltrout.com.attacker.com' or 'noteviltrout.com'. Use exact string comparison and validate the host matches exactly, not as substring. referer_host = URI(request.referer || '').host raise Discourse::InvalidAccess.new('invalid referer host') unless referer_host.present? && referer_host.downcase == SiteSetting.embeddable_host.downcase <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/controllers/embed_controller.rb",
+        "line": 26
+      },
+      {
+        "comment": "SSRF vulnerability: Kernel.open() fetches the feed_polling_url without restrictions. If an attacker can influence this setting, they can trigger requests to internal services. Use a restricted HTTP client with timeout and scheme validation. rss = SimpleRSS.parse fetch_with_restrictions(SiteSetting.feed_polling_url) <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/jobs/scheduled/poll_feed.rb",
+        "line": 29
+      },
+      {
+        "comment": "Same nil pointer vulnerability as topic_retriever.rb: `SiteSetting.embed_by_username.downcase` will fail with NoMethodError if the setting is nil. Should use `.to_s.downcase` for safety.       user = User.where(username_lower: SiteSetting.embed_by_username.to_s.downcase).first <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/jobs/scheduled/poll_feed.rb",
+        "line": 25
+      },
+      {
+        "comment": "SSRF vulnerability: Kernel.open() is used to fetch remote URLs without validation. An attacker can supply URLs like http://localhost:22/, file:///etc/passwd, or http://169.254.169.254/ to access internal services, local files, or cloud metadata endpoints. Use a restricted HTTP client like Faraday with explicit allowlists for schemes and hosts. # Use a restricted HTTP client with scheme/host validation response = fetch_with_restrictions(url) doc = Readability::Document.new(response.body, <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/models/topic_embed.rb",
+        "line": 48
+      },
+      {
+        "comment": "Input parameter mutation bug: `contents << \"...\"` mutates the input string in-place using the shovel operator. This side effect modifies the caller's original data, which can cause unexpected behavior if the content string is reused elsewhere. The method should not mutate its inputs.     contents = contents + \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\" <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/models/topic_embed.rb",
+        "line": 13
+      },
+      {
+        "comment": "Syntax error: `<%- end if %>` is invalid Ruby syntax. The `if` keyword cannot be used after `end`. This should be just `<%- end %>`. The current code will raise a syntax error when the template is compiled. <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/views/embed/best.html.erb",
+        "line": 6
+      },
+      {
+        "comment": "XSS vulnerability: post.cooked is rendered with 'raw' helper, and TopicEmbed.import creates posts with cook_method: :raw_html and skip_validations: true. External RSS content or readability-extracted HTML is stored and rendered without sanitization, allowing stored XSS attacks via malicious embedded content. <div class='cooked'><%= post.cooked.html_safe %></div> <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/views/embed/best.html.erb",
+        "line": 19
+      },
+      {
+        "comment": "XSS vulnerability: request.referer is interpolated directly into JavaScript without proper escaping. An attacker can craft a malicious Referer header like http://example.com/');alert('xss');// to execute arbitrary JavaScript in the parent's browser context via postMessage. Use escape_javascript() or json_escape() to safely embed the value. parent.postMessage({type: 'discourse-resize', height: document['body'].offsetHeight}, '<%= escape_javascript(request.referer) %>'); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/views/layouts/embed.html.erb",
+        "line": 11
+      },
+      {
+        "comment": "Host validation bypass: Same substring vulnerability as embed_controller. Simple string comparison allows attackers to use malicious subdomains that contain the allowed host as a substring. SiteSetting.embeddable_host.downcase != URI(@embed_url).host&.downcase <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "lib/topic_retriever.rb",
+        "line": 15
+      },
+      {
+        "comment": "Potential nil pointer error: `SiteSetting.embed_by_username.downcase` will raise NoMethodError if embed_by_username returns nil. While the setting defaults to empty string, defensive programming requires handling the nil case, especially since this setting might not be configured.       user = User.where(username_lower: SiteSetting.embed_by_username.to_s.downcase).first <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "lib/topic_retriever.rb",
+        "line": 49
+      }
+    ]
+  },
+  {
+    "pr_title": "Optimize header layout performance with flexbox mixins",
+    "pr_url": "https://github.com/discourse/discourse/commit/5b229316ee4c661836ed1161139692a3e8527444",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Fix WebKit ordinal group indexing mismatch. The old 2009 WebKit flexbox `box-ordinal-group` property uses 1-based indexing (starts at 1), while modern `order` uses 0-based indexing (starts at 0). When `$val` is 0 (the common default for 'no special order'), old WebKit browsers receive `box-ordinal-group: 0` which is invalid (minimum valid value is 1). This causes layout issues in older Safari/Chrome when order(0) is used. @mixin order($val) {   -webkit-box-ordinal-group: $val + 1;   -moz-box-ordinal-group: $val + 1;   -ms-flex-order: $val;   -webkit-order: $val;   order: $val; <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "app/assets/stylesheets/common/foundation/mixins.scss",
+        "line": 131
+      }
+    ]
+  },
+  {
+    "pr_title": "UX: show complete URL path if website domain is same as instance domain",
+    "pr_url": "https://github.com/discourse/discourse/commit/267d8be1f556ed59639ced396c885bb44586da19",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "scale-color $lightness must use $secondary for dark themes",
+    "pr_url": "https://github.com/discourse/discourse/commit/d38c4d5f7443223c81529c22470293771baf9f38",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "FIX: proper handling of group memberships",
+    "pr_url": "https://github.com/discourse/discourse/commit/060cda77729cb1c4a827560e09e89a7b22078ba9",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Syntax error in the destroy function. The code `return };` is invalid JavaScript syntax - the semicolon should come after the closing brace, not before it. This should be `return; }`. ```javascript   destroy: function(){     if (!this.get('id')) { return; }     return Discourse.ajax(\"/admin/groups/\" + this.get('id'), {type: \"DELETE\"}); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/assets/javascripts/discourse/models/group.js",
+        "line": 84
+      },
+      {
+        "comment": "Case-sensitivity bypass vulnerability: Using Ruby's `downcase` method to compare against SQL `lower()` creates inconsistent behavior for non-ASCII Unicode characters. Ruby's `downcase` only handles ASCII by default, while PostgreSQL's `lower()` handles full Unicode. For characters like Turkish 'İ' or German umlauts, these can produce different results, potentially allowing bypass of group lookups. The fix is to use SQL's `lower()` function on both sides of the comparison by passing the raw parameter value.     def find_group(param_name)       name = params.require(param_name)       group = Group.find_by(\"lower(name) = lower(?)\", name)       guardian.ensure_can_see!(group) <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/controllers/groups_controller.rb",
+        "line": 45
+      },
+      {
+        "comment": "The test uses `xhr :put` but the route is defined as `delete \"members\"`. This test is not actually exercising the remove_member action because the HTTP method doesn't match. It should use `xhr :delete` to properly test the remove_member endpoint.     it \"cannot remove members from automatic groups\" do       xhr :delete, :remove_member, group_id: 1, user_id: 42       response.status.should == 422 <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "spec/controllers/admin/groups_controller_spec.rb",
+        "line": 117
+      }
+    ]
+  },
+  {
+    "pr_title": "FEATURE: Localization fallbacks (server-side)",
+    "pr_url": "https://github.com/discourse/discourse/commit/ecfa17b5a79dfdc91e7a4d50b42ae78a35d0a293",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Regular expression injection vulnerability. The `locale` parameter is interpolated directly into a Regexp pattern without escaping. A malicious user can set their locale to a regex pattern like `en(((((((((((((((((((((((((((` causing catastrophic backtracking (ReDoS). Use `Regexp.escape(locale)` to sanitize user-controlled input before regex interpolation.         I18n.backend.load_translations(I18n.load_path.grep Regexp.new(\"\\\\.#{Regexp.escape(locale.to_s)}\\\\.yml$\")) <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "lib/freedom_patches/translate_accelerator.rb",
+        "line": 65
+      }
+    ]
+  },
+  {
+    "pr_title": "FEATURE: Can edit category/host relationships for embedding",
+    "pr_url": "https://github.com/discourse/discourse/commit/d1c69189f3c90ecf56013a8da904da9bff9a8e19",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Missing nil check in update action. If the host with the given ID doesn't exist, `host` will be nil and `save_host(host)` will fail with NoMethodError when trying to set attributes on nil.     host = EmbeddableHost.where(id: params[:id]).first     return render_json_error(I18n.t('not_found'), status: 404) unless host     save_host(host) <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+        "line": 12
+      },
+      {
+        "comment": "Missing nil check in destroy action. If the host doesn't exist, `host.destroy` will raise NoMethodError on nil.   def destroy     host = EmbeddableHost.where(id: params[:id]).first     return render_json_error(I18n.t('not_found'), status: 404) unless host     host.destroy     render json: success_json <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub>",
+        "file": "app/controllers/admin/embeddable_hosts_controller.rb",
+        "line": 18
+      },
+      {
+        "comment": "SQL injection vulnerability at line 25. The migration directly interpolates user-controlled host values from site settings into SQL without sanitization. Attackers could inject SQL via the embeddable_hosts site setting value before migration runs.           records.each do |h|             execute \"INSERT INTO embeddable_hosts (host, category_id, created_at, updated_at) VALUES (#{ActiveRecord::Base.connection.quote(h)}, #{category_id}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)\" <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+        "line": 26
+      },
+      {
+        "comment": "File content was incorrectly swapped. This file should contain the category fabricator but now contains the embeddable_host fabricator. This will break all tests that use Fabricate(:category) or Fabricate(:embeddable_host). Fabricator(:category) do   name { sequence(:name) { |n| \"Amazing Category #{n}\" } } Fabricator(:diff_category, from: :category) do   name \"Different Category\" Fabricator(:happy_category, from: :category) do   name 'Happy Category'   slug 'happy'",
+        "file": "spec/fabricators/category_fabricator.rb",
+        "line": 4
+      },
+      {
+        "comment": "File content was incorrectly swapped. This file should contain the embeddable_host fabricator but now contains the category fabricator. This will break all tests that use Fabricate(:embeddable_host) or Fabricate(:category). Fabricator(:embeddable_host) do   host \"eviltrout.com\" <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "spec/fabricators/embeddable_host_fabricator.rb",
+        "line": 1
+      }
+    ]
+  },
+  {
+    "pr_title": "Async import of the appStore packages",
+    "pr_url": "https://github.com/calcom/cal.com/pull/8087",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Using `forEach` with an async callback creates a fire-and-forget pattern where promises are not awaited. The surrounding try-catch at line 124 won't catch errors from these async operations, and the function may return before all delete operations complete. Replace with `for...of` loop to properly await each async operation. ```typescript       for (const bookingRef of bookingRefsFiltered) {         if (bookingRef.uid) {           if (bookingRef.type.endsWith(\"_calendar\")) {             const calendar = await getCalendar(credentialsMap.get(bookingRef.type));             await calendar?.deleteEvent(bookingRef.uid, builder.calendarEvent);           } else if (bookingRef.type.endsWith(\"_video\")) {",
+        "file": "packages/app-store/vital/lib/reschedule.ts",
+        "line": 131
+      },
+      {
+        "comment": "forEach with async callback creates fire-and-forget promises that are not awaited. The try/catch block cannot catch errors from these async operations, and the function may return before calendar deletions complete. Replace with Promise.all() and map() to properly await all async operations. ```typescript await Promise.all(bookingRefsFiltered.map(async (bookingRef) => {         if (bookingRef.uid) {           if (bookingRef.type.endsWith(\"_calendar\")) {             const calendar = await getCalendar(credentialsMap.get(bookingRef.type));             return calendar?.deleteEvent(bookingRef.uid, builder.calendarEvent);           } else if (bookingRef.type.endsWith(\"_video\")) {",
+        "file": "packages/app-store/vital/lib/reschedule.ts",
+        "line": 131
+      },
+      {
+        "comment": "Using `forEach` with an async callback creates a fire-and-forget pattern where promises are not awaited. The surrounding try-catch at line 124 won't catch errors from these async operations, and the function may return before all delete operations complete. Replace with `for...of` loop to properly await each async operation. ```typescript       for (const bookingRef of bookingRefsFiltered) {         if (bookingRef.uid) {           if (bookingRef.type.endsWith(\"_calendar\")) {             const calendar = await getCalendar(credentialsMap.get(bookingRef.type));             await calendar?.deleteEvent(bookingRef.uid, builder.calendarEvent);           } else if (bookingRef.type.endsWith(\"_video\")) {",
+        "file": "packages/app-store/wipemycalother/lib/reschedule.ts",
+        "line": 131
+      },
+      {
+        "comment": "Same forEach(async anti-pattern as vital/lib/reschedule.ts. The async callback is not awaited, causing the try/catch to be ineffective and operations to complete after function returns. ```typescript await Promise.all(bookingRefsFiltered.map(async (bookingRef) => {         if (bookingRef.uid) {           if (bookingRef.type.endsWith(\"_calendar\")) {             const calendar = await getCalendar(credentialsMap.get(bookingRef.type));             return calendar?.deleteEvent(bookingRef.uid, builder.calendarEvent);           } else if (bookingRef.type.endsWith(\"_video\")) {",
+        "file": "packages/app-store/wipemycalother/lib/reschedule.ts",
+        "line": 131
+      },
+      {
+        "comment": "Using `forEach` with an async callback creates a fire-and-forget pattern. The async delete operations are pushed to `apiDeletes` array AFTER execution starts, but since the forEach doesn't await, the `apiDeletes` array may be incomplete when other code tries to use it. The inner async operations with `await calendar?.deleteEvent()` inside the forEach are also not properly awaited by the outer context. Replace with `for...of` loop to ensure operations complete in sequence and can be properly tracked. ```typescript           const calendarCredentials = bookingToDelete.user.credentials.filter(             (credential) => credential.type.endsWith(\"_calendar\")           for (const credential of calendarCredentials) {             const calendar = await getCalendar(credential);             for (const updBooking of updatedBookings) {               const bookingRef = updBooking.references.find((ref) => ref.type.includes(\"_calendar\"));",
+        "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+        "line": 464
+      },
+      {
+        "comment": "Using `forEach` with an async callback creates a fire-and-forget pattern. The async operations inside the callback are not awaited by the containing function, causing the code to continue executing (including sending reschedule emails) before calendar/video deletions complete. Errors from these operations are silently dropped. Replace with `for...of` loop. ```typescript         for (const bookingRef of bookingRefsFiltered) {           if (bookingRef.uid) {             if (bookingRef.type.endsWith(\"_calendar\")) {               const calendar = await getCalendar(credentialsMap.get(bookingRef.type));               await calendar?.deleteEvent(                 bookingRef.uid,",
+        "file": "packages/trpc/server/routers/viewer/bookings.tsx",
+        "line": 559
+      }
+    ]
+  },
+  {
+    "pr_title": "feat: 2fa backup codes",
+    "pr_url": "https://github.com/calcom/cal.com/pull/10600",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Timing attack vulnerability: Same issue as in next-auth-options.ts. The `indexOf()` method performs non-constant-time comparison, allowing attackers to determine valid backup codes through timing analysis. Must use `crypto.timingSafeEqual()` for constant-time comparison. ```typescript     // check if user-supplied code matches one using constant-time comparison     const userCode = Buffer.from(req.body.backupCode.replaceAll(\"-\", \"\"));     let index = -1;     for (let i = 0; i < backupCodes.length; i++) {       const codeBuf = Buffer.from(backupCodes[i]);       if (userCode.length === codeBuf.length && crypto.timingSafeEqual(userCode, codeBuf)) {",
+        "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+        "line": 64
+      },
+      {
+        "comment": "Timing attack vulnerability: The `indexOf()` method performs non-constant-time string comparison, leaking information through execution time. When the supplied backup code doesn't match, the comparison terminates early at the first mismatched character. Attackers can measure response times to determine valid codes or brute-force character by character. Must use `crypto.timingSafeEqual()` for constant-time comparison by iterating through all codes. ```typescript         // check if user-supplied code matches one using constant-time comparison         const userCode = Buffer.from(credentials.backupCode.replaceAll(\"-\", \"\"));         let index = -1;         for (let i = 0; i < backupCodes.length; i++) {           const codeBuf = Buffer.from(backupCodes[i]);           if (userCode.length === codeBuf.length && crypto.timingSafeEqual(userCode, codeBuf)) {",
+        "file": "packages/features/auth/lib/next-auth-options.ts",
+        "line": 145
+      }
+    ]
+  },
+  {
+    "pr_title": "fix: handle collective multiple host on destinationCalendar",
+    "pr_url": "https://github.com/calcom/cal.com/pull/10967",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Logic error in updateEvent: searching for a calendar with `cal.externalId === externalCalendarId` when externalCalendarId is falsy will never match since it's comparing against undefined/null. The fallback code is unreachable dead code. Should search for the calendar that belongs to the credential being used instead. ```typescript       const selectedCalendar = externalCalendarId         ? externalCalendarId         : event.destinationCalendar?.find((cal) => cal.credentialId === this.credentialId)?.externalId; <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+        "line": 256
+      },
+      {
+        "comment": "Same logic error in deleteEvent: the fallback condition searches for `cal.externalId === externalCalendarId` when externalCalendarId is already falsy, which will always be undefined. This makes the fallback useless and could cause calendar events to not be deleted from the correct calendar. ```typescript       const calendarId = externalCalendarId         ? externalCalendarId         : event.destinationCalendar?.[0]?.externalId; <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+        "line": 317
+      },
+      {
+        "comment": "Authorization bypass vulnerability: When fetching credentials from database at line 344, the code uses only credentialId without verifying the credential belongs to the current user. This allows an attacker to specify any valid credentialId from another user and have the system use their calendar credentials. The credentialFromDB query should include a userId check to ensure the credential belongs to the authenticated user. ```typescript             const credentialFromDB = await prisma.credential.findFirst({                     slug: true,                 id: destination.credentialId,                 userId: this.userId, // Add user ownership verification <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub>",
+        "file": "packages/core/EventManager.ts",
+        "line": 357
+      },
+      {
+        "comment": "Potential null reference access: mainHostDestinationCalendar could be undefined when destinationCalendar is empty or undefined, but the code directly accesses `.integration` without checking existence first. This will throw a runtime error when trying to access a property of undefined. ```typescript     const [mainHostDestinationCalendar] = evt.destinationCalendar ?? [];     if (evt.location === MeetLocationType && mainHostDestinationCalendar?.integration !== \"google_calendar\") { <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "packages/core/EventManager.ts",
+        "line": 119
+      },
+      {
+        "comment": "Authorization bypass at lines 433-440: When fetching credential by ID from database, there's no verification that the credential belongs to the user attempting the cancel operation. An attacker could provide a credentialId from another user's account and potentially manipulate their calendar events. ```typescript         if (!calendarCredential) {           // get credential from DB with user ownership verification           const foundCalendarCredential = await prisma.credential.findFirst({               id: credentialId,               userId: bookingToDelete.userId, // Verify ownership           if (foundCalendarCredential) {",
+        "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+        "line": 442
+      },
+      {
+        "comment": "Missing fallback to user.destinationCalendar when bookingToReschedule.destinationCalendar is null. Other handlers like confirm.handler.ts and editLocation.handler.ts include this fallback pattern, but requestReschedule.handler.ts only returns an empty array when there's no booking destinationCalendar, potentially missing the user's default calendar. ```typescript     destinationCalendar: bookingToReschedule?.destinationCalendar       ? [bookingToReschedule?.destinationCalendar]       : user.destinationCalendar       ? [user.destinationCalendar] <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub>",
+        "file": "packages/trpc/server/routers/viewer/bookings/requestReschedule.handler.ts",
+        "line": 242
+      }
+    ]
+  },
+  {
+    "pr_title": "feat: convert InsightsBookingService to use Prisma.sql raw queries",
+    "pr_url": "https://github.com/calcom/cal.com/pull/22345",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Comprehensive workflow reminder management for booking lifecycle events",
+    "pr_url": "https://github.com/calcom/cal.com/pull/7232",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Incorrect truthiness check for array. The condition `if (workflows)` checks if the array is truthy, but arrays are always truthy in JavaScript even when empty. Should check `if (workflows.length)` or `if (workflows && workflows.length > 0)` to properly handle empty arrays. ```typescript       if (workflows.length) {         isHostConfirmationEmailsDisabled =           eventTypeMetadata?.disableStandardEmails?.confirmation?.host || false;         isAttendeeConfirmationEmailDisabled =           eventTypeMetadata?.disableStandardEmails?.confirmation?.attendee || false; <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "packages/features/bookings/lib/handleConfirmation.ts",
+        "line": 95
+      },
+      {
+        "comment": "Missing `await` for `deleteAllWorkflowReminders` on line 35. This is an async function that returns a Promise, but it's being called without await, causing fire-and-forget behavior that could lead to unhandled promise rejections. ```typescript     await deleteAllWorkflowReminders(workflowRemindersToDelete); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "packages/features/ee/teams/lib/deleteWorkflowRemindersOfRemovedMember.ts",
+        "line": 35
+      },
+      {
+        "comment": "Missing `await` for `deleteAllWorkflowReminders` on line 93. This is the second occurrence in the same file where an async function is called without await, causing potential unhandled promise rejections. ```typescript     await deleteAllWorkflowReminders(workflowRemindersToDelete); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "packages/features/ee/teams/lib/deleteWorkflowRemindersOfRemovedMember.ts",
+        "line": 93
+      },
+      {
+        "comment": "The function mutates the input parameter `eventTypeWorkflows` by pushing to it (`allWorkflows.push(...)`). This causes side effects for the caller. Should create a copy of the input array instead: `const allWorkflows = [...eventTypeWorkflows];` ```typescript export const getAllWorkflows = async (   eventTypeWorkflows: Workflow[],   userId?: number | null,   teamId?: number | null,   orgId?: number | null,   workflowsLockedForUser = true",
+        "file": "packages/features/ee/workflows/lib/getAllWorkflows.ts",
+        "line": 36
+      },
+      {
+        "comment": "Missing `await` for `processWorkflowStep` call in `sendCancelledReminders`. The function iterates over workflows and steps but doesn't await the async `processWorkflowStep` function, causing a race condition where the function may return before reminders are actually sent. ```typescript     for (const step of workflow.steps) {       await processWorkflowStep(workflow, step, {         smsReminderNumber,         hideBranding,         calendarEvent: evt, <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "packages/features/ee/workflows/lib/reminders/reminderScheduler.ts",
+        "line": 200
+      },
+      {
+        "comment": "Missing `await` for `processWorkflowStep` in `scheduleWorkflowReminders`. The inner loop over workflow steps doesn't await the async processWorkflowStep function, which means reminders may not complete before the outer function returns. ```typescript     for (const step of workflow.steps) {       await processWorkflowStep(workflow, step, {         calendarEvent: evt,         emailAttendeeSendToOverride,         smsReminderNumber,         hideBranding,",
+        "file": "packages/features/ee/workflows/lib/reminders/reminderScheduler.ts",
+        "line": 158
+      },
+      {
+        "comment": "Missing `await` for `deleteRemindersOfActiveOnIds` call on line 105. This async function is called without await inside the loop, causing fire-and-forget behavior that may result in unhandled promise rejections and incomplete cleanup when teams are deleted. ```typescript       await deleteRemindersOfActiveOnIds({         removedActiveOnIds: [team.id],         workflowSteps,         isOrg: true,         activeOnIds: remainingActiveOnIds, <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "packages/trpc/server/routers/viewer/teams/delete.handler.ts",
+        "line": 111
+      },
+      {
+        "comment": "Inconsistent logic for computing removedActiveOnIds between org and non-org workflows. For non-org workflows, removedActiveOnIds is computed using `activeOnWithChildren` (line 175), but for org workflows (line 234), it uses the raw `activeOn` without considering children. This inconsistency could cause incorrect reminder deletion for org workflows. ```typescript     removedActiveOnIds = oldActiveOnIds.filter((teamId) => !activeOn.includes(teamId));     // Note: For org workflows, activeOn represents teamIds, not eventTypeIds     // The logic should be consistent with how newActiveOn is computed <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "packages/trpc/server/routers/viewer/workflows/update.handler.ts",
+        "line": 234
+      }
+    ]
+  },
+  {
+    "pr_title": "Advanced date override handling and timezone compatibility improvements",
+    "pr_url": "https://github.com/calcom/cal.com/pull/8330",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Dayjs object comparison with === always returns false because it compares object references, not date values. Two dayjs objects representing the same time will never be equal with ===. Should use .isSame() method for proper date comparison. ```typescript if (dayjs(date.start).add(utcOffset, \"minutes\").isSame(dayjs(date.end).add(utcOffset, \"minutes\"))) { <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "packages/trpc/server/routers/viewer/slots.ts",
+        "line": 114
+      },
+      {
+        "comment": "The 'end' variable incorrectly uses slotStartTime instead of slotEndTime. This is a copy-paste error from the line above. Both variables end up with the same value, making the working hours bounds check ineffective - it won't correctly detect when a slot ends outside working hours. ```typescript const start = slotStartTime.hour() * 60 + slotStartTime.minute(); const end = slotEndTime.hour() * 60 + slotEndTime.minute(); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "packages/trpc/server/routers/viewer/slots.ts",
+        "line": 142
+      }
+    ]
+  },
+  {
+    "pr_title": "OAuth credential sync and app integration enhancements",
+    "pr_url": "https://github.com/calcom/cal.com/pull/11059",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Using `.parse()` without try-catch causes unhandled Zod validation errors that crash the request. Should use `.safeParse()` and return appropriate HTTP error responses. Also, the schema validation result is not checked before proceeding. ```typescript const parseResult = appCredentialWebhookRequestBodySchema.safeParse(req.body); if (!parseResult.success) {   return res.status(400).json({ message: \"Invalid request body\", errors: parseResult.error.errors }); const reqBody = parseResult.data; <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub>",
+        "file": "apps/web/pages/api/webhook/app-credential.ts",
+        "line": 31
+      },
+      {
+        "comment": "Unsafe JSON.parse on decrypted data without validation. If decryption produces malformed JSON or unexpected structure, this throws an unhandled exception. Should wrap in try-catch and validate the parsed structure. ```typescript     keys = JSON.parse(       symmetricDecrypt(reqBody.keys, process.env.CALCOM_APP_CREDENTIAL_ENCRYPTION_KEY || \"\")   } catch (e) {     return res.status(400).json({ message: \"Invalid encrypted keys format\" }); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub>",
+        "file": "apps/web/pages/api/webhook/app-credential.ts",
+        "line": 59
+      },
+      {
+        "comment": "Invalid Zod schema with computed properties. Using `[z.string().toString()]` creates a property key of '[object Object]' instead of a catch-all pattern. The `.toString()` method on Zod objects doesn't produce valid property keys. This schema will fail to validate any token response because it expects a literal '[object Object]' property instead of dynamic keys. Should use `z.record()` or `z.intersection()` with `z.object().passthrough()` for variable keys. ```typescript const minimumTokenResponseSchema = z.object({   access_token: z.string(), }).passthrough(); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+        "line": 12
+      },
+      {
+        "comment": "The computed property [z.string().toString()] evaluates to the literal string '[object Object]' at runtime, not a dynamic key validator. This creates a schema with a fixed key name '[object Object]' which will fail to validate real responses. Use z.record() for dynamic keys. ```typescript const minimumTokenResponseSchema = z.object({   access_token: z.string(), }).and(z.record(z.number())); // Capture expiry as numeric fields <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+        "line": 11
+      },
+      {
+        "comment": "Hardcoded placeholder refresh token creates security risk. When the response lacks a refresh_token, the code sets it to the literal string \"refresh_token\". This placeholder could be mistakenly used in subsequent OAuth flows, potentially causing credential confusion or leaks when the actual refresh token should be preserved or the operation should fail. ```typescript // Preserve existing refresh_token if not returned in refresh response   // Do not set placeholder values - missing refresh_token should be handled by caller <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+        "line": 27
+      },
+      {
+        "comment": "Inconsistent return types: when credential sharing is enabled, returns a raw fetch Response object; when disabled, returns the result of refreshFunction(). Callers expect the same shape in both cases. The Response object needs to be parsed to extract the actual token data. ```typescript const response = await fetch(process.env.CALCOM_CREDENTIAL_SYNC_ENDPOINT, {       method: \"POST\",       body: new URLSearchParams({         calcomUserId: userId.toString(),     return await response.json(); <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+        "line": 15
+      },
+      {
+        "comment": "The `parseRefreshTokenResponse` function returns a SafeParseReturnType object (containing `success`, `data`, `error` properties), but the code incorrectly uses this entire object as the credential key value. This stores the wrapper object instead of just the parsed data. The code should extract `key.data` or handle the success case properly. ```typescript const parsedKey = parseRefreshTokenResponse(googleCredentials, googleCredentialSchema); if (!parsedKey.success) {   throw new Error(\"Invalid credential format\"); await prisma.credential.update({   where: { id: credential.id },   data: { key: parsedKey.data },",
+        "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+        "line": 100
+      }
+    ]
+  },
+  {
+    "pr_title": "SMS workflow reminder retry count tracking",
+    "pr_url": "https://github.com/calcom/cal.com/pull/14943",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The deleteMany query's OR condition has a logic error. The second branch (retryCount > 1) lacks a method filter, causing it to delete ALL workflow reminder types (including EMAIL) with retryCount > 1, not just SMS reminders. This is inconsistent with the first branch which only targets SMS. The method filter should apply to both conditions in the OR clause. ```typescript   await prisma.workflowReminder.deleteMany({       method: WorkflowMethods.SMS,           scheduledDate: {             lte: dayjs().toISOString(),           retryCount: { <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+        "line": 29
+      }
+    ]
+  },
+  {
+    "pr_title": "Add guest management functionality to existing bookings",
+    "pr_url": "https://github.com/calcom/cal.com/pull/14740",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The isTeamAdminOrOwner permission check uses && (AND) instead of || (OR), requiring a user to be BOTH a team admin AND a team owner. Based on the variable name and logical intent, it should allow access if the user is either an admin OR an owner. This incorrectly denies access to legitimate team admins who are not owners, and team owners who are not explicitly marked as admins. ```typescript   const isTeamAdminOrOwner =     (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||     (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0)); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "line": 49
+      },
+      {
+        "comment": "The sendAddGuestsEmails function is called with the original 'guests' array from the input, but it should receive 'uniqueGuests' which has been filtered to remove existing attendees and blacklisted emails. The email-manager.ts uses this array to determine which attendees are 'new' (line 541: newGuests.includes(attendee.email)). Passing the original array causes incorrect email classification - already-existing attendees would receive 'AttendeeScheduledEmail' instead of 'AttendeeAddGuestsEmail', and blacklisted emails that weren't actually added would be incorrectly matched. ```typescript     await sendAddGuestsEmails(evt, uniqueGuests); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "line": 168
+      },
+      {
+        "comment": "Case-sensitivity bypass in email blacklist check. The blacklistedGuestEmails array contains lowercased emails from the environment variable, but the guest emails from user input are not lowercased before the includes() check. This allows attackers to bypass the blacklist by using different casing (e.g., 'ATTACKER@EXAMPLE.COM' vs 'attacker@example.com'). The codebase consistently normalizes emails with toLowerCase() before comparison elsewhere. ```typescript   const uniqueGuests = guests.filter(       !booking.attendees.some((attendee) => guest.toLowerCase() === attendee.email.toLowerCase()) &&       !blacklistedGuestEmails.includes(guest.toLowerCase()) <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "line": 78
+      }
+    ]
+  },
+  {
+    "pr_title": "feat: add calendar cache status and actions (#22532)",
+    "pr_url": "https://github.com/calcom/cal.com/pull/22532",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Missing authentication on cache revalidation endpoint. The endpoint accepts any username and triggers cache revalidation without verifying the requester is authorized. This allows unauthenticated attackers to: (1) Cause DoS by forcing expensive revalidation operations, (2) Enumerate valid usernames, (3) Potentially interfere with calendar availability data. Add authentication check using getSession or require an API key/webhook signature. ```typescript export default async function handler(req: NextApiRequest, res: NextApiResponse) {   const session = await getSession({ req });   const { username } = querySchema.parse(req.query);   // Only allow users to revalidate their own cache or require API key for webhooks   if (!session?.user?.username || session.user.username !== username) {     return res.status(401).json({ message: \"Unauthorized\" });",
+        "file": "apps/web/pages/api/revalidate-calendar-cache/[username].ts",
+        "line": 27
+      },
+      {
+        "comment": "The refactored getBusyCalendarTimes function only reads from SSG cache (getNextCache) but never falls back to fetching actual calendar data from external sources. The old code called getCachedResults which would fetch from external calendars if cache miss. Now if the SSG cache is empty or doesn't exist, the function returns empty results, breaking calendar availability checks. Need to add fallback to getCachedResults when cache returns empty. ```typescript export const getBusyCalendarTimes = async (   username: string,   withCredentials: CredentialPayload[],   dateFrom: string,   dateTo: string,   selectedCalendars: SelectedCalendar[]",
+        "file": "packages/core/CalendarManager.ts",
+        "line": 185
+      }
+    ]
+  },
+  {
+    "pr_title": "Fixing Re-authentication with passkeys",
+    "pr_url": "https://github.com/keycloak/keycloak/pull/41249",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Add caching support for IdentityProviderStorageProvider.getForLogin operations",
+    "pr_url": "https://github.com/keycloak/keycloak/pull/32918",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The predicate accesses idp.getConfig().get() without null-checking the config map. If getConfig() returns null, this will throw NullPointerException. While config is initialized by default in IdentityProviderModel, defensive programming should be used since setConfig(null) could be called or the object could be in an unexpected state. Use getOrDefault to safely handle the case when BROKER_PUBLIC is not set or when config might be null. .and(idp -> idp.getOrganizationId() == null || Boolean.parseBoolean(idp.getConfig() != null ? idp.getConfig().get(OrganizationModel.BROKER_PUBLIC) : null)) <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+        "line": 256
+      }
+    ]
+  },
+  {
+    "pr_title": "Add AuthzClientCryptoProvider for authorization client cryptographic operations",
+    "pr_url": "https://github.com/keycloak/keycloak/pull/33832",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Buffer over-read vulnerability in nested ASN.1 structure parsing. The readLength() method validates declared length against total buffer size (limit) but doesn't enforce parent container boundaries. In nested structures, an inner element can specify a length exceeding its parent's remaining bytes, causing the decoder to read beyond the intended sequence boundary. The check at line 160 should validate that length + bytesAlreadyRead <= parentLimit, or the class needs to track remaining bytes per nesting level.             if (length + count > limit) // must not exceed remaining bytes in this container                 throw new IOException(\"corrupted stream - out of bounds length found\"); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+        "line": 163
+      },
+      {
+        "comment": "Integer underflow vulnerability in readSequence loop. When length - bytes.length underflows (if bytes.length > length), length becomes negative and the loop exits, but the result list contains more data than the declared sequence length specified. This could allow parsing of malformed structures that violate ASN.1 encoding rules.         while (length > 0) {             byte[] bytes = readNext();             if (bytes.length > length) {                 throw new IOException(\"Element length \" + bytes.length + \" exceeds remaining sequence length \" + length);             result.add(bytes);             length = length - bytes.length; <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+        "line": 61
+      },
+      {
+        "comment": "Missing bounds check in concatenatedRSToASN1DER before System.arraycopy. The method assumes signature.length equals signLength without validation. If signature array is shorter than signLength, System.arraycopy will throw ArrayIndexOutOfBoundsException. Should validate signature.length >= signLength before copying.                 if (signature.length < signLength) {                     throw new IllegalArgumentException(\"Signature length \" + signature.length + \" is less than expected \" + signLength);                 byte[] r = new byte[arraySize];                 byte[] s = new byte[arraySize];                 System.arraycopy(signature, 0, r, 1, len);                 System.arraycopy(signature, len, s, 1, len); <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+        "line": 110
+      },
+      {
+        "comment": "Critical bug: The getKeyStore method was changed from using `KeyStore.getInstance(format.toString(), BouncyIntegration.PROVIDER)` to `KeyStore.getInstance(format.name())`. This removes the FIPS-compliant BouncyCastle provider from KeyStore instantiation, breaking FIPS 140-2 compliance. For FIPS compliance, the KeyStore must use the FIPS-validated BouncyCastle provider.     public KeyStore getKeyStore(KeystoreFormat format) throws KeyStoreException, NoSuchProviderException {         return KeyStore.getInstance(format.toString(), BouncyIntegration.PROVIDER); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "crypto/fips1402/src/main/java/org/keycloak/crypto/fips/FIPS1402Provider.java",
+        "line": 211
+      }
+    ]
+  },
+  {
+    "pr_title": "Add rolling-updates feature flag and compatibility framework",
+    "pr_url": "https://github.com/keycloak/keycloak/pull/36882",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The rolling-updates feature must be enabled for all test cases, not just when updateStrategy is explicitly set. When updateStrategy is null, the testCacheMaxCount test still expects rolling upgrades to work (via eventuallyRollingUpgradeStatus), but the feature is not enabled in this case. The feature setup should be moved outside the null check.     private static Keycloak createInitialDeployment(UpdateStrategy updateStrategy) {         var kc = getTestKeycloakDeployment(true);         kc.getSpec().setInstances(3);         if (kc.getSpec().getFeatureSpec() == null) {             kc.getSpec().setFeatureSpec(new FeatureSpec());         kc.getSpec().getFeatureSpec().setEnabledFeatures(List.of(Profile.Feature.ROLLING_UPDATES.getKey()));         if (updateStrategy == null) {",
+        "file": "operator/src/test/java/org/keycloak/operator/testsuite/integration/UpgradeTest.java",
+        "line": 118
+      }
+    ]
+  },
+  {
+    "pr_title": "Add Client resource type and scopes to authorization schema",
+    "pr_url": "https://github.com/keycloak/keycloak/pull/36880",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Logic error in length validation: The check `length >= limit` compares content length against total buffer size without accounting for header bytes (tag + length) already consumed. The `count` variable tracks bytes read since mark(). For a valid buffer-filling ASN.1 structure, this check incorrectly throws 'out of bounds' exception. Should use `count + length > limit` or `length > limit - count` to properly account for consumed bytes.             if (count + length > limit)                 throw new IOException(\"corrupted stream - out of bounds length found\"); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+        "line": 163
+      }
+    ]
+  },
+  {
+    "pr_title": "Add Groups resource type and scopes to authorization schema",
+    "pr_url": "https://github.com/keycloak/keycloak/pull/37038",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The getGroups() method now uses stream.filter(groupsEvaluator::canView) which evaluates permissions for each group individually. When combined with pagination (first/max results), this causes incorrect pagination behavior - fewer results than requested may be returned if groups are filtered out after pagination. The filtering should happen before pagination or the query should incorporate permission checks.         if (populateHierarchy) {             return GroupUtils.populateGroupHierarchyFromSubGroups(session, realm, stream, !briefRepresentation, groupsEvaluator);         // Filter first, then paginate to ensure correct result counts         Stream<GroupModel> filteredStream = stream.filter(groupsEvaluator::canView);         return paginatedStream(filteredStream, firstResult, maxResults)             .map(g -> GroupUtils.populateSubGroupCount(g, GroupUtils.toRepresentation(groupsEvaluator, g, !briefRepresentation))); <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "services/src/main/java/org/keycloak/services/resources/admin/GroupsResource.java",
+        "line": 115
+      },
+      {
+        "comment": "Multiple calls to auth.groups().getGroupIdsWithViewPermission() in getUsersCount() method can result in redundant expensive permission evaluations. Each call path (lines 398, 425, 430, 448) triggers the full N+1 group permission check. The result should be cached and reused within the request scope.     private Stream<UserRepresentation> searchForUser(Map<String, String> attributes, RealmModel realm, UserPermissionEvaluator usersEvaluator, Boolean briefRepresentation, Integer firstResult, Integer maxResults, Boolean includeServiceAccounts) {         attributes.put(UserModel.INCLUDE_SERVICE_ACCOUNT, includeServiceAccounts.toString());         // Cache groupIds to avoid redundant permission evaluations         Set<String> groupIds = session.getAttribute(UserModel.GROUPS) != null              ? (Set<String>) session.getAttribute(UserModel.GROUPS)             : auth.groups().getGroupIdsWithViewPermission();         if (!groupIds.isEmpty()) {",
+        "file": "services/src/main/java/org/keycloak/services/resources/admin/UsersResource.java",
+        "line": 455
+      },
+      {
+        "comment": "Resource type mismatch breaks V1 permissions. V1 uses type 'Group' while V2 searches for 'Groups'. V1 uses resource name 'group.resource.{id}' while V2 searches for '{id}'. This causes all existing V1 group permissions to be ignored after upgrade, potentially bypassing authorization checks.         // Support both V1 and V2 resource types for backward compatibility         resourceStore.findByType(server, AdminPermissionsSchema.GROUPS_RESOURCE_TYPE, groupResource -> {             if (hasPermission(groupResource.getId(), AdminPermissionsSchema.VIEW_MEMBERS, AdminPermissionsSchema.MANAGE_MEMBERS)) {                 granted.add(groupResource.getId());         // Also check V1 resource type \"Group\" for backward compatibility         resourceStore.findByType(server, \"Group\", groupResource -> {             String resourceName = groupResource.getName();",
+        "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+        "line": 127
+      },
+      {
+        "comment": "Resource lookup in hasPermission() uses raw groupId but V1 resources are named 'group.resource.{groupId}'. This prevents V2 from finding V1 group-specific resources, causing fallback to 'all-groups' permission and ignoring granular group permissions.         Resource resource = null;         if (groupId != null) {             resource = resourceStore.findByName(server, groupId);             // Fallback to V1 naming convention for backward compatibility             if (resource == null) {                 resource = resourceStore.findByName(server, \"group.resource.\" + groupId); <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+        "line": 141
+      },
+      {
+        "comment": "Logic inconsistency in canManage() method: It checks for both VIEW and MANAGE scopes, but should only check MANAGE scope to be consistent with canManage(GroupModel group) which only checks MANAGE. Also inconsistent with ClientPermissionsV2.canManage() which only checks MANAGE scope.     public boolean canManage() {         if (root.hasOneAdminRole(AdminRoles.MANAGE_USERS)) {             return true;         return hasPermission(null, AdminPermissionsSchema.MANAGE); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "services/src/main/java/org/keycloak/services/resources/admin/permissions/GroupPermissionsV2.java",
+        "line": 71
+      }
+    ]
+  },
+  {
+    "pr_title": "Add HTML sanitizer for translated message resources",
+    "pr_url": "https://github.com/keycloak/keycloak/pull/37429",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Case-sensitive HTML detection: The regex pattern '<[a-z]+[^>]*>' only matches lowercase HTML tags. HTML is case-insensitive, so uppercase tags like '<P>' or '<DIV>' in the English source won't be detected as HTML, causing POLICY_NO_HTML to be used incorrectly and rejecting legitimate HTML translations. Pattern HTML_TAGS = Pattern.compile(\"<[a-zA-Z]+[^>]*>\"); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+        "line": 142
+      },
+      {
+        "comment": "Case-sensitive anchor detection: The pattern '</?a[^>]*>' only matches lowercase anchor tags '<a>'. If English uses lowercase '<a>' but translation uses uppercase '<A>', they won't match and the code will report 'Didn't find anchor tag' error. HTML is case-insensitive, so <A> and <a> should be treated as equivalent. private static final Pattern ANCHOR_PATTERN = Pattern.compile(\"</?a[^>]*>\", Pattern.CASE_INSENSITIVE); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+        "line": 145
+      }
+    ]
+  },
+  {
+    "pr_title": "Implement access token context encoding framework",
+    "pr_url": "https://github.com/keycloak/keycloak/pull/37634",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Copy-paste error in constructor: the second Objects.requireNonNull incorrectly validates grantType again instead of rawTokenId. This means null rawTokenId values would not be rejected as intended.         Objects.requireNonNull(grantType, \"Null grantType not allowed\");         Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\"); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+        "line": 73
+      },
+      {
+        "comment": "Two bugs in isAccessTokenId matcher: 1) substring(3, 5) extracts wrong characters - the grant shortcut is at positions 4-5, not 3-4. The token format is 6 chars (SSSSSS:UUID) where positions 0-1=sessionType, 2-3=tokenType, 4-5=grantType. 2) The equals().return false logic is inverted - it should return true when the grant matches the expected value.                 if (items[0].substring(4, 6).equals(expectedGrantShortcut)) return true; <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+        "line": 483
+      }
+    ]
+  },
+  {
+    "pr_title": "Implement recovery key support for user storage providers",
+    "pr_url": "https://github.com/keycloak/keycloak/pull/38446",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The code calls `credentialModelOpt.get()` without checking if the Optional contains a value. If the user has no recovery codes configured (neither in federated storage nor local storage), `RecoveryAuthnCodesUtils.getCredential(user)` returns an empty Optional, and calling `.get()` will throw NoSuchElementException.     public RecoveryAuthnCodeInputLoginBean(KeycloakSession session, RealmModel realm, UserModel user) {         Optional<CredentialModel> credentialModelOpt = RecoveryAuthnCodesUtils.getCredential(user);         if (credentialModelOpt.isPresent()) {             RecoveryAuthnCodesCredentialModel recoveryCodeCredentialModel = RecoveryAuthnCodesCredentialModel.createFromCredentialModel(credentialModelOpt.get());             this.codeNumber = recoveryCodeCredentialModel.getNextRecoveryAuthnCode().get().getNumber();             this.codeNumber = 0; <sub>Talk to Kody by mentioning @kody</sub>",
+        "file": "services/src/main/java/org/keycloak/forms/login/freemarker/model/RecoveryAuthnCodeInputLoginBean.java",
+        "line": 21
+      },
+      {
+        "comment": "Timing attack vulnerability in recovery code validation. The code uses standard String.equals() comparison through anyMatch, which leaks timing information about the stored recovery codes. An attacker can measure response times to determine valid code prefixes. Should use constant-time comparison for cryptographic secrets.             return generatedKeys.stream().anyMatch(key -> MessageDigest.isEqual(key.getBytes(StandardCharsets.UTF_8), input.getChallengeResponse().getBytes(StandardCharsets.UTF_8))); <sub>Talk to Kody by mentioning @kody</sub> <sub>Was this suggestion helpful? React with 👍 or 👎 to help Kody learn from this interaction.</sub> <!-- kody-codereview -->&#8203;",
+        "file": "testsuite/integration-arquillian/servers/auth-server/services/testsuite-providers/src/main/java/org/keycloak/testsuite/federation/BackwardsCompatibilityUserStorage.java",
+        "line": 340
+      }
+    ]
+  },
+  {
+    "pr_title": "Fix concurrent group access to prevent NullPointerException",
+    "pr_url": "https://github.com/keycloak/keycloak/pull/40940",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "NullPointerException vulnerability in concurrent group access. After session.groups().getGroupById() at line 47, parentModel can be null if another thread deleted the group. This null is passed to groupEvaluator.canView(parentModel) at line 51, which calls getGroupResourceName(group) -> group.getId(), causing NPE. Also passed to toRepresentation() at line 57. Add null check after getGroupById and break loop if parentModel is null.             while(currGroup.getParentId() != null) {                 GroupModel parentModel = session.groups().getGroupById(realm, currGroup.getParentId());                 // Group may have been deleted by another thread                 if (parentModel == null) {                 if (!AdminPermissionsSchema.SCHEMA.isAdminPermissionsEnabled(realm)) {                     //TODO GROUPS not sure if this is even necessary but if somehow you can't view the parent we need to remove the child and move on                     if(!groupEvaluator.canView() && !groupEvaluator.canView(parentModel)) {",
+        "file": "services/src/main/java/org/keycloak/utils/GroupUtils.java",
+        "line": 98
+      }
+    ]
+  }
+]

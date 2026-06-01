@@ -1,0 +1,139 @@
+---
+title: "匿名遥测"
+description: "自托管心跳发送的内容、收集的原因以及如何禁用。"
+icon: "satellite-dish"
+---
+
+每个自托管的 Kodus 实例每天向 `https://telemetry.kodus.io` 发送
+**一次匿名心跳**。负载仅包含聚合计数器和运行时元数据 — 永远不包含
+代码、身份信息或任何可以追溯到您或您的用户的内容。
+
+本页准确记录了发送的内容、原因、存储位置以及如何关闭它。
+
+## 我们发送的内容
+
+每个 UTC 日一次 `POST /v1/heartbeat`,约 700 字节。负载示例
+(为清晰起见,UUID 已编辑):
+
+```json
+{
+  "schema_version": 1,
+  "instance_id": "0188f5c5-5b8f-4f45-92d4-b20c25df0b5a",
+  "sent_at": "2026-05-04T03:17:00.000Z",
+  "kodus": {
+    "version": "0.4.15",
+    "deployment": "docker",
+    "uptime_hours": 124
+  },
+  "runtime": {
+    "node_version": "v20.11.1",
+    "os": "linux",
+    "arch": "x64",
+    "cpu_count": 8,
+    "db_type": "postgres",
+    "db_version": "PostgreSQL 15.4"
+  },
+  "usage_7d": {
+    "active_users": 12,
+    "organizations": 1,
+    "teams": 2,
+    "repos_connected": 9,
+    "prs_reviewed": 184,
+    "suggestions_generated": 0,
+    "suggestions_applied": 0
+  },
+  "config": {
+    "kody_rules_enabled": true,
+    "agent_review_repos_pct": 0,
+    "integrations": ["github", "slack"]
+  }
+}
+```
+
+完整 schema 位于 [kodus-beacon 仓库](https://github.com/kodustech/kodus-beacon/blob/main/docs/api.md) — 由严格的服务端验证器强制执行,任何未知字段都会被 `400` 拒绝。
+
+## 我们永远不会发送的内容
+
+按照设计,schema 不能包含:
+
+- 用户邮箱、姓名、OAuth 令牌、API 密钥
+- 仓库名称、分支名称、PR 标题、提交消息、代码内容
+- 任何客户标识字符串(组织 slug、工作区名称、自定义域名)
+- IP 地址(receiver 仅出于滥用检测目的,使用每日轮换的 salt 对源 IP
+  进行哈希,从不持久化原始 IP)
+- 任何自由文本字段
+
+receiver 强制 5 KB 的 body 限制,并拒绝文档 schema 之外的任何字段,
+因此配置错误的客户端无法意外泄露数据。
+
+## 我们为什么收集这些
+
+匿名心跳让我们能够回答其他方式无法回答的关于自托管用户的问题:
+
+- 哪些版本的 Kodus 仍在使用,新版本被采用的速度有多快
+- 运维人员如何部署(Docker / Kubernetes / bare metal),以便我们优先
+  支持人们实际使用的平台
+- Kody Rules 等功能是否触达自托管用户
+- 流量信号(整个集群审查的 PR、连接的仓库)用于容量规划决策
+
+这**无法**让我们识别任何特定的实例、客户或用户。我们不会基于遥测
+联系您。我们不会共享或出售数据。
+
+## 检查您的实例将发送什么
+
+在任何心跳离开您的实例之前,您可以输出每日 cron 将构建的精确负载:
+
+```bash
+yarn telemetry:preview
+```
+
+此命令启动一个最小的 Kodus 上下文,运行 cron 使用的同一收集器,并将
+JSON 打印到 stdout — 不发送任何内容。可以通过 `jq` 管道来探索:
+
+```bash
+yarn telemetry:preview | jq '.usage_7d'
+```
+
+## 禁用遥测
+
+在环境中设置 `KODUS_TELEMETRY_DISABLED=true`。cron 会静默跳过 — 在您
+将其改回之前,不会发送任何心跳。
+
+```bash
+# .env
+KODUS_TELEMETRY_DISABLED=true
+```
+
+接受的真值(不区分大小写):`1`、`true`、`yes`、`on`。任何其他值
+(包括空)都会保持遥测启用。
+
+## 数据存放位置
+
+- **Receiver:** 部署在 `telemetry.kodus.io` 的小型 Node.js 服务
+  (Fastify)。源代码公开:
+  [kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon)。
+- **存储:** Neon Postgres,US 区域,静态加密,仅 TLS。两个表 —
+  `telemetry_instances`(每个实例一行,last seen + version)和
+  `telemetry_heartbeats`(每个实例每个 UTC 日一行,负载存储为 JSONB)。
+- **保留期:** 单条心跳行保留 **12 个月**。之后,我们将计数器聚合为
+  历史统计(例如"2026 年 1 月活跃实例 X")并删除每日行。实例行保留 —
+  它不携带时间序列,只有最新版本 + last seen 时间戳。
+- **访问权限:** 仅产品工程团队,通过带有审计的 Neon 个人凭证。数据
+  从不与第三方共享,也从不用于训练任何 AI 模型。
+
+## 您可以审计的源代码
+
+两端都是开源的,且足够小,可以从头到尾阅读:
+
+- **客户端**(在您的实例上运行的部分):cron、收集器和 HTTP 传输位于
+  [`libs/telemetry/`](https://github.com/kodustech/kodus-ai/tree/main/libs/telemetry)
+  和 [`apps/worker/src/cron/self-hosted-beacon.cron.ts`](https://github.com/kodustech/kodus-ai/blob/main/apps/worker/src/cron/self-hosted-beacon.cron.ts)。
+- **服务端**(在 `telemetry.kodus.io` 上运行的部分):整个 receiver 是
+  约 80 行的 Fastify 路由 + 一个 Postgres upsert。参见
+  [kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon)。
+
+## 问题
+
+如果此处有任何不清楚的地方,或者您希望添加、删除或进一步记录某个
+字段,请在 [kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon/issues)
+开 issue,或在 [Discord](https://discord.gg/TFZBRk9fT6) 联系我们。

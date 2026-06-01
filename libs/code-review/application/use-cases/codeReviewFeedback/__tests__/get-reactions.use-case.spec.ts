@@ -61,10 +61,11 @@ describe('GetReactionsUseCase', () => {
 
         expect(
             pullRequestService.findPullRequestsWithDeliveredSuggestions,
-        ).toHaveBeenCalledWith(orgAndTeam.organizationId, [1, 2], [
-            PullRequestState.MERGED,
-            PullRequestState.CLOSED,
-        ]);
+        ).toHaveBeenCalledWith(
+            orgAndTeam.organizationId,
+            [1, 2],
+            [PullRequestState.MERGED, PullRequestState.CLOSED],
+        );
         expect(result).toEqual([]);
     });
 

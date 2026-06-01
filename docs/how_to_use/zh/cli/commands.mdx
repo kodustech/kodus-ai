@@ -1,0 +1,489 @@
+---
+title: "命令参考"
+description: "Kodus CLI 所有命令、标志和选项的完整参考。"
+---
+
+## 全局标志
+
+以下标志适用于所有命令：
+
+| 标志 | 简写 | 默认值 | 描述 |
+|------|------|--------|------|
+| `--format <fmt>` | `-f` | `terminal` | 输出格式：`terminal`、`json`、`markdown` |
+| `--output <file>` | `-o` | — | 保存输出到文件 |
+| `--verbose` | `-v` | `false` | 详细输出 |
+| `--quiet` | `-q` | `false` | 安静模式（仅错误） |
+| `--agent` | — | `false` | 代理模式：确定性、机器可读输出 |
+
+---
+
+## `kodus review`
+
+分析修改的文件，查找代码质量问题、Bug、安全漏洞和风格违规。
+
+### 用法
+
+```bash
+kodus review                          # 审查工作目录变更（交互式）
+kodus review [files...]               # 审查特定文件
+kodus review --staged                 # 仅审查暂存文件
+kodus review --branch main            # 与指定分支对比
+kodus review --commit abc123          # 分析特定提交
+kodus review --fix                    # 自动应用所有可修复问题
+kodus review --prompt-only            # 为 AI 代理优化的输出
+```
+
+### 标志
+
+| 标志 | 简写 | 描述 |
+|------|------|------|
+| `--staged` | `-s` | 仅分析暂存文件 |
+| `--commit <sha>` | `-c` | 分析特定提交的差异 |
+| `--branch <name>` | `-b` | 与指定分支对比 |
+| `--rules-only` | — | 仅使用配置的规则审查（不生成通用建议） |
+| `--fast` | — | 快速模式：使用更轻量的检查进行更快分析 |
+| `--interactive` | `-i` | 交互模式：浏览并应用修复 |
+| `--fix` | — | 自动应用所有可修复的问题 |
+| `--prompt-only` | — | 为 AI 代理优化的输出 |
+| `--fail-on <severity>` | — | 如果问题达到或超过指定严重级别则退出码为 1 |
+| `--context <file>` | — | 包含在审查中的自定义上下文文件 |
+| `--fields <csv>` | — | 选择响应字段（JSON/代理模式），例如 `summary,issues.file` |
+
+### 审查模式
+
+<Tabs>
+  <Tab title="交互式（默认）">
+    浏览文件和问题数量，预览建议修复，逐一应用。
+
+    ```bash
+    kodus review
+    ```
+  </Tab>
+  <Tab title="自动修复">
+    一次性应用所有可修复的问题，带确认提示。
+
+    ```bash
+    kodus review --fix
+    ```
+  </Tab>
+  <Tab title="AI 代理">
+    为 Claude Code、Cursor 或 Windsurf 设计的精简结构化输出。支持自主审查-修复循环。
+
+    ```bash
+    kodus review --prompt-only
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## `kodus pr suggestions`
+
+获取开放 Pull Request 的 AI 建议。
+
+### 用法
+
+```bash
+kodus pr suggestions --pr-url https://github.com/org/repo/pull/42
+kodus pr suggestions --pr-number 42 --repo-id <id>
+kodus pr suggestions --pr-number 42 --repo-id <id> --severity error,warning
+kodus pr suggestions --pr-number 42 --repo-id <id> --format json
+```
+
+### 标志
+
+| 标志 | 描述 |
+|------|------|
+| `--pr-url <url>` | Pull Request URL |
+| `--pr-number <number>` | Pull Request 编号（需要 `--repo-id`） |
+| `--repo-id <id>` | 仓库 ID |
+| `--severity <list>` | 以逗号分隔的严重级别列表 |
+| `--category <list>` | 以逗号分隔的类别列表 |
+| `--fields <csv>` | 选择响应字段（JSON/代理模式），例如 `summary,issues.file` |
+
+---
+
+## `kodus pr business-validation`
+
+根据任务的业务规则/验收标准验证本地差异。适合在合并前确认实现与任务意图一致。
+
+### 用法
+
+```bash
+kodus pr business-validation --task-url https://linear.app/team/issue/KC-1441
+kodus pr business-validation --task-id KC-1441 --staged
+kodus pr business-validation --task-id KC-1441 --branch main
+kodus pr business-validation --task-id KC-1441 --commit abc123
+kodus pr business-validation --task-id KC-1441 --dry-run
+```
+
+### 标志
+
+| 标志 | 简写 | 描述 |
+|------|------|------|
+| `--task-url <url>` | — | 要附加到验证命令的任务 URL |
+| `--task-id <id>` | — | 要附加的任务 ID 或 Issue key（例如 `KC-1441`） |
+| `--staged` | `-s` | 仅使用暂存变更 |
+| `--commit <sha>` | `-c` | 使用特定提交的差异 |
+| `--branch <name>` | `-b` | 将当前分支与基础分支对比 |
+| `--dry-run` | — | 打印 payload 但不执行 API 调用 |
+
+---
+
+## `kodus auth`
+
+管理 Kodus API 的认证。
+
+### `auth login`
+
+```bash
+kodus auth login                              # 交互式登录
+kodus auth login -e user@mail.com -p password # 非交互式
+```
+
+| 标志 | 简写 | 描述 |
+|------|------|------|
+| `--email <email>` | `-e` | 账户邮箱 |
+| `--password <password>` | `-p` | 账户密码 |
+
+### `auth logout`
+
+```bash
+kodus auth logout
+```
+
+移除本地认证（登录和团队密钥）。
+
+### `auth status`
+
+```bash
+kodus auth status
+```
+
+显示认证模式、邮箱、令牌有效性、组织、试用状态和使用限制。
+
+### `auth team-key`
+
+```bash
+kodus auth team-key --key kodus_xxxxx
+```
+
+使用共享的团队 API 密钥进行认证。也可以通过 `KODUS_TEAM_KEY` 环境变量设置。
+
+### `auth team-status`
+
+```bash
+kodus auth team-status
+```
+
+显示团队认证详情（组织和团队名称）。
+
+### `auth token`
+
+```bash
+kodus auth token
+```
+
+生成用于自动化流水线的 CI/CD 令牌。配合 `KODUS_TOKEN` 环境变量使用。
+
+---
+
+## `kodus hook`
+
+管理 pre-push Git 钩子，在推送前自动进行代码审查。
+
+### `hook install`
+
+```bash
+kodus hook install                    # 默认：fail-on critical，快速模式启用
+kodus hook install --fail-on error    # 在 error 严重级别时阻止推送
+kodus hook install --no-fast          # 禁用快速模式
+kodus hook install --force            # 覆盖现有钩子
+```
+
+| 标志 | 默认值 | 描述 |
+|------|--------|------|
+| `--fail-on <severity>` | `critical` | 阻止推送的最低严重级别 |
+| `--fast` / `--no-fast` | `true` | 启用/禁用快速模式 |
+| `--force` | — | 无提示覆盖现有钩子 |
+
+### `hook uninstall`
+
+```bash
+kodus hook uninstall
+```
+
+移除 Kodus 安装的 pre-push 钩子。
+
+### `hook status`
+
+```bash
+kodus hook status
+```
+
+显示钩子状态、fail-on 严重级别、快速模式设置和路径。
+
+### 跳过钩子
+
+```bash
+KODUS_SKIP_HOOK=1 git push
+```
+
+---
+
+## `kodus decisions`
+
+捕获并持久化 AI 代理的决策到代码仓库中，供未来参考。决策以结构化 Markdown 文件存储在 `.kody/` 目录中。
+
+### `decisions enable`
+
+```bash
+kodus decisions enable                                    # 所有代理
+kodus decisions enable --agents claude,cursor            # 特定代理
+kodus decisions enable --agents codex --codex-config ~/.codex/config.toml
+kodus decisions enable --force                           # 覆盖现有配置
+```
+
+| 标志 | 默认值 | 描述 |
+|------|--------|------|
+| `--agents <agents>` | `claude,cursor,codex` | 以逗号分隔的代理列表 |
+| `--codex-config <path>` | `~/.codex/config.toml` | Codex 配置路径 |
+| `--force` | — | 覆盖现有 `modules.yml` |
+
+### `decisions disable`
+
+```bash
+kodus decisions disable
+```
+
+移除所有决策钩子。`.kody/` 中的已保存数据不会被删除。
+
+### `decisions status`
+
+```bash
+kodus decisions status
+```
+
+显示 PR 记忆、会话、最新 SHA、代理和模块配置。
+
+### `decisions show`
+
+```bash
+kodus decisions show                  # 当前分支的 PR 记忆
+kodus decisions show auth             # 'auth' 模块的决策
+kodus decisions show feat/new-api     # 特定分支的 PR 决策
+```
+
+### `decisions promote`
+
+```bash
+kodus decisions promote                                   # 当前分支，所有模块
+kodus decisions promote --branch feat/auth                # 特定分支
+kodus decisions promote --branch feat/auth --modules auth,users
+```
+
+| 标志 | 描述 |
+|------|------|
+| `--branch <name>` | 分支名称（默认：当前分支） |
+| `--modules <ids>` | 以逗号分隔的模块 ID（默认：所有匹配的模块） |
+
+将 PR 级别的决策提升为长期模块记忆。
+
+---
+
+## `kodus config repo`
+
+查看和更新存储在 Kodus 中的仓库设置。需要团队密钥认证。使用 `.` 指代当前仓库。
+
+<Note>`kodus config repo` 和 `kodus config remote` 是同一命令组的别名。</Note>
+
+### 用法
+
+```bash
+kodus config repo add                                   # 将当前仓库添加到 Kodus
+kodus config repo add owner/repo                        # 添加指定仓库
+kodus config repo list                                  # 列出已配置的仓库
+kodus config repo show                                  # 显示当前仓库设置
+kodus config repo setup                                 # 引导式设置向导
+kodus config repo set . reviewEnabled true              # 直接设置某项配置
+kodus config repo open                                  # 在 Kodus 仪表板中打开
+kodus config repo add-ignore-file . "**/*.generated.ts"
+kodus config repo add-base-branch . "release/*"
+kodus config repo add-ignore-title . "^WIP:"
+```
+
+### 子命令
+
+| 子命令 | 描述 |
+|--------|------|
+| `add [repository]` | 将仓库添加到 Kodus（快捷方式：`kodus config -r [repository]`） |
+| `list` | 列出已在 Kodus 配置的仓库 |
+| `show [repository]` | 显示仓库设置 |
+| `setup [repository]` | 运行引导式仓库设置向导 |
+| `set [repository] <key> <value>` | 直接设置某项仓库配置 |
+| `open [repository]` | 打开 Kodus 仪表板进行高级配置 |
+| `add-pattern [repository] <field> <pattern>` | 向列表字段添加模式（`ignore-files`、`base-branches`、`ignore-titles`） |
+| `remove-pattern [repository] <field> <pattern>` | 从列表字段移除模式 |
+| `add-ignore-file [repository] <pattern>` | 快捷方式：添加忽略文件模式 |
+| `remove-ignore-file [repository] <pattern>` | 快捷方式：移除忽略文件模式 |
+| `add-base-branch [repository] <pattern>` | 快捷方式：添加基础分支模式 |
+| `remove-base-branch [repository] <pattern>` | 快捷方式：移除基础分支模式 |
+| `add-ignore-title [repository] <pattern>` | 快捷方式：添加忽略标题模式 |
+| `remove-ignore-title [repository] <pattern>` | 快捷方式：移除忽略标题模式 |
+
+### 标志
+
+| 标志 | 适用于 | 描述 |
+|------|--------|------|
+| `--no-prompt` | `add` | 跳过添加后的设置提示 |
+
+---
+
+## `kodus rules`
+
+创建、更新和查看 Kody Rules — Kodus 在审查时应用的结构化规则。
+
+### 用法
+
+```bash
+kodus rules view                                         # 查看团队的所有规则
+kodus rules view --repo-id <id>                          # 按仓库筛选
+kodus rules view --uuid <rule-uuid>                      # 获取单个规则
+kodus rules create --title "No console.log" --rule "Avoid leaving console.log in committed code" --severity high
+kodus rules update --uuid <rule-uuid> --severity critical
+```
+
+### 子命令
+
+| 子命令 | 描述 |
+|--------|------|
+| `create` | 创建新的 Kody Rule |
+| `update` | 更新已有规则 |
+| `view` | 查看 Kody Rules |
+
+### `rules create` 标志
+
+| 标志 | 默认值 | 描述 |
+|------|--------|------|
+| `--title <title>` | — | 规则标题 |
+| `--rule <rule>` | — | 规则内容/描述 |
+| `--repo-id <id>` | `global` | 仓库 ID（或 `global` 应用到所有仓库） |
+| `--severity <severity>` | `medium` | `low`、`medium`、`high`、`critical` |
+| `--scope <scope>` | `file` | `pull request` 或 `file` |
+| `--path <glob>` | `**/*` | 文件匹配的 glob 模式 |
+| `--json` | `false` | 以 JSON 输出创建的规则 |
+
+### `rules update` 标志
+
+| 标志 | 描述 |
+|------|------|
+| `--uuid <uuid>` | 要更新的规则 UUID（必填） |
+| `--repo-id <id>` | 更新后的仓库 ID |
+| `--title <title>` | 更新后的标题 |
+| `--rule <rule>` | 更新后的内容/描述 |
+| `--severity <severity>` | 更新后的严重级别 |
+| `--scope <scope>` | 更新后的作用范围 |
+| `--path <glob>` | 更新后的 glob 模式 |
+| `--json` | 以 JSON 输出更新后的规则 |
+
+### `rules view` 标志
+
+| 标志 | 描述 |
+|------|------|
+| `--uuid <uuid>` | 按 UUID 获取单个规则 |
+| `--repo-id <id>` | 按仓库 ID 筛选规则 |
+| `--json` | 以 JSON 输出规则 |
+
+---
+
+## `kodus skills`
+
+查看和安装 CLI 打包的代理技能（Claude Code、Cursor、Codex）。
+
+### 用法
+
+```bash
+kodus skills list                                        # 列出打包的技能
+kodus skills install                                     # 安装到检测到的代理目录
+kodus skills install --dry-run                           # 预览变更
+kodus skills resync                                      # 重新同步打包的技能
+kodus skills uninstall                                   # 移除打包的技能
+```
+
+### 子命令
+
+| 子命令 | 描述 |
+|--------|------|
+| `list` | 列出 CLI 包中打包的技能 |
+| `sync` | 将打包的技能同步到检测到的本地代理目录 |
+| `resync` | 重新同步打包的技能到本地代理目录 |
+| `install` | 将打包的技能安装到检测到的代理目录（按需创建目录） |
+| `uninstall` | 从检测到的代理目录中卸载打包的受管技能 |
+
+### 标志
+
+| 标志 | 适用于 | 描述 |
+|------|--------|------|
+| `--dry-run` | `install`、`sync`、`resync`、`uninstall` | 显示计划变更但不写入文件 |
+
+<Tip>要进行完整的多代理初始化，优先使用平台安装器（`curl -fsSL https://review-skill.com/install | bash`）。`kodus skills` 主要用于本地重新同步和清理。</Tip>
+
+---
+
+## `kodus status`
+
+显示统一的 Kodus 状态：认证模式、组织、仓库、钩子、决策、打包的技能以及 CLI 版本。
+
+```bash
+kodus status
+```
+
+出现问题或接入新机器时，作为第一步诊断非常有用。
+
+---
+
+## `kodus update`
+
+将 Kodus CLI 更新到 npm 上的最新版本。
+
+```bash
+kodus update
+```
+
+根据您的包管理器（`npm`、`yarn`、`pnpm`、`bun`）解析正确的全局安装命令并执行。若使用过安装器脚本，CLI 会提示您运行对应的重新安装命令。
+
+---
+
+## `kodus subscribe`
+
+在浏览器中打开 Kodus 定价/升级页面。
+
+```bash
+kodus subscribe
+```
+
+---
+
+## 严重级别
+
+问题按严重程度分类，从最高到最低：
+
+| 级别 | 描述 |
+|------|------|
+| `critical` | 需要立即关注的重大安全或稳定性问题 |
+| `error` | 重要的 Bug 或问题 |
+| `warning` | 值得关注的潜在问题 |
+| `info` | 建议和最佳实践 |
+
+## 问题类别
+
+| 类别 | 描述 |
+|------|------|
+| `security_vulnerability` | 安全相关问题 |
+| `bug` | 潜在 Bug |
+| `performance` | 性能优化机会 |
+| `code_quality` | 代码质量改进 |
+| `best_practices` | 最佳实践违规 |
+| `complexity` | 代码复杂度问题 |
+| `maintainability` | 可维护性问题 |
+| `style` | 代码风格问题 |

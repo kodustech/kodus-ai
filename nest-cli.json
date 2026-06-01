@@ -70,6 +70,42 @@
                     }
                 ]
             }
+        },
+        "analytics-cli": {
+            "type": "application",
+            "root": "apps/analytics-cli",
+            "entryFile": "main",
+            "sourceRoot": "apps/analytics-cli/src",
+            "compilerOptions": {
+                "tsConfigPath": "apps/analytics-cli/tsconfig.json",
+                "deleteOutDir": true
+            }
+        },
+        "ast-cli": {
+            "type": "application",
+            "root": "apps/ast-cli",
+            "entryFile": "main",
+            "sourceRoot": "apps/ast-cli/src",
+            "compilerOptions": {
+                "tsConfigPath": "apps/ast-cli/tsconfig.json",
+                "deleteOutDir": true
+            }
+        },
+        "mcp-manager": {
+            "type": "application",
+            "root": "apps/mcp-manager",
+            "entryFile": "main",
+            "sourceRoot": "apps/mcp-manager/src",
+            "compilerOptions": {
+                "tsConfigPath": "apps/mcp-manager/tsconfig.json",
+                "deleteOutDir": true,
+                "assets": [
+                    {
+                        "include": "apps/mcp-manager/src/config/*.json",
+                        "outDir": "dist/apps/mcp-manager/config"
+                    }
+                ]
+            }
         }
     }
 }

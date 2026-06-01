@@ -1,0 +1,47 @@
+---
+title: "AI モデルセキュリティ"
+---
+
+## 使用モデル
+
+Kodus はコード分析に以下の言語モデルを使用します:
+
+- **GPT-4o とその派生モデル**（OpenAI）
+- **Gemini 1.5 Pro とその派生モデル**（Google）
+- **Claude 3.5 Sonnet とその派生モデル**（Anthropic）
+
+## データ処理
+
+コードは一時的に処理され、トレーニングには使用されません:
+
+- データはレビューセッション中のみ保持
+- 完了後に即座に廃棄
+- モデルのトレーニングや改善には使用されない
+- プロバイダーの契約に従ってプライバシーを維持
+
+## 各モデルの利用規約
+
+- **GPT-4o とその派生モデル**: [GPT-4o 利用規約](https://openai.com/enterprise-privacy/)
+- **Gemini 1.5 Pro とその派生モデル**: [Gemini 1.5 Pro 利用規約](https://ai.google.dev/gemini-api/terms)
+- **Claude 3.5 Sonnet とその派生モデル**: [Claude 3.5 Sonnet 利用規約](https://support.anthropic.com/en/articles/7996885-how-do-you-use-personal-data-in-model-training)
+
+## セキュリティ対策
+
+- **暗号化**: 転送中および保存中のデータを暗号化
+- **データ分離**: モデルは処理後にデータを保存または保持しない
+- **アクセス制御**: 承認された担当者のみの厳格なアクセス制御（[ワークスペースロール](/how_to_use/ja/workspace_roles)を参照）
+- **定期監査**: コンプライアンスのための定期的なセキュリティ監査
+- **セキュリティ更新**: 定期的なパッチと更新
+
+## セルフホストのテレメトリ
+
+Kodus をセルフホストで実行している場合、各インスタンスは集計された
+カウンタとランタイムメタデータを含む匿名のハートビートを 1 日 1 回
+`telemetry.kodus.io` に送信します — コード、識別情報、またはユーザーを
+追跡できる情報は一切含まれません。`yarn telemetry:preview` で正確な
+ペイロードを確認したり、`KODUS_TELEMETRY_DISABLED=true` で無効化したり
+できます。完全なスキーマ、保持ポリシー、ソースコードへのリンクは
+[匿名テレメトリ](/how_to_deploy/ja/deploy_kodus/telemetry) に
+記載されています。
+
+ご質問は？サポートチームに連絡するか、[Discord](https://discord.gg/TFZBRk9fT6) に参加してください。

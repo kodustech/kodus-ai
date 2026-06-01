@@ -12,7 +12,7 @@ export type OptionsOrm = {
     migrationsTableName: string;
     synchronize: boolean;
     logging: boolean;
-    logger: 'file';
+    logger: 'advanced-console' | 'simple-console' | 'file' | 'debug';
     ssl?: boolean;
     extra?: {
         ssl?: {

@@ -32,6 +32,12 @@ export interface SkillExecutionContext<TPrepareContext = unknown> {
     organizationAndTeamData: OrganizationAndTeamData;
     prepareContext?: TPrepareContext;
     thread?: Thread;
+    /**
+     * Per-repository/directory BYOK model override resolved by the code
+     * review pipeline (`codeReviewConfig.byokModel`). When set, the skill's
+     * LLM calls run on this model instead of the BYOK-settings main model.
+     */
+    byokModel?: string;
 }
 
 export interface SkillErrorContext<TPrepareContext = unknown> {
@@ -145,7 +151,7 @@ export abstract class AbstractSkillProvider<
 
         this.logExecutionStarted(organizationAndTeamData, userLanguage);
 
-        await this.fetchBYOKConfig(organizationAndTeamData);
+        await this.fetchBYOKConfig(organizationAndTeamData, context.byokModel);
 
         const fetcherInitialization = await this.initializeFetcherRuntime(
             context,

@@ -21,7 +21,6 @@ export class PrepareCliFilesStage extends BasePipelineStage<CliReviewPipelineCon
             metadata: {
                 correlationId: context.correlationId,
                 filesCount: context.changedFiles.length,
-                isFastMode: context.isFastMode,
                 isTrialMode: context.isTrialMode,
             },
         });

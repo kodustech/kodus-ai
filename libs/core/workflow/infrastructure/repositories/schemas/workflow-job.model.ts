@@ -14,6 +14,7 @@ import type { InboxMessageModel } from './inbox-message.model';
 @Index('IDX_workflow_jobs_workflow_type', ['workflowType'])
 @Index('IDX_workflow_jobs_correlation_id', ['correlationId'])
 @Index('IDX_workflow_jobs_organization_team', ['organizationId', 'teamId'])
+@Index('idx_workflow_jobs_type_updated', ['workflowType', 'updatedAt'])
 export class WorkflowJobModel extends CoreModel {
     @Column({ type: 'varchar', length: 255 })
     correlationId: string;

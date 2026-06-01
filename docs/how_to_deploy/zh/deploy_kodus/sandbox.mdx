@@ -1,0 +1,158 @@
+---
+title: "Sandbox & AST Graph"
+description: "Kodus 如何解析您的仓库（kodus-graph）、在哪里运行（沙箱模式），以及何时选择每种模式。"
+icon: "box"
+---
+
+为了用正确的上下文审查 PR，Kodus 将整个仓库解析为一个 **AST 图**
+（节点 + 边），并使用它来获取 cross-file 上下文、验证建议并为 agent
+提供输入。解析器在**沙箱**内运行，以便它可以执行 `git clone`、安装
+依赖项，并在与 API 进程隔离的环境中执行 CLI。
+
+本页解释您可以选择的沙箱模式、什么是 AST 图，以及缓存如何使 PR 级别的
+审查保持快速。
+
+## AST 图的工作方式
+
+Kodus 使用 [`@kodus/kodus-graph`](https://www.npmjs.com/package/@kodus/kodus-graph)，
+这是一个遍历仓库并发出 JSON 图（函数、类、文件、imports、调用）的 CLI。
+该 CLI **预安装在 worker 镜像**（`kodus-ai-worker`）中，因此在 `local`
+模式下没有额外的设置步骤。
+
+生命周期：
+
+1. **当您选择仓库时**（在 setup 期间，或之后在 UI 中添加仓库时）—
+   Kodus 将 `AstGraphBuild` 作业排入队列，对默认分支运行
+   `kodus-graph parse --all`，将结果持久化到 Postgres（`ast_graph_*`
+   表），并将仓库标记为已索引。这在后台运行 — 您无需等待它完成即可
+   打开 PR。
+2. **当 PR 合并到默认分支时** — webhook 处理程序排入增量重建作业，
+   仅重新解析更改的文件，并将差异合并到缓存的图中。无需完整重建即可
+   保持缓存新鲜。
+3. **每次 PR 审查时** — Kodus 加载缓存的图，只解析 PR 触及的文件，
+   并向 agent 提供一个聚焦的子图。这是热路径；它从不重新解析整个仓库。
+
+缓存使大型仓库的审查变得可行：完整构建在仓库 onboarding 时运行一次，
+之后的每个 PR 都从 Postgres 读取。
+
+## 沙箱模式
+
+沙箱由 `.env` 中的 `SANDBOX_PROVIDER` 选择：
+
+| 模式 | 作用 | 权衡 |
+|---|---|---|
+| **`local`** _（安装程序默认）_ | 在 `worker` 容器内运行 `kodus-graph`。Bun 和 CLI 已预安装。 | 无外部依赖。大型仓库需要 worker 容器更多 RAM。 |
+| **`e2b`** | 每个作业启动一个远程 [E2B](https://e2b.dev) 沙箱。需要 `API_E2B_KEY`。 | 强隔离，可扩展到巨大仓库。**付费的第三方服务。** |
+| **`auto`** | 设置了 `API_E2B_KEY` 时使用 `e2b`，否则回退到无沙箱。 | 便于分阶段推出，例如从 `none` 迁移到 `e2b`。 |
+| **`none`** | 没有沙箱。禁用 AST 图和 cross-file 上下文。 | 审查不那么丰富（没有 call-graph 上下文，没有 cross-file 分析）。 |
+
+### 选择模式
+
+- **您刚开始，希望"直接工作"** → `local`。这是安装程序默认值，
+  不需要任何外部账户。
+- **仓库巨大（数百万 LOC）或您需要严格的隔离** → `e2b`。
+  在 [e2b.dev](https://e2b.dev) 注册，设置 `API_E2B_KEY`，
+  切换 `SANDBOX_PROVIDER=e2b`。
+- **您明确不希望任何沙箱运行** → `none`。审查 agent 在没有 cross-file
+  上下文的情况下运行；建议仍可工作但信息较少。
+
+## 迁移现有的自托管安装
+
+如果您从 AST 图之前的版本升级，您**已选择的仓库**还没有图 — 仅在
+**新的**仓库选择时才会自动触发构建。要为它们建立索引，请运行随安装
+程序提供的 backfill 脚本：
+
+```bash
+# 在堆栈运行的情况下，从 kodus-installer 目录：
+./scripts/backfill-ast-graph.sh
+```
+
+它会遍历实例中的每个团队，并为每个 `astGraphStatus` 为 `NULL`、
+`PENDING` 或 `FAILED` 的已选择仓库排入 `AstGraphBuild` 作业。构建在
+后台运行 — 您可以在它们完成时继续使用 Kodus。
+
+该脚本是**幂等的**：重新运行会跳过已经 `READY` 的仓库，从不重新排入
+`BUILDING` 作业，您可以自由停止和恢复。
+
+常用标志：
+
+```bash
+./scripts/backfill-ast-graph.sh --org <id>          # 限制为一个组织
+./scripts/backfill-ast-graph.sh --org <id> --team <id>  # 仅一个团队
+./scripts/backfill-ast-graph.sh --force             # 也重新构建 READY 仓库
+./scripts/backfill-ast-graph.sh --limit 50          # 每个团队的作业上限（默认：10）
+./scripts/backfill-ast-graph.sh --dry-run           # 列出团队，不排入任何内容
+```
+
+在 worker 日志中观察进度：
+
+```bash
+docker compose logs -f worker | grep -i ast-graph
+```
+
+## 配置
+
+```bash
+# 自托管默认值 — 在 worker 容器内运行。
+SANDBOX_PROVIDER=local
+
+# 或使用 E2B（付费）以获得更强的隔离。
+SANDBOX_PROVIDER=e2b
+API_E2B_KEY=your-e2b-api-key
+```
+
+在 [e2b.dev](https://e2b.dev) 注册 E2B，在仪表板中生成 API key，
+将其放入 `.env` 并重启堆栈。
+
+## 什么在哪里运行
+
+```mermaid
+flowchart LR
+    pr[PR webhook] --> worker[worker]
+    worker -->|local 模式| sandbox_local[kodus-graph CLI<br/>在 worker 容器内]
+    worker -.->|e2b 模式| sandbox_e2b[E2B 远程沙箱<br/>kodus-graph 在那里运行]
+    sandbox_local --> graph[(Postgres • ast_graph_*)]
+    sandbox_e2b --> graph
+    graph --> agent[code review agent]
+```
+
+## 资源大小
+
+`local` 沙箱在 `worker` 容器内运行 `git clone` 和 `kodus-graph parse`，
+因此 worker 的 RAM 余量很重要：
+
+- **小到中型仓库（< 100k LOC）** — 默认的 8GB 主机就够了。
+- **大型仓库（100k–1M LOC）** — 在正常使用之外为 worker 容器分配 4–8GB RAM；
+  考虑总共 16GB 主机 RAM。
+- **巨大的 monorepo（> 1M LOC）** — 切换到 `e2b`，使解析在主机外进行。
+
+Postgres 占用空间随仓库数量和历史深度而扩展 — 计划每个已索引仓库
+约 10–50MB 作为粗略数量级。
+
+## 故障排除
+
+**审查不包含 cross-file 上下文（`local` 模式）：**
+
+检查 worker 日志中 `kodus-graph` 安装或解析错误：
+
+```bash
+docker compose logs -f worker | grep -i kodus-graph
+```
+
+如果安装步骤失败，请确认 worker 容器有互联网访问权限（如果镜像在
+没有它们的情况下构建，则需要在首次启动时获取 bun 和 CLI）。
+
+**`e2b` 作业挂起或无法启动：**
+
+验证 `API_E2B_KEY` 已设置且有效：
+
+```bash
+docker compose exec worker printenv API_E2B_KEY
+```
+
+E2B 仪表板显示活动会话和配额使用情况。
+
+**您想完全禁用 AST（测试、调试）：**
+
+设置 `SANDBOX_PROVIDER=none` 并重启 worker。审查将跳过图阶段，并使用
+LLM 对差异的原始视图运行。

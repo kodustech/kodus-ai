@@ -1,0 +1,73 @@
+---
+title:"快速开始"
+---
+
+<Steps>
+  <Step title="创建账户">
+    通过输入您的姓名、电子邮件和密码注册，或使用社交提供商（如 Google、GitHub 或 GitLab）登录。
+  </Step>
+
+  <Step title="配置代码管理工具">
+    <AccordionGroup>
+        <Accordion title="设置 GitHub" icon="github">
+            通过 OAuth 或令牌连接 GitHub：
+              - **OAuth（推荐）**：点击"via OAuth"按钮。您将被重定向到 GitHub 的身份验证页面。
+                - ✅ Kody 在 PR 中显示为专用机器人
+                - ✅ 更好的审计跟踪（清晰区分人工和 AI 审查）
+                - 需要您组织的 `owner` 权限
+                - 授予对所有您希望 Kody 分析的代码库的访问权限（稍后可以调整）
+              - **令牌**：审查将以您的用户名显示。<a href="/how_to_use/en/code_review/general_config/github_pat">访问 GitHub 令牌设置页面了解详细说明。</a>
+
+            <Note>使用 GitHub Enterprise？请在连接前将 Kodus 的 IP `52.55.217.197` 添加到您的网络防火墙白名单。</Note>
+        </Accordion>
+
+        <Accordion title="设置 GitLab" icon="gitlab">
+            通过 OAuth 或令牌连接 GitLab：
+              - **OAuth（推荐）**：点击"via OAuth"按钮，您将被重定向到 GitLab 的身份验证页面。
+                - ✅ Kody 在 PR 中显示为专用机器人
+                - 授予对所有您希望 Kody 分析的代码库的访问权限（稍后可以调整）
+              - **令牌**：审查将以您的用户名显示。<a href="/how_to_use/en/code_review/general_config/gitlab_pat">访问 GitLab 令牌设置页面了解详细说明。</a>
+
+            <Note>使用自托管 GitLab 实例？请在连接前将 Kodus 的 IP `52.55.217.197` 添加到您的网络防火墙白名单。</Note>
+        </Accordion>
+              <Accordion title="设置 Bitbucket" icon="bitbucket">
+            通过 OAuth 或令牌连接 Bitbucket：
+              - **令牌**：<a href="/how_to_use/en/code_review/general_config/bitbucket_pat">访问 Bitbucket 令牌设置页面了解详细说明。</a>
+
+            <Note>使用 Bitbucket Data Center（自托管）？请在连接前将 Kodus 的 IP `52.55.217.197` 添加到您的网络防火墙白名单。</Note>
+        </Accordion>
+        <Accordion title="设置 Azure DevOps" icon="microsoft">
+            通过 OAuth 或令牌连接 Azure DevOps：
+              - **令牌**：<a href="/how_to_use/en/code_review/general_config/azure_devops_pat">访问 Azure DevOps 令牌设置页面了解详细说明。</a>
+
+            <Note>使用 Azure DevOps Server（自托管）？请在连接前将 Kodus 的 IP `52.55.217.197` 添加到您的网络防火墙白名单。</Note>
+        </Accordion>
+    </AccordionGroup>
+
+
+  </Step>
+
+<Step title="选择代码库">
+  选择您希望 Kody 访问的代码库，以进行自动审查和可操作的洞察。
+</Step>
+
+<Step title="运行您的第一次 PR 审查">
+  选择一个拉取请求（PR）供 Kody 审查。这将展示自动代码审查的强大功能。选择后，Kody 将直接在您的 Git 工具中执行审查。不用担心，这只是第一次——之后，Kody 将自动审查您打开的每个 PR。
+</Step>
+<Step title="享受 Kody 的自动审查！🔥">
+  坐下来放松，让 Kody 通过智能建议和可操作的洞察来简化您的审查流程。
+</Step>
+
+</Steps>
+
+## 后续步骤
+
+<CardGroup cols={1}>
+  <Card
+    title="使用您团队的规则配置 Kody"
+    icon="Hand-love"
+    href="code_review/configs/kody_rules"
+  >
+    了解如何使用您团队的规则配置 Kody。
+  </Card>
+</CardGroup>

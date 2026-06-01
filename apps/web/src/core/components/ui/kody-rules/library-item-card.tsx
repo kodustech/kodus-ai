@@ -6,7 +6,10 @@ import { Badge } from "@components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader } from "@components/ui/card";
 import { Heading } from "@components/ui/heading";
 import { McpProvidersBadge } from "@components/ui/kody-rules/mcp-providers";
-import type { LibraryRule } from "@services/kodyRules/types";
+import {
+    resolveKodyRuleDisplaySeverity,
+    type LibraryRule,
+} from "@services/kodyRules/types";
 import {
     removeRuleFeedback,
     sendRuleFeedback,
@@ -123,11 +126,7 @@ export const KodyRuleLibraryItem = ({
 
                         {!!rule.severity && (
                             <IssueSeverityLevelBadge
-                                severity={
-                                    rule.severity.toLowerCase() as Lowercase<
-                                        typeof rule.severity
-                                    >
-                                }
+                                severity={resolveKodyRuleDisplaySeverity(rule)}
                             />
                         )}
                     </CardHeader>

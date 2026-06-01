@@ -1,0 +1,25 @@
+{
+    "schema_version": 1,
+    "generated_at": "2026-05-08T18:02:15.011Z",
+    "source": "manual",
+    "features": {
+        "agent-review": {
+            "name": "Agent-first code review",
+            "stage": "general-availability",
+            "description": "A new code review engine built on three specialized agents — context, suggestion, and validation — replacing the single-shot model. Higher precision, fewer false positives.",
+            "audience": [
+                "cloud",
+                "self-hosted"
+            ]
+        },
+        "github-enterprise-server-pat": {
+            "name": "GitHub Enterprise Server (PAT auth)",
+            "stage": "beta",
+            "description": "Connect a GitHub Enterprise Server installation using a personal access token, for environments where the GitHub App flow isn't available.",
+            "audience": [
+                "cloud",
+                "self-hosted"
+            ]
+        }
+    }
+}

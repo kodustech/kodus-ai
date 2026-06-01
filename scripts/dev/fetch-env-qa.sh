@@ -45,25 +45,26 @@ KEYS=(
     "/qa/kodus-orchestrator/API_GITLAB_CODE_MANAGEMENT_WEBHOOK"
     "/qa/kodus-orchestrator/API_GITHUB_CODE_MANAGEMENT_WEBHOOK"
 
-    "/qa/kodus-orchestrator/LANGCHAIN_TRACING_V2"
-    "/qa/kodus-orchestrator/LANGCHAIN_ENDPOINT"
-    "/qa/kodus-orchestrator/LANGCHAIN_API_KEY"
-    "/qa/kodus-orchestrator/LANGCHAIN_PROJECT"
-    "/qa/kodus-orchestrator/LANGCHAIN_CALLBACKS_BACKGROUND"
+    "/qa/kodus-orchestrator/LANGFUSE_TRACING"
+    "/qa/kodus-orchestrator/LANGFUSE_PUBLIC_KEY"
+    "/qa/kodus-orchestrator/LANGFUSE_SECRET_KEY"
+    "/qa/kodus-orchestrator/LANGFUSE_BASE_URL"
+    "/qa/kodus-orchestrator/LANGFUSE_ENVIRONMENT"
 
     "/qa/kodus-orchestrator/API_BETTERSTACK_DSN"
 
     "/qa/kodus-orchestrator/API_CRON_SYNC_CODE_REVIEW_REACTIONS"
     "/qa/kodus-orchestrator/API_CRON_KODY_LEARNING"
     "/qa/kodus-orchestrator/API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED"
+    "/qa/kodus-orchestrator/API_CRON_SSO_TEST_SESSION_CLEANUP"
+    "/qa/kodus-orchestrator/API_CRON_WEEKLY_RECAP"
 
     "/qa/kodus-orchestrator/KODUS_SERVICE_TEAMS"
 
     "/qa/kodus-orchestrator/KODUS_SERVICE_AZURE_REPOS"
 
-    "/qa/kodus-orchestrator/API_CUSTOMERIO_APP_API_TOKEN"
-    "/qa/kodus-orchestrator/API_CUSTOMERIO_TRANSACTIONAL_FORGOT_PASSWORD_ID"
-    "/qa/kodus-orchestrator/API_CUSTOMERIO_TRANSACTIONAL_CONFIRM_EMAIL_ID"
+    "/qa/kodus-orchestrator/RESEND_API_KEY"
+    "/qa/kodus-orchestrator/RESEND_WEBHOOK_SECRET"
     "/qa/kodus-orchestrator/API_USER_INVITE_BASE_URL"
 
     "/qa/kodus-orchestrator/API_AWS_REGION"
@@ -74,18 +75,19 @@ KEYS=(
     "/qa/kodus-orchestrator/API_GOOGLE_AI_API_KEY"
     "/qa/kodus-orchestrator/API_ANTHROPIC_API_KEY"
 
+    "/qa/kodus-orchestrator/N8N_WEBHOOK_URL"
     "/qa/kodus-orchestrator/API_SIGNUP_NOTIFICATION_WEBHOOK"
     "/qa/kodus-orchestrator/API_CRYPTO_KEY"
 
     "/qa/kodus-orchestrator/API_SEGMENT_KEY"
 
     "/qa/kodus-orchestrator/API_VERTEX_AI_API_KEY"
+    "/qa/kodus-orchestrator/API_VERTEX_AI_LOCATION"
+    "/qa/kodus-orchestrator/API_GOOGLE_AI_PROVIDER"
 
     "/qa/kodus-orchestrator/API_NOVITA_AI_API_KEY"
 
     "/qa/kodus-orchestrator/GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK"
-
-    "/qa/kodus-orchestrator/API_ENABLE_CODE_REVIEW_AST"
 
     "/qa/kodus-orchestrator/CODE_MANAGEMENT_SECRET"
     "/qa/kodus-orchestrator/CODE_MANAGEMENT_WEBHOOK_TOKEN"
@@ -94,13 +96,12 @@ KEYS=(
 
     "/qa/kodus-orchestrator/API_POSTHOG_KEY"
 
-    "/qa/kodus-orchestrator/API_SERVICE_AST_URL"
-
     "/qa/kodus-orchestrator/API_MCP_SERVER_ENABLED"
     "/qa/kodus-orchestrator/API_KODUS_SERVICE_MCP_MANAGER"
     "/qa/kodus-orchestrator/API_KODUS_MCP_SERVER_URL"
 
     "/qa/kodus-orchestrator/API_OPENROUTER_KEY"
+    "/qa/kodus-orchestrator/API_LLM_TEMPERATURE_OVERRIDE"
 
     "/qa/kodus-orchestrator/API_URL"
     "/qa/kodus-orchestrator/API_FRONTEND_URL"
@@ -130,6 +131,12 @@ KEYS=(
     "/qa/kodus-orchestrator/API_BETTERSTACK_HEARTBEAT_WEBHOOK_URL"
 
     "/qa/kodus-orchestrator/API_EXA_KEY"
+
+    "/qa/kodus-orchestrator/WEB_HOSTNAME_HELPDESK"
+    "/qa/kodus-orchestrator/WEB_PORT_HELPDESK"
+    "/qa/kodus-orchestrator/API_JWT_PRIVATE_KEY"
+
+    "/qa/kodus-orchestrator/API_BILLING_WEBHOOK_SECRET"
 )
 
 # Lista de todas as chaves que você precisa

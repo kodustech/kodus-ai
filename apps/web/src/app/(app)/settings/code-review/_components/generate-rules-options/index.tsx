@@ -11,28 +11,36 @@ import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { useReactQueryInvalidateQueries } from "@hooks/use-invalidate-queries";
 import { KODY_RULES_PATHS } from "@services/kodyRules";
-import { generateKodyRules, syncIDERules } from "@services/kodyRules/fetch";
+import {
+    generateKodyRules,
+    getImportedKodyRulesCount,
+    syncIDERules,
+} from "@services/kodyRules/fetch";
 import { useSuspenseKodyRulesCheckSyncStatus } from "@services/kodyRules/hooks";
 import { PARAMETERS_PATHS } from "@services/parameters";
 import { createOrUpdateCodeReviewParameter } from "@services/parameters/fetch";
-import { useOptionalParameterQuery } from "@services/parameters/hooks";
 import {
+    isCentralizedPrResponse,
     ParametersConfigKey,
-    type CentralizedConfigValue,
 } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
+import { useConfig } from "@providers/ConfigProvider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
+import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
 import { useCodeReviewConfig } from "../../../_components/context";
 import { useCodeReviewRouteParams } from "../../../_hooks";
+import {
+    DisableIdeSyncModal,
+    type DisableIdeSyncAction,
+} from "./disable-ide-sync-modal";
 import { GenerateFromPastReviewsFirstTimeModal } from "./generate-from-past-reviews-modal";
 import { SyncFromIDEFilesFirstTimeModal } from "./sync-from-ide-files-modal";
 
 export const GenerateRulesOptions = () => {
+    const cfg = useConfig();
     const config = useCodeReviewConfig();
-    const { centralizedConfigParameter } = useFeatureFlags();
     const { teamId } = useSelectedTeamId();
     const { repositoryId } = useCodeReviewRouteParams();
     const { invalidateQueries, generateQueryKey } =
@@ -46,29 +54,6 @@ export const GenerateRulesOptions = () => {
         ResourceType.CodeReviewSettings,
     );
 
-    const centralizedConfig = useOptionalParameterQuery<CentralizedConfigValue>(
-        ParametersConfigKey.CENTRALIZED_CONFIG,
-        teamId,
-        {
-            uuid: "",
-            configKey: ParametersConfigKey.CENTRALIZED_CONFIG,
-            configValue: {
-                enabled: false,
-                repository: {
-                    id: "",
-                    name: "",
-                },
-            },
-        },
-    );
-
-    const canEditWithCentralizedConfig =
-        canEdit &&
-        !(
-            centralizedConfigParameter === true &&
-            centralizedConfig.data?.configValue?.enabled === true
-        );
-
     const [
         handleGenerateFromPastReviewsToggle,
         { loading: isLoadingGenerateFromPastReviewsToggle },
@@ -76,13 +61,23 @@ export const GenerateRulesOptions = () => {
         try {
             const newValue = !config?.kodyRulesGeneratorEnabled?.value;
 
-            await createOrUpdateCodeReviewParameter(
+            const mutationResult = await createOrUpdateCodeReviewParameter(
                 {
                     kodyRulesGeneratorEnabled: newValue,
                 },
                 teamId,
                 repositoryId,
             );
+
+            if (isCentralizedPrResponse(mutationResult)) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        mutationResult,
+                        "Change proposed through centralized pull request.",
+                    ),
+                );
+                return;
+            }
 
             invalidateQueries({
                 queryKey: generateQueryKey(PARAMETERS_PATHS.GET_BY_KEY, {
@@ -148,13 +143,49 @@ export const GenerateRulesOptions = () => {
             try {
                 const newValue = !config?.ideRulesSyncEnabled?.value;
 
-                await createOrUpdateCodeReviewParameter(
+                // When turning the toggle OFF, ask the user what should happen
+                // to the rules already imported from IDE files for this repo.
+                // If there are none active, fall through with the safe default
+                // ("keep") and don't bother showing the modal.
+                let ideSyncDisableAction: DisableIdeSyncAction = "keep";
+                if (newValue === false && repositoryId) {
+                    const counts = await getImportedKodyRulesCount({
+                        repositoryId,
+                    });
+
+                    if (counts.active > 0) {
+                        const picked = await magicModal.show(() => (
+                            <DisableIdeSyncModal counts={counts} />
+                        ));
+                        if (!picked) {
+                            // User cancelled — do not flip the toggle.
+                            return;
+                        }
+                        ideSyncDisableAction =
+                            picked as DisableIdeSyncAction;
+                    }
+                }
+
+                const mutationResult = await createOrUpdateCodeReviewParameter(
                     {
                         ideRulesSyncEnabled: newValue,
+                        ...(newValue === false && {
+                            ideSyncDisableAction,
+                        }),
                     },
                     teamId,
                     repositoryId,
                 );
+
+                if (isCentralizedPrResponse(mutationResult)) {
+                    toast(
+                        getCentralizedPrToastPayload(
+                            mutationResult,
+                            "Change proposed through centralized pull request.",
+                        ),
+                    );
+                    return;
+                }
 
                 invalidateQueries({
                     queryKey: generateQueryKey(PARAMETERS_PATHS.GET_BY_KEY, {
@@ -178,6 +209,29 @@ export const GenerateRulesOptions = () => {
                         {
                             params: { teamId },
                         },
+                    ),
+                });
+
+                // Toggle off → backend may have flipped imported rules to
+                // DELETED or PAUSED. The Kody Rules tab caches its rule
+                // list separately, so without these invalidations the
+                // user sees stale rows until they manually refresh.
+                invalidateQueries({
+                    queryKey: generateQueryKey(
+                        KODY_RULES_PATHS.FIND_BY_ORGANIZATION_ID_AND_FILTER,
+                        { params: { repositoryId } },
+                    ),
+                });
+                invalidateQueries({
+                    queryKey: generateQueryKey(
+                        KODY_RULES_PATHS.GET_INHERITED_RULES,
+                        { params: { teamId, repositoryId } },
+                    ),
+                });
+                invalidateQueries({
+                    queryKey: generateQueryKey(
+                        KODY_RULES_PATHS.COUNT_IMPORTED_KODY_RULES,
+                        { params: { repositoryId } },
                     ),
                 });
 
@@ -213,7 +267,7 @@ export const GenerateRulesOptions = () => {
                 size="lg"
                 variant="helper"
                 className="w-full justify-between p-0"
-                disabled={!canEditWithCentralizedConfig}
+                disabled={!canEdit}
                 onClick={() => handleIDESyncToggle()}>
                 <Card color="none" className="w-full">
                     <CardHeader>
@@ -252,9 +306,7 @@ export const GenerateRulesOptions = () => {
                 <span>
                     For a detailed list of rule files that can be scanned,{" "}
                 </span>
-                <Link href={process.env.WEB_RULE_FILES_DOCS ?? ""}>
-                    check the docs
-                </Link>
+                <Link href={cfg.ruleFilesDocs || ""}>check the docs</Link>
                 .
             </span>
 
@@ -262,7 +314,7 @@ export const GenerateRulesOptions = () => {
                 size="lg"
                 variant="helper"
                 className="w-full justify-between p-0"
-                disabled={!canEditWithCentralizedConfig}
+                disabled={!canEdit}
                 onClick={() => handleGenerateFromPastReviewsToggle()}>
                 <Card color="none" className="w-full">
                     <CardHeader>

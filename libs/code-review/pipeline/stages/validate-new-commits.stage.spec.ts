@@ -192,4 +192,177 @@ describe('ValidateNewCommitsStage', () => {
             [AutomationStatus.PARTIAL_ERROR, AutomationStatus.ERROR],
         );
     });
+
+    describe('orphaned baseCommit detection (rebase / force-push)', () => {
+        it('should force full rerun when lastAnalyzedCommit is not in PR commits (orphan)', async () => {
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                {
+                    uuid: 'exec-prev',
+                    dataExecution: {
+                        lastAnalyzedCommit: { sha: 'OLD_ORPHAN_SHA' },
+                    },
+                },
+            );
+
+            // PR head was rebased — orphan SHA is gone, only new SHAs remain.
+            mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                [{ sha: 'NEW_HEAD_SHA', parents: [{ sha: 'BASE_SHA' }] }],
+            );
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).not.toBe(
+                AutomationStatus.SKIPPED,
+            );
+            expect(result.pipelineMetadata?.forceFullRerun).toBe(true);
+        });
+
+        it('should clear lastAnalyzedCommit from pipeline context when orphan detected', async () => {
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                {
+                    uuid: 'exec-prev',
+                    dataExecution: {
+                        lastAnalyzedCommit: { sha: 'OLD_ORPHAN_SHA' },
+                        commentId: 'c1',
+                        noteId: 'n1',
+                        threadId: 't1',
+                    },
+                },
+            );
+
+            mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                [{ sha: 'NEW_HEAD_SHA', parents: [{ sha: 'BASE_SHA' }] }],
+            );
+
+            const result = await stage.execute(context);
+
+            expect(result.lastExecution?.lastAnalyzedCommit).toBeUndefined();
+            // Other lastExecution fields must be preserved (we only zero the SHA).
+            expect(result.lastExecution?.commentId).toBe('c1');
+            expect(result.lastExecution?.noteId).toBe('n1');
+            expect(result.lastExecution?.threadId).toBe('t1');
+        });
+
+        it('should set orphanedBaseCommit on context when orphan detected (for persistence)', async () => {
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                {
+                    uuid: 'exec-prev',
+                    dataExecution: {
+                        lastAnalyzedCommit: { sha: 'OLD_ORPHAN_SHA' },
+                    },
+                },
+            );
+
+            const allCommits = [
+                { sha: 'NEW_A', parents: [{ sha: 'BASE_SHA' }] },
+                { sha: 'NEW_B', parents: [{ sha: 'NEW_A' }] },
+            ];
+            mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                allCommits,
+            );
+
+            const result = await stage.execute(context);
+
+            expect(result.orphanedBaseCommit).toEqual({
+                previousSha: 'OLD_ORPHAN_SHA',
+                currentHeadSha: 'head-sha',
+                totalCommits: 2,
+            });
+        });
+
+        it('should pass all PR commits as prCommits when orphan detected (full rerun input)', async () => {
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                {
+                    uuid: 'exec-prev',
+                    dataExecution: {
+                        lastAnalyzedCommit: { sha: 'OLD_ORPHAN_SHA' },
+                    },
+                },
+            );
+
+            const allCommits = [
+                { sha: 'NEW_A', parents: [{ sha: 'BASE_SHA' }] },
+                { sha: 'NEW_B', parents: [{ sha: 'NEW_A' }] },
+            ];
+            mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                allCommits,
+            );
+
+            const result = await stage.execute(context);
+
+            expect(result.prAllCommits).toEqual(allCommits);
+            expect(result.prCommits).toEqual(allCommits);
+        });
+
+        it('should emit warn log with reason "orphaned_base_commit" when orphan detected', async () => {
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                {
+                    uuid: 'exec-prev',
+                    dataExecution: {
+                        lastAnalyzedCommit: { sha: 'OLD_ORPHAN_SHA' },
+                    },
+                },
+            );
+            mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                [{ sha: 'NEW_HEAD_SHA', parents: [{ sha: 'BASE_SHA' }] }],
+            );
+
+            const warnSpy = jest
+                .spyOn((stage as any).logger, 'warn')
+                .mockImplementation(() => {});
+
+            await stage.execute(context);
+
+            const warnCalls = warnSpy.mock.calls.map((c) => c[0] as any);
+            const orphanWarn = warnCalls.find(
+                (call) => call?.metadata?.reason === 'orphaned_base_commit',
+            );
+
+            expect(orphanWarn).toBeDefined();
+            expect(orphanWarn?.metadata).toEqual(
+                expect.objectContaining({
+                    reason: 'orphaned_base_commit',
+                    orphanedSha: 'OLD_ORPHAN_SHA',
+                    pullRequestNumber: 1,
+                }),
+            );
+
+            warnSpy.mockRestore();
+        });
+
+        it('should preserve incremental flow when lastAnalyzedCommit IS in PR commits (regression guard)', async () => {
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                {
+                    uuid: 'exec-prev',
+                    dataExecution: {
+                        lastAnalyzedCommit: { sha: 'KNOWN_SHA' },
+                    },
+                },
+            );
+
+            const allCommits = [
+                { sha: 'KNOWN_SHA', parents: [{ sha: 'BASE' }] },
+                { sha: 'NEW_1', parents: [{ sha: 'KNOWN_SHA' }] },
+                { sha: 'NEW_2', parents: [{ sha: 'NEW_1' }] },
+            ];
+            mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                allCommits,
+            );
+
+            const result = await stage.execute(context);
+
+            expect(result.pipelineMetadata?.forceFullRerun).toBe(false);
+            expect(result.lastExecution?.lastAnalyzedCommit).toEqual({
+                sha: 'KNOWN_SHA',
+            });
+            expect(result.prCommits).toEqual([
+                { sha: 'NEW_1', parents: [{ sha: 'KNOWN_SHA' }] },
+                { sha: 'NEW_2', parents: [{ sha: 'NEW_1' }] },
+            ]);
+            expect(result.prAllCommits).toEqual(allCommits);
+            // Field must remain absent on normal flow — _buildExecutionData
+            // only persists when present, so undefined keeps DB clean.
+            expect(result.orphanedBaseCommit).toBeUndefined();
+        });
+    });
 });

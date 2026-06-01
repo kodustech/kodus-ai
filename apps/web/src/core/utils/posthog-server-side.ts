@@ -136,6 +136,9 @@ export const isFeatureEnabled = async ({
             return value === true;
         });
     } catch (error) {
+        if ((error as { digest?: string })?.digest === "DYNAMIC_SERVER_USAGE") {
+            throw error;
+        }
         console.error("Error checking feature flag:", error);
         return false;
     }

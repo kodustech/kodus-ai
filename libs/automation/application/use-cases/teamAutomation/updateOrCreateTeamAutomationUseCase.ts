@@ -45,13 +45,16 @@ export class UpdateOrCreateTeamAutomationUseCase implements IUseCase {
             team: { uuid: teamAutomations.teamId },
         });
 
-        if (!oldTeamAutomation) {
-            this.setupNewAutomations(
+        // `find` always resolves to an array, so a fresh team yields `[]`.
+        // Treat an empty (or missing) result as "no automations yet" so it
+        // still flows into `setupNewAutomations`, as the falsy check intended.
+        if (!oldTeamAutomation?.length) {
+            await this.setupNewAutomations(
                 teamAutomations.automations,
                 organizationAndTeamData,
             );
         } else {
-            this.updateOrCreateAutomations(
+            await this.updateOrCreateAutomations(
                 teamAutomations,
                 oldTeamAutomation,
                 organizationAndTeamData,
@@ -68,30 +71,42 @@ export class UpdateOrCreateTeamAutomationUseCase implements IUseCase {
         };
     }
 
-    private setupNewAutomations(
+    private async setupNewAutomations(
         automations: TeamAutomationsDto['automations'],
         organizationAndTeamData: any,
     ) {
+        // Awaited so the team_automation rows are committed before `execute`
+        // returns. Callers (registerRepo -> ActiveCodeReviewAutomationUseCase)
+        // depend on those rows existing to flip the automation to active.
         for (const automation of automations) {
-            this.executeAutomation.setupStrategy(
+            await this.executeAutomation.setupStrategy(
                 automation?.automationType,
                 organizationAndTeamData,
             );
         }
     }
 
-    private updateOrCreateAutomations(
+    private async updateOrCreateAutomations(
         teamAutomations: TeamAutomationsDto,
         oldTeamAutomation: any[],
         organizationAndTeamData: any,
     ) {
+        // Index by automation uuid so the lookup below is O(1). `set` only when
+        // absent keeps the first-match semantics of the previous `.find()`.
+        const existingByAutomationUuid = new Map<string, any>();
+        for (const old of oldTeamAutomation) {
+            if (!existingByAutomationUuid.has(old.automation.uuid)) {
+                existingByAutomationUuid.set(old.automation.uuid, old);
+            }
+        }
+
         for (const automation of teamAutomations.automations) {
-            const existingAutomation = oldTeamAutomation.find(
-                (old) => old.automation.uuid === automation.automationUuid,
+            const existingAutomation = existingByAutomationUuid.get(
+                automation.automationUuid,
             );
 
             if (existingAutomation) {
-                this.teamAutomationService.update(
+                await this.teamAutomationService.update(
                     { uuid: existingAutomation.uuid },
                     {
                         uuid: existingAutomation.uuid,
@@ -101,7 +116,7 @@ export class UpdateOrCreateTeamAutomationUseCase implements IUseCase {
                     },
                 );
             } else if (automation.status) {
-                this.executeAutomation.setupStrategy(
+                await this.executeAutomation.setupStrategy(
                     automation.automationType,
                     organizationAndTeamData,
                 );

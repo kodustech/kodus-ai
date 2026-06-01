@@ -1,0 +1,27 @@
+---
+title: "GitLabでAIコードレビューをセットアップする方法"
+description: "GitLabプロジェクトにKodusをインストールして設定し、すべてのマージリクエストで自動AIコードレビューを受けます。"
+---
+
+KodusはOAuthとWebhookを通じてGitLabと統合します。設定されると、マージリクエストが自動的にレビューされます。
+
+## 手順
+
+1. [kodus.io](https://kodus.io)で**アカウントを作成**するか、[Kodusをセルフホスト](/how_to_deploy/ja/deploy_kodus/generic_vm)します
+2. **GitLabに接続** — セットアップ中にOAuth経由で認証します
+3. **Webhookを設定** — ガイド付きセットアップに従ってマージリクエストイベントを有効にします
+4. **プロジェクトを選択** — Kodusがレビューすべきプロジェクトを選択します
+5. **マージリクエストをオープン** — Kodusが自動的にレビューします
+
+## 得られるもの
+
+- すべてのMRでの自動レビュー
+- マージリクエスト内に直接投稿されるコメント
+- カスタマイズ可能なルールと提案コントロール
+- リンクされたタスクに対するビジネスロジック検証
+
+## カスタム設定
+
+プロジェクトごとの動作をカスタマイズするには、リポジトリルートに `kodus-config.yml` を配置します。
+
+完全なセットアップガイドについては、[GitLab OAuth](/how_to_deploy/ja/platforms/gitlab/gitlab_oauth)と[GitLab Webhook](/how_to_deploy/ja/platforms/gitlab/gitlab_webhook)を参照してください。

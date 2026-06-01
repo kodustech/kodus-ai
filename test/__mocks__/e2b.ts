@@ -7,7 +7,13 @@
  *
  * This mock is wired via `moduleNameMapper` in jest.config.ts so that
  * Jest never attempts to resolve or parse the real package.
+ *
+ * All static Sandbox methods used by SandboxLeaseManager and SandboxLeaseReaperService
+ * are stubbed here so tests can spy on them via jest.spyOn(Sandbox, 'kill') etc.
  */
 export const Sandbox = {
-    create: jest.fn(),
+    create: jest.fn().mockResolvedValue({}),
+    connect: jest.fn().mockResolvedValue({}),
+    kill: jest.fn().mockResolvedValue(undefined),
+    setTimeout: jest.fn().mockResolvedValue(undefined),
 };

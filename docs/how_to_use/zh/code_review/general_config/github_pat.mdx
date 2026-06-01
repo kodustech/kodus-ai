@@ -1,0 +1,77 @@
+---
+title: "Github FGPAT 令牌"
+---
+
+## FGPAT 简介
+
+要使 Kody 能够执行自动代码审查,您需要在 GitHub 中生成一个细粒度个人访问令牌(FGPAT)。此令牌允许 Kody 以受控方式安全地访问您的代码库并执行代码分析。
+
+## 检查细粒度访问权限
+
+默认情况下,细粒度 PAT 可能无法访问您组织的内容。通过以下步骤确保访问权限:
+
+![title](/images/fgpat.png)
+
+1. 您必须是组织所有者。
+1. 转到 GitHub 中的组织设置:
+   - 您可以使用此 URL 替换为您的组织名称: <small>https://github.com/organizations/YOUR_ORG_NAME/settings/personal-access-tokens)</small>。
+1. 在**细粒度个人访问令牌**下,选择**"允许通过细粒度个人访问令牌访问"**以启用 Kody 的安全访问。
+
+## 生成 FGPAT(细粒度个人访问令牌)
+
+<iframe
+  width="560"
+  height="315"
+  src="https://www.youtube.com/embed/ESE-Hl-bAD0?si=pCufAgeLBe73K_g0"
+  title="YouTube video player"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  referrerpolicy="strict-origin-when-cross-origin"
+  allowfullscreen
+></iframe>
+
+按照以下步骤正确设置令牌:
+
+1. **访问 GitHub 并进入您的个人资料设置**:
+
+   - [点击此处访问个人资料设置页面](https://github.com/settings/profile)。
+
+2. **导航到 `开发者设置`**:
+
+   - 在左侧边栏中,向下滚动找到 `开发者设置` 并点击它。
+
+3. **转到 `个人访问令牌`**:
+
+   - 仍在左侧边栏中,在 `开发者设置` 下,选择 `个人访问令牌`。
+   - 然后,点击[细粒度令牌](https://github.com/settings/tokens?type=beta)。
+
+4. **生成新令牌**:
+
+   - 点击 `生成新令牌` 按钮。
+
+5. **使用以下规格设置新令牌**:
+
+   - **令牌名称**:选择一个容易识别的名称,例如 `kody_code_review`。
+   - **到期日期**:如果可能,选择较长的到期日期,最好至少 180 天。
+   - **资源所有者**:确保组织设置为令牌所有者,因为团队的代码库位于组织下。
+   - **代码库访问**:选择**所有代码库**以允许令牌访问所有代码库。
+   - **权限**:配置以下只读权限:
+   - **代码库**:
+     - **Actions**:读权限。
+     - **提交状态**:读权限。
+     - **内容**:读和写权限。
+     - **部署**:读权限。
+     - **工单**:读权限。
+     - **元数据**:读权限。
+     - **拉取请求**:读和写权限。
+     - **Webhooks**:读和写权限。
+   - **组织**:
+     - **成员**:读权限。
+
+6. **完成并保存令牌**:
+   - 设置权限后,点击 `生成令牌`。
+   - 确保复制生成的令牌并安全存储,因为您需要它来配置 Kody。
+
+## 将令牌添加到 Kody
+
+生成令牌后,将其粘贴到 Kody 配置屏幕中进行自动化设置。一旦您尝试启用自动化,模态框将自动打开。

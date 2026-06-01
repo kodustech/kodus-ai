@@ -5,4 +5,5 @@ export type BitbucketAuthDetail = {
     appPassword: string;
     authMode: AuthMode;
     email?: string;
+    host?: string;
 };

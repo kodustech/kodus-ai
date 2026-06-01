@@ -52,13 +52,31 @@ RUN_MIGRATIONS="${RUN_MIGRATIONS:-false}"
 RUN_SEEDS="${RUN_SEEDS:-false}"
 
 if [ "$RUN_MIGRATIONS" = "true" ]; then
-  echo "▶ Running Migrations (PROD)..."
+  echo "▶ Running OLTP migrations (PROD)..."
   # Use node with compiled migrations in prod
   if [ -f "dist/libs/core/infrastructure/database/typeorm/ormconfig.js" ]; then
       yarn migration:run:prod
   else
       echo "⚠️ Migration config not found at dist/libs/core/infrastructure/database/typeorm/ormconfig.js. Skipping."
   fi
+
+  echo "▶ Ensuring analytics schema exists (PROD)..."
+  # See dev-entrypoint.sh for rationale. Idempotent.
+  if [ -f "dist/scripts/analytics/ensure-schema.cli.js" ]; then
+      yarn analytics:ensure-schema:prod
+  else
+      echo "⚠️ ensure-schema CLI not found in dist/. Skipping (migration may fail on first boot)."
+  fi
+
+  echo "▶ Running analytics warehouse migrations (PROD)..."
+  if [ -f "dist/libs/ee/analytics-warehouse/infrastructure/ormconfig.js" ]; then
+      yarn analytics:migration:run:prod
+  else
+      echo "⚠️ Analytics ormconfig not found at dist/libs/ee/analytics-warehouse/infrastructure/ormconfig.js. Skipping."
+  fi
+
+  # MCP manager owns its own schema and runs its migration from a
+  # dedicated entrypoint. The API container does NOT touch it.
 else
   echo "▶ Skipping migrations (RUN_MIGRATIONS=$RUN_MIGRATIONS)"
 fi

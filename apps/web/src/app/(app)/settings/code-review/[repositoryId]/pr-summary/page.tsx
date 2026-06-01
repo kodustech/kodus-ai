@@ -35,6 +35,7 @@ import {
     type AutomationCodeReviewConfigPageProps,
     type CodeReviewFormType,
 } from "../../_types";
+import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
 import {
     useCodeReviewConfig,
     usePlatformConfig,
@@ -108,7 +109,7 @@ export default function PRSummary(props: AutomationCodeReviewConfigPageProps) {
 
     const handleSubmit = form.handleSubmit(async (formData) => {
         try {
-            await saveSettings(formData, {
+            const saveResult = await saveSettings(formData, {
                 prepare: (data) => {
                     const { language: _language, ...config } = data;
                     const unformatted = unformatConfig(config);
@@ -118,6 +119,16 @@ export default function PRSummary(props: AutomationCodeReviewConfigPageProps) {
                     };
                 },
             });
+
+            if (saveResult.centralizedPr) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        saveResult.centralizedPr,
+                        "Change proposed through centralized pull request.",
+                    ),
+                );
+                return;
+            }
 
             toast({
                 description: "Settings saved",

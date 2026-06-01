@@ -1,0 +1,95 @@
+name: "Kodus RabbitMQ: Build and Publish"
+
+# The RabbitMQ image packages the rabbitmq_delayed_message_exchange
+# plugin, which Kodus services need for workflow delayed retries.
+# Since the plugin + RabbitMQ version change rarely (and independently
+# of Kodus releases), this runs on its own cadence instead of piggybacking
+# on every self-hosted release.
+
+on:
+    # Rebuild when the Dockerfile or its config artifacts change.
+    push:
+        branches: [main]
+        paths:
+            - "docker/rabbitMQ/**"
+            - ".github/workflows/rabbitmq-build-push.yml"
+    # Or when someone manually bumps the tag (e.g., after updating the
+    # base image or plugin version in the Dockerfile).
+    workflow_dispatch:
+        inputs:
+            tag:
+                description: "Additional tag to publish (e.g. '4.2.2-delayed-4.2.0'). :latest is always updated."
+                required: false
+                default: ""
+
+jobs:
+    build-and-push:
+        name: Build and push kodus-rabbitmq
+        runs-on: ubuntu-latest
+        # Multi-arch buildx + Trivy typically finish in ~4–7 min. Cap
+        # at 20 so a hung upload or stuck qemu emulation fails loud.
+        timeout-minutes: 20
+        environment: production
+        permissions:
+            contents: read
+            packages: write
+            # Required by github/codeql-action/upload-sarif below.
+            security-events: write
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v6.0.2
+
+            - name: Set up QEMU
+              uses: docker/setup-qemu-action@v4.0.0
+              with:
+                  platforms: amd64,arm64
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v4.0.0
+
+            - name: Login to GitHub Container Registry
+              uses: docker/login-action@v4.1.0
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Compute image tags
+              id: tags
+              run: |
+                  set -euo pipefail
+                  OWNER="${{ github.repository_owner }}"
+                  IMAGE="ghcr.io/${OWNER}/kodus-rabbitmq"
+                  TAGS="${IMAGE}:latest,${IMAGE}:sha-${GITHUB_SHA::7}"
+                  if [ -n "${{ inputs.tag }}" ]; then
+                    TAGS="${TAGS},${IMAGE}:${{ inputs.tag }}"
+                  fi
+                  echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+                  echo "Publishing: ${TAGS}"
+
+            - name: Build and push kodus-rabbitmq
+              env:
+                  RABBITMQ_TAGS: ${{ steps.tags.outputs.tags }}
+              run: |
+                  set -euo pipefail
+                  docker buildx bake -f docker-bake.hcl rabbitmq \
+                    --set rabbitmq.cache-from=type=gha \
+                    --set rabbitmq.cache-to=type=gha,mode=max \
+                    --set rabbitmq.platform=linux/amd64,linux/arm64 \
+                    --push
+
+            - name: Trivy scan — kodus-rabbitmq
+              uses: aquasecurity/trivy-action@v0.36.0
+              with:
+                  image-ref: ghcr.io/${{ github.repository_owner }}/kodus-rabbitmq:latest
+                  format: "sarif"
+                  output: "trivy-rabbitmq.sarif"
+                  severity: "CRITICAL,HIGH"
+                  ignore-unfixed: true
+                  exit-code: "0"
+
+            - name: Upload Trivy SARIF reports
+              uses: github/codeql-action/upload-sarif@v4
+              with:
+                  sarif_file: "trivy-rabbitmq.sarif"
+                  category: "trivy-rabbitmq"

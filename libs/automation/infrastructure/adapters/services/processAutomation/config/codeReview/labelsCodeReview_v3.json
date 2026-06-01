@@ -1,0 +1,22 @@
+[
+    {
+        "type": "bug",
+        "name": "Bug",
+        "description": "Logic errors, race conditions, null dereferences, edge cases, and incorrect behavior."
+    },
+    {
+        "type": "security",
+        "name": "Security",
+        "description": "Vulnerabilities, injection, auth issues, data exposure, and secrets."
+    },
+    {
+        "type": "performance",
+        "name": "Performance",
+        "description": "N+1 queries, hot path allocations, missing caching, and blocking I/O."
+    },
+    {
+        "type": "business_logic",
+        "name": "Business Logic",
+        "description": "Validates the implementation against business rules, requirements, and acceptance criteria linked in the PR."
+    }
+]

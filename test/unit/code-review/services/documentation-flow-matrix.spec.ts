@@ -213,12 +213,10 @@ describeIfKeys('Documentation Flow Matrix (Jest)', () => {
 });
 
 if (!longRunningTestsEnabled) {
-     
     console.warn(
         'Skipping Documentation Flow Matrix tests. LONG_RUNNING_TESTS env variable is not set to "true".',
     );
 } else if (!hasRequiredKeys) {
-     
     console.warn(
         'Skipping Documentation Flow Matrix tests. Missing required env keys: API_GOOGLE_AI_API_KEY (or GOOGLE_API_KEY), API_EXA_KEY, API_CRYPTO_KEY.',
     );

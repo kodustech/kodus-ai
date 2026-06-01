@@ -1,0 +1,216 @@
+---
+title: "安装"
+description: "在通用虚拟机上部署 Kodus。"
+icon: "plug"
+---
+
+<Snippet file="deploy-basic-setup-zh.mdx" />
+
+## 环境变量配置
+
+使用此部分填写您的 `.env`。首先从公共 URL 开始，然后设置数据库和 RabbitMQ，最后添加特定于提供商的设置。
+
+### 命名空间配置
+
+这些设置定义了 Web 应用程序和 API 使用的公共 URL 和主机绑定。如果您不使用 MCP Manager，可以在此处跳过 MCP 条目和下面的完整块。
+
+```env
+WEB_HOSTNAME_API="kodus-api.yourdomain.com"    # 公共 API 主机名（例如 kodus-api.yourdomain.com）
+NEXTAUTH_URL="https://kodus-web.yourdomain.com" # Web 应用程序的完整公共基本 URL（例如 https://kodus-web.yourdomain.com）
+API_HOST=0.0.0.0                              # API 主机（本地开发使用 0.0.0.0）
+
+# 仅在您想使用 MCP 功能时需要。
+API_KODUS_SERVICE_MCP_MANAGER=http://kodus-mcp-manager:3101 # MCP Manager URL
+API_KODUS_MCP_SERVER_URL=http://kodus-api.yourdomain.com/mcp # Kodus MCP Server URL
+```
+
+### LLM 提供商配置
+
+```env
+API_LLM_PROVIDER_MODEL="gpt-5"     # 您想要使用的模型
+API_OPENAI_FORCE_BASE_URL="https://your-api.com/v1"  # 您的 API 提供商 URL
+API_OPEN_AI_API_KEY="your-api-key"          # 您的 API 提供商密钥
+```
+
+查看我们的[模型特定指南](https://docs.kodus.io/cookbook/zh)，获取热门提供商（如 Novita、OpenAI、Anthropic 等）的详细设置说明。
+
+### 数据库配置
+
+默认情况下，使用本地容器运行 Postgres 和 MongoDB。更新凭据以符合您的安全要求。
+
+```env
+# 使用本地容器运行 Postgres 和 MongoDB
+USE_LOCAL_DB=true
+
+# PostgreSQL 设置
+API_DATABASE_ENV="development"                # development, production, test
+API_PG_DB_HOST=db_kodus_postgres              # PostgreSQL 主机
+API_PG_DB_PORT=5432                          # PostgreSQL 端口
+API_PG_DB_USERNAME=kodusdev                  # 数据库用户名
+API_PG_DB_PASSWORD=                          # 数据库密码
+API_PG_DB_DATABASE=kodus_db                  # 数据库名称
+
+# MongoDB 设置
+API_MG_DB_HOST=db_kodus_mongodb              # MongoDB 主机
+API_MG_DB_PORT=27017                         # MongoDB 端口
+API_MG_DB_USERNAME=kodusdev                  # 数据库用户名
+API_MG_DB_PASSWORD=                          # 数据库密码
+API_MG_DB_DATABASE=kodus                     # 数据库名称
+API_MG_DB_PRODUCTION_CONFIG=''               # 其他生产设置
+
+# SSL — 本地 Postgres 容器不支持 SSL。该全局开关覆盖所有数据源
+# （default + analytics）。如果保持 false，api 会陷入 SSL 重试连接循环。
+API_DATABASE_DISABLE_SSL=true                # 为本地数据库禁用 SSL
+```
+
+<Tip>
+  如果 `API_PG_DB_PASSWORD` 和 `API_MG_DB_PASSWORD` 留空，`./scripts/install.sh`（通过 `generate-secrets.sh`）会自动生成。只有当安装程序指向外部数据库时才需要手动设置。
+</Tip>
+
+### RabbitMQ 配置
+
+2.0 需要 RabbitMQ。保持 URI 与以下值同步。
+
+```env
+# RabbitMQ 配置
+USE_LOCAL_RABBITMQ=true
+RABBITMQ_HOSTNAME=rabbitmq                   # Docker 网络中的 RabbitMQ 主机名
+RABBITMQ_DEFAULT_USER=kodus                  # RabbitMQ 用户（在生产环境中更改）
+RABBITMQ_DEFAULT_PASS=kodus                  # RabbitMQ 密码（在生产环境中更改）
+
+# 保持 URI 与上面的用户、密码和 vhost 同步
+API_RABBITMQ_URI=amqp://kodus:kodus@rabbitmq:5672/kodus-ai # RabbitMQ 连接 URI
+API_RABBITMQ_ENABLED=true                    # RabbitMQ 是必需的
+```
+
+### Worker 配置
+
+Worker 容器需要一个角色来确定处理哪种工作负载。Self-hosted 仅运行代码审查
+角色；analytics 角色仅适用于云端。
+
+<Warning>
+  如果将 `WORKER_ROLE` 留空，worker 会在启动时崩溃。由于 `workflow.jobs.*` 队列是 worker 首次连接时创建的，worker 崩溃后 api 和 webhooks 会对每个 webhook 事件抛出 `QueueBind 404` 错误。
+</Warning>
+
+```env
+# Worker 角色 — 必填。Self-hosted = code-review。
+WORKER_ROLE=code-review
+```
+
+### Git 提供商配置
+
+选择并配置您首选的 Git 提供商。您可以设置一个或多个提供商；对于基本的基于令牌的身份验证，您只需要 webhook URL。
+
+<Info>
+  Webhook 由独立服务处理（端口 3332）。Webhook URL 必须指向该服务。您可以使用独立的 webhook 域名，或继续使用 API 域名并在反向代理中将 `/.../webhook` 路径转发到 webhook 服务。
+  如果您使用 GitHub 或 GitLab OAuth，请参见 <a href="/how_to_deploy/zh/platforms/github/github_oauth">GitHub OAuth App</a> 或 <a href="/how_to_deploy/zh/platforms/gitlab/gitlab_oauth">GitLab OAuth App</a>。如需 GitHub App 设置，请参见 <a href="/how_to_deploy/zh/platforms/github/github_app">GitHub App</a>。
+</Info>
+
+<Tabs>
+  <Tab title="Github">
+    ```env
+    # 基于令牌的身份验证所需
+    API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"          # Webhook URL（使用 webhook 域名，或在代理转发到 Webhooks 服务时使用 API 域名）
+    ```
+
+  </Tab>
+  <Tab title="GitLab">
+    ```env
+    # 基于令牌的身份验证所需
+    API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"          # Webhook URL（使用 webhook 域名，或在代理转发到 Webhooks 服务时使用 API 域名）
+    ```
+
+  </Tab>
+  <Tab title="Bitbucket">
+    ```env
+    # 基于令牌的身份验证所需
+    GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"    # Webhook URL（使用 webhook 域名，或在代理转发到 Webhooks 服务时使用 API 域名）
+    ```
+
+  </Tab>
+
+  <Tab title="Azure DevOps">
+    ```env
+    # 基于令牌的身份验证所需
+    GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/azure-repos/webhook"    # Webhook URL（使用 webhook 域名，或在代理转发到 Webhooks 服务时使用 API 域名）
+    ```
+
+  </Tab>
+</Tabs>
+
+### MCP Manager 配置
+
+<Info>
+  仅在您想使用 MCP Manager 时需要。
+</Info>
+
+MCP Manager 是将 Kody 连接到外部工具并在插件屏幕中公开这些工具的服务。查看我们的 [MCP Manager 文档](/how_to_deploy/zh/deploy_kodus/mcp_manager)了解更多信息。
+
+```env
+API_MCP_SERVER_ENABLED=false # 如果您想使用 MCP Manager，请更改为 true
+---
+API_KODUS_SERVICE_MCP_MANAGER=http://kodus-mcp-manager:3101
+API_KODUS_MCP_SERVER_URL=http://localhost:3001/mcp
+
+# MCP Manager 配置
+API_MCP_MANAGER_LOG_LEVEL=info
+API_MCP_MANAGER_PORT=3101
+API_MCP_MANAGER_NODE_ENV=development
+API_MCP_MANAGER_DATABASE_ENV=development
+API_MCP_MANAGER_CORS_ORIGINS=*
+API_MCP_MANAGER_JWT_SECRET=
+API_MCP_MANAGER_COMPOSIO_BASE_URL=https://backend.composio.dev/api/v3
+API_MCP_MANAGER_COMPOSIO_API_KEY=
+API_MCP_MANAGER_MCP_PROVIDERS=kodusmcp,composio,custom
+API_MCP_MANAGER_REDIRECT_URI=http://localhost:3000/setup/mcp/oauth
+API_MCP_MANAGER_PG_DB_SCHEMA=mcp-manager
+API_MCP_MANAGER_ENCRYPTION_SECRET=
+```
+
+### 外部服务配置（可选）
+
+这些服务是可选的，但能显著提升 Kodus 的代码审查质量。每个服务都需要您创建账号并生成 API 密钥。
+
+<AccordionGroup>
+  <Accordion title="E2B — 代码执行沙箱">
+    E2B 提供安全的沙箱环境，Kodus 用它在审查过程中运行和验证代码。
+
+    1. 在 [e2b.dev](https://e2b.dev) 创建账号
+    2. 在您的控制台中生成 API 密钥
+    3. 添加到您的 `.env`：
+
+    ```env
+    API_E2B_KEY=your-e2b-api-key
+    ```
+  </Accordion>
+
+  <Accordion title="MorphLLM — 代码编辑模型">
+    MorphLLM 是专为快速、精准代码编辑设计的模型。Kodus 用它更精确地应用审查建议。
+
+    1. 在 [morphllm.com](https://morphllm.com) 创建账号
+    2. 在您的控制台中生成 API 密钥
+    3. 添加到您的 `.env`：
+
+    ```env
+    API_MORPHLLM_API_KEY=your-morphllm-api-key
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Columns cols={2}>
+  <Card
+    title="需要帮助？"
+    icon="headset"
+    href="https://cal.com/gabrielmalinosqui/30min"
+  >
+    与我们的创始人安排通话，获取部署帮助。
+  </Card>
+
+  <Card
+    title="从我们的社区获取帮助"
+    icon="discord"
+    href="https://discord.gg/TFZBRk9fT6"
+  >
+    加入我们的社区以获取部署帮助。
+  </Card>
+</Columns>

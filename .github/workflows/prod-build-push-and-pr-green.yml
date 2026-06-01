@@ -3,11 +3,12 @@ name: "Backend: Production GitOps Deploy"
 # Release routing:
 # - backend: semantic tags like 1.2.3
 # - web: tags prefixed with web- (handled by Web workflows)
+# - mcp-manager: tags prefixed with mcp-manager- (handled by MCP Manager workflows)
 # - selfhosted: separate workflow that builds all services together
 
 on:
     release:
-        types: [published]
+        types: [ published ]
     workflow_dispatch:
         inputs:
             image_tag:
@@ -23,9 +24,16 @@ permissions:
 
 env:
     AWS_REGION: ${{ secrets.AWS_REGION }}
-    IMAGE_TAG: ${{ github.event.inputs.image_tag || github.event.release.tag_name || github.sha }}
+    IMAGE_TAG: ${{ github.event.inputs.image_tag || github.event.release.tag_name ||
+        github.sha }}
     BUILDX_PLATFORMS: linux/arm64
     BUILDX_CACHE_SCOPE: kodus-ai-arm64
+    # The runner is linux/amd64 but our images are pushed arm64-only.
+    # Without this, Trivy tries to resolve a child manifest for its own
+    # platform inside the manifest list and fails with "no child with
+    # platform linux/amd64". Trivy CLI picks up `TRIVY_PLATFORM` env to
+    # mean `--platform`, so all three scan steps inherit it.
+    TRIVY_PLATFORM: linux/arm64
 
     # ECR repositories (required)
     ECR_REPOSITORY_API: ${{ vars.ECR_REPOSITORY_API }}
@@ -44,11 +52,18 @@ jobs:
         environment: production
         if: |
             github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'web-')) ||
-            (startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref_name, 'web-'))
+            (github.event_name == 'release' &&
+             !startsWith(github.event.release.tag_name, 'web-') &&
+             !startsWith(github.event.release.tag_name, 'mcp-manager-')) ||
+            (startsWith(github.ref, 'refs/tags/') &&
+             !startsWith(github.ref_name, 'web-') &&
+             !startsWith(github.ref_name, 'mcp-manager-'))
         permissions:
             contents: read
             id-token: write
+            # Required by github/codeql-action/upload-sarif to publish
+            # Trivy findings to the repo's Security tab.
+            security-events: write
 
         steps:
             - name: Validate tag format (x.y.z)
@@ -116,35 +131,38 @@ jobs:
                     https://api.github.com/repos/kodustech/kodus-infra | jq '{full_name, permissions}'
 
             - name: Checkout code
-              uses: actions/checkout@v4.2.2
+              uses: actions/checkout@v6.0.2
 
             - name: Configure AWS Credentials (OIDC)
-              uses: aws-actions/configure-aws-credentials@v4.1.0
+              uses: aws-actions/configure-aws-credentials@v6.1.0
               with:
                   role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
                   aws-region: ${{ secrets.AWS_REGION }}
 
             - name: Login to Amazon ECR
               id: login-ecr
-              uses: aws-actions/amazon-ecr-login@v2.0.1
+              uses: aws-actions/amazon-ecr-login@v2.1.4
 
             - name: Mask ECR registry
               run: echo "::add-mask::${{ steps.login-ecr.outputs.registry }}"
 
             - name: Set up QEMU
-              uses: docker/setup-qemu-action@v3.2.0
+              uses: docker/setup-qemu-action@v4.0.0
               with:
                   platforms: arm64
 
             - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v3.10.0
+              uses: docker/setup-buildx-action@v4.0.0
 
             - name: Build, tag, and push (api/webhooks/worker)
               env:
                   ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-                  API_TAGS: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_API }}:${{ env.IMAGE_TAG }}
-                  WEBHOOKS_TAGS: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_WEBHOOKS }}:${{ env.IMAGE_TAG }}
-                  WORKER_TAGS: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_WORKER }}:${{ env.IMAGE_TAG }}
+                  API_TAGS: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_API
+                      }}:${{ env.IMAGE_TAG }}
+                  WEBHOOKS_TAGS: ${{ steps.login-ecr.outputs.registry }}/${{
+                      env.ECR_REPOSITORY_WEBHOOKS }}:${{ env.IMAGE_TAG }}
+                  WORKER_TAGS: ${{ steps.login-ecr.outputs.registry }}/${{
+                      env.ECR_REPOSITORY_WORKER }}:${{ env.IMAGE_TAG }}
               run: |
                   set -euo pipefail
 
@@ -157,8 +175,67 @@ jobs:
                     --push \
                     api webhooks worker
 
+            # ---- CVE scan -----------------------------------------------------
+            # See selfhosted-build-push.yml for the rationale behind the
+            # Trivy flags. `exit-code: 0` keeps findings advisory — flip
+            # to `1` once the current backlog of CVEs is triaged.
+            - name: Trivy scan — kodus-ai-api
+              uses: aquasecurity/trivy-action@v0.36.0
+              with:
+                  image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_API
+                      }}:${{ env.IMAGE_TAG }}
+                  format: "sarif"
+                  output: "trivy-api.sarif"
+                  severity: "CRITICAL,HIGH"
+                  ignore-unfixed: true
+                  exit-code: "0"
+
+            - name: Trivy scan — kodus-ai-webhooks
+              uses: aquasecurity/trivy-action@v0.36.0
+              with:
+                  image-ref: ${{ steps.login-ecr.outputs.registry }}/${{
+                      env.ECR_REPOSITORY_WEBHOOKS }}:${{ env.IMAGE_TAG }}
+                  format: "sarif"
+                  output: "trivy-webhooks.sarif"
+                  severity: "CRITICAL,HIGH"
+                  ignore-unfixed: true
+                  exit-code: "0"
+
+            - name: Trivy scan — kodus-ai-worker
+              uses: aquasecurity/trivy-action@v0.36.0
+              with:
+                  image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_WORKER
+                      }}:${{ env.IMAGE_TAG }}
+                  format: "sarif"
+                  output: "trivy-worker.sarif"
+                  severity: "CRITICAL,HIGH"
+                  ignore-unfixed: true
+                  exit-code: "0"
+
+            # CodeQL Action v4 rejects multiple SARIF runs sharing a
+            # category, so each image gets its own upload step with a
+            # distinct category. (v3 silently combined them; v4 requires
+            # one upload per category.)
+            - name: Upload Trivy SARIF — api
+              uses: github/codeql-action/upload-sarif@v4
+              with:
+                  sarif_file: trivy-api.sarif
+                  category: trivy-prod-api
+
+            - name: Upload Trivy SARIF — webhooks
+              uses: github/codeql-action/upload-sarif@v4
+              with:
+                  sarif_file: trivy-webhooks.sarif
+                  category: trivy-prod-webhooks
+
+            - name: Upload Trivy SARIF — worker
+              uses: github/codeql-action/upload-sarif@v4
+              with:
+                  sarif_file: trivy-worker.sarif
+                  category: trivy-prod-worker
+
             - name: Checkout infra repo
-              uses: actions/checkout@v4.2.2
+              uses: actions/checkout@v6.0.2
               with:
                   repository: ${{ env.INFRA_REPO }}
                   ref: ${{ env.INFRA_BASE_BRANCH }}
@@ -200,7 +277,7 @@ jobs:
 
             - name: Create PR (Deploy)
               id: create_pr
-              uses: peter-evans/create-pull-request@v7
+              uses: peter-evans/create-pull-request@v8.1.1
               with:
                   token: ${{ steps.infra_token.outputs.token }}
                   path: infra
@@ -279,7 +356,7 @@ jobs:
             contents: write
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4.2.2
+              uses: actions/checkout@v6.0.2
               with:
                   fetch-depth: 0
 

@@ -1,0 +1,93 @@
+[
+    {
+        "id": "context7-default",
+        "name": "Context7",
+        "baseUrl": "https://context7-kodus.up.railway.app/mcp",
+        "protocol": "http",
+        "logoUrl": "https://avatars.githubusercontent.com/u/74989412?s=48&v=4",
+        "headers": {},
+        "auth": {
+            "type": "none"
+        }
+    },
+    {
+        "id": "kodus-docs-default",
+        "name": "Kodus Docs",
+        "baseUrl": "https://docs.kodus.io/mcp",
+        "protocol": "http",
+        "logoUrl": "https://kodus.io/wp-content/uploads/2025/11/Kodus-AI-Logo-6.png",
+        "headers": {},
+        "auth": {
+            "type": "none"
+        }
+    },
+    {
+        "id": "kodus-github-issues-default",
+        "name": "Github Issues by Kodus",
+        "baseUrl": "/mcp/github-issues",
+        "protocol": "http",
+        "logoUrl": "https://kodus.io/wp-content/uploads/2026/03/github_kodus.png",
+        "headers": {},
+        "auth": {
+            "type": "none"
+        }
+    },
+    {
+        "id": "sentry-default",
+        "name": "Sentry",
+        "baseUrl": "https://mcp.sentry.dev/mcp",
+        "protocol": "http",
+        "logoUrl": "https://kodus.io/wp-content/uploads/2025/12/sentry-glyph-light-400x367-1.svg",
+        "headers": {},
+        "auth": {
+            "type": "oauth2",
+            "dynamicRegistration": true
+        }
+    },
+    {
+        "id": "exa-default",
+        "name": "Exa Search",
+        "baseUrl": "https://mcp.exa.ai/mcp?tools=web_search_exa,get_code_context_exa,crawling_exa,company_research_exa,linkedin_search_exa,deep_researcher_start,deep_researcher_check",
+        "protocol": "http",
+        "logoUrl": "https://exa.ai/images/favicon-32x32.png",
+        "headers": {},
+        "auth": {
+            "type": "none"
+        }
+    },
+    {
+        "id": "kodus-osv-default",
+        "name": "Kodus OSV",
+        "baseUrl": "https://mcp-osv.kodus.io/mcp",
+        "protocol": "http",
+        "logoUrl": "https://kodus.io/wp-content/uploads/2025/11/Kodus-AI-Logo-6.png",
+        "headers": {},
+        "auth": {
+            "type": "none"
+        }
+    },
+    {
+        "id": "linear-default",
+        "name": "Linear",
+        "baseUrl": "https://mcp.linear.app/mcp",
+        "protocol": "http",
+        "logoUrl": "https://static.linear.app/client/assets/newAppIcon-256x256-full.NvjGn2GI.png",
+        "headers": {},
+        "auth": {
+            "type": "oauth2",
+            "dynamicRegistration": true
+        }
+    },
+    {
+        "id": "atlassian-rovo-default",
+        "name": "Atlassian Rovo",
+        "baseUrl": "https://mcp.atlassian.com/v1/mcp",
+        "protocol": "http",
+        "logoUrl": "https://avatars.githubusercontent.com/u/21215?s=200&v=4",
+        "headers": {},
+        "auth": {
+            "type": "oauth2",
+            "dynamicRegistration": true
+        }
+    }
+]

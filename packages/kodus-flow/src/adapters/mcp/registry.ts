@@ -97,11 +97,29 @@ export class MCPRegistry {
                     },
                 });
             } catch (error) {
+                const errorMessage =
+                    error instanceof Error ? error.message : String(error);
+                const errorCause =
+                    error instanceof Error && error.cause
+                        ? (error.cause as any).message || String(error.cause)
+                        : undefined;
+
                 this.logger.error({
-                    message: 'Failed to register MCP server',
+                    message: `Failed to register MCP server: ${errorMessage}`,
                     context: this.constructor.name,
                     error: error instanceof Error ? error : undefined,
-                    metadata: { serverName: config.name, config },
+                    metadata: {
+                        serverName: config.name,
+                        serverUrl: config.url,
+                        serverType: config.type,
+                        errorMessage,
+                        errorCause,
+                        errorStack:
+                            error instanceof Error
+                                ? error.stack?.substring(0, 500)
+                                : undefined,
+                        config,
+                    },
                 });
                 throw error;
             } finally {
@@ -170,8 +188,19 @@ export class MCPRegistry {
                     try {
                         await client.connect();
                     } catch (reconnectError) {
+                        const reconnectMsg =
+                            reconnectError instanceof Error
+                                ? reconnectError.message
+                                : String(reconnectError);
+                        const reconnectCause =
+                            reconnectError instanceof Error &&
+                            reconnectError.cause
+                                ? (reconnectError.cause as any).message ||
+                                  String(reconnectError.cause)
+                                : undefined;
+
                         this.logger.error({
-                            message: 'Failed to reconnect to server',
+                            message: `Failed to reconnect to server: ${reconnectMsg}`,
                             context: this.constructor.name,
 
                             error:
@@ -179,7 +208,18 @@ export class MCPRegistry {
                                     ? reconnectError
                                     : undefined,
 
-                            metadata: { serverName },
+                            metadata: {
+                                serverName,
+                                errorMessage: reconnectMsg,
+                                errorCause: reconnectCause,
+                                errorStack:
+                                    reconnectError instanceof Error
+                                        ? reconnectError.stack?.substring(
+                                              0,
+                                              500,
+                                          )
+                                        : undefined,
+                            },
                         });
                         continue; // Skip this server
                     }
@@ -356,8 +396,10 @@ export class MCPRegistry {
                 try {
                     return await client.executeTool(toolName, args);
                 } catch (error) {
+                    const execErrMsg =
+                        error instanceof Error ? error.message : String(error);
                     this.logger.warn({
-                        message: 'Failed to execute tool on server',
+                        message: `Failed to execute tool on server: ${execErrMsg}`,
                         context: this.constructor.name,
 
                         error: error as Error,
@@ -365,6 +407,12 @@ export class MCPRegistry {
                         metadata: {
                             serverName: candidate,
                             toolName,
+                            errorMessage: execErrMsg,
+                            errorCause:
+                                error instanceof Error && error.cause
+                                    ? (error.cause as any).message ||
+                                      String(error.cause)
+                                    : undefined,
                         },
                     });
                 }

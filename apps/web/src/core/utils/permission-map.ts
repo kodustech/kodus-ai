@@ -1,7 +1,7 @@
 import {
     Action,
-    type PermissionsMap,
     ResourceType,
+    type PermissionsMap,
 } from "@services/permissions/types";
 
 export const hasPermission = (params: {

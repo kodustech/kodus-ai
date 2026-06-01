@@ -1,0 +1,32 @@
+---
+title: "Auto License Assignment"
+---
+
+The Auto License Assignment feature simplifies the management of developer licenses within your organization. Instead of manually assigning licenses to each developer, Kodus can automatically assign a license to active contributors.
+
+## How it Works
+
+When enabled, Kodus monitors pull request activity in your repositories.
+
+-   **Automatic Assignment:** If a user creates more than one pull request, Kodus checks if there are available license slots in your organization.
+    -   If a slot is available, the user is automatically assigned a license and their PRs will be reviewed.
+    -   If no slots are available, Kodus will react to the pull request with a thumbs down emoji (👎) for Github or a padlock emoji (🔒) for Gitlab to indicate that the review could not be performed due to a lack of licenses.
+
+## Ignored Users
+
+You can configure a list of **Ignored Users**. These users will be excluded from the auto-assignment process.
+
+-   **No Reviews:** Pull requests created by ignored users will not be reviewed by Kodus.
+-   **No Reactions:** Kodus will not react to their PRs, even if they exceed the PR limit. It will be as if Kodus ignored the PR entirely.
+
+This is useful for bots, service accounts, or specific team members who do not require code reviews.
+
+## Configuration
+
+To enable and configure Auto License Assignment:
+
+1. Go to your **Code Review Settings**.
+2. Navigate to the **Subscription** tab.
+3. Locate the **Auto-assign licenses** section.
+    - Use the toggle to enable or disable the feature.
+    - If enabled, you can select users to add to the **Ignored Users** list.

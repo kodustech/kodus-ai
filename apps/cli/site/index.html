@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Kodus CLI</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            :root {
+                --bg: #101019;
+                --surface: #181825;
+                --surface-2: #202032;
+                --border: #30304b;
+                --text: #f3f3f7;
+                --text-secondary: #cdcfdf;
+                --text-muted: rgba(243, 243, 247, 0.58);
+                --accent: #f8b76d;
+                --accent-dim: #443024;
+                --secondary: #c9bbf2;
+                --secondary-dark: #312b4b;
+                --success: #42be65;
+            }
+
+            body {
+                font-family:
+                    -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                background: var(--bg);
+                color: var(--text);
+                line-height: 1.6;
+                min-height: 100vh;
+            }
+
+            .container {
+                max-width: 820px;
+                margin: 0 auto;
+                padding: 4rem 1.5rem;
+            }
+
+            header {
+                text-align: center;
+                margin-bottom: 3rem;
+            }
+
+            .logo img {
+                height: 40px;
+                width: auto;
+                margin-bottom: 1rem;
+            }
+
+            h1 {
+                font-size: 2.75rem;
+                font-weight: 700;
+                letter-spacing: -0.03em;
+                margin-bottom: 0.75rem;
+            }
+
+            .subtitle {
+                max-width: 620px;
+                margin: 0 auto;
+                color: var(--text-secondary);
+                font-size: 1.05rem;
+            }
+
+            .install-box,
+            .command,
+            .feature,
+            .tool {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 14px;
+            }
+
+            .install-box {
+                padding: 1.25rem;
+                margin: 2rem 0 3rem;
+            }
+
+            .install-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 1rem;
+                margin-bottom: 1rem;
+            }
+
+            .install-label {
+                font-size: 0.75rem;
+                text-transform: uppercase;
+                letter-spacing: 0.1em;
+                color: var(--text-muted);
+            }
+
+            .tabs {
+                display: inline-flex;
+                gap: 0.5rem;
+                background: var(--bg);
+                border: 1px solid var(--border);
+                padding: 0.25rem;
+                border-radius: 999px;
+            }
+
+            .tab {
+                border: 0;
+                background: transparent;
+                color: var(--text-secondary);
+                border-radius: 999px;
+                padding: 0.45rem 0.8rem;
+                cursor: pointer;
+                font-size: 0.825rem;
+            }
+
+            .tab.active {
+                background: var(--surface-2);
+                color: var(--text);
+            }
+
+            .install-cmd {
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+                background: var(--bg);
+                border-radius: 10px;
+                padding: 1rem 1.1rem;
+                overflow-x: auto;
+                font-family: 'SF Mono', 'Fira Code', monospace;
+                font-size: 0.875rem;
+            }
+
+            .install-cmd code {
+                flex: 1;
+                color: var(--accent);
+                white-space: pre-wrap;
+                word-break: break-word;
+            }
+
+            .copy-btn {
+                background: transparent;
+                color: var(--text-muted);
+                border: 0;
+                cursor: pointer;
+                padding: 0.25rem;
+            }
+
+            .copy-btn:hover {
+                color: var(--text);
+            }
+
+            .install-note {
+                margin-top: 0.9rem;
+                color: var(--text-muted);
+                font-size: 0.9rem;
+            }
+
+            section {
+                margin-bottom: 2.5rem;
+            }
+
+            h2 {
+                font-size: 1.2rem;
+                font-weight: 600;
+                margin-bottom: 1rem;
+                display: flex;
+                align-items: center;
+                gap: 0.55rem;
+            }
+
+            h2::before {
+                content: '';
+                width: 4px;
+                height: 1.1rem;
+                background: var(--accent);
+                border-radius: 999px;
+            }
+
+            .commands,
+            .features {
+                display: grid;
+                gap: 1rem;
+            }
+
+            .command,
+            .feature {
+                padding: 1.25rem;
+            }
+
+            .command-name {
+                display: inline-block;
+                color: var(--accent);
+                font-family: 'SF Mono', 'Fira Code', monospace;
+                font-size: 1rem;
+                font-weight: 600;
+                margin-bottom: 0.65rem;
+            }
+
+            .command-desc,
+            .feature p {
+                color: var(--text-secondary);
+                font-size: 0.94rem;
+                margin-bottom: 0.9rem;
+            }
+
+            .command-flags {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+
+            .flag {
+                font-family: 'SF Mono', 'Fira Code', monospace;
+                font-size: 0.74rem;
+                background: var(--secondary-dark);
+                border: 1px solid var(--border);
+                border-radius: 7px;
+                padding: 0.25rem 0.5rem;
+                color: var(--secondary);
+            }
+
+            .tools {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+                gap: 0.75rem;
+            }
+
+            .tool {
+                padding: 0.85rem 1rem;
+                text-align: center;
+                color: var(--text-secondary);
+                font-size: 0.9rem;
+            }
+
+            .feature {
+                display: flex;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .feature-icon {
+                width: 28px;
+                height: 28px;
+                border-radius: 8px;
+                background: var(--accent-dim);
+                color: var(--accent);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+                font-size: 0.875rem;
+                font-weight: 700;
+            }
+
+            .feature h3 {
+                font-size: 0.95rem;
+                margin-bottom: 0.2rem;
+            }
+
+            .alt-install {
+                color: var(--text-muted);
+                font-size: 0.9rem;
+                margin-top: 0.75rem;
+            }
+
+            .alt-install code {
+                color: var(--secondary);
+                font-family: 'SF Mono', 'Fira Code', monospace;
+            }
+
+            footer {
+                margin-top: 3rem;
+                padding-top: 1.5rem;
+                border-top: 1px solid var(--border);
+                color: var(--text-muted);
+                text-align: center;
+                font-size: 0.88rem;
+            }
+
+            footer a {
+                color: var(--accent);
+                text-decoration: none;
+            }
+            footer a:hover {
+                text-decoration: underline;
+            }
+
+            @media (max-width: 640px) {
+                .container {
+                    padding: 2rem 1rem;
+                }
+                h1 {
+                    font-size: 2rem;
+                }
+                .install-header {
+                    flex-direction: column;
+                    align-items: flex-start;
+                }
+                .tabs {
+                    width: 100%;
+                }
+                .tab {
+                    flex: 1;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <div class="logo">
+                    <img src="/logo.png" alt="Kodus" />
+                </div>
+                <h1>Kodus CLI</h1>
+                <p class="subtitle">
+                    Install the Kodus CLI and bundled skills for Claude Code,
+                    Cursor, Codex, Windsurf and other supported agents from a
+                    single source of truth.
+                </p>
+            </header>
+
+            <div class="install-box">
+                <div class="install-header">
+                    <div class="install-label">Installation</div>
+                    <div
+                        class="tabs"
+                        role="tablist"
+                        aria-label="Install command tabs"
+                    >
+                        <button
+                            class="tab active"
+                            data-platform="unix"
+                            type="button"
+                        >
+                            macOS/Linux
+                        </button>
+                        <button
+                            class="tab"
+                            data-platform="windows"
+                            type="button"
+                        >
+                            Windows PowerShell
+                        </button>
+                    </div>
+                </div>
+                <div class="install-cmd">
+                    <code id="install-command"></code>
+                    <button
+                        class="copy-btn"
+                        onclick="copyInstall()"
+                        title="Copy install command"
+                        aria-label="Copy install command"
+                    >
+                        <svg
+                            width="18"
+                            height="18"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <rect
+                                x="9"
+                                y="9"
+                                width="13"
+                                height="13"
+                                rx="2"
+                                ry="2"
+                            ></rect>
+                            <path
+                                d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                            ></path>
+                        </svg>
+                    </button>
+                </div>
+                <p class="install-note">
+                    The installer updates <code>@kodus/cli</code> globally and
+                    installs bundled skills into detected local agent roots.
+                </p>
+                <p class="alt-install">
+                    Alternative: <code>npm install -g @kodus/cli</code> then
+                    <code>kodus skills install</code>.
+                </p>
+            </div>
+
+            <section>
+                <h2>Core Commands</h2>
+                <div class="commands">
+                    <div class="command">
+                        <span class="command-name">kodus review</span>
+                        <p class="command-desc">
+                            Review local changes, gate commit or merge
+                            readiness, and optionally emit prompt-friendly
+                            output for agents.
+                        </p>
+                        <div class="command-flags">
+                            <span class="flag">--prompt-only</span>
+                            <span class="flag">--staged</span>
+                            <span class="flag">--commit &lt;sha&gt;</span>
+                            <span class="flag">--branch &lt;name&gt;</span>
+                            <span class="flag">--fast</span>
+                            <span class="flag">--agent</span>
+                        </div>
+                    </div>
+
+                    <div class="command">
+                        <span class="command-name">kodus pr suggestions</span>
+                        <p class="command-desc">
+                            Fetch and triage PR suggestions from Kodus for an
+                            existing remote PR, with structured output for
+                            skills and automation.
+                        </p>
+                        <div class="command-flags">
+                            <span class="flag">--pr-url &lt;url&gt;</span>
+                            <span class="flag">--pr-number &lt;n&gt;</span>
+                            <span class="flag">--repo-id &lt;id&gt;</span>
+                            <span class="flag">--fields &lt;csv&gt;</span>
+                            <span class="flag">--agent</span>
+                        </div>
+                    </div>
+
+                    <div class="command">
+                        <span class="command-name">kodus skills install</span>
+                        <p class="command-desc">
+                            Sync bundled Kodus skills into supported agent roots
+                            already present on the machine.
+                        </p>
+                        <div class="command-flags">
+                            <span class="flag">install</span>
+                            <span class="flag">sync</span>
+                            <span class="flag">resync</span>
+                            <span class="flag">uninstall</span>
+                            <span class="flag">--dry-run</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <h2>Supported Tools</h2>
+                <div class="tools">
+                    <div class="tool">Claude Code</div>
+                    <div class="tool">Cursor</div>
+                    <div class="tool">Codex</div>
+                    <div class="tool">Windsurf</div>
+                    <div class="tool">OpenCode</div>
+                    <div class="tool">Goose</div>
+                    <div class="tool">Gemini CLI</div>
+                    <div class="tool">Kilo Code</div>
+                    <div class="tool">Roo Code</div>
+                    <div class="tool">AiderDesk</div>
+                    <div class="tool">Agents</div>
+                    <div class="tool">More local roots</div>
+                </div>
+            </section>
+
+            <section>
+                <h2>How It Works</h2>
+                <div class="features">
+                    <div class="feature">
+                        <div class="feature-icon">1</div>
+                        <div>
+                            <h3>Single installer</h3>
+                            <p>
+                                One install source updates the CLI and deploys
+                                bundled Kodus skills without depending on the
+                                old review-skill repository.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">2</div>
+                        <div>
+                            <h3>Agent-friendly output</h3>
+                            <p>
+                                Use <code>--agent</code>,
+                                <code>kodus schema</code> and
+                                <code>--fields</code> to make CLI usage
+                                predictable for skills, CI and thin MCP layers.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">3</div>
+                        <div>
+                            <h3>Local and remote review flows</h3>
+                            <p>
+                                Use <code>kodus review</code> for local diff
+                                review and <code>kodus pr suggestions</code> for
+                                remote PR suggestion resolution.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <footer>
+                <p>
+                    Made by
+                    <a href="https://kodus.io" target="_blank" rel="noreferrer"
+                        >Kodus</a
+                    >
+                </p>
+            </footer>
+        </div>
+
+        <script>
+            const origin = window.location.origin || 'https://kodus.io';
+            const commands = {
+                unix: `curl -fsSL ${origin}/install | bash`,
+                windows: `powershell -NoProfile -ExecutionPolicy Bypass -Command "$tmp = Join-Path $env:TEMP 'kodus-install.ps1'; Invoke-WebRequest ${origin}/install.ps1 -OutFile $tmp; & $tmp"`,
+            };
+
+            let currentPlatform = /Windows/i.test(navigator.userAgent)
+                ? 'windows'
+                : 'unix';
+
+            function renderInstall() {
+                document.getElementById('install-command').textContent =
+                    commands[currentPlatform];
+                document.querySelectorAll('.tab').forEach((button) => {
+                    button.classList.toggle(
+                        'active',
+                        button.dataset.platform === currentPlatform,
+                    );
+                });
+            }
+
+            async function copyInstall() {
+                const button = document.querySelector('.copy-btn');
+                await navigator.clipboard.writeText(commands[currentPlatform]);
+                button.innerHTML =
+                    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#42BE65" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+                setTimeout(() => {
+                    button.innerHTML =
+                        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+                }, 1500);
+            }
+
+            document.querySelectorAll('.tab').forEach((button) => {
+                button.addEventListener('click', () => {
+                    currentPlatform = button.dataset.platform;
+                    renderInstall();
+                });
+            });
+
+            renderInstall();
+        </script>
+    </body>
+</html>

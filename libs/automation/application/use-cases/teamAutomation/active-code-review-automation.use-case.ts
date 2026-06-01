@@ -34,16 +34,22 @@ export class ActiveCodeReviewAutomationUseCase implements IUseCase {
         teamId: string,
         codeManagementTeamAutomations: IAutomation[],
     ) {
-        const codeReviewAutomation = codeManagementTeamAutomations.find(
+        const codeReviewAutomation = codeManagementTeamAutomations?.find(
             (automation) =>
                 automation.automationType ===
                 AutomationType.AUTOMATION_CODE_REVIEW,
         );
 
-        const [teamAutomation] = await this.teamAutomationService.find({
+        if (!codeReviewAutomation?.automationUuid) {
+            return;
+        }
+
+        const results = await this.teamAutomationService.find({
             team: { uuid: teamId },
             automation: { uuid: codeReviewAutomation.automationUuid },
         });
+
+        const [teamAutomation] = results ?? [];
 
         if (teamAutomation) {
             await this.updateTeamAutomationStatusUseCase.execute(

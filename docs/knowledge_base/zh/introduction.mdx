@@ -1,0 +1,118 @@
+---
+title: "知识库"
+description: "关于 AI 代码审查、编码标准执行、业务逻辑验证等常见问题的解答。"
+---
+
+## 代码审查
+
+<CardGroup cols={2}>
+  <Card title="如何在拉取请求中强制执行编码标准" href="/knowledge_base/zh/how-to-enforce-coding-standards-in-pull-requests">
+    使用自定义规则在每个 PR 上自动执行团队的编码约定。
+  </Card>
+  <Card title="如何在 GitHub、GitLab 和 Bitbucket 上自动化代码审查" href="/knowledge_base/zh/how-to-automate-code-review">
+    设置在每个拉取请求上自动运行的 AI 驱动代码审查。
+  </Card>
+  <Card title="如何创建自定义代码审查规则" href="/knowledge_base/zh/how-to-create-custom-code-review-rules">
+    定义适合团队架构、模式和偏好的规则。
+  </Card>
+  <Card title="如何减少代码审查噪音和误报" href="/knowledge_base/zh/how-to-reduce-code-review-noise">
+    调整建议限制、严重性过滤器和忽略路径以保持审查重点。
+  </Card>
+  <Card title="审查规则和记忆有什么区别" href="/knowledge_base/zh/difference-between-review-rules-and-memories">
+    了解何时使用每种类型的 Kody 规则以获得最佳效果。
+  </Card>
+  <Card title="如何教 AI 学习团队的编码约定" href="/knowledge_base/zh/how-to-teach-ai-your-team-conventions">
+    使用记忆功能通过自然对话让 Kody 学习您的编码偏好。
+  </Card>
+</CardGroup>
+
+## 业务逻辑验证
+
+<CardGroup cols={2}>
+  <Card title="如何验证 PR 是否实现了 Jira 工单" href="/knowledge_base/zh/how-to-validate-pr-against-jira-ticket">
+    在合并之前将拉取请求与 Jira 验收标准进行比较。
+  </Card>
+  <Card title="如何根据 Linear 问题验证拉取请求" href="/knowledge_base/zh/how-to-validate-pr-against-linear-issue">
+    确保您的 PR 实现了 Linear 问题描述的内容。
+  </Card>
+  <Card title="如何根据 Google Docs 规范检查代码" href="/knowledge_base/zh/how-to-check-code-against-google-docs">
+    验证实现是否符合 Google Docs 中编写的规范。
+  </Card>
+  <Card title="如何在合并前验证业务规则" href="/knowledge_base/zh/how-to-validate-business-rules-before-merging">
+    在代码到达生产环境之前捕获缺失的需求、边缘情况和逻辑差距。
+  </Card>
+</CardGroup>
+
+## 规则与自动化
+
+<CardGroup cols={2}>
+  <Card title="如何从 Cursor、Copilot 或 Claude 导入规则" href="/knowledge_base/zh/how-to-import-rules-from-ide-tools">
+    将现有 AI 编码工具规则同步到代码审查工作流中。
+  </Card>
+  <Card title="如何自动生成代码审查规则" href="/knowledge_base/zh/how-to-generate-rules-automatically">
+    让 AI 分析您的审查历史并根据团队模式建议规则。
+  </Card>
+  <Card title="如何跨代码库共享编码标准" href="/knowledge_base/zh/how-to-share-standards-across-repositories">
+    使用规则继承和组织级规则保持一致性。
+  </Card>
+  <Card title="如何使用项目特定上下文审查 PR" href="/knowledge_base/zh/how-to-review-prs-with-project-context">
+    让 Kody 访问您的项目文档、手册和架构指南。
+  </Card>
+</CardGroup>
+
+## 设置与集成
+
+<CardGroup cols={2}>
+  <Card title="如何在 GitHub 上设置 AI 代码审查" href="/knowledge_base/zh/how-to-set-up-ai-code-review-on-github">
+    在几分钟内为 GitHub 代码库安装和配置 Kodus。
+  </Card>
+  <Card title="如何在 GitLab 上设置 AI 代码审查" href="/knowledge_base/zh/how-to-set-up-ai-code-review-on-gitlab">
+    为 GitLab 项目安装和配置 Kodus。
+  </Card>
+  <Card title="如何在 Azure DevOps 上设置 AI 代码审查" href="/knowledge_base/zh/how-to-set-up-ai-code-review-on-azure-devops">
+    为 Azure DevOps 代码库安装和配置 Kodus。
+  </Card>
+  <Card title="如何将 Jira 连接到代码审查工具" href="/knowledge_base/zh/how-to-connect-jira-to-code-review">
+    链接 Jira 以在代码审查中启用自动任务上下文。
+  </Card>
+  <Card title="如何将 Linear 连接到代码审查工具" href="/knowledge_base/zh/how-to-connect-linear-to-code-review">
+    链接 Linear 以在代码审查中启用自动任务上下文。
+  </Card>
+  <Card title="我可以使用自己的 LLM 提供商进行代码审查吗" href="/knowledge_base/zh/can-i-use-my-own-llm-provider">
+    带上自己的 API 密钥并选择您首选的 LLM 提供商。
+  </Card>
+  <Card title="如何自托管 AI 代码审查工具" href="/knowledge_base/zh/how-to-self-host-ai-code-review">
+    在您自己的基础设施上部署 Kodus，完全控制数据。
+  </Card>
+</CardGroup>
+
+## LLM 提供商
+
+<CardGroup cols={2}>
+  <Card title="如何将 Novita AI 与 Kodus 配合使用" href="/knowledge_base/zh/how-to-use-novita-with-kodus">
+    配置 Novita 的无服务器 GPU 平台作为您的 LLM 提供商。
+  </Card>
+  <Card title="如何将 Groq 与 Kodus 配合使用" href="/knowledge_base/zh/how-to-use-groq-with-kodus">
+    配置 Groq 的超快推理作为您的 LLM 提供商。
+  </Card>
+  <Card title="如何将 Together AI 与 Kodus 配合使用" href="/knowledge_base/zh/how-to-use-together-ai-with-kodus">
+    配置 Together AI 的开源模型作为您的 LLM 提供商。
+  </Card>
+  <Card title="如何将 Fireworks AI 与 Kodus 配合使用" href="/knowledge_base/zh/how-to-use-fireworks-with-kodus">
+    配置 Fireworks AI 的快速推理作为您的 LLM 提供商。
+  </Card>
+</CardGroup>
+
+## 故障排除
+
+<CardGroup cols={2}>
+  <Card title="为什么我的 AI 代码审查没有触发" href="/knowledge_base/zh/why-is-ai-code-review-not-triggering">
+    审查未自动启动的常见原因和修复方法。
+  </Card>
+  <Card title="如何修复 GitHub 或 GitLab 的 webhook 问题" href="/knowledge_base/zh/how-to-fix-webhook-issues">
+    调试和解决 webhook 连接问题。
+  </Card>
+  <Card title="为什么我的代码审查被暂停了" href="/knowledge_base/zh/why-are-code-reviews-paused">
+    了解自动暂停行为以及如何恢复审查。
+  </Card>
+</CardGroup>

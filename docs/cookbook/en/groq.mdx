@@ -1,0 +1,169 @@
+---
+title: "Groq Cloud - Ultra-Fast Inference"
+description: "Learn how to use Groq's models with Kodus"
+icon: "bolt"
+---
+
+## How Groq works
+
+Groq Cloud provides fast LLM inference with OpenAI-compatible APIs. Built for speed and simplicity, Groq offers ultra-fast inference for popular models like Llama, Deepseek, and more. The platform is designed to be simple to integrate and easy to scale, making it perfect for production applications.
+
+## Recommended Models
+
+We recommend good coding models with high context windows and fast inference.
+
+<Info>
+  For the most updated information, please visit [Groq's models page](https://console.groq.com/docs/models).
+</Info>
+
+| Model                              | Context Window | Speed     |
+| ---------------------------------- | -------------- | --------- |
+| **Llama 3.3 70B Versatile** `recommended` | ~128k tokens   | Ultra Fast |
+| **Deepseek R1 Distill Llama 70B** | ~128k tokens   | Ultra Fast |
+| **Llama 3.1 70B Versatile**       | ~128k tokens   | Ultra Fast |
+
+
+## Creating API Key
+
+<Warning>Groq Cloud Account is required to create API Key.</Warning>
+
+Go directly to [Groq's API Keys page](https://console.groq.com/keys) to create a new API Key.
+
+Or, follow these steps:
+
+1. Go to [Groq Console](https://console.groq.com)
+2. Sign in or create your account
+3. Navigate to "API Keys" in the top navigation
+4. Click on "Create API Key" button
+5. Give it a name like 'Kodus' or any descriptive name
+6. Copy the API Key and save it somewhere safe
+
+<Info>
+  Only team owners or users with the developer role may create or manage API keys in Groq.
+</Info>
+
+## How to use
+
+<Snippet file="deploy-basic-setup.mdx" />
+
+### Configure Groq in Environment File
+
+Edit your `.env` file and configure the core settings. For **LLM Integration**, use Groq in Fixed Mode:
+
+```env
+# Core System Settings (update with your domains)
+WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
+WEB_PORT_API=443                               
+NEXTAUTH_URL="https://kodus-web.yourdomain.com"
+
+# Security Keys (generate with openssl commands above)
+WEB_NEXTAUTH_SECRET="your-generated-secret"
+API_CRYPTO_KEY="your-generated-hex-key"
+API_JWT_SECRET="your-generated-secret"
+API_JWT_REFRESH_SECRET="your-generated-secret"
+
+# Database Configuration
+API_PG_DB_PASSWORD="your-secure-db-password"
+API_MG_DB_PASSWORD="your-secure-db-password"
+
+# Groq Configuration (Fixed Mode) 
+API_LLM_PROVIDER_MODEL="llama-3.3-70b-versatile"             # Choose your preferred model
+API_OPENAI_FORCE_BASE_URL="https://api.groq.com/openai/v1"   # Groq API URL
+API_OPEN_AI_API_KEY="your-groq-api-key"                      # Your Groq API Key
+
+# Git Provider Webhooks (choose your provider)
+API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
+# or API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
+# or GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
+```
+
+<Note>
+  Webhook URLs must reach the Webhooks service (port 3332). Use a dedicated webhooks domain or route `/.../webhook` to port 3332 in your reverse proxy.
+</Note>
+
+<Info>
+  **Fixed Mode is ideal for Groq** because it provides OpenAI-compatible APIs with ultra-fast inference. This gives you the best performance with simple configuration.
+</Info>
+
+<Snippet file="deploy-installation.mdx" />
+
+### Set Up Reverse Proxy (For Production)
+
+For webhooks and external access, configure Nginx:
+
+```nginx
+# Web App (port 3000)
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com;
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# API (port 3001)  
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com;
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Verify Groq Integration
+
+In addition to the basic installation verification, confirm that Groq is working:
+
+```bash
+# Verify Groq API connection specifically
+docker-compose logs api worker | grep -i groq
+```
+
+<Tip>
+  For detailed information about SSL setup, monitoring, and advanced configurations, see our [complete deployment guide](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm).
+</Tip>
+
+### Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="API Key Issues">
+    - Verify your API key is correct and active in [Groq Console](https://console.groq.com/keys)
+    - Check if you have sufficient credits or quota in your Groq account
+    - Ensure there are no extra spaces in your `.env` file
+  </Accordion>
+  
+  <Accordion title="Model Not Found">
+    - Check if the model name is correctly spelled in your configuration
+    - Verify the model is available in Groq's current model list
+    - Try with a different model from our recommended list
+  </Accordion>
+  
+  <Accordion title="Connection Errors">
+    - Verify your server has internet access to reach `api.groq.com`
+    - Check if there are any firewall restrictions
+    - Review the API/worker logs for detailed error messages
+  </Accordion>
+  
+  <Accordion title="Rate Limiting">
+    - Groq has rate limits based on your plan
+    - Check the [Groq rate limits documentation](https://console.groq.com/docs/rate-limits)
+    - Consider upgrading your plan for higher limits
+  </Accordion>
+</AccordionGroup>

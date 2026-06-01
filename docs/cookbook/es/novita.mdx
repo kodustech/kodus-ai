@@ -1,0 +1,158 @@
+---
+title: "Novita AI - Plataforma GPU Serverless"
+description: "Aprende cómo usar los modelos de Novita con Kodus"
+icon: "server"
+---
+
+## Cómo funciona Novita
+
+Novita es una plataforma de infraestructura serverless para IA, diseñada para escalar modelos de código abierto con baja latencia y costo reducido. Admite cientos de modelos listos para producción, incluidos Llama, Mistral, Claude y Stable Diffusion, y proporciona APIs optimizadas, GPUs bajo demanda y despliegues de modelos personalizados sin ningún trabajo de DevOps.
+
+## Modelos recomendados
+
+Recomendamos buenos modelos de codificación con ventana de contexto de +100k.
+
+<Info>
+  {" "}
+  Para información más actualizada, visita el [sitio web de Novita](https://novita.ai/models/llm).{" "}
+</Info>
+
+| Modelo                              | Precio     | Ventana de contexto |
+| ---------------------------------- | ---------- | -------------- |
+| **Deepseek v3 0324** `recommended` | $0.33/1.3  | ~128k tokens   |
+| **Deepseek R1 0528**               | $0.7/2.5   | ~128k tokens   |
+| **Llama 4 Maverick Instruct**      | $0.17/0.85 | ~100k tokens   |
+
+## Crear clave de API
+
+<Warning>Se requiere una cuenta de Novita para crear una clave de API.</Warning>
+
+Ve directamente a la [página de claves de API de Novita](https://novita.ai/settings/key-management) para crear una nueva clave de API.
+
+O sigue estos pasos:
+
+1. Ve a tu consola de Novita
+2. Haz clic en el botón "Manage API Keys" o ve a tu foto de perfil y haz clic en API Keys
+3. Haz clic en "Add New Key" y rellena con 'Kodus' o el nombre que prefieras
+4. Haz clic en "Confirm"
+5. Copia la clave de API y guárdala en un lugar seguro
+
+
+
+<Snippet file="deploy-basic-setup.mdx" />
+
+### Configura Novita en el archivo de entorno
+
+Edita tu archivo `.env` y configura los ajustes principales. Para la **Integración con LLM**, usa Novita en Modo Fijo:
+
+```env
+# Core System Settings (update with your domains)
+WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
+WEB_PORT_API=443                               
+NEXTAUTH_URL="https://kodus-web.yourdomain.com"
+
+# Security Keys (generate with openssl commands above)
+WEB_NEXTAUTH_SECRET="your-generated-secret"
+API_CRYPTO_KEY="your-generated-hex-key"
+API_JWT_SECRET="your-generated-secret"
+API_JWT_REFRESH_SECRET="your-generated-secret"
+
+# Database Configuration
+API_PG_DB_PASSWORD="your-secure-db-password"
+API_MG_DB_PASSWORD="your-secure-db-password"
+
+# Novita Configuration (Fixed Mode) 
+API_LLM_PROVIDER_MODEL="deepseek-v3-0324"                    # Choose your preferred model
+API_OPENAI_FORCE_BASE_URL="https://api.novita.ai/v3/openai"  # Novita API URL
+API_OPEN_AI_API_KEY="your-novita-api-key"                    # Your Novita API Key
+
+# Git Provider Webhooks (choose your provider)
+API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
+# or API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
+# or GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
+```
+
+<Note>
+  Las URLs de webhook deben alcanzar el servicio de Webhooks (puerto 3332). Usa un dominio dedicado para webhooks o enruta `/.../webhook` al puerto 3332 en tu proxy inverso.
+</Note>
+
+<Info>
+  **El Modo Fijo es ideal para Novita** porque proporciona APIs compatibles con OpenAI y solo requiere una clave de API. Esto simplifica significativamente tu configuración.
+</Info>
+
+<Snippet file="deploy-installation.mdx" />
+
+### 6. Configura el proxy inverso (para producción)
+
+Para webhooks y acceso externo, configura Nginx:
+
+```nginx
+# Web App (port 3000)
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com;
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# API (port 3001)  
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com;
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Verifica la integración con Novita
+
+Además de la verificación básica de instalación, confirma que Novita está funcionando:
+
+```bash
+# Verify Novita API connection specifically
+docker-compose logs api worker | grep -i novita
+```
+
+<Tip>
+  Para información detallada sobre la configuración de SSL, monitoreo y configuraciones avanzadas, consulta nuestra [guía de despliegue completa](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm).
+</Tip>
+
+### Solución de problemas
+
+<AccordionGroup>
+  <Accordion title="Problemas con la clave de API">
+    - Verifica que tu clave de API sea correcta y esté activa en la [consola de Novita](https://novita.ai/settings/key-management)
+    - Comprueba si tienes créditos suficientes en tu cuenta de Novita
+    - Asegúrate de que no haya espacios adicionales en tu archivo `.env`
+  </Accordion>
+  
+  <Accordion title="Modelo no encontrado">
+    - Verifica que el nombre del modelo esté escrito correctamente en tu configuración
+    - Confirma que el modelo esté disponible en tu plan de Novita
+    - Prueba con un modelo diferente de nuestra lista recomendada
+  </Accordion>
+  
+  <Accordion title="Errores de conexión">
+    - Verifica que tu servidor tenga acceso a internet para alcanzar `api.novita.ai`
+    - Comprueba si hay restricciones de firewall
+    - Revisa los logs de la API/worker para mensajes de error detallados
+  </Accordion>
+</AccordionGroup>

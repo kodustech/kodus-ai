@@ -24,15 +24,20 @@
       "status": "success"
     },
     {
-      "capability": "pr.diff.read",
-      "status": "success"
-    },
-    {
       "capability": "task.context.read",
       "status": "success"
     },
     {
-      "step": "validateContext",
+      "step": "validateTaskContext",
+      "passed": true,
+      "status": "success"
+    },
+    {
+      "capability": "pr.diff.read",
+      "status": "success"
+    },
+    {
+      "step": "validatePullRequestDiff",
       "passed": true,
       "status": "success"
     }

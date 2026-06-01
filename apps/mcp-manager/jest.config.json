@@ -1,0 +1,21 @@
+{
+  "preset": "ts-jest",
+  "testEnvironment": "node",
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": ".",
+  "testRegex": ".spec.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": ["ts-jest", {
+      "useESM": false,
+      "tsconfig": {
+        "module": "commonjs"
+      }
+    }]
+  },
+  "collectCoverageFrom": ["**/*.(t|j)s"],
+  "coverageDirectory": "../coverage",
+  "coveragePathIgnorePatterns": ["dist", "node_modules", "test", "src/main.ts", ".eslintrc.js"],
+  "transformIgnorePatterns": [
+    "node_modules/(?!(@composio/core|chalk|ansi-styles)/)"
+  ]
+}

@@ -30,7 +30,7 @@ export class StageMessageHelper {
             return userMessage;
         }
 
-        let technicalDetails = '';
+        let technicalDetails: string;
         if (error instanceof Error) {
             technicalDetails = error.message;
         } else if (typeof error === 'string') {

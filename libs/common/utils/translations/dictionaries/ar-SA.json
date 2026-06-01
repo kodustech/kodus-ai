@@ -5,7 +5,9 @@
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## تم إكمال مراجعة الكود! 🔥\n\nتم إكمال مراجعة الكود بنجاح بناءً على تكويناتك الحالية.\n\n",
-        "withoutComments": "# تم إكمال مراجعة كودي\n**أخبار رائعة!** 🎉\nلم يتم العثور على أي مشاكل تتطابق مع تكوينات المراجعة الحالية الخاصة بك.\n\nواصل العمل الممتاز! 🚀"
+        "withoutComments": "# تم إكمال مراجعة كودي\n**أخبار رائعة!** 🎉\nلم يتم العثور على أي مشاكل تتطابق مع تكوينات المراجعة الحالية الخاصة بك.\n\nواصل العمل الممتاز! 🚀",
+        "withErrors": "## Code Review Could Not Complete ⚠️\n\nThe review failed before suggestions could be generated.\n\n**Reason:** {{errorMessage}}\n\nAfter fixing the issue, comment `@kody review` on this PR to re-run the review.\n\n",
+        "partialErrorsNotice": "\n\n> ⚠️ Note: some checks couldn't be completed in this run, so auto-approval (when enabled) was skipped. Check the details at {{dashboardUrl}} and then comment `@kody review` on this PR to retry once the issue is resolved.\n"
     },
     "pullRequestSummaryMarkdown": {
         "title": "ملخص PR (تم إنشاء التعليق بواسطة [كودي](https://kodus.io) 🤖)",

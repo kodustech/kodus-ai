@@ -10,28 +10,20 @@ import { SelectRepositoriesModal } from "../../_components/_modals/select-reposi
 const providers = {
     azure_repos: {
         readableName: "Azure Repos",
-        segmentKey: "azure_repos",
     },
     github: {
         readableName: "Github",
-        segmentKey: "github",
     },
     gitlab: {
         readableName: "Gitlab",
-        segmentKey: "gitlab",
     },
     bitbucket: {
         readableName: "Bitbucket",
-        segmentKey: "bitbucket",
     },
     forgejo: {
         readableName: "Forgejo",
-        segmentKey: "forgejo",
     },
-} as const satisfies Record<
-    string,
-    { readableName: string; segmentKey: string }
->;
+} as const satisfies Record<string, { readableName: string }>;
 
 export default async function GitRepositories() {
     const teamId = await getGlobalSelectedTeamId();
@@ -67,7 +59,6 @@ export default async function GitRepositories() {
     return (
         <SelectRepositoriesModal
             platformName={provider.readableName}
-            segmentPlatformName={provider.segmentKey}
             selectedRepositories={selectedRepositories}
         />
     );

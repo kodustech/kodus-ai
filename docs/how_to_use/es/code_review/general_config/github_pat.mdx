@@ -1,0 +1,77 @@
+---
+title: "Token FGPAT de Github"
+---
+
+## Introducción al FGPAT
+
+Para permitir que Kody realice Revisiones de Código automáticas, necesitas generar un Token de Acceso Personal de Grano Fino (FGPAT) en GitHub. Este token permite a Kody acceder de forma segura a tus repositorios y realizar análisis de código de manera controlada.
+
+## Verificar los Permisos de Acceso de Grano Fino
+
+Por defecto, un PAT de Grano Fino puede no tener acceso al contenido de tu organización. Asegura el acceso siguiendo estos pasos:
+
+![title](/images/fgpat.png)
+
+1. Debes ser el propietario de la organización.
+1. Ve a la configuración de tu organización en GitHub:
+   - Puedes usar esta URL reemplazando con el nombre de tu organización: <small>https://github.com/organizations/YOUR_ORG_NAME/settings/personal-access-tokens)</small>.
+1. En **Tokens de Acceso Personal de Grano Fino**, selecciona **"Permitir acceso mediante tokens de acceso personal de grano fino"** para habilitar el acceso seguro para Kody.
+
+## Generar el FGPAT (Token de Acceso Personal de Grano Fino)
+
+<iframe
+  width="560"
+  height="315"
+  src="https://www.youtube.com/embed/ESE-Hl-bAD0?si=pCufAgeLBe73K_g0"
+  title="YouTube video player"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  referrerpolicy="strict-origin-when-cross-origin"
+  allowfullscreen
+></iframe>
+
+Sigue estos pasos para configurar el token correctamente:
+
+1. **Accede a GitHub y ve a la configuración de tu perfil**:
+
+   - [Haz clic aquí para acceder a la página de configuración del perfil](https://github.com/settings/profile).
+
+2. **Navega a `Configuración de Desarrollador`**:
+
+   - En la barra lateral izquierda, desplázate hacia abajo para encontrar `Configuración de Desarrollador` y haz clic en ella.
+
+3. **Ve a `Tokens de Acceso Personal`**:
+
+   - Aún en la barra lateral izquierda, bajo `Configuración de Desarrollador`, selecciona `Tokens de Acceso Personal`.
+   - Luego, haz clic en [Tokens de Grano Fino](https://github.com/settings/tokens?type=beta).
+
+4. **Genera un nuevo token**:
+
+   - Haz clic en el botón `Generar nuevo token`.
+
+5. **Configura el nuevo token con las siguientes especificaciones**:
+
+   - **Nombre del Token**: Elige un nombre fácilmente identificable, como `kody_code_review`.
+   - **Fecha de Vencimiento**: Si es posible, selecciona una fecha de vencimiento larga, preferiblemente al menos 180 días.
+   - **Propietario del Recurso**: Asegúrate de que la organización esté configurada como propietaria del token, ya que los repositorios del equipo están bajo la organización.
+   - **Acceso al Repositorio**: Selecciona **Todos los repositorios** para permitir el acceso del token a todos los repositorios.
+   - **Permisos**: Configura los siguientes permisos de solo lectura:
+   - **Repositorio**:
+     - **Actions**: Permiso de lectura.
+     - **Commit statuses**: Permiso de lectura.
+     - **Contents**: Permiso de lectura y escritura.
+     - **Deployments**: Permiso de lectura.
+     - **Issues**: Permiso de lectura.
+     - **Metadata**: Permiso de lectura.
+     - **Pull requests**: Permiso de lectura y escritura.
+     - **Webhooks**: Permiso de lectura y escritura.
+   - **Organización**:
+     - **Members**: Permiso de lectura.
+
+6. **Finaliza y guarda el token**:
+   - Después de configurar los permisos, haz clic en `Generar token`.
+   - Asegúrate de copiar el token generado y guardarlo de forma segura, ya que lo necesitarás para configurar Kody.
+
+## Agregar el Token a Kody
+
+Después de generar el token, pégalo en la pantalla de configuración de Kody para la configuración de automatización. El modal se abrirá automáticamente en cuanto intentes habilitar la automatización.

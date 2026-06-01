@@ -1,0 +1,291 @@
+---
+title: "ローカルクイックスタート"
+description: "ローカルマシンでKodusを起動する — API、Worker、Webhooks、Web UI、およびすべての依存関係を1つのコマンドで。"
+icon: "laptop"
+---
+
+<Note>
+  このガイドはローカル開発を目的としています。本番環境へのデプロイについては、
+  [Kodusのデプロイ](/how_to_deploy/ja/deploy_kodus/generic_vm)ガイドを参照してください。
+</Note>
+
+<Note>
+  ローカル開発は `API_CLOUD_MODE=false` で動作します — これはセルフホスト
+  インスタンスと同じモードで、`telemetry.kodus.io` への匿名の日次
+  ハートビートがデフォルトで有効になっていることを意味します。ローカルでの
+  実験をフリートに表示させたくない場合は、`.env` で
+  `KODUS_TELEMETRY_DISABLED=true` を設定してください。送信される内容と
+  確認方法は [匿名テレメトリ](/how_to_deploy/ja/deploy_kodus/telemetry)
+  を参照してください。
+</Note>
+
+## 前提条件
+
+- Node.js（LTSバージョン）
+- Docker
+- YarnまたはNPM
+- LLM APIキー
+
+## プロジェクトの実行
+
+<Tabs>
+  <Tab title="自動セットアップ（推奨）">
+      クイックかつ自動化されたセットアップには、セットアップスクリプトを使用してください：
+
+      ```bash
+      git clone https://github.com/kodustech/kodus-ai.git
+      cd kodus-ai
+      yarn setup
+      ```
+
+      このスクリプトは自動的に以下を行います：
+      - ✅ 必要な依存関係（Node.js、Yarn、Docker、OpenSSL）をすべて確認
+      - ✅ プロジェクトの依存関係をインストール
+      - ✅ `.env`ファイルを作成・設定
+      - ✅ 必要なセキュリティキーをすべて自動生成
+      - ✅ Dockerネットワークをセットアップ
+      - ✅ 次のステップを明確に提示
+
+    ### LLMモードの選択（必須）
+
+    モードを1つ選択し、サービスを開始する前に.envに入力してください。
+
+    <Snippet file="llm-api-keys.mdx" />
+
+      ### 次のステップ
+
+      **基本セットアップ：**
+      ```bash
+      yarn docker:start
+      yarn migrate:dev
+      yarn seed
+      ```
+
+      **外部インテグレーション（Webhooksなど）を使用する場合：**
+      ```bash
+      yarn docker:start
+      yarn migrate:dev
+      yarn seed
+      yarn tunnel  # 外部サービス用のパブリックエンドポイントを作成
+      ```
+
+      すべてが起動したら、ブラウザで **http://localhost:3000** を開いてください。
+  </Tab>
+  <Tab title="手動セットアップ">
+      すべてを手動で設定する場合：
+
+      ### 1. リポジトリのクローン
+
+      ```bash
+      git clone https://github.com/kodustech/kodus-ai.git
+      ```
+
+      ### 2. 依存関係のインストール
+
+      ```bash
+      yarn install
+      ```
+
+      ### 3. 環境変数の設定
+
+      ```bash
+      cp .env.example .env
+      ```
+      ### 4. LLMモードの選択（必須）
+
+サービスを開始する前に、モードを1つ選択して.envに入力してください。
+
+      <Snippet file="llm-api-keys.mdx" />
+
+      ### 5. セキュリティキーの生成
+
+      環境変数を設定する前に、JWTトークンとその他のセキュリティ関連の設定のためにセキュアなキーを生成する必要があります：
+
+      ```bash
+      # ほとんどのセキュリティキー（JWTシークレットなど）
+      openssl rand -base64 32
+
+      # 暗号化キーとコード管理シークレット
+      openssl rand -hex 32
+
+      # Webhookトークン（URLセーフ）
+      openssl rand -base64 32 | tr -d '=' | tr '/+' '_-'
+      ```
+
+      以下のセキュリティキーの値を生成する必要があります：
+      - `JWT_SECRET`（`openssl rand -base64 32`を使用）
+      - `JWT_REFRESH_SECRET`（`openssl rand -base64 32`を使用）
+      - `CODE_MANAGEMENT_SECRET`（`openssl rand -hex 32`を使用）
+      - `CODE_MANAGEMENT_WEBHOOK_TOKEN`（`openssl rand -base64 32 | tr -d '=' | tr '/+' '_-'`を使用）
+
+
+      ### 6. Dockerネットワークのセットアップ
+
+      必要なDockerネットワークを作成します：
+
+      ```bash
+      docker network create kodus-backend-services || true
+      docker network create shared-network || true
+      ```
+
+      ### 7. 開発環境の起動
+
+      Dockerを使用してサービスを起動します：
+
+      ```bash
+      yarn docker:start
+      ```
+
+      このコマンドは以下を起動します：
+
+      - Kodus API
+      - Worker（非同期ジョブ）
+      - Webhooksサービス
+      - Kodus Webアプリケーション
+      - PostgreSQLデータベース
+      - MongoDBデータベース
+      - RabbitMQ
+      - 必要なネットワーク設定
+
+      外部サービス用のパブリックエンドポイントも作成する場合：
+      ```bash
+      yarn tunnel
+      ```
+
+      ### 8. 初回セットアップ
+
+      プロジェクトを初めて実行する場合は、以下のコマンドを実行してください：
+
+      データベースマイグレーションの実行：
+
+      ```bash
+      yarn migrate:dev
+      ```
+
+      初期データのシード：
+
+      ```bash
+      yarn seed
+      ```
+
+      ### 9. サービスエンドポイント
+
+      以下のURLでサービスにアクセスできます：
+
+      - Web UI: `http://localhost:3000`
+      - API: `http://localhost:3001`
+      - RabbitMQ管理コンソール: `http://localhost:15672`
+      - デバッグポート: `9229`
+
+  </Tab>
+</Tabs>
+
+
+## 開発ワークフロー
+
+### 基本的なローカル開発
+
+1. **サービスの起動**: `yarn docker:start`
+2. **マイグレーションの実行**: `yarn migrate:dev`
+3. **シードデータの読み込み**: `yarn seed`
+4. **アプリを開く**: `http://localhost:3000`にアクセス
+5. **ヘルスチェック**: `yarn dev:health-check`
+
+### 外部インテグレーションを使用した開発
+
+外部サービス（GitのWebhookなど）とのインテグレーションをテストする必要がある場合：
+
+1. **サービスの起動**: `yarn docker:start && yarn migrate:dev && yarn seed`
+2. **トンネルの作成**: `yarn tunnel`（パブリックエンドポイントを作成）
+3. **Webhook URLの更新**: トンネルコマンドが`.env`を自動的に更新します
+4. **Gitプロバイダーの設定**: Gitプロバイダーの設定でトンネルURLを使用
+5. **インテグレーションのテスト**: WebhookをトリガーしてログをモニタリングJP
+
+<Info>
+  **トンネルのメリット：**
+  - 本物のWebhookインテグレーションをローカルでテスト
+  - 外部サービス通信のデバッグ
+  - チームメンバーとの開発環境の共有
+  - モバイルアプリやその他の外部クライアントのテスト
+</Info>
+
+## トラブルシューティング
+
+### クイックヘルスチェック
+
+```bash
+yarn dev:health-check
+```
+
+この包括的なヘルスチェックは以下を検証します：
+- ✅ **サービス**: Kodus API、Worker、Webhooks、Web、PostgreSQL、MongoDB、RabbitMQ
+- 🔌 **ポートの可用性**: Web（3000）、API（3001）、PostgreSQL（5432）、MongoDB（27017）、RabbitMQ（5672/15672）
+- 🗄️ **データベースセットアップ**: マイグレーションとシードデータ
+- 🌐 **APIエンドポイント**: ヘルスエンドポイントと基本的な接続性
+
+
+### 手動での確認
+
+1. **Web UIの確認**: ブラウザで`http://localhost:3000`にアクセス
+2. **APIヘルスの確認**: `http://localhost:3001/health`にアクセス
+3. **RabbitMQの確認**: `http://localhost:15672`にアクセス（デフォルト認証情報: `guest`/`guest`）
+4. **データベース接続の確認**: ログでデータベース接続の成功を確認
+5. **Webhookエンドポイントのテスト**: Gitプロバイダーの設定で`http://localhost:3332/[provider]/webhook`を指定（またはリバースプロキシが`/.../webhook`をWebhooksサービスにルーティングする場合はAPIドメインを使用）
+
+
+### セットアップスクリプトの問題
+
+自動セットアップスクリプト（`yarn setup`）が失敗した場合：
+
+**依存関係が見つからない場合：**
+```bash
+# 必要なツールがすべてインストールされているか確認
+node --version
+yarn --version
+docker --version
+openssl version
+```
+
+**Dockerのパーミッション問題：**
+```bash
+# ユーザーをdockerグループに追加（Linux/macOS）
+sudo usermod -aG docker $USER
+# その後、ログアウトして再度ログイン
+```
+
+**ネットワーク作成エラー：**
+```bash
+# ネットワークが既に存在するか確認
+docker network ls | grep kodus
+# 必要に応じて競合するネットワークを削除
+docker network rm kodus-backend-services shared-network
+```
+
+### よくある問題
+
+**ポートの競合：**
+- ポート3000（Web）、3001（API）、5432（PostgreSQL）、27017（MongoDB）、5672/15672（RabbitMQ）が使用可能であることを確認
+- Kodusを起動する前にこれらのポートを使用している他のサービスを停止
+
+**環境変数が読み込まれない：**
+- プロジェクトルートに`.env`ファイルが存在することを確認
+- 変数の代入にトレーリングスペースがないことを確認
+- 必要なセキュリティキーがすべて正しく生成されたことを確認
+
+**ヘルスチェックの失敗：**
+- `yarn dev:health-check`を実行して詳細な診断を確認
+- コンテナが完全に起動しているか確認（`yarn docker:start`後、1〜2分待機）
+- データベースマイグレーションとシードデータが読み込まれていることを確認
+- `yarn docker:logs`でAPIのログを確認して起動エラーを確認
+
+**APIが応答しない：**
+- APIはコンテナ起動後に完全に初期化されるまでに時間がかかります
+- マイグレーションとシードデータが読み込まれているか確認
+- `.env`ファイルに必要な変数がすべて含まれていることを確認
+- ヘルスチェックを実行して、どの特定のコンポーネントが失敗しているかを確認
+
+**外部サービスとのWebhookの問題：**
+- `yarn tunnel`を使用して外部Webhook用のパブリックエンドポイントを作成
+- GitプロバイダーのWebhook URLをトンネルURLに更新
+- Webhookインテグレーションのテスト中はトンネルNが稼働していることを確認
+- トンネルのログで接続の問題を確認

@@ -1,0 +1,38 @@
+---
+title: "Frecuencia de Despliegue"
+description: "Mide con qué frecuencia tu equipo despliega código a producción"
+---
+
+## Qué es la Frecuencia de Despliegue
+
+La Frecuencia de Despliegue mide cuántas veces tu equipo despliega exitosamente código a producción dentro de un período de tiempo determinado. Esta métrica es un indicador clave de la capacidad de tu equipo para entregar valor rápidamente y mantener un pipeline de entrega fluido.
+
+## Cómo la Calculamos
+
+Rastreamos automáticamente cada vez que tu equipo fusiona código en la rama principal (o rama predeterminada). Dado que las fusiones en la rama principal típicamente desencadenan despliegues, esto nos da una buena medida de la frecuencia con la que tu equipo entrega código a producción.
+
+**Lo que Rastreamos:**
+- Cada fusión en tu rama principal/predeterminada
+- El período de tiempo que seleccionas (diario, semanal, mensual)
+- Integraciones de código exitosas
+
+**Cómo se Calcula:**
+```
+Frecuencia de Despliegue = (Número de Fusiones a Main) ÷ (Período de Tiempo en Semanas)
+```
+
+Por ejemplo, si fusionas 12 veces en main en un período de 4 semanas, tu frecuencia de despliegue es de 3 fusiones por semana.
+
+**Nota**: Medimos las fusiones en main porque típicamente representan cuándo el código está listo para el despliegue en producción. Si tu equipo tiene un flujo de trabajo diferente (como desplegar desde ramas de funciones), esta métrica puede necesitar interpretación.
+
+## Por qué es Importante
+
+Los despliegues frecuentes garantizan que las nuevas funciones y correcciones de errores lleguen rápidamente a los usuarios, aumentando la satisfacción del cliente y la competitividad. También reducen riesgos y facilitan la resolución de problemas.
+
+## Cómo Mejorar
+
+- Implementar pipelines de CI/CD para despliegues automatizados
+- Dividir los cambios grandes en PRs más pequeños
+- Usar feature flags para desplegar sin exponer funciones
+- Hacer la infraestructura como código para despliegues repetibles
+- Configurar monitoreo integral y rollback rápido

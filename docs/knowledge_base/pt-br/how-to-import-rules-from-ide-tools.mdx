@@ -1,0 +1,30 @@
+---
+title: "Como importar regras do Cursor, Copilot ou Claude"
+description: "Sincronize suas regras existentes de ferramentas de codificação com IA no Kodus para que os mesmos padrões se apliquem na sua IDE e na revisão de código."
+---
+
+Se você já tem regras definidas no Cursor, GitHub Copilot, Claude ou outras ferramentas de codificação com IA, pode importá-las para o Kodus para que as mesmas convenções sejam aplicadas durante a revisão de código.
+
+## Como funciona
+
+O Kodus detecta arquivos de regras no seu repositório e oferece a opção de sincronizá-los como Regras do Kody. Os formatos de arquivo suportados incluem:
+
+- `.cursorrules` (Cursor)
+- `.github/copilot-instructions.md` (GitHub Copilot)
+- Arquivos `.claude` (Claude)
+- Outros arquivos de configuração de ferramentas de IA
+
+## Configurando
+
+1. Vá em **Configurações de Revisão de Código** → **Regras do Kody**
+2. O Kodus detecta automaticamente arquivos de regras compatíveis no seu repositório
+3. Revise as regras detectadas e importe as que você deseja
+4. As regras importadas são adicionadas como Regras do Kody e aplicadas durante a revisão de código
+
+## Por que isso importa
+
+Sem sincronização, sua IDE e as ferramentas de revisão de código aplicam padrões diferentes. Um desenvolvedor seguindo as regras do Cursor ainda pode ser sinalizado durante a revisão por algo que a IDE não identificou — ou vice-versa.
+
+A importação garante **uma única fonte de verdade** para padrões de codificação em todo o seu fluxo de trabalho.
+
+Para detalhes, consulte [Sincronização de Regras de IDE](/how_to_use/pt-br/code_review/configs/rules_file_detection).

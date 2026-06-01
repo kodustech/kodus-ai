@@ -1,0 +1,88 @@
+# Self-hosted GitLab fixture for local development testing of the GitLab
+# integration. See ../../scripts/gitlab-dev/run.sh for the orchestrator
+# that boots this compose, bootstraps a test project + PAT, and prints
+# the connection info to register in Kodus.
+#
+# Topology:
+#   GitLab UI/API   →  http://gitlab.lvh.me:8929   (from host + browser)
+#                      http://kodus-gitlab-dev      (from sibling containers
+#                                                    on kodus-backend-services)
+#
+# lvh.me wildcard-resolves to 127.0.0.1, so the GitLab `external_url`
+# below is reachable from both the host and the browser without any
+# /etc/hosts edits. We join the same docker network the Kodus API runs
+# on (`kodus-backend-services`) so:
+#   - GitLab can POST webhooks to http://kodus-api:3001/gitlab/webhook
+#   - the API can clone/fetch via http://kodus-gitlab-dev (no port hop)
+#
+# First boot is slow (gitlab-ce reconfigures on every container start —
+# typically 2-5 minutes on a warm volume, longer on a cold one). The
+# orchestrator polls /-/health with a generous timeout and prints
+# progress.
+
+services:
+    gitlab:
+        # Image is parameterised so the same fixture can validate
+        # GitLab-version-compat code paths against older tags without
+        # a separate compose file. Recommended pins:
+        #   gitlab/gitlab-ce:latest        — happy-path / regression
+        #   gitlab/gitlab-ce:15.6.8-ce.0   — last 15.6.x (before 15.7
+        #                                    introduced the /diffs
+        #                                    endpoint that allDiffs uses)
+        #   gitlab/gitlab-ce:13.12.15-ce.0 — 13.x webhook payload shape
+        #                                    (notes may omit action and
+        #                                    discussion_id)
+        image: ${GITLAB_IMAGE:-gitlab/gitlab-ce:latest}
+        container_name: kodus-gitlab-dev
+        # The hostname must match `external_url` so internal links,
+        # clone URLs, and webhook UIs render consistently. Containers
+        # on the same network resolve `kodus-gitlab-dev` to this box
+        # via docker DNS; the host reaches the same instance via the
+        # published port on gitlab.lvh.me:8929.
+        hostname: gitlab.lvh.me
+        restart: unless-stopped
+        ports:
+            - "8929:8929"
+            - "2289:22"
+        environment:
+            GITLAB_OMNIBUS_CONFIG: |
+                external_url 'http://gitlab.lvh.me:8929'
+                gitlab_rails['gitlab_shell_ssh_port'] = 2289
+                # Trim memory footprint for dev — GitLab CE defaults
+                # assume a beefy production host. These knobs drop the
+                # idle RSS from ~4 GB to ~2.5 GB without affecting the
+                # paths we exercise (REST API + git push/pull).
+                puma['worker_processes'] = 2
+                sidekiq['max_concurrency'] = 10
+                prometheus_monitoring['enable'] = false
+                # Allow webhooks to local/private addresses so GitLab
+                # will actually POST to http://kodus-api:3001 (which
+                # resolves to a docker-internal IP). Without this,
+                # the webhook UI accepts the URL but every delivery
+                # silently fails with "URL is blocked". Harmless when
+                # the webhook points at a public URL (e.g. a zrok or
+                # ngrok tunnel) — that path doesn't need the setting.
+                gitlab_rails['allow_local_requests_from_web_hooks_and_services'] = true
+            # Seed an initial root password so bootstrap.sh doesn't
+            # have to shell into the container to scrape it out of
+            # /etc/gitlab/initial_root_password. Local-only test value.
+            GITLAB_ROOT_PASSWORD: "KodusDev!2026"
+        volumes:
+            - gitlab-config:/etc/gitlab
+            - gitlab-logs:/var/log/gitlab
+            - gitlab-data:/var/opt/gitlab
+        shm_size: "256m"
+        networks:
+            kodus-backend-services:
+                aliases:
+                    - gitlab.lvh.me
+
+volumes:
+    gitlab-config:
+    gitlab-logs:
+    gitlab-data:
+
+networks:
+    kodus-backend-services:
+        external: true
+        name: kodus-backend-services

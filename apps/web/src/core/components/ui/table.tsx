@@ -6,6 +6,7 @@ const TableContainer = React.forwardRef<
     React.HTMLAttributes<HTMLDivElement>
 >((props, ref) => (
     <div
+        ref={ref}
         {...props}
         className={cn("relative w-full overflow-x-auto", props.className)}
     />

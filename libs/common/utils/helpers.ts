@@ -1,4 +1,4 @@
-import * as moment from 'moment-timezone';
+import moment from 'moment-timezone';
 
 import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -208,7 +208,7 @@ export async function sleep(ms = 1000) {
 export const generateRandomOrgName = (name: string): string => {
     let organizationName = `${name}-${randomString(16)}`;
 
-    organizationName = organizationName?.replace(/[^\w\-]/gi, '');
+    organizationName = organizationName?.replace(/[^\w-]/gi, '');
     organizationName = organizationName?.substring(0, 50);
 
     return organizationName;

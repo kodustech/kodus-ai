@@ -20,7 +20,7 @@ ignorePaths:
 ignoredTitleKeywords: []
 baseBranches: []
 enableCommittableSuggestions: true
-crossFileDependenciesAnalysis: true
+byokModel: '' # BYOK main model, empty = inherit, (directory -> repository -> the main model set in BYOK settings)
 
 # review categories
 codeReviewVersion: 'v2' # legacy | v2
@@ -29,7 +29,6 @@ reviewOptions:
     bug: true
     performance: true
     security: true
-    cross_file: true
     business_logic: true
 
 # suggestion control
@@ -171,29 +170,42 @@ v2PromptOverrides:
         flags:
             critical: |
                 Application crash/downtime
-                Data loss/corruption
+                Data loss/corruption or state corruption under concurrent access
                 Security breach (unauthorized access/data exfiltration)
                 Critical operation failure (auth/payment/authorization)
                 Direct financial loss operations
                 Memory leaks that inevitably crash production
+                Race conditions causing data loss or security bypass
             high: |
-                Important functionality broken
+                Important functionality broken or silently wrong
+                Race conditions, TOCTOU bugs, missing synchronization
+                Missing or incorrect locking (e.g., double-checked locking, lock scope reduction)
+                Cache inconsistency or stale data served to users
+                Feature flags or configuration that silently disables functionality
                 Memory leaks that cause eventual crash
                 Performance degradation affecting UX under normal load
                 Security issues with indirect exploitation paths
-                Financial calculation errors affecting revenue
+                Functions that always return wrong values (logic errors)
             medium: |
-                Partially broken functionality
-                Performance issues in specific scenarios
-                Security weaknesses requiring specific conditions
+                Partially broken functionality with workarounds available
+                Performance issues in specific scenarios only
+                Security weaknesses requiring specific conditions to exploit
                 Incorrect but recoverable data
-                Non-critical business logic errors with workarounds
+                Non-critical business logic errors
             low: |
                 Minor performance overhead
                 Low-risk security improvements
                 Incorrect metrics/logs
                 Rarely affecting few users
-                Edge-case issues
+                Edge-case issues unlikely to occur in practice
+
+    level:
+        critical: |
+            The code WILL crash, lose/corrupt data, or open a severe security breach in production. Immediate fix required before merge.
+        issue: |
+            The code produces WRONG results or fails to perform its intended function in at least one scenario, but does not cause catastrophic failure.
+        warning: |
+            The code produces CORRECT results and performs its intended function in ALL scenarios but is suboptimal in style, performance, or maintainability.
 
     generation:
         main: |

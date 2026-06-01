@@ -1,0 +1,59 @@
+---
+title: "Directory-Level Settings"
+description: "Target specific folders in your repo with custom code review settings. Ideal for monorepos."
+---
+
+## Overview
+
+Apply custom code review settings to specific folders in your repository. Ideal for monorepos where different areas have different standards or ownership.
+
+Kody selects a single config per PR: **Directory** → **Repository** → **Global**
+
+<Note>
+  Learn how settings flow between levels in <a href="/how_to_use/en/code_review/configs/inheritance_overrides">Config Inheritance & Overrides</a>.
+</Note>
+
+## How it works
+
+- Configure any folder at any depth (e.g., `api/src/services`)
+- Configure as many folders as you want
+- **No overlapping**: if you configure `api/src/services`, you cannot also configure `api/src/services/users`
+
+### Selection rules
+
+- **One configured directory touched**: Uses that directory's config
+- **No configured directories touched**: Uses repository config (or global if no repo config)
+- **Two or more configured directories touched**: Escalates to repository config (or global if no repo config)
+
+<Note>
+  Kody uses one config per PR to keep reviews predictable. Mixing configs causes conflicts.
+</Note>
+
+## Examples
+
+<Tabs>
+  <Tab title="Single configured directory">
+    You configured `src/microservice-alpha`. PR changes files in `src/microservice-alpha` and unconfigured folders.
+    
+    Uses **microservice-alpha** config.
+  </Tab>
+  <Tab title="No configured directories">
+    PR only touches directories without specific configs.
+    
+    Uses **repository** config (or **global** if no repo config).
+  </Tab>
+  <Tab title="Multiple configured directories">
+    You configured `src/microservice-alpha` and `src/microservice-beta`. PR touches both.
+    
+    Escalates to **repository** config (or **global** if no repo config).
+  </Tab>
+</Tabs>
+
+## Setup
+
+1. Open your repository's Code Review settings
+2. Add directory entries and assign configurations
+3. Save changes
+
+If you also use `kodus-config.yml`, it overrides web settings (see Config Priority in General settings).
+

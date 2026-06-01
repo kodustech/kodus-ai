@@ -1,0 +1,118 @@
+---
+title: "ナレッジベース"
+description: "AIコードレビュー、コーディング標準の適用、ビジネスロジック検証などに関するよくある質問への回答。"
+---
+
+## コードレビュー
+
+<CardGroup cols={2}>
+  <Card title="プルリクエストでコーディング標準を適用する方法" href="/knowledge_base/ja/how-to-enforce-coding-standards-in-pull-requests">
+    カスタムルールを使用して、すべてのPRにチームのコーディング規約を自動的に適用します。
+  </Card>
+  <Card title="GitHub、GitLab、Bitbucketでコードレビューを自動化する方法" href="/knowledge_base/ja/how-to-automate-code-review">
+    すべてのプルリクエストで自動的に実行されるAI搭載コードレビューをセットアップします。
+  </Card>
+  <Card title="カスタムコードレビュールールを作成する方法" href="/knowledge_base/ja/how-to-create-custom-code-review-rules">
+    チームのアーキテクチャ、パターン、好みに合わせたルールを定義します。
+  </Card>
+  <Card title="コードレビューのノイズと誤検知を減らす方法" href="/knowledge_base/ja/how-to-reduce-code-review-noise">
+    提案数の制限、重要度フィルター、無視パスを調整してレビューを集中させます。
+  </Card>
+  <Card title="レビュールールとメモリの違いとは" href="/knowledge_base/ja/difference-between-review-rules-and-memories">
+    最良の結果を得るために、各タイプのKodyルールをいつ使用するかを理解します。
+  </Card>
+  <Card title="AIにチームのコーディング規約を学習させる方法" href="/knowledge_base/ja/how-to-teach-ai-your-team-conventions">
+    メモリを使用して、自然な会話を通じてKodyのコーディング設定を学習させます。
+  </Card>
+</CardGroup>
+
+## ビジネスロジック検証
+
+<CardGroup cols={2}>
+  <Card title="PRがJiraチケットを実装しているか検証する方法" href="/knowledge_base/ja/how-to-validate-pr-against-jira-ticket">
+    マージ前にJiraの受け入れ基準とプルリクエストを比較します。
+  </Card>
+  <Card title="プルリクエストに対してLinearイシューを検証する方法" href="/knowledge_base/ja/how-to-validate-pr-against-linear-issue">
+    PRがLinearイシューに記載された内容を実装していることを確認します。
+  </Card>
+  <Card title="Google Docsの仕様に対してコードを確認する方法" href="/knowledge_base/ja/how-to-check-code-against-google-docs">
+    Google Docsに記載された仕様に対して実装を検証します。
+  </Card>
+  <Card title="マージ前にビジネスルールを検証する方法" href="/knowledge_base/ja/how-to-validate-business-rules-before-merging">
+    コードが本番環境に到達する前に、不足している要件、エッジケース、ロジックのギャップを検出します。
+  </Card>
+</CardGroup>
+
+## ルールと自動化
+
+<CardGroup cols={2}>
+  <Card title="Cursor、Copilot、またはClaudeからルールをインポートする方法" href="/knowledge_base/ja/how-to-import-rules-from-ide-tools">
+    既存のAIコーディングツールのルールをコードレビューワークフローに同期します。
+  </Card>
+  <Card title="コードレビュールールを自動生成する方法" href="/knowledge_base/ja/how-to-generate-rules-automatically">
+    AIにレビュー履歴を分析させ、チームのパターンに基づいたルールを提案させます。
+  </Card>
+  <Card title="リポジトリ間でコーディング標準を共有する方法" href="/knowledge_base/ja/how-to-share-standards-across-repositories">
+    ルールの継承と組織レベルのルールを使用して一貫性を維持します。
+  </Card>
+  <Card title="プロジェクト固有のコンテキストでPRをレビューする方法" href="/knowledge_base/ja/how-to-review-prs-with-project-context">
+    Kodyにプロジェクトドキュメント、ハンドブック、アーキテクチャガイドへのアクセスを提供します。
+  </Card>
+</CardGroup>
+
+## セットアップと統合
+
+<CardGroup cols={2}>
+  <Card title="GitHubでAIコードレビューをセットアップする方法" href="/knowledge_base/ja/how-to-set-up-ai-code-review-on-github">
+    数分でGitHubリポジトリにKodusをインストールして設定します。
+  </Card>
+  <Card title="GitLabでAIコードレビューをセットアップする方法" href="/knowledge_base/ja/how-to-set-up-ai-code-review-on-gitlab">
+    GitLabプロジェクトにKodusをインストールして設定します。
+  </Card>
+  <Card title="Azure DevOpsでAIコードレビューをセットアップする方法" href="/knowledge_base/ja/how-to-set-up-ai-code-review-on-azure-devops">
+    Azure DevOpsリポジトリにKodusをインストールして設定します。
+  </Card>
+  <Card title="JiraをコードレビューツールにConnectする方法" href="/knowledge_base/ja/how-to-connect-jira-to-code-review">
+    Jiraをリンクしてコードレビューで自動タスクコンテキストを有効にします。
+  </Card>
+  <Card title="LinearをコードレビューツールにConnectする方法" href="/knowledge_base/ja/how-to-connect-linear-to-code-review">
+    Linearをリンクしてコードレビューで自動タスクコンテキストを有効にします。
+  </Card>
+  <Card title="コードレビューに独自のLLMプロバイダーを使用できますか" href="/knowledge_base/ja/can-i-use-my-own-llm-provider">
+    独自のAPIキーを持ち込み、好みのLLMプロバイダーを選択します。
+  </Card>
+  <Card title="AIコードレビューツールをセルフホストする方法" href="/knowledge_base/ja/how-to-self-host-ai-code-review">
+    完全なデータ管理でKodusを独自のインフラストラクチャにデプロイします。
+  </Card>
+</CardGroup>
+
+## LLMプロバイダー
+
+<CardGroup cols={2}>
+  <Card title="KodusでNovita AIを使用する方法" href="/knowledge_base/ja/how-to-use-novita-with-kodus">
+    NovitaのサーバーレスGPUプラットフォームをLLMプロバイダーとして設定します。
+  </Card>
+  <Card title="KodusでGroqを使用する方法" href="/knowledge_base/ja/how-to-use-groq-with-kodus">
+    Groqの超高速推論をLLMプロバイダーとして設定します。
+  </Card>
+  <Card title="KodusでTogether AIを使用する方法" href="/knowledge_base/ja/how-to-use-together-ai-with-kodus">
+    Together AIのオープンソースモデルをLLMプロバイダーとして設定します。
+  </Card>
+  <Card title="KodusでFireworks AIを使用する方法" href="/knowledge_base/ja/how-to-use-fireworks-with-kodus">
+    Fireworks AIの高速推論をLLMプロバイダーとして設定します。
+  </Card>
+</CardGroup>
+
+## トラブルシューティング
+
+<CardGroup cols={2}>
+  <Card title="AIコードレビューがトリガーされない理由" href="/knowledge_base/ja/why-is-ai-code-review-not-triggering">
+    レビューが自動的に開始されない場合の一般的な原因と修正方法。
+  </Card>
+  <Card title="GitHubまたはGitLabのWebhook問題を修正する方法" href="/knowledge_base/ja/how-to-fix-webhook-issues">
+    Webhookの接続問題をデバッグして解決します。
+  </Card>
+  <Card title="コードレビューが一時停止している理由" href="/knowledge_base/ja/why-are-code-reviews-paused">
+    自動一時停止の動作とレビューを再開する方法を理解します。
+  </Card>
+</CardGroup>

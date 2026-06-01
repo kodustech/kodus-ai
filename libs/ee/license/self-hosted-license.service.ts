@@ -294,7 +294,9 @@ export class SelfHostedLicenseService implements ILicenseService {
             // DB lookup failed, fall through to env var
         }
 
-        // Fallback to env var
+        // Fallback to env var. KODUS_LICENSE_KEY is the customer-facing
+        // name self-hosted installs use — do NOT rename it (our test
+        // provisioning must set this exact var).
         return process.env.KODUS_LICENSE_KEY || null;
     }
 

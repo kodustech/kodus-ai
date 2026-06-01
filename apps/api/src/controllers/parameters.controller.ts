@@ -34,13 +34,14 @@ import {
 } from '../dtos/parameters-response.dto';
 
 import { ApplyCodeReviewPresetUseCase } from '@libs/code-review/application/use-cases/configuration/apply-code-review-preset.use-case';
-import { CentralizedConfigSyncUseCase } from '@libs/code-review/application/use-cases/configuration/centralized-config-sync.use-case';
+import { CentralizedConfigSyncUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-sync.use-case';
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
     ICodeBaseConfigService,
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { CodeReviewVersion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import { toRequestUserContext } from '@libs/identity/domain/user/types/request-user-context.type';
 import {
     Action,
     ResourceType,
@@ -51,8 +52,8 @@ import {
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
 
 import { DeleteRepositoryCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/delete-repository-code-review-parameter.use-case';
-import { CentralizedConfigDownloadUseCase } from '@libs/code-review/application/use-cases/configuration/centralized-config-download.use-case';
-import { CentralizedConfigInitUseCase } from '@libs/code-review/application/use-cases/configuration/centralized-config-init.use-case';
+import { CentralizedConfigDownloadUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-download.use-case';
+import { CentralizedConfigInitUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-init.use-case';
 import { GenerateKodusConfigFileUseCase } from '@libs/code-review/application/use-cases/configuration/generate-kodus-config-file.use-case';
 import { GetCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/get-code-review-parameter.use-case';
 import { ListCodeReviewAutomationLabelsWithStatusUseCase } from '@libs/code-review/application/use-cases/configuration/list-code-review-automation-labels-with-status.use-case';
@@ -70,7 +71,6 @@ import { GetDefaultConfigUseCase } from '@libs/organization/application/use-case
 import { CreateOrUpdateCodeReviewParameterDto } from '@libs/organization/dtos/create-or-update-code-review-parameter.dto';
 import { DeleteRepositoryCodeReviewParameterDto } from '@libs/organization/dtos/delete-repository-code-review-parameter.dto';
 import { PreviewPrSummaryDto } from '@libs/organization/dtos/preview-pr-summary.dto';
-import archiver from 'archiver';
 import { finished } from 'stream/promises';
 import { ApplyCodeReviewPresetDto } from '../dtos/apply-code-review-preset.dto';
 
@@ -173,6 +173,7 @@ export class ParametersController {
                     organizationId,
                     teamId: body.organizationAndTeamData.teamId,
                 },
+                requestUser: toRequestUserContext(this.request?.user),
             } as any);
         }
 
@@ -287,6 +288,7 @@ export class ParametersController {
                 ...body.organizationAndTeamData,
                 organizationId,
             },
+            requestUser: toRequestUserContext(this.request?.user),
         });
     }
 
@@ -581,6 +583,7 @@ export class ParametersController {
                 'attachment; filename=centralized-config.zip',
         });
 
+        const { default: archiver } = await import('archiver');
         const archive = archiver('zip', { zlib: { level: 9 } });
         archive.on('error', (err) => {
             response.destroy(err);

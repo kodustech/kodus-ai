@@ -101,6 +101,13 @@ export class PermissionValidationService {
     }
 
     /**
+     * Verifies if the plan requires per-user license validation
+     */
+    private requiresUserLicense(planType: PlanType | null): boolean {
+        return planType === PlanType.BYOK || planType === PlanType.MANAGED;
+    }
+
+    /**
      * Unified permission validation for operations that need license + BYOK
      */
     async validateExecutionPermissions(
@@ -201,9 +208,9 @@ export class PermissionValidationService {
                 }
             }
 
-            if (identifiedPlanType === PlanType.MANAGED && !userGitId) {
+            if (this.requiresUserLicense(identifiedPlanType) && !userGitId) {
                 this.logger.warn({
-                    message: 'Managed plan requires licensed user, NOT_ERROR',
+                    message: 'Plan requires licensed user, NOT_ERROR',
                     context: contextName || PermissionValidationService.name,
                     metadata: { organizationAndTeamData },
                 });
@@ -217,8 +224,8 @@ export class PermissionValidationService {
                 };
             }
 
-            // 6. Validate specific user (ALWAYS validates if userGitId provided, except trial)
-            if (!this.requiresBYOK(identifiedPlanType) && userGitId) {
+            // 6. Validate specific user (ALWAYS validates if userGitId provided, except trial and free)
+            if (this.requiresUserLicense(identifiedPlanType) && userGitId) {
                 const users = await this.licenseService.getAllUsersWithLicense(
                     organizationAndTeamData,
                 );
@@ -576,11 +583,22 @@ export class PermissionValidationService {
     }
 
     /**
-     * Retorna a configuração BYOK da organização (se existir)
+     * Retorna a configuração BYOK da organização (se existir).
+     *
+     * CLI trial requests carry organizationId='trial' (not a UUID) so the
+     * organization_parameters lookup would fail with Postgres' UUID syntax
+     * check. Treat non-UUID org identifiers as "no BYOK config" instead of
+     * letting the query error propagate.
      */
     async getBYOKConfig(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<BYOKConfig | null> {
+        const UUID_RE =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!UUID_RE.test(organizationAndTeamData?.organizationId || '')) {
+            return null;
+        }
+
         const byokConfig = await this.organizationParametersService.findByKey(
             OrganizationParametersKey.BYOK_CONFIG,
             organizationAndTeamData,

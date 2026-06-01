@@ -19,7 +19,7 @@ import { Action, ResourceType } from "@services/permissions/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { SeverityLevel } from "src/core/types";
 import { cn } from "src/core/utils/components";
-import { pathToApiUrl } from "src/core/utils/helpers";
+import { apiProxyPath } from "src/core/utils/api-proxy";
 import { generateQueryKey } from "src/core/utils/reactQuery";
 
 const SEVERITY_OPTIONS = [
@@ -51,14 +51,14 @@ export const SeverityLevelSelect = ({
                 });
 
                 queryClient.setQueryData<IssueItem>(
-                    generateQueryKey(pathToApiUrl(`/issues/${issueId}`)),
+                    generateQueryKey(apiProxyPath(`/issues/${issueId}`)),
                     (old) => (!old ? old : { ...old, severity }),
                 );
 
                 queryClient.setQueriesData<IssueListItem[]>(
                     {
                         exact: false,
-                        queryKey: generateQueryKey(pathToApiUrl("/issues")),
+                        queryKey: generateQueryKey(apiProxyPath("/issues")),
                     },
                     (old = []) =>
                         old.map((d) =>

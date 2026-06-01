@@ -40,8 +40,13 @@ function getPinoLogger(): pino.Logger {
                 level: (label) => ({ level: label }),
             },
             serializers: {
-                error: pino.stdSerializers.err,
-                err: pino.stdSerializers.err,
+                // Custom err serializer: run pino's stdSerializer to flatten the
+                // Error, then deepSanitize so nested HTTPError shapes (got/axios
+                // throw with err.request.headers.authorization, err.options.headers,
+                // err.response.headers.set-cookie, etc.) are redacted by key name
+                // at any depth — no need to enumerate every possible path below.
+                error: (err: any) => deepSanitize(pino.stdSerializers.err(err)),
+                err: (err: any) => deepSanitize(pino.stdSerializers.err(err)),
                 req: pino.stdSerializers.req,
                 res: pino.stdSerializers.res,
             },
@@ -55,6 +60,7 @@ function getPinoLogger(): pino.Logger {
                     'apikey',
                     'api_key',
                     'authorization',
+                    'cookie',
                     'accessToken',
                     'refreshToken',
                     'clientSecret',
@@ -71,6 +77,7 @@ function getPinoLogger(): pino.Logger {
                     '*.apikey',
                     '*.api_key',
                     '*.authorization',
+                    '*.cookie',
                     '*.accessToken',
                     '*.refreshToken',
                     '*.clientSecret',
@@ -85,6 +92,7 @@ function getPinoLogger(): pino.Logger {
                     '*.*.secret',
                     '*.*.apiKey',
                     '*.*.authorization',
+                    '*.*.cookie',
                     '*.*.accessToken',
                     '*.*.refreshToken',
                     '*.*.clientSecret',
@@ -92,10 +100,27 @@ function getPinoLogger(): pino.Logger {
                     '*.*.jwt',
                     '*.*.credential',
                     '*.*.connectionString',
-                    // HTTP
+                    // HTTP req/res
                     'req.headers.authorization',
-                    'req.headers[\"x-api-key\"]',
+                    'req.headers["x-api-key"]',
                     'req.headers.cookie',
+                    'res.headers["set-cookie"]',
+                    // Intermediate wildcards (`*.headers.X`, `*.*.headers.X`,
+                    // `*.*.*.headers.X`) were intentionally removed: they
+                    // crashed pino-redact whenever the log payload carried
+                    // an `undici` Response in its tree (issue #1105). The
+                    // wildcard traversal touches getter-defined properties
+                    // on Response (e.g. `.type`) whose internal state may
+                    // be invalid after the body is consumed or aborted,
+                    // raising a TypeError that escaped this logger.
+                    //
+                    // `deepSanitize` below (key-based, normalizes case +
+                    // punctuation) provides equivalent or stronger
+                    // redaction for `authorization` / `cookie` /
+                    // `set-cookie` / `x-api-key` / `proxy-authorization`
+                    // at arbitrary depth, so dropping the wildcards is
+                    // not a coverage loss — it removes redundant work
+                    // that was the actual crash site.
                 ],
                 censor: '[REDACTED]',
             },
@@ -142,8 +167,18 @@ function getPinoLogger(): pino.Logger {
             });
         }
 
+        let transportFailed = false;
         transport.on('error', (err) => {
-            console.error('Pino transport failure:', err);
+            if (transportFailed) return;
+            transportFailed = true;
+            console.error(
+                'Pino transport worker died, falling back to in-process stdout logger:',
+                err,
+            );
+            // Worker thread is gone — rebuild the singleton with an in-process
+            // destination so subsequent getPinoLogger() calls return a healthy
+            // logger that can't die the same way.
+            pinoLogger = pino(baseConfig, pino.destination({ dest: 1 }));
         });
 
         pinoLogger = pino(baseConfig, transport);
@@ -158,6 +193,11 @@ const SENSITIVE_KEYS = new Set([
     'apikey',
     'api_key',
     'authorization',
+    'proxyauthorization',
+    'cookie',
+    'setcookie',
+    'xapikey',
+    'xauthtoken',
     'accesstoken',
     'refreshtoken',
     'clientsecret',
@@ -276,18 +316,57 @@ function sanitizeString(value: string): string {
 }
 
 /**
+ * Hard cap on recursion depth for `deepSanitize`. The default V8 stack
+ * holds ~10k frames before throwing RangeError; we trim well below that
+ * because legitimate log payloads never need anywhere near this depth.
+ *
+ * Why this matters: an AxiosError carries the full Node HTTP agent chain
+ * (`err.request.agent.sockets[host][0]._httpMessage.agent.sockets...`),
+ * and in long-running workers under load that graph can reach
+ * thousands of levels. The WeakSet cycle guard below catches cycles but
+ * does NOT bound depth — so a non-cyclic but deeply-nested object would
+ * still overflow. In production this manifested as every per-file fetch
+ * failure on the AzureReposService falling back to the safety-net
+ * `console.error` path with `loggerErrorName: "RangeError"`, losing
+ * structured info AND burning CPU on the failed serialization attempts.
+ */
+const DEEP_SANITIZE_MAX_DEPTH = 24;
+
+/**
  * Deep-sanitizes an object, redacting sensitive keys at any depth.
  * Also strips URL-embedded credentials from string values.
  * Uses structural sharing: returns the original reference when nothing changed,
  * so clean metadata incurs zero allocation overhead.
+ *
+ * Depth-bounded: stops recursing past `DEEP_SANITIZE_MAX_DEPTH` and
+ * returns a `[Max-Depth]` marker. This is the difference between
+ * "lost log line" and "truncated-but-present log line" when something
+ * upstream hands us a Node HTTP agent / AxiosError graph.
  */
-function deepSanitize(obj: any, seen?: WeakSet<object>): any {
+function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
     if (obj === null || typeof obj !== 'object') {
         if (typeof obj === 'string') {
             const sanitized = sanitizeString(obj);
             return sanitized !== obj ? sanitized : obj;
         }
         return obj;
+    }
+
+    if (
+        typeof (globalThis as any).Response === 'function' &&
+        obj instanceof (globalThis as any).Response
+    ) {
+        return '[Response]';
+    }
+    if (
+        typeof (globalThis as any).Request === 'function' &&
+        obj instanceof (globalThis as any).Request
+    ) {
+        return '[Request]';
+    }
+
+    if (depth >= DEEP_SANITIZE_MAX_DEPTH) {
+        return '[Max-Depth]';
     }
 
     // Lazily create WeakSet only when we actually recurse into a nested object.
@@ -299,7 +378,7 @@ function deepSanitize(obj: any, seen?: WeakSet<object>): any {
         let changed = false;
         const out: any[] = [];
         for (const item of obj) {
-            const sanitized = deepSanitize(item, refs);
+            const sanitized = deepSanitize(item, refs, depth + 1);
             out.push(sanitized);
             if (sanitized !== item) changed = true;
         }
@@ -314,7 +393,7 @@ function deepSanitize(obj: any, seen?: WeakSet<object>): any {
             out[key] = '[REDACTED]';
             changed = true;
         } else {
-            const val = deepSanitize(obj[key], refs);
+            const val = deepSanitize(obj[key], refs, depth + 1);
             out[key] = val;
             if (val !== obj[key]) changed = true;
         }
@@ -358,31 +437,70 @@ export class SimpleLogger {
         const contextStr = this.extractContextInfo(context);
         const baseLogger = getPinoLogger();
 
-        // Standard logging to stdout (respects API_LOG_LEVEL)
+        // #1105: pino write must never propagate to the caller.
         if (baseLogger.isLevelEnabled(level)) {
-            const childLogger = baseLogger.child({
-                serviceName: effectiveServiceName,
-                context: contextStr,
-            });
+            try {
+                const childLogger = baseLogger.child({
+                    serviceName: effectiveServiceName,
+                    context: contextStr,
+                });
 
-            const logObject = this.buildLogObject(
-                effectiveServiceName,
-                metadata,
-                error,
-            );
+                const logObject = this.buildLogObject(
+                    effectiveServiceName,
+                    metadata,
+                    error,
+                );
 
-            if (error) {
-                childLogger[level]({ ...logObject, err: error }, message);
-            } else {
-                childLogger[level](logObject, message);
+                if (error) {
+                    childLogger[level]({ ...logObject, err: error }, message);
+                } else {
+                    childLogger[level](logObject, message);
+                }
+            } catch (loggerErr) {
+                try {
+                    const fallbackPayload: Record<string, unknown> = {
+                        level,
+                        message,
+                        serviceName: effectiveServiceName,
+                        context: contextStr,
+                        loggerFallback: true,
+                    };
+                    if (error) {
+                        fallbackPayload.errorName = (error as Error)?.name;
+                        fallbackPayload.errorMessage = (
+                            error as Error
+                        )?.message;
+                    }
+                    const loggerErrAsError = loggerErr as Error | undefined;
+                    fallbackPayload.loggerErrorName = loggerErrAsError?.name;
+                    fallbackPayload.loggerErrorMessage =
+                        loggerErrAsError?.message;
+                    // eslint-disable-next-line no-console
+                    console.error(JSON.stringify(fallbackPayload));
+                } catch {
+                    // eslint-disable-next-line no-console
+                    console.error(
+                        '[logger:fallback-failed] level=' +
+                            level +
+                            ' service=' +
+                            effectiveServiceName,
+                    );
+                }
             }
         }
 
-        // Processors run regardless of stdout log level
-        const safeProcessorMetadata = deepSanitize({
-            ...metadata,
-            component: effectiveServiceName,
-        });
+        let safeProcessorMetadata: Record<string, unknown> = {};
+        try {
+            safeProcessorMetadata = deepSanitize({
+                ...metadata,
+                component: effectiveServiceName,
+            });
+        } catch {
+            safeProcessorMetadata = {
+                component: effectiveServiceName,
+                sanitizationFailed: true,
+            };
+        }
         for (const processor of globalLogProcessors) {
             try {
                 if (typeof processor === 'function') {

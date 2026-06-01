@@ -23,7 +23,6 @@ import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { cn } from "src/core/utils/components";
 import { useFetch } from "src/core/utils/reactQuery";
 import { safeArray } from "src/core/utils/safe-array";
-import { captureSegmentEvent } from "src/core/utils/segment";
 
 import { StepIndicators } from "../_components/step-indicators";
 
@@ -226,16 +225,6 @@ export default function ReviewModePage() {
     }, [onboardingSignals]);
 
     const handleSelectMode = (mode: ReviewMode) => {
-        captureSegmentEvent({
-            userId: userId!,
-            event: "setup_review_mode_selected",
-            properties: {
-                mode,
-                recommendedMode: recommendedMode ?? null,
-                isRecommended: recommendedMode === mode,
-                teamId,
-            },
-        });
         setSelectedMode(mode);
     };
 
@@ -303,17 +292,6 @@ export default function ReviewModePage() {
         const preset = ["speed", "safety", "coach"].includes(selectedMode)
             ? (selectedMode as "speed" | "safety" | "coach")
             : undefined;
-
-        captureSegmentEvent({
-            userId: userId!,
-            event: "setup_review_mode_continue",
-            properties: {
-                mode: selectedMode,
-                recommendedMode: recommendedMode ?? null,
-                isRecommended: recommendedMode === selectedMode,
-                teamId,
-            },
-        });
 
         if (!preset) {
             router.push("/setup/customize-team");

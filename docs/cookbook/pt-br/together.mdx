@@ -1,0 +1,173 @@
+---
+title: "Together AI - Modelos Open Source"
+description: "Aprenda a usar os modelos do Together AI com o Kodus"
+icon: "users"
+---
+
+## Como o Together AI funciona
+
+O Together AI facilita a execução dos principais modelos open-source usando apenas algumas linhas de código. A plataforma fornece inferência rápida, APIs compatíveis com OpenAI e acesso a modelos de ponta como Llama 4, DeepSeek e muito mais. Criado para desenvolvedores que precisam de infraestrutura de IA confiável e escalável sem complexidade.
+
+## Modelos Recomendados
+
+Recomendamos bons modelos de codificação com grandes janelas de contexto e preços competitivos.
+
+<Info>
+  Para as informações mais atualizadas, visite a [página de preços do Together AI](https://www.together.ai/pricing).
+</Info>
+
+| Modelo                              | Preço (1M tokens) | Janela de Contexto |
+| ---------------------------------- | ------------------- | ------------------ |
+| **Llama 4 Maverick** `recommended` | $0.27/$0.85         | ~128k tokens   |
+| **DeepSeek-V3**                    | $1.25               | ~128k tokens   |
+| **Llama 3.1 70B Turbo**            | $0.88               | ~128k tokens   |
+| **Qwen 2.5 72B**                   | $1.20               | ~128k tokens   |
+
+## Criando a Chave de API
+
+<Warning>Uma conta no Together AI é necessária para criar a Chave de API.</Warning>
+
+Acesse diretamente o [Together AI Console](https://api.together.ai) para criar uma nova Chave de API.
+
+Ou siga estas etapas:
+
+1. Crie uma conta em [api.together.ai](https://api.together.ai) ou entre se já tiver uma
+2. No painel principal, role até a seção "Manage Account"
+3. No cartão "API Keys", clique no botão "Manage Keys"
+4. Clique no botão "Add Key"
+5. Dê um nome como 'Kodus' ou qualquer nome descritivo
+6. Copie sua chave de API e você está pronto para começar!
+
+<Info>
+  Novas contas recebem $1 em créditos para começar gratuitamente.
+</Info>
+
+## Como usar
+
+<Snippet file="deploy-basic-setup.mdx" />
+
+### Configure o Together AI no Arquivo de Ambiente
+
+Edite seu arquivo `.env` e configure as definições principais. Para **Integração com LLM**, use o Together AI no Modo Fixo:
+
+```env
+# Core System Settings (update with your domains)
+WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
+WEB_PORT_API=443                               
+NEXTAUTH_URL="https://kodus-web.yourdomain.com"
+
+# Security Keys (generate with openssl commands above)
+WEB_NEXTAUTH_SECRET="your-generated-secret"
+API_CRYPTO_KEY="your-generated-hex-key"
+API_JWT_SECRET="your-generated-secret"
+API_JWT_REFRESH_SECRET="your-generated-secret"
+
+# Database Configuration
+API_PG_DB_PASSWORD="your-secure-db-password"
+API_MG_DB_PASSWORD="your-secure-db-password"
+
+# Together AI Configuration (Fixed Mode) 
+API_LLM_PROVIDER_MODEL="meta-llama/Meta-Llama-4-Maverick-Instruct"  # Choose your preferred model
+API_OPENAI_FORCE_BASE_URL="https://api.together.xyz/v1"             # Together AI API URL  
+API_OPEN_AI_API_KEY="your-together-api-key"                         # Your Together AI API Key
+
+# Git Provider Webhooks (choose your provider)
+API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
+# or API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
+# or GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
+```
+
+<Note>
+  As URLs de webhook devem alcançar o serviço de Webhooks (porta 3332). Use um domínio dedicado para webhooks ou roteie `/.../webhook` para a porta 3332 no seu proxy reverso.
+</Note>
+
+<Info>
+  **O Modo Fixo é ideal para o Together AI** porque fornece APIs compatíveis com OpenAI com preços competitivos e acesso a modelos open-source de ponta.
+</Info>
+
+<Snippet file="deploy-installation.mdx" />
+
+### Configure o Proxy Reverso (Para Produção)
+
+Para webhooks e acesso externo, configure o Nginx:
+
+```nginx
+# Web App (port 3000)
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com;
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# API (port 3001)  
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com;
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Verifique a Integração com o Together AI
+
+Além da verificação básica de instalação, confirme que o Together AI está funcionando:
+
+```bash
+# Verify Together AI API connection specifically
+docker-compose logs api worker | grep -i together
+```
+
+<Tip>
+  Para informações detalhadas sobre configuração de SSL, monitoramento e configurações avançadas, consulte nosso [guia completo de implantação](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm).
+</Tip>
+
+### Solução de Problemas
+
+<AccordionGroup>
+  <Accordion title="Problemas com a Chave de API">
+    - Verifique se sua chave de API está correta e ativa no [Together AI Console](https://api.together.ai)
+    - Verifique se você tem créditos suficientes em sua conta Together AI
+    - Certifique-se de que não há espaços extras no seu arquivo `.env`
+    - Novas contas recebem $1 em créditos gratuitos
+  </Accordion>
+  
+  <Accordion title="Modelo Não Encontrado">
+    - Verifique se o nome do modelo está escrito corretamente na sua configuração
+    - Confirme se o modelo está disponível na biblioteca de modelos atual do Together AI
+    - Tente com um modelo diferente da nossa lista recomendada
+    - Consulte a [documentação de modelos do Together AI](https://docs.together.ai/docs/serverless-models)
+  </Accordion>
+  
+  <Accordion title="Erros de Conexão">
+    - Verifique se seu servidor tem acesso à internet para alcançar `api.together.xyz`
+    - Verifique se há restrições de firewall
+    - Revise os logs da API/worker para mensagens de erro detalhadas
+    - Certifique-se de que está usando o endpoint de API correto
+  </Accordion>
+  
+  <Accordion title="Limite de Taxa">
+    - O Together AI fornece limites de taxa generosos (até 6000 requisições/min para LLMs)
+    - Verifique seu uso atual no painel do Together AI
+    - Considere fazer upgrade para um nível superior para limites aumentados
+    - Monitore seus padrões de uso para otimizar as chamadas de API
+  </Accordion>
+</AccordionGroup>

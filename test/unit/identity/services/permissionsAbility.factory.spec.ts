@@ -1,14 +1,10 @@
 import { subject } from '@casl/ability';
 
 import {
-    LICENSE_SERVICE_TOKEN,
     SubscriptionStatus,
     type ILicenseService,
 } from '@libs/ee/license/interfaces/license.interface';
-import {
-    PERMISSIONS_SERVICE_TOKEN,
-    type IPermissionsService,
-} from '@libs/identity/domain/permissions/contracts/permissions.service.contract';
+import { type IPermissionsService } from '@libs/identity/domain/permissions/contracts/permissions.service.contract';
 import {
     Action,
     ResourceType,

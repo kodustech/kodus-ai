@@ -1,0 +1,363 @@
+---
+title: "Visão Geral"
+description: "Kody Rules são diretrizes personalizáveis que sua equipe configura para aplicar automaticamente qualidade de código, consistência, segurança e manutenibilidade."
+---
+
+
+<iframe
+  width="100%"
+  height="400"
+  src="https://www.youtube.com/embed/KrzlUmmJh3s?si=igZuKTjlfT2FwRVm"
+  title="YouTube video player"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  referrerpolicy="strict-origin-when-cross-origin"
+  allowfullscreen
+></iframe>
+
+## Dois tipos na interface de Kody Rules
+
+As Kody Rules são organizadas em duas categorias, gerenciadas por meio de uma interface com abas nas suas configurações:
+
+<Tabs>
+  <Tab title="Regras de Revisão">
+    Regras tradicionais de code review que são executadas durante a etapa de revisão de código dedicada. Elas analisam diffs de arquivos e metadados do PR para aplicar padrões de codificação.
+
+    - Aplicadas no nível de **Arquivo** ou de **Pull Request**
+    - Suportam variáveis, referências a arquivos e funções MCP
+    - Acionadas durante revisões de código automatizadas
+  </Tab>
+
+  <Tab title="Memórias">
+    Instruções contextuais persistentes que são injetadas em todos os prompts e conversas. As Memórias permitem que Kody aprenda e retenha como seu codebase funciona para que futuras revisões e sugestões sejam mais relevantes.
+
+    - Injetadas como **contexto de alta prioridade** em revisões de código, análise entre arquivos e conversas
+    - Criadas via **conversa com Kody** ou **manualmente na interface**
+    - Com escopo para **diretório**, **repositório** ou nível de **organização**
+    - Suportam fluxos de aprovação para memórias geradas por IA
+  </Tab>
+</Tabs>
+
+## Regras de Revisão
+
+### Criar Regras Personalizadas
+
+Defina regras com base nas necessidades exatas da sua equipe. As Regras de Revisão podem ser aplicadas em dois níveis diferentes: **[Nível de Arquivo](#regras-no-nível-de-arquivo)** e **[Nível de Pull Request](#regras-no-nível-de-pull-request)**. Ambos os níveis suportam variáveis, referências a arquivos e funções MCP para criar regras poderosas e conscientes do contexto.
+
+#### Variáveis, Referências a Arquivos e Funções MCP
+
+As regras podem acessar contexto rico por meio de variáveis, referências a arquivos e funções MCP. Veja o que está disponível:
+
+**Variáveis:**
+
+As variáveis representam os dados de contexto disponíveis durante a execução da regra. Entender o que está disponível ajuda a compor melhores regras combinando variáveis com funções MCP e referências a arquivos.
+
+- **Nível de Arquivo**:
+  - `fileDiff` - As alterações específicas feitas no arquivo individual sendo analisado
+
+- **Nível de PR**:
+  - `pr_title` - O título do Pull Request
+  - `pr_description` - A descrição/corpo do Pull Request
+  - `pr_total_additions` - Total de linhas adicionadas
+  - `pr_total_deletions` - Total de linhas removidas
+  - `pr_total_files` - Total de arquivos alterados
+  - `pr_total_lines_changed` - Total de linhas modificadas
+  - `pr_files_diff` - Diff completo de todas as alterações em todo o Pull Request
+  - `pr_tags` - Tags associadas ao Pull Request
+  - `pr_author` - Autor do Pull Request
+  - `pr_number` - Número do Pull Request
+
+Use essas variáveis nas instruções da sua regra para acessar dados de contexto e combine-as com funções MCP para buscar informações adicionais ou realizar análises dinâmicas.
+
+**Referências a Arquivos:**
+
+Referencie arquivos diretamente nas instruções da sua regra para comparar código, validar padrões, garantir consistência e aproveitar templates ou padrões existentes.
+
+- **`@file:caminho/para/arquivo.ts`** - Referencie arquivos no mesmo repositório onde você está editando a regra
+  - Use ao referenciar templates, exemplos ou arquivos de configuração dentro do seu repositório atual
+  - Exemplo: `@file:src/services/userService.ts`
+
+- **`@repo:org/projeto`** - Referencie arquivos em outro repositório ou ao configurar regras fora do contexto de um repositório
+  - Use ao garantir consistência entre múltiplos repositórios ou ao referenciar padrões compartilhados
+  - Exemplo: `@repo:team/api-standards`
+
+**Como as Referências a Arquivos Funcionam:**
+
+- Kody identifica referências a arquivos automaticamente quando você salva uma regra
+- As referências são resolvidas em segundo plano — observe o indicador de status ao lado do editor para confirmar a conclusão
+- Use caminhos precisos no estilo blob (ex.: `src/utils/helpers.ts`) em vez de placeholders
+- O conteúdo dos arquivos é injetado no contexto da regra, permitindo que Kody compare, valide ou aplique padrões
+- Funciona em regras de Nível de Arquivo e de Pull Request
+
+**Funções MCP:**
+
+Acesse funções MCP (Model Context Protocol) por meio do menu suspenso `@MCP` no editor de regras para buscar dados e contexto adicionais. Você pode usar qualquer ferramenta ou servidor MCP conectado na página de [Plugins](/how_to_use/pt-br/code_review/plugins) do seu workspace.
+
+As funções disponíveis incluem:
+
+- Operações de repositório: Listar repositórios, obter arquivos, conteúdo e linguagens do repositório
+- Análise de PR: Obter detalhes do pull request, listar commits, analisar conteúdo de arquivos do PR
+- Recuperação de conteúdo de arquivos: Buscar conteúdo e diffs de arquivos
+- Validação entre arquivos: Realizar análise avançada em múltiplos arquivos
+- Integrações personalizadas: Qualquer servidor MCP que você conectou como plugin (Jira, ferramentas personalizadas, etc.)
+
+As funções MCP são executadas durante a avaliação da regra, permitindo regras que se adaptam ao estado atual do repositório e buscam dados em tempo real.
+
+**Boas Práticas:**
+
+- Use caminhos de arquivo específicos em vez de placeholders genéricos
+- Referencie arquivos estáveis que representam os padrões da sua equipe
+- Teste se as referências de arquivos existem antes de salvar as regras para evitar erros de resolução
+- Combine variáveis, referências a arquivos e funções MCP para validação abrangente
+
+#### Regras no Nível de Arquivo
+
+Analise arquivos individuais para capturar problemas dentro de arquivos de código específicos.
+
+**Contexto Disponível:**
+
+Veja a seção [Variáveis, Referências a Arquivos e Funções MCP](#variáveis-referências-a-arquivos-e-funções-mcp) acima para detalhes. Disponível neste nível: variável `fileDiff`, referências a arquivos (`@file`, `@repo`) e funções MCP.
+
+**O Que Você Pode Fazer:**
+
+- Comparar com arquivos de referência usando `@file` ou `@repo`
+- Buscar arquivos relacionados ou dados do repositório usando funções MCP
+- Combinar variáveis, referências a arquivos e funções MCP para validar padrões, verificar consistência ou aplicar regras arquiteturais
+
+**Como Configurar:**
+
+- **Nome da regra**: Defina claramente o propósito da regra
+- **Caminhos de Arquivo**: Limite as regras a arquivos ou diretórios específicos usando padrões glob
+- **Severidade**: Defina como Crítico, Alto, Médio ou Baixo
+- **Instruções Detalhadas**: Use `fileDiff`, referencie arquivos com `@file`/`@repo` e chame funções MCP para compor regras poderosas com contexto rico
+
+**Exemplo de Configuração:**
+
+📋 **Regra**: "Evite operadores de igualdade (==, !=) em condições de terminação de loop."
+
+📁 **Caminho**: `src/**/*.ts`
+
+⚠️ **Severidade**: Crítica
+
+📝 **Instruções**: "Usar operadores de igualdade (== ou !=) pode causar loops infinitos se os valores exatos não forem correspondidos."
+
+**Exemplo Ruim:**
+
+```typescript
+// Risk of infinite loop if increment is not exactly 1
+for (let i = 0; i != 10; i += 2) {
+  console.log(i); // Will print 0, 2, 4, 6, 8, 10, 12, 14... forever
+}
+
+// Risk if array is modified during iteration
+let items = [1, 2, 3, 4, 5];
+for (let i = 0; i != items.length; i++) {
+  if (items[i] === 3) {
+    items.push(6); // Modifies length, can cause infinite loop
+  }
+}
+```
+
+**Exemplo Bom:**
+
+```typescript
+// Safe: loop will always terminate
+for (let i = 0; i < 10; i += 2) {
+  console.log(i); // Will print 0, 2, 4, 6, 8 and stop
+}
+
+// Safe even if array is modified
+let items = [1, 2, 3, 4, 5];
+for (let i = 0; i < items.length; i++) {
+  if (items[i] === 3) {
+    items.push(6); // Loop will still terminate safely
+  }
+}
+```
+
+#### Regras no Nível de Pull Request
+
+Analise todo o Pull Request para validação entre arquivos e requisitos específicos do PR.
+
+**Contexto Disponível:**
+
+Veja a seção [Variáveis, Referências a Arquivos e Funções MCP](#variáveis-referências-a-arquivos-e-funções-mcp) acima para detalhes. Disponível neste nível: variáveis de PR (`pr_title`, `pr_description`, `pr_files_diff`, etc.), referências a arquivos (`@file`, `@repo`) e funções MCP.
+
+**O Que Você Pode Fazer:**
+
+- Validar metadados do PR usando variáveis como `pr_title`, `pr_description`, `pr_author`
+- Referenciar arquivos de configuração ou templates usando `@file` ou `@repo`
+- Buscar contexto adicional usando funções MCP (ex.: verificar se arquivos relacionados existem, validar em relação à estrutura do repositório)
+- Combinar variáveis de PR, referências a arquivos e funções MCP para criar regras de validação abrangentes
+
+**Como Configurar:**
+
+O processo de criação é idêntico ao das regras de nível de arquivo, mas você deve selecionar o escopo "Pull-request". Esse contexto mais amplo permite a análise de dependências entre arquivos e a qualidade geral do PR.
+
+**Exemplos:**
+
+- Todo arquivo de serviço deve ter um arquivo de teste correspondente
+- A descrição do PR deve estar completa, informando claramente o que foi adicionado ou removido
+- Quando uma nova rota é criada em um controller, ela deve ser registrada em routes.json
+- Use `pr_total_lines_changed` para sinalizar PRs que excedem limites de tamanho
+- Combine `pr_files_diff` com funções MCP para validar dependências entre arquivos
+- Referencie `@file:routes.json` para garantir que novas rotas sejam registradas
+- Use funções MCP para verificar se arquivos de teste existem para arquivos de serviço modificados
+
+#### Compondo Regras Poderosas
+
+Combine variáveis, funções MCP e referências a arquivos para criar regras sofisticadas com contexto rico. Veja o que está disponível em cada nível:
+
+**Composição no Nível de Arquivo:**
+
+- Use `fileDiff` para analisar as alterações específicas em um arquivo
+- Referencie arquivos relacionados com `@file:caminho/para/template.ts` para comparar com padrões
+- Chame funções MCP para buscar dados do repositório ou verificar se arquivos relacionados existem
+- **Exemplo**: "Analise `fileDiff` e garanta que segue o padrão em `@file:src/utils/example.ts`. Use MCP para verificar se arquivos de teste relacionados existem."
+
+**Composição no Nível de PR:**
+
+- Use variáveis de PR (`pr_title`, `pr_description`, `pr_files_diff`, etc.) para validar metadados e tamanho do PR
+- Referencie arquivos de configuração com `@file:config.json` ou `@repo:org/shared-config` para garantir consistência
+- Chame funções MCP para realizar validação entre arquivos, verificar a estrutura do repositório ou buscar histórico de commits
+- **Exemplo**: "Se `pr_files_diff` contiver novas rotas, verifique se estão registradas em `@file:routes.json`. Use MCP para verificar se arquivos de teste correspondentes existem para todos os arquivos de serviço modificados."
+
+**Validação Entre Repositórios:**
+
+- Referencie arquivos de outros repositórios com `@repo:org/projeto` para manter consistência entre projetos
+- Combine com funções MCP para validar em relação a padrões ou templates compartilhados
+- **Exemplo**: "Garanta que os endpoints de API sigam o padrão definido em `@repo:org/api-standards`. Use MCP para buscar o documento de padrões mais recente."
+
+**Análise Dinâmica:**
+
+- As funções MCP são executadas durante a avaliação da regra, permitindo regras que se adaptam ao estado atual do repositório
+- Busque dados em tempo real sobre arquivos, commits ou estrutura do repositório
+- **Exemplo**: "Use MCP para verificar a estrutura atual do repositório e garantir que novos arquivos sigam os padrões de diretório existentes."
+
+Essa composição permite regras que entendem não apenas as alterações de código, mas o contexto mais amplo da sua base de código, práticas da equipe e requisitos do projeto.
+
+### Importar da Biblioteca de Regras
+
+Aproveite as boas práticas comprovadas instantaneamente:
+
+- Navegue até Descoberta de Regras no seu painel Kodus.
+- Filtre regras por severidade, linguagem ou tags.
+- Importe e ative regras com um único clique.
+
+**Exemplos:**
+
+- Security: "Proibir uso de hash MD5 inseguro."
+- Maintainability: "Limitar componentes React a menos de 150 linhas."
+
+## Memórias
+
+Memórias são instruções contextuais persistentes que Kody aprende das conversas e práticas de codificação da sua equipe. Ao contrário das Regras de Revisão que são executadas durante o code review, as Memórias são injetadas em todos os prompts e conversas para fornecer contexto contínuo de alta prioridade e melhorar sugestões futuras.
+
+### Como as Memórias Funcionam
+
+- **Injetadas em todos os lugares**: As Memórias são incluídas na análise de code review (entre arquivos, salvaguardas, regras no nível de PR) e nas interações conversacionais
+- **Contexto de alta prioridade**: As Memórias são tratadas como orientações de alta prioridade pela IA, garantindo que as convenções da sua equipe sejam aplicadas consistentemente
+- **Melhores sugestões futuras**: As Memórias ajudam o Kody a parar de repetir as mesmas suposições erradas sobre seu repositório
+- **Deduplicação inteligente**: Quando uma nova memória é criada, Kody usa um mecanismo de resolução baseado em LLM para determinar se deve criá-la, ignorá-la (se duplicada) ou atualizar uma memória existente
+
+### Criando Memórias
+
+Há duas formas de criar memórias:
+
+#### Via Conversa
+
+A forma mais natural de criar memórias é por meio de conversa com Kody nos comentários do PR. Kody detecta intenções explícitas e implícitas de salvar convenções:
+
+**Explícito** — pedindo diretamente para Kody lembrar:
+
+```
+@kody remember: este repositório espelha uma API de terceiros, então alguns campos de payload permanecem intencionalmente em snake_case.
+```
+
+```
+@kody please remember: este serviço segue arquitetura hexagonal e mantém adapters nas bordas.
+```
+
+**Implícito** — declarando uma preferência ou convenção que Kody captura:
+
+```
+@kody este repositório espelha uma API de terceiros, então alguns campos de payload permanecem intencionalmente em snake_case.
+```
+
+```
+@kody neste serviço, os testes normalmente ficam ao lado dos arquivos de implementação, não em uma pasta central de testes.
+```
+
+```
+@kody o módulo de billing está no meio de uma migração, então prefira mudanças incrementais a refactors amplos.
+```
+
+<Info>
+  Kody NÃO criará memórias para instruções transitórias (ex.: "corrija isso agora"), conversas de debug, perguntas, declarações vagas ou solicitações explicitamente limitadas a uma única tarefa ou PR.
+</Info>
+
+Quando uma memória é criada ou atualizada, Kody responde com uma confirmação e fornece um **link direto** para visualizar a memória na interface.
+
+#### Via Interface
+
+Você também pode criar memórias manualmente:
+
+1. Acesse **Configurações de Code Review** → **Repositório** → **Kody Rules**
+2. Mude para a aba **Memórias**
+3. Clique em **Adicionar Memória** para criar uma nova entrada
+4. Preencha o conteúdo da memória e o escopo
+
+### Escopos de Memória
+
+Cada memória tem um escopo que determina onde ela se aplica:
+
+| Escopo | Descrição | Exemplo |
+|-------|-------------|---------|
+| **Diretório** | Aplica-se a arquivos que correspondem a um padrão glob dentro do repositório | `src/components/ui`, `src/**/*.ts` |
+| **Repositório** | Aplica-se a todo o repositório | Todos os arquivos no repositório |
+| **Organização** | Aplica-se a todos os repositórios na organização | Todos os repositórios na organização |
+
+### Aprovação de Memórias Geradas por LLM
+
+Por padrão, as memórias geradas por IA são ativadas automaticamente. Você pode exigir aprovação manual antes que entrem em vigor:
+
+1. Acesse **Configurações de Code Review** → **Repositório** → **Kody Rules** → aba **Memórias**
+2. Habilite **Aprovação de memórias geradas por LLM**
+
+Quando habilitado:
+- Memórias geradas por IA entram em um **estado pendente** e não ficam ativas até serem aprovadas
+- Um badge de notificação aparece mostrando a contagem de memórias pendentes
+- Clique em **Memórias Pendentes** para revisar, aprovar, descartar ou converter itens pendentes
+- Tanto a criação de novas memórias quanto as atualizações de memórias existentes passam pelo fluxo de aprovação
+
+Você também pode definir isso em `kodus-config.yml`:
+
+```yaml
+llmGeneratedMemoriesRequireApproval: true
+```
+
+### Revisão de Memórias Pendentes
+
+O modal de Memórias Pendentes mostra duas categorias:
+
+- **Novas Memórias**: Memórias geradas por IA aguardando aprovação
+- **Atualizações de Memória**: Alterações propostas para memórias existentes
+
+Para cada item pendente, você pode:
+- **Aplicar**: Ativar a memória ou aplicar a atualização
+- **Descartar**: Rejeitar a memória ou atualização
+- **Converter em Regra de Revisão**: Transformar uma memória em uma Regra de Revisão padrão
+
+## Próximos Passos
+
+<CardGroup cols={3}>
+  <Card title="Sincronizar Regras da IDE" icon="window" href="/how_to_use/pt-br/code_review/configs/rules_file_detection">
+    Importe automaticamente regras do Cursor, Copilot, Claude e outras ferramentas de codificação com IA.
+  </Card>
+  <Card title="Regras do Repositório" icon="folder" href="/how_to_use/pt-br/code_review/configs/repository_rules">
+    Crie regras diretamente no seu repositório usando arquivos markdown estruturados.
+  </Card>
+  <Card title="Geração por IA" icon="sparkles" href="/how_to_use/pt-br/code_review/learning/kody_rules_generation">
+    Deixe a IA gerar regras com base nos padrões da sua base de código e revisões anteriores.
+  </Card>
+</CardGroup>

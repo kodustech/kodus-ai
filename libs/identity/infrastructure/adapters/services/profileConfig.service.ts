@@ -149,6 +149,7 @@ export class ProfileConfigService implements IProfileConfigService {
 
             throw new Error(
                 'Failed to retrieve the organization owner profile configuration',
+                { cause: err },
             );
         }
     }

@@ -48,6 +48,19 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
         context: CodeReviewPipelineContext,
         observerContext: PipelineObserverContext,
     ): Promise<void> {
+        // Clean up sandbox to prevent disk space leaks
+        if (context.sandboxHandle?.cleanup) {
+            try {
+                await context.sandboxHandle.cleanup();
+            } catch (err) {
+                this.logger.warn({
+                    message: 'Sandbox cleanup failed on pipeline finish',
+                    context: CodeReviewPipelineObserver.name,
+                    error: err,
+                });
+            }
+        }
+
         if (context.statusInfo.status === AutomationStatus.SKIPPED) {
             const reason = context.statusInfo.message;
 
@@ -58,10 +71,23 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
                 CheckStageNames._pipelineEndSkipped,
                 reason,
             );
-        } else if (
+            return;
+        }
+
+        // Classify collected errors by severity. Errors with severity === 'partial'
+        // come from stages that declared `errorSeverity = 'partial'` (business
+        // logic, PR-level comments, summary, verify, kody-rules agent) and
+        // should degrade the review to PARTIAL_ERROR / neutral rather than
+        // red-flagging the whole run.
+        const errors = context.errors || [];
+        const hasCriticalError =
             context.statusInfo.status === AutomationStatus.ERROR ||
-            (context.errors && context.errors.length > 0)
-        ) {
+            errors.some((e) => (e.severity ?? 'critical') === 'critical');
+        const hasPartialError =
+            context.statusInfo.status === AutomationStatus.PARTIAL_ERROR ||
+            errors.some((e) => e.severity === 'partial');
+
+        if (hasCriticalError) {
             const failureReason = this.buildPipelineFailureReason(context);
             await this.pipelineChecksService.finalizeCheck(
                 observerContext,
@@ -70,14 +96,27 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
                 CheckStageNames._pipelineEndFailure,
                 failureReason,
             );
-        } else {
+            return;
+        }
+
+        if (hasPartialError) {
+            const partialReason = this.buildPipelineFailureReason(context);
             await this.pipelineChecksService.finalizeCheck(
                 observerContext,
                 context,
-                CheckConclusion.SUCCESS,
-                CheckStageNames._pipelineEndSuccess,
+                CheckConclusion.NEUTRAL,
+                CheckStageNames._pipelineEndPartial,
+                partialReason,
             );
+            return;
         }
+
+        await this.pipelineChecksService.finalizeCheck(
+            observerContext,
+            context,
+            CheckConclusion.SUCCESS,
+            CheckStageNames._pipelineEndSuccess,
+        );
     }
 
     private buildPipelineFailureReason(
@@ -218,12 +257,49 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
             Object.assign(additionalMetadata, ignoredFilesMetadata);
         }
 
+        if (stageName === 'AgentReviewStage' && context.dedupTrace) {
+            additionalMetadata = additionalMetadata || {};
+            additionalMetadata.dedupTrace = context.dedupTrace;
+        }
+
+        // Stage status respects error severity (matches deriveFinalStatus
+        // in automationCodeReview.ts so the per-stage badge and the
+        // automation rollup agree). Before this, a critical agent failure
+        // (e.g. AgentReviewStage with severity='critical') showed the
+        // stage as PARTIAL_ERROR while the rollup correctly showed ERROR —
+        // confusing UI where the stage said "Partial Error" but the same
+        // run's final stage said "Error". Default severity is 'critical'
+        // when omitted, matching PipelineErrorSeverity's documented default.
+        const hasCriticalError = errors.some(
+            (e) => (e.severity ?? 'critical') === 'critical',
+        );
         let status =
-            errors.length > 0
-                ? AutomationStatus.PARTIAL_ERROR
-                : AutomationStatus.SUCCESS;
+            errors.length === 0
+                ? AutomationStatus.SUCCESS
+                : hasCriticalError
+                  ? AutomationStatus.ERROR
+                  : AutomationStatus.PARTIAL_ERROR;
 
         let label = options?.label;
+
+        // BusinessLogicValidationStage reports its outcome via context.businessLogicOutcome
+        // (it cannot use statusInfo without aborting the whole pipeline). Map it to the
+        // per-stage log status here so the UI shows the correct badge.
+        if (
+            stageName === 'BusinessLogicValidationStage' &&
+            context.businessLogicOutcome
+        ) {
+            const outcome = context.businessLogicOutcome;
+            if (outcome.kind === 'skipped') {
+                status = AutomationStatus.SKIPPED;
+            } else if (outcome.kind === 'error') {
+                status = AutomationStatus.ERROR;
+            } else {
+                status = AutomationStatus.SUCCESS;
+            }
+            additionalMetadata = additionalMetadata || {};
+            additionalMetadata.businessLogicOutcome = outcome;
+        }
 
         if (stageName === 'FileAnalysisStage') {
             const totalFiles = context.changedFiles?.length || 0;
@@ -267,6 +343,16 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
             const remaining = uniqueMessages.length - displayMessages.length;
 
             message = `${displayMessages.join('\n')}${remaining > 0 ? `\n(+${remaining} more)` : ''}`;
+        }
+
+        // Surface the BusinessLogicValidationStage outcome message so the
+        // PR logs UI shows WHY (skipped reason, gap detected, alignment ok).
+        if (
+            !message &&
+            stageName === 'BusinessLogicValidationStage' &&
+            context.businessLogicOutcome?.message
+        ) {
+            message = context.businessLogicOutcome.message;
         }
 
         await this.logStage(stageName, status, message, context, {
@@ -340,9 +426,17 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
             additionalMetadata?: Record<string, any>;
         },
     ): Promise<void> {
+        // Only use correlationId as a fallback executionUuid when it looks
+        // like a real UUID — the CLI generates `corr_xxxx` correlation ids
+        // that would break uuid-typed DB queries if passed through.
+        const UUID_REGEX =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const correlationIdIsUuid =
+            typeof context.correlationId === 'string' &&
+            UUID_REGEX.test(context.correlationId);
         let executionUuid =
             context.pipelineMetadata?.lastExecution?.uuid ||
-            context.correlationId;
+            (correlationIdIsUuid ? context.correlationId : undefined);
         const pullRequestNumber = context.pullRequest?.number;
         const repositoryId = context.repository?.id;
 

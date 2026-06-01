@@ -1,0 +1,48 @@
+---
+title: "Como aplicar padrões de codificação em pull requests"
+description: "Aprenda como aplicar automaticamente as convenções de código, regras de arquitetura e boas práticas do seu time em cada pull request."
+---
+
+Aplicar padrões de codificação manualmente é demorado e inconsistente. Revisores diferentes identificam coisas diferentes, e as convenções se deterioram com o tempo. A solução é codificar seus padrões em regras automatizadas que são executadas em cada PR.
+
+## Como funciona com o Kodus
+
+O Kodus permite que você defina **Regras do Kody** — instruções personalizadas verificadas automaticamente durante cada revisão de código. Existem dois tipos:
+
+- **Regras de Revisão** são executadas durante a revisão de código e analisam diffs de arquivos ou o PR completo em relação aos seus padrões
+- **Memórias** são convenções persistentes que o Kody aplica em todas as interações — revisões de código, conversas e sugestões
+
+### Exemplo: Aplicando uma convenção de nomenclatura
+
+Você pode criar uma regra em nível de arquivo como:
+
+- **Regra**: "Componentes React devem usar nomes de arquivo em PascalCase"
+- **Caminho**: `src/components/**/*.tsx`
+- **Severidade**: Alta
+- **Instruções**: "Sinalize qualquer arquivo de componente que não siga a nomenclatura PascalCase."
+
+### Exemplo: Aplicando limites arquiteturais
+
+Uma regra em nível de PR pode validar preocupações entre arquivos:
+
+- **Regra**: "A camada de domínio não deve importar da infraestrutura"
+- **Escopo**: Pull Request
+- **Instruções**: "Verifique `pr_files_diff` para qualquer declaração de importação em `src/domain/` que referencie `src/infrastructure/`. Isso viola nossa arquitetura hexagonal."
+
+## Outras abordagens
+
+Você também pode aplicar padrões:
+
+- **Importando da Biblioteca de Regras** — navegue por regras pré-construídas para segurança, performance e estilo
+- **Sincronizando regras de IDE** — importe automaticamente regras do Cursor, Copilot, Claude e outras ferramentas de IA
+- **Regras de repositório** — defina regras em arquivos markdown diretamente no seu repositório (`kodus/rules/`)
+- **Gerando regras automaticamente** — deixe o Kody analisar 3 meses de histórico de revisões e sugerir regras baseadas nos padrões do seu time
+
+## Como começar
+
+1. Vá em **Configurações de Revisão de Código** → **Regras do Kody**
+2. Clique em **Adicionar Regra** e defina seu padrão
+3. Configure o caminho, severidade e instruções detalhadas
+4. O Kody vai aplicá-la em cada PR futuro
+
+Para mais detalhes, consulte a [documentação de Regras do Kody](/how_to_use/pt-br/code_review/configs/kody_rules).

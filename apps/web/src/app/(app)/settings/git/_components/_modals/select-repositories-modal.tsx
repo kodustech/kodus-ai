@@ -31,11 +31,9 @@ import { ParametersConfigKey } from "@services/parameters/types";
 import { useAuth } from "src/core/providers/auth.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { IntegrationCategory } from "src/core/types";
-import { captureSegmentEvent } from "src/core/utils/segment";
 
 export const SelectRepositoriesModal = (props: {
     platformName: string;
-    segmentPlatformName: string;
     selectedRepositories: Repository[];
 }) => {
     const router = useRouter();
@@ -125,15 +123,6 @@ export const SelectRepositoriesModal = (props: {
                 ),
             }),
         ]);
-
-        captureSegmentEvent({
-            userId: userId!,
-            event: "select_repositories_changed",
-            properties: {
-                platform: props.segmentPlatformName,
-                newQuantityOfRepositories: selectedRepositories.length,
-            },
-        });
 
         setUploadProgress({ current: 0, total: 0 });
         router.push("/settings/git");

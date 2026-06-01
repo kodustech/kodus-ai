@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import {
     Command,
@@ -21,6 +22,7 @@ import { ChevronsUpDownIcon } from "lucide-react";
 import { Controller, useFormContext } from "react-hook-form";
 import { ArrayHelpers } from "src/core/utils/array";
 
+import { isBetaProvider } from "../_beta-providers";
 import type { EditKeyForm } from "../_types";
 
 export const ByokProviderSelect = ({
@@ -55,12 +57,30 @@ export const ByokProviderSelect = ({
                                     rightIcon={
                                         <ChevronsUpDownIcon className="-mr-2 opacity-50" />
                                     }>
-                                    {providers.find((p) => p.id === field.value)
-                                        ?.name ?? (
-                                        <span className="font-normal">
-                                            Select a provider
-                                        </span>
-                                    )}
+                                    {(() => {
+                                        const selected = providers.find(
+                                            (p) => p.id === field.value,
+                                        );
+                                        if (!selected) {
+                                            return (
+                                                <span className="font-normal">
+                                                    Select a provider
+                                                </span>
+                                            );
+                                        }
+                                        return (
+                                            <span className="flex items-center gap-2">
+                                                {selected.name}
+                                                {isBetaProvider(selected.id) && (
+                                                    <Badge
+                                                        variant="helper"
+                                                        size="xs">
+                                                        Beta
+                                                    </Badge>
+                                                )}
+                                            </span>
+                                        );
+                                    })()}
                                 </Button>
                             </PopoverTrigger>
                         </FormControl.Input>
@@ -117,7 +137,16 @@ export const ByokProviderSelect = ({
                                         resetErrorBoundary();
                                         setOpen(false);
                                     }}>
-                                    {r.name}
+                                    <span className="flex items-center gap-2">
+                                        {r.name}
+                                        {isBetaProvider(r.id) && (
+                                            <Badge
+                                                variant="helper"
+                                                size="xs">
+                                                Beta
+                                            </Badge>
+                                        )}
+                                    </span>
                                 </CommandItem>
                             ),
                         )}

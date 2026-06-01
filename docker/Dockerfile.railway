@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # =============================================================================
 # Railway-compatible Dockerfile for kodus-ai backend services.
 #
@@ -8,7 +9,7 @@
 #   SERVICE_TYPE=api | worker | webhooks
 # =============================================================================
 
-FROM docker.io/library/node:22.22.0-slim AS base
+FROM docker.io/library/node:22.22.2-slim AS base
 WORKDIR /usr/src/app
 
 ARG API_CLOUD_MODE=false
@@ -19,7 +20,8 @@ ENV API_DEVELOPMENT_MODE=false
 ENV RELEASE_VERSION=${RELEASE_VERSION}
 ENV SENTRY_RELEASE=${RELEASE_VERSION}
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
     ca-certificates git python3 make g++ procps \
   && rm -rf /var/lib/apt/lists/*
 
@@ -31,11 +33,18 @@ COPY package.json yarn.lock .npmrc ./
 COPY packages/kodus-common ./packages/kodus-common
 COPY packages/kodus-flow ./packages/kodus-flow
 
-# Build local packages first
-RUN cd packages/kodus-common && yarn install && yarn prepack
-RUN cd packages/kodus-flow && yarn install && yarn build
+# Railway's Metal builder rejects BuildKit secret mounts and requires a
+# service-id-prefixed cache key on cache mounts (which can't share across
+# our 3 services), so this Dockerfile drops both. The repo-local .npmrc
+# copied above only holds registry URLs (no tokens), and the @kodus/*
+# packages are replaced by the local copies in packages/ via `cp -r`.
+RUN cd packages/kodus-common \
+  && yarn install \
+  && yarn prepack
+RUN cd packages/kodus-flow \
+  && yarn install \
+  && yarn build
 
-# Install dependencies and link local packages
 RUN yarn install --frozen-lockfile
 RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
 RUN rm -rf node_modules/@kodus/flow && cp -r packages/kodus-flow node_modules/@kodus/flow
@@ -64,17 +73,26 @@ COPY package.json yarn.lock .npmrc ./
 COPY packages/kodus-common ./packages/kodus-common
 COPY packages/kodus-flow ./packages/kodus-flow
 
-# Build local packages first
-RUN cd packages/kodus-common && yarn install && yarn prepack
-RUN cd packages/kodus-flow && yarn install && yarn build
+RUN cd packages/kodus-common \
+  && yarn install \
+  && yarn prepack
+RUN cd packages/kodus-flow \
+  && yarn install \
+  && yarn build
 
-# Install dependencies and link local packages
-RUN yarn install --frozen-lockfile && yarn cache clean
+RUN yarn install --frozen-lockfile --prefer-offline --production=true
+
+# Drop nested node_modules/src/test that were needed for `yarn prepack`
+# but not at runtime — keeping them would duplicate hundreds of MB inside
+# the final image. `dist/` and `package.json` are what Node resolves.
+RUN rm -rf packages/kodus-common/node_modules packages/kodus-flow/node_modules \
+           packages/kodus-common/src packages/kodus-flow/src \
+           packages/kodus-common/test packages/kodus-flow/test
 RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
 RUN rm -rf node_modules/@kodus/flow && cp -r packages/kodus-flow node_modules/@kodus/flow
 
 # Runtime stage — single stage, service selected via SERVICE_TYPE
-FROM docker.io/library/node:22.22.0-slim
+FROM docker.io/library/node:22.22.2-slim
 WORKDIR /usr/src/app
 ENV NODE_ENV=production
 
@@ -88,18 +106,26 @@ ENV RELEASE_VERSION=${RELEASE_VERSION}
 ENV SENTRY_RELEASE=${RELEASE_VERSION}
 ENV SERVICE_TYPE=${SERVICE_TYPE}
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
     ca-certificates procps \
   && rm -rf /var/lib/apt/lists/*
 
-COPY --from=prod-deps /usr/src/app/node_modules ./node_modules
-COPY --from=build /usr/src/app/dist ./dist
-COPY --from=build /usr/src/app/package.json ./package.json
-COPY --from=build /usr/src/app/default-kodus-config.yml ./default-kodus-config.yml
-COPY --from=build /usr/src/app/kodus-config.yml ./kodus-config.yml
-COPY --from=build /usr/src/app/scripts ./scripts
-COPY --from=build /usr/src/app/tsconfig-paths-bootstrap.js ./tsconfig-paths-bootstrap.js
+COPY --chown=1000:1000 --from=prod-deps /usr/src/app/node_modules ./node_modules
+COPY --chown=1000:1000 --from=build /usr/src/app/dist ./dist
+COPY --chown=1000:1000 --from=build /usr/src/app/package.json ./package.json
+COPY --chown=1000:1000 --from=build /usr/src/app/default-kodus-config.yml ./default-kodus-config.yml
+COPY --chown=1000:1000 --from=build /usr/src/app/kodus-config.yml ./kodus-config.yml
+COPY --chown=1000:1000 --from=build /usr/src/app/scripts ./scripts
+COPY --chown=1000:1000 --from=build /usr/src/app/tsconfig-paths-bootstrap.js ./tsconfig-paths-bootstrap.js
 
 COPY --chmod=0755 docker/prod-entrypoint.sh /usr/local/bin/prod-entrypoint
+
+# Own the working directory so the unprivileged user can write logs
+# (e.g. ormlogs.log) at runtime.
+RUN chown 1000:1000 /usr/src/app
+
+USER 1000
+
 ENTRYPOINT ["/usr/local/bin/prod-entrypoint"]
 CMD ["sh", "-c", "exec node dist/apps/${SERVICE_TYPE}/main.js"]

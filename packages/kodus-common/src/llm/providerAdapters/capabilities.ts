@@ -13,6 +13,12 @@ function budget(
     return { type: 'budget', options: { min, default: defaultBudget } };
 }
 
+function adaptive(
+    options: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high'],
+): ReasoningConfig {
+    return { type: 'adaptive', options };
+}
+
 function level(
     options: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high'],
 ): ReasoningConfig {
@@ -150,7 +156,9 @@ const REASONING_PATTERN_RULES: Array<[RegExp, ReasoningConfig]> = [
     // Gemini 2.0 thinking experimental
     [/^gemini-2\.0-.*thinking.*/i, budget()],
 
-    // Anthropic Claude - budget for recent families
+    // Anthropic Claude - adaptive for 4.7+, budget for older families
+    [/^claude-opus-4-7(\b|[-_@])/, adaptive()],
+    [/^claude-sonnet-4-7(\b|[-_@])/, adaptive()],
     [/^claude-opus-4(\b|[-_@])/, budget()],
     [/^claude-sonnet-4(\b|[-_@])/, budget()],
     [/^claude-3-7-sonnet(\b|[-_@])/, budget()],
@@ -266,7 +274,7 @@ export function supportsReasoning(model: string): boolean {
 
 export function getReasoningType(
     model: string,
-): 'level' | 'budget' | undefined {
+): 'level' | 'budget' | 'adaptive' | undefined {
     return getModelCapabilities(model).reasoningConfig?.type;
 }
 

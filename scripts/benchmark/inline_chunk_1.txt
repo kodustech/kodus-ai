@@ -1,0 +1,63 @@
+
+=== PR 5: AuthZService: improve authz caching ===
+
+GOLDEN COMMENTS:
+  G0: The Check operation exhibits asymmetric cache trust logic: cached permission grants are trusted and returned immediately, but cached denials from the same permission cache are ignored, leading to a fresh database lookup. This allows stale cached grants to provide access to revoked resources, posing a security risk. 
+  G1: The test comment says the cached permissions 'allow access', but the map stores false for dashboards:uid:dash1, so checkPermission will still treat this scope as not allowed.
+
+CANDIDATE ISSUES:
+  C0: The `requestCount` metric in `Check` always reports `cached="true"` even when a cache miss leads to a database call via `getIdentityPermissions`. 157	s.metrics.requestCount.WithLabelValues("false", "false", req.GetVerb(), req.GetGroup(), req.GetResource()).Inc()
+  C1: userPermDenialCacheKey uses an ambiguous string concatenation with underscores as separators, allowing for cache key collisions between different resource UIDs. func userPermDenialCacheKey(namespace, userUID, action, name, parent string) string { return fmt.Sprintf("%s.perm:%s:%s:%s:%s", namespace, userUID, action, name, parent)
+  C2: The permDenialCache check only verifies the existence of an entry in the cache without checking its value, which could lead to incorrect denials if the cache is poisoned with false values. if denied, ok := s.permDenialCache.Get(ctx, permDenialKey); ok && denied { s.metrics.permissionCacheUsage.WithLabelValues("true", checkReq.Action).Inc() s.metrics.requestCount.WithLabelValues("false", "true", re
+  C3: WHAT: `permDenialCache` is redundant and increases memory overhead. WHY: It caches individual resource-level denials which are already covered by the more general `permCache` (which stores all allowed resources for an action); this leads to duplicated data and unnecessary cache management overhead. HOW: Remove `permDenialCache` and rely on the authoritative `permCache` for both positive and negati
+  C4: The `Check` method redundantly performs a database query when the action's permission cache (`permCache`) is present but indicates a denial, even though this cache is already authoritative for the action. 123	cachedPerms, err := s.getCachedIdentityPermissions(ctx, checkReq.Namespace, checkReq.IdentityType, checkReq.UserUID, checkReq.Action) 124	if err == nil { 125		allowed, err := s.checkPermissio
+
+=== PR 6: Plugins: Chore: Renamed instrumentation middleware to metrics middleware ===
+
+GOLDEN COMMENTS:
+  G0: The ContextualLoggerMiddleware methods (QueryData, CallResource, CheckHealth, CollectMetrics) panic when a nil request is received. This occurs because they directly access req.PluginContext (via the instrumentContext function) without first checking if req is nil. This is a regression, as previous middleware layers gracefully handled nil requests.
+  G1: The traceID is no longer logged for plugin requests. During a refactoring, the tracing import and the logic to extract and add traceID from the context to log parameters were removed from the LoggerMiddleware. The newly introduced ContextualLoggerMiddleware does not add this information, resulting in missing traceID in plugin request logs and impacting debugging and request tracing capabilities.
+
+CANDIDATE ISSUES:
+  C0: Logging methods in `FakeLogger` append to internal slices (e.g., `InfoLogs.Calls`) without synchronization, causing data races when the logger is used across multiple goroutines in concurrent tests. func (f *FakeLogger) Info(msg string, args ...interface{}) { defer f.mtx.Unlock() f.InfoLogs.Calls = append(f.InfoLogs.Calls, struct { Args []interface{}
+  C1: The middleware uses a pre-instantiated logger field instead of `log.FromContext(ctx)`, which prevents it from including contextual attributes added by the `ContextualLoggerMiddleware`. log.FromContext(ctx).Info("CallResource", "path", req.Path) return m.next.CallResource(ctx, req, sender)
+  C2: LoggerMiddleware.logRequest calls FromContext and allocates a new wrapper on every request. This triggers multiple heap allocations (log provider slices, ConcreteLogger instances, and the grafanaInfraLogWrapper) on every plugin request, significantly increasing GC pressure on the high-throughput data egress path. Avoid re-calculating the contextual logger at the end of every request by passing the
+  C3: MetricsMiddleware shares a single instance with a mutable 'next' field across all concurrent requests. This causes a data race and unnecessary cache line bouncing/contention because 'Decorator.QueryData' reconstructs the middleware chain and overwrites 'imw.next' on every single request. Return a new instance of the middleware struct within the ClientMiddlewareFunc closure to ensure thread-safety 
+
+=== PR 7: Advanced Query Processing Architecture ===
+
+GOLDEN COMMENTS:
+  G0: The applyTemplateVariables method is called with request.filters as the third parameter, but this parameter is not used in the corresponding test setup.
+
+CANDIDATE ISSUES:
+  C0: Ad-hoc filters are added redundantly to the query expression during each manual call to applyTemplateVariables. This leads to duplicate label matchers in the LogQL selector (e.g., {job="grafana", host="localhost", host="localhost"}), which can cause queries to exceed Loki's matcher limits or result in performance degradation. Modify the logic to only append ad-hoc filters once, or ensure applyTemp
+  C1: User-controlled input is subject to multiple rounds of template variable interpolation across nested function calls. This allows for recursive variable expansion where an attacker-controlled variable value can contain references to other variables (e.g., $secret_var) that are then expanded in subsequent calls, potentially leading to sensitive data exposure or LogQL injection. Ensure interpolation 
+
+=== PR 8: FEATURE: automatically downsize large images ===
+
+GOLDEN COMMENTS:
+  G0: The downsize method is defined twice. The second definition, which expects a single dimensions string parameter, overrides the first, which expected separate max_width and max_height parameters. This makes the original method unreachable and breaks existing code that calls it with separate width and height arguments.
+  G1: Hardcoding maxSizeKB = 10 * 1024 ignores Discourse.SiteSettings['max_' + type + '_size_kb'], so the client-side limit can diverge from server-side and per-type settings (also applies to the 413 handler below).
+  G2: Passing 80% as the dimensions can fail for animated GIFs when allow_animated_thumbnails is true, since the animated path uses gifsicle --resize-fit which expects WxH geometry, not a percentage; downsizing would then silently fail.
+
+CANDIDATE ISSUES:
+  C0: Downsizing in place invalidates the `tempfile` object's internal file descriptor, leading to incorrect SHA1 and filesize calculations in `Upload.create_for`. while attempt > 0 && File.size(tempfile.path) > SiteSetting.max_image_size_kb.kilobytes if OptimizedImage.downsize(tempfile.path, tempfile.path, "80%", allow_animation: SiteSetting.allow_animated_thumbnails)
+  C1: Using percentages in `dimensions` for `gifsicle` will likely cause command failure as it expects `WIDTHxHEIGHT` format for `--resize-fit`. # For percentages, gifsicle should use --scale dimensions.to_s.end_with?('%') ? "--scale #{dimensions.to_f / 100.0}" : "--resize-fit #{dimensions}"
+  C2: User-controlled input is passed to a shell command via backticks without escaping. Allows an attacker to execute arbitrary commands by providing a malicious 'type' parameter or URL extension that manipulates the tempfile path used in the ImageMagick command. system(*instructions, out: File::NULL, err: File::NULL)
+  C3: User-provided URLs are passed to FileHelper.download without validation, enabling Server-Side Request Forgery (SSRF). An attacker can use this to probe the internal network or access cloud metadata services (e.g., 169.254.169.254), made worse by the increased 10MB download limit.
+  C4: Redefining `downsize` with fewer arguments breaks existing callers. The second definition of `self.downsize` (line 149) overwrites the first (line 145), causing `ArgumentError` in callers like `resize_emoji.rb:14` that pass 4 positional arguments. def self.downsize(from, to, width_or_dim, height_or_opts = {}, opts = {}) if width_or_dim.is_a?(String) && width_or_dim.include?('%') optimize("downsize
+  C5: Hardcoded 10MB limit in JavaScript bypasses SiteSettings. This allows large files to be uploaded regardless of admin configuration, shifting the validation burden from a cheap client-side check to expensive server-side downsizing. **Also found in:** - `app/assets/javascripts/discourse/lib/utilities.js:181-184` var maxSizeKB = Discourse.SiteSettings['max_' + type + '_size_kb'] || (10 * 1024); if (f
+  C6: Iterative downsizing by 80% is inefficient and redundant. The loop performs multiple full-image read/write operations (up to 5 times) which is computationally expensive and may still fail to reach the target size for very large files. # Calculate the required scale once or use ImageMagick's JPEG extent define # OptimizedImage.downsize(tempfile.path, tempfile.path, "#{target_resolution}")
+
+=== PR 9: FEATURE: per-topic unsubscribe option in emails ===
+
+GOLDEN COMMENTS:
+  G0: logic: Potential nil pointer exception - if no TopicUser record exists, tu will be nil and calling methods on it will crash
+  G1: Typo in property name: 'stopNotificiationsText' should be 'stopNotificationsText' (missing 'n' in 'Notifications')
+
+CANDIDATE ISSUES:
+  C0: The unsubscribe logic only downgrades 'watching' to 'regular', meaning users will still receive notifications for mentions and replies despite the email promising they will stop. TopicUser.change(current_user.id, params[:topic_id], notification_level: TopicUser.notification_levels[:muted])
+  C1: A state-changing operation is performed via a GET request without CSRF protection. An attacker can craft a link or use an embedded image to force a logged-in user to change their topic notification settings without their consent. The action should either require a POST request with an authenticity token or include a unique, per-user signed token in the GET URL to verify intent.
+  C2: User-controlled topic titles are rendered using triple mustaches (`{{{ }}}`), which bypasses client-side HTML escaping. While `fancyTitle` is typically sanitized on the server, the combination of `I18n.t` and triple mustaches increases the XSS risk if any part of the topic title contains malicious HTML that bypasses the server-side sanitizer. <strong>{{model.fancyTitle}}</strong>
+  C3: WHAT: TopicsController#unsubscribe performs heavy and redundant operations by instantiating a full TopicView and serializing the entire post stream. WHY: These operations load the first page of posts and their metadata into memory and serialize them into the response, which is unnecessary for a simple unsubscribe confirmation and significantly increases server load when bots or email scanners foll
+  C4: A null pointer dereference occurs when `TopicUser.find_by` returns nil or when the record exists but has a `nil` notification level. level = TopicUser.notification_levels[:muted] tu = TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id]) if tu && (tu.notification_level || TopicUser.notification_levels[:regular]) > TopicUser.notification_levels[:regular] level = TopicUser.notific

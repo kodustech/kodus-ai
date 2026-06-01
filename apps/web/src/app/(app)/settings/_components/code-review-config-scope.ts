@@ -52,6 +52,6 @@ export const resolveCodeReviewConfigForScope = (
     return {
         ...configs,
         ...rest,
-        displayName: `${repository.name}${directory.path}`,
+        displayName: `${repository.name}${directory.folders?.[0]?.path ?? ''}`,
     };
 };

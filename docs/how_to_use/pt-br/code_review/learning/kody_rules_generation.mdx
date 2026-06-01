@@ -1,0 +1,83 @@
+---
+title: "Geração Automática de Regras"
+description: "Kody pode gerar automaticamente regras personalizadas analisando o histórico de code review da sua equipe. Deixe-a aprender com suas revisões anteriores para criar padrões de codificação personalizados."
+---
+
+<Warning>
+  **Requer pelo menos 3 meses de histórico de revisões de Kody no repositório.** Este recurso deriva regras das revisões passadas de Kody nos seus PRs, então repositórios que acabaram de ser integrados não produzirão sugestões úteis. Se você começou a usar Kody recentemente, volte após alguns meses de revisões reais.
+</Warning>
+
+## Visão Rápida
+
+- **Geração Automática**: Kody analisa seu histórico de revisões para criar novas regras
+- **Baseada em Dados**: Usa 3 meses de dados de revisão para insights inteligentes
+- **Sugestões Inteligentes**: Gera regras com base nos padrões reais da equipe
+- **Importação Manual Necessária**: As regras geradas devem ser revisadas e importadas manualmente para entrar em vigor
+- **Aprendizado Contínuo**: Atualizações semanais de regras conforme sua equipe evolui
+
+<iframe
+  width="100%"
+  height="400"
+  src="https://www.youtube.com/embed/e1SOwOEVZB4?si=RJ7gKGaLgtJ1CRKt"
+  title="YouTube video player"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  referrerpolicy="strict-origin-when-cross-origin"
+></iframe>
+
+## Como Funciona
+
+### 1. Acessando a Geração de Regras
+
+Navegue até as configurações do seu repositório:
+
+1. Acesse **Configurações de Code Review** → **Repositório** → **Kody Rules**
+2. Procure o botão **"Gerar Kody Rules"**
+3. Clique para iniciar o processo de geração automática
+
+### 2. Processo de Análise
+
+Quando você clica em "Gerar Kody Rules", Kody irá:
+
+- **Varrer o Histórico de Revisões**: Analisa os últimos 3 meses de code reviews no seu repositório
+- **Identificar Padrões**: Descobre temas comuns de feedback e preferências de codificação
+- **Extrair Padrões**: Converte padrões de revisão em regras acionáveis
+- **Gerar Sugestões**: Cria sugestões de regras personalizadas adaptadas ao estilo da sua equipe
+
+### 3. Revisando as Regras Geradas
+
+Uma vez que a análise for concluída:
+
+1. Um botão **"Conferir Novas Regras"** aparecerá
+2. Clique para revisar as sugestões de regras geradas
+3. Navegue pelas regras propostas e suas explicações
+4. **Importante**: As regras ainda não estão ativas — são apenas sugestões neste ponto
+
+### 4. Importando Regras (Necessário para Ativação)
+
+<Warning>
+  **Etapa Crítica**: As regras geradas NÃO entrarão em vigor até que você as
+  importe manualmente.
+</Warning>
+
+Para tornar as regras ativas:
+
+- **Escolha Seletivamente**: Importe apenas as regras que correspondem às necessidades da sua equipe
+- **Personalize**: Modifique as regras antes de importar se necessário
+- **Aplique**: Adicione as regras selecionadas ao seu conjunto de regras ativas
+- **Ativação**: Apenas as regras importadas serão aplicadas durante os code reviews
+
+## Aprendizado Contínuo
+
+Após a configuração inicial, Kody mantém um ciclo de aprendizado contínuo:
+
+- **Atualizações Semanais**: Kody gera novas sugestões de regras toda semana
+- **Padrões em Evolução**: As sugestões de regras se adaptam conforme o estilo de codificação da sua equipe evolui
+- **Precisão Refinada**: As sugestões ficam mais precisas ao longo do tempo
+- **Revisões Regulares**: Novas sugestões de regras aparecem para sua revisão semanalmente
+
+## Requisitos
+
+- **Dados Mínimos**: Pelo menos 3 meses de histórico de revisões no repositório
+- **Revisões Ativas**: Atividade regular de code review para melhor detecção de padrões
+- **Acesso ao Repositório**: Permissões adequadas para modificar as regras do repositório

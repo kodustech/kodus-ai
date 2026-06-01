@@ -1,0 +1,225 @@
+/**
+ * Builds release/features-snapshot.json from release/features.yaml.
+ *
+ * The YAML is the source of truth for every feature's lifecycle stage. The
+ * snapshot JSON is the read model consumed by FeatureGateService at runtime
+ * and by the changelog pipeline. Always commit the regenerated snapshot
+ * alongside any YAML change — CI will fail otherwise.
+ *
+ * Usage:
+ *   yarn feature-gate:snapshot           Regenerate the snapshot.
+ *   yarn feature-gate:snapshot:check     Fail if the snapshot is out of date.
+ */
+
+import { readFileSync, writeFileSync } from 'fs';
+import { resolve } from 'path';
+
+import yaml from 'js-yaml';
+
+const REPO_ROOT = resolve(__dirname, '../..');
+const YAML_PATH = resolve(REPO_ROOT, 'release/features.yaml');
+const SNAPSHOT_PATH = resolve(REPO_ROOT, 'release/features-snapshot.json');
+// TS mirror of the JSON. Web imports this via `@libs/*` because Next.js's
+// `outputFileTracingRoot` blocks bundling files outside `apps/web`, which
+// makes a direct JSON import of `release/features-snapshot.json` fail at
+// build time. The lib continues to read the JSON at runtime via fs.
+const SNAPSHOT_TS_PATH = resolve(
+    REPO_ROOT,
+    'libs/feature-gate/infrastructure/features-snapshot.generated.ts',
+);
+
+const VALID_STAGES = ['alpha', 'beta', 'general-availability'] as const;
+
+const VALID_AUDIENCES = ['cloud', 'self-hosted'] as const;
+
+type Stage = (typeof VALID_STAGES)[number];
+type Audience = (typeof VALID_AUDIENCES)[number];
+
+interface YamlFeature {
+    name: string;
+    stage: Stage;
+    audience?: Audience[];
+    description?: string;
+    documentation_url?: string;
+    promoted_at?: Record<string, string>;
+}
+
+interface YamlCatalog {
+    schema_version: number;
+    features: Record<string, YamlFeature>;
+}
+
+interface SnapshotFeature {
+    name: string;
+    stage: Stage;
+    description?: string;
+    documentation_url?: string;
+    audience?: Audience[];
+    promoted_at?: Record<string, string>;
+}
+
+interface Snapshot {
+    schema_version: 1;
+    generated_at: string;
+    source: 'manual';
+    features: Record<string, SnapshotFeature>;
+}
+
+function loadYaml(): YamlCatalog {
+    const raw = readFileSync(YAML_PATH, 'utf8');
+    const parsed = yaml.load(raw) as YamlCatalog | undefined;
+    if (!parsed || typeof parsed !== 'object') {
+        throw new Error(`${YAML_PATH} is empty or not a valid YAML mapping.`);
+    }
+    if (parsed.schema_version !== 1) {
+        throw new Error(
+            `Unsupported schema_version ${parsed.schema_version} in ${YAML_PATH}.`,
+        );
+    }
+    if (!parsed.features || typeof parsed.features !== 'object') {
+        throw new Error(`${YAML_PATH} is missing the "features" mapping.`);
+    }
+    return parsed;
+}
+
+function validate(catalog: YamlCatalog): string[] {
+    const errors: string[] = [];
+    const flagKeyPattern = /^[a-z0-9][a-z0-9-]*$/;
+
+    for (const [key, feature] of Object.entries(catalog.features)) {
+        if (!flagKeyPattern.test(key)) {
+            errors.push(
+                `feature key "${key}" must be lowercase kebab-case (matched against ${flagKeyPattern}).`,
+            );
+        }
+        if (!feature.name) {
+            errors.push(`feature "${key}" is missing "name".`);
+        }
+        if (!VALID_STAGES.includes(feature.stage)) {
+            errors.push(
+                `feature "${key}" has invalid stage "${feature.stage}". Valid: ${VALID_STAGES.join(', ')}.`,
+            );
+        }
+        if (feature.audience) {
+            for (const a of feature.audience) {
+                if (!VALID_AUDIENCES.includes(a)) {
+                    errors.push(
+                        `feature "${key}" has invalid audience "${a}". Valid: ${VALID_AUDIENCES.join(', ')}.`,
+                    );
+                }
+            }
+        }
+    }
+
+    return errors;
+}
+
+function toSnapshot(catalog: YamlCatalog): Snapshot {
+    const features: Record<string, SnapshotFeature> = {};
+    const sortedKeys = Object.keys(catalog.features).sort();
+
+    for (const key of sortedKeys) {
+        const f = catalog.features[key];
+        features[key] = {
+            name: f.name,
+            stage: f.stage,
+            ...(f.description ? { description: f.description.trim() } : {}),
+            ...(f.documentation_url
+                ? { documentation_url: f.documentation_url }
+                : {}),
+            ...(f.audience?.length ? { audience: f.audience } : {}),
+            ...(f.promoted_at ? { promoted_at: f.promoted_at } : {}),
+        };
+    }
+
+    return {
+        schema_version: 1,
+        generated_at: new Date().toISOString(),
+        source: 'manual',
+        features,
+    };
+}
+
+function serialize(snapshot: Snapshot): string {
+    return JSON.stringify(snapshot, null, 4) + '\n';
+}
+
+function serializeTs(snapshot: Snapshot): string {
+    const json = JSON.stringify(snapshot, null, 4);
+    return [
+        '// AUTO-GENERATED by scripts/feature-gate/generate-snapshot.ts.',
+        '// Do not edit by hand. Run `yarn feature-gate:snapshot` to regenerate.',
+        '',
+        "import type { FeaturesSnapshot } from '../domain/snapshot.types';",
+        '',
+        `export const FEATURES_SNAPSHOT: FeaturesSnapshot = ${json};`,
+        '',
+    ].join('\n');
+}
+
+function checkOnly(next: Snapshot): never {
+    const current = readFileSync(SNAPSHOT_PATH, 'utf8');
+    const parsedCurrent = JSON.parse(current) as Snapshot;
+    // Compare ignoring `generated_at` so CI doesn't churn on every run.
+    const a = { ...parsedCurrent, generated_at: '' };
+    const b = { ...next, generated_at: '' };
+    if (JSON.stringify(a) !== JSON.stringify(b)) {
+        console.error(
+            'release/features-snapshot.json is stale. Run `yarn feature-gate:snapshot` and commit the result.',
+        );
+        process.exit(1);
+    }
+
+    // Verify the TS mirror matches the JSON. Skip if it doesn't exist yet
+    // (first run after introducing the file) — the regen will create it.
+    let tsCurrent = '';
+    try {
+        tsCurrent = readFileSync(SNAPSHOT_TS_PATH, 'utf8');
+    } catch {
+        console.error(
+            'libs/feature-gate/infrastructure/features-snapshot.generated.ts is missing. Run `yarn feature-gate:snapshot` and commit the result.',
+        );
+        process.exit(1);
+    }
+    const expectedTs = serializeTs({ ...next, generated_at: parsedCurrent.generated_at });
+    const tsCurrentNormalised = tsCurrent.replace(
+        /generated_at": "[^"]+"/,
+        `generated_at": "${parsedCurrent.generated_at}"`,
+    );
+    if (tsCurrentNormalised !== expectedTs) {
+        console.error(
+            'libs/feature-gate/infrastructure/features-snapshot.generated.ts is out of sync with the JSON. Run `yarn feature-gate:snapshot` and commit both files.',
+        );
+        process.exit(1);
+    }
+
+    console.log('Snapshot is up to date.');
+    process.exit(0);
+}
+
+function main(): void {
+    const isCheck = process.argv.includes('--check');
+    const catalog = loadYaml();
+    const errors = validate(catalog);
+    if (errors.length > 0) {
+        console.error(`release/features.yaml has ${errors.length} error(s):`);
+        for (const e of errors) console.error(`  - ${e}`);
+        process.exit(2);
+    }
+
+    const snapshot = toSnapshot(catalog);
+
+    if (isCheck) {
+        checkOnly(snapshot);
+    }
+
+    writeFileSync(SNAPSHOT_PATH, serialize(snapshot));
+    writeFileSync(SNAPSHOT_TS_PATH, serializeTs(snapshot));
+    console.log(
+        `Wrote ${Object.keys(snapshot.features).length} feature(s) to:`,
+    );
+    console.log(`  - ${SNAPSHOT_PATH}`);
+    console.log(`  - ${SNAPSHOT_TS_PATH}`);
+}
+
+main();

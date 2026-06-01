@@ -1,0 +1,35 @@
+---
+title: "Updating"
+description: "Update your Kodus installation."
+icon: "arrow-up"
+---
+
+<Note>
+  Versions shipping anonymous self-hosted telemetry are enabled by default
+  and send one daily heartbeat to `telemetry.kodus.io` with aggregated
+  counters only — no code, names, or identifiers. Inspect what would be
+  sent with `yarn telemetry:preview`, or set `KODUS_TELEMETRY_DISABLED=true`
+  to opt out. Full schema and policy in
+  [Anonymous Telemetry](/how_to_deploy/en/deploy_kodus/telemetry).
+</Note>
+
+To update your Kodus installation to the latest version:
+
+```bash
+# Navigate to your Kodus installation directory
+cd kodus-installer
+
+# Pull the latest changes from the repository
+git pull
+
+# If you are upgrading from 1.x, update your .env with the new 2.0 variables
+# (RabbitMQ, MCP Manager, and webhooks).
+
+# Re-run the installer to pull images, start services, and run migrations
+./scripts/install.sh
+
+# Optional: run diagnostics
+./scripts/doctor.sh
+```
+
+

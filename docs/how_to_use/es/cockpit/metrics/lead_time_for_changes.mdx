@@ -1,0 +1,43 @@
+---
+title: "Tiempo de Ciclo del PR"
+description: "Mide el tiempo desde el primer commit hasta el despliegue en producción"
+---
+
+## Qué es el Tiempo de Ciclo del PR
+
+El Tiempo de Ciclo del PR mide el tiempo total desde que un desarrollador confirma código por primera vez hasta que ese código se fusiona exitosamente en la rama predeterminada. Esta métrica representa la velocidad de entrega de extremo a extremo de tu proceso de desarrollo.
+
+## Cómo lo Calculamos
+
+Rastreamos automáticamente el tiempo entre tu primer commit y cuando ese código se fusiona en la rama predeterminada (main/master). Dado que las fusiones en main típicamente representan cuándo el código está listo para producción, esto nos da una buena medida del tiempo de ciclo de tu desarrollo.
+
+**Lo que Rastreamos:**
+- Tiempo desde el primer commit hasta la fusión del PR
+- El ciclo de desarrollo completo
+- Cuánto tiempo tarda el código en integrarse
+
+**Lo que No Contamos:**
+- Tiempo dedicado a planificación o diseño (antes del primer commit)
+- Tiempo después de la fusión (despliegue, adopción por parte del usuario, etc.)
+- Cambios fallidos o abandonados
+
+**Cómo se Calcula:**
+```
+Tiempo de Ciclo del PR = (Hora de Fusión del PR) - (Hora del Primer Commit)
+```
+
+Usamos el percentil 75 (P75) para mostrarte el tiempo de ciclo típico, filtrando los valores atípicos inusualmente largos que podrían distorsionar tu comprensión del rendimiento normal.
+
+## Por qué es Importante
+
+El Tiempo de Ciclo del PR es una métrica crítica que mide la capacidad de tu equipo para completar el trabajo de desarrollo de manera eficiente. Los tiempos de ciclo altos pueden indicar tamaños de lote grandes, procesos de revisión extensos o cuellos de botella en el flujo de trabajo de desarrollo.
+
+
+## Cómo Mejorar
+
+- Dividir los cambios grandes en PRs más pequeños (200-400 líneas)
+- Establecer expectativas y pautas de revisión claras
+- Usar verificaciones automatizadas para detectar problemas antes de la revisión
+- Distribuir la carga de trabajo de revisión en el equipo
+- Obtener retroalimentación temprana durante el desarrollo
+- Usar una estrategia de ramas consistente

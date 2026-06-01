@@ -16,6 +16,7 @@ import {
 } from '@libs/platformData/infrastructure/adapters/repositories/schemas/pullRequests.model';
 import { PullRequestsRepository } from '@libs/platformData/infrastructure/adapters/repositories/pullRequests.repository';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
+import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { IPullRequests } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
 /**
@@ -153,7 +154,7 @@ const shouldSkip = !MONGODB_URI;
                         relevantLinesEnd: 10,
                         label: 'code_style',
                         severity: 'low',
-                        priorityStatus: 'medium',
+                        priorityStatus: PriorityStatus.PRIORITIZED,
                         deliveryStatus: s.deliveryStatus,
                         createdAt: new Date().toISOString(),
                         updatedAt: new Date().toISOString(),
@@ -167,8 +168,8 @@ const shouldSkip = !MONGODB_URI;
                 isDraft: false,
             };
 
-            const created = await model.create(pr);
-            return created.toObject() as IPullRequests;
+            const created = await model.create(pr as any);
+            return created.toObject() as unknown as IPullRequests;
         }
 
         describe('CRITICAL: Aggregation must match in-memory counting', () => {
@@ -370,7 +371,7 @@ const shouldSkip = !MONGODB_URI;
 
             it('should handle large PR with many files and suggestions', async () => {
                 // Simulate realistic scenario: 50 files, 20 suggestions each
-                const files = Array.from({ length: 50 }, (_, fileIdx) => ({
+                const files = Array.from({ length: 50 }, (_, _fileIdx) => ({
                     suggestions: Array.from({ length: 20 }, (_, suggIdx) => {
                         // Distribute: 50% SENT, 30% NOT_SENT, 20% FAILED
                         const idx = suggIdx % 10;
@@ -434,7 +435,7 @@ const shouldSkip = !MONGODB_URI;
                     user: { id: 'user-1', username: 'testuser' },
                     commits: [],
                     isDraft: false,
-                });
+                } as any);
 
                 const result =
                     await repository.findSuggestionCountsByNumbersAndRepositoryIds(

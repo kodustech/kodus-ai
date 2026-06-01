@@ -65,6 +65,7 @@ function omitDeletionHunks(patchLines: string[]): string {
 
 /**
  * Convert a patch to hunks with line numbers.
+ * Uses __new hunk__ / __old hunk__ format with line numbers on new hunk only.
  * @param patch The patch to convert.
  * @param file The file being processed.
  * @returns The converted patch.
@@ -186,6 +187,63 @@ export function convertToHunksWithLinesNumbers(
     return patchWithLinesStr.trim();
 }
 
+/**
+ * Convert a patch to standard unified diff with new-file line numbers.
+ * Keeps the unified diff interleaving intact — no __new hunk__ / __old hunk__ separation.
+ *
+ * Output format:
+ *   ## file: 'src/service.ts'
+ *   @@ -10,5 +10,7 @@
+ *        10  context line
+ *        11 +added line
+ *        12  context line
+ *            -removed line
+ *        13  another context
+ *
+ * Rules:
+ * - Context lines (' ') and added lines ('+'): get new-file line number
+ * - Removed lines ('-'): no number (padding with spaces) — they don't exist in the new file
+ * - Hunk headers ('@@') kept as-is
+ */
+export function convertToUnifiedDiffWithLineNumbers(
+    patch: string,
+    file: { filename?: string },
+): string {
+    if (!patch) return '';
+
+    const lines = patch.split('\n').slice(0, MAX_PATCH_LINES);
+    const RE_HUNK_HEADER =
+        /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@[ ]?(.*)/;
+    const result: string[] = [`## file: '${file.filename?.trim()}'`];
+
+    let newLine = 0;
+
+    for (const line of lines) {
+        if (line.toLowerCase().includes('no newline at end of file')) {
+            continue;
+        }
+
+        const match = line.match(RE_HUNK_HEADER);
+        if (match) {
+            newLine = parseInt(match[3], 10);
+            result.push(line);
+            continue;
+        }
+
+        if (line.startsWith('+')) {
+            result.push(`${String(newLine).padStart(6)} ${line}`);
+            newLine++;
+        } else if (line.startsWith('-')) {
+            result.push(`${''.padStart(6)} ${line}`);
+        } else {
+            result.push(`${String(newLine).padStart(6)} ${line}`);
+            newLine++;
+        }
+    }
+
+    return result.join('\n');
+}
+
 interface ModifiedRange {
     start: number;
     end: number;
@@ -194,6 +252,7 @@ interface ModifiedRange {
 /**
  * Extracts the modification ranges from a diff.
  * Each range represents a continuous block of code that was modified.
+ * Supports the __new hunk__ / __old hunk__ format.
  *
  * @param diffHunk The diff to be analyzed
  * @returns Array of ranges (start and end) of the modifications
@@ -261,6 +320,62 @@ export function extractLinesFromDiffHunk(diffHunk: string): ModifiedRange[] {
     }
 
     // If there's an open range left at the end, close it
+    if (currentRange) {
+        modifiedRanges.push(currentRange);
+    }
+
+    return modifiedRanges;
+}
+
+/**
+ * Extracts the modification ranges from a unified diff with padded line numbers.
+ * Companion to convertToUnifiedDiffWithLineNumbers.
+ *
+ * Supports format:
+ *     10 +added line       → line 10 is added
+ *        -removed line     → no number (ignored for ranges)
+ *     11  context line     → line 11 is context
+ *
+ * @param diffHunk The diff to be analyzed
+ * @returns Array of ranges (start and end) of the modifications
+ */
+export function extractLinesFromUnifiedDiff(diffHunk: string): ModifiedRange[] {
+    const lines = diffHunk?.split('\n');
+    const modifiedRanges: ModifiedRange[] = [];
+
+    let currentRange: ModifiedRange | null = null;
+
+    const RE_ADDED_LINE = /^\s*(\d+)\s\+/;
+
+    for (const line of lines) {
+        if (!line || line.startsWith('@@') || line.startsWith('## file:')) {
+            if (currentRange) {
+                modifiedRanges.push(currentRange);
+                currentRange = null;
+            }
+            continue;
+        }
+
+        const addedMatch = line.match(RE_ADDED_LINE);
+        if (addedMatch) {
+            const lineNumber = parseInt(addedMatch[1], 10);
+
+            if (!currentRange) {
+                currentRange = { start: lineNumber, end: lineNumber };
+            } else if (lineNumber === currentRange.end + 1) {
+                currentRange.end = lineNumber;
+            } else {
+                modifiedRanges.push(currentRange);
+                currentRange = { start: lineNumber, end: lineNumber };
+            }
+        } else {
+            if (currentRange) {
+                modifiedRanges.push(currentRange);
+                currentRange = null;
+            }
+        }
+    }
+
     if (currentRange) {
         modifiedRanges.push(currentRange);
     }

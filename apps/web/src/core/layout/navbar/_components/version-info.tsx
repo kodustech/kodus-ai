@@ -22,13 +22,17 @@ export const VERSION_QUERY = {
     retry: 1,
 };
 
-export const VersionInfo = ({ showUpdate = false }: { showUpdate?: boolean }) => {
+export const VersionInfo = ({
+    showUpdate = false,
+}: {
+    showUpdate?: boolean;
+}) => {
     const { data } = useQuery(VERSION_QUERY);
 
     if (!data || data.current === "unknown") return null;
 
     return (
-        <div className="flex items-center gap-1.5 text-xs text-text-tertiary">
+        <div className="text-text-tertiary flex items-center gap-1.5 text-xs">
             <span>{data.current}</span>
             {showUpdate && data.hasUpdate && data.latest && (
                 <Link

@@ -37,14 +37,24 @@ export class ProviderService {
             requiresApiKey: true,
             requiresBaseUrl: false,
         },
-        // [BYOKProvider.GOOGLE_VERTEX]: {
-        //     id: BYOKProvider.GOOGLE_VERTEX,
-        //     name: 'Google Vertex',
-        //     description: 'Vertex AI models from Google Cloud',
-        //     supported: true,
-        //     requiresApiKey: true,
-        //     requiresBaseUrl: false,
-        // },
+        [BYOKProvider.GOOGLE_VERTEX]: {
+            id: BYOKProvider.GOOGLE_VERTEX,
+            name: 'Google Vertex AI',
+            description:
+                'Vertex AI models via service account (needs SA JSON + region)',
+            supported: true,
+            requiresApiKey: true,
+            requiresBaseUrl: false,
+        },
+        [BYOKProvider.AMAZON_BEDROCK]: {
+            id: BYOKProvider.AMAZON_BEDROCK,
+            name: 'Amazon Bedrock',
+            description:
+                'AWS-hosted foundation models (needs AWS access key, secret, and region)',
+            supported: true,
+            requiresApiKey: false,
+            requiresBaseUrl: false,
+        },
         [BYOKProvider.OPEN_ROUTER]: {
             id: BYOKProvider.OPEN_ROUTER,
             name: 'OpenRouter',

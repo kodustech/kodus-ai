@@ -46,24 +46,6 @@ interface GeminiResponse {
     models: GeminiModel[];
 }
 
-interface VertexModel {
-    name: string;
-    displayName?: string;
-    description?: string;
-    versionId?: string;
-    versionCreateTime?: string;
-    versionUpdateTime?: string;
-    versionDescription?: string;
-    supportedDeploymentResourcesTypes?: string[];
-    supportedInputStorageFormats?: string[];
-    supportedOutputStorageFormats?: string[];
-}
-
-interface VertexResponse {
-    models: VertexModel[];
-    nextPageToken?: string;
-}
-
 export interface ModelResponse {
     provider: BYOKProvider;
     models: Array<{
@@ -117,11 +99,81 @@ export class GetModelsByProviderUseCase {
                         'https://api.openai.com',
                 );
 
+            case BYOKProvider.AMAZON_BEDROCK:
+                return this.getBedrockModels();
+
             default:
                 throw new BadRequestException(
                     `Unsupported provider: ${provider}`,
                 );
         }
+    }
+
+    /**
+     * Bedrock model IDs are region-scoped and cross-region inference
+     * profiles vary by AWS account. We can't list them generically without
+     * the user's AWS credentials (which are entered later in the wizard),
+     * so this returns a curated set of "us.*" cross-region inference
+     * profiles that cover the most common code-review use cases.
+     *
+     * Users on eu/apac regions or with custom inference profiles can still
+     * paste a model ID manually — the frontend allows free-form input on
+     * the Bedrock model field.
+     */
+    private getBedrockModels(): ModelResponse {
+        // Lookup by the Anthropic-style suffix (everything after
+        // "us.anthropic.") so we still pick up reasoning config from
+        // getModelCapabilities even though the catalog ID is prefixed.
+        const reasoningKeyOf = (id: string): string => {
+            const match = id.match(/^[a-z]{2,5}\.anthropic\.(.+?)-v\d+:\d+$/);
+            return match ? match[1] : id;
+        };
+
+        const catalog: Array<{ id: string; name: string }> = [
+            {
+                id: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+                name: 'Claude Sonnet 4.5 (us, cross-region)',
+            },
+            {
+                id: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+                name: 'Claude Sonnet 4 (us, cross-region)',
+            },
+            {
+                id: 'us.anthropic.claude-opus-4-1-20250805-v1:0',
+                name: 'Claude Opus 4.1 (us, cross-region)',
+            },
+            {
+                id: 'us.anthropic.claude-opus-4-20250514-v1:0',
+                name: 'Claude Opus 4 (us, cross-region)',
+            },
+            {
+                id: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
+                name: 'Claude 3.7 Sonnet (us, cross-region)',
+            },
+            {
+                id: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0',
+                name: 'Claude 3.5 Sonnet v2 (us, cross-region)',
+            },
+            {
+                id: 'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+                name: 'Claude 3.5 Haiku (us, cross-region)',
+            },
+        ];
+
+        return {
+            provider: BYOKProvider.AMAZON_BEDROCK,
+            models: catalog.map(({ id, name }) => {
+                const capabilities = getModelCapabilities(reasoningKeyOf(id));
+                return {
+                    id,
+                    name,
+                    ...(capabilities.supportsReasoning && {
+                        supportsReasoning: true,
+                        reasoningConfig: capabilities.reasoningConfig,
+                    }),
+                };
+            }),
+        };
     }
 
     private async getOpenAIModels(apiKey?: string): Promise<ModelResponse> {

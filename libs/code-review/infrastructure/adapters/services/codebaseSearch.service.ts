@@ -93,12 +93,19 @@ export class CodebaseSearchService {
                     context: CodebaseSearchService.name,
                 });
 
-                if (
-                    message.includes('exit code 1') ||
-                    message.includes('exit status 1') ||
-                    message.includes('exited with code 1') ||
-                    message.includes('No matches')
-                ) {
+                // Auth/fatal errors (git clone failures, network issues) must always
+                // surface as failures — they would otherwise corrupt downstream reviews.
+                // Check these BEFORE the "exit 1" branch because messages like
+                // "exit code 128" contain "exit code 1" as a substring.
+                if (this.isFatalErrorOutput(message)) {
+                    this.logger.error({
+                        message: `codebaseSearch.grep failed with fatal/auth error: ${message.slice(0, 300)}`,
+                        context: CodebaseSearchService.name,
+                    });
+                    return { success: false, contexts: [], error: message };
+                }
+
+                if (this.isRipgrepNoMatches(message)) {
                     return { success: true, contexts: [] };
                 }
                 return { success: false, contexts: [], error: message };
@@ -112,6 +119,21 @@ export class CodebaseSearchService {
 
             if (!raw || !raw.trim()) {
                 return { success: true, contexts: [] };
+            }
+
+            // The E2B sandbox layer sometimes swallows non-zero exit codes and
+            // returns stderr as the resolved value instead of throwing. Detect
+            // auth/fatal failures in the raw output so we do not silently parse
+            // them into an empty match list.
+            if (
+                this.isFatalErrorOutput(raw) &&
+                !this.looksLikeRipgrepOutput(raw)
+            ) {
+                this.logger.error({
+                    message: `codebaseSearch.grep returned fatal/auth error as output: ${raw.slice(0, 300)}`,
+                    context: CodebaseSearchService.name,
+                });
+                return { success: false, contexts: [], error: raw };
             }
 
             // 2. Parse rg output
@@ -159,6 +181,43 @@ export class CodebaseSearchService {
             });
             return { success: false, contexts: [], error: message };
         }
+    }
+
+    /**
+     * Returns true when the output comes from ripgrep reporting no matches.
+     * Uses word-boundary matching so it does not accidentally classify
+     * "exit code 128" (auth failure) as "exit code 1" (no matches).
+     */
+    private isRipgrepNoMatches(output: string): boolean {
+        return (
+            /\bexit (code|status) 1\b/.test(output) ||
+            /\bexited with code 1\b/.test(output) ||
+            output.includes('No matches')
+        );
+    }
+
+    /**
+     * Returns true when the output contains a git/network/auth fatal error
+     * that must always surface as a failure (never be treated as "no matches").
+     */
+    private isFatalErrorOutput(output: string): boolean {
+        return (
+            /fatal:/i.test(output) ||
+            /authentication failed/i.test(output) ||
+            /could not read username/i.test(output) ||
+            /permission denied/i.test(output) ||
+            /\bexit (code|status) 128\b/.test(output)
+        );
+    }
+
+    /**
+     * Heuristic to decide whether a string looks like real ripgrep output
+     * (at least one `file:line:text` row) rather than an error message.
+     */
+    private looksLikeRipgrepOutput(raw: string): boolean {
+        return raw
+            .split('\n')
+            .some((line) => /^[^:\n]+:\d+:/.test(line));
     }
 
     /**

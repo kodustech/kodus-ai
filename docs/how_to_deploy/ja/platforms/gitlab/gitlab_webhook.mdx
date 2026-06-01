@@ -1,0 +1,29 @@
+---
+title: Webhookの作成
+icon: webhook
+---
+
+Kodusは通常、Webhookを自動的に作成します。それが行われなかった場合は、以下の手順に従って手動で設定してください：
+
+<Note>
+  WebhookのURLはWebhooksサービス（ポート3332）に到達できる必要があります。APIドメインを使用するのは、リバースプロキシが`/.../webhook`パスをWebhooksサービスにルーティングする場合のみ機能します。
+</Note>
+
+1. GitLabプロジェクトに移動
+2. 「Settings」 > 「Webhooks」に移動
+3. Webhookを設定します：
+
+   - **URL**: `.env`ファイルのURLを入力：`API_GITLAB_CODE_MANAGEMENT_WEBHOOK`
+   - **Show full URLを確認**
+   - **Name**: （オプション）Kodus Code Review
+   - **Description**: （オプション）Kodus Code Review Webhook
+   - **Secret token**: 空欄のまま
+   - **SSL verification**: SSL検証を有効にする
+   - **Trigger**: 以下のイベントを選択：
+     - Comments
+     - Issue events
+     - Merge request events
+
+4. 「Add webhook」をクリック
+
+GitLabリポジトリのコードレビュー用Webhookのセットアップが完了しました。

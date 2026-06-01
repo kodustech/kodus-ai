@@ -541,7 +541,7 @@ __new hunk__
 22          lowercase: true,
 23          validate: {
 24              validator: function(v) {
-25                  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+25                  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(v);
 26              },
 27              message: props => \`\${props.value} is not a valid email!\`
 28          }

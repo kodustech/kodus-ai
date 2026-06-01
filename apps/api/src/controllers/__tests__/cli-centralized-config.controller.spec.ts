@@ -207,6 +207,7 @@ describe('CliCentralizedConfigController', () => {
             {
                 enabled: false,
                 repository: null,
+                activePullRequest: null,
             },
             {
                 organizationId: 'org-1',

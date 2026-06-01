@@ -1,0 +1,167 @@
+---
+title: "トラブルシューティングガイド"
+description: "Kodusのよくある問題を解決する。"
+icon: "headset"
+---
+
+## クイックフィックス
+
+### 「診断を実行する」
+
+インストーラーにはスタックと一般的な設定ミスを確認するdoctorスクリプトが同梱されています。
+
+```bash
+cd kodus-installer
+./scripts/doctor.sh
+```
+
+### 「Webインターフェースにアクセスできない」
+
+1. コンテナが実行中か確認します：
+
+```bash
+docker-compose ps kodus-web
+```
+
+2. ポートが正しくマッピングされているか確認します：
+
+```bash
+docker-compose port kodus-web 3000
+```
+
+3. Webコンテナのログを確認します：
+
+```bash
+docker-compose logs kodus-web
+```
+
+### 「`kodus-web`ログにEdge Runtimeエラーが表示される」
+
+`A Node.js API is used ... not supported in the Edge Runtime`のようなエラーが表示される場合（`axios`のインポートトレースが伴うことが多い）、WebアプリのあちらがEdge Runtimeで実行されており、Node.js APIをサポートしていません。
+
+1. 最新の`kodus-web`イメージに更新します（インストーラーを再実行するか、`docker-compose pull kodus-web`と`docker-compose up -d`を実行）。
+2. ソースからビルドしている場合は、auth/サーバールートがNode.jsランタイムで実行されることを確認してください（`export const runtime = "nodejs"`を設定し、それらのルートで`runtime = "edge"`を使用しないようにしてください）。
+3. コンテナを再ビルドして再起動します。
+
+### 「Gitのwebhookが機能しない」
+
+1. ドメインの設定を確認します：
+
+```bash
+curl -I https://your-domain.com
+```
+
+2. Webhookの試行についてWebhooksのログを確認します：
+
+```bash
+docker-compose logs webhooks | grep webhook
+```
+
+3. リバースプロキシの設定を確認します：
+
+```bash
+sudo nginx -t
+```
+
+### 「データベース接続の問題」
+
+1. データベースコンテナの状態を確認します：
+
+```bash
+docker-compose ps db_kodus_postgres
+docker-compose ps db_kodus_mongodb
+```
+
+2. データベースのログを確認します：
+
+```bash
+docker-compose logs db_kodus_postgres
+docker-compose logs db_kodus_mongodb
+```
+
+3. データベース接続をテストします：
+
+```bash
+docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
+docker-compose exec db_kodus_mongodb mongosh -u $API_MG_DB_USERNAME -p $API_MG_DB_PASSWORD
+```
+
+### 「vectorタイプが見つからないためマイグレーションが失敗した」
+
+マイグレーション中に「type vector does not exist」エラーが発生した場合、PostgreSQLデータベースでpgvector拡張機能が有効になっていないためです。修正方法を以下に示します：
+
+1. PostgreSQLデータベースに接続します：
+
+```bash
+docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
+```
+
+2. pgvector拡張機能を有効にします：
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+3. 拡張機能を有効にした後、マイグレーションを再度実行します：
+
+```bash
+docker-compose exec api npm run migration:run
+```
+
+問題が解決しない場合は、拡張機能が正しくインストールされているか確認できます：
+
+```sql
+SELECT * FROM pg_extension WHERE extname = 'vector';
+```
+
+## よくある問題
+
+### RabbitMQの問題
+
+メッセージキューのエラーが表示される場合：
+
+1. RabbitMQの状態を確認します：
+
+```bash
+docker-compose logs rabbitmq
+```
+
+2. `http://localhost:15672`の管理コンソールにアクセスして、キューと接続を確認します
+
+3. 必要に応じてサービスを再起動します：
+
+```bash
+docker-compose restart rabbitmq
+```
+
+### リソースの問題
+
+サービスが遅くなったりクラッシュしたりする場合：
+
+1. リソースの使用状況を確認します：
+
+```bash
+docker stats
+```
+
+2. コンテナの制限を確認します：
+
+```bash
+docker inspect $(docker-compose ps -q api) | grep -A 5 "Resources"
+```
+
+3. 必要に応じてdocker-compose.ymlのリソース制限を調整します
+
+## サポートを受ける
+
+### サポートリクエストに含める内容
+
+- 正確なエラーメッセージ
+- 影響を受けたサービスの関連ログ
+- デプロイ方法（CLI、VMなど）
+- 問題を再現する手順
+
+### サポートを受けられる場所
+
+- [Discordコミュニティ](https://discord.gg/TFZBRk9fT6)
+- [GitHub Issues](https://github.com/kodustech/kodus-installer/issues)

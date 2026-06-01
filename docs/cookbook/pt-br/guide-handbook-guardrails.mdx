@@ -1,0 +1,155 @@
+---
+title: "Transforme seu guia de boas práticas em guardrails de revisão"
+description: "Converta seu handbook de engenharia em Kody Rules vivas com plugins MCP opcionais."
+icon: "shield-check"
+---
+
+## Por que este guia é importante
+
+Todo time de engenharia tem um documento de "boas práticas" em algum lugar. O problema é que as sugestões do IDE não o leem, os revisores esquecem os detalhes, e o documento vai perdendo autoridade aos poucos. Este guia mostra como transformar seu handbook em guardrails ativos para que o Kody aplique essas regras automaticamente e cite a seção relevante sempre que o código se desviar.
+
+Vamos focar em dois blocos fundamentais:
+
+- [Kody Rules](/how_to_use/pt-br/code_review/configs/kody_rules) – codifique cada item de política como verificações determinísticas em nível de arquivo ou de PR.
+- [Plugins personalizados](/cookbook/pt-br/custom-plugin-install) – busque padrões em servidores MCP remotos quando a fonte da verdade estiver fora do Git.
+
+Siga o fluxo e qualquer repositório pode evoluir de "PDF do handbook" para "pacote de políticas vivo".
+
+
+## Checklist de pré-voo
+
+- Você tem permissão para editar **Configurações de Code Review → Kody Rules**.
+- O pacote de políticas está no repositório (ex.: `docs/engineering-standards.md`). Se o seu estiver em outro caminho, ajuste conforme necessário. Se estiver no Notion, Confluence ou Google Docs, planeje expô-lo por meio de um endpoint MCP remoto.
+- Você sabe quais tópicos devem ser avaliados no nível de arquivo (controllers, configs) versus no nível de PR (feature flags, narrativas de rollout, arquitetura).
+
+<Callout icon="layers">
+  Mantenha o handbook sob controle de versão. Cada edição deve passar por PRs com aprovadores responsáveis. Essa disciplina mantém as regras conectadas à realidade.
+</Callout>
+
+## Fase 1 – Molde um pacote de políticas amigável a regras
+
+1. Crie ou reutilize um arquivo markdown como `docs/engineering-standards.md`. O único requisito: o Kody deve conseguir referenciá-lo via `@file:...`.
+2. Organize o conteúdo em bullets curtos e verificáveis:
+
+```md
+# Padrões de Engenharia
+
+## Tratamento de erros
+- Nunca suprima erros.
+- Não registre PII ou segredos em logs.
+- Requisições externas devem ter política de timeout e retry.
+
+## Arquitetura
+- Sem importações diretas entre módulos de `domain/*` para `web/*`.
+- Novos endpoints devem incluir campos de rastreamento (ex.: requestId) e logs estruturados.
+- Feature flags são obrigatórias para mudanças arriscadas.
+```
+
+3. Adicione metadados como `[Responsável: Plataforma Backend]` ou `[Risco: Alto]` para ajudar a rotear violações.
+
+<Info>
+  Se a fonte da verdade permanecer fora do Git, adote a mesma estrutura, mas publique-a por meio de um servidor MCP remoto para que as regras possam chamar `@MCP:policy_pack.getSection(...)`.
+</Info>
+
+<Tip>
+  Torne cada bullet atômico. Quando uma regra disparar, não deve haver dúvida sobre o que precisa ser alterado.
+</Tip>
+
+
+## Fase 2 – Aponte cada regra para o documento real
+
+As regras podem ler arquivos e payloads MCP remotos. Referencie o handbook real em vez de colar trechos em cada instrução.
+
+```text
+Use @file:docs/engineering-standards.md (seção Arquitetura) como fonte da política.
+Sinalize apenas código que claramente viola esses bullets. Se a seção estiver ausente, diga isso.
+```
+
+- Substitua por outros caminhos de arquivo para pacotes específicos de domínio (ex.: `@file:docs/mobile.md`).
+- Precisa de apenas uma parte do arquivo? Adicione âncoras de linha — `@file:docs/engineering-standards.md#L40-L72` — para que a regra consuma apenas aquela seção.
+- Quando a política vier do Notion/Confluence/etc., substitua a referência de arquivo por `@MCP:policy_pack.getSection({"id":"security"})`.
+- Combine os dois quando a regra precisar de templates estáticos mais dados dinâmicos (ex.: `@file` para formato de log + `@MCP:piiRegistry.list()` para os campos sensíveis atuais).
+
+<Callout icon="link">
+  Uma única referência mantém tudo sincronizado. Atualize o handbook uma vez e cada regra aplicará a versão mais recente.
+</Callout>
+
+
+## Fase 3 – Traduza seções em Kody Rules
+
+Abra **Configurações de Code Review → Kody Rules** e mapeie cada seção de política para o escopo adequado.
+
+| Seção da política      | Tipo de regra | Exemplo de escopo                     | Severidade |
+| ---------------------- | ------------- | ------------------------------------- | ---------- |
+| Tratamento de erros    | Nível de arquivo | `backend/**/*.ts`                  | Alta       |
+| Arquitetura            | Nível de PR   | Todos os arquivos via `pr_files_diff` | Crítica    |
+| Logging e rastreamento | Nível de arquivo | `web/apps/**/controllers/**/*.ts` | Média      |
+| Segurança / PII        | Arquivo + MCP | `**/*` com busca de lista de PII    | Crítica    |
+
+### Exemplo de regra em nível de arquivo
+
+```
+Name: Enforce tracing fields on new endpoints
+Scope: File
+Paths: web/apps/**/controllers/**/*.ts
+Severity: High
+Instructions:
+  Compare fileDiff with Architecture → New endpoints in @file:docs/engineering-standards.md.
+  Flag handlers that lack requestId tracing AND structured log statements.
+  Quote the diff chunk that violates the policy.
+```
+
+### Exemplo de regra em nível de PR
+
+```
+Name: Require feature flags for risky changes
+Scope: Pull Request
+Severity: Critical
+Instructions:
+  Scan pr_files_diff for routes/services/domain files that add major functionality.
+  If no feature flag file is touched, cite "Architecture → Feature flags are mandatory" and request the rollout plan.
+```
+
+Precisa de dados atualizados para avaliar a regra? Chame o MCP dentro das instruções:
+
+```
+Use @MCP:policy_pack.getSection({"id":"security"}) to fetch the latest restricted fields.
+```
+
+<Info>
+  As regras já entendem variáveis (`fileDiff`, `pr_files_diff`, etc.), referências de arquivo e invocações MCP. Veja a matriz completa no [guia de Kody Rules](/how_to_use/pt-br/code_review/configs/kody_rules).
+</Info>
+
+
+## Fase 4 – Espelhe padrões externos via MCP (opcional)
+
+Às vezes, o handbook (ou parte dele) precisa permanecer no Notion, Confluence, Google Docs ou outro sistema. Você ainda pode alimentá-lo no Kody:
+
+1. Construa ou adote um endpoint MCP remoto que exponha `listSections()` e `getSection(id)`.
+2. Instale-o via **Adicionar Plugin Personalizado**. Siga o [guia de plugin personalizado](/cookbook/pt-br/custom-plugin-install) para o fluxo exato.
+3. Substitua as referências `@file` por `@MCP:policy_pack.getSection({"id":"architecture"})`.
+4. Armazene respostas em cache no servidor MCP para que várias regras compartilhem o payload por revisão.
+
+Agora o Kody aplica os mesmos padrões independentemente de onde o documento esteja.
+
+## Fase 5 – Teste, observe e mantenha vivo
+
+<AccordionGroup>
+  <Accordion title="Crie um PR de verificação">
+    Crie um PR descartável que viole cada seção. Mencione @kody e garanta que os comentários inline e de nível de PR citem os bullets corretos.
+  </Accordion>
+  <Accordion title="Ajuste ruído e severidade">
+    Durante o rollout, observe com que frequência cada regra dispara. Restrinja globs de arquivo, adicione exclusões ou ajuste a severidade até que o sinal atenda às expectativas.
+  </Accordion>
+  <Accordion title="Atualize documentos e regras juntos">
+    Sempre que o handbook mudar, atualize o markdown (ou payload MCP) e as regras relacionadas no mesmo PR para que os revisores possam validar o pipeline completo.
+  </Accordion>
+</AccordionGroup>
+
+## Checklist rápido
+
+- [ ] `docs/engineering-standards.md` (ou equivalente MCP) existe com bullets escaneáveis e marcados.
+- [ ] Cada regra referencia o pacote de políticas via `@file` ou `@MCP`, garantindo que leia o texto mais recente.
+- [ ] Kody Rules em nível de arquivo e de PR cobrem suas seções críticas.
+- [ ] Plugin MCP opcional espelha padrões fora do repositório quando necessário.
+- [ ] Um PR de teste confirmou os comentários inline e o resumo do PR antes do rollout amplo.

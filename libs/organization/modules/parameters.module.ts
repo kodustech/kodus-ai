@@ -16,6 +16,8 @@ import { ParametersService } from '../infrastructure/adapters/services/parameter
 import { UpdateOrCreateCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/update-or-create-code-review-parameter-use-case';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
 import { AIEngineModule } from '@libs/ai-engine/modules/ai-engine.module'; // Added
+import { CentralizedConfigModule } from '@libs/centralized-config/modules/centralized-config.module';
+import { PullRequestMessagesModule } from '@libs/code-review/modules/pullRequestMessages.module';
 
 @Module({
     imports: [
@@ -23,9 +25,11 @@ import { AIEngineModule } from '@libs/ai-engine/modules/ai-engine.module'; // Ad
         forwardRef(() => IntegrationConfigModule),
         forwardRef(() => IntegrationModule),
         forwardRef(() => OrganizationParametersModule),
-        PermissionsModule,
         forwardRef(() => McpCoreModule),
-        forwardRef(() => AIEngineModule), // Added
+        forwardRef(() => AIEngineModule),
+        forwardRef(() => CentralizedConfigModule),
+        forwardRef(() => PullRequestMessagesModule),
+        PermissionsModule,
     ],
     providers: [
         CreateOrUpdateParametersUseCase,

@@ -1,6 +1,6 @@
 import {
-    getGithubTokenErrorMessage,
     getGithubTokenConfig,
+    getGithubTokenErrorMessage,
     isValidGithubEnterpriseUrl,
     resolveGithubTokenHost,
 } from "./github-token-config";
@@ -84,9 +84,9 @@ describe("github-token-config", () => {
             expect(isValidGithubEnterpriseUrl("github acme internal")).toBe(
                 false,
             );
-            expect(isValidGithubEnterpriseUrl("ftp://github.acme.internal")).toBe(
-                false,
-            );
+            expect(
+                isValidGithubEnterpriseUrl("ftp://github.acme.internal"),
+            ).toBe(false);
         });
     });
 

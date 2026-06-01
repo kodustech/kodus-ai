@@ -51,9 +51,7 @@ describe('McpController', () => {
             handleRequest: jest.fn().mockResolvedValue(undefined),
         };
 
-        controller = new McpController(
-            mcpServerService as any,
-        );
+        controller = new McpController(mcpServerService as any);
     });
 
     it('delegates POST requests directly to the stateless service', async () => {

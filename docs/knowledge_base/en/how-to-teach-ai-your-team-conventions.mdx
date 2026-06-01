@@ -1,0 +1,68 @@
+---
+title: "How to teach AI your team's coding conventions"
+description: "Use Memories to make Kody learn your coding preferences, architectural decisions, and team conventions through natural conversation."
+---
+
+Every team has unwritten context — technology preferences, naming conventions, architectural decisions, migration details. Instead of documenting them all upfront, you can teach Kody through natural conversation so future reviews are more relevant and repetitive bad suggestions go away.
+
+## How it works
+
+When you talk to Kody in PR comments, it detects when you're stating codebase context or a team preference and automatically saves it as a **Memory**. Memories are then applied as high-priority context in all future code reviews and conversations.
+
+### Explicit teaching
+
+Directly tell Kody to remember something:
+
+```
+@kody remember: this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
+```
+
+```
+@kody please remember: this service follows hexagonal architecture and keeps adapters at the edge.
+```
+
+### Implicit learning
+
+State a preference naturally — Kody picks it up:
+
+```
+@kody this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
+```
+
+```
+@kody in this service, tests usually live next to the implementation files rather than in a central test folder.
+```
+
+```
+@kody the billing module is mid-migration, so prefer incremental fixes over broad refactors.
+```
+
+## What Kody won't save
+
+Kody is selective about what becomes a memory:
+
+- Temporary instructions ("fix this now", "skip this for today")
+- Questions ("what's the deadline?")
+- Debugging chatter ("I see an error")
+- Vague statements without actionable information
+- Requests scoped to a single PR or task
+
+## Memory scopes
+
+Each memory applies at a specific level:
+
+| Scope | Example |
+|-------|---------|
+| **Directory** | "In `src/components/ui`, always use our design system tokens" |
+| **Repository** | "This repo uses hexagonal architecture" |
+| **Organization** | "All repos use ESLint flat config" |
+
+## Approval workflow
+
+If you want to review AI-generated memories before they take effect, enable **LLM-generated memories approval** in settings. Memories will enter a pending state until you approve them.
+
+## Managing memories
+
+Go to **Code Review Settings** → **Kody Rules** → **Memories** tab to view, edit, or delete memories. You can also create memories manually from the UI.
+
+For details, see [Kody Rules — Memories](/how_to_use/en/code_review/configs/kody_rules#memories).

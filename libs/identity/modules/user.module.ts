@@ -6,6 +6,7 @@ import { OrganizationModule } from '@libs/organization/modules/organization.modu
 import { TeamModule } from '@libs/organization/modules/team.module';
 import { TeamMembersModule } from '@libs/organization/modules/teamMembers.module';
 import { CryptoModule } from '@libs/core/crypto/crypto.module';
+import { NotificationModule } from '@libs/notifications/modules/notification.module';
 
 import { UpdateAnotherUserUseCase } from '../application/use-cases/user/update-another.use-case';
 import { AcceptUserInvitationUseCase } from '../application/use-cases/user/accept-user-invitation.use-case';
@@ -19,6 +20,7 @@ import { SaveMarketingSurveyUseCase } from '../application/use-cases/profile/sav
         forwardRef(() => TeamModule),
         forwardRef(() => TeamMembersModule),
         CryptoModule,
+        forwardRef(() => NotificationModule),
     ],
     providers: [
         UpdateAnotherUserUseCase,

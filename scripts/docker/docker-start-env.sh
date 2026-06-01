@@ -9,13 +9,44 @@ else
 fi
 
 COMPOSE_FILE="docker-compose.dev.yml"
+COMPOSE_FILES=(-f "$COMPOSE_FILE")
+# `docker compose` only auto-loads `docker-compose.override.yml` when the
+# main file is the default `docker-compose.yml`. Since we pass `-f` here,
+# we have to opt in explicitly. Useful in worktrees that need to coexist
+# with the main checkout (renamed containers, remapped ports, isolated
+# volumes/networks).
+if [ -f "docker-compose.override.yml" ]; then
+  COMPOSE_FILES+=(-f "docker-compose.override.yml")
+  echo "▶ Detected docker-compose.override.yml — including it."
+fi
 PROFILE_ARGS=()
 
 case "$ENVIRONMENT" in
   local)
     export ENV_FILE=${ENV_FILE:-.env}
     export API_DATABASE_ENV=${API_DATABASE_ENV:-development}
-    PROFILE_ARGS=(--profile local-db)
+    # profiling=opt-in. Most dev flows don't need Pyroscope running and
+    # it's another ~150 MiB of headroom in the OrbStack VM. To bring it
+    # up: `ENABLE_PROFILING=true yarn docker:start`, or use the
+    # `yarn docker:start:profiling` shortcut, or `yarn docker:start:full`
+    # (which activates the `extras` profile that includes Pyroscope).
+    PROFILE_ARGS=()
+    if [ "${ENABLE_PROFILING:-false}" = "true" ]; then
+      PROFILE_ARGS+=(--profile profiling)
+    fi
+    # Opt-in extras: webhooks, mcp, analytics, or `extras` (all three).
+    # Default `yarn docker:start` brings up api + worker + web only; pass
+    # KODUS_DEV_EXTRAS=mcp (or comma-separated list, or `extras`) to add.
+    # Empty/unset = none added.
+    if [ -n "${KODUS_DEV_EXTRAS:-}" ]; then
+      IFS=',' read -ra _EXTRA_PROFILES <<< "$KODUS_DEV_EXTRAS"
+      for _p in "${_EXTRA_PROFILES[@]}"; do
+        _p_trimmed=$(echo "$_p" | tr -d '[:space:]')
+        if [ -n "$_p_trimmed" ]; then
+          PROFILE_ARGS+=(--profile "$_p_trimmed")
+        fi
+      done
+    fi
     ENV_LABEL="local"
     ;;
   qa|homolog)
@@ -47,7 +78,7 @@ fi
 echo "Iniciando docker compose ($ENV_LABEL) com arquivo $ENV_FILE ..."
 
 if [ ${#PROFILE_ARGS[@]} -gt 0 ]; then
-  docker compose -f "$COMPOSE_FILE" "${PROFILE_ARGS[@]}" "$@"
+  docker compose "${COMPOSE_FILES[@]}" "${PROFILE_ARGS[@]}" "$@"
 else
-  docker compose -f "$COMPOSE_FILE" "$@"
+  docker compose "${COMPOSE_FILES[@]}" "$@"
 fi

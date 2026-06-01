@@ -18,7 +18,47 @@ export type CentralizedConfigValue = {
     repository: {
         id: string;
         name: string;
-    };
+    } | null;
+    activePullRequest?: {
+        prUrl: string;
+        prNumber?: number;
+        sourceBranch: string;
+        targetBranch?: string;
+        repository: {
+            id: string;
+            name: string;
+        };
+        createdAt: string;
+        updatedAt: string;
+    } | null;
+};
+
+export type CentralizedPrResponse = {
+    mode: "centralized-pr";
+    prUrl?: string;
+    prNumber?: number;
+    reused?: boolean;
+    pending?: boolean;
+    message?: string;
+};
+
+export const isCentralizedPrResponse = (
+    value: unknown,
+): value is CentralizedPrResponse => {
+    if (!value || typeof value !== "object") {
+        return false;
+    }
+
+    const obj = value as Record<string, unknown>;
+
+    return (
+        obj.mode === "centralized-pr" &&
+        (!("prUrl" in obj) || typeof obj.prUrl === "string") &&
+        (!("prNumber" in obj) || typeof obj.prNumber === "number") &&
+        (!("reused" in obj) || typeof obj.reused === "boolean") &&
+        (!("pending" in obj) || typeof obj.pending === "boolean") &&
+        (!("message" in obj) || typeof obj.message === "string")
+    );
 };
 
 export enum OrganizationParametersConfigKey {

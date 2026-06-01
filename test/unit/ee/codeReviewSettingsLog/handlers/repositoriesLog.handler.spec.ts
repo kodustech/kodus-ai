@@ -1,7 +1,5 @@
 import { RepositoriesLogHandler } from '@libs/ee/codeReviewSettingsLog/infrastructure/adapters/services/repositoriesLog.handler';
-import {
-    ActionType,
-} from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
+import { ActionType } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
 import {
     createMockUnifiedLogHandler,
     createBaseParams,

@@ -13,6 +13,11 @@ import { CoreModel } from '@libs/core/infrastructure/repositories/model/typeOrm'
     where: '"active" = true',
     concurrent: true,
 })
+@Index('UQ_parameters_one_active_per_team_key', ['team', 'configKey'], {
+    unique: true,
+    where: '"active" = true',
+    concurrent: true,
+})
 @Index('IDX_parameters_config_value_gin', { synchronize: false }) // Typeorm does not support GIN indexes natively, so we set synchronize to false and create it manually in migrations
 export class ParametersModel extends CoreModel {
     @Column({

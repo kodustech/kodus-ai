@@ -1,0 +1,33 @@
+---
+title: Webhookの作成
+icon: webhook
+---
+
+Kodusは通常、Webhookを自動的に作成します。それが行われなかった場合は、以下の手順に従って手動で設定してください：
+
+<Note>
+  WebhookのURLはWebhooksサービス（ポート3332）に到達できる必要があります。APIドメインを使用するのは、リバースプロキシが`/.../webhook`パスをWebhooksサービスにルーティングする場合のみ機能します。
+</Note>
+
+1. GitHubリポジトリに移動
+2. 「Settings」をクリック
+3. 左サイドバーの「Webhooks」を見つける
+4. 「Add webhook」をクリック
+5. Webhookを設定します：
+
+   - **Payload URL**: `.env`ファイルのURLを入力：`API_GITHUB_CODE_MANAGEMENT_WEBHOOK`
+   - **Content type**: `application/json`
+   - **Secret**: 空欄のまま
+   - **SSL verification**: SSL検証を有効にする
+   - **Which events would you like to trigger this webhook?**: 個別のイベントを選択する
+   - 以下のボックスにチェックを入れます：
+     - Issue comment
+     - Pull request review comments
+     - Pull request review threads
+     - Pull request reviews
+     - Pull requests
+     - Pushes
+
+6. 「Add webhook」をクリック
+
+GitHubリポジトリのコードレビュー用Webhookのセットアップが完了しました。

@@ -1,0 +1,12 @@
+node_modules/
+evidence/
+*.local
+.env
+.env.local
+playwright/node_modules/
+playwright/test-results/
+playwright/playwright-report/
+playwright/failure.png
+playwright/failure.html
+playwright/ui-smoke-*.png
+playwright/ui-smoke-*.html

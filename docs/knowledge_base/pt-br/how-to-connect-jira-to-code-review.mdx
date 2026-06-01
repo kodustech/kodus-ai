@@ -1,0 +1,42 @@
+---
+title: "Como conectar o Jira à sua ferramenta de revisão de código"
+description: "Vincule o Jira ao Kodus para que suas revisões de código com IA validem automaticamente os PRs contra os requisitos e critérios de aceitação das tarefas."
+---
+
+Conectar o Jira ao Kodus habilita dois recursos poderosos: **validação automática de lógica de negócio** contra tickets do Jira e um contexto mais rico para sugestões de revisão de código.
+
+## Como conectar
+
+1. Vá em **Configurações** → **Plugins**
+2. Encontre **Jira** nos plugins disponíveis
+3. Clique em **Conectar** e autorize o acesso ao seu workspace do Jira
+4. Selecione quais projetos o Kodus pode acessar
+
+## O que isso habilita
+
+### Validação automática de lógica de negócio
+
+Quando um PR está vinculado a um ticket do Jira, o Kodus automaticamente:
+- Busca o título, a descrição e os critérios de aceitação do ticket
+- Compara o diff do PR com os requisitos
+- Reporta implementações ausentes, incompatibilidades de escopo e lacunas
+
+### Validação sob demanda
+
+Cole qualquer URL do Jira em um comentário de PR:
+
+```
+@kody -v business-logic https://sua-org.atlassian.net/browse/PROJ-123
+```
+
+### Contexto mais rico para revisão de código
+
+Com o Jira conectado, o Kody pode usar funções MCP nas suas regras para buscar contexto de tarefas, verificar o status de issues e fazer referência cruzada de requisitos.
+
+## Requisitos
+
+- Jira Cloud ou Jira Data Center
+- Acesso via OAuth ou token de API
+- Permissões para ler os projetos relevantes
+
+Para detalhes sobre validação de lógica de negócio, consulte [Validação de Lógica de Negócio](/how_to_use/pt-br/code_review/business_logic_validation). Para configuração de plugins, consulte [Plugins](/how_to_use/pt-br/code_review/plugins).

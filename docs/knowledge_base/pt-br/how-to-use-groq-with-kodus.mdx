@@ -1,0 +1,169 @@
+---
+title: "Groq Cloud - Inferência Ultrarrápida"
+description: "Aprenda como usar os modelos do Groq com o Kodus"
+icon: "bolt"
+---
+
+## Como o Groq funciona
+
+O Groq Cloud fornece inferência rápida de LLM com APIs compatíveis com OpenAI. Desenvolvido para velocidade e simplicidade, o Groq oferece inferência ultrarrápida para modelos populares como Llama, Deepseek e mais. A plataforma é projetada para ser simples de integrar e fácil de escalar, tornando-a perfeita para aplicações em produção.
+
+## Modelos Recomendados
+
+Recomendamos bons modelos de codificação com janelas de contexto grandes e inferência rápida.
+
+<Info>
+  Para as informações mais atualizadas, visite a [página de modelos do Groq](https://console.groq.com/docs/models).
+</Info>
+
+| Modelo                              | Janela de Contexto | Velocidade     |
+| ----------------------------------- | ------------------ | -------------- |
+| **Llama 3.3 70B Versatile** `recomendado` | ~128k tokens   | Ultra Rápida |
+| **Deepseek R1 Distill Llama 70B** | ~128k tokens   | Ultra Rápida |
+| **Llama 3.1 70B Versatile**       | ~128k tokens   | Ultra Rápida |
+
+
+## Criando uma Chave de API
+
+<Warning>Uma conta Groq Cloud é necessária para criar uma Chave de API.</Warning>
+
+Acesse diretamente a [página de Chaves de API do Groq](https://console.groq.com/keys) para criar uma nova Chave de API.
+
+Ou siga estes passos:
+
+1. Vá para o [Console Groq](https://console.groq.com)
+2. Faça login ou crie sua conta
+3. Navegue até "Chaves de API" na navegação superior
+4. Clique no botão "Criar Chave de API"
+5. Dê um nome como 'Kodus' ou qualquer nome descritivo
+6. Copie a Chave de API e guarde-a em um lugar seguro
+
+<Info>
+  Apenas proprietários de time ou usuários com papel de desenvolvedor podem criar ou gerenciar chaves de API no Groq.
+</Info>
+
+## Como usar
+
+<Snippet file="deploy-basic-setup.mdx" />
+
+### Configurar o Groq no Arquivo de Ambiente
+
+Edite o seu arquivo `.env` e configure as definições principais. Para a **Integração de LLM**, use o Groq no Modo Fixo:
+
+```env
+# Configurações Principais do Sistema (atualize com seus domínios)
+WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
+WEB_PORT_API=443                               
+NEXTAUTH_URL="https://kodus-web.yourdomain.com"
+
+# Chaves de Segurança (gere com os comandos openssl acima)
+WEB_NEXTAUTH_SECRET="your-generated-secret"
+API_CRYPTO_KEY="your-generated-hex-key"
+API_JWT_SECRET="your-generated-secret"
+API_JWT_REFRESH_SECRET="your-generated-secret"
+
+# Configuração do Banco de Dados
+API_PG_DB_PASSWORD="your-secure-db-password"
+API_MG_DB_PASSWORD="your-secure-db-password"
+
+# Configuração Groq (Modo Fixo) 
+API_LLM_PROVIDER_MODEL="llama-3.3-70b-versatile"             # Escolha seu modelo preferido
+API_OPENAI_FORCE_BASE_URL="https://api.groq.com/openai/v1"   # URL da API Groq
+API_OPEN_AI_API_KEY="your-groq-api-key"                      # Sua Chave de API Groq
+
+# Webhooks do Provedor Git (escolha seu provedor)
+API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
+# ou API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
+# ou GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
+```
+
+<Note>
+  As URLs de webhook devem alcançar o serviço de Webhooks (porta 3332). Use um domínio dedicado para webhooks ou roteie `/.../webhook` para a porta 3332 no seu proxy reverso.
+</Note>
+
+<Info>
+  **O Modo Fixo é ideal para o Groq** porque ele fornece APIs compatíveis com OpenAI com inferência ultrarrápida. Isso oferece o melhor desempenho com configuração simples.
+</Info>
+
+<Snippet file="deploy-installation.mdx" />
+
+### Configurar Proxy Reverso (Para Produção)
+
+Para webhooks e acesso externo, configure o Nginx:
+
+```nginx
+# Aplicação Web (porta 3000)
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com;
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# API (porta 3001)  
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com;
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Verificar a Integração com o Groq
+
+Além da verificação básica de instalação, confirme que o Groq está funcionando:
+
+```bash
+# Verificar especificamente a conexão com a API Groq
+docker-compose logs api worker | grep -i groq
+```
+
+<Tip>
+  Para informações detalhadas sobre configuração de SSL, monitoramento e configurações avançadas, consulte nosso [guia completo de implantação](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm).
+</Tip>
+
+### Solução de problemas
+
+<AccordionGroup>
+  <Accordion title="Problemas com Chave de API">
+    - Verifique se sua chave de API está correta e ativa no [Console Groq](https://console.groq.com/keys)
+    - Verifique se você tem créditos ou cota suficientes na sua conta Groq
+    - Certifique-se de que não há espaços extras no seu arquivo `.env`
+  </Accordion>
+  
+  <Accordion title="Modelo Não Encontrado">
+    - Verifique se o nome do modelo está escrito corretamente na sua configuração
+    - Verifique se o modelo está disponível na lista de modelos atual do Groq
+    - Tente com um modelo diferente da nossa lista recomendada
+  </Accordion>
+  
+  <Accordion title="Erros de Conexão">
+    - Verifique se o seu servidor tem acesso à internet para alcançar `api.groq.com`
+    - Verifique se há restrições de firewall
+    - Revise os logs da API/worker para mensagens de erro detalhadas
+  </Accordion>
+  
+  <Accordion title="Limitação de Taxa">
+    - O Groq tem limites de taxa baseados no seu plano
+    - Consulte a [documentação de limites de taxa do Groq](https://console.groq.com/docs/rate-limits)
+    - Considere fazer upgrade do seu plano para limites maiores
+  </Accordion>
+</AccordionGroup>

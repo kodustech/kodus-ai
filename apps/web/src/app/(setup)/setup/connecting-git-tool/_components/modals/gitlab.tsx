@@ -28,7 +28,6 @@ import {
     DialogTitle,
 } from "src/core/components/ui/dialog";
 import { AuthMode, PlatformType } from "src/core/types";
-import { captureSegmentEvent } from "src/core/utils/segment";
 import { z } from "zod";
 
 const tokenFormSchema = z.object({
@@ -69,16 +68,6 @@ export const GitlabTokenModal = (props: {
                 host: data.selfhostUrl,
                 organizationAndTeamData: {
                     teamId: props.teamId,
-                },
-            });
-
-            captureSegmentEvent({
-                userId: props?.userId!,
-                event: "setup_git_integration_success",
-                properties: {
-                    platform: "github",
-                    method: "token",
-                    teamId: props?.teamId,
                 },
             });
 

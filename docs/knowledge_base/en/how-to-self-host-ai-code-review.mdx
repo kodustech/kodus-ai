@@ -1,0 +1,39 @@
+---
+title: "How to self-host an AI code review tool"
+description: "Deploy Kodus on your own infrastructure with full control over data, models, and configuration."
+---
+
+Kodus is open-source and can be self-hosted on your own infrastructure. This gives you full control over your data, network access, and LLM provider.
+
+## Deployment options
+
+### Docker (recommended)
+
+Deploy Kodus using Docker Compose on any VM:
+
+1. Clone the Kodus repository
+2. Configure environment variables
+3. Run `docker compose up`
+4. Access the web UI and connect your Git provider
+
+### Local development
+
+For testing or contributing:
+
+1. Use the orchestrator for a quick local setup
+2. Includes all services in a single command
+
+## What you control
+
+- **Data** — all code and review data stays on your infrastructure
+- **LLM provider** — use any provider or self-hosted models
+- **Network** — runs behind your firewall, no external access required
+- **Configuration** — full control over all settings
+
+## Requirements
+
+- Docker and Docker Compose
+- Sufficient compute resources for the API and worker services
+- Network access to your Git provider (GitHub, GitLab, Bitbucket)
+
+For the full deployment guide, see [Deploy with Docker](/how_to_deploy/en/deploy_kodus/generic_vm).

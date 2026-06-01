@@ -1,0 +1,14 @@
+{
+    "name": "@kodus/mcp-manager",
+    "version": "0.0.1",
+    "description": "MCP Manager — provisions and orchestrates MCP servers per organization",
+    "main": "dist/main.js",
+    "scripts": {
+        "build": "nest build mcp-manager",
+        "start": "node dist/main.js",
+        "start:dev": "nest start mcp-manager --watch",
+        "start:debug": "nest start mcp-manager --debug --watch"
+    },
+    "dependencies": {},
+    "devDependencies": {}
+}

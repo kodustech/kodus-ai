@@ -32,8 +32,8 @@ export async function fetchAndParseMetadata(url: string) {
         }
 
         const response = await axios.get(url, {
-            httpAgent: useAgent(url),
-            httpsAgent: useAgent(url),
+            // httpAgent: useAgent(url),
+            // httpsAgent: useAgent(url),
             responseType: "text",
             transitional: {
                 silentJSONParsing: false,

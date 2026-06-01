@@ -1,0 +1,169 @@
+---
+title: "Groq Cloud - 超高速推論"
+description: "KodusでGroqのモデルを使用する方法を学びます"
+icon: "bolt"
+---
+
+## Groqの動作方法
+
+Groq CloudはOpenAI互換APIで高速なLLM推論を提供します。スピードとシンプルさのために構築されたGroqは、Llama、DeepSeekなどの人気モデルへの超高速推論を提供します。プラットフォームはシンプルに統合してスケールしやすいように設計されており、本番アプリケーションに最適です。
+
+## 推奨モデル
+
+高いコンテキストウィンドウと高速推論を持つ優れたコーディングモデルを推奨します。
+
+<Info>
+  最新情報については、[Groqのモデルページ](https://console.groq.com/docs/models)を参照してください。
+</Info>
+
+| モデル                              | コンテキストウィンドウ | 速度     |
+| ---------------------------------- | -------------- | --------- |
+| **Llama 3.3 70B Versatile** `推奨` | 約128kトークン   | 超高速 |
+| **Deepseek R1 Distill Llama 70B** | 約128kトークン   | 超高速 |
+| **Llama 3.1 70B Versatile**       | 約128kトークン   | 超高速 |
+
+
+## APIキーの作成
+
+<Warning>APIキーを作成するにはGroq Cloudアカウントが必要です。</Warning>
+
+[GroqのAPIキーページ](https://console.groq.com/keys)に直接アクセスして新しいAPIキーを作成します。
+
+または、以下の手順に従ってください：
+
+1. [Groqコンソール](https://console.groq.com)にアクセスします
+2. サインインするかアカウントを作成します
+3. 上部ナビゲーションで「APIキー」に移動します
+4. 「APIキーを作成」ボタンをクリックします
+5. 「Kodus」または任意の説明的な名前を付けます
+6. APIキーをコピーして安全な場所に保存します
+
+<Info>
+  GroqのAPIキーを作成または管理できるのは、チームオーナーまたはデベロッパーロールを持つユーザーのみです。
+</Info>
+
+## 使用方法
+
+<Snippet file="deploy-basic-setup.mdx" />
+
+### 環境ファイルでGroqを設定する
+
+`.env` ファイルを編集してコア設定を構成します。**LLMインテグレーション**には、Groqを固定モードで使用します：
+
+```env
+# コアシステム設定（ドメインを更新）
+WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
+WEB_PORT_API=443                               
+NEXTAUTH_URL="https://kodus-web.yourdomain.com"
+
+# セキュリティキー（上記のopensslコマンドで生成）
+WEB_NEXTAUTH_SECRET="your-generated-secret"
+API_CRYPTO_KEY="your-generated-hex-key"
+API_JWT_SECRET="your-generated-secret"
+API_JWT_REFRESH_SECRET="your-generated-secret"
+
+# データベース設定
+API_PG_DB_PASSWORD="your-secure-db-password"
+API_MG_DB_PASSWORD="your-secure-db-password"
+
+# Groq設定（固定モード） 
+API_LLM_PROVIDER_MODEL="llama-3.3-70b-versatile"             # 好みのモデルを選択
+API_OPENAI_FORCE_BASE_URL="https://api.groq.com/openai/v1"   # Groq API URL
+API_OPEN_AI_API_KEY="your-groq-api-key"                      # Groq APIキー
+
+# Gitプロバイダーのwebhook（プロバイダーを選択）
+API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
+# または API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
+# または GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
+```
+
+<Note>
+  WebhookのURLはWebhooksサービス（ポート3332）に到達できる必要があります。専用webhooksドメインを使用するか、リバースプロキシで `/.../webhook` をポート3332にルーティングします。
+</Note>
+
+<Info>
+  **固定モードはGroqに最適です**。OpenAI互換APIと超高速推論を提供します。これによりシンプルな設定で最高のパフォーマンスが得られます。
+</Info>
+
+<Snippet file="deploy-installation.mdx" />
+
+### リバースプロキシのセットアップ（本番環境向け）
+
+WebhookとExternal Accessには、Nginxを設定します：
+
+```nginx
+# Webアプリ（ポート3000）
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com;
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# API（ポート3001）  
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com;
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Groq統合の確認
+
+基本的なインストール確認に加えて、Groqが動作していることを確認します：
+
+```bash
+# Groq API接続を具体的に確認
+docker-compose logs api worker | grep -i groq
+```
+
+<Tip>
+  SSLセットアップ、モニタリング、高度な設定の詳細については、[完全なデプロイガイド](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm)を参照してください。
+</Tip>
+
+### トラブルシューティング
+
+<AccordionGroup>
+  <Accordion title="APIキーの問題">
+    - APIキーが[Groqコンソール](https://console.groq.com/keys)で正しくアクティブであることを確認します
+    - Groqアカウントに十分なクレジットまたはクォータがあるか確認します
+    - `.env` ファイルに余分なスペースがないことを確認します
+  </Accordion>
+  
+  <Accordion title="モデルが見つからない">
+    - 設定のモデル名が正しくスペルされていることを確認します
+    - GroqのCurrentモデルリストでモデルが利用可能であることを確認します
+    - 推奨リストの別のモデルで試してください
+  </Accordion>
+  
+  <Accordion title="接続エラー">
+    - サーバーが `api.groq.com` にアクセスできるインターネット接続を持っていることを確認します
+    - ファイアウォールの制限がないか確認します
+    - 詳細なエラーメッセージについてAPI/ワーカーログを確認します
+  </Accordion>
+  
+  <Accordion title="レート制限">
+    - Groqにはプランに基づいたレート制限があります
+    - [Groqのレート制限ドキュメント](https://console.groq.com/docs/rate-limits)を確認します
+    - より高い制限のためにプランのアップグレードを検討します
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,209 @@
+---
+title: "Moonshot (Kimi) - OpenAI 互換推論"
+description: "Moonshot Developer API または Kimi Code Plan を通じて Moonshot AI の Kimi K2.6 モデルを Kodus に接続する方法を学びます。"
+icon: "moon"
+---
+
+## Moonshot の動作方法
+
+Moonshot AI は **Kimi** ファミリーのモデル（K2、K2.5、K2.6、K2.6 Coding）を公開しています。Kimi は長コンテキストのコード理解とエージェントワークフローに特に強く、API は完全に OpenAI 互換です — Kodus は `OpenAI Compatible` プロバイダー（または BYOK のキュレートされた **Kimi K2.6 Coding** カードを介して直接）を通じて通信します。
+
+Moonshot は同じモデルファミリーに **2つのパス**を提供しており、それぞれ独自のエンドポイントがあります：
+
+- **Developer API**（`platform.moonshot.ai`）— ペイパートークン、使用量ごとに課金。同時実行数はリチャージティアとスケールします。
+- **Kimi Code Plan**（`kimi.com/code`）— **専用コーディングエンドポイント**付きのサブスクリプション。定額価格、同時実行数は上限付き（30 concurrent）。
+
+<Note>
+  Moonshot のコンシューマー Kimi.com チャットサブスクリプション（Andante、Moderato など）は、両方の API パスとは別物です。チャットサブスクリプションは API アクセスを付与**しません**。Kimi Code Plan が API 専用のサブスクリプションです。
+</Note>
+
+Moonshot は中国限定のプラットフォーム（`platform.moonshot.cn`、ベース URL `https://api.moonshot.cn/v1`）も運営しており、CNY で課金されます。中国本土内で運営する場合にのみ使用してください。
+
+## プランの概要
+
+### Kimi Code Plan（サブスクリプション）
+
+| 属性 | 値 |
+| --- | --- |
+| **エンドポイント** | `https://api.kimi.com/coding/v1` |
+| **同時実行数** | 30 concurrent リクエストで上限 |
+| **請求** | 定額サブスクリプション |
+| **キーの取得元** | [kimi.com/code](https://www.kimi.com/code) |
+
+### Developer API（ペイパートークン）
+
+| モデル | 価格（入力/出力トークン 100万当たり） | コンテキストウィンドウ | 備考 |
+| ----- | ---------------------------------- | -------------- | ----- |
+| **Kimi K2.6 Coding** `推奨` | 約$0.60 / $2.50 | 約256kトークン | 最新、コードレビュー向けにチューニング済み。 |
+| **Kimi K2.5**        | $0.60 / $2.50 | 約256kトークン | 前世代、まだ有能。 |
+| **Kimi K2 (0905)**   | より低い価格帯 | 約128kトークン | 安定した汎用モデル。 |
+
+Developer API エンドポイント：`https://api.moonshot.ai/v1`（国際）。同時実行数はリチャージティアとスケール — Tier 1（$10 リチャージ）は約50 concurrent から開始し、Tier 5 では最大約1000 concurrent。
+
+## APIキーの作成
+
+<Warning>APIキーを作成するには Moonshot アカウントが必要です。</Warning>
+
+<Tabs>
+  <Tab title="Kimi Code Plan サブスクライバー">
+    1. [kimi.com/code](https://www.kimi.com/code) にアクセスしてプランにサブスクライブします。
+    2. サブスクリプションのキー管理エリアを開きます。
+    3. Kimi Code キーを作成してコピーします。
+
+    <Note>
+      Kimi Code キーは `https://api.kimi.com/coding/v1` に対してのみ動作します。`api.moonshot.ai` に送信すると 401 を返します。
+    </Note>
+  </Tab>
+
+  <Tab title="Developer API（ペイパートークン）">
+    1. [platform.moonshot.ai](https://platform.moonshot.ai) でサインインします（中国本土内で運営する場合は [platform.moonshot.cn](https://platform.moonshot.cn)）。
+    2. 支払い方法を追加します — Moonshot は最初に請求を追加したときに少額のスターター残高を付与する場合があります。
+    3. [platform.moonshot.ai/console/api-keys](https://platform.moonshot.ai/console/api-keys) で **API Keys** セクションを開きます。
+    4. **Create API Key** をクリックし、説明的な名前（例：`kodus-prod`）を付けてすぐにキーをコピーします。
+
+    <Note>
+      Developer API キーは `api.moonshot.ai/v1`（国際）または `api.moonshot.cn/v1`（中国）に対してのみ動作します。キーはリージョン間で**ポータブルではありません**。
+    </Note>
+  </Tab>
+</Tabs>
+
+## Kodus で Moonshot を設定する
+
+主なフローは Kodus Cloud での BYOK です — キュレートされた **Kimi K2.6 Coding** カードがエンドポイントの切り替えを処理します。プロセスレベルでプロバイダーを固定することを好むセルフホストユーザーは、代わりに環境変数を使用できます。
+
+### オプション1 — Kodus Cloud での BYOK（推奨）
+
+<Steps>
+  <Step title="BYOK を開き Kimi K2.6 Coding を選択">
+    [app.kodus.io/organization/byok](https://app.kodus.io/organization/byok) にアクセスし、メインモデルセクションの **Kimi K2.6 Coding** カードをクリックします。
+  </Step>
+
+  <Step title="プランを選択">
+    カードは **Plan** セレクターとともに展開します。以下を選択します：
+    - **Developer API** — キーが [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) からの場合
+    - **Kimi Code Plan** — キーが [kimi.com/code](https://www.kimi.com/code) サブスクリプションからの場合
+
+    ベース URL と "Get a key" リンクは自動的に更新されます。
+  </Step>
+
+  <Step title="APIキーを貼り付ける">
+    キーのみ。Kimi Code Plan ユーザーの場合、Kodus は Advanced settings に `maxConcurrentRequests=30` を事前入力します（文書化された上限と一致）。
+  </Step>
+
+  <Step title="Test & save">
+    **Test & save** をクリックします。Kodus は安価なメタデータ呼び出しでエンドポイントをプローブし、成功時に設定を保存します。401 はキーが選択したプランのエンドポイントと一致しないことを意味します。
+  </Step>
+</Steps>
+
+### Reasoning のチューニング（任意）
+
+Kimi K2.6 Coding では Reasoning はデフォルトで ON です — キュレートされたカードは **Thinking: Medium** を事前入力し、これは OpenAI 互換プロバイダーでは `thinking: { type: "enabled" }` を生成します。一般的な2つのオーバーライド：
+
+- 小さな PR でより高速/安価なレビューのために **thinking を無効化**：
+
+  ```json
+  {
+    "thinking": { "type": "disabled" }
+  }
+  ```
+
+- **特定のトークン予算を強制**（Moonshot がティアで `budget_tokens` のサポートを追加した場合）：
+
+  ```json
+  {
+    "thinking": { "type": "enabled", "budget_tokens": 25000 }
+  }
+  ```
+
+<Note>
+  名前空間のラップは不要です — Kodus が送信前に `openaiCompatible`（アクティブなプロバイダー）で自動ラップします。詳しくは [main BYOK doc → Custom JSON override](/how_to_use/ja/byok#custom-json-override) を参照してください。
+</Note>
+
+### 同時実行数のチューニング
+
+- **Kimi Code Plan**：事前入力された `maxConcurrentRequests=30`（文書化された上限）を維持します。それ以上にすると 429 を返します。
+- **Developer API**：空のまま開始（制限なし）。実際の制限はリチャージティアとスケールします — Tier 1（約$10 リチャージ）は約50 concurrent を許可；Tier 5（約$3000）は約1000 を許可。レビュー時に 429 が発生した場合は明示的に下げてください。
+
+<Note>
+  Kimi を**メイン**として設定し、OpenAI または Anthropic キーを**フォールバック**として保持します — Moonshot が 429 または 402 を返した場合、Kodus は自動的にフェイルオーバーします。
+</Note>
+
+### オプション2 — 手動設定
+
+キュレートされたカタログにない Kimi バリアント（例：`kimi-k2.5` または `kimi-k2-0905`）が必要な場合、カタログ下部の **Configure manually** をクリックして以下を入力します：
+
+| フィールド | 値 |
+| --- | --- |
+| **プロバイダー** | `OpenAI Compatible` |
+| **ベース URL** | `https://api.moonshot.ai/v1`（Developer API）<br />`https://api.kimi.com/coding/v1`（Kimi Code Plan）<br />`https://api.moonshot.cn/v1`（中国本土のみ） |
+| **モデル** | `kimi-k2.6`、`kimi-k2.6`、`kimi-k2.5`、`kimi-k2-0905`、`kimi-k2` |
+| **APIキー** | Moonshot または Kimi Code キー（上記のベース URL と一致） |
+| **Max Concurrent Requests** | Kimi Code Plan では `30`；Developer API では空のまま（リチャージティアとスケール） |
+
+### オプション3 — セルフホスト（環境変数）
+
+固定モード（単一グローバルプロバイダー、組織ごとの BYOK なし）で Kodus を実行している場合は、API とワーカーコンテナの `.env` で Moonshot を設定します：
+
+```env
+# Moonshot (Kimi) configuration (Fixed Mode)
+API_LLM_PROVIDER_MODEL="kimi-k2.6"
+API_OPENAI_FORCE_BASE_URL="https://api.moonshot.ai/v1"    # or https://api.kimi.com/coding/v1 for Kimi Code Plan
+API_OPEN_AI_API_KEY="your-moonshot-or-kimi-code-api-key"
+```
+
+<Note>
+  このパスは意図的に BYOK を無効にしているセルフホスト Kodus インストールにのみ必要です。セルフホストインスタンスで BYOK が有効な場合は、**オプション1**を優先してください — キュレートされたカードがエンドポイントのロジックを処理します。
+</Note>
+
+`.env` を編集後、API とワーカーコンテナを再起動して統合を確認します：
+
+```bash
+docker-compose logs api worker | grep -iE "moonshot|kimi"
+```
+
+完全なセルフホストセットアップ（ドメイン、セキュリティキー、データベース、Webhook、リバースプロキシ）については、[汎用VMデプロイガイド](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm) に従い、LLM ブロックのみ上記のものと置き換えてください。
+
+## Kimi Code Plan、Developer API、アグリゲーターの選択
+
+- **Kimi Code Plan** — 予測可能な定額コスト、30 concurrent の上限、コーディングワークフロー向けに最適化された専用の `api.kimi.com/coding/v1` エンドポイント。予測可能な PR ボリュームを持つ定常運用チームに最適。
+- **Moonshot Developer API** — ペイパートークン、同時実行数はリチャージティアとスケール、最大の柔軟性。バースト的なワークロードに最適。
+- **OpenRouter プロキシ** — 多くのプロバイダーにわたる1つの請求関係が欲しい場合、OpenRouter は小さなルーティングマークアップで Kimi モデルを公開します。Kimi が混在プロバイダーフリートの一部で、主要なワークロードではない場合に選択してください。
+
+## トラブルシューティング
+
+<AccordionGroup>
+  <Accordion title="Test 後の 401 — キーがエンドポイントと一致しない">
+    - Kimi Code Plan キーは `api.kimi.com/coding/v1` に対してのみ動作します。
+    - `platform.moonshot.ai` からの Developer API キーは `api.moonshot.ai/v1` に対してのみ動作します。
+    - `platform.moonshot.cn` からの Developer API キーは `api.moonshot.cn/v1` に対してのみ動作します。
+    - キュレートされたカードでは、**Plan** セレクターがキーの出所と一致することを確認してください。
+  </Accordion>
+
+  <Accordion title="残高不足">
+    - Developer API はペイパートークンで課金します。残高が尽きた場合、リクエストは HTTP 402 を返します。
+    - コンソールの請求セクションで資金を追加するか、驚きを避けるために月次上限を設定します。
+    - Kimi Code Plan は定額価格ですが、30 concurrent の上限とクォータウィンドウに縛られます — 429 はそれらのいずれかに達したことを意味します。
+  </Accordion>
+
+  <Accordion title="モデルが見つからない">
+    - モデル名がカタログと一致していることを確認します（`kimi-k2.6`、`kimi-k2.6`、`kimi-k2.5`、`kimi-k2-0905`、`kimi-k2`）。
+    - 最新リストについては [platform.kimi.ai/docs](https://platform.kimi.ai/docs) を確認してください — 新しいバージョンが定期的にリリースされます。
+  </Accordion>
+
+  <Accordion title="最初のレスポンスが遅い">
+    - 非アクティブ期間後の最初の呼び出しは Moonshot 側でコールドスタートする可能性があります。
+    - レイテンシが重要な場合、定期的なレビューには `kimi-k2-0905` が一般的に K2.6 バリアントよりも高速です。
+  </Accordion>
+
+  <Accordion title="リージョン / 接続性">
+    - 中国以外のユーザーは常に `api.moonshot.ai` または `api.kimi.com` を使用してください。`api.moonshot.cn` は中国本土外から到達できないかレート制限される場合があります。
+    - Kodus デプロイから選択したエンドポイントへのアウトバウンド HTTPS が許可されていることを確認します。
+  </Accordion>
+</AccordionGroup>
+
+## 関連リンク
+
+- [Moonshot プラットフォーム（国際）](https://platform.moonshot.ai)
+- [Kimi Code Plan](https://www.kimi.com/code)
+- [Kimi API ドキュメント](https://platform.kimi.ai/docs)
+- [BYOK の概要](/how_to_use/ja/byok)

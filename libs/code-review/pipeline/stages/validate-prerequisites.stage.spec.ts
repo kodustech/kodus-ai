@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 
+import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { PlatformType } from '@libs/core/domain/enums';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
@@ -11,6 +12,10 @@ import {
     PermissionValidationService,
     ValidationErrorType,
 } from '@libs/ee/shared/services/permissionValidation.service';
+import { NotificationService } from '@libs/notifications/application/notification.service';
+import { NotificationRateLimiter } from '@libs/notifications/application/notification-rate-limiter.service';
+import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-author-recipient.resolver';
+import { USER_SERVICE_TOKEN } from '@libs/identity/domain/user/contracts/user.service.contract';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { ValidatePrerequisitesStage } from './validate-prerequisites.stage';
 
@@ -62,7 +67,6 @@ describe('ValidatePrerequisitesStage', () => {
             action: 'opened',
             dryRun: { enabled: false },
             errors: [],
-            batches: [],
             preparedFileContexts: [],
             validSuggestions: [],
             discardedSuggestions: [],
@@ -130,6 +134,24 @@ describe('ValidatePrerequisitesStage', () => {
                 {
                     provide: CodeManagementService,
                     useValue: mockCodeManagementService,
+                },
+                {
+                    provide: NotificationService,
+                    useValue: { emit: jest.fn().mockResolvedValue(undefined) },
+                },
+                {
+                    provide: NotificationRateLimiter,
+                    useValue: {
+                        shouldEmit: jest.fn().mockResolvedValue(true),
+                    },
+                },
+                {
+                    provide: PrAuthorRecipientResolver,
+                    useValue: { resolve: jest.fn().mockResolvedValue(null) },
+                },
+                {
+                    provide: USER_SERVICE_TOKEN,
+                    useValue: { find: jest.fn().mockResolvedValue([]) },
                 },
             ],
         }).compile();
@@ -287,5 +309,101 @@ describe('ValidatePrerequisitesStage', () => {
         expect(
             mockPermissionValidationService.validateExecutionPermissions,
         ).toHaveBeenCalled();
+    });
+
+    describe('SKIPPED status contract', () => {
+        it('marks the pipeline SKIPPED with a subscription-related message when license is invalid', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.INVALID_LICENSE,
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+            expect(result.statusInfo?.message?.toLowerCase()).toMatch(
+                /(license|subscription)/,
+            );
+        });
+
+        it('marks the pipeline SKIPPED with a USER_NO_LICENSE reason when user is not licensed and auto-assign is unavailable', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.USER_NOT_LICENSED,
+                },
+            );
+            mockAutoAssignLicenseUseCase.execute.mockResolvedValue({
+                shouldProceed: false,
+                reason: 'NOT_ENOUGH_PRS',
+            });
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+            expect(result.statusInfo?.message?.toLowerCase()).toMatch(
+                /(license|subscription|seat)/,
+            );
+        });
+
+        it('marks the pipeline SKIPPED with USER_IGNORED message when the user is in the ignored list', async () => {
+            const context = makeContext();
+
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: { ignoredUsers: ['user-1'] },
+            });
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+            // USER_IGNORED constant from AutomationMessage
+            expect(result.statusInfo?.message).toBeDefined();
+            expect(
+                mockPermissionValidationService.validateExecutionPermissions,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('does NOT mark SKIPPED on the happy path (license valid, user not ignored)', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true, errorType: ValidationErrorType.NOT_ERROR },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            // statusInfo not changed from in_progress
+            expect(result.statusInfo?.status).not.toBe(AutomationStatus.SKIPPED);
+        });
     });
 });

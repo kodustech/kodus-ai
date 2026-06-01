@@ -6,17 +6,21 @@ import {
     getOrganizationId,
     getOrganizationName,
 } from "@services/organizations/fetch";
+import { getTeamParametersNoCache } from "@services/parameters/fetch";
+import { ParametersConfigKey } from "@services/parameters/types";
 import { getTeams } from "@services/teams/fetch";
 import { auth } from "src/core/config/auth";
 import { SupportDropdown } from "src/core/layout/navbar/_components/support";
 import { AllTeamsProvider } from "src/core/providers/all-teams-context";
 import { AuthProvider } from "src/core/providers/auth.provider";
 import { SelectedTeamProvider } from "src/core/providers/selected-team-context";
+import { TEAM_STATUS } from "src/core/types";
 import { OrganizationProvider } from "src/features/organization/_providers/organization-context";
 
 import { SetupGithubStars } from "./_components/setup-github-stars";
 import { SetupUserNav } from "./_components/setup-user-nav";
 import { SetupProgressSaver } from "./setup/_components/setup-step-tracker";
+import { Team } from "@services/teams/types";
 
 export default async function Layout(props: React.PropsWithChildren) {
     const [teams, organizationId, organizationName, session] =
@@ -33,6 +37,20 @@ export default async function Layout(props: React.PropsWithChildren) {
 
     if (userStatus && ["pending", "pending_email"].includes(userStatus)) {
         redirect("/confirm-email");
+    }
+
+    const candidateTeamId =
+        teams?.find((t: Team) => t.status === TEAM_STATUS.ACTIVE)?.uuid;
+    if (candidateTeamId) {
+        const platformConfigs = await getTeamParametersNoCache<{
+            configValue: { finishOnboard?: boolean };
+        }>({
+            key: ParametersConfigKey.PLATFORM_CONFIGS,
+            teamId: candidateTeamId,
+        }).catch(() => null);
+        if (platformConfigs?.configValue?.finishOnboard) {
+            redirect("/");
+        }
     }
 
     return (

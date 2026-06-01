@@ -1,0 +1,68 @@
+---
+title: "How to validate business rules before merging"
+description: "Catch missing requirements, forgotten edge cases, and logic gaps in your pull request before code reaches production."
+---
+
+Code reviews typically focus on code quality — security, performance, style. But they often miss the question: **does this code actually do what the business asked for?** Business Logic Validation bridges that gap.
+
+## What it checks
+
+Kodus compares your PR diff against the task requirements and identifies:
+
+- **Missing implementations** — acceptance criteria not covered in the code
+- **Partial implementations** — requirements only partially addressed
+- **Scope mismatches** — when the PR is working in a different area than the task describes
+- **Edge cases** — business scenarios mentioned in the task but not handled
+
+## How to use it
+
+### Automatic (default)
+
+With `business_logic: true` in your review options (enabled by default), Kodus automatically validates business rules during every PR review when a task management plugin is connected.
+
+### On-demand
+
+Comment on any PR with a link or inline spec:
+
+```
+@kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292
+```
+
+```
+@kody -v business-logic
+Orders above $500 must issue cashback credits.
+Discount codes cannot be combined with loyalty rewards.
+Free shipping applies only to domestic orders.
+```
+
+## Supported task sources
+
+Connect via [Plugins](/how_to_use/en/code_review/plugins) to fetch task context automatically:
+
+| Source | How to reference |
+|--------|-----------------|
+| **Jira** | Paste the Jira issue URL |
+| **Linear** | Paste the Linear issue URL |
+| **Notion** | Paste the Notion page URL |
+| **ClickUp** | Paste the ClickUp task URL |
+| **Google Docs** | Paste the document URL |
+| **Slack** | Paste a Slack message permalink |
+| **Inline** | Write requirements directly in the PR comment |
+
+## Understanding the output
+
+Each finding has a severity:
+
+- **MUST_FIX** — a required business rule is missing or contradicted
+- **SUGGESTION** — an edge case or robustness point is not covered
+- **INFO** — observation that doesn't block compliance
+
+Every finding includes the **exact quote** from the task that establishes the requirement, ensuring nothing is invented.
+
+## Tips
+
+- Tasks with explicit acceptance criteria get the most thorough validation
+- After fixing issues, rerun the command to confirm compliance
+- If the PR scope doesn't match the task, Kody flags a scope mismatch instead of speculating
+
+For details, see [Business Logic Validation](/how_to_use/en/code_review/business_logic_validation).

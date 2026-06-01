@@ -25,6 +25,7 @@ export class GithubController {
             'pull_request',
             'issue_comment',
             'pull_request_review_comment',
+            'push',
         ];
         if (!supportedEvents.includes(event)) {
             return res
@@ -64,6 +65,9 @@ export class GithubController {
                         context: GithubController.name,
                         metadata: {
                             event,
+                            action: payload?.action,
+                            commentId: payload?.comment?.id,
+                            deliveryId: req.headers['x-github-delivery'],
                             installationId: payload?.installation?.id,
                             repository: payload?.repository?.name,
                         },

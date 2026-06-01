@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@enums";
 import { ResourceType } from "@services/permissions/types";
+import { Role } from "@libs/identity/domain/permissions/enums/permissions.enum";
+import { ROLE_POLICIES } from "@libs/identity/domain/permissions/policies/role-policies";
 import type { Session } from "next-auth";
+
 import { hasPermission } from "./permission-map";
 
-const resourceRoutes = {
+// Maps a resource to the URL prefixes that surface it. This is the only
+// frontend-specific piece — what each role *can do* comes from ROLE_POLICIES
+// (shared with the backend). Resources without a dedicated page (KodyRules,
+// IssuesSettings, TokenUsage, CliReview, ...) simply have no entry here.
+const resourceRoutes: Partial<Record<ResourceType, string[]>> = {
     [ResourceType.All]: [
         "/user-waiting-for-approval/*",
         "/settings",
@@ -16,6 +23,7 @@ const resourceRoutes = {
     [ResourceType.Billing]: ["/settings/subscription/*", "/choose-plan"],
     [ResourceType.Cockpit]: ["/cockpit/*"],
     [ResourceType.PullRequests]: ["/pull-requests/*"],
+    [ResourceType.CliReview]: ["/cli-reviews/*"],
     [ResourceType.Issues]: ["/issues/*"],
     [ResourceType.CodeReviewSettings]: ["/settings/code-review/*"],
     [ResourceType.OrganizationSettings]: ["/organization/*"],
@@ -25,31 +33,27 @@ const resourceRoutes = {
     [ResourceType.Logs]: ["/user-logs/*"],
 };
 
-const roleRoutes = {
-    [UserRole.REPO_ADMIN]: [
-        ...resourceRoutes[ResourceType.All],
-        ...resourceRoutes[ResourceType.PullRequests],
-        ...resourceRoutes[ResourceType.Issues],
-        ...resourceRoutes[ResourceType.Cockpit],
-        ...resourceRoutes[ResourceType.CodeReviewSettings],
-        ...resourceRoutes[ResourceType.GitSettings],
-        ...resourceRoutes[ResourceType.PluginSettings],
-        ...resourceRoutes[ResourceType.Logs],
-    ],
-    [UserRole.BILLING_MANAGER]: [
-        ...resourceRoutes[ResourceType.All],
-        ...resourceRoutes[ResourceType.Billing],
-        ...resourceRoutes[ResourceType.CodeReviewSettings],
-        ...resourceRoutes[ResourceType.GitSettings],
-        ...resourceRoutes[ResourceType.PluginSettings],
-        ...resourceRoutes[ResourceType.Logs],
-    ],
-    [UserRole.CONTRIBUTOR]: [
-        ...resourceRoutes[ResourceType.All],
-        ...resourceRoutes[ResourceType.CodeReviewSettings],
-        ...resourceRoutes[ResourceType.Issues],
-    ],
-};
+const baseRoutes = resourceRoutes[ResourceType.All] ?? [];
+
+// Derive each non-owner role's accessible routes from the shared policy, so the
+// middleware guard can never drift from the backend's permissions. Owner gets
+// everything via the early return in canAccessRoute.
+const roleRoutes: Record<string, string[]> = Object.fromEntries(
+    (Object.keys(ROLE_POLICIES) as Role[])
+        .filter((role) => role !== Role.OWNER)
+        .map((role) => {
+            const resources = new Set(
+                ROLE_POLICIES[role].map((rule) => rule.resource),
+            );
+            const routes = [
+                ...baseRoutes,
+                ...[...resources].flatMap(
+                    (resource) => resourceRoutes[resource] ?? [],
+                ),
+            ];
+            return [role, Array.from(new Set(routes))];
+        }),
+);
 
 const canAccessRoute = ({
     pathname,

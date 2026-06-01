@@ -5,7 +5,9 @@
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## 代码审查完成！ 🔥\n\n代码审查已根据您当前的配置成功完成。\n\n",
-        "withoutComments": "# Kody 审查完成\n**好消息！** 🎉\n未发现与您当前审查配置匹配的问题。\n\n继续保持出色的工作! 🚀"
+        "withoutComments": "# Kody 审查完成\n**好消息！** 🎉\n未发现与您当前审查配置匹配的问题。\n\n继续保持出色的工作! 🚀",
+        "withErrors": "## 代码审查未能完成 ⚠️\n\n在生成建议之前，审查已失败。\n\n**原因：** {{errorMessage}}\n\n修复问题后，请在此 PR 中评论 `@kody review` 以重新运行审查。\n\n",
+        "partialErrorsNotice": "\n\n> ⚠️ 注意：本次运行中部分检查未能完成，因此跳过了自动批准（如果已启用）。请在 {{dashboardUrl}} 查看详情，问题解决后在此 PR 中评论 `@kody review` 以重新运行。\n"
     },
     "pullRequestSummaryMarkdown": {
         "title": "PR 摘要(评论由 [Kody](https://kodus.io) 创建 🤖)",

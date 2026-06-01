@@ -45,6 +45,13 @@ export type PlatformConfigValue = {
     finishOnboard: boolean;
     finishProjectManagementConnection: boolean;
     kodyLearningStatus: KodyLearningStatus;
+    /**
+     * Consecutive rule-generation runs that hard-crashed before completing
+     * — bumped when entering `GENERATING_RULES`, reset to 0 on any
+     * completion. The KodyLearning cron stops retrying once this reaches
+     * `MAX_STUCK_RETRIES`.
+     */
+    kodyLearningStuckRetries?: number;
 };
 
 export enum KodyLearningStatus {
@@ -54,12 +61,26 @@ export enum KodyLearningStatus {
     GENERATING_CONFIG = 'generating_config',
 }
 
+export type CentralizedConfigActivePullRequest = {
+    prUrl: string;
+    prNumber?: number;
+    sourceBranch: string;
+    targetBranch?: string;
+    repository: {
+        id: string;
+        name: string;
+    };
+    createdAt: string;
+    updatedAt: string;
+};
+
 export type CentralizedConfigParameter = {
     enabled: boolean;
     repository: {
         name: string;
         id: string;
-    };
+    } | null;
+    activePullRequest?: CentralizedConfigActivePullRequest | null;
 };
 
 interface KnownConfigs {

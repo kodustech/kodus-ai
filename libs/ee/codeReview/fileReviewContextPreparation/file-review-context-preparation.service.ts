@@ -11,15 +11,12 @@ import { IAIAnalysisService } from '@libs/code-review/domain/contracts/AIAnalysi
 
 import { BaseFileReviewContextPreparation } from '@libs/code-review/infrastructure/adapters/services/code-analysis/file/base-file-review.abstract';
 import { LLM_ANALYSIS_SERVICE_TOKEN } from '@libs/code-review/infrastructure/adapters/services/llmAnalysis.service';
-import { BackoffPresets } from '@libs/common/utils/polling';
 import { ReviewModeOptions } from '@libs/core/domain/interfaces/file-review-context-preparation.interface';
 import {
     AnalysisContext,
     FileChange,
     ReviewModeResponse,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
-import { TaskStatus } from '@libs/ee/kodyAST/interfaces/code-ast-analysis.interface';
-
 /**
  * Enterprise (cloud) implementation of the file review context preparation service
  * Extends the base class and overrides methods to add advanced functionalities
@@ -33,18 +30,6 @@ export class FileReviewContextPreparation extends BaseFileReviewContextPreparati
         private readonly aiAnalysisService: IAIAnalysisService,
     ) {
         super();
-    }
-
-    /**
-     * Get backoff configuration for heavy AST tasks
-     * Uses linear backoff: 5s, 10s, 15s, 20s... up to 60s
-     */
-    private getHeavyTaskBackoffConfig() {
-        return {
-            initialInterval: BackoffPresets.HEAVY_TASK.baseInterval,
-            maxInterval: BackoffPresets.HEAVY_TASK.maxInterval,
-            useExponentialBackoff: false, // Linear mode
-        };
     }
 
     /**
@@ -63,12 +48,11 @@ export class FileReviewContextPreparation extends BaseFileReviewContextPreparati
     }
 
     /**
-     * Overrides the method for preparing the internal context to add AST analysis
+     * Overrides the method for preparing the internal context
      * @param file File to be analyzed
      * @param patchWithLinesStr Patch with line numbers
-     * @param reviewMode Determined review mode
      * @param context Analysis context
-     * @returns Prepared file context with AST analysis
+     * @returns Prepared file context
      * @override
      */
     protected async prepareFileContextInternal(
@@ -106,52 +90,21 @@ export class FileReviewContextPreparation extends BaseFileReviewContextPreparati
         context: AnalysisContext,
     ): Promise<{
         relevantContent: string | null;
-        taskStatus?: TaskStatus;
         hasRelevantContent?: boolean;
     }> {
         try {
-            // Use AST formatted content when available (set by ASTContentFormatterService)
+            // Use graph-formatted content when available (set by GraphContentFormatter)
             if (file.astFormattedContent) {
                 return {
                     relevantContent: file.astFormattedContent,
                     hasRelevantContent: true,
-                    taskStatus: TaskStatus.TASK_STATUS_COMPLETED,
                 };
             }
 
-            const { taskId } = context.tasks.astAnalysis;
-
-            if (!taskId) {
-                this.logger.warn({
-                    message:
-                        'No AST analysis task ID found, returning file content',
-                    context: FileReviewContextPreparation.name,
-                    metadata: {
-                        ...context?.organizationAndTeamData,
-                        filename: file.filename,
-                    },
-                });
-
-                return {
-                    relevantContent: file.fileContent || file.content || null,
-                    hasRelevantContent: false,
-                    taskStatus: TaskStatus.TASK_STATUS_FAILED,
-                };
-            } else {
-                this.logger.warn({
-                    message: 'No relevant content found for the file',
-                    context: FileReviewContextPreparation.name,
-                    metadata: {
-                        ...context?.organizationAndTeamData,
-                        filename: file.filename,
-                        task: { taskId },
-                    },
-                });
-                return {
-                    relevantContent: file.fileContent || file.content || null,
-                    hasRelevantContent: false,
-                };
-            }
+            return {
+                relevantContent: file.fileContent || file.content || null,
+                hasRelevantContent: false,
+            };
         } catch (error) {
             this.logger.error({
                 message: 'Error retrieving relevant file content',
@@ -164,26 +117,8 @@ export class FileReviewContextPreparation extends BaseFileReviewContextPreparati
             });
             return {
                 relevantContent: file.fileContent || file.content || null,
-                taskStatus: TaskStatus.TASK_STATUS_FAILED,
                 hasRelevantContent: false,
             };
         }
-    }
-
-    private updateContextWithTaskStatus(
-        context: AnalysisContext,
-        taskStatus: TaskStatus,
-        type: keyof AnalysisContext['tasks'],
-    ): AnalysisContext {
-        return {
-            ...context,
-            tasks: {
-                ...context.tasks,
-                [type]: {
-                    ...context.tasks[type],
-                    status: taskStatus,
-                },
-            },
-        };
     }
 }

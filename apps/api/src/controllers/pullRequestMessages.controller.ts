@@ -29,7 +29,6 @@ import {
 import {
     ApiBearerAuth,
     ApiBody,
-    ApiNoContentResponse,
     ApiOkResponse,
     ApiOperation,
     ApiQuery,
@@ -61,7 +60,7 @@ export class PullRequestMessagesController {
             'Creates or updates the review message configuration for a repository or directory.',
     })
     @ApiBody({ type: PullRequestMessagesUpsertDto })
-    @ApiNoContentResponse({ description: 'Configuration updated' })
+    @ApiOkResponse({ description: 'Configuration updated or PR proposed' })
     @UseGuards(PolicyGuard)
     @CheckPolicies(
         checkPermissions({
@@ -70,11 +69,16 @@ export class PullRequestMessagesController {
         }),
     )
     public async createOrUpdatePullRequestMessages(
-        @Body() body: IPullRequestMessages,
+        @Body() body: PullRequestMessagesUpsertDto,
     ) {
+        const { teamId, ...payload } = body;
+
         return await this.createOrUpdatePullRequestMessagesUseCase.execute(
             this.request.user,
-            body,
+            payload as unknown as IPullRequestMessages,
+            {
+                teamId,
+            },
         );
     }
 

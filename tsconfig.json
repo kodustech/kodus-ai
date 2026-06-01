@@ -1,5 +1,6 @@
 {
     "compilerOptions": {
+        "ignoreDeprecations": "6.0",
         "declaration": true,
         "removeComments": true,
         "emitDecoratorMetadata": true,
@@ -7,6 +8,7 @@
         "allowSyntheticDefaultImports": true,
         "lib": ["ES2022"],
         "module": "commonjs",
+        "jsx": "react-jsx",
         "target": "ES2022",
         "sourceMap": true,
         "outDir": "./dist",
@@ -15,6 +17,7 @@
         "incremental": true,
         "skipLibCheck": true,
         "strictNullChecks": false,
+        "useUnknownInCatchVariables": false,
         "noImplicitAny": false,
         "strictBindCallApply": false,
         "forceConsistentCasingInFileNames": false,

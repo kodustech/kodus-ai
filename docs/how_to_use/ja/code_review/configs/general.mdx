@@ -1,0 +1,115 @@
+---
+title: "一般設定"
+---
+
+## コア設定
+
+<Note>
+  Kodus には 3 つの設定レベルがあります：グローバル、リポジトリ、ディレクトリ。仕組みについては <a href="/how_to_use/ja/code_review/configs/inheritance_overrides">設定の継承とオーバーライド</a> を参照してください。
+</Note>
+
+### 設定の優先度
+リポジトリルートの `kodus-config.yml` は Web 設定をオーバーライドします。セットアップ不要 — ファイルをコミットするだけです。
+
+<Accordion title="kodus-config.yml のサンプル">
+```yaml
+version: '1.2'
+summary:
+  generatePRSummary: true
+  customInstructions: ''
+  behaviourForExistingDescription: concatenate
+ignorePaths:
+  - yarn.lock
+  - package-lock.json
+  - package.json
+  - .env
+baseBranches: []
+reviewOptions:
+  security: true
+  code_style: true
+  kody_rules: true
+  refactoring: true
+  error_handling: true
+  maintainability: true
+  potential_issues: true
+  documentation_and_comments: true
+  performance_and_optimization: true
+  business_logic: true
+suggestionControl:
+  groupingMode: full
+  limitationType: pr
+  maxSuggestions: 9
+  severityLevelFilter: medium
+ignoredTitleKeywords: []
+automatedReviewActive: true
+pullRequestApprovalActive: false
+isRequestChangesActive: false
+llmGeneratedMemoriesRequireApproval: false
+```
+</Accordion>
+
+## レビュー動作
+
+### 自動レビュー
+
+Kody は PR が開かれたときに自動的にレビューするか、`@kody start-review` とコメントしたときのみレビューできます。
+
+<Info>
+  これは**初回レビュー**にのみ影響します。以降のコミットについては、下記のレビュー頻度を参照してください。
+</Info>
+
+#### レビュー頻度
+
+以降のコミットで Kody がレビューを処理する方法：
+
+<Tabs>
+  <Tab title="自動">
+    すべての新しいプッシュをレビュー。すべての変更に対して継続的なフィードバック。
+  </Tab>
+  
+  <Tab title="自動一時停止">
+    急速な連続プッシュ中にレビューを一時停止します（例：15 分以内に 3 回のプッシュ）。活発なコーディング中のスパムを防ぎます。
+    
+    デフォルト：3 回のプッシュ / 15 分
+  </Tab>
+  
+  <Tab title="手動">
+    `@kody start-review` とコメントした場合のみフォローアップレビューを実行します。
+  </Tab>
+</Tabs>
+
+### PR ワークフロー
+
+#### PR の自動承認
+問題が見つからない場合、Kody は PR を承認します。
+
+**対応プラットフォーム：** GitHub、GitLab、Bitbucket
+
+#### 変更のリクエスト
+クリティカルな問題が見つかった場合、Kody は変更をリクエストします。
+
+**対応プラットフォーム：** GitHub、Bitbucket
+
+### スキップ条件
+
+**無視するファイル：** glob パターンを使用します（例：`**/*.js`）、1 行に 1 つ。デフォルト：`yarn.lock`、`package-lock.json`、`package.json`、`.env`
+
+**無視するタイトル：** 特定のキーワードを含む PR をスキップします（大文字・小文字を区別しない、最大 100 文字）
+
+**ベースブランチ：** デフォルト以外にレビューする追加ブランチ（dev、release、master）
+
+## 分析タイプ
+
+### コード品質
+- セキュリティ：SQL インジェクション、XSS、セキュリティの脅威
+- パフォーマンス：キャッシュ、クエリ最適化、速度改善
+- エラー処理：例外管理、エラーメッセージ
+- 潜在的な問題：ヌルポインタ、リソースリーク、無限ループ
+
+### コード構造
+- リファクタリング：コードの整理、関数サイズ、重複
+- 保守性：将来に対応できるコードパターン
+- コードスタイル：一貫したフォーマットと標準
+- ドキュメント：明確なコメントと API ドキュメント
+- Kody ルール：カスタムルールの強制
+- ビジネスロジック：タスク要件と受け入れ基準に対する PR 実装の検証

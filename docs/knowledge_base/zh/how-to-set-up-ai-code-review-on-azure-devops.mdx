@@ -1,0 +1,31 @@
+---
+title: "如何在 Azure DevOps 上设置 AI 代码审查"
+description: "为 Azure DevOps 代码库安装和配置 Kodus，以在每个拉取请求上获得自动 AI 代码审查。"
+---
+
+Kodus 通过 webhooks 与 Azure DevOps 集成。配置完成后，每个拉取请求都会自动审查。
+
+## 步骤
+
+1. **创建帐户** — 在 [kodus.io](https://kodus.io) 或[自托管 Kodus](/how_to_deploy/en/deploy_kodus/generic_vm)
+2. **连接 Azure DevOps** — 在设置过程中授权并配置个人访问令牌
+3. **配置 webhooks** — 按照引导设置启用拉取请求事件
+4. **选择代码库** — 选择 Kodus 应审查的 Azure DevOps 代码库
+5. **打开拉取请求** — Kodus 自动审查
+
+## 您获得什么
+
+- 每个 PR 自动审查
+- 直接在拉取请求中发布的评论
+- 可自定义的规则和建议控制
+- 根据关联工作项的业务逻辑验证
+
+## 自定义配置
+
+在代码库根目录放置 `kodus-config.yml` 以自定义每个代码库的行为。该文件自动覆盖 Web 设置。
+
+## 使用个人访问令牌
+
+Azure DevOps 需要 PAT 以便 Kodus 访问您的代码库并发布审查评论。确保令牌具有代码读取和 PR 评论访问的适当范围。
+
+完整设置指南，请参阅 [Azure DevOps Webhooks](/how_to_deploy/en/platforms/azure_devops/azdevops_webhook) 和 [Azure DevOps PAT](/how_to_use/en/code_review/general_config/azure_devops_pat)。

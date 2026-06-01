@@ -12,12 +12,16 @@ import { Page } from "@components/ui/page";
 import { toast } from "@components/ui/toaster/use-toast";
 import { ToggleGroup } from "@components/ui/toggle-group";
 import { useAsyncAction } from "@hooks/use-async-action";
-import { createOrUpdateRepositories } from "@services/codeManagement/fetch";
+import {
+    createOrUpdateRepositories,
+    deleteIntegration,
+} from "@services/codeManagement/fetch";
 import { useGetRepositories } from "@services/codeManagement/hooks";
 import {
     CODE_MANAGEMENT_API_PATHS,
     type Repository,
 } from "@services/codeManagement/types";
+import { INTEGRATION_CONFIG } from "@services/integrations/integrationConfig";
 import { fastSyncIDERules } from "@services/kodyRules/fetch";
 import { updateAutoLicenseAllowedUsers } from "@services/organizationParameters/fetch";
 import {
@@ -27,6 +31,7 @@ import {
 } from "@services/parameters/fetch";
 import { useSuspenseGetCodeReviewParameter } from "@services/parameters/hooks";
 import { ParametersConfigKey } from "@services/parameters/types";
+import { SETUP_PATHS } from "@services/setup";
 import { useSuspenseGetConnections } from "@services/setup/hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -39,9 +44,9 @@ import {
 } from "lucide-react";
 import { useAuth } from "src/core/providers/auth.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
+import { IntegrationCategory } from "src/core/types";
 import { generateQueryKey } from "src/core/utils/reactQuery";
 import { safeArray } from "src/core/utils/safe-array";
-import { captureSegmentEvent } from "src/core/utils/segment";
 import { pluralize } from "src/core/utils/string";
 
 import { StepIndicators } from "../_components/step-indicators";
@@ -153,18 +158,6 @@ export default function App() {
                 void Promise.allSettled(fastSyncPromises);
             }
 
-            captureSegmentEvent({
-                userId: userId!,
-                event: "setup_select_repositories",
-                properties: {
-                    platform: codeManagementConnections
-                        .at(0)
-                        ?.platformName.toLowerCase(),
-                    quantityOfRepositories: selectedRepositories.length,
-                    scope: reviewScope,
-                },
-            });
-
             router.replace(nextStepPath);
         } catch (error) {
             console.error(error);
@@ -176,6 +169,45 @@ export default function App() {
             });
         }
     });
+
+    const [updateConnectionAction, { loading: loadingUpdateConnection }] =
+        useAsyncAction(async () => {
+            try {
+                await deleteIntegration(teamId);
+
+                await Promise.all([
+                    queryClient.invalidateQueries({
+                        queryKey: generateQueryKey(SETUP_PATHS.CONNECTIONS, {
+                            params: { teamId },
+                        }),
+                    }),
+                    queryClient.invalidateQueries({
+                        queryKey: generateQueryKey(
+                            INTEGRATION_CONFIG.GET_INTEGRATION_CONFIG_BY_CATEGORY,
+                            {
+                                params: {
+                                    teamId,
+                                    integrationCategory:
+                                        IntegrationCategory.CODE_MANAGEMENT,
+                                },
+                            },
+                        ),
+                    }),
+                    queryClient.invalidateQueries({
+                        queryKey: [CODE_MANAGEMENT_API_PATHS.GET_REPOSITORIES_ORG],
+                    }),
+                ]);
+
+                router.push("/setup/connecting-git-tool");
+            } catch (error) {
+                console.error(error);
+                toast({
+                    variant: "danger",
+                    title: "Could not reset the connection",
+                    description: "Please try again in a moment.",
+                });
+            }
+        });
 
     const selectedCount = selectedRepositories.length;
     const repoLabel = pluralize(selectedCount || 1, {
@@ -279,11 +311,8 @@ export default function App() {
                                     variant="primary"
                                     className="w-full"
                                     rightIcon={<KeyRound />}
-                                    onClick={() =>
-                                        router.push(
-                                            "/setup/connecting-git-tool",
-                                        )
-                                    }>
+                                    loading={loadingUpdateConnection}
+                                    onClick={updateConnectionAction}>
                                     Update connection
                                 </Button>
                                 <p className="text-text-tertiary text-center text-xs">

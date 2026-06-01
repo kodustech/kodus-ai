@@ -1,0 +1,49 @@
+---
+title: "GitHub、GitLab、Bitbucketでコードレビューを自動化する方法"
+description: "GitHub、GitLab、Bitbucket、Azure DevOps全体のすべてのプルリクエストで自動的に実行されるAI搭載コードレビューをセットアップします。"
+---
+
+手動のコードレビューはボトルネックを生み出します。レビュアーはコンテキストを切り替え、PRが溜まり、フィードバックの品質にばらつきが生じます。AI搭載のコードレビューは、人間のレビュアーがコードを見る前に、すべてのPRで即座に実行され、問題を発見します。
+
+## Kodusがコードレビューを自動化する方法
+
+接続されると、Kodusはすべてのプルリクエストを自動的にレビューします。セキュリティの脆弱性、パフォーマンスの問題、エラー処理、保守性、カスタムルールについてコードを分析し、PR内に直接コメントを投稿します。
+
+### サポートされているプラットフォーム
+
+- **GitHub** — GitHub Appを通じて
+- **GitLab** — OAuth + Webhookを通じて
+- **Bitbucket** — Webhookを通じて
+- **Azure DevOps** — Webhookを通じて
+
+### 分析される内容
+
+デフォルトでは、Kodusは以下を確認します：
+- セキュリティ問題（SQLインジェクション、XSS、ハードコードされた秘密情報）
+- パフォーマンスの問題（N+1クエリ、インデックスの不足）
+- エラー処理のギャップ
+- 潜在的なバグ（nullポインタ、リソースリーク）
+- コードスタイルと保守性
+- カスタムKodyルール
+- ビジネスロジックへの準拠（リンクされたタスク要件に対して検証）
+
+### レビューの頻度オプション
+
+| モード | 動作 |
+|------|----------|
+| **自動** | すべてのプッシュをレビュー — 継続的なフィードバック |
+| **自動一時停止** | 急速なプッシュ時に一時停止（例：15分以内に3回）してノイズを避ける |
+| **手動** | `@kody start-review` とコメントしたときのみレビュー |
+
+## はじめに
+
+1. [kodus.io](https://kodus.io)でワークスペースを作成するか、[Kodusをセルフホスト](/how_to_deploy/ja/deploy_kodus/generic_vm)します
+2. Gitプロバイダーを接続します（GitHub、GitLab、Bitbucket、またはAzure DevOps）
+3. 監視するリポジトリを選択します
+4. PRをオープンします — Kodusが自動的にレビューします
+
+プラットフォーム固有のセットアップについては以下を参照してください：
+- [GitHubセットアップ](/knowledge_base/ja/how-to-set-up-ai-code-review-on-github)
+- [GitLabセットアップ](/knowledge_base/ja/how-to-set-up-ai-code-review-on-gitlab)
+- [Azure DevOpsセットアップ](/knowledge_base/ja/how-to-set-up-ai-code-review-on-azure-devops)
+- [Bitbucketセットアップ](/how_to_deploy/ja/platforms/bitbucket/bitbucket_webhook)

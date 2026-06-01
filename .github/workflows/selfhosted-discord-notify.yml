@@ -36,22 +36,25 @@ jobs:
 
             - name: Notify Discord on Success
               if: github.event.inputs.status == 'success'
-              uses: sarisia/actions-status-discord@v1.15.3
+              uses: sarisia/actions-status-discord@v1.16.0
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_SELFHOSTED }}
-                  content: ":tada: New Self-Hosted Release `${{ github.event.inputs.release_tag }}` published!"
+                  content: ":tada: New Self-Hosted Release `${{ github.event.inputs.release_tag
+                      }}` published!"
                   title: "Self-Hosted Release"
-                  description: "Docker images were already built and published. This message was sent manually."
+                  description: "Docker images were already built and published. This message was
+                      sent manually."
                   username: "GitHub Actions"
-                  color: 0x00FF00
+                  color: 0xff00
 
             - name: Notify Discord on Failure
               if: github.event.inputs.status == 'failure'
-              uses: sarisia/actions-status-discord@v1.15.3
+              uses: sarisia/actions-status-discord@v1.16.0
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_SELFHOSTED }}
-                  content: ":x: Self-hosted release `${{ github.event.inputs.release_tag }}` requires attention."
+                  content: ":x: Self-hosted release `${{ github.event.inputs.release_tag }}`
+                      requires attention."
                   title: "Self-Hosted Release Failed"
                   description: "This message was sent manually from the workflow dispatcher."
                   username: "GitHub Actions"
-                  color: 0xFF0000
+                  color: 0xff0000

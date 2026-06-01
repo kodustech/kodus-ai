@@ -1,0 +1,39 @@
+---
+title: "如何自托管 AI 代码审查工具"
+description: "在您自己的基础设施上部署 Kodus，完全控制数据、模型和配置。"
+---
+
+Kodus 是开源的，可以在您自己的基础设施上自托管。这使您完全控制数据、网络访问和 LLM 提供商。
+
+## 部署选项
+
+### Docker（推荐）
+
+使用 Docker Compose 在任何 VM 上部署 Kodus：
+
+1. 克隆 Kodus 代码库
+2. 配置环境变量
+3. 运行 `docker compose up`
+4. 访问 Web UI 并连接您的 Git 提供商
+
+### 本地开发
+
+用于测试或贡献：
+
+1. 使用编排器进行快速本地设置
+2. 包含单个命令中的所有服务
+
+## 您控制的内容
+
+- **数据** — 所有代码和审查数据保留在您的基础设施上
+- **LLM 提供商** — 使用任何提供商或自托管模型
+- **网络** — 在防火墙后运行，不需要外部访问
+- **配置** — 完全控制所有设置
+
+## 要求
+
+- Docker 和 Docker Compose
+- 足够的计算资源用于 API 和 worker 服务
+- 到 Git 提供商（GitHub、GitLab、Bitbucket）的网络访问
+
+完整部署指南，请参阅[使用 Docker 部署](/how_to_deploy/en/deploy_kodus/generic_vm)。

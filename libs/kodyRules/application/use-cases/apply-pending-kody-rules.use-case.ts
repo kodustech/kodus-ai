@@ -1,4 +1,5 @@
 import { createLogger } from '@kodus/flow';
+import { CentralizedPrMetadata } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import { CreateKodyRuleDto } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
 import {
@@ -21,6 +22,7 @@ import { RuleIdsDto } from '@libs/kodyRules/dtos/rule-ids.dto';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
+import { CreateOrUpdateKodyRulesUseCase } from './create-or-update.use-case';
 import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from './find-rules-in-organization-by-filter.use-case';
 
 @Injectable()
@@ -30,20 +32,27 @@ export class ApplyPendingKodyRulesUseCase {
     constructor(
         @Inject(KODY_RULES_SERVICE_TOKEN)
         private readonly kodyRulesService: IKodyRulesService,
+        private readonly createOrUpdateKodyRulesUseCase: CreateOrUpdateKodyRulesUseCase,
         private readonly findRulesInOrganizationByRuleFilterKodyRulesUseCase: FindRulesInOrganizationByRuleFilterKodyRulesUseCase,
         private readonly authorizationService: AuthorizationService,
         @Inject(REQUEST)
         private readonly request: UserRequest,
     ) {}
 
-    async execute(body: RuleIdsDto) {
+    async execute(
+        body: RuleIdsDto,
+    ): Promise<Array<Partial<IKodyRule> | IKodyRule> | CentralizedPrMetadata> {
         try {
             const organizationId = this.request.user.organization.uuid;
             if (!organizationId) {
                 throw new Error('Organization ID not found');
             }
 
-            const organizationAndTeamData = { organizationId };
+            const teamId =
+                body.teamId ||
+                (this.request.user as any)?.team?.uuid ||
+                (this.request.user as any)?.teamId;
+            const organizationAndTeamData = { organizationId, teamId };
             const userInfo = {
                 userId: this.request.user?.uuid || 'kody-system',
                 userEmail: this.request.user?.email || 'kody@kodus.io',
@@ -90,6 +99,7 @@ export class ApplyPendingKodyRulesUseCase {
             });
 
             const applied: Array<Partial<IKodyRule> | IKodyRule> = [];
+            let centralizedPrResult: CentralizedPrMetadata | null = null;
 
             for (const pendingRule of pendingRules) {
                 if (
@@ -108,8 +118,7 @@ export class ApplyPendingKodyRulesUseCase {
                     }
 
                     const updatedTarget =
-                        await this.kodyRulesService.createOrUpdate(
-                            organizationAndTeamData,
+                        await this.createOrUpdateKodyRulesUseCase.execute(
                             this.toCreateOrUpdateDto({
                                 ...targetRule,
                                 title:
@@ -134,11 +143,20 @@ export class ApplyPendingKodyRulesUseCase {
                                 resolvedAt: undefined,
                                 resolvedBy: undefined,
                             }),
+                            organizationId,
                             userInfo,
+                            true,
+                            teamId,
                         );
 
                     if (!updatedTarget) {
                         throw new Error('Failed to apply pending update');
+                    }
+
+                    if (this.isCentralizedPrMetadata(updatedTarget)) {
+                        centralizedPrResult = updatedTarget;
+                    } else {
+                        applied.push(updatedTarget);
                     }
 
                     const appliedPending =
@@ -158,26 +176,34 @@ export class ApplyPendingKodyRulesUseCase {
                             'Failed to mark pending update request as applied',
                         );
                     }
-
-                    applied.push(updatedTarget);
                     continue;
                 }
 
                 const activatedRule =
-                    await this.kodyRulesService.createOrUpdate(
-                        organizationAndTeamData,
+                    await this.createOrUpdateKodyRulesUseCase.execute(
                         this.toCreateOrUpdateDto({
                             ...pendingRule,
                             status: KodyRulesStatus.ACTIVE,
                         }),
+                        organizationId,
                         userInfo,
+                        true,
+                        teamId,
                     );
 
                 if (!activatedRule) {
                     throw new Error('Failed to apply pending rule');
                 }
 
-                applied.push(activatedRule);
+                if (this.isCentralizedPrMetadata(activatedRule)) {
+                    centralizedPrResult = activatedRule;
+                } else {
+                    applied.push(activatedRule);
+                }
+            }
+
+            if (centralizedPrResult) {
+                return centralizedPrResult;
             }
 
             return applied;
@@ -192,6 +218,17 @@ export class ApplyPendingKodyRulesUseCase {
             });
             throw error;
         }
+    }
+
+    private isCentralizedPrMetadata(
+        value: Partial<IKodyRule> | IKodyRule | CentralizedPrMetadata,
+    ): value is CentralizedPrMetadata {
+        return (
+            typeof value === 'object' &&
+            value !== null &&
+            'mode' in value &&
+            (value as { mode?: string }).mode === 'centralized-pr'
+        );
     }
 
     private toCreateOrUpdateDto(rule: Partial<IKodyRule>): CreateKodyRuleDto {

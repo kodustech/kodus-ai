@@ -1,0 +1,54 @@
+# Two gates in one workflow:
+#  1. drift   — generated outputs (.env.example, docs snippet) match .env.schema
+#  2. coverage — every process.env.X / env.X reference in code is declared
+#                in .env.schema (with an allowlist for CLI/test/false-positives)
+#
+# Runs in ~15s — no Docker, no LLM, just yarn.
+name: env-drift-check
+
+# Read-only — this workflow only fetches code and runs scripts; it does
+# not push, comment, or modify anything. Lock GITHUB_TOKEN to the bare
+# minimum (CodeQL alert: actions/missing-workflow-permissions).
+permissions:
+    contents: read
+
+on:
+    pull_request:
+        # Coverage check needs to re-scan the codebase whenever ANY .ts/.js
+        # changes, not only schema files. Otherwise a PR adding a stray
+        # `process.env.NEW_VAR` outside schema/scripts would slip through.
+        paths:
+            - '.env.schema'
+            - '.env.example'
+            - 'docs/_snippets/env-vars-generated.mdx'
+            - 'scripts/env/**'
+            - 'package.json'
+            - 'yarn.lock'
+            - '**/*.ts'
+            - '**/*.tsx'
+            - '**/*.js'
+
+jobs:
+    check:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: yarn
+            - run: yarn install --frozen-lockfile
+
+            - name: Regenerate from schema and diff
+              run: yarn env:apply
+            - name: Fail if anything drifted from schema
+              run: |
+                  if ! git diff --quiet; then
+                      echo "::error::Generated outputs drifted from .env.schema."
+                      echo "Run \`yarn env:apply\` locally and commit the result."
+                      git --no-pager diff
+                      exit 1
+                  fi
+
+            - name: Check schema covers every env var used in code
+              run: yarn env:check:coverage

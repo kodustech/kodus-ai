@@ -1,0 +1,136 @@
+# Reproducible SSO end-to-end environment for the cookie-domain regression
+# (the Dmitry / scorpion.co bug). See ../../scripts/sso-e2e/run.sh for the
+# orchestrator that boots this compose, configures Keycloak + Kodus, and
+# prints the verification steps.
+#
+# Topology (lvh.me resolves *.lvh.me → 127.0.0.1, no /etc/hosts needed):
+#   Frontend  →  https://app.kodus.lvh.me   (Caddy → kodus-web:3000)
+#   API       →  https://api.kodus.lvh.me   (Caddy → kodus-api:3001)
+#   Keycloak  →  http://localhost:8080
+#
+# Why TLS (Caddy + mkcert): in production-mode the SSO handoff cookie is
+# emitted with `secure: true`. Without TLS the browser silently drops it
+# on receive, so the /sso-callback page can't read it and the full
+# handoff doesn't complete end-to-end. Caddy terminates TLS using a
+# wildcard cert from mkcert (the host's local CA) so cookies travel
+# over HTTPS and the fixture mirrors a real deployment.
+#
+# Prerequisites:
+#   1. The dev backing services running (postgres, mongo, rabbit):
+#        yarn docker:start
+#   2. The prod images built locally:
+#        WEB_TAGS=kodus-web:sso-e2e RELEASE_VERSION=sso-e2e \
+#          docker buildx bake -f docker-bake.hcl web
+#        API_TAGS=kodus-api:sso-e2e API_CLOUD_MODE=false \
+#          docker buildx bake -f docker-bake.hcl api
+#   3. mkcert installed and trusted on the host:
+#        brew install mkcert && sudo mkcert -install
+#      The CA is what makes the browser trust the wildcard cert
+#      generated under `.tmp/sso-e2e-tls/` by run.sh.
+
+services:
+    caddy:
+        image: caddy:2.10-alpine
+        container_name: kodus-sso-e2e-caddy
+        depends_on:
+            - kodus-web
+            - kodus-api
+        ports:
+            - "443:443"
+        volumes:
+            - ./Caddyfile:/etc/caddy/Caddyfile:ro
+            - ../../.tmp/sso-e2e-tls:/tls:ro
+        networks:
+            kodus-backend-services:
+                # The Web container's SSR layer (Next.js Server Components)
+                # makes server-side fetches to `${apiPublicUrl}/team`,
+                # `/user/info`, etc. Without this alias, that URL resolves
+                # via lvh.me's public A record (127.0.0.1) and lands on the
+                # Web container itself — ECONNREFUSED. With the alias, it
+                # resolves to Caddy, which terminates TLS and forwards to
+                # kodus-api:3001 — the same path the browser takes.
+                aliases:
+                    # Aliases for both shapes; Caddy serves whichever
+                    # SSO_E2E_DOMAIN is selected in the env. Listed
+                    # together so we don't need to recreate the network
+                    # on shape switch.
+                    - api.kodus.lvh.me
+                    - app.kodus.lvh.me
+                    - api.web.scorpion.lvh.me
+                    - app.web.scorpion.lvh.me
+
+    keycloak:
+        image: quay.io/keycloak/keycloak:26.5.1
+        container_name: kodus-sso-e2e-keycloak
+        command: start-dev
+        ports:
+            - "8080:8080"
+        environment:
+            KC_BOOTSTRAP_ADMIN_USERNAME: admin
+            KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+        volumes:
+            - keycloak-data:/opt/keycloak/data
+        networks:
+            - kodus-backend-services
+
+    kodus-api:
+        image: ${SSO_E2E_API_IMAGE:-kodus-api:sso-e2e}
+        container_name: kodus-sso-e2e-api
+        env_file:
+            - ../../.tmp/sso-e2e-api.env
+        environment:
+            API_NODE_ENV: production
+            # SSO_E2E_DOMAIN selects the test topology:
+            #   kodus.lvh.me        — SaaS-shaped (3-label common parent)
+            #   web.scorpion.lvh.me — Dmitry-shaped (4-label common parent)
+            API_FRONTEND_URL: https://app.${SSO_E2E_DOMAIN:-kodus.lvh.me}
+            # buildApiUrl() (libs/ee/sso/utils/api-url.util.ts) reads
+            # API_URL when assembling the SAML AssertionConsumerServiceURL.
+            # Must match the redirectUri registered on the Keycloak SAML
+            # client — otherwise Keycloak rejects with "Invalid redirect uri".
+            API_URL: https://api.${SSO_E2E_DOMAIN:-kodus.lvh.me}
+            API_HOST: 0.0.0.0
+            API_PORT: 3001
+            # The dev compose runs Mongo as `mongodb`, but the .env still
+            # points at `db_mongodb`. Override here so this stack works
+            # regardless of which one is in the .env.
+            API_MG_DB_HOST: mongodb
+            API_MG_DB_PRODUCTION_CONFIG: "?authSource=admin"
+        networks:
+            - kodus-backend-services
+
+    kodus-web:
+        image: ${SSO_E2E_WEB_IMAGE:-kodus-web:sso-e2e}
+        container_name: kodus-sso-e2e-web
+        depends_on:
+            - kodus-api
+        environment:
+            # `https://` prefix forces createUrl to honour the explicit scheme
+            # and produce a public URL the browser can reach (Caddy on :443).
+            # No port is appended (the createUrl heuristic skips the port for
+            # non-internal hops with an explicit scheme).
+            WEB_HOSTNAME_API: https://api.${SSO_E2E_DOMAIN:-kodus.lvh.me}
+            WEB_NODE_ENV: production
+            WEB_NEXTAUTH_SECRET: sso-e2e-do-not-use-in-prod
+            NEXTAUTH_URL: https://app.${SSO_E2E_DOMAIN:-kodus.lvh.me}
+            RELEASE_VERSION: sso-e2e
+            # Trust the mkcert root CA so Next.js's SSR fetches to
+            # https://api.kodus.lvh.me succeed (otherwise Node rejects
+            # the cert as self-signed and Server Components fail with
+            # "Network error while requesting...").
+            NODE_EXTRA_CA_CERTS: /tls/rootCA.pem
+        volumes:
+            # Mount the mkcert CA root so NODE_EXTRA_CA_CERTS can find it.
+            # The path on the host is mkcert -CAROOT — captured by run.sh
+            # into MKCERT_CAROOT_HOST so this compose stays portable.
+            - ${MKCERT_CAROOT_HOST:-/tmp/mkcert-not-set}:/tls:ro
+        networks:
+            - kodus-backend-services
+
+volumes:
+    keycloak-data:
+
+networks:
+    kodus-backend-services:
+        external: true
+        name: kodus-backend-services

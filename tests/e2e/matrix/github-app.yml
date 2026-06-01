@@ -1,0 +1,24 @@
+id: github-app
+description: |
+    Single-cell smoke for the github-app provider variant (oauth /
+    installation_id code path). Cloud × github-app × paid. Runs every
+    scenario that applies to this cell to validate end-to-end before
+    folding the cell into the full nightly run.
+
+    Use:
+        yarn e2e:matrix matrix/github-app.yml --target cloud -y
+
+    The cell is auto-skipped if GH_APP_TEST_REPO or
+    GH_APP_INSTALLATION_ID is missing — set both before running.
+
+scenarios:
+    - onboarding-webhook-registration
+    - code-review-basic
+    - command-review
+    - kody-rules-create-and-apply
+    - license-attribution
+
+cells:
+    - target: cloud
+      provider: github-app
+      license: paid

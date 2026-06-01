@@ -1,0 +1,58 @@
+---
+title: "为什么我的 AI 代码审查没有触发"
+description: "审查未自动启动时的常见原因和修复方法。"
+---
+
+如果 Kodus 没有审查您的 PR，请检查以下常见原因：
+
+## 1. 自动审查已禁用
+
+验证自动审查是否启用：
+- 前往**代码审查设置** → **通用**
+- 检查**自动审查**是否开启
+- 或在 `kodus-config.yml` 中验证：
+
+```yaml
+automatedReviewActive: true
+```
+
+## 2. Webhook 未配置
+
+Kodus 需要 webhooks 来知道何时打开或更新 PR：
+- 前往 Git 提供商的 webhook 设置
+- 验证 Kodus webhook URL 是否已注册且活跃
+- 检查失败的投递尝试
+
+## 3. PR 标题匹配忽略关键字
+
+如果 PR 标题包含忽略关键字，Kodus 会跳过审查：
+
+```yaml
+ignoredTitleKeywords:
+  - "release"
+  - "WIP"
+```
+
+检查您的 `ignoredTitleKeywords` 设置。
+
+## 4. 基础分支未被监控
+
+默认情况下，Kodus 审查目标为默认分支的 PR。如果您的 PR 目标是其他分支，请将其添加到 `baseBranches`：
+
+```yaml
+baseBranches:
+  - develop
+  - staging
+```
+
+## 5. 审查节奏设置为手动
+
+如果审查节奏设置为**手动**，Kodus 仅在您评论 `@kody start-review` 时审查。
+
+## 6. 自动暂停已激活
+
+如果您快速连续推送了多次，自动暂停可能已启动。等待冷却期或评论 `@kody start-review` 手动触发。
+
+## 仍然无法工作？
+
+尝试在 PR 上评论 `@kody start-review` 以触发手动审查。如果仍然无效，请查看[故障排除指南](/how_to_use/en/code_review/troubleshooting)。

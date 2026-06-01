@@ -1,0 +1,155 @@
+---
+title: "将您的最佳实践文档转变为审查护栏"
+description: "使用可选的 MCP 插件将您的工程手册转换为活的 Kody 规则。"
+icon: "shield-check"
+---
+
+## 为什么本指南很重要
+
+每个工程团队都有一个"最佳实践"文档。问题是 IDE 建议不读它,审查者忘记细微差别,文档慢慢失去权威性。本指南展示如何将您的手册转变为主动护栏,以便 Kody 自动执行这些规则,并在代码偏离时引用相关部分。
+
+我们将重点关注两个构建块:
+
+- [Kody 规则](/how_to_use/en/code_review/configs/kody_rules) – 将每个策略要点编码为确定性的文件级或 PR 级检查。
+- [自定义插件](/cookbook/en/custom-plugin-install) – 当真相源存在于 Git 之外时,从远程 MCP 服务器获取标准。
+
+遵循流程,任何代码库都可以从"手册 PDF"演变为"活策略包"。
+
+
+## 飞行前检查清单
+
+- 您有权编辑**代码审查设置 → Kody 规则**。
+- 策略包位于代码库中(例如 `docs/engineering-standards.md`)。如果您的位于另一个路径,请相应调整。如果它位于 Notion、Confluence 或 Google Docs 中,计划通过远程 MCP 端点公开它。
+- 您知道哪些主题应该在文件级(控制器、配置)还是 PR 级(功能标志、推出叙述、架构)进行评估。
+
+<Callout icon="layers">
+  将手册保持在版本控制下。每次编辑都应通过有所有者签署的 PR。这种纪律使规则扎根于现实。
+</Callout>
+
+## 第 1 阶段 – 塑造规则友好的策略包
+
+1. 创建或重用 markdown 文件,例如 `docs/engineering-standards.md`。唯一的要求:Kody 必须能够通过 `@file:...` 引用它。
+2. 将内容组织成简短、可检查的要点:
+
+```md
+# 工程标准
+
+## 错误处理
+- 绝不吞没错误。
+- 不要记录 PII 或秘密。
+- 外部请求必须有超时和重试策略。
+
+## 架构
+- 禁止从 `domain/*` 直接跨模块导入到 `web/*`。
+- 新端点必须包括跟踪字段(例如 requestId)和结构化日志。
+- 高风险更改必须使用功能标志。
+```
+
+3. 添加元数据,如 `[所有者:后端平台]` 或 `[风险:高]` 以帮助路由违规。
+
+<Info>
+  如果真相源停留在 Git 之外,采用相同的结构,但通过远程 MCP 服务器发布它,以便规则可以调用 `@MCP:policy_pack.getSection(...)`。
+</Info>
+
+<Tip>
+  使每个要点都是原子的。当规则触发时,应该没有关于需要更改什么的争论。
+</Tip>
+
+
+## 第 2 阶段 – 将每个规则指向真实文档
+
+规则可以读取文件和远程 MCP 负载。引用实际手册,而不是在每个指令中粘贴片段。
+
+```text
+使用 @file:docs/engineering-standards.md(架构部分)作为策略源。
+仅标记明显违反这些要点的代码。如果该部分缺失,请说明。
+```
+
+- 为特定领域的包交换其他文件路径(例如 `@file:docs/mobile.md`)。
+- 只需要文件的一部分?附加行锚点——`@file:docs/engineering-standards.md#L40-L72`——以便规则仅使用该部分。
+- 当策略来自 Notion/Confluence/等时,用 `@MCP:policy_pack.getSection({"id":"security"})` 替换文件引用。
+- 当规则需要静态模板加上动态数据时,结合两者(例如,`@file` 用于日志格式 + `@MCP:piiRegistry.list()` 用于当前敏感字段)。
+
+<Callout icon="link">
+  一个引用使一切保持同步。更新手册一次,每个规则都会执行最新版本。
+</Callout>
+
+
+## 第 3 阶段 – 将部分转换为 Kody 规则
+
+打开**代码审查设置 → Kody 规则**并将每个策略部分映射到适当的范围。
+
+| 策略部分         | 规则类型     | 范围示例                     | 严重性 |
+| ---------------------- | ------------- | --------------------------------- | -------- |
+| 错误处理         | 文件级    | `backend/**/*.ts`                  | 高     |
+| 架构           | PR 级      | 通过 `pr_files_diff` 所有文件     | 严重 |
+| 日志和跟踪      | 文件级    | `web/apps/**/controllers/**/*.ts` | 中等   |
+| 安全 / PII         | 文件 + MCP    | `**/*` 与 PII 列表获取        | 严重 |
+
+### 文件级示例
+
+```
+名称:在新端点上执行跟踪字段
+范围:文件
+路径: web/apps/**/controllers/**/*.ts
+严重性:高
+说明:
+  将 fileDiff 与 @file:docs/engineering-standards.md 中的架构 → 新端点进行比较。
+  标记缺少 requestId 跟踪和结构化日志语句的处理程序。
+  引用违反策略的差异块。
+```
+
+### PR 级示例
+
+```
+名称:高风险更改需要功能标志
+范围:拉取请求
+严重性:严重
+说明:
+  扫描 pr_files_diff 以查找添加主要功能的路由/服务/域文件。
+  如果没有触及功能标志文件,引用"架构 → 功能标志是强制性的"并请求推出计划。
+```
+
+需要新鲜数据来评估规则?在指令中调用 MCP:
+
+```
+使用 @MCP:policy_pack.getSection({"id":"security"}) 获取最新的受限字段。
+```
+
+<Info>
+  规则已经理解变量(`fileDiff`、`pr_files_diff` 等)、文件引用和 MCP 调用。请参阅 [Kody 规则指南](/how_to_use/en/code_review/configs/kody_rules)中的完整矩阵。
+</Info>
+
+
+## 第 4 阶段 – 通过 MCP 镜像外部标准(可选)
+
+有时手册(或其部分)必须保留在 Notion、Confluence、Google Docs 或其他系统中。您仍然可以将其输入 Kody:
+
+1. 构建或采用公开 `listSections()` 和 `getSection(id)` 的远程 MCP 端点。
+2. 通过**添加自定义插件**安装它。按照[自定义插件指南](/cookbook/en/custom-plugin-install)获取确切流程。
+3. 用 `@MCP:policy_pack.getSection({"id":"architecture"})` 替换 `@file` 引用。
+4. 在 MCP 服务器上缓存响应,以便多个规则在每次审查时共享负载。
+
+现在 Kody 执行相同的标准,无论文档位于何处。
+
+## 第 5 阶段 – 测试、观察并保持活力
+
+<AccordionGroup>
+  <Accordion title="种子验证 PR">
+    创建一个违反每个部分的一次性 PR。提及 @kody 并确保内联 + PR 级评论引用正确的要点。
+  </Accordion>
+  <Accordion title="调整噪音和严重性">
+    在推出期间,观察每个规则触发的频率。收紧文件 glob,添加排除项,或调整严重性,直到信号满足期望。
+  </Accordion>
+  <Accordion title="一起更新文档和规则">
+    每当手册更改时,在同一个 PR 中更新 markdown(或 MCP 负载)和相关规则,以便审查者可以验证整个管道。
+  </Accordion>
+</AccordionGroup>
+
+## 快速检查清单
+
+- [ ] `docs/engineering-standards.md`(或 MCP 等效项)存在,带有可扫描的标记要点。
+- [ ] 每个规则通过 `@file` 或 `@MCP` 引用策略包,确保它读取最新文本。
+- [ ] 文件级和 PR 级 Kody 规则涵盖您的关键部分。
+- [ ] 可选的 MCP 插件在需要时镜像非代码库标准。
+- [ ] 干运行 PR 在广泛推出之前确认了内联评论和 PR 摘要。

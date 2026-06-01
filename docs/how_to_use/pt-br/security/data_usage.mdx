@@ -1,0 +1,47 @@
+---
+title: "Segurança do Modelo de IA"
+---
+
+## Modelos Utilizados
+
+O Kodus usa os seguintes modelos de linguagem para análise de código:
+
+- **GPT-4o e derivados** (OpenAI)
+- **Gemini 1.5 Pro e derivados** (Google)
+- **Claude 3.5 Sonnet e derivados** (Anthropic)
+
+## Tratamento de Dados
+
+Seu código é processado temporariamente e nunca é usado para treinamento:
+
+- Dados retidos apenas durante a sessão de revisão
+- Descartados imediatamente após a conclusão
+- Nunca usados para treinar ou melhorar modelos
+- Privacidade mantida de acordo com os contratos dos provedores
+
+## Termos de Uso de Cada Modelo
+
+- **GPT-4o e derivados**: [Termos de Uso do GPT-4o](https://openai.com/enterprise-privacy/)
+- **Gemini 1.5 Pro e derivados**: [Termos de Uso do Gemini 1.5 Pro](https://ai.google.dev/gemini-api/terms)
+- **Claude 3.5 Sonnet e derivados**: [Termos de Uso do Claude 3.5 Sonnet](https://support.anthropic.com/en/articles/7996885-how-do-you-use-personal-data-in-model-training)
+
+## Medidas de Segurança
+
+- **Criptografia**: Dados criptografados em trânsito e em repouso
+- **Isolamento de Dados**: Os modelos não armazenam nem retêm dados após o processamento
+- **Acesso Controlado**: Controles de acesso rígidos apenas para pessoal autorizado (veja [Funções do Workspace](/how_to_use/pt-br/workspace_roles))
+- **Auditorias Regulares**: Auditorias de segurança periódicas para conformidade
+- **Atualizações de Segurança**: Patches e atualizações regulares
+
+## Telemetria self-hosted
+
+Se você roda o Kodus self-hosted, cada instância envia um heartbeat
+diário anônimo para `telemetry.kodus.io` com contadores agregados e
+metadados de runtime — nunca código, identidades, ou qualquer coisa que
+possa rastrear até seus usuários. Você pode inspecionar o payload exato
+com `yarn telemetry:preview` ou desligar com
+`KODUS_TELEMETRY_DISABLED=true`. O schema completo, política de retenção
+e links para o código-fonte estão documentados em
+[Telemetria Anônima](/how_to_deploy/pt-br/deploy_kodus/telemetry).
+
+Dúvidas? Entre em contato com nossa equipe de suporte ou junte-se ao [Discord](https://discord.gg/TFZBRk9fT6).

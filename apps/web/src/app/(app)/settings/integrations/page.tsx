@@ -7,17 +7,24 @@ import { HelpCircleIcon } from "lucide-react";
 import { ErrorCard } from "src/core/components/ui/error-card";
 import { FEATURE_FLAGS } from "src/core/config/feature-flags";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
-import { isFeatureEnabled } from "src/core/utils/posthog-server-side";
+import { isFeatureEnabled } from "src/core/feature-gate/resolver";
 import { safeArray } from "src/core/utils/safe-array";
+import { getOrganizationReleaseTrack } from "@services/organizations/release-track";
 
 export default async function IntegrationsPage() {
+    const releaseTrackPromise = getOrganizationReleaseTrack();
     const [teamId, teams, githubEnterpriseServerPatEnabled] = await Promise.all(
         [
             getGlobalSelectedTeamId(),
             getTeams(),
-            isFeatureEnabled({
-                feature: FEATURE_FLAGS.githubEnterpriseServerPat,
-            }).catch(() => false),
+            releaseTrackPromise
+                .then((releaseTrack) =>
+                    isFeatureEnabled({
+                        feature: FEATURE_FLAGS.githubEnterpriseServerPat,
+                        releaseTrack,
+                    }),
+                )
+                .catch(() => false),
         ],
     );
 

@@ -15,7 +15,7 @@ const buildConfig = () => ({
             directories: [
                 {
                     id: 'dir-1',
-                    path: '/src',
+                    folders: [{ id: 'f-1', name: 'src', path: '/src' }],
                     configs: {
                         automatedReviewActive: {
                             value: true,

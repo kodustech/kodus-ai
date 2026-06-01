@@ -22,6 +22,7 @@ import { UpdateInfoOrganizationAndPhoneDto } from '../dtos/updateInfoOrgAndPhone
 import { GetOrganizationNameUseCase } from '@libs/organization/application/use-cases/organization/get-organization-name';
 import { UpdateInfoOrganizationAndPhoneUseCase } from '@libs/organization/application/use-cases/organization/update-infos.use-case';
 import { GetOrganizationsByDomainUseCase } from '@libs/organization/application/use-cases/organization/get-organizations-domain.use-case';
+import { GetReleaseTrackUseCase } from '@libs/organization/application/use-cases/organization/get-release-track.use-case';
 import { GetOrganizationLanguageUseCase } from '@libs/platform/application/use-cases/organization/get-organization-language.use-case';
 import { CacheService } from '@libs/core/cache/cache.service';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
@@ -51,6 +52,7 @@ export class OrganizationController {
         private readonly getOrganizationLanguageUseCase: GetOrganizationLanguageUseCase,
         private readonly updateInfoOrganizationAndPhoneUseCase: UpdateInfoOrganizationAndPhoneUseCase,
         private readonly getOrganizationsByDomainUseCase: GetOrganizationsByDomainUseCase,
+        private readonly getReleaseTrackUseCase: GetReleaseTrackUseCase,
         private readonly cacheService: CacheService,
         @Inject(REQUEST)
         private readonly request: UserRequest,
@@ -64,6 +66,16 @@ export class OrganizationController {
     @ApiOkResponse({ type: ApiStringResponseDto })
     public getOrganizationName() {
         return this.getOrganizationNameUseCase.execute();
+    }
+
+    @Get('/release-track')
+    @ApiOperation({
+        summary: 'Get organization release track',
+        description:
+            'Returns the release track (stable | beta | internal) for the authenticated user organization.',
+    })
+    public getReleaseTrack() {
+        return this.getReleaseTrackUseCase.execute();
     }
 
     @Patch('/update-infos')

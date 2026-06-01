@@ -3,10 +3,20 @@ export type SpeedRating = "fast" | "medium" | "slow";
 export type CostTier = "$" | "$$" | "$$$";
 export type BadgeType = "tested" | "untested" | "legacy";
 
+export type ModelVariant = {
+    id: string;
+    label: string;
+    description?: string;
+    baseURL: string;
+    apiKeyUrl?: string;
+    maxConcurrentRequests?: number;
+};
+
 export type CuratedModel = {
     id: string;
     displayName: string;
     provider: string;
+    providerDisplayName?: string;
     tier: ModelTier;
     benchmarkScore: number;
     description: string;
@@ -19,7 +29,14 @@ export type CuratedModel = {
     defaults: {
         temperature: number;
         maxOutputTokens: number;
+        baseURL?: string;
+        reasoningEffort?: "none" | "low" | "medium" | "high";
     };
+    variants?: ModelVariant[];
+    defaultVariantId?: string;
+    docsUrl?: string;
+    latencyP50Ms?: number;
+    errorRatePct?: number;
 };
 
 export type ModelAnnotation = {

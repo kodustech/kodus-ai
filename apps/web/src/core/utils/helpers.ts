@@ -8,10 +8,9 @@ import invariant from "tiny-invariant";
 
 import { type ApiRoute } from "../config/constants";
 import { type LiteralUnion } from "../types";
+import { apiProxyPath } from "../utils/api-proxy";
 import { isSelfHosted } from "../utils/self-hosted";
 import { isServerSide } from "./server-side";
-
-const containerName = process.env.GLOBAL_API_CONTAINER_NAME || "kodus_api";
 
 export function pathToApiUrl(
     path: ApiRoute | string,
@@ -19,69 +18,97 @@ export function pathToApiUrl(
 ): string {
     invariant(path, "Api path doesn't exist");
 
-    let hostName = process.env.WEB_HOSTNAME_API;
-
-    // if 'true' we are in the server and hostname is not a domain
-    if (isServerSide && hostName === "localhost") {
-        hostName = containerName;
-    }
-
     if (params) {
         Object.keys(params).forEach((key) => {
             path = path.replace(`:${key}`, params[key].toString());
         });
     }
 
+    // Dual-mode: server callers hit the upstream directly, client callers
+    // route through the same-origin proxy so the internal hostname never
+    // appears in the browser bundle. Any module-level call to
+    // pathToApiUrl(...) used to bake `http://undefined/...` into the
+    // client bundle because WEB_HOSTNAME_API / WEB_PORT_API were removed
+    // from next.config.js's `env:` block by the runtime-config migration.
+    if (!isServerSide) {
+        return apiProxyPath(path);
+    }
+
+    let hostName = process.env.WEB_HOSTNAME_API;
+    if (hostName === "localhost") {
+        hostName =
+            process.env.GLOBAL_API_CONTAINER_NAME || "kodus_api";
+    }
     const port = process.env.WEB_PORT_API;
 
-    return createUrl(hostName, port, path);
+    // `internal: true` is the caller saying "this is a same-cluster
+    // hop". `createUrl` honours that only when a port is set (Docker
+    // compose / dev). On AWS, no port is set and `createUrl` falls
+    // through to the public-domain heuristic (https, no port).
+    return createUrl(hostName, port, path, { internal: true });
 }
 
+/**
+ * Build a URL for a backend upstream.
+ *
+ * Pass `{ internal: true }` when the target is on the same Docker /
+ * Kubernetes network as us (`kodus_api:3001`, `kodus-service-billing:3992`,
+ * etc.) — then the function just assembles `http://host:port/path`.
+ *
+ * When `internal` is unset, the function falls back to a heuristic
+ * (production + self-hosted with a non-localhost hostname → https with
+ * no port) for backwards compatibility with any caller that still
+ * points at a public domain directly. New code should always set
+ * `internal` explicitly.
+ */
 export function createUrl(
     hostName?: string,
     port?: string,
     path?: string,
-    options?: { containerName?: string },
+    options?: { internal?: boolean },
 ): string {
-    let finalPort: string;
-    let protocol: string;
+    const HTTP = "http://";
+    const HTTPS = "https://";
 
-    const defaultOptions = { containerName };
-    const config = { ...defaultOptions, ...options };
-
-    const isProduction = process.env.WEB_NODE_ENV === "production";
-
-    if (
-        isProduction ||
-        (isSelfHosted &&
-            hostName !== "localhost" &&
-            hostName !== config.containerName)
-    ) {
-        // Cases: Production OR (SelfHosted with a specific domain)
-        protocol = "https";
-        finalPort = "";
-    } else {
-        // Cases: Development OR (SelfHosted running on localhost)
-        // Also implicitly covers isDevelopment(), because if it's not production nor self-hosted with a domain,
-        // and isDevelopment() is true, it will fall here.
-        // If it's self-hosted and hostname === "localhost", it will also fall here.
-
-        const HTTP = "http://";
-        const HTTPS = "https://";
-        if (hostName?.includes(HTTP)) {
-            protocol = "http";
-            hostName = hostName.replace(HTTP, "");
-        } else if (hostName?.includes(HTTPS)) {
-            protocol = "https";
-            hostName = hostName.replace(HTTPS, "");
-        } else {
-            protocol = "http";
-        }
-
-        finalPort = port ? `:${port}` : "";
+    // If the hostName carries an explicit scheme, honor it regardless
+    // of the internal/heuristic logic below.
+    let schemeOverride: string | null = null;
+    if (hostName?.startsWith(HTTP)) {
+        schemeOverride = "http";
+        hostName = hostName.slice(HTTP.length);
+    } else if (hostName?.startsWith(HTTPS)) {
+        schemeOverride = "https";
+        hostName = hostName.slice(HTTPS.length);
     }
 
-    return `${protocol}://${hostName}${finalPort}${path}`;
+    const portPart = port ? `:${port}` : "";
+
+    // Explicit internal hop: same-cluster http+port, no heuristics.
+    // We require BOTH `internal` AND a port to take this path. The
+    // proxy routes (billing, mcp, api/*) all set `internal: true`
+    // unconditionally, but on AWS QA/prod the env doesn't ship
+    // WEB_PORT_* (the upstream is a public domain fronted by an ALB
+    // that terminates TLS on 443). Without `port`, treat the call as a
+    // public-domain hop and fall through to the heuristic below — that
+    // produces `https://<host><path>`, which is what the ALB expects.
+    if (options?.internal && port) {
+        return `${schemeOverride ?? "http"}://${hostName}${portPart}${path}`;
+    }
+
+    // Explicit scheme on the hostName overrides the public-URL
+    // heuristic below — the caller signalled exactly what they want
+    // (including whether to keep the port).
+    if (schemeOverride) {
+        return `${schemeOverride}://${hostName}${portPart}${path}`;
+    }
+
+    // Legacy heuristic path, kept for callers that pass a bare
+    // customer-supplied hostname and want a public-facing URL.
+    const isProduction = process.env.WEB_NODE_ENV === "production";
+    if (isProduction || (isSelfHosted && hostName !== "localhost")) {
+        return `https://${hostName}${path}`;
+    }
+    return `http://${hostName}${portPart}${path}`;
 }
 
 export function isJwtExpired(expirationDate: number) {
@@ -166,6 +193,12 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         "baseBranches",
         "ignoredTitleKeywords",
         "ideRulesSyncEnabled",
+        // Action picked in the toggle-off confirmation modal. Without it
+        // here, the stripper would silently drop the field and the
+        // backend would never see whether the user chose keep / pause /
+        // delete — which produced the production bug where rules stayed
+        // ACTIVE after the user chose Delete.
+        "ideSyncDisableAction",
         "ignorePaths",
         "reviewOptions",
         "kodusConfigFileOverridesWebPreferences",
@@ -179,7 +212,10 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         "runOnDraft",
         "codeReviewVersion",
         "enableCommittableSuggestions",
-        "crossFileDependenciesAnalysis",
+        // BYOK main-model override. Without it here the stripper would
+        // silently drop the field and the backend would never persist the
+        // selected model.
+        "byokModel",
         // New v2 prompt overrides for categories/severity customization
         "v2PromptOverrides",
     ];
@@ -198,7 +234,10 @@ export const codeReviewConfigRemovePropertiesNotInType = (
 export const waitFor = (ms: number) =>
     new Promise((resolve) => setTimeout(resolve, ms));
 
-export const unformatConfig = <T>(node: FormattedConfig<T>): T => {
+// Trailing comma on the generic <T,> disambiguates from JSX for
+// SWC/Turbopack's edge-runtime parser when this module is imported
+// from middleware.ts.
+export const unformatConfig = <T,>(node: FormattedConfig<T>): T => {
     const unformattedConfig: Partial<T> = {};
 
     (Object.keys(node) as (keyof T)[]).forEach((key) => {

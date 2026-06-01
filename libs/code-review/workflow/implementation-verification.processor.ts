@@ -34,6 +34,7 @@ import {
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
 
 @Injectable()
 export class ImplementationVerificationProcessor implements IJobProcessorService {
@@ -56,7 +57,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
         private readonly teamAutomationService: ITeamAutomationService,
     ) {}
 
-    async process(jobId: string): Promise<void> {
+    async process(jobId: string, signal?: AbortSignal): Promise<void> {
         const job = await this.jobRepository.findOne(jobId);
 
         if (!job) {
@@ -67,7 +68,19 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
             throw new Error(`Invalid workflow type ${job.workflowType}`);
         }
 
+        if (signal?.aborted) {
+            throw new Error(`Job ${jobId} aborted before start`);
+        }
+
         try {
+            // Race the entire verification work against the parent's
+            // AbortSignal. The block contains several sequential GitHub
+            // /platform calls — any of them can stall on a retry-after,
+            // and without this race the worker slot stays held past the
+            // router timeout. The inner IIFE keeps all original local
+            // variables in scope without refactoring into a separate
+            // private method.
+            await raceWithAbortSignal((async () => {
             const payload =
                 job.payload as unknown as CheckImplementationJobPayload;
 
@@ -228,6 +241,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
             await this.markCompleted(jobId, {
                 checkedCount: suggestionsToCheck.length,
             });
+            })(), signal);
         } catch (error) {
             this.logger.error({
                 message: `Failed to process implementation check for job ${jobId}`,

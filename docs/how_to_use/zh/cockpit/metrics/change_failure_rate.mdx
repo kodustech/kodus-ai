@@ -1,0 +1,68 @@
+---
+title: "Bug 比率"
+description: "衡量 Bug 修复 PR 的百分比（也称为变更失败率）"
+---
+
+## 什么是 Bug 比率
+
+Bug 比率衡量的是修复 Bug 或更正的拉取请求相对于 PR 总数的百分比。此指标帮助您了解开发工作中有多少精力用于修复问题，而不是构建新功能。它也可以理解为"变更失败率" - 变更导致失败的比率。
+
+## 我们如何计算
+
+我们使用 AI 语言模型（LLM）分析拉取请求名称和描述，自动识别哪些 PR 是 Bug 修复。然后系统计算与您的 PR 总活动相关的 Bug 相关工作的百分比。
+
+**我们跟踪的内容：**
+- 通过 AI 分析识别为 Bug 修复的 PR
+- 期间内的 PR 总数
+- Bug 相关工作的百分比
+
+**计算方式：**
+```
+Bug 比率 = (Bug 修复 PR) ÷ (总 PR) × 100
+```
+
+例如，如果 15 个 PR 中有 3 个被识别为 Bug 修复，则您的 Bug 比率为 20%。
+
+**我们如何识别 Bug 修复：**
+我们使用先进的语言模型分析 PR 标题并自动分类。AI 会查找如下模式：
+- "Fix bug in..." 或 "Bug fix for..."
+- "Resolve issue with..." 或 "Fix problem in..."
+- "Patch for..." 或 "Hotfix:..."
+
+## 为什么重要
+
+Bug 比率是团队开发重点和代码质量的关键指标。理解这个比率可以帮助您：
+
+- **开发重点**：了解修复问题与构建新功能的时间分配
+- **代码质量**：识别是否在 Bug 上花费了太多时间
+- **流程改进**：了解开发流程是否需要优化
+- **资源规划**：计划将多少精力分配给 Bug 修复
+
+## 如何改进
+
+- 实施全面的测试策略（单元测试、集成测试、端到端测试）
+- 在生产前使用自动化工具（linter、静态分析器）
+- 确保对所有更改进行彻底的代码审查
+- 将大型功能分解为更小的可测试部分
+- 使用功能标志进行更安全的部署
+- 进行事后审查以防止问题再次发生
+
+## PR 命名的最佳实践
+
+为了帮助 AI 准确识别 Bug 修复，请考虑以下命名约定：
+
+### 良好的 Bug 修复 PR 名称
+- "Fix: User login fails with invalid credentials"
+- "Bug fix: Memory leak in data processing module"
+- "Resolve issue: API returns 500 error for large requests"
+- "Patch: Fix null pointer exception in user service"
+
+### 避免模糊名称
+- "Fix stuff" 或 "Bug fix"
+- "Update code" 或 "Improve performance"
+- "Fix things" 或 "Resolve issues"
+
+### 功能 vs Bug 修复
+- **Bug 修复**："Fix: Payment validation fails for expired cards"
+- **功能**："Add: New payment method support"
+- **改进**："Enhance: Payment validation error messages"

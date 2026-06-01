@@ -1,0 +1,58 @@
+---
+title: GitLab OAuthアプリ（GitLabでサインイン）
+icon: gitlab
+---
+
+コードレビューの自動化に使用されるGitLab Webhookインテグレーションとは別に、ユーザーがGitLabでKodusにサインインできるようにしたい場合に使用します。
+
+## 前提条件
+
+- **WEB_DOMAIN**: フロントエンドのURL（例：`https://app.yourdomain.com`または`http://localhost:3000`）
+
+## ステップ1：OAuthアプリの作成
+
+1. GitLabで**User Settings** > **Applications**に移動
+2. **New application**をクリック
+3. アプリケーション名とリダイレクトURIを入力
+
+## ステップ2：コールバックURLの設定
+
+**Redirect URI**を以下に設定します：
+
+```
+WEB_DOMAIN/api/auth/callback/gitlab
+```
+
+URLが実際のWebドメインとスキーム（http/https）と一致していることを確認してください。
+
+## ステップ3：スコープの設定
+
+GitLabのスコープを以下に合わせて設定します：
+
+```
+WEB_GITLAB_SCOPES="read_api read_user read_repository"
+```
+
+## ステップ4：.envへの認証情報の追加
+
+アプリを作成したら、GitLabから認証情報をコピーしてKodusの環境に追加します：
+
+```
+WEB_OAUTH_GITLAB_CLIENT_ID="your_client_id_here"
+WEB_OAUTH_GITLAB_CLIENT_SECRET="your_client_secret_here"
+WEB_GITLAB_SCOPES="read_api read_user read_repository"
+WEB_GITLAB_OAUTH_URL="https://gitlab.com/oauth/authorize"
+```
+
+セルフマネージドのGitLabの場合は、OAuth URLをインスタンスのドメイン（例：`https://gitlab.yourdomain.com/oauth/authorize`）に置き換えてください。
+
+## 環境変数の概要
+
+```bash
+WEB_OAUTH_GITLAB_CLIENT_ID="your_client_id_here"
+WEB_OAUTH_GITLAB_CLIENT_SECRET="your_client_secret_here"
+WEB_GITLAB_SCOPES="read_api read_user read_repository"
+WEB_GITLAB_OAUTH_URL="https://gitlab.com/oauth/authorize"
+```
+
+変更を適用するためにWebアプリケーションを再起動してください。

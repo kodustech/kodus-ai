@@ -1,0 +1,36 @@
+---
+title: "Cómo conectar Linear a tu herramienta de revisión de código"
+description: "Vincula Linear a Kodus para que tus revisiones de código con IA validen automáticamente los PRs contra los requisitos de los issues."
+---
+
+Conectar Linear a Kodus habilita la **validación automática de lógica de negocio** contra issues de Linear y un contexto más enriquecido para las sugerencias de revisión de código.
+
+## Cómo conectar
+
+1. Ve a **Configuración** → **Plugins**
+2. Encuentra **Linear** en los plugins disponibles
+3. Haz clic en **Conectar** y autoriza el acceso
+4. Selecciona a qué espacios de trabajo puede acceder Kodus
+
+## Qué habilita
+
+### Validación automática de lógica de negocio
+
+Cuando un PR está vinculado a un issue de Linear, Kodus automáticamente:
+- Obtiene el título, la descripción y los criterios de aceptación del issue
+- Compara el diff del PR con los requisitos
+- Reporta implementaciones faltantes y brechas
+
+### Validación bajo demanda
+
+Pega cualquier URL de Linear en un comentario de PR:
+
+```
+@kody -v business-logic https://linear.app/your-team/issue/TEAM-123
+```
+
+### Contexto de revisión de código más enriquecido
+
+Con Linear conectado, Kody puede referenciar el contexto de las tareas en reglas y conversaciones.
+
+Para más detalles, consulta [Validación de Lógica de Negocio](/how_to_use/es/code_review/business_logic_validation) y [Plugins](/how_to_use/es/code_review/plugins).

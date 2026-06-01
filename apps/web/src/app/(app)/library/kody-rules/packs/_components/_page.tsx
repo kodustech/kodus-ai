@@ -13,7 +13,11 @@ import { Input } from "@components/ui/input";
 import { Link } from "@components/ui/link";
 import { Page } from "@components/ui/page";
 import { Separator } from "@components/ui/separator";
-import type { KodyRuleBucket, LibraryRule } from "@services/kodyRules/types";
+import {
+    resolveKodyRuleDisplaySeverity,
+    type KodyRuleBucket,
+    type LibraryRule,
+} from "@services/kodyRules/types";
 import { SearchIcon } from "lucide-react";
 
 export const KodyRulesPacksExplorer = ({
@@ -41,18 +45,18 @@ export const KodyRulesPacksExplorer = ({
         );
     }, [buckets, searchQuery]);
     // Get severity badge color
-    const getSeverityColor = (severity: string) => {
-        switch (severity.toLowerCase()) {
-            case "high":
-                return "bg-[rgba(255,139,64,0.1)] border-[rgba(255,139,64,0.64)] text-[#ff8b40]";
+    const getSeverityColor = (severity?: string) => {
+        switch (severity?.toLowerCase()) {
+            case "low":
+                return "bg-[rgba(17,157,228,0.1)] border-[rgba(17,157,228,0.64)] text-[#119de4]";
             case "medium":
                 return "bg-[rgba(242,198,49,0.1)] border-[rgba(242,198,49,0.64)] text-[#f2c631]";
-            case "low":
-                return "bg-[rgba(34,197,94,0.1)] border-[rgba(34,197,94,0.64)] text-[#22c55e]";
+            case "high":
+                return "bg-[rgba(255,139,64,0.1)] border-[rgba(255,139,64,0.64)] text-[#ff8b40]";
             case "critical":
                 return "bg-[rgba(239,68,68,0.1)] border-[rgba(239,68,68,0.64)] text-[#ef4444]";
             default:
-                return "bg-[rgba(242,198,49,0.1)] border-[rgba(242,198,49,0.64)] text-[#f2c631]";
+                return "bg-[rgba(255,139,64,0.1)] border-[rgba(255,139,64,0.64)] text-[#ff8b40]";
         }
     };
 
@@ -93,28 +97,33 @@ export const KodyRulesPacksExplorer = ({
                             Highlighted rules
                         </h4>
                         <div className="space-y-2">
-                            {sampleRules.map((rule, index) => (
-                                <div
-                                    key={index}
-                                    className="flex items-start justify-between rounded bg-[#202032] p-4">
-                                    <div className="flex-1 pr-3">
-                                        <h5 className="mb-1 line-clamp-1 text-xs font-bold text-white">
-                                            {rule.title}
-                                        </h5>
-                                        <p className="line-clamp-2 text-xs leading-relaxed text-[#cdcddf]">
-                                            {rule.rule.length > 100
-                                                ? `${rule.rule.substring(0, 100)}...`
-                                                : rule.rule}
-                                        </p>
-                                    </div>
+                            {sampleRules.map((rule, index) => {
+                                const displaySeverity =
+                                    resolveKodyRuleDisplaySeverity(rule);
+
+                                return (
                                     <div
-                                        className={`${getSeverityColor(rule.severity)} flex-shrink-0 rounded border px-2 py-1`}>
-                                        <span className="text-xs font-semibold uppercase">
-                                            {rule.severity}
-                                        </span>
+                                        key={index}
+                                        className="flex items-start justify-between rounded bg-[#202032] p-4">
+                                        <div className="flex-1 pr-3">
+                                            <h5 className="mb-1 line-clamp-1 text-xs font-bold text-white">
+                                                {rule.title}
+                                            </h5>
+                                            <p className="line-clamp-2 text-xs leading-relaxed text-[#cdcddf]">
+                                                {rule.rule.length > 100
+                                                    ? `${rule.rule.substring(0, 100)}...`
+                                                    : rule.rule}
+                                            </p>
+                                        </div>
+                                        <div
+                                            className={`${getSeverityColor(displaySeverity)} flex-shrink-0 rounded border px-2 py-1`}>
+                                            <span className="text-xs font-semibold uppercase">
+                                                {displaySeverity}
+                                            </span>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 )}

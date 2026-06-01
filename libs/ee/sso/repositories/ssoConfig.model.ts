@@ -2,6 +2,8 @@ import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 
 import { CoreModel } from '@libs/core/infrastructure/repositories/model/typeOrm';
 import {
+    SSOConnectionTestMetadata,
+    SSODomainVerificationMetadata,
     SSOProtocol,
     SSOProtocolConfigMap,
 } from '@libs/ee/sso/domain/interfaces/ssoConfig.interface';
@@ -34,4 +36,10 @@ export class SSOConfigModel extends CoreModel {
 
     @Column({ name: 'provider_config', type: 'jsonb' })
     providerConfig: SSOProtocolConfigMap[SSOProtocol];
+
+    @Column({ name: 'connection_test', type: 'jsonb', nullable: true })
+    connectionTest?: SSOConnectionTestMetadata;
+
+    @Column({ name: 'domain_verification', type: 'jsonb', nullable: true })
+    domainVerification?: SSODomainVerificationMetadata;
 }

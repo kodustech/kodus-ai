@@ -18,10 +18,11 @@
   },
   "expectedTrajectory": [
     { "capability": "pr.metadata.read", "status": "success" },
-    { "capability": "pr.diff.read", "status": "success" },
     { "capability": "task.context.read", "status": "success" },
     { "step": "classifyTaskContext", "output": { "taskQuality": "COMPLETE" } },
-    { "step": "validateContext", "passed": true },
+    { "step": "validateTaskContext", "passed": true },
+    { "capability": "pr.diff.read", "status": "success" },
+    { "step": "validatePullRequestDiff", "passed": true },
     { "step": "analyzeBusinessRules", "status": "success" }
   ],
   "expectedOutcome": {

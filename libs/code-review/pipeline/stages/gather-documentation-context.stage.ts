@@ -1,44 +1,23 @@
 import { createLogger } from '@kodus/flow';
-import { CliReviewPipelineContext } from '@libs/cli-review/pipeline/context/cli-review-pipeline.context';
-import {
-    ISandboxProvider,
-    SANDBOX_PROVIDER_TOKEN,
-} from '@libs/code-review/domain/contracts/sandbox.provider';
 import { SUPPORTED_LANGUAGES } from '@libs/code-review/domain/contracts/SupportedLanguages';
-import { DocumentationLLMPlannerService } from '@libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service';
-import { DocumentationPackageDiscoveryService } from '@libs/code-review/infrastructure/adapters/services/documentation-package-discovery.service';
-import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
-import posthog, { FEATURE_FLAGS } from '@libs/common/utils/posthog';
-import { PlatformType } from '@libs/core/domain/enums';
+import {
+    DOCUMENTATION_LLM_PLANNER_SERVICE_TOKEN,
+    DocumentationLLMPlannerService,
+} from '@libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service';
+import {
+    DOCUMENTATION_PACKAGE_DISCOVERY_SERVICE_TOKEN,
+    DocumentationPackageDiscoveryService,
+} from '@libs/code-review/infrastructure/adapters/services/documentation-package-discovery.service';
+import {
+    DOCUMENTATION_SEARCH_EXA_SERVICE_TOKEN,
+    DocumentationSearchExaService,
+} from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
-import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import path from 'path';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
-
-function parseGitRemoteUrl(
-    url: string,
-): { fullName: string; name: string } | null {
-    const httpsMatch = url.match(
-        /https?:\/\/[^/]+\/([^/]+\/[^/]+?)(?:\.git)?$/,
-    );
-    if (httpsMatch) {
-        const fullName = httpsMatch[1];
-        const name = fullName.split('/')[1];
-        return { fullName, name };
-    }
-
-    const sshMatch = url.match(/[^@]+@[^:]+:([^/]+\/[^/]+?)(?:\.git)?$/);
-    if (sshMatch) {
-        const fullName = sshMatch[1];
-        const name = fullName.split('/')[1];
-        return { fullName, name };
-    }
-
-    return null;
-}
 
 @Injectable()
 export class GatherDocumentationContextStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -52,12 +31,12 @@ export class GatherDocumentationContextStage extends BasePipelineStage<CodeRevie
 
     constructor(
         private readonly configService: ConfigService,
+        @Inject(DOCUMENTATION_PACKAGE_DISCOVERY_SERVICE_TOKEN)
         private readonly packageDiscoveryService: DocumentationPackageDiscoveryService,
+        @Inject(DOCUMENTATION_LLM_PLANNER_SERVICE_TOKEN)
         private readonly llmPlannerService: DocumentationLLMPlannerService,
+        @Inject(DOCUMENTATION_SEARCH_EXA_SERVICE_TOKEN)
         private readonly documentationSearchService: DocumentationSearchExaService,
-        @Inject(SANDBOX_PROVIDER_TOKEN)
-        private readonly sandboxProvider: ISandboxProvider,
-        private readonly codeManagementService: CodeManagementService,
     ) {
         super();
     }
@@ -113,42 +92,38 @@ export class GatherDocumentationContextStage extends BasePipelineStage<CodeRevie
             });
         }
 
-        let cleanup: (() => Promise<void>) | undefined;
-
         try {
-            let remoteCommands = context.sandboxHandle?.remoteCommands;
+            // Single-sandbox-per-PR: reuse the lease-managed sandbox set up by
+            // CreateSandboxStage (which runs earlier in the pipeline). When
+            // the sandbox isn't available, package discovery's fallback would
+            // be `buildManifestCandidatesForFile`, which walks every parent
+            // directory of every changed file × 9 manifest names and calls
+            // `getRepositoryContentFile` for each — typically 80-150 GitHub
+            // requests per PR that all 404 and consume nothing useful. On the
+            // 2026-05-13 rate-limit incident this single fallback was ~70%
+            // of QuintoAndar's GitHub quota waste. Skip the stage entirely
+            // when there's no sandbox; review continues without external
+            // documentation context (degraded but functional).
+            const remoteCommands = context.sandboxHandle?.remoteCommands;
 
-            if (!remoteCommands && this.sandboxProvider.isAvailable()) {
-                try {
-                    const cloneInfo = await this.resolveCloneParams(context);
+            if (!remoteCommands) {
+                this.logger.log({
+                    message:
+                        'Skipping documentation discovery: no sandbox available (would trigger manifest-fan-out fallback)',
+                    context: this.stageName,
+                    metadata: {
+                        prNumber: context.pullRequest.number,
+                        repository: context.repository.name,
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
+                    },
+                });
 
-                    if (cloneInfo) {
-                        const sandbox =
-                            await this.sandboxProvider.createSandboxWithRepo({
-                                cloneUrl: cloneInfo.url,
-                                authToken: cloneInfo.authToken,
-                                branch: cloneInfo.branch,
-                                prNumber: cloneInfo.prNumber,
-                                platform: cloneInfo.platform,
-                            });
-
-                        remoteCommands = sandbox.remoteCommands;
-                        cleanup = sandbox.cleanup;
-                    }
-                } catch (sandboxError) {
-                    this.logger.warn({
-                        message:
-                            'Failed to initialize sandbox for ripgrep manifest discovery, using fallback manifest resolution',
-                        context: this.stageName,
-                        metadata: {
-                            prNumber: context.pullRequest.number,
-                            repository: context.repository.name,
-                            organizationAndTeamData:
-                                context.organizationAndTeamData,
-                        },
-                        error: sandboxError,
-                    });
-                }
+                return this.updateContext(context, (draft) => {
+                    draft.discoveredPackages = [];
+                    draft.documentationQueryPlanByFile = {};
+                    draft.documentationByFile = {};
+                });
             }
 
             const discovery =
@@ -255,26 +230,9 @@ export class GatherDocumentationContextStage extends BasePipelineStage<CodeRevie
             });
 
             return context;
-        } finally {
-            if (cleanup) {
-                try {
-                    await cleanup();
-                } catch (cleanupError) {
-                    this.logger.warn({
-                        message:
-                            'Sandbox cleanup failed after documentation manifest discovery',
-                        context: this.stageName,
-                        metadata: {
-                            prNumber: context.pullRequest.number,
-                            repository: context.repository.name,
-                            organizationAndTeamData:
-                                context.organizationAndTeamData,
-                        },
-                        error: cleanupError,
-                    });
-                }
-            }
         }
+        // Sandbox lifecycle is owned by SandboxLeaseManager (release →
+        // pause); this stage doesn't manage cleanup anymore.
     }
 
     private isCodeFile(filePath: string): boolean {
@@ -290,105 +248,9 @@ export class GatherDocumentationContextStage extends BasePipelineStage<CodeRevie
     }
 
     private async shouldRunDocumentationContext(
-        context: CodeReviewPipelineContext,
+        _context: CodeReviewPipelineContext,
     ): Promise<boolean> {
-        const featureIdentifier =
-            context.organizationAndTeamData?.organizationId ||
-            context.organizationAndTeamData?.teamId ||
-            'unknown';
-
-        const isFeatureEnabled = await posthog.isFeatureEnabled(
-            FEATURE_FLAGS.documentationContext,
-            featureIdentifier,
-            context.organizationAndTeamData,
-        );
-
         const hasAPIKey = this.configService.get<string>('API_EXA_KEY');
-
-        return !!hasAPIKey && isFeatureEnabled;
-    }
-
-    private async resolveCloneParams(
-        context: CodeReviewPipelineContext,
-    ): Promise<{
-        url: string;
-        authToken: string;
-        branch: string;
-        prNumber?: number;
-        platform: PlatformType;
-    } | null> {
-        if (context.origin !== 'cli') {
-            const cloneParams = await this.codeManagementService.getCloneParams(
-                {
-                    repository: context.repository,
-                    organizationAndTeamData: context.organizationAndTeamData,
-                },
-                context.platformType,
-            );
-
-            return {
-                url: cloneParams.url,
-                authToken: cloneParams.auth?.token || '',
-                branch: context.branch,
-                prNumber: context.pullRequest.number,
-                platform: context.platformType,
-            };
-        }
-
-        const cliContext = context as unknown as CliReviewPipelineContext;
-        const gitContext = cliContext?.gitContext;
-
-        if (!gitContext?.remote) {
-            return null;
-        }
-
-        const parsed = parseGitRemoteUrl(gitContext.remote);
-        if (!parsed) {
-            return null;
-        }
-
-        const platform = gitContext.inferredPlatform || PlatformType.GITHUB;
-        const branch = gitContext.branch || 'main';
-        let authToken = '';
-        let cloneUrl = gitContext.remote;
-
-        try {
-            const cloneParams = await this.codeManagementService.getCloneParams(
-                {
-                    repository: {
-                        id: '0',
-                        defaultBranch: branch,
-                        fullName: parsed.fullName,
-                        name: parsed.name,
-                    },
-                    organizationAndTeamData: context.organizationAndTeamData,
-                },
-                platform,
-            );
-
-            authToken = cloneParams.auth?.token || '';
-            if (cloneParams.url) {
-                cloneUrl = cloneParams.url;
-            }
-        } catch {
-            // Continue without token for public repositories.
-        }
-
-        if (cloneUrl.startsWith('git@')) {
-            const sshMatch = cloneUrl.match(/git@([^:]+):(.+?)(?:\.git)?$/);
-            if (!sshMatch) {
-                return null;
-            }
-
-            cloneUrl = `https://${sshMatch[1]}/${sshMatch[2]}`;
-        }
-
-        return {
-            url: cloneUrl,
-            authToken,
-            branch,
-            prNumber: undefined,
-            platform,
-        };
+        return !!hasAPIKey;
     }
 }

@@ -1,0 +1,117 @@
+---
+title: "Agentes de IA"
+description: "Integre o Kodus CLI com agentes de programação de IA para loops autônomos de revisão e correção."
+---
+
+O CLI vem com um modo de saída mínimo e estruturado (`--prompt-only`) projetado para agentes de programação de IA analisarem e agirem. Combinado com uma chave de equipe, ele permite loops autônomos de revisão e correção — o agente revisa, aplica correções, reavalia e faz commit, tudo sem intervenção humana no caminho crítico.
+
+## Agentes Suportados
+
+- **Claude Code** — skill nativa via instalador de skills.
+- **Cursor** — skill nativa.
+- **Codex** — skill nativa, com Decision Memory via hooks `notify`.
+- **Windsurf** — via saída `--prompt-only`.
+
+Para qualquer outro agente que possa executar comandos shell e analisar texto estruturado, `kodus review --prompt-only` funciona imediatamente.
+
+## Configuração Mais Rápida
+
+Instale o CLI e todas as skills de agentes de uma só vez:
+
+```bash
+curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+```
+
+Isso:
+
+1. Instala o binário `@kodus/cli` globalmente.
+2. Configura a chave de equipe em `~/.kodus/config.json`.
+3. Implanta as skills do Kodus em todos os agentes detectados (Claude Code, Cursor, Codex, Windsurf).
+
+Sem logins individuais. Sem prompts interativos. Pronto para loops de agentes imediatamente.
+
+## O Loop de Revisão e Correção
+
+<Steps>
+  <Step title="Agente executa revisão">
+    ```bash
+    kodus review --prompt-only
+    ```
+
+    O CLI retorna problemas estruturados com caminhos de arquivos, números de linha, severidades e correções sugeridas — em um formato de texto compacto projetado para ser consumido por um LLM.
+  </Step>
+  <Step title="Agente aplica correções">
+    O agente lê a saída, decide quais correções aplicar (ou aceita todas via `--fix`) e edita os arquivos adequadamente.
+  </Step>
+  <Step title="Agente reavalia">
+    ```bash
+    kodus review --prompt-only --fail-on error
+    ```
+
+    Com `--fail-on error`, o loop termina com código não-zero enquanto ainda houver problemas de nível error ou superior. O agente continua em loop; quando a revisão retorna limpa, o processo termina com código 0 e o agente prossegue.
+  </Step>
+  <Step title="Agente faz commit e push">
+    Uma vez que a revisão esteja limpa, o agente faz commit e push. Opcionalmente, instale o hook pre-push (`kodus hook install`) como uma rede de segurança adicional para pushes manuais.
+  </Step>
+</Steps>
+
+## Autenticação por Chave de Equipe para Agentes
+
+Chaves de equipe são fortemente recomendadas para agentes — sem cadastro individual, sem login interativo, rotação fácil, rastreamento por dispositivo.
+
+```bash
+export KODUS_TEAM_KEY=kodus_xxxxx
+kodus review --prompt-only
+```
+
+Gere uma chave em <a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a> e distribua o comando de instalação exibido lá para sua equipe.
+
+<Warning>Salve a chave quando ela for exibida — ela não será mostrada novamente.</Warning>
+
+## Flags de Saída Importantes
+
+| Flag             | Uso                                                                 |
+| ---------------- | ------------------------------------------------------------------- |
+| `--prompt-only`  | Saída estruturada compacta para análise. Use no loop de revisão.   |
+| `--agent`        | Força saída determinística legível por máquina em qualquer comando. |
+| `--format json`  | Payload JSON completo. Combine com `--agent` para parsers estritos. |
+| `--fail-on`      | Portão de código de saída. O loop continua enquanto isso for não-zero. |
+| `--fields <csv>` | Restringe o payload JSON/agent (ex.: `summary,issues.file,issues.severity`). Útil para manter as janelas de contexto do agente pequenas. |
+
+## Combinando com Decision Memory
+
+Combine loops de agentes com [Decision Memory](decision_memory) para capturar o raciocínio por trás de cada turno do agente como arquivos estruturados no seu repositório. O loop trata *o que* mudou; a memória captura *por que*.
+
+```bash
+kodus decisions enable
+# Agora cada turno do agente grava um arquivo de decisão em .kody/
+```
+
+## Exemplo: Loop Claude Code com Validação de Negócio
+
+```bash
+# Em uma sessão Claude Code, o agente pode executar:
+kodus review --prompt-only --fail-on error    # revisão geral
+kodus pr business-validation --task-id KC-1441 --dry-run   # verifica contra a tarefa
+kodus review --prompt-only --fix               # aplica automaticamente problemas corrigíveis
+git commit -am "fix: KC-1441 address review findings"
+```
+
+Com o instalador de skills, a skill Kodus do Claude Code sabe quando invocar cada um desses — sem necessidade de engenharia de prompt da sua parte.
+
+## Relacionados
+
+<CardGroup cols={2}>
+  <Card title="Decision Memory" icon="brain" href="decision_memory">
+    Persista decisões de agentes como arquivos estruturados no seu repositório.
+  </Card>
+  <Card title="Conceitos" icon="book-open" href="concepts">
+    Modos de revisão, modos de diff e flags de saída para agentes.
+  </Card>
+  <Card title="Referência de Comandos" icon="book" href="commands">
+    Listagem completa de flags.
+  </Card>
+  <Card title="Solução de Problemas" icon="life-ring" href="troubleshooting">
+    Problemas no loop de agentes, problemas com hooks, timeouts.
+  </Card>
+</CardGroup>

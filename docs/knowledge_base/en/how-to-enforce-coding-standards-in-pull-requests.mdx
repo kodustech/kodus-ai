@@ -1,0 +1,48 @@
+---
+title: "How to enforce coding standards in pull requests"
+description: "Learn how to automatically enforce your team's coding conventions, architecture rules, and best practices on every pull request."
+---
+
+Enforcing coding standards manually is time-consuming and inconsistent. Different reviewers catch different things, and conventions drift over time. The solution is to codify your standards into automated rules that run on every PR.
+
+## How it works with Kodus
+
+Kodus lets you define **Kody Rules** — custom instructions that are checked automatically during every code review. There are two types:
+
+- **Review Rules** run during code review and analyze file diffs or the entire PR against your standards
+- **Memories** are persistent conventions that Kody applies across all interactions — code reviews, conversations, and suggestions
+
+### Example: Enforcing a naming convention
+
+You can create a file-level rule like:
+
+- **Rule**: "React components must use PascalCase file names"
+- **Path**: `src/components/**/*.tsx`
+- **Severity**: High
+- **Instructions**: "Flag any component file that doesn't follow PascalCase naming."
+
+### Example: Enforcing architectural boundaries
+
+A PR-level rule can validate cross-file concerns:
+
+- **Rule**: "Domain layer must not import from infrastructure"
+- **Scope**: Pull Request
+- **Instructions**: "Check `pr_files_diff` for any import statement in `src/domain/` that references `src/infrastructure/`. This violates our hexagonal architecture."
+
+## Other approaches
+
+You can also enforce standards by:
+
+- **Importing from the Rules Library** — browse pre-built rules for security, performance, and style
+- **Syncing IDE rules** — automatically import rules from Cursor, Copilot, Claude, and other AI tools
+- **Repository rules** — define rules in markdown files directly in your repo (`kodus/rules/`)
+- **Auto-generating rules** — let Kody analyze 3 months of review history and suggest rules based on your team's patterns
+
+## Getting started
+
+1. Go to **Code Review Settings** → **Kody Rules**
+2. Click **Add Rule** and define your standard
+3. Set the path, severity, and detailed instructions
+4. Kody will enforce it on every future PR
+
+For more details, see the [Kody Rules documentation](/how_to_use/en/code_review/configs/kody_rules).

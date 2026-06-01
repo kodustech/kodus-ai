@@ -1,12 +1,14 @@
-import { useSuspenseFetch } from "src/core/utils/reactQuery";
+import { useMemo } from "react";
+import { useFetch, useSuspenseFetch } from "src/core/utils/reactQuery";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 import { KODY_RULES_PATHS } from ".";
-import type {
-    KodyRule,
-    KodyRulesType,
-    KodyRuleWithInheritanceDetails,
-    LibraryRule,
+import {
+    KodyRulesStatus,
+    type KodyRule,
+    type KodyRulesType,
+    type KodyRuleWithInheritanceDetails,
+    type LibraryRule,
 } from "./types";
 
 export const useSuspenseFindLibraryKodyRules = () => {
@@ -96,4 +98,33 @@ export const useSuspenseGetInheritedKodyRules = (params: {
         repoRules: KodyRuleWithInheritanceDetails[];
         directoryRules: KodyRuleWithInheritanceDetails[];
     }>(KODY_RULES_PATHS.GET_INHERITED_RULES, { params });
+};
+
+export const useKodyRulesCount = (
+    repositoryId: string,
+    directoryId?: string,
+    enabled = true,
+) => {
+    const { data } = useFetch<Array<KodyRule>>(
+        KODY_RULES_PATHS.FIND_BY_ORGANIZATION_ID_AND_FILTER,
+        { params: { repositoryId, directoryId } },
+        enabled,
+        { staleTime: 60_000 },
+    );
+
+    return useMemo(() => {
+        if (!data) return 0;
+
+        // Count anything that actually shows up in the user's list:
+        // ACTIVE and PAUSED (rules that are visible, just enforced or
+        // paused respectively). Mirrors the same `status !== DELETED &&
+        // status !== APPLIED` filter the backend listing endpoint
+        // applies, so the sidebar count stays consistent with what the
+        // Kody Rules page renders.
+        return data.filter(
+            (rule) =>
+                rule.status === KodyRulesStatus.ACTIVE ||
+                rule.status === KodyRulesStatus.PAUSED,
+        ).length;
+    }, [data]);
 };

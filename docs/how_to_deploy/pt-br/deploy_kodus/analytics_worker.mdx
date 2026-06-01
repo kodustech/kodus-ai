@@ -1,0 +1,159 @@
+---
+title: "Analytics Worker"
+description: "Worker de ingestão de analytics opcional para self-hosted Enterprise. Alimenta os dashboards do Cockpit (DORA, ciclo de vida, classifier)."
+icon: "chart-line"
+tag: "enterprise"
+---
+
+O analytics worker é um add-on **exclusivo do Enterprise**. Ele roda o cron
+de ingestão que alimenta os dashboards do Cockpit (métricas tipo DORA,
+ciclo de vida de PR, classifier de PR baseado em LLM).
+
+<Warning>
+O instalador padrão **não** inclui esse worker. Deploys self-hosted da
+versão community não precisam dele e essas vars são filtradas do
+`.env.example` padrão. Pare por aqui a menos que você tenha uma licença
+self-hosted Enterprise e queira os relatórios do Cockpit.
+</Warning>
+
+## O que ele faz
+
+Um processo Node separado rodando a **mesma imagem do `worker`**
+(`kodus-ai-worker`), selecionado no boot via `WORKER_ROLE=analytics`.
+Dois crons disparam desse processo e somente dele:
+
+- **Ingestão** (`ANALYTICS_INGESTION_CRON`, default `*/30 * * * *`) — lê
+  pull requests e sessões de review do Mongo + do Postgres OLTP, projeta
+  no schema `analytics`.
+- **Classifier** (`ANALYTICS_CLASSIFIER_CRON`, default `*/15 * * * *`) —
+  chama uma LLM pra classificar cada PR (feature/bugfix/refactor/etc).
+
+Isolar do `worker` principal mantém o event loop de code review livre
+de queries de ingestão longas.
+
+## Topologia
+
+O warehouse de analytics é um **schema** Postgres, não um banco
+separado. Dois layouts suportados:
+
+- **Postgres compartilhado (recomendado para self-hosted)** — deixe
+  `ANALYTICS_PG_DB_HOST` vazio. O config loader cai no fallback das vars
+  `API_PG_DB_*` e cria o schema `analytics` na mesma instância. Um banco
+  só pra fazer backup e operar.
+- **Postgres dedicado** — preencha o bloco `ANALYTICS_PG_DB_*` apontando
+  pra outra instância. Use isso quando quer queries analíticas totalmente
+  isoladas do write path do OLTP.
+
+```mermaid
+flowchart LR
+    api[api] --> pg[(Postgres OLTP)]
+    worker[worker] --> rabbitmq[(RabbitMQ)]
+    aw[worker-analytics] --> rabbitmq
+    aw --> pg
+    aw --> mg[(MongoDB)]
+    aw -.->|escreve| analytics[(Postgres • schema analytics)]
+    cockpit[Cockpit UI] --> analytics
+```
+
+## Habilitando no self-hosted Enterprise
+
+### 1. Adicione o serviço ao `docker-compose.yml`
+
+```yaml
+worker-analytics:
+    image: ghcr.io/kodustech/kodus-ai-worker:latest
+    platform: linux/amd64
+    container_name: kodus-worker-analytics
+    environment:
+        - ENV=production
+        - NODE_ENV=production
+        - WORKER_ROLE=analytics
+    networks:
+        - shared-network
+        - kodus-backend-services
+    restart: unless-stopped
+    env_file:
+        - .env
+    depends_on:
+        - db_kodus_postgres
+        - db_kodus_mongodb
+        - rabbitmq
+```
+
+A imagem é idêntica à do serviço `worker` — só `WORKER_ROLE=analytics`
+muda pra modo ingestão.
+
+### 2. Adicione o bloco de analytics ao `.env`
+
+**Postgres compartilhado (recomendado):**
+
+```bash
+# ANALYTICS_PG_DB_HOST vazio → loader reusa API_PG_DB_* e cria o
+# schema `analytics` na instância principal.
+ANALYTICS_PG_DB_HOST=
+ANALYTICS_PG_DB_SCHEMA=analytics
+
+# Cron schedules (UTC).
+ANALYTICS_INGESTION_CRON=*/30 * * * *
+ANALYTICS_CLASSIFIER_CRON=*/15 * * * *
+```
+
+**Postgres dedicado:**
+
+```bash
+ANALYTICS_PG_DB_HOST=seu-host-de-analytics
+ANALYTICS_PG_DB_PORT=5432
+ANALYTICS_PG_DB_USERNAME=analytics
+ANALYTICS_PG_DB_PASSWORD=...
+ANALYTICS_PG_DB_DATABASE=kodus_analytics
+ANALYTICS_PG_DB_SCHEMA=analytics
+
+ANALYTICS_INGESTION_CRON=*/30 * * * *
+ANALYTICS_CLASSIFIER_CRON=*/15 * * * *
+```
+
+### 3. Boot — migrations rodam automaticamente
+
+O container `worker-analytics` compartilha o mesmo `prod-entrypoint.sh`
+do `api`/`worker`/`webhooks`. Com `RUN_MIGRATIONS=true` (default do
+installer), as migrations do warehouse de analytics
+(`yarn analytics:migration:run:prod`) rodam no primeiro boot, criando
+o schema `analytics` e suas tabelas.
+
+## Referência
+
+| Variável | Descrição | Default |
+|---|---|---|
+| `WORKER_ROLE` | Tem que ser `analytics` nesse container. | _obrigatório_ |
+| `ANALYTICS_PG_DB_HOST` | Host do Postgres de analytics. Vazio → reusa o Postgres principal. | _vazio_ |
+| `ANALYTICS_PG_DB_PORT` | Porta do Postgres de analytics. | `5432` |
+| `ANALYTICS_PG_DB_USERNAME` | Usuário do Postgres de analytics. Vazio → reusa `API_PG_DB_USERNAME`. | _vazio_ |
+| `ANALYTICS_PG_DB_PASSWORD` | Senha do Postgres de analytics. Vazio → reusa `API_PG_DB_PASSWORD`. | _vazio_ |
+| `ANALYTICS_PG_DB_DATABASE` | Banco do Postgres de analytics. Vazio → reusa `API_PG_DB_DATABASE`. | _vazio_ |
+| `ANALYTICS_PG_DB_SCHEMA` | Nome do schema das tabelas do warehouse. | `analytics` |
+| `ANALYTICS_PG_POOL_MAX` | Limite superior do pool do Postgres de analytics. | `5` |
+| `ANALYTICS_INGESTION_CRON` | Cron schedule da ingestão (UTC). | `*/30 * * * *` |
+| `ANALYTICS_CLASSIFIER_CRON` | Cron schedule do classifier de tipo de PR via LLM (UTC). | `*/15 * * * *` |
+
+### Pausando a ingestão (avançado)
+
+Pra parar a ingestão em runtime sem remover o container, defina
+`ANALYTICS_INGESTION_DISABLED=true` e/ou `ANALYTICS_CLASSIFIER_DISABLED=true`
+e reinicie o `worker-analytics`. O cron continua agendado mas cada tick
+faz short-circuit. Use isso pra triagem de incidente, não como config
+de longo prazo — essas vars são gerenciadas primariamente para cloud e
+podem não aparecer no template do installer.
+
+## Verificando que está funcionando
+
+Após o boot, acompanhe os logs do analytics worker:
+
+```bash
+docker compose logs -f worker-analytics
+```
+
+Você deve ver linhas como `analytics ingestion done in NNNms — {...}` a
+cada 30 minutos e `analytics classifier done ...` a cada 15 minutos.
+Se não, confirme que `WORKER_ROLE=analytics` está setado só nesse
+container (não no `worker` principal — esse tem que continuar
+`code-review`).

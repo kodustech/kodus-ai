@@ -1,0 +1,144 @@
+---
+title: "合规性 PR 审查（SOC2、HIPAA）"
+description: "配置 Kody 规则和记忆以执行审计追踪、数据处理和访问控制要求。"
+icon: "file-shield"
+---
+
+## 为什么合规性需要自动化审查
+
+SOC2、HIPAA 和 GDPR 等合规框架要求围绕数据处理、访问控制和审计日志的特定编码实践。手动审查能发现一些违规，但不一致 — 特别是当审查者不是安全专家时。
+
+此 cookbook 设置在每个 PR 上执行合规要求的规则。
+
+## 步骤 1 — 定义合规记忆
+
+首先教 Kody 高级别的合规原则：
+
+```
+@kody remember: we are SOC2 compliant. All data access must be logged
+with who accessed what, when, and from where.
+```
+
+```
+@kody remember: PII (personally identifiable information) must never
+appear in logs, error messages, or API responses. PII includes:
+name, email, phone, address, SSN, date of birth, IP address.
+```
+
+```
+@kody remember: all data at rest must be encrypted. Database fields
+containing PII must use application-level encryption.
+```
+
+```
+@kody remember: access control follows least privilege principle.
+New endpoints default to authenticated + authorized, never public.
+```
+
+## 步骤 2 — 创建审计追踪规则
+
+### 审计日志规则
+
+```
+名称：数据变更必须有审计日志
+范围：文件
+路径：src/services/**/*.ts, src/repositories/**/*.ts
+严重性：严重
+说明：
+  如果 fileDiff 包含对用户数据或敏感记录的创建、更新或删除操作，
+  验证是否创建了审计日志条目。查找对 auditService.log()、
+  AuditLogger 或 @Audited 装饰器的调用。
+  参考 @file:src/shared/audit/audit.service.ts 了解批准的审计模式。
+```
+
+### 数据保留规则
+
+```
+名称：用户数据需要软删除
+范围：文件
+路径：src/**/*.ts
+严重性：严重
+说明：
+  标记任何对包含用户数据的表/集合的硬删除
+  （DELETE FROM、.delete()、.destroy()）。
+  用户数据必须使用软删除（deletedAt 时间戳）
+  以符合数据保留政策。
+```
+
+## 步骤 3 — 创建数据处理规则
+
+### PII 暴露防护
+
+```
+名称：日志或错误响应中禁止 PII
+范围：文件
+路径：src/**/*.ts
+严重性：严重
+说明：
+  检查 fileDiff 中可能包含 PII 字段的日志语句（logger.*、console.*）
+  和错误响应构建器：email、name、phone、address、ssn、dateOfBirth、ipAddress。
+  这些必须在日志/响应之前被编辑或排除。
+```
+
+### 加密要求
+
+```
+名称：PII 字段必须使用加密助手
+范围：文件
+路径：src/entities/**/*.ts, src/models/**/*.ts
+严重性：严重
+说明：
+  如果 fileDiff 添加或修改了包含 PII 的实体/模型字段（见上述列表），
+  验证它们使用 @Encrypted 装饰器或 encryptionService 助手。
+  参考 @file:src/shared/encryption/encryption.service.ts。
+```
+
+## 步骤 4 — 创建访问控制规则
+
+```
+名称：新端点必须有认证守卫
+范围：拉取请求
+严重性：严重
+说明：
+  检查 pr_files_diff 中的新路由定义或控制器方法。
+  每个新端点必须包含：
+  1. 认证守卫（@UseGuards(AuthGuard)）
+  2. 授权装饰器（@Roles 或 @Permissions）
+  3. 速率限制（@Throttle 或等效）
+  如果任何端点有意公开，必须有显式的 @Public() 装饰器
+  并附带解释原因的代码注释。
+```
+
+## 步骤 5 — 添加 PR 级合规检查
+
+```
+名称：合规影响评估
+范围：拉取请求
+严重性：高
+说明：
+  如果 pr_files_diff 涉及 src/entities/、src/models/
+  或数据库迁移中的任何文件，检查是否：
+  1. 记录了处理 PII 的新字段
+  2. 在 pr_description 中注明了数据流变更
+  3. 考虑了隐私影响
+  如果 PR 添加了新的数据收集，标记进行隐私审查。
+```
+
+## 步骤 6 — 配置执行
+
+1. 启用**请求更改**使合规违规阻止合并
+2. 将所有合规规则设置为**严重**级别
+3. 使用规则继承在组织中所有代码库应用合规规则
+
+## 检查清单
+
+- [ ] 合规记忆教授高级别原则
+- [ ] 审计日志规则覆盖所有数据变更路径
+- [ ] PII 暴露规则覆盖日志和错误响应
+- [ ] 加密规则覆盖实体/模型定义
+- [ ] 访问控制规则覆盖所有新端点
+- [ ] 为严重发现启用请求更改
+- [ ] 规则设置在组织级别以保持一致性
+- [ ] 测试 PR 验证规则正确触发
+
+有关配置规则的更多信息，请参阅 [Kody 规则](/how_to_use/en/code_review/configs/kody_rules)。

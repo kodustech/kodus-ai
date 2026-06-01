@@ -1,0 +1,129 @@
+## 系统要求
+
+<AccordionGroup>
+  <Accordion title="推荐硬件">
+    按默认 `local` 沙箱模式（kodus-graph + cross-file context 在 worker
+    容器内运行）调整大小。
+
+    - **CPU**: 2+ 核心（约 100k LOC 以上的仓库推荐 4+ 核心）
+    - **RAM**: 8GB+（在大型仓库上运行 `local` 沙箱时推荐 16GB）
+    - **存储**: 60GB+ 可用空间（Postgres 保存 AST 图缓存；
+      随仓库数量和 PR 量增长）
+  </Accordion>
+  <Accordion title="必需软件">
+    - **Docker**（最新稳定版）以及 Compose 插件
+    - **域名或固定 IP**（如果您要从云端 Git 提供商
+      （GitHub.com、GitLab.com 等）接收 webhook）
+  </Accordion>
+  <Accordion title="必需端口">
+    默认主机端口映射 — 如果发生冲突，请在 `.env` 中调整。
+
+    - **3000** — Kodus Web App
+    - **3001** — API
+    - **3332** — Webhooks
+    - **5432** — PostgreSQL
+    - **27017** — MongoDB
+    - **5672, 15672, 15692** — RabbitMQ（AMQP、管理 UI、指标）
+    - **3101** — MCP Manager _（仅当 `API_MCP_SERVER_ENABLED=true` 时）_
+  </Accordion>
+  <Accordion title="服务">
+    `./scripts/install.sh` 根据您的 `.env` 启动的内容。
+
+    **核心（始终运行）：**
+    - `api` — 主后端
+    - `worker` — code review 作业
+    - `webhooks` — Git 提供商 webhook 接收器
+    - `kodus-web` — Next.js 前端
+    - `db_kodus_postgres`、`db_kodus_mongodb`、`rabbitmq` —
+      本地基础设施。使用 `USE_LOCAL_DB=false` /
+      `USE_LOCAL_RABBITMQ=false` 跳过以指向托管实例。
+
+    **可选：**
+    - `kodus-mcp-manager` — Model Context Protocol broker。通过
+      `API_MCP_SERVER_ENABLED=true` 启用。请参阅
+      [MCP Manager](/how_to_deploy/zh/deploy_kodus/mcp_manager)。
+    - `worker-analytics` — Cockpit 摄取（DORA 指标、PR classifier）。
+      **仅限自托管企业版**，默认不连接。请参阅
+      [Analytics Worker](/how_to_deploy/zh/deploy_kodus/analytics_worker)。
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  Code review 使用在沙箱中运行的 AST 图 + cross-file 上下文 —
+  `local`（默认，在 worker 内运行）或 `e2b`（付费远程沙箱）。
+  有关模式、缓存行为以及何时选择每种模式，请参阅
+  [Sandbox & AST Graph](/how_to_deploy/zh/deploy_kodus/sandbox)。
+</Note>
+
+<Note>
+  **如果您计划连接云端 Git 服务（GitHub、GitLab、Bitbucket）或云端 LLM 提供商（OpenAI、Anthropic 等），则需要互联网访问。** 对于内网自托管的 Git 工具和本地/自托管 LLM，外网访问是可选的。
+</Note>
+
+## 域名设置（可选）
+
+If you're planning to integrate Kodus with cloud-based Git providers (GitHub, GitLab, or Bitbucket), you'll need public-facing URLs for both the Kodus Web App and its API. This allows your server to receive webhooks for proper Code Review functionality and ensures correct application behavior.
+
+We recommend setting up two subdomains:
+- One for the Web Application, e.g., `kodus-web.yourdomain.com`.
+- One for the API, e.g., `kodus-api.yourdomain.com`.
+
+Webhook 由独立服务处理（端口 3332）。您可以选择：
+- 使用独立的 webhook 子域名，例如 `kodus-webhooks.yourdomain.com`，或
+- 继续使用 API 域名，并在反向代理中将 `/github/webhook`、`/gitlab/webhook` 等路径转发到 webhook 服务。
+
+Both subdomains should have DNS A records pointing to your server's IP address. Later in this guide, we will configure a reverse proxy (Nginx) to route requests to these subdomains to the correct internal services. This setup is essential for full functionality, including webhooks and authentication.
+
+> **Note**: If you're only connecting to self-hosted Git tools on your network and do not require public access or webhooks, you might be able to use a simpler setup, but this guide focuses on public-facing deployments.
+
+## Setup
+
+<Steps>
+  <Step title="Clone the installer repository">
+    ```bash
+    git clone https://github.com/kodustech/kodus-installer.git
+    cd kodus-installer
+    ```
+  </Step>
+  <Step title="Copy the example environment file">
+    ```bash
+    cp .env.example .env
+    ```
+  </Step>
+  <Step title="Generate secure keys for the required environment variables">
+    ```bash
+    ./generate-keys.sh
+    ```
+  </Step>
+  <Step title="Edit the environment file">
+    Edit `.env` with your values using your preferred text editor. 
+    ```bash
+    nano .env
+    ```
+
+    详细说明请参见 [环境变量配置](/how_to_deploy/zh/deploy_kodus/generic_vm)。  
+  </Step>
+
+  <Step title="Run the installer">
+    ```bash
+    ./scripts/install.sh
+    ```
+  </Step>
+  <Step title="Success 🎉">
+  When complete, Kodus Services should be running on your machine.
+  You can verify your installation using the following script:
+  ```bash
+  ./scripts/doctor.sh
+  ```
+  </Step>
+  <Step title="Access the web interface">
+    Once you access the web interface for the first time, you'll need to:
+
+1. **Create your admin account** - This will be the first user with full system access
+2. **Configure your Git provider** - Connect GitHub, GitLab, or Bitbucket following the on-screen instructions
+3. **Select repositories** for analysis - Choose which code repositories Kody will review
+
+<Info>
+  详细步骤请参见 [快速开始指南](/how_to_use/zh/quickstart)。
+</Info>
+  </Step>
+</Steps>

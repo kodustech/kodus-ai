@@ -1,0 +1,78 @@
+---
+title: "Desglose del Lead Time"
+description: "Desglosa tu ciclo de desarrollo en fases de codificación, recogida y revisión"
+---
+
+## Qué es el Desglose del Lead Time
+
+El Desglose del Lead Time te da una vista detallada de tu proceso de desarrollo al dividir el tiempo total del ciclo en tres fases clave: tiempo de codificación, tiempo de recogida y tiempo de revisión. Esto te ayuda a identificar exactamente dónde ocurren los cuellos de botella en tu flujo de trabajo.
+
+## Cómo lo Calculamos
+
+Rastreamos automáticamente el tiempo invertido en cada fase de tu proceso de desarrollo, desde el primer commit hasta la fusión del PR.
+
+**Lo que Rastreamos:**
+- **Tiempo de Codificación**: Tiempo de desarrollo activo (desde el primer commit hasta el último commit)
+- **Tiempo de Recogida**: Tiempo entre el último commit y la creación del PR
+- **Tiempo de Revisión**: Tiempo desde la creación del PR hasta la fusión
+
+**Lo que No Contamos:**
+- Tiempo antes del primer commit (planificación, diseño)
+- Tiempo después de la fusión (despliegue, etc.)
+- PRs fallidos o abandonados
+
+**Cómo se Calcula:**
+```
+Tiempo de Codificación = (Hora del Último Commit) - (Hora del Primer Commit)
+Tiempo de Recogida = (Hora de Apertura del PR) - (Hora del Último Commit)  
+Tiempo de Revisión = (Hora de Cierre del PR) - (Hora de Apertura del PR)
+```
+
+Usamos el percentil 75 (P75) para cada fase para filtrar los valores atípicos y mostrarte el rendimiento típico.
+
+## Por qué es Importante
+
+Comprender dónde se invierte el tiempo te ayuda a optimizar la parte correcta de tu proceso:
+
+- **Tiempo de Codificación**: Muestra la eficiencia del desarrollo
+- **Tiempo de Recogida**: Revela cuellos de botella en el flujo de trabajo
+- **Tiempo de Revisión**: Indica la efectividad del proceso de revisión
+
+## Cómo Mejorar
+
+### Reducir el Tiempo de Codificación
+- **Requisitos Claros**: Asegurarse de que los desarrolladores entiendan qué construir
+- **Funciones Más Pequeñas**: Dividir los cambios grandes en partes manejables
+- **Programación en Pareja**: Colaborar para resolver problemas complejos más rápido
+- **Reutilización de Código**: Aprovechar los patrones y componentes existentes
+
+### Reducir el Tiempo de Recogida
+- **Creación Inmediata del PR**: Crear PRs justo después de terminar el código
+- **Automatización del Flujo de Trabajo**: Usar herramientas para optimizar la creación de PRs
+- **Definición Clara de "Terminado"**: Saber exactamente cuándo el código está listo
+- **Reducir el Cambio de Contexto**: Centrarse en completar una tarea a la vez
+
+### Reducir el Tiempo de Revisión
+- **Pautas de Revisión**: Establecer expectativas claras para los revisores
+- **Verificaciones Automatizadas**: Usar herramientas para detectar problemas antes de la revisión
+- **Rotación de Revisiones**: Distribuir la carga de trabajo de revisión en el equipo
+- **Respuestas Rápidas**: Responder con prontitud a los comentarios de revisión
+
+## Cuellos de Botella Comunes
+
+### Tiempo de Codificación
+- **Requisitos Poco Claros**: Los desarrolladores no saben qué construir
+- **Funciones Complejas**: Cambios demasiado grandes o complejos
+- **Deuda Técnica**: Trabajar alrededor de problemas de código existentes
+- **Dependencias**: Esperar otros componentes o servicios
+
+### Tiempo de Recogida
+- **Ineficiencia del Flujo de Trabajo**: Pasos manuales que ralentizan el proceso
+- **Cambio de Contexto**: Moverse entre múltiples tareas
+- **Falta de Automatización**: Creación y configuración manual de PRs
+
+### Tiempo de Revisión
+- **PRs Grandes**: Cambios demasiado grandes para revisar rápidamente
+- **Disponibilidad de Revisores**: No hay suficientes personas disponibles para revisar
+- **Cambios Poco Claros**: PRs difíciles de entender
+- **Backlog de Revisión**: Demasiados PRs esperando revisión

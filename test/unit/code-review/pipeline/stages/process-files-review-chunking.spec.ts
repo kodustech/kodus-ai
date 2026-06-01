@@ -4,9 +4,8 @@ import { SUGGESTION_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/Sug
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { FILE_REVIEW_CONTEXT_PREPARATION_TOKEN } from '@libs/core/domain/interfaces/file-review-context-preparation.interface';
 import { KODY_FINE_TUNING_CONTEXT_PREPARATION_TOKEN } from '@libs/core/domain/interfaces/kody-fine-tuning-context-preparation.interface';
-import { KODY_AST_ANALYZE_CONTEXT_PREPARATION_TOKEN } from '@libs/core/domain/interfaces/kody-ast-analyze-context-preparation.interface';
 import { CodeAnalysisOrchestrator } from '@libs/ee/codeBase/codeAnalysisOrchestrator.service';
-import { ASTContentFormatterService } from '@libs/code-review/infrastructure/adapters/services/astContentFormatter.service';
+import { GraphContentFormatter } from '@libs/code-review/infrastructure/adapters/services/graphContentFormatter.service';
 import {
     AnalysisContext,
     CodeSuggestion,
@@ -102,14 +101,6 @@ const mockKodyFineTuningContextPreparation = {
     ),
 };
 
-const mockKodyAstAnalyzeContextPreparation = {
-    prepareKodyASTAnalyzeContext: jest.fn(() => ({ codeSuggestions: [] })),
-};
-
-const mockAstContentFormatter = {
-    fetchFormattedContent: jest.fn(() => new Map()),
-};
-
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
@@ -141,16 +132,14 @@ describe('ProcessFilesReview – file content chunking', () => {
                     useValue: mockKodyFineTuningContextPreparation,
                 },
                 {
-                    provide: KODY_AST_ANALYZE_CONTEXT_PREPARATION_TOKEN,
-                    useValue: mockKodyAstAnalyzeContextPreparation,
-                },
-                {
                     provide: CodeAnalysisOrchestrator,
                     useValue: mockCodeAnalysisOrchestrator,
                 },
                 {
-                    provide: ASTContentFormatterService,
-                    useValue: mockAstContentFormatter,
+                    provide: GraphContentFormatter,
+                    useValue: {
+                        formatContent: jest.fn().mockResolvedValue(new Map()),
+                    },
                 },
             ],
         }).compile();
@@ -225,9 +214,6 @@ describe('ProcessFilesReview – file content chunking', () => {
                 patchWithLinesStr: file.patchWithLinesStr || file.patch,
                 hasRelevantContent: true,
             },
-            tasks: {
-                astAnalysis: { status: 'completed' },
-            } as any,
             ...overrides,
         } as any;
     }
@@ -341,7 +327,7 @@ describe('ProcessFilesReview – file content chunking', () => {
 
             // Each chunk analysis returns 1 suggestion
             mockCodeAnalysisOrchestrator.executeStandardAnalysis.mockImplementation(
-                async (_org, _pr, fileContext) => ({
+                async (_org, _pr, _fileContext) => ({
                     codeSuggestions: [
                         makeSuggestion(
                             `s-${mockCodeAnalysisOrchestrator.executeStandardAnalysis.mock.calls.length}`,

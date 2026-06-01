@@ -1,0 +1,584 @@
+---
+title: "BYOK - 自带密钥"
+description: "配置您自己的 API 密钥以获得最大灵活性和成本控制。所有 Kodus 套餐均可用。"
+---
+
+BYOK(自带密钥)是 **Kodus 在所有套餐中使用 LLM 的默认方式** — 社区版、团队版和企业版都一样。您连接自己的提供商账号、选择模型、只为实际使用付费,并直接在提供商的仪表板中监控成本。Kodus 从不对 token 加价,也不会以明文形式看到您的密钥。
+
+<Card
+  title="如何对应到各套餐"
+  icon="scale-balanced"
+  href="/how_to_use/zh/pricing#byok-是所有套餐的默认方式"
+>
+  BYOK 在社区版免费、在团队版包含(每活跃开发 $10/月,另外支付您自己的 token 费用)、在企业版是两个选项之一(另一个是 Kodus 托管的 API 密钥)。
+</Card>
+
+## 入门
+
+BYOK 界面提供两条路径:从精选目录中选择一个**推荐模型**(最快路径,覆盖 90% 的情况),或**手动配置任意提供商**(用于自定义端点或未被精选的模型的逃生通道)。
+
+<Steps>
+  <Step title="打开 BYOK 设置">
+    访问 [app.kodus.io/organization/byok](https://app.kodus.io/organization/byok)。
+  </Step>
+
+  <Step title="选择一个推荐模型">
+    **主模型**部分展示了我们为代码审查评测过的精选模型网格。点击任意卡片即可开始连接。
+  </Step>
+
+  <Step title="粘贴 API 密钥并测试">
+    每张卡片会内嵌展开,只有一个输入框 — 仅需 API 密钥。点击**测试**以探测提供商,或点击**测试并保存**以在测试成功后持久化配置。
+  </Step>
+
+  <Step title="添加备用模型(推荐)">
+    主模型配置完成后,会显示**备用模型**部分。如果主提供商遇到速率限制或宕机,Kodus 会自动回退到备用模型。
+  </Step>
+</Steps>
+
+<Info>
+  **保存前先测试。** **测试**按钮会通过一次低成本的元数据调用(不进行 LLM 推理)来探测您的提供商。它能在第一次代码审查被破坏前,捕获无效密钥、错误的基础 URL 以及网络问题。
+</Info>
+
+## 推荐模型
+
+这六个模型针对代码审查进行了精选。它们都在 `/organization/byok` 的目录中展示,并预先调整好了合理的默认值(温度、最大输出 token 数,以及推理强度设为 `medium`)。
+
+<CardGroup cols={2}>
+  <Card title="Claude Sonnet 4.6" icon="crown">
+    **质量与成本的最佳平衡**
+
+    Anthropic 最新的 Sonnet。自适应扩展思考、强大的跨文件分析,200K 上下文窗口。
+
+    - **提供商:** Anthropic
+    - **模型 ID:** `claude-sonnet-4-6`
+    - **密钥:** [console.anthropic.com](https://console.anthropic.com/settings/keys)
+  </Card>
+
+  <Card title="Claude Opus 4.7" icon="star">
+    **旗舰质量**
+
+    Anthropic 的顶级模型,应对最难的审查任务。1M 上下文,高端价格。
+
+    - **提供商:** Anthropic
+    - **模型 ID:** `claude-opus-4-7`
+    - **密钥:** [console.anthropic.com](https://console.anthropic.com/settings/keys)
+  </Card>
+
+  <Card title="Gemini 3.1 Pro(自定义工具)" icon="brain">
+    **最大上下文**
+
+    Google 的旗舰模型,支持自定义工具。1M 上下文窗口 — 在大型 PR 和 monorepo 上最强。
+
+    - **提供商:** Google Gemini
+    - **模型 ID:** `gemini-3.1-pro-preview-customtools`
+    - **密钥:** [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+  </Card>
+
+  <Card title="GPT-5.4" icon="sparkles">
+    **快速且稳定**
+
+    OpenAI 最新的旗舰模型。低延迟可靠、知识面广,400K 上下文。
+
+    - **提供商:** OpenAI
+    - **模型 ID:** `gpt-5.4`
+    - **密钥:** [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+  </Card>
+
+  <Card title="Kimi K2.6 Coding" icon="moon">
+    **专攻编码,价格便宜**
+
+    Moonshot AI 的编码调优模型。两种方案:开发者 API(按 token 付费)或 Kimi Code Plan(带专用端点的订阅)。
+
+    - **提供商:** OpenAI 兼容(Moonshot AI)
+    - **模型 ID:** `kimi-k2.6`
+    - **密钥:** [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) 或 [kimi.com/code](https://www.kimi.com/code)
+  </Card>
+
+  <Card title="GLM 5.1" icon="bolt">
+    **最佳订阅价值**
+
+    Z.ai 最新模型。两种方案:开发者 API(按 token 付费)或 GLM Coding Plan(统一定价的订阅)。
+
+    - **提供商:** OpenAI 兼容(Z.ai)
+    - **模型 ID:** `glm-5.1`
+    - **密钥:** [z.ai console](https://z.ai/manage-apikey/apikey-list) 或 [z.ai/subscribe](https://z.ai/subscribe)
+  </Card>
+</CardGroup>
+
+<Info>
+  **我们的默认推荐:**从 **Claude Sonnet 4.6** 开始以获得最佳整体代码审查体验。如果成本是优先考虑项,**GLM 5.1 的 Coding Plan** 或 **Kimi K2.6 的 Kimi Code Plan** 提供统一月费的订阅,能封顶您的月度开销。
+</Info>
+
+## 方案选择器(GLM 5.1 和 Kimi K2.6)
+
+Z.ai 和 Moonshot 都在按 token 付费的开发者 API 之外提供一个订阅方案,其**端点与开发者 API 不同**。这两个模型的精选卡片都带一个**Plan** 选择器,方便您在粘贴密钥前选择正确的端点。
+
+<Tabs>
+  <Tab title="GLM 5.1 (Z.ai)">
+    | 方案 | 端点 | 密钥来源 | 适合场景 |
+    | --- | --- | --- | --- |
+    | **Developer API** | `https://api.z.ai/api/paas/v4/` | [z.ai/manage-apikey](https://z.ai/manage-apikey/apikey-list) | 波动性负载,按 token 付费 |
+    | **Coding Plan** | `https://api.z.ai/api/coding/paas/v4` | [z.ai/subscribe](https://z.ai/subscribe) | 稳定的团队流量,统一月费 |
+
+    <Warning>
+      GLM Coding Plan 密钥**只能**在 `/api/coding/paas/v4` 上工作。Lite 和 Pro 档位通常限制为**1 个并发请求** — 当您选择该方案时,Kodus 会预填 `maxConcurrentRequests=1`。如果您使用 Max 档位(最多 30),请在高级设置中上调。
+    </Warning>
+  </Tab>
+
+  <Tab title="Kimi K2.6 (Moonshot AI)">
+    | 方案 | 端点 | 密钥来源 | 适合场景 |
+    | --- | --- | --- | --- |
+    | **Developer API** | `https://api.moonshot.ai/v1` | [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) | 按 token 付费,并发随充值档位伸缩 |
+    | **Kimi Code Plan** | `https://api.kimi.com/coding/v1` | [kimi.com/code](https://www.kimi.com/code) | 带专用编码端点的订阅 |
+
+    <Info>
+      Kimi Code Plan 文档记录的上限为 30 个并发请求。您选择该方案时 Kodus 会预填 `maxConcurrentRequests=30`。
+    </Info>
+  </Tab>
+</Tabs>
+
+## 手动配置
+
+如果您想要的模型不在精选列表中(自定义端点、自托管 LLM,或我们尚未评测的提供商),请点击目录底部的**手动配置**。这会打开 `/organization/byok/manual?slot=main` — 一个分步向导:
+
+<Steps>
+  <Step title="选择提供商">
+    从 OpenAI、Anthropic、Google Gemini、OpenRouter、Novita 或 **OpenAI Compatible**(用于任意 OpenAI 格式的端点)中选择。
+  </Step>
+
+  <Step title="输入基础 URL(如需要)">
+    OpenAI 兼容的提供商需要显式指定基础 URL。该字段仅在选择该提供商时出现。
+  </Step>
+
+  <Step title="选择或输入模型 ID">
+    如果 Kodus 能从提供商列出模型,您会看到下拉菜单。否则(例如自托管或未配置平台密钥时)需要手动输入精确的模型 ID。
+  </Step>
+
+  <Step title="粘贴 API 密钥">
+    密钥字段会在提供商和模型设定后出现。
+  </Step>
+
+  <Step title="调整高级设置(可选)">
+    温度、最大 token 数、推理强度和最大并发请求数 — 全部可选。对大多数提供商来说,默认值都是合理的。
+  </Step>
+
+  <Step title="测试并保存">
+    点击**测试并保存**以运行连接探测,成功后持久化。
+  </Step>
+</Steps>
+
+<Tip>
+  相同的手动路径同样适用于备用模型 — 使用 `?slot=fallback` 导航,或在主模型保存后使用**添加备用**链接。
+</Tip>
+
+## 支持的提供商
+
+<Tabs>
+  <Tab title="OpenAI">
+    **最适合:**最新 GPT 模型和可靠性能。
+
+    **获取 API 密钥:**
+    1. 访问 [OpenAI API Keys](https://platform.openai.com/api-keys)
+    2. 为 Kodus 创建新密钥
+    3. 添加计费信息
+  </Tab>
+
+  <Tab title="Google Gemini">
+    **最适合:**大上下文审查(1M tokens)与竞争性定价。
+
+    **获取 API 密钥:**
+    1. 前往 [Google AI Studio](https://aistudio.google.com/app/apikey)
+    2. 创建新密钥
+    3. 在 Google Cloud Console 中启用计费
+  </Tab>
+
+  <Tab title="Anthropic Claude">
+    **最适合:**细致的分析和自适应扩展思考。
+
+    **获取 API 密钥:**
+    1. 访问 [Anthropic Console](https://console.anthropic.com/)
+    2. 创建账号并生成密钥
+    3. 添加积分
+  </Tab>
+
+  <Tab title="Novita AI">
+    **最适合:**以竞争性价格访问开源模型。
+
+    **获取 API 密钥:**
+    1. 在 [Novita AI](https://novita.ai/) 注册
+    2. 导航到 API 设置
+    3. 生成密钥
+
+    <Card title="Novita 设置指南" icon="rocket" href="/cookbook/zh/novita">
+      带截图的详细设置。
+    </Card>
+  </Tab>
+
+  <Tab title="OpenRouter">
+    **最适合:**通过一个计费关系访问多个模型。
+
+    **获取 API 密钥:**
+    1. 在 [OpenRouter](https://openrouter.ai/) 创建账号
+    2. 添加积分
+    3. 在设置中生成密钥
+
+    <Warning>
+      OpenRouter 默认会将每次请求路由到不同的上游提供商,这会导致不同调用之间出现质量和延迟漂移。请在 Advanced settings → OpenRouter routing 下**固定特定的上游**以保持行为稳定。参见 [固定 OpenRouter 上游提供商](#固定-openrouter-上游提供商)。
+    </Warning>
+  </Tab>
+
+  <Tab title="OpenAI Compatible">
+    **最适合:**专业提供商(Moonshot、Z.ai、Fireworks、Together、Groq、DeepSeek)或自托管端点。
+
+    **如何配置:**
+    1. 在手动向导中选择 **OpenAI Compatible** 作为提供商。
+    2. 输入基础 URL(例如 `https://api.moonshot.ai/v1`、`https://api.z.ai/api/paas/v4/`、`https://api.fireworks.ai/inference/v1`)。
+    3. 提供密钥和模型 ID。
+
+    <CardGroup cols={2}>
+      <Card title="Z.ai (GLM) 指南" href="/knowledge_base/zh/how-to-use-z-ai-with-kodus" icon="bolt">
+        包含 Coding Plan 细节的完整 Z.ai 设置。
+      </Card>
+      <Card title="Moonshot (Kimi) 指南" href="/knowledge_base/zh/how-to-use-moonshot-with-kodus" icon="moon">
+        Kimi K2.6 + Kimi Code Plan 设置。
+      </Card>
+      <Card title="Fireworks AI" href="/knowledge_base/zh/how-to-use-fireworks-with-kodus" icon="fire">
+        Fireworks 专属设置。
+      </Card>
+      <Card title="Together AI" href="/knowledge_base/zh/how-to-use-together-ai-with-kodus" icon="handshake">
+        Together AI 设置。
+      </Card>
+    </CardGroup>
+  </Tab>
+</Tabs>
+
+## 推理 / 扩展思考
+
+所有六个推荐模型都支持推理。BYOK 表单在**高级设置**下提供一个 **Thinking** 开关(Off / Low / Medium / High / Custom),每个推荐模型默认为 **Medium**。
+
+### 预设级别
+
+当您选择 Low / Medium / High 时,Kodus 会自动将该级别转换为每个提供商的原生格式:
+
+| 提供商 | "medium" 如何映射 |
+| --- | --- |
+| **Anthropic**(Claude Sonnet 4.6 / Opus 4.7) | `thinking: { type: "adaptive" }` + `outputConfig: { effort: "medium" }` |
+| **Google**(Gemini 3.1 Pro) | `thinkingConfig: { thinkingLevel: "medium" }` |
+| **OpenAI**(GPT-5.4) | `reasoningEffort: "medium"` |
+| **OpenRouter** | `reasoning: { effort: "medium" }` |
+| **OpenAI 兼容**(Kimi K2.6 / GLM 5.1) | `thinking: { type: "enabled" }` — 二元开关,级别被忽略 |
+
+<Note>
+  Kimi 和 GLM 目前将推理暴露为单一的开/关标志。选择 Low、Medium 或 High 都会发出相同的 payload(启用 thinking)。当它们的 API 支持级别粒度时,Kodus 会开始转发。
+</Note>
+
+### 自定义 JSON 覆盖
+
+在 Thinking 开关中选择 **Custom** 会显示一个 JSON 文本框。直接粘贴提供商选项 — **Kodus 会自动把它们包裹在当前提供商的命名空间下**。您无需了解 Vercel AI SDK 的路由规则。
+
+在以下情况使用:
+
+- 您需要为 Claude 设置特定的 `budgetTokens` 值(而不是预设的 effort 映射)
+- 您希望针对 OpenAI 兼容提供商按模型启用/禁用 thinking
+- 您想设置推理之外的字段 — **缓存、服务档位、安全设置、`user` 标签等**。覆盖会被合并进 `providerOptions`,因此任何适配器字段都可以透传
+- 提供商发布了一个 Kodus 尚未映射的新字段
+
+#### 示例(直接粘贴 — 无需命名空间)
+
+<Tabs>
+  <Tab title="Anthropic">
+    将 Claude 的思考预算精确覆盖为 20,000 tokens:
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budgetTokens": 20000 }
+    }
+    ```
+
+    启用提示缓存(非推理示例):
+
+    ```json
+    {
+      "cacheControl": { "type": "ephemeral" }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Google Gemini">
+    显式思考预算(Gemini 2.5)或级别(Gemini 3+):
+
+    ```json
+    {
+      "thinkingConfig": { "thinkingBudget": 16000 }
+    }
+    ```
+
+    调整安全设置:
+
+    ```json
+    {
+      "safetySettings": [
+        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE" }
+      ]
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI">
+    结合 OpenAI 特有字段的推理配置:
+
+    ```json
+    {
+      "reasoningEffort": "high",
+      "serviceTier": "flex",
+      "store": false,
+      "user": "kodus-review"
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenRouter">
+    强制推理并忽略特定上游:
+
+    ```json
+    {
+      "reasoning": { "effort": "high" },
+      "ignore": ["deepinfra"]
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI 兼容(Kimi、GLM 等)">
+    启用 thinking 并带上预算提示:
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budget_tokens": 25000 }
+    }
+    ```
+
+    显式禁用 thinking:
+
+    ```json
+    {
+      "thinking": { "type": "disabled" }
+    }
+    ```
+
+    <Warning>
+      上游提供商不识别的字段(例如某台服务器忽略的 `budget_tokens`)会被静默丢弃。请查阅提供商文档确认他们接受什么。
+    </Warning>
+  </Tab>
+</Tabs>
+
+#### 手动指定命名空间(进阶用户)
+
+如果您的 JSON 顶层已经包含一个已知的命名空间键(`anthropic`、`google`、`openai`、`openrouter`、`openaiCompatible`),Kodus 会保持原样不动。当您想混合多个提供商命名空间或希望显式书写时很有用:
+
+```json
+{
+  "openrouter": {
+    "reasoning": { "effort": "high" },
+    "provider": { "order": ["moonshot"], "allow_fallbacks": false }
+  }
+}
+```
+
+在底层,Kodus 使用以下命名空间映射:
+
+| BYOK 提供商 | 命名空间键 |
+| --- | --- |
+| `anthropic` | `anthropic` |
+| `google_gemini` / `google_vertex` | `google` |
+| `openai` | `openai` |
+| `open_router` | `openrouter` |
+| `openai_compatible` / `novita` | `openaiCompatible` |
+
+#### 注意事项
+
+- **仅支持有效的 JSON。** 遗漏逗号或尾随逗号会破坏解析,Kodus 会忽略覆盖。
+- **优先级:**JSON 覆盖会**完全替换** effort 预设对应的命名空间块 — 如果您覆盖了 `anthropic.thinking` 但漏掉 `anthropic.outputConfig`,那个字段就不会被发送。OpenRouter routing(固定提供商 / 允许回退)是唯一例外:它会与您在 `openrouter` 下的覆盖进行深度合并。
+- **未知提供商 = 不自动包裹。** 如果您的 BYOK 提供商不在上表中,Kodus 会原样透传 JSON。这种情况很少见 — 仅在配置 Kodus 不识别的提供商时才会发生。
+
+## 固定 OpenRouter 上游提供商
+
+OpenRouter 是一个路由器 — 当您请求某个模型(例如 `moonshotai/kimi-k2.5`)时,它会将调用转发到若干上游提供商之一(Moonshot 直连、Together、Groq、Fireworks、Novita……)。每次调用都可能落到不同的后端。这很方便,但会引入隐性的差异:
+
+- **质量漂移** — 上游以不同精度运行(FP8、INT4、完整),对相同提示会给出微妙不同的输出
+- **工具调用不一致** — 一些后端对函数调用的支持方式不同,会导致格式错误的工具使用
+- **推理格式差异** — 一个上游支持 `reasoning_effort`,另一个只支持 `thinking.enabled`,还有的两者都忽略
+- **延迟波动** — 随着路由变化,p50 可能在两次调用之间从 800ms 跳到 4s
+- **速率限制意外** — 您会在自己未显式选择的后端上撞到配额
+
+### 如何固定
+
+当您的 BYOK 提供商是 **OpenRouter** 时,Advanced settings 面板会显示一个 **OpenRouter routing** 区块,包含两个字段:
+
+- **Pin providers (in order)** — 上游名称的逗号分隔列表(例如 `moonshot, together`)。OpenRouter 会按顺序尝试,并使用第一个可用的。
+- **Allow fallbacks** — 关闭时,若没有任何被固定的提供商可用,请求会硬失败。开启时(默认),OpenRouter 可以回退到任意其他服务该模型的上游。
+
+<Tip>
+  为了获得**稳定**的配置,请只固定一个提供商并关闭回退(`Pin: moonshot`、`Allow fallbacks: off`)。请求将始终命中同一个上游,或响亮地失败 — 不会有隐性的质量变化。代价是一旦那个上游宕机就完全没有韧性;请搭配一个不同的 BYOK 备用模型(例如 Anthropic)来吸收中断。
+</Tip>
+
+<Warning>
+  上游名称必须与 OpenRouter 的目录一致。请在 [openrouter.ai/docs/features/provider-routing](https://openrouter.ai/docs/features/provider-routing) 上查看提供商标签 — 常见值包括 `moonshot`、`together`、`groq`、`fireworks`、`novita`。
+</Warning>
+
+在底层,Kodus 会把以下内容发送到 Vercel AI SDK 的调用中:
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot", "together"],
+      "allow_fallbacks": false
+    }
+  }
+}
+```
+
+### 进阶:原始 JSON 覆盖
+
+如果您需要 `order` 和 `allow_fallbacks` 之外的字段(例如 `ignore`、`data_collection`、`require_parameters`),请在 Advanced settings 中将 **Thinking** 切换到 **Custom**,并粘贴完整的路由 payload — 它会与任何推理配置一起被合并进 `providerOptions`:
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot"],
+      "allow_fallbacks": false,
+      "ignore": ["deepinfra"],
+      "data_collection": "deny"
+    },
+    "reasoning": { "effort": "medium" }
+  }
+}
+```
+
+## 并发与速率限制
+
+`maxConcurrentRequests` 字段(**高级设置**下)限制 Kodus 并行向您的提供商发送的未完成请求数。多数情况下默认值即可 — 但有严格并发限制的订阅方案需要显式设置。
+
+### Kodus 预填的默认值
+
+| 提供商 / 方案 | 预填值 | 原因 |
+| --- | --- | --- |
+| **GLM Coding Plan(Lite/Pro)** | `1` | 订阅只允许一个请求在途。超过会触发 429。 |
+| **GLM Coding Plan(Max)** | `1`(请手动上调) | Max 最多允许 30,但我们默认使用安全值。请在高级设置中上调。 |
+| **Kimi Code Plan** | `30` | Moonshot 在编码端点的文档上限。 |
+| **GLM Developer API** | _(空)_ | 限制按密钥伸缩;没有合理的全局默认值。 |
+| **Kimi Developer API** | _(空)_ | 随您的充值档位伸缩(Tier 1 ≈ 50,Tier 5 ≈ 1000)。 |
+| **Anthropic / OpenAI / Google / OpenRouter** | _(空)_ | 提供商自行强制 TPM/RPM;Kodus 不设上限。 |
+
+### 何时调整
+
+<CardGroup cols={2}>
+  <Card title="上调" icon="arrow-up">
+    - Moonshot/OpenRouter 上有高档位充值,并希望在大型 PR 上获得更高吞吐
+    - 把 GLM Coding Plan 升到了 **Max** 并希望用满 30 并发预算
+    - 多文件 PR 上审查感觉被串行化,而您并未看到 429
+  </Card>
+  <Card title="下调" icon="arrow-down">
+    - 您在审查日志中看到 `429` 或 `Too much concurrency` 错误
+    - 提供商仪表板提示速率限制警告
+    - 希望在更多 PR 之间节省 Coding Plan 窗口(5 小时/每周)
+  </Card>
+</CardGroup>
+
+<Tip>
+  **并发 vs. RPM vs. TPM。** `maxConcurrentRequests` 仅限制并行在途请求。许多提供商还另行强制 **RPM**(每分钟请求数)和 **TPM**(每分钟 token 数)限制。如果并发看起来没问题但您在撞 RPM/TPM,通常解法是升级档位或跨时间分散负载 — 而不是调 `maxConcurrentRequests`。
+</Tip>
+
+<Note>
+  **与备用模型的交互。** 当主模型遇到 429 并 Kodus 故障转移到备用模型时,备用模型自身的 `maxConcurrentRequests` 生效。将备用配置到不同提供商上并设一个宽松的值,是在主模型使用紧张订阅时吸收突发流量的好办法。
+</Note>
+
+## 最佳实践
+
+### 安全
+
+<CardGroup cols={2}>
+  <Card title="专用密钥" icon="shield-check">
+    为 Kodus 创建独立的 API 密钥,便于审计使用情况和轮换密钥。
+  </Card>
+  <Card title="定期轮换" icon="arrows-rotate">
+    定期轮换密钥,并在 BYOK 设置中更新。
+  </Card>
+  <Card title="监控使用" icon="chart-bar">
+    检查您的提供商仪表板是否有异常模式。
+  </Card>
+  <Card title="安全存储" icon="lock">
+    切勿将密钥提交到代码仓库。Kodus 对密钥进行静态和传输中加密存储。
+  </Card>
+</CardGroup>
+
+### 备用策略
+
+- 为主模型和备用模型使用**不同的提供商**(例如主用 Anthropic,备用 Google)。可防止提供商特定的中断。
+- 带有紧张并发限制的订阅(GLM Coding Plan Lite/Pro、Kimi Code Plan)不适合单独使用 — 请配对一个按 token 付费的备用,避免突发 PR 把资源吃光。
+
+## 故障排查
+
+<AccordionGroup>
+  <Accordion title="点击 Test 时出现 'Invalid API key'">
+    - 复制密钥时不要带多余的空格、引号或尾随换行。
+    - 确认计费已启用且账户有余额。
+    - 对于 GLM Coding Plan / Kimi Code Plan 密钥,请确认卡片中选择了匹配的**Plan** — 订阅密钥不适用于开发者 API 端点,反之亦然。
+  </Accordion>
+
+  <Accordion title="点击 Test 时出现 'Endpoint not found'">
+    - 验证基础 URL 与提供商完全匹配(对某些端点来说,尾部斜杠很重要)。
+    - 对于 OpenAI 兼容的提供商,模型端点通常是 `{baseURL}/models`。
+  </Accordion>
+
+  <Accordion title="审查时模型未找到(密钥测试已通过)">
+    - **测试**按钮会验证密钥/端点,但不会验证具体的模型 ID。如果您输入了一个不存在的模型(拼写错误),第一次真实审查就会失败。
+    - 保存前请对照提供商目录核对模型 ID。
+  </Accordion>
+
+  <Accordion title="'Rate limited' 或 'Too much concurrency'">
+    - 在高级设置中降低**最大并发请求数**。
+    - 在 GLM Coding Plan Lite/Pro 上,保持 **1 个并发**。如果需要更高吞吐,升级到 Max(30 并发)。
+    - 在 Kimi Code Plan 上,文档上限为 **30 并发**。
+  </Accordion>
+
+  <Accordion title="自托管环境变量未显示">
+    - 如果 Kodus 通过 `.env`(自托管固定模式)配置,BYOK 界面会显示一个蓝色信息横幅,标明当前活动的提供商/模型 — 出于安全考虑,密钥不会显示。
+    - 在 `.env` 之上保存 BYOK 配置时会弹出确认对话框再覆盖。
+  </Accordion>
+
+  <Accordion title="高或意外的成本">
+    - 推理会增加 token 消耗。如果成本飙升,将 **Thinking** 从 Medium 降到 Low,或把主模型切换到更便宜的模型。
+    - 查看提供商仪表板中的按模型分解。
+    - 在提供商端设置月度上限。
+  </Accordion>
+</AccordionGroup>
+
+## 常见问题
+
+<AccordionGroup>
+  <Accordion title="我可以随时切换提供商吗?">
+    可以。更改会在下一次审查生效 — 无需重新部署。
+  </Accordion>
+
+  <Accordion title="如果我的 API 密钥用完积分会怎样?">
+    如果配置了备用模型,审查会自动切换到备用。没有备用时审查会失败并返回错误。始终配置备用模型。
+  </Accordion>
+
+  <Accordion title="主/备用系统如何工作?">
+    默认情况下,主模型处理每次审查。如果失败(速率限制、5xx、超时),Kodus 会在备用模型上重试一次。您只为真正处理审查的那个提供商付费。
+  </Accordion>
+
+  <Accordion title="我应该为主和备用使用相同的提供商吗?">
+    不应该。使用不同的提供商可防止提供商特定的中断。常见搭配:Anthropic 主 + Google 备用,或 GLM Coding Plan 主 + Anthropic 备用来应对流量尖峰。
+  </Accordion>
+
+  <Accordion title="你们是否安全存储我们的 API 密钥?">
+    是的。密钥在静态和传输中加密,从不以明文记录。BYOK 状态端点从不返回原始密钥。
+  </Accordion>
+
+  <Accordion title="我可以使用自托管 LLM(例如 Ollama、vLLM)吗?">
+    可以 — 通过手动向导中的 **OpenAI Compatible** 提供商。输入端点的基础 URL、暴露的模型 ID,以及占位 API 密钥(多数自托管运行时忽略密钥请求头,但仍要求提供)。
+  </Accordion>
+</AccordionGroup>

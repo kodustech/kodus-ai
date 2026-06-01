@@ -29,11 +29,14 @@ export default async function PluginsPage() {
                 : "MCP Manager service is not available";
     }
 
-    const alphabeticallySortedPlugins = plugins.sort((a, b) =>
-        a.name > b.name ? 1 : -1,
-    );
+    const sortedPlugins = plugins.sort((a, b) => {
+        const aIsComposio = a.provider === "composio";
+        const bIsComposio = b.provider === "composio";
+        if (aIsComposio !== bIsComposio) return aIsComposio ? 1 : -1;
+        return a.name > b.name ? 1 : -1;
+    });
 
-    console.log(alphabeticallySortedPlugins);
+    console.log(sortedPlugins);
 
     return (
         <Page.Root>
@@ -64,7 +67,7 @@ export default async function PluginsPage() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 gap-2">
-                        {alphabeticallySortedPlugins.map((item) => (
+                        {sortedPlugins.map((item) => (
                             <Link
                                 key={item.id}
                                 className="w-full"
@@ -90,9 +93,17 @@ export default async function PluginsPage() {
                                                 </Avatar>
 
                                                 <div className="flex-1">
-                                                    <CardTitle className="text-text-primary capitalize">
-                                                        {item.appName}
-                                                    </CardTitle>
+                                                    <div className="flex items-center gap-2">
+                                                        <CardTitle className="text-text-primary capitalize">
+                                                            {item.appName}
+                                                        </CardTitle>
+                                                        {item.provider ===
+                                                            "composio" && (
+                                                            <Badge className="bg-red-500/10 text-red-500 border-red-500/20 pointer-events-none text-[10px]">
+                                                                Deprecated
+                                                            </Badge>
+                                                        )}
+                                                    </div>
 
                                                     <span className="text-text-tertiary text-xs">
                                                         @{item.provider}

@@ -1,4 +1,3 @@
-import { createLogger } from '@kodus/flow';
 import { CostEstimateUseCase } from '@libs/analytics/application/use-cases/usage/cost-estimate.use-case';
 import { TokenPricingUseCase } from '@libs/analytics/application/use-cases/usage/token-pricing.use-case';
 import { TokensByDeveloperUseCase } from '@libs/analytics/application/use-cases/usage/tokens-developer.use-case';
@@ -24,8 +23,18 @@ import {
     Inject,
     Query,
     Scope,
+    UseGuards,
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
+import {
+    Action,
+    ResourceType,
+} from '@libs/identity/domain/permissions/enums/permissions.enum';
+import {
+    CheckPolicies,
+    PolicyGuard,
+} from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
+import { checkPermissions } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
 import {
     ApiBearerAuth,
     ApiOkResponse,
@@ -51,10 +60,15 @@ import {
 @ApiTags('Token Usage')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
+@UseGuards(PolicyGuard)
+@CheckPolicies(
+    checkPermissions({
+        action: Action.Read,
+        resource: ResourceType.TokenUsage,
+    }),
+)
 @Controller({ path: 'usage', scope: Scope.REQUEST })
 export class TokenUsageController {
-    private readonly logger = createLogger(TokenUsageController.name);
-
     constructor(
         @Inject(TOKEN_USAGE_SERVICE_TOKEN)
         private readonly tokenUsageService: ITokenUsageService,
@@ -76,26 +90,14 @@ export class TokenUsageController {
     async getSummary(
         @Query() query: TokenUsageQueryDto,
     ): Promise<UsageSummaryContract> {
-        try {
-            const organizationId = this.request?.user?.organization?.uuid;
+        const organizationId = this.request?.user?.organization?.uuid;
 
-            if (!organizationId) {
-                throw new BadRequestException(
-                    'organizationId not found in request',
-                );
-            }
-
-            const mapped = this.mapDtoToContract(query, organizationId);
-            return this.tokenUsageService.getSummary(mapped);
-        } catch (error) {
-            this.logger.error({
-                message: 'Error fetching token usage summary',
-                error,
-                context: TokenUsageController.name,
-                metadata: { query },
-            });
-            return {} as UsageSummaryContract;
+        if (!organizationId) {
+            throw new BadRequestException('organizationId not found in request');
         }
+
+        const mapped = this.mapDtoToContract(query, organizationId);
+        return this.tokenUsageService.getSummary(mapped);
     }
 
     @Get('tokens/daily')
@@ -107,26 +109,14 @@ export class TokenUsageController {
     async getDaily(
         @Query() query: TokenUsageQueryDto,
     ): Promise<DailyUsageResultContract[]> {
-        try {
-            const organizationId = this.request?.user?.organization?.uuid;
+        const organizationId = this.request?.user?.organization?.uuid;
 
-            if (!organizationId) {
-                throw new BadRequestException(
-                    'organizationId not found in request',
-                );
-            }
-
-            const mapped = this.mapDtoToContract(query, organizationId);
-            return this.tokenUsageService.getDailyUsage(mapped);
-        } catch (error) {
-            this.logger.error({
-                message: 'Error fetching daily token usage',
-                error,
-                context: TokenUsageController.name,
-                metadata: { query },
-            });
-            return [];
+        if (!organizationId) {
+            throw new BadRequestException('organizationId not found in request');
         }
+
+        const mapped = this.mapDtoToContract(query, organizationId);
+        return this.tokenUsageService.getDailyUsage(mapped);
     }
 
     @Get('tokens/by-pr')
@@ -138,26 +128,14 @@ export class TokenUsageController {
     async getUsageByPr(
         @Query() query: TokenUsageQueryDto,
     ): Promise<UsageByPrResultContract[]> {
-        try {
-            const organizationId = this.request?.user?.organization?.uuid;
+        const organizationId = this.request?.user?.organization?.uuid;
 
-            if (!organizationId) {
-                throw new BadRequestException(
-                    'organizationId not found in request',
-                );
-            }
-
-            const mapped = this.mapDtoToContract(query, organizationId);
-            return await this.tokenUsageService.getUsageByPr(mapped);
-        } catch (error) {
-            this.logger.error({
-                message: 'Error fetching token usage by PR',
-                error,
-                context: TokenUsageController.name,
-                metadata: { query },
-            });
-            return [];
+        if (!organizationId) {
+            throw new BadRequestException('organizationId not found in request');
         }
+
+        const mapped = this.mapDtoToContract(query, organizationId);
+        return await this.tokenUsageService.getUsageByPr(mapped);
     }
 
     @Get('tokens/daily-by-pr')
@@ -169,26 +147,14 @@ export class TokenUsageController {
     async getDailyUsageByPr(
         @Query() query: TokenUsageQueryDto,
     ): Promise<DailyUsageByPrResultContract[]> {
-        try {
-            const organizationId = this.request?.user?.organization?.uuid;
+        const organizationId = this.request?.user?.organization?.uuid;
 
-            if (!organizationId) {
-                throw new BadRequestException(
-                    'organizationId not found in request',
-                );
-            }
-
-            const mapped = this.mapDtoToContract(query, organizationId);
-            return await this.tokenUsageService.getDailyUsageByPr(mapped);
-        } catch (error) {
-            this.logger.error({
-                message: 'Error fetching daily token usage by PR',
-                error,
-                context: TokenUsageController.name,
-                metadata: { query },
-            });
-            return [];
+        if (!organizationId) {
+            throw new BadRequestException('organizationId not found in request');
         }
+
+        const mapped = this.mapDtoToContract(query, organizationId);
+        return await this.tokenUsageService.getDailyUsageByPr(mapped);
     }
 
     @Get('tokens/by-developer')
@@ -200,26 +166,14 @@ export class TokenUsageController {
     async getUsageByDeveloper(
         @Query() query: TokenUsageQueryDto,
     ): Promise<UsageByDeveloperResultContract[]> {
-        try {
-            const organizationId = this.request?.user?.organization?.uuid;
+        const organizationId = this.request?.user?.organization?.uuid;
 
-            if (!organizationId) {
-                throw new BadRequestException(
-                    'organizationId not found in request',
-                );
-            }
-
-            const mapped = this.mapDtoToContract(query, organizationId);
-            return await this.tokensByDeveloperUseCase.execute(mapped, false);
-        } catch (error) {
-            this.logger.error({
-                message: 'Error fetching token usage by developer',
-                error,
-                context: TokenUsageController.name,
-                metadata: { query },
-            });
-            return [];
+        if (!organizationId) {
+            throw new BadRequestException('organizationId not found in request');
         }
+
+        const mapped = this.mapDtoToContract(query, organizationId);
+        return await this.tokensByDeveloperUseCase.execute(mapped, false);
     }
 
     @Get('tokens/daily-by-developer')
@@ -231,26 +185,14 @@ export class TokenUsageController {
     async getDailyByDeveloper(
         @Query() query: TokenUsageQueryDto,
     ): Promise<DailyUsageByDeveloperResultContract[]> {
-        try {
-            const organizationId = this.request?.user?.organization?.uuid;
+        const organizationId = this.request?.user?.organization?.uuid;
 
-            if (!organizationId) {
-                throw new BadRequestException(
-                    'organizationId not found in request',
-                );
-            }
-
-            const mapped = this.mapDtoToContract(query, organizationId);
-            return await this.tokensByDeveloperUseCase.execute(mapped, true);
-        } catch (error) {
-            this.logger.error({
-                message: 'Error fetching daily token usage by developer',
-                error,
-                context: TokenUsageController.name,
-                metadata: { query },
-            });
-            return [];
+        if (!organizationId) {
+            throw new BadRequestException('organizationId not found in request');
         }
+
+        const mapped = this.mapDtoToContract(query, organizationId);
+        return await this.tokensByDeveloperUseCase.execute(mapped, true);
     }
 
     @Get('tokens/pricing')
@@ -260,28 +202,16 @@ export class TokenUsageController {
     })
     @ApiOkResponse({ type: ApiObjectResponseDto })
     async getPricing(@Query() query: TokenPricingQueryDto) {
-        try {
-            const organizationId = this.request?.user?.organization?.uuid;
+        const organizationId = this.request?.user?.organization?.uuid;
 
-            if (!organizationId) {
-                throw new BadRequestException(
-                    'organizationId not found in request',
-                );
-            }
-
-            return await this.tokenPricingUseCase.execute(
-                query.model,
-                query.provider,
-            );
-        } catch (error) {
-            this.logger.error({
-                message: 'Error fetching token pricing',
-                error,
-                context: TokenUsageController.name,
-                metadata: { query },
-            });
-            return {};
+        if (!organizationId) {
+            throw new BadRequestException('organizationId not found in request');
         }
+
+        return await this.tokenPricingUseCase.execute(
+            query.model,
+            query.provider,
+        );
     }
 
     @Get('cost-estimate')
@@ -294,34 +224,10 @@ export class TokenUsageController {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
-            throw new BadRequestException(
-                'organizationId not found in request',
-            );
+            throw new BadRequestException('organizationId not found in request');
         }
 
-        try {
-            return await this.costEstimateUseCase.execute(organizationId);
-        } catch (error) {
-            this.logger.error({
-                message: 'Error fetching cost estimate',
-                error,
-                context: TokenUsageController.name,
-                metadata: { organizationId },
-            });
-            return {
-                estimatedMonthlyCost: 0,
-                costPerDeveloper: 0,
-                developerCount: 0,
-                tokenUsage: {
-                    inputTokens: 0,
-                    outputTokens: 0,
-                    reasoningTokens: 0,
-                    totalTokens: 0,
-                },
-                periodDays: 14,
-                projectionDays: 30,
-            };
-        }
+        return await this.costEstimateUseCase.execute(organizationId);
     }
 
     private mapDtoToContract(

@@ -1,0 +1,48 @@
+---
+title: "GitHubまたはGitLabのWebhook問題を修正する方法"
+description: "GitプロバイダーとKodus間のWebhook接続問題をデバッグして解決します。"
+---
+
+WebhookはKodusがPRが開かれたり更新されたりしたときを知る方法です。動作していない場合、レビューはトリガーされません。
+
+## 問題の診断
+
+### GitHub
+
+1. リポジトリの**設定** → **Webhook** に移動します
+2. KodusのWebhookを見つけます
+3. クリックして**最近の配信**を確認します
+4. 失敗した配信（非2xxステータスコード）を探します
+
+### GitLab
+
+1. プロジェクトの**設定** → **Webhook** に移動します
+2. KodusのWebhookを見つけます
+3. エラーの配信履歴を確認します
+
+## 一般的な修正方法
+
+### WebhookのURLが間違っているか古い
+
+KodusのデプロイURLを変更した場合は、GitプロバイダーのWebhook設定でURLを更新します。
+
+### SSL証明書の問題
+
+セルフホストしている場合は、SSL証明書が有効であることを確認します。GitHubとGitLabは無効な証明書を持つWebhookを拒否します。
+
+### ファイアウォールによるブロック
+
+Kodusがファイアウォールの背後にある場合は、GitプロバイダーのIPレンジがWebhookエンドポイントに到達できることを確認します。
+
+### Webhookが削除された
+
+Kodusのセットアップフローを再実行してWebhookを再登録するか、手動でWebhook URLを追加します。
+
+## テスト
+
+ほとんどのGitプロバイダーでは、最近のWebhookペイロードを**再配信**できます。新しいPRを作成せずにテストするためにこれを使用します。
+
+プラットフォーム固有のガイドについては以下を参照してください：
+- [GitHub Webhook](/how_to_deploy/ja/platforms/github/github_webhook)
+- [GitLab Webhook](/how_to_deploy/ja/platforms/gitlab/gitlab_webhook)
+- [Bitbucket Webhook](/how_to_deploy/ja/platforms/bitbucket/bitbucket_webhook)

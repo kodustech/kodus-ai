@@ -243,8 +243,8 @@ describe('Branch Review Validation - Integration Tests', () => {
         it('should handle exclusion pattern correctly in mergeBaseBranches', () => {
             const originalConfig = ['develop', 'feature/*'];
             const apiBaseBranch = 'develop';
-            const sourceBranch = 'hotfix/urgent';
-            const targetBranch = 'main';
+            const _sourceBranch = 'hotfix/urgent';
+            const _targetBranch = 'main';
 
             const mergedBranches = mergeBaseBranches(
                 originalConfig,

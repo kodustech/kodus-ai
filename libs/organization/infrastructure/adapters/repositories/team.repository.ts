@@ -66,8 +66,7 @@ export class TeamDatabaseRepository implements ITeamRepository {
 
             return mapSimpleModelsToEntities(teamsModel, TeamEntity);
         } catch (error) {
-            console.log(error);
-            throw new Error('Error finding teams');
+            throw new Error('Error finding teams', { cause: error });
         }
     }
 
@@ -457,8 +456,7 @@ export class TeamDatabaseRepository implements ITeamRepository {
 
             return mapSimpleModelsToEntities(teamsModel, TeamEntity);
         } catch (error) {
-            console.log(error);
-            throw new Error('Error finding teams by user ID');
+            throw new Error('Error finding teams by user ID', { cause: error });
         }
     }
 }

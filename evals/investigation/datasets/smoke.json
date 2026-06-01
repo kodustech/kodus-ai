@@ -1,0 +1,59 @@
+[
+  {
+    "description": "cross-file: detect wrong token store argument order after reading callee signature",
+    "vars": {
+      "caseId": "cross-file-token-store-arg-order",
+      "mode": "planner",
+      "prTitle": "Use shared token cache in OAuth sync",
+      "prBody": "Routes token persistence through the shared token store.",
+      "repositoryFullName": "eval/smoke",
+      "reviewMode": "normal",
+      "maxSteps": 8,
+      "requestedCategories": "[\"bug\"]",
+      "changedFiles": "[{\"filename\":\"src/auth/oauth-sync.ts\",\"patchWithLinesStr\":\"## file: 'src/auth/oauth-sync.ts'\\n@@ -18,7 +18,7 @@\\n18   export async function syncCredential(userId: string, token: string, cacheTtlSeconds: number) {\\n19 -  await legacyCache.save(userId, token, cacheTtlSeconds);\\n20 +  await tokenStore.put(userId, token, cacheTtlSeconds);\\n21   }\\n\"}]",
+      "toolReplay": "{\"readFile\":[{\"match\":{\"path\":\"src/auth/oauth-sync.ts\"},\"result\":\"import { tokenStore } from '../cache/token-store';\\n\\nexport async function syncCredential(userId: string, token: string, cacheTtlSeconds: number) {\\n  await tokenStore.put(userId, token, cacheTtlSeconds);\\n}\\n\"},{\"match\":{\"path\":\"src/cache/token-store.ts\"},\"result\":\"export const tokenStore = {\\n  async put(key: string, ttlSeconds: number, value: string): Promise<void> {\\n    await redis.set(key, value, ttlSeconds);\\n  },\\n};\\n\"}],\"grep\":[{\"match\":{\"patternIncludes\":\"tokenStore\"},\"result\":\"src/auth/oauth-sync.ts:4:  await tokenStore.put(userId, token, cacheTtlSeconds);\\nsrc/cache/token-store.ts:2:  async put(key: string, ttlSeconds: number, value: string): Promise<void> {\\n\"}],\"listDir\":[{\"match\":{\"path\":\".\",\"maxDepth\":3},\"result\":\"src/\\nsrc/auth/\\nsrc/auth/oauth-sync.ts\\nsrc/cache/\\nsrc/cache/token-store.ts\\n\"}]}",
+      "expectedRequiredTools": "[\"readFile\"]",
+      "expectedAnyRequiredToolCalls": "[[{\"tool\":\"readFile\",\"pathEndsWith\":\"src/cache/token-store.ts\"},{\"tool\":\"grep\",\"patternIncludes\":\"tokenStore.put\"}]]",
+      "expectedForbiddenTools": "[\"searchDocs\",\"checkTypes\"]",
+      "expectedReasoningIncludes": "[\"tokenStore.put\",\"ttl\"]",
+      "expectedFindingFiles": "[\"src/auth/oauth-sync.ts\"]",
+      "expectedFindingLabels": "[\"bug\"]",
+      "expectedMinFindings": 1,
+      "expectedMaxFindings": 2,
+      "expectedMaxSteps": 8
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://investigation-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "cross-file: inspect token store signature and avoid promoting when argument order is correct",
+    "vars": {
+      "caseId": "cross-file-token-store-correct-order",
+      "mode": "planner",
+      "prTitle": "Use shared token cache in OAuth sync",
+      "prBody": "Routes token persistence through the shared token store.",
+      "repositoryFullName": "eval/smoke",
+      "reviewMode": "normal",
+      "maxSteps": 8,
+      "requestedCategories": "[\"bug\"]",
+      "changedFiles": "[{\"filename\":\"src/auth/oauth-sync.ts\",\"patchWithLinesStr\":\"## file: 'src/auth/oauth-sync.ts'\\n@@ -18,7 +18,7 @@\\n18   export async function syncCredential(userId: string, token: string, cacheTtlSeconds: number) {\\n19 -  await legacyCache.save(userId, token, cacheTtlSeconds);\\n20 +  await tokenStore.put(userId, cacheTtlSeconds, token);\\n21   }\\n\"}]",
+      "toolReplay": "{\"readFile\":[{\"match\":{\"path\":\"src/auth/oauth-sync.ts\"},\"result\":\"import { tokenStore } from '../cache/token-store';\\n\\nexport async function syncCredential(userId: string, token: string, cacheTtlSeconds: number) {\\n  await tokenStore.put(userId, cacheTtlSeconds, token);\\n}\\n\"},{\"match\":{\"path\":\"src/cache/token-store.ts\"},\"result\":\"export const tokenStore = {\\n  async put(key: string, ttlSeconds: number, value: string): Promise<void> {\\n    await redis.set(key, value, ttlSeconds);\\n  },\\n};\\n\"}],\"grep\":[{\"match\":{\"patternIncludes\":\"tokenStore\"},\"result\":\"src/auth/oauth-sync.ts:4:  await tokenStore.put(userId, cacheTtlSeconds, token);\\nsrc/cache/token-store.ts:2:  async put(key: string, ttlSeconds: number, value: string): Promise<void> {\\n\"}],\"listDir\":[{\"match\":{\"path\":\".\",\"maxDepth\":3},\"result\":\"src/\\nsrc/auth/\\nsrc/auth/oauth-sync.ts\\nsrc/cache/\\nsrc/cache/token-store.ts\\n\"}]}",
+      "expectedRequiredTools": "[\"readFile\"]",
+      "expectedAnyRequiredToolCalls": "[[{\"tool\":\"readFile\",\"pathEndsWith\":\"src/cache/token-store.ts\"},{\"tool\":\"grep\",\"patternIncludes\":\"tokenStore.put\"}]]",
+      "expectedForbiddenTools": "[\"searchDocs\",\"checkTypes\"]",
+      "expectedReasoningIncludes": "[\"tokenStore.put\",\"ttl\"]",
+      "expectedMaxFindings": 0,
+      "expectedMaxSteps": 8
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://investigation-assertion.js"
+      }
+    ]
+  }
+]

@@ -104,7 +104,7 @@ export const createOrUpdateCodeReviewParameter = async (
     teamId: string,
     repositoryId: LiteralUnion<"global"> | undefined,
     directoryId?: string,
-    directoryPath?: string,
+    directoryPaths?: string[],
 ) => {
     try {
         const trimmedCodeReviewConfigValue =
@@ -118,7 +118,7 @@ export const createOrUpdateCodeReviewParameter = async (
                 repositoryId:
                     repositoryId === "global" ? undefined : repositoryId,
                 directoryId,
-                directoryPath,
+                directoryPaths,
             },
         );
 
@@ -162,15 +162,17 @@ export const deleteRepositoryCodeReviewParameter = async ({
     repositoryId,
     teamId,
     directoryId,
+    folderId,
 }: {
     teamId: string;
     repositoryId: string;
     directoryId?: string;
+    folderId?: string;
 }) => {
     try {
         const response = await axiosAuthorized.post<any>(
             PARAMETERS_PATHS.DELETE_REPOSITORY_CODE_REVIEW_PARAMETER,
-            { teamId, repositoryId, directoryId },
+            { teamId, repositoryId, directoryId, folderId },
         );
 
         return response.data;

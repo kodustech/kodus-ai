@@ -1,0 +1,36 @@
+---
+title: "如何将 Linear 连接到代码审查工具"
+description: "链接 Linear 到 Kodus，使 AI 代码审查自动根据问题需求验证 PR。"
+---
+
+将 Linear 连接到 Kodus 启用根据 Linear 问题的自动**业务逻辑验证**和更丰富的代码审查上下文。
+
+## 如何连接
+
+1. 前往**设置** → **插件**
+2. 找到**Linear**
+3. 点击**连接**并授权访问
+4. 选择 Kodus 可以访问的工作区
+
+## 启用的功能
+
+### 自动业务逻辑验证
+
+当 PR 关联到 Linear 问题时，Kodus 自动：
+- 获取问题标题、描述和验收标准
+- 将 PR 差异与需求进行比较
+- 报告缺失的实现和差距
+
+### 按需验证
+
+在 PR 评论中粘贴任何 Linear URL：
+
+```
+@kody -v business-logic https://linear.app/your-team/issue/TEAM-123
+```
+
+### 更丰富的代码审查上下文
+
+连接 Linear 后，Kody 可以在规则和对话中引用任务上下文。
+
+更多详情，请参阅[业务逻辑验证](/how_to_use/en/code_review/business_logic_validation)和[插件](/how_to_use/en/code_review/plugins)。

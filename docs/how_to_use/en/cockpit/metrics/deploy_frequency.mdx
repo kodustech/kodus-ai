@@ -1,0 +1,38 @@
+---
+title: "Deploy Frequency"
+description: "Measure how often your team deploys code to production"
+---
+
+## What is Deploy Frequency
+
+Deploy Frequency measures how many times your team successfully deploys code to production within a given time period. This metric is a key indicator of your team's ability to deliver value quickly and maintain a smooth delivery pipeline.
+
+## How We Calculate It
+
+We automatically track every time your team merges code into the main branch (or default branch). Since merges to main typically trigger deployments, this gives us a good measure of how frequently your team delivers code to production.
+
+**What We Track:**
+- Every merge to your main/default branch
+- The time period you select (daily, weekly, monthly)
+- Successful code integrations
+
+**How It's Calculated:**
+```
+Deploy Frequency = (Number of Merges to Main) ÷ (Time Period in Weeks)
+```
+
+For example, if you merge 12 times to main in a 4-week period, your deploy frequency is 3 merges per week.
+
+**Note**: We measure merges to main because they typically represent when code is ready for production deployment. If your team has a different workflow (like deploying from feature branches), this metric may need interpretation.
+
+## Why It Matters
+
+Frequent deployments ensure new features and bug fixes reach users quickly, boosting customer satisfaction and competitiveness. They also reduce risks and facilitate issue resolution.
+
+## How to Improve
+
+- Implement CI/CD pipelines for automated deployments
+- Break large changes into smaller PRs
+- Use feature flags to deploy without exposing features
+- Make infrastructure as code for repeatable deployments
+- Set up comprehensive monitoring and quick rollback

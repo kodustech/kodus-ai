@@ -1,16 +1,36 @@
+"use client";
+
 import { Link } from "@components/ui/link";
 import { HelpCircle } from "lucide-react";
 
-const DOCS_LINKS = {
-    github: process.env.WEB_TOKEN_DOCS_GITHUB,
-    gitlab: process.env.WEB_TOKEN_DOCS_GITLAB,
-    bitbucket: process.env.WEB_TOKEN_DOCS_BITBUCKET,
-    azure_repos: process.env.WEB_TOKEN_DOCS_AZUREREPOS,
-} as const;
+import { useConfig } from "@providers/ConfigProvider";
 
-export const GitTokenDocs = (props: { provider: keyof typeof DOCS_LINKS }) => {
-    const link = DOCS_LINKS[props.provider];
-    if (!link) return;
+type Provider =
+    | "github"
+    | "gitlab"
+    | "bitbucket"
+    | "azure_repos"
+    | "forgejo";
+
+// Build the provider → docs URL map from PublicConfig. Was previously a
+// module-level const reading process.env at import time (inlined into the
+// client bundle). Now it's a hook so the values come from the SSR-
+// serialized ConfigProvider and can vary per deployment at runtime.
+export function useTokenDocs(): Record<Provider, string> {
+    const cfg = useConfig();
+    return {
+        github: cfg.tokenDocsGithub,
+        gitlab: cfg.tokenDocsGitlab,
+        bitbucket: cfg.tokenDocsBitbucket,
+        azure_repos: cfg.tokenDocsAzureRepos,
+        forgejo: cfg.tokenDocsForgejo,
+    };
+}
+
+export const GitTokenDocs = (props: { provider: Provider }) => {
+    const docsLinks = useTokenDocs();
+    const link = docsLinks[props.provider];
+    if (!link) return null;
 
     return (
         <div className="mt-4 flex flex-col gap-6">

@@ -27,6 +27,7 @@ import GeneratingConfig from "../../_components/generating-config";
 import { CodeReviewSaveButton } from "../../_components/save-button";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import { type CodeReviewFormType } from "../../_types";
+import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
 import {
     useDefaultCodeReviewConfig,
     usePlatformConfig,
@@ -115,46 +116,6 @@ function buildPromptSections(defaults: PromptDefaults): PromptSectionConfig[] {
                 },
             ],
         },
-        {
-            fieldName: "v2PromptOverrides.severity",
-            title: "Severity Prompts",
-            description: "Define how Kody classifies each severity level.",
-            contentClassName: "grid grid-cols-1 gap-6 md:grid-cols-2",
-            fields: [
-                {
-                    name: "v2PromptOverrides.severity.flags.critical.value",
-                    fieldName: "v2PromptOverrides.severity.flags.critical",
-                    label: "Critical",
-                    helperText: "Prompt for Critical (max 2000).",
-                    placeholder: "Type the prompt for Critical",
-                    defaultValue: defaults.severity?.flags?.critical ?? "",
-                },
-                {
-                    name: "v2PromptOverrides.severity.flags.high.value",
-                    fieldName: "v2PromptOverrides.severity.flags.high",
-                    label: "High",
-                    helperText: "Prompt for High (max 2000).",
-                    placeholder: "Type the prompt for High",
-                    defaultValue: defaults.severity?.flags?.high ?? "",
-                },
-                {
-                    name: "v2PromptOverrides.severity.flags.medium.value",
-                    fieldName: "v2PromptOverrides.severity.flags.medium",
-                    label: "Medium",
-                    helperText: "Prompt for Medium (max 2000).",
-                    placeholder: "Type the prompt for Medium",
-                    defaultValue: defaults.severity?.flags?.medium ?? "",
-                },
-                {
-                    name: "v2PromptOverrides.severity.flags.low.value",
-                    fieldName: "v2PromptOverrides.severity.flags.low",
-                    label: "Low",
-                    helperText: "Prompt for Low (max 2000).",
-                    placeholder: "Type the prompt for Low",
-                    defaultValue: defaults.severity?.flags?.low ?? "",
-                },
-            ],
-        },
     ];
 }
 
@@ -224,7 +185,7 @@ function CustomPromptsContent() {
 
     const handleSubmit = form.handleSubmit(async (formData) => {
         try {
-            await saveSettings(formData, {
+            const saveResult = await saveSettings(formData, {
                 prepare: (data) => {
                     const { language: _language, ...config } = data;
                     const unformatted = unformatConfig(config);
@@ -236,6 +197,16 @@ function CustomPromptsContent() {
                     };
                 },
             });
+
+            if (saveResult?.centralizedPr) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        saveResult.centralizedPr,
+                        "Change proposed through centralized pull request.",
+                    ),
+                );
+                return;
+            }
 
             toast({
                 description: "Settings saved",

@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
-import { sendConfirmationEmail } from '@libs/common/utils/email/sendMail';
 import {
     AUTH_SERVICE_TOKEN,
     IAuthService,
@@ -16,6 +15,8 @@ import {
     IUsersService,
     USER_SERVICE_TOKEN,
 } from '@libs/identity/domain/user/contracts/user.service.contract';
+import { NotificationService } from '@libs/notifications/application/notification.service';
+import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 
 @Injectable()
 export class ResendEmailUseCase implements IUseCase {
@@ -25,6 +26,7 @@ export class ResendEmailUseCase implements IUseCase {
         private readonly authService: IAuthService,
         @Inject(USER_SERVICE_TOKEN)
         private readonly usersService: IUsersService,
+        private readonly notificationService: NotificationService,
     ) {}
 
     async execute(email: string): Promise<{ message: string }> {
@@ -42,14 +44,19 @@ export class ResendEmailUseCase implements IUseCase {
                 user.email,
             );
 
-            await sendConfirmationEmail(
-                token,
-                user.email,
-                user.organization.name,
-                {
-                    organizationId: user.organization.uuid,
+            await this.notificationService.emit({
+                event: NotificationEvent.AUTH_EMAIL_CONFIRMATION,
+                payload: {
+                    token,
+                    email: user.email,
+                    organizationName: user.organization.name,
+                    organizationAndTeamData: {
+                        organizationId: user.organization.uuid,
+                    },
                 },
-            );
+                organizationId: user.organization.uuid,
+                recipients: { kind: 'user', userId: user.uuid },
+            });
 
             return { message: 'Email sent successfully' };
         } catch (error) {

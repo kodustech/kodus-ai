@@ -1,0 +1,149 @@
+---
+title: "Code Review Flow"
+---
+
+## Overview
+
+Kody reviews your PRs automatically or on demand, adds clear suggestions, and helps your team decide when to merge. Below is the simple, user-facing view of how it works.
+
+Reference: <a href="https://www.figma.com/board/ZZJcIJMJWGuyzRGMh3w5di/Kodus-Code-Review-Flow?node-id=4-274" target="_blank">Figma board</a>
+
+## When Kody Runs
+
+- PR opened
+- New commit pushed to the PR (depending on cadence)
+- Manual trigger via comment: `@kody start-review`
+
+## When Kody Skips
+
+- No new commits since the last run
+- Only merge commits with no effective changes
+- All changed files ignored by configured patterns
+- PR exceeds the configured file limit
+- Invalid or missing configuration
+
+## What Kody Does
+
+- Resolves which settings apply (global → repo → directory) and validates them
+- Collects the relevant diffs and context for this PR
+- Runs PR-level checks (e.g., custom rules and cross-file analysis when enabled)
+- Reviews changed files with focus on the diff
+- Filters and prioritizes suggestions to reduce noise (relevance, severity, dedupe, safeguards)
+- Posts inline comments and, when applicable, a PR-level summary
+- Optionally approves or requests changes if those policies are enabled
+- Remembers the last analyzed commit to keep follow-ups incremental
+
+## What You Get
+
+- Inline comments with concrete suggestions
+- Optional PR-level summary with highlights
+- Optional status: approved or changes requested (if enabled)
+
+## Status Reactions
+
+Kody uses emoji reactions to show the live status of your code review directly in your Git provider. No guessing whether she’s working, done, or ran into a problem. She always replaces the previous emoji with the latest status (for example: 🚀 → 🎉, 👀, 👎 or 😕).
+
+<Note>
+  Supported on GitHub and GitLab. Azure DevOps and Bitbucket do not support
+  reactions yet.
+</Note>
+
+### What each emoji means
+
+- 🚀 Processing — Kody is working on your code:
+  - Analyzing files
+  - Checking rules and policies
+  - Generating suggestions
+- 🎉 Completed — Review finished:
+  - All comments posted
+  - Analysis complete
+  - You can review the suggestions
+- 👀 Skipped — Review was skipped. Common reasons include:
+  - No new commits since the last run
+  - Only merge commits detected
+  - PR/MR exceeds the configured file limit
+  - No relevant files to review (ignored patterns)
+  - Branch not configured for review
+  - PR/MR in draft mode (if configured to skip drafts)
+- 👎 No license — The user is not licensed:
+  - Kody cannot run without a valid license
+  - Ensure the user that opened the PR/MR has a license assigned
+  - Optionally, enable [Auto License Assignment](/how_to_use/en/auto_license_assignment) to assign licenses automatically
+- 😕 Error — Something went wrong:
+  - Temporary technical issue during the review
+  - Try again; join our [Discord community](https://discord.gg/TFZBRk9fT6) if it persists
+
+### Where reactions appear
+
+- Automatic review (PR opened or new commit): reaction on the PR/MR description (top of the thread)
+- Manual review (comment `@kody start-review`): reaction on your comment where you invoked Kody
+
+### Example scenarios
+
+- New PR (automatic): 🚀 while running → 🎉 when finished
+- Manual command: 🚀 on your comment → 🎉 when finished
+- No changes since last run: 👀 reaction
+- Unlicensed user: 👎 reaction
+- Temporary issue: 😕 reaction
+
+### FAQs
+
+**I don't see reactions**
+
+- GitHub/GitLab: ✅ | Azure DevOps/Bitbucket: ❌ (not supported yet)
+
+**Why did the emoji change?**
+
+- Normal—Kody replaces previous status (🚀 → 🎉/👀/😕)
+
+**I saw 👀 but wanted a review**
+
+- Likely skipped: no new commits, merge-only, ignored files, or file limit
+- Fix: comment `@kody start-review`
+
+**I saw 👎**
+
+- The user that opened the PR/MR is not licensed
+- Fix: assign a license or enable [Auto License Assignment](/how_to_use/en/auto_license_assignment)
+
+**I saw 😕**
+
+- Retry with `@kody start-review`. If persists, check [Troubleshooting](/how_to_use/en/code_review/troubleshooting) or [Discord](https://discord.gg/TFZBRk9fT6)
+
+## Settings That Matter
+
+- Automated vs manual reviews and follow-up cadence
+- Ignore patterns and base branches in scope
+- Custom rules and cross-file analysis
+- Suggestion controls: severity filter, grouping, and max suggestions
+- File limits and timeouts
+
+<CardGroup cols={2}>
+  <Card
+    title="General Config"
+    icon="sliders"
+    href="/how_to_use/en/code_review/configs/general"
+  >
+    Configure modes, cadence, branches, and suggestion options
+  </Card>
+  <Card
+    title="Review Policy"
+    icon="shield-check"
+    href="/how_to_use/en/code_review/policy"
+  >
+    Understand suggestions vs blocking and when to enable each
+  </Card>
+  <Card
+    title="Troubleshooting"
+    icon="triangle-exclamation"
+    href="/how_to_use/en/code_review/troubleshooting"
+  >
+    Fix common issues and learn about limits
+  </Card>
+</CardGroup>
+
+## Tips
+
+- Keep PRs small—large diffs reduce review quality
+- Link specs/tickets in PR description
+- Re-run with `@kody start-review` after addressing feedback

@@ -1,0 +1,78 @@
+---
+title: "Lead Time Breakdown"
+description: "Break down your development cycle into coding, pickup, and review phases"
+---
+
+## What is Lead Time Breakdown
+
+Lead Time Breakdown gives you a detailed view of your development process by breaking down the total cycle time into three key phases: coding time, pickup time, and review time. This helps you identify exactly where bottlenecks occur in your workflow.
+
+## How We Calculate It
+
+We automatically track the time spent in each phase of your development process, from first commit to PR merge.
+
+**What We Track:**
+- **Coding Time**: Active development time (first commit to last commit)
+- **Pickup Time**: Time between last commit and creating the PR
+- **Review Time**: Time from PR creation to merge
+
+**What We Don't Count:**
+- Time before first commit (planning, design)
+- Time after merge (deployment, etc.)
+- Failed or abandoned PRs
+
+**How It's Calculated:**
+```
+Coding Time = (Last Commit Time) - (First Commit Time)
+Pickup Time = (PR Opened Time) - (Last Commit Time)  
+Review Time = (PR Closed Time) - (PR Opened Time)
+```
+
+We use the 75th percentile (P75) for each phase to filter out outliers and show you typical performance.
+
+## Why It Matters
+
+Understanding where time is spent helps you optimize the right part of your process:
+
+- **Coding Time**: Shows development efficiency
+- **Pickup Time**: Reveals workflow bottlenecks
+- **Review Time**: Indicates review process effectiveness
+
+## How to Improve
+
+### Reduce Coding Time
+- **Clear Requirements**: Ensure developers understand what to build
+- **Smaller Features**: Break large changes into manageable pieces
+- **Pair Programming**: Collaborate to solve complex problems faster
+- **Code Reuse**: Leverage existing patterns and components
+
+### Reduce Pickup Time
+- **Immediate PR Creation**: Create PRs right after finishing code
+- **Workflow Automation**: Use tools to streamline PR creation
+- **Clear Definition of Done**: Know exactly when code is ready
+- **Reduce Context Switching**: Focus on completing one task at a time
+
+### Reduce Review Time
+- **Review Guidelines**: Set clear expectations for reviewers
+- **Automated Checks**: Use tools to catch issues before review
+- **Review Rotation**: Distribute review workload across the team
+- **Quick Responses**: Respond promptly to review comments
+
+## Common Bottlenecks
+
+### Coding Time
+- **Unclear Requirements**: Developers don't know what to build
+- **Complex Features**: Changes that are too large or complex
+- **Technical Debt**: Working around existing code issues
+- **Dependencies**: Waiting for other components or services
+
+### Pickup Time
+- **Workflow Inefficiency**: Manual steps that slow down the process
+- **Context Switching**: Moving between multiple tasks
+- **Lack of Automation**: Manual PR creation and setup
+
+### Review Time
+- **Large PRs**: Changes that are too big to review quickly
+- **Reviewer Availability**: Not enough people available to review
+- **Unclear Changes**: PRs that are hard to understand
+- **Review Backlog**: Too many PRs waiting for review

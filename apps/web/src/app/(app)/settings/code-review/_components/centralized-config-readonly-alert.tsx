@@ -1,6 +1,7 @@
 "use client";
 
 import { Alert, AlertDescription } from "@components/ui/alert";
+import { Link } from "@components/ui/link";
 import { useOptionalParameterQuery } from "@services/parameters/hooks";
 import {
     ParametersConfigKey,
@@ -9,21 +10,10 @@ import {
 import { AlertCircleIcon } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
-import { useFeatureFlags } from "../../_components/context";
 import { useCodeReviewRouteParams } from "../../_hooks";
-
-const readOnlyPages = new Set([
-    "general",
-    "review-categories",
-    "custom-prompts",
-    "suggestion-control",
-    "pr-summary",
-    "kody-rules",
-]);
 
 export function CentralizedConfigReadOnlyAlert() {
     const { teamId } = useSelectedTeamId();
-    const { centralizedConfigParameter } = useFeatureFlags();
     const { pageName } = useCodeReviewRouteParams();
 
     const centralizedConfig = useOptionalParameterQuery<CentralizedConfigValue>(
@@ -45,21 +35,30 @@ export function CentralizedConfigReadOnlyAlert() {
     const repositoryName =
         centralizedConfig.data?.configValue?.repository?.name?.trim() ||
         "configured";
+    const activePullRequestUrl =
+        centralizedConfig.data?.configValue?.activePullRequest?.prUrl;
 
-    const showReadOnlyAlert =
-        centralizedConfigParameter === true &&
-        centralizedConfig.data?.configValue?.enabled === true &&
-        readOnlyPages.has(pageName);
+    const showCentralizedAlert =
+        centralizedConfig.data?.configValue?.enabled === true;
 
-    if (!showReadOnlyAlert) return null;
+    if (!showCentralizedAlert) return null;
 
     return (
         <Alert variant="warning">
             <AlertCircleIcon />
             <AlertDescription className="text-pretty">
-                Centralized config is enabled. Code review parameter fields on
-                this page are read-only and controlled by the {repositoryName}{" "}
-                repository.
+                Centralized config is enabled. Changes on this page are proposed
+                through pull requests in the {repositoryName} repository and
+                applied after merge.
+                {activePullRequestUrl ? (
+                    <>
+                        {" "}
+                        <Link href={activePullRequestUrl} target="_blank">
+                            View active pull request
+                        </Link>
+                        .
+                    </>
+                ) : null}
             </AlertDescription>
         </Alert>
     );

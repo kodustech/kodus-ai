@@ -1,0 +1,73 @@
+---
+title: "Herencia y Overrides de Configuración"
+description: "Cómo los ajustes Global → Repositorio → Directorio se heredan, anulan y propagan."
+---
+
+## Descripción General
+
+Las configuraciones de Kodus funcionan en tres niveles: **Global**, **Repositorio** y **Directorio**.
+
+<Note>
+El nivel más específico tiene prioridad: Directorio > Repositorio > Global
+</Note>
+
+```
+Global
+ ├─ Repositorio A
+ │   ├─ Directorio A1
+ │   └─ Directorio A2
+ └─ Repositorio B
+```
+
+## Cómo Funciona
+
+Los campos heredan del nivel padre de forma predeterminada. Cuando cambias un campo en Global, todos los repositorios y directorios sin un override se actualizan automáticamente.
+
+<Info>
+Los overrides son por campo. Puedes anular un campo y heredar todo lo demás.
+</Info>
+
+Una vez que se anula, un campo deja de seguir al padre y usa su valor local en su lugar.
+
+## Ejemplos
+
+<Tabs>
+  <Tab title="El cambio Global se propaga">
+    Cambias los **Umbrales de severidad** en Global.
+    
+    Todos los repositorios y directorios sin un override se actualizan automáticamente. Los que tienen override permanecen sin cambios.
+  </Tab>
+
+  <Tab title="Override en Repositorio">
+    En el Repositorio X, anulas el **Mensaje de inicio de revisión**.
+    
+    Los directorios dentro del Repositorio X ahora heredan de él (a menos que tengan su propio override).
+  </Tab>
+
+  <Tab title="Volver a la herencia">
+    En el Repositorio Y, eliminas el override para **Categorías activas**.
+    
+    El campo sigue a Global nuevamente y recibe futuros cambios globales.
+  </Tab>
+</Tabs>
+
+## Mejores Prácticas
+
+- Comienza en Global con valores predeterminados sólidos
+- Solo anula cuando tengas una necesidad específica para ese repositorio/directorio
+
+## Preguntas Frecuentes
+
+<AccordionGroup>
+  <Accordion title="Si cambio algo en Global, ¿se romperán mis ajustes locales?">
+    No. Los overrides locales permanecen sin cambios.
+  </Accordion>
+
+  <Accordion title="¿Puedo anular solo un campo y heredar el resto?">
+    Sí. Los overrides son por campo.
+  </Accordion>
+
+  <Accordion title="¿Un Directorio hereda del Repositorio o de Global?">
+    Del Repositorio primero. Si el Repositorio no tiene override para ese campo, hereda de Global.
+  </Accordion>
+</AccordionGroup>

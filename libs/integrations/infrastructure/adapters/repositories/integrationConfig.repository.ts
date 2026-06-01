@@ -234,7 +234,12 @@ export class IntegrationConfigRepository implements IIntegrationConfigRepository
                         status: true,
                     },
                 },
-                relations: ['integration', 'team', 'team.organization'],
+                relations: [
+                    'integration',
+                    'integration.authIntegration',
+                    'team',
+                    'team.organization',
+                ],
                 order: {
                     updatedAt: 'DESC',
                 },

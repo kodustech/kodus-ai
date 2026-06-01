@@ -17,7 +17,7 @@ permissions:
 
 on:
     pull_request:
-        types: [opened, synchronize, reopened]
+        types: [ opened, synchronize, reopened ]
 
 concurrency:
     group: preview-${{ github.event.pull_request.number }}
@@ -34,9 +34,9 @@ jobs:
             web: ${{ steps.changes.outputs.web }}
             backend: ${{ steps.changes.outputs.backend }}
         steps:
-            - uses: actions/checkout@v4.2.2
+            - uses: actions/checkout@v6.0.2
 
-            - uses: dorny/paths-filter@v3
+            - uses: dorny/paths-filter@v4.0.1
               id: changes
               with:
                   filters: |
@@ -55,8 +55,15 @@ jobs:
 
     # ------------------------------------------------------------------
     # 2. Resolve Railway API URL (if backend changed)
-    #    Railway deploys automatically via native PR environments.
-    #    This job just fetches the URL to pass to Vercel.
+    #
+    #    Railway exposes PR environments at a deterministic public host:
+    #    <service-slug>-<env-slug>.up.railway.app. We just construct it
+    #    instead of querying the Railway CLI — the previous approach
+    #    relied on `railway domain` which silently returned empty in our
+    #    setup, looped 30x, and wedged the workflow.
+    #
+    #    Then we poll the URL until the API responds (Railway PR envs
+    #    take a couple of minutes to boot from cold).
     # ------------------------------------------------------------------
     resolve-backend-url:
         name: Resolve backend URL
@@ -65,59 +72,46 @@ jobs:
         runs-on: ubuntu-latest
         outputs:
             api_url: ${{ steps.url.outputs.api_url }}
-        env:
-            RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         steps:
-            - name: Install Railway CLI
-              run: npm install -g @railway/cli
+            - name: Construct Railway URL
+              id: url
+              run: |
+                  PR_NUM="${{ github.event.pull_request.number }}"
+                  API_URL="https://kodus-ai-kodus-ai-pr-${PR_NUM}.up.railway.app"
+                  echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+                  echo "Backend URL: $API_URL"
 
             - name: Wait for Railway deployment
               run: |
-                  ENV_NAME="pr-${{ github.event.pull_request.number }}"
-                  echo "Waiting for Railway PR environment to be ready..."
+                  API_URL="${{ steps.url.outputs.api_url }}"
+                  echo "Waiting for $API_URL to respond..."
 
-                  # Railway native PR environments may take a moment to provision
                   for i in $(seq 1 30); do
-                    API_URL=$(railway domain \
-                      --project ${{ secrets.RAILWAY_PROJECT_ID }} \
-                      --environment "$ENV_NAME" \
-                      --service ${{ secrets.RAILWAY_API_SERVICE_ID }} 2>/dev/null || echo "")
-
-                    if [ -n "$API_URL" ]; then
-                      echo "Railway environment ready: $API_URL"
-                      break
+                    code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$API_URL/") || code="000"
+                    # Any non-5xx (incl. 404) means the API is up enough to
+                    # route. 502/503/000 mean Railway is still cold-starting
+                    # or networking isn't ready yet.
+                    if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then
+                      echo "API is up (HTTP $code on attempt $i)"
+                      exit 0
                     fi
 
-                    echo "Attempt $i/30 - environment not ready yet..."
+                    echo "Attempt $i/30 - HTTP $code, retrying in 20s..."
                     sleep 20
                   done
 
-            - name: Get Railway domain
-              id: url
-              run: |
-                  ENV_NAME="pr-${{ github.event.pull_request.number }}"
-
-                  API_URL=$(railway domain \
-                    --project ${{ secrets.RAILWAY_PROJECT_ID }} \
-                    --environment "$ENV_NAME" \
-                    --service ${{ secrets.RAILWAY_API_SERVICE_ID }} 2>/dev/null || echo "")
-
-                  if [ -n "$API_URL" ]; then
-                    echo "api_url=https://$API_URL" >> $GITHUB_OUTPUT
-                    echo "Backend URL: https://$API_URL"
-                  else
-                    echo "Could not resolve Railway domain"
-                  fi
+                  echo "::error::API at $API_URL did not become reachable after 10 minutes"
+                  exit 1
 
     # ------------------------------------------------------------------
     # 3. Web preview on Vercel
     # ------------------------------------------------------------------
     deploy-web:
         name: Deploy web preview
-        needs: [detect-changes, resolve-backend-url]
+        needs: [ detect-changes, resolve-backend-url ]
         if: |
             always() &&
-            needs.detect-changes.outputs.web == 'true' &&
+            (needs.detect-changes.outputs.web == 'true' || needs.detect-changes.outputs.backend == 'true') &&
             !cancelled()
         runs-on: ubuntu-latest
         outputs:
@@ -126,10 +120,10 @@ jobs:
             VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
             VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         steps:
-            - uses: actions/checkout@v4.2.2
+            - uses: actions/checkout@v6.0.2
 
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6.4.0
               with:
                   node-version: 22
 
@@ -163,46 +157,31 @@ jobs:
                     echo "Using QA backend: https://$API_HOST"
                   fi
 
-            - name: Pull Vercel environment
-              working-directory: apps/web
-              run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
-
-            - name: Override API host in pulled Vercel env
-              working-directory: apps/web
-              run: |
-                  ENV_FILE=".vercel/.env.preview.local"
-
-                  if [ ! -f "$ENV_FILE" ]; then
-                    echo "::error::Expected $ENV_FILE after 'vercel pull'."
-                    exit 1
-                  fi
-
-                  cp "$ENV_FILE" "$ENV_FILE.bak"
-                  grep -v '^WEB_HOSTNAME_API=' "$ENV_FILE.bak" > "$ENV_FILE" || true
-                  echo "WEB_HOSTNAME_API=${{ steps.api-url.outputs.url }}" >> "$ENV_FILE"
-
-                  echo "Injected WEB_HOSTNAME_API in $ENV_FILE"
-                  grep '^WEB_HOSTNAME_API=' "$ENV_FILE"
-
-            - name: Build project
-              working-directory: apps/web
-              run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
-              env:
-                  WEB_HOSTNAME_API: ${{ steps.api-url.outputs.url }}
-
+            # Build remotely on Vercel and pass WEB_HOSTNAME_API as a
+            # per-deployment env var. Doing the build locally with
+            # `vercel build` was hitting `spawn sh ENOENT` from the
+            # CLI's installCommand spawn in our monorepo layout.
+            #
+            # Run from the repo root (no working-directory) — the Vercel
+            # project already has Root Directory configured as apps/web,
+            # so cd-ing into it would make the CLI resolve apps/web/apps/web.
             - name: Deploy preview
               id: deploy
-              working-directory: apps/web
               run: |
-                  URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+                  URL=$(vercel deploy \
+                    --token=${{ secrets.VERCEL_TOKEN }} \
+                    --env "WEB_HOSTNAME_API=${{ steps.api-url.outputs.url }}" \
+                    --build-env "WEB_HOSTNAME_API=${{ steps.api-url.outputs.url }}" \
+                    --yes)
                   echo "preview_url=$URL" >> $GITHUB_OUTPUT
+                  echo "Deployed: $URL"
 
     # ------------------------------------------------------------------
     # 4. Comment on PR with preview links
     # ------------------------------------------------------------------
     comment:
         name: Comment preview URLs
-        needs: [detect-changes, resolve-backend-url, deploy-web]
+        needs: [ detect-changes, resolve-backend-url, deploy-web ]
         if: always() && !cancelled()
         runs-on: ubuntu-latest
         permissions:
@@ -240,7 +219,7 @@ jobs:
 
             - name: Create or update PR comment
               if: steps.body.outputs.skip != 'true'
-              uses: actions/github-script@v7
+              uses: actions/github-script@v9.0.0
               with:
                   script: |
                       const body = `${{ steps.body.outputs.comment }}`;

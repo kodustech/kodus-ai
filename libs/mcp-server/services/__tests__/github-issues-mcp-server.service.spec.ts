@@ -27,9 +27,8 @@ describe('GithubIssuesMcpServerService', () => {
             close: jest.fn().mockResolvedValue(undefined),
         };
 
-        const { GithubIssuesMcpServerService } = await import(
-            '../github-issues-mcp-server.service'
-        );
+        const { GithubIssuesMcpServerService } =
+            await import('../github-issues-mcp-server.service');
 
         const service = new GithubIssuesMcpServerService({
             create: jest.fn().mockResolvedValue({ server, transport }),
@@ -102,9 +101,8 @@ describe('GithubIssuesMcpServerService', () => {
             close: jest.fn().mockResolvedValue(undefined),
         };
 
-        const { GithubIssuesMcpServerService } = await import(
-            '../github-issues-mcp-server.service'
-        );
+        const { GithubIssuesMcpServerService } =
+            await import('../github-issues-mcp-server.service');
 
         const service = new GithubIssuesMcpServerService({
             create: jest.fn().mockResolvedValue({ server, transport }),

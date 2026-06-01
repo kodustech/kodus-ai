@@ -1,0 +1,151 @@
+---
+title: "Chutes — 开源模型的订阅封顶推理"
+description: "了解如何将 Chutes AI 的订阅套餐(覆盖 DeepSeek、Llama、Qwen、MiniMax 等)连接到 Kodus。"
+icon: "cloud-bolt"
+---
+
+## Chutes 工作原理
+
+Chutes AI 是一个面向开源模型的去中心化无服务器计算平台。它暴露一个 **OpenAI 兼容**的推理端点,并提供**订阅套餐** — 套餐将 API 使用量打包到一个以等价按 token 付费价值的倍数表示的上限内,结构上类似 Z.AI GLM Coding Plan,但覆盖完整的开源目录(DeepSeek、Llama、Qwen、MiniMax、Kimi 等等)。
+
+Kodus 通过与其他提供商相同的 OpenAI 兼容适配器与 Chutes 通信,无需任何代码修改 — 仅需 BYOK 凭证。
+
+## 方案概览
+
+<Info>
+  价格和配额规则会变化。选择套餐前请先在 [chutes.ai/pricing](https://chutes.ai/pricing) 确认。
+</Info>
+
+自 2026 年初起,每个 Chutes 订阅都附带一个等于该档位**等价按量付费价值 5 倍**的使用额度,基于每个模型的每百万 token 价格计算。
+
+代表性档位(请在定价页核对当前数据):
+
+| 档位 | 月费 | 说明 |
+| ---- | ----------- | ----- |
+| Base | 约 $3/月 | 入门档位;模型选择有限。 |
+| Standard | 约 $10/月 | 前沿模型(DeepSeek V3、MiniMax M2.1 等)所需。 |
+| Pro | 约 $20+/月 | 更高的 5× 上限,适合较大审查量。 |
+| Enterprise | 定制 | 联系 Chutes。 |
+
+- 5× 上限按月重置,基于您按量付费时会支付的同等每 token 价格计算。
+- 部分模型需要 **Standard 或更高档位** — Base 不包含前沿编程模型。
+- Chutes 对部分模型标注 `-TEE` 后缀,表示可信执行环境(机密计算)变体。
+
+### 推荐模型
+
+Chutes 使用 HuggingFace 风格的 `org/model` 标识符,部分带 `-TEE` 后缀表示机密计算变体:
+
+| 模型 ID | 说明 |
+| -------- | ----- |
+| `deepseek-ai/DeepSeek-V3-0324-TEE` | 前沿编程模型;出色的 Agent 行为。需要 ≥ Standard。 |
+| `moonshotai/Kimi-K2-Instruct` | 长上下文 Kimi K2 — 大型 PR 上表现出色。 |
+| `Qwen/Qwen3-Coder-480B-A35B-Instruct` | 专业编码模型。 |
+| `chutes/MiniMaxAI/MiniMax-M2.1-TEE` | 另一个前沿选项。 |
+
+在 [llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models) 查看实时列表和当前价格。
+
+## 创建 API 密钥
+
+<Warning>需要拥有有效订阅(或按量付费余额)的 Chutes 账号。</Warning>
+
+1. 访问 [chutes.ai](https://chutes.ai) 注册账号。
+2. 在 [chutes.ai/pricing](https://chutes.ai/pricing) 订阅档位,或启用按量付费。
+3. 打开开发者控制台并创建 API 密钥。立即复制。
+
+## 在 Kodus 中配置 Chutes
+
+### 方式 1 — Kodus Cloud 上的 BYOK(推荐)
+
+1. 在 Kodus Web UI 中打开**设置 → BYOK**([app.kodus.io/organization/byok](https://app.kodus.io/organization/byok))。
+2. Chutes 不在精选目录中 — 请点击模型列表底部的**手动配置**。如果要配置备用模型而非主模型,请在 URL 中使用 `?slot=fallback`。
+3. 填写向导:
+
+   | 字段 | 值 |
+   | --- | --- |
+   | **Provider** | `OpenAI Compatible` |
+   | **Base URL** | `https://llm.chutes.ai/v1` |
+   | **Model** | 例如 `deepseek-ai/DeepSeek-V3-0324-TEE` |
+   | **API Key** | 您的 Chutes API 密钥 |
+   | **Max Concurrent Requests** | `3–5` 是安全起点;若未触及上限可上调(在高级设置下) |
+
+4. 点击**测试并保存**。Kodus 会探测端点,成功后持久化配置。
+
+<Tip>
+  5× 上限基于每 token 价格计算。前沿模型比小模型更快消耗上限 — 如果想最大化每美元的审查数量,可以将 Chutes 与更便宜的模型(Llama、较小的 Qwen 变体)搭配用于常规 PR,通过 Kody 规则或独立的 BYOK 配置文件将前沿模型留给复杂审查。
+</Tip>
+
+<Note>
+  由于 Chutes 运行在去中心化计算上,冷启动和尾部延迟比专用提供商更多变。配置一个 OpenAI 或 Anthropic 密钥作为 **Fallback**,以便当节点响应慢或月度上限触及时 Kodus 能故障转移。
+</Note>
+
+### 方式 2 — 自托管(环境变量)
+
+如果您以 Fixed Mode 运行 Kodus(单一全局提供商,无按组织 BYOK),在 API + worker 容器的 `.env` 中配置 Chutes:
+
+```env
+# Chutes 配置(固定模式)
+API_LLM_PROVIDER_MODEL="deepseek-ai/DeepSeek-V3-0324-TEE"   # 目录中的任意模型 ID
+API_OPENAI_FORCE_BASE_URL="https://llm.chutes.ai/v1"
+API_OPEN_AI_API_KEY="your-chutes-api-key"
+```
+
+<Note>
+  仅在有意禁用 BYOK 的自托管 Kodus 安装中才需要这条路径。如果您的自托管实例启用了 BYOK,请优先使用**方式 1** — 基于 UI 的流程与 Cloud 上相同。
+</Note>
+
+编辑 `.env` 后重启 API 和 worker 容器,然后验证:
+
+```bash
+docker-compose logs api worker | grep -iE "chutes|llm\.chutes"
+```
+
+完整的自托管设置(域名、安全密钥、数据库、webhook、反向代理)请参见[通用 VM 部署指南](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm),只需将 LLM 部分替换为上面的配置。
+
+## 何时选择 Chutes
+
+- **希望以订阅价获得最广的开源目录** — 前沿 DeepSeek / MiniMax / Qwen,统一月费、可预测的上限。
+- **关注机密计算** — Chutes 提供 `-TEE` 变体,在可信执行环境中运行,如果您的合规要求需要这点就有用。
+- **运行在中低流量** — 能装进便宜档位的 5× PAYG 上限内。
+
+如果您想要更简单的、无按模型计算的统一订阅,选择 Synthetic。如果您特别想要 GLM 系列,选择 Z.AI。
+
+## 故障排查
+
+<AccordionGroup>
+  <Accordion title="模型需要更高档位">
+    - 前沿模型(DeepSeek V3、MiniMax M2.1、部分 Qwen 变体)自 2026 年 2 月起被限制在 Standard 及以上档位。
+    - 升级档位,或改用当前档位可用的模型(较小的 Llama 或 Qwen 变体)。
+  </Accordion>
+
+  <Accordion title="月度 5× 上限触及">
+    - 在 Chutes 仪表板查看当前使用情况。
+    - 临时切换到更便宜的模型以延长上限,或升级档位。
+    - 配置 `Fallback` BYOK 提供商,让上限触及时审查仍能继续。
+  </Accordion>
+
+  <Accordion title="401 / 身份验证错误">
+    - 在 Chutes 仪表板确认密钥有效且订阅未过期。
+    - 确保 `.env` 值中没有尾随空格或引号。
+  </Accordion>
+
+  <Accordion title="模型未找到">
+    - Chutes 使用 `org/model` 格式,部分变体以 `-TEE` 结尾(机密计算)。在 [llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models) 核对精确大小写。
+  </Accordion>
+
+  <Accordion title="延迟慢或不稳定">
+    - Chutes 运行在去中心化计算上,尾部延迟比专用云更高。
+    - 对延迟敏感的审查,优先使用专用提供商;把 Chutes 留给隔夜或批量审查任务,或把快速提供商配置为 `Main`、Chutes 为 `Fallback`。
+  </Accordion>
+
+  <Accordion title="连接错误">
+    - 确认您的服务器可以访问 `llm.chutes.ai`。
+    - 查看 API 和 worker 日志获取具体的上游错误。
+  </Accordion>
+</AccordionGroup>
+
+## 相关链接
+
+- [Chutes 定价](https://chutes.ai/pricing)
+- [Chutes API 参考](https://chutes.ai/docs/api-reference/overview)
+- [实时模型目录](https://llm.chutes.ai/v1/models)
+- [BYOK 概述](/how_to_use/zh/byok)

@@ -11,7 +11,7 @@ import z from 'zod';
 import type { ContextAugmentationsMap } from '@libs/ai-engine/infrastructure/adapters/services/context/interfaces/code-review-context-pack.interface';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 
-import { CreateSandboxParams } from '@libs/code-review/domain/contracts/sandbox.provider';
+import { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
     CrossFileContextSnippet,
     RemoteCommands,
@@ -30,10 +30,6 @@ import {
     ReviewPreset,
     SuggestionType,
 } from '@libs/core/domain/enums/code-review.enum';
-import {
-    GetImpactAnalysisResponse,
-    TaskStatus,
-} from '@libs/ee/kodyAST/interfaces/code-ast-analysis.interface';
 import { IClusterizedSuggestion } from '@libs/kodyFineTuning/domain/interfaces/kodyFineTuning.interface';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { OrganizationAndTeamData } from './organizationAndTeamData';
@@ -72,23 +68,6 @@ export interface ISafeguardResponse {
     };
 }
 
-export interface FileAST {
-    path: string;
-    duplicateFunctions: Array<{
-        functionName: string;
-        locations: string[];
-    }>;
-    missingImports: string[];
-    unusedImports: Array<{
-        functionName: string;
-        filesWithUnusedImport: string[];
-    }>;
-}
-export interface ChangedFilesWithAST {
-    file: FileChange;
-    astAnalysis: FileAST;
-}
-
 export type Repository = {
     platform: 'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | 'forgejo';
     id: string;
@@ -109,19 +88,12 @@ export type AnalysisContext<TPullRequest = any> = {
     action?: string;
     baseDir?: string;
     correlationId?: string;
-    impactASTAnalysis?: GetImpactAnalysisResponse;
     reviewModeResponse?: ReviewModeResponse;
     kodyFineTuningConfig?: KodyFineTuningConfig;
     fileChangeContext?: FileChangeContext;
     clusterizedSuggestions?: IClusterizedSuggestion[];
     validCrossFileSuggestions?: CodeSuggestion[];
-    tasks?: {
-        astAnalysis?: {
-            taskId: string;
-            status?: TaskStatus;
-            hasRelevantContent?: boolean;
-        };
-    }; /** External file content and metadata loaded by PromptContextLoader. */
+    /** External file content and metadata loaded by PromptContextLoader. */
     externalPromptContext?: any;
     /** Set of layers ready for ContextPack composition (files, instructions). */
     externalPromptLayers?: ContextLayer[];
@@ -144,7 +116,9 @@ export type AnalysisContext<TPullRequest = any> = {
     /** Remote commands for safeguard agent verification (from E2B sandbox) */
     remoteCommands?: RemoteCommands;
     /** Parameters used to create the sandbox — kept for renewal if it expires */
-    sandboxCloneParams?: CreateSandboxParams;
+    getFreshCloneParams?: () => Promise<CreateSandboxParams>;
+    /** Graph JSON from kodus-graph parse (nodes + edges) for content formatting */
+    callGraphJson?: { nodes: any[]; edges: any[] };
 };
 
 export type DocumentationContextItem = {
@@ -153,20 +127,6 @@ export type DocumentationContextItem = {
     url: string;
     snippet: string;
     source: string;
-};
-
-export type ASTAnalysisResult = {
-    issues: any[];
-    metrics: any;
-    suggestions: any[];
-};
-
-export type CombinedAnalysisResult = {
-    aiAnalysis?: AIAnalysisResult;
-    astAnalysis?: ASTAnalysisResult;
-    lintingAnalysis?: any;
-    securityAnalysis?: any;
-    codeSuggestions: CodeSuggestion[]; // Aggregation of all suggestions
 };
 
 export type AIAnalysisResult = {
@@ -302,7 +262,7 @@ export const reviewOptionsSchema = z.object({
     bug: z.boolean(),
     performance: z.boolean(),
     security: z.boolean(),
-    cross_file: z.boolean(),
+    cross_file: z.boolean().optional(), // Legacy — no longer shown in UI but kept for backward compat
     business_logic: z.boolean().optional(),
 });
 
@@ -310,7 +270,7 @@ export interface ReviewOptions {
     bug?: boolean;
     performance?: boolean;
     security?: boolean;
-    cross_file?: boolean;
+    cross_file?: boolean; // Legacy — no longer shown in UI
     business_logic?: boolean;
 }
 
@@ -345,6 +305,7 @@ export type ImplementedSuggestionsToAnalyze = {
 
 export type CodeReviewConfig = {
     ignorePaths: string[];
+    reviewMode?: 'fast' | 'normal' | 'deep';
     reviewOptions: ReviewOptions;
     ignoredTitleKeywords: string[];
     baseBranches: string[];
@@ -368,9 +329,18 @@ export type CodeReviewConfig = {
     configLevel?: ConfigLevel;
     directoryId?: string;
     directoryPath?: string;
+    directoryFolders?: Array<{ id: string; name: string; path: string }>;
     runOnDraft?: boolean;
     codeReviewVersion?: CodeReviewVersion;
     byokConfig?: BYOKConfig;
+    /**
+     * Optional override for the BYOK *main* model used to run code reviews.
+     * Empty string '' means "inherit": directory -> repository -> the main
+     * model defined in the BYOK settings page.
+     */
+    byokModel?: string;
+    /** @deprecated Reflection/verify was removed — it hurt recall more than it helped precision. */
+    enableReflection?: boolean;
     /**
      * Optional overrides for v2 prompts (categories and severity guidance only).
      * These influence only the v2 system prompt used during suggestion generation.
@@ -406,7 +376,6 @@ export type CodeReviewConfig = {
     contextReferenceId?: string;
     contextRequirementsHash?: string;
     enableCommittableSuggestions?: boolean;
-    crossFileDependenciesAnalysis?: boolean;
     // This is the default branch of the repository, used only during the review process
     // This field is populated dynamically from the API (GitHub/GitLab) and should NOT be saved to the database
     // It represents the repository's default branch (e.g., 'main', 'develop') that comes from the code management platform

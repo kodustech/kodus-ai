@@ -1,0 +1,33 @@
+---
+title: Creating a Webhook
+icon: webhook
+---
+
+Kodus usually creates the webhook automatically. If that didn't happen, follow these steps to set it up manually:
+
+<Note>
+  Webhook URLs must reach the Webhooks service (port 3332). Using the API domain only works if your reverse proxy routes `/.../webhook` paths to the webhooks service.
+</Note>
+
+1. Head over to your GitHub repository
+2. Click on "Settings"
+3. Find "Webhooks" in the left sidebar
+4. Click "Add webhook"
+5. Configure your webhook:
+
+   - **Payload URL**: Enter the URL from your `.env` file: `API_GITHUB_CODE_MANAGEMENT_WEBHOOK`
+   - **Content type**: `application/json`
+   - **Secret**: Leave blank
+   - **SSL verification**: Enable SSL verification
+   - **Which events would you like to trigger this webhook?**: Let me select individual events
+   - Check these boxes:
+     - Issue comment
+     - Pull request review comments
+     - Pull request review threads
+     - Pull request reviews
+     - Pull requests
+     - Pushes
+
+6. Click "Add webhook"
+
+You've successfully set up a webhook for code reviews in your GitHub repository.

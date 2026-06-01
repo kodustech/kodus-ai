@@ -1,0 +1,59 @@
+---
+title: "Bitbucket API 令牌"
+---
+
+## 简介
+
+要使 Kody 能够对 Bitbucket Cloud 执行自动代码审查,您需要生成一个 **API 令牌**。此令牌允许 Kody 访问您的代码库、拉取请求、webhooks、工单、管道等,并具有下面列出的特定权限。
+
+---
+
+## 在 Bitbucket 中生成 API 令牌
+
+1. 直接打开 [Atlassian API 令牌页面](https://id.atlassian.com/manage-profile/security/api-tokens)(或从您的 Atlassian 个人资料导航到 **Security → API tokens**)。
+2. 点击 **Create API token with scopes**。
+3. 为令牌命名(例如 `kody_code_review`)并设置到期日期。
+4. 如果出现提示,选择 **Bitbucket** 作为应用程序。
+5. 选择所有必需的范围(见下文)。
+6. 查看您的选择,然后点击 **Create token**。
+7. **立即复制**令牌并安全存储——创建后您将无法再次查看它。
+
+---
+
+## Kody 所需的范围
+
+令牌必须包含 Kody 完整功能的**所有**以下范围:
+
+| 范围                         | 用途/启用的功能                                                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| `read:user:bitbucket`         | 读取基本用户或账户信息。                                                     |
+| `read:workspace:bitbucket`    | 读取有关工作区的信息(项目、成员、代码库)。                     |
+| `read:project:bitbucket`      | 读取有关项目的元数据。                                                               |
+| `read:repository:bitbucket`   | 读取代码库中的代码、分支、源文件。                                          |
+| `write:repository:bitbucket`  | 在需要时修改代码库内容(评论、文件更新等)。                     |
+| `admin:repository:bitbucket`  | 对代码库的管理操作:管理 webhooks、权限、代码库设置。 |
+| `read:pullrequest:bitbucket`  | 查看拉取请求、其状态、评论。                                               |
+| `write:pullrequest:bitbucket` | 创建或修改拉取请求评论;批准、拒绝或合并 PR。                      |
+| `read:issue:bitbucket`        | 读取工单跟踪器信息。                                                             |
+| `read:webhook:bitbucket`      | 查看现有 webhooks 及其设置。                                                  |
+| `write:webhook:bitbucket`     | 创建或更新 webhooks。                                                                  |
+| `read:pipeline:bitbucket`     | 读取与代码库或 PR 相关的管道的状态/日志。                          |
+
+> ⚠️ 确保您仅授予这些必要的权限;避免授予超过所需的权限以降低安全风险。
+
+---
+
+## 将令牌添加到 Kody
+
+- 一旦使用所有必需的范围生成令牌,在启用 Bitbucket 集成时将其粘贴到 **Kody 集成/自动化设置屏幕**中。
+- 如果 Kody 需要配置 webhooks 或监听拉取请求事件,请确保令牌具有 `admin:repository:bitbucket`(或等效权限)。
+
+---
+
+## 重要说明
+
+- 令牌将在创建时**仅显示一次**。请安全保存,因为您将**无法**再次查看它。
+- 如果可能,设置**到期日期**以限制令牌的生命周期。
+- 如果令牌被泄露,请立即撤销它并创建一个新的。
+- 定期审核令牌及其范围,以确认它们仍然必要和有效。
+- 检查您的 Bitbucket 计划/账户是否允许上述所有范围;某些范围(项目、工作区、管理员)可能取决于订阅/权限。

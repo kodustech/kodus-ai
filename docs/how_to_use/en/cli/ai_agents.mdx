@@ -1,0 +1,117 @@
+---
+title: "AI Agents"
+description: "Integrate the Kodus CLI with AI coding agents for autonomous review-fix loops."
+---
+
+The CLI ships with a minimal, structured output mode (`--prompt-only`) designed for AI coding agents to parse and act on. Combined with a team key, it enables autonomous review-fix loops — the agent reviews, applies fixes, re-reviews, and commits, all without human input in the critical path.
+
+## Supported agents
+
+- **Claude Code** — native skill via the skill installer.
+- **Cursor** — native skill.
+- **Codex** — native skill, with Decision Memory via `notify` hooks.
+- **Windsurf** — via `--prompt-only` output.
+
+For any other agent that can run shell commands and parse structured text, `kodus review --prompt-only` works out of the box.
+
+## Quickest setup
+
+Install the CLI plus all agent skills in one shot:
+
+```bash
+curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+```
+
+This:
+
+1. Installs the `@kodus/cli` binary globally.
+2. Configures the team key in `~/.kodus/config.json`.
+3. Deploys Kodus skills to every detected agent (Claude Code, Cursor, Codex, Windsurf).
+
+No individual logins. No interactive prompts. Ready for agent loops immediately.
+
+## The Review-Fix Loop
+
+<Steps>
+  <Step title="Agent runs review">
+    ```bash
+    kodus review --prompt-only
+    ```
+
+    The CLI returns structured issues with file paths, line numbers, severities, and suggested fixes — in a compact text format designed for an LLM to consume.
+  </Step>
+  <Step title="Agent applies fixes">
+    The agent reads the output, decides which fixes to apply (or accepts all via `--fix`), and edits files accordingly.
+  </Step>
+  <Step title="Agent re-runs review">
+    ```bash
+    kodus review --prompt-only --fail-on error
+    ```
+
+    With `--fail-on error`, the loop exits non-zero while there are still error-or-worse issues. The agent keeps looping; when the review comes back clean, the process exits 0 and the agent moves on.
+  </Step>
+  <Step title="Agent commits and pushes">
+    Once the review is clean, the agent commits and pushes. Optionally, install the pre-push hook (`kodus hook install`) for an additional safety net on manual pushes.
+  </Step>
+</Steps>
+
+## Team key authentication for agents
+
+Team keys are strongly recommended for agents — no individual signup, no interactive login, easy rotation, per-device tracking.
+
+```bash
+export KODUS_TEAM_KEY=kodus_xxxxx
+kodus review --prompt-only
+```
+
+Generate a key at <a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a> and distribute the install command shown there to your team.
+
+<Warning>Save the key when it's shown — it won't be displayed again.</Warning>
+
+## Output flags that matter
+
+| Flag             | Use                                                                 |
+| ---------------- | ------------------------------------------------------------------- |
+| `--prompt-only`  | Compact structured output for parsing. Use in the review loop.     |
+| `--agent`        | Enforces deterministic machine-readable output on any command.     |
+| `--format json`  | Full JSON payload. Pair with `--agent` for strict parsers.          |
+| `--fail-on`      | Exit code gate. The loop keeps going while this is non-zero.        |
+| `--fields <csv>` | Narrow the JSON/agent payload (e.g. `summary,issues.file,issues.severity`). Useful to keep agent context windows small. |
+
+## Combining with Decision Memory
+
+Pair agent loops with [Decision Memory](decision_memory) to capture the reasoning behind every agent turn as structured files in your repo. The loop handles *what* changed; memory captures *why*.
+
+```bash
+kodus decisions enable
+# Now every agent turn writes a decision file under .kody/
+```
+
+## Example: Claude Code loop with business validation
+
+```bash
+# In a Claude Code session, the agent can run:
+kodus review --prompt-only --fail-on error    # general review
+kodus pr business-validation --task-id KC-1441 --dry-run   # check against task
+kodus review --prompt-only --fix               # auto-apply fixable issues
+git commit -am "fix: KC-1441 address review findings"
+```
+
+With the skill installer, Claude Code's Kodus skill knows when to invoke each of these — no prompt engineering required on your side.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Decision Memory" icon="brain" href="decision_memory">
+    Persist agent decisions as structured files in your repo.
+  </Card>
+  <Card title="Concepts" icon="book-open" href="concepts">
+    Review modes, diff modes, and agent output flags.
+  </Card>
+  <Card title="Command Reference" icon="book" href="commands">
+    Full flag listing.
+  </Card>
+  <Card title="Troubleshooting" icon="life-ring" href="troubleshooting">
+    Agent loop issues, hook problems, timeouts.
+  </Card>
+</CardGroup>

@@ -22,7 +22,7 @@ describe('Azure Branch Normalization', () => {
         createSingleIssueComment: jest.fn(),
     };
 
-    const mockLogger = {
+    const _mockLogger = {
         log: jest.fn(),
         warn: jest.fn(),
         error: jest.fn(),

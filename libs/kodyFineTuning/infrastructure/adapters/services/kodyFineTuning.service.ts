@@ -593,52 +593,81 @@ export class KodyFineTuningService {
                 return [];
             }
 
-            const vectors = suggestions.map((item) => item.suggestionEmbed);
+            // Filter out suggestions with missing or dimension-inconsistent
+            // embeddings before feeding them to k-means. The clustering
+            // library crashes (or produces garbage) when given nulls or
+            // mixed-dimension vectors — both can happen when the upstream
+            // embedding call partially fails.
+            let expectedDim: number | null = null;
+            const validEntries: Array<{
+                suggestion: Partial<ISuggestionEmbedded>;
+                vector: number[];
+            }> = [];
+
+            for (const item of suggestions) {
+                const vec = item?.suggestionEmbed;
+                if (!Array.isArray(vec) || vec.length === 0) continue;
+                if (expectedDim === null) expectedDim = vec.length;
+                if (vec.length !== expectedDim) continue;
+                validEntries.push({ suggestion: item, vector: vec });
+            }
+
+            if (validEntries.length === 0) {
+                this.logger.warn({
+                    message:
+                        'clusterizeSuggestions: no valid embeddings after filtering — skipping k-means',
+                    context: KodyFineTuningService.name,
+                    metadata: {
+                        receivedCount: suggestions.length,
+                    },
+                });
+                return [];
+            }
 
             const { max_clusters, divisor_for_cluster_quantity } =
                 await this.getClustersConfig();
 
-            const numberOfClusters = Math.min(
-                max_clusters,
-                Math.ceil(suggestions.length / divisor_for_cluster_quantity),
+            const numberOfClusters = Math.max(
+                1,
+                Math.min(
+                    max_clusters,
+                    Math.ceil(
+                        validEntries.length / divisor_for_cluster_quantity,
+                    ),
+                    validEntries.length,
+                ),
             );
 
-            const result = kmeans(vectors, numberOfClusters, {
-                initialization: 'kmeans++',
-                maxIterations: 1,
-            });
+            const result = kmeans(
+                validEntries.map((e) => e.vector),
+                numberOfClusters,
+                {
+                    initialization: 'kmeans++',
+                    maxIterations: 1,
+                },
+            );
 
             const clusterizedSuggestions: IClusterizedSuggestion[] =
-                suggestions.map((item, index) => {
-                    const suggestion = suggestions.find(
-                        (s) => s.suggestionId === item.suggestionId,
-                    );
-                    if (!suggestion) {
-                        throw new Error(
-                            `Suggestion not found for id: ${item.suggestionId}`,
-                        );
-                    }
-
+                validEntries.map(({ suggestion: item }, index) => {
                     return {
                         ...item,
                         cluster: result.clusters[index],
                         language: item.language,
                         originalSuggestion: {
-                            uuid: suggestion.uuid,
-                            suggestionId: suggestion.suggestionId,
-                            suggestionContent: suggestion.suggestionContent,
-                            oneSentenceSummary: suggestion?.oneSentenceSummary,
-                            suggestionEmbed: suggestion.suggestionEmbed,
-                            improvedCode: suggestion.improvedCode,
-                            severity: suggestion.severity as SeverityLevel,
-                            label: suggestion.label,
-                            feedbackType:
-                                suggestion.feedbackType as FeedbackType,
-                            pullRequestNumber: suggestion.pullRequestNumber,
-                            repositoryId: suggestion.repositoryId,
-                            repositoryFullName: suggestion.repositoryFullName,
+                            uuid: item.uuid,
+                            suggestionId: item.suggestionId,
+                            suggestionContent: item.suggestionContent,
+                            oneSentenceSummary: item?.oneSentenceSummary,
+                            suggestionEmbed: item.suggestionEmbed,
+                            improvedCode: item.improvedCode,
+                            severity: item.severity as SeverityLevel,
+                            label: item.label,
+                            feedbackType: item.feedbackType as FeedbackType,
+                            pullRequestNumber: item.pullRequestNumber,
+                            repositoryId: item.repositoryId,
+                            repositoryFullName: item.repositoryFullName,
                             organization: {
-                                uuid: suggestion?.organization?.uuid,
+                                uuid: item?.organization?.uuid,
                             },
                             language: item.language,
                         },

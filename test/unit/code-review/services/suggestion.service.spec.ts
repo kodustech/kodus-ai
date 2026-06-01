@@ -625,7 +625,7 @@ __new hunk__
 
             const result = service.sortSuggestionsByFilePathAndSeverity(
                 suggestions,
-                GroupingModeSuggestions.NONE,
+                'none' as any,
             );
 
             // a.ts files first, then b.ts
@@ -1005,7 +1005,7 @@ __new hunk__
                 123,
                 LimitationType.FILE,
                 1, // 1 per file
-                GroupingModeSuggestions.NONE,
+                'none' as any,
                 suggestions,
             );
 
@@ -1033,7 +1033,7 @@ __new hunk__
                 123,
                 LimitationType.PR,
                 2, // 2 total for PR
-                GroupingModeSuggestions.NONE,
+                'none' as any,
                 suggestions,
             );
 
@@ -1062,7 +1062,7 @@ __new hunk__
                 123,
                 LimitationType.SEVERITY,
                 0,
-                GroupingModeSuggestions.NONE,
+                'none' as any,
                 suggestions,
                 severityLimits,
             );

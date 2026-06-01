@@ -123,6 +123,8 @@ export class FileContextAugmentationService {
                     promptOverrides: baseOverrides,
                     additionalContext: this.buildAdditionalContext(context),
                     kodyRule: kodyRule,
+                    // Per-repo/directory model override resolved by ValidateConfigStage.
+                    byokModel: context.codeReviewConfig?.byokModel,
                 },
             );
 

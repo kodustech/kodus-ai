@@ -1,0 +1,40 @@
+---
+title: "Cómo validar issues de Linear contra pull requests"
+description: "Asegúrate de que tu pull request implementa lo que describe el issue de Linear usando validación de lógica de negocio con IA."
+---
+
+Los issues de Linear a menudo contienen requisitos detallados, criterios de aceptación y definiciones de alcance. Kodus puede comparar tu PR con el issue de Linear para detectar brechas antes de fusionar.
+
+## Cómo funciona
+
+1. **Conecta el plugin de Linear** en la página de [Plugins](/how_to_use/es/code_review/plugins) de tu espacio de trabajo
+2. Comenta en tu PR:
+
+```
+@kody -v business-logic https://linear.app/your-team/issue/TEAM-123
+```
+
+3. Kody obtiene el contexto del issue de Linear, lee el diff del PR y produce un análisis de brechas
+
+## Qué obtienes
+
+- **Hallazgos** con severidad: MUST_FIX, SUGGESTION o INFO
+- **Trazabilidad de requisitos** — cada hallazgo cita el texto exacto del issue de Linear
+- **Detección de desajuste de alcance** — si el PR trabaja en un dominio diferente al del issue
+- **Requisitos Verificados** — lo que fue implementado correctamente
+
+## Validación automática
+
+Cuando `business_logic: true` está habilitado (por defecto), Kody recupera automáticamente el contexto de la tarea desde Linear durante cada revisión de PR si el plugin está conectado.
+
+## Consejos
+
+- Escribe criterios de aceptación claros en tus issues de Linear para la validación más exhaustiva
+- También puedes pegar los requisitos en línea si prefieres no vincular el issue:
+
+```
+@kody -v business-logic Los pedidos superiores a $500 deben emitir créditos de cashback.
+Los códigos de descuento no se pueden combinar con recompensas de fidelidad.
+```
+
+Para más detalles, consulta [Validación de Lógica de Negocio](/how_to_use/es/code_review/business_logic_validation).

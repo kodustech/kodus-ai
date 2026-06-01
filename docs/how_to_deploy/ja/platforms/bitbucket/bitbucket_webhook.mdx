@@ -1,0 +1,46 @@
+---
+title: Webhookの作成
+icon: webhook
+---
+
+Kodusは通常、Webhookを自動的に作成します。それが行われなかった場合は、以下の手順に従って手動で設定してください：
+
+<Note>
+  WebhookのURLはWebhooksサービス（ポート3332）に到達できる必要があります。APIドメインを使用するのは、リバースプロキシが`/.../webhook`パスをWebhooksサービスにルーティングする場合のみ機能します。
+</Note>
+
+1. Bitbucketリポジトリに移動
+2. 左サイドバーの「Repository settings」をクリック
+3. 「Webhooks」を選択
+4. 「Add webhook」をクリック
+5. Webhookを設定します：
+
+   - **Title**: Kodus Code Review
+   - **URL**: 通知を受け取りたいURL、`.env`ファイルの`GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK`に設定したURLを入力
+   - **Status**: Active
+   - **SSL/TLS**: SSL検証を有効にするにチェック
+   - **Triggers**: 以下のイベントを選択：
+        - Repository（リポジトリ）:
+            - Push
+            - Updated
+            - Commit comment created
+            - Build status created
+            - Build status updated
+        - Issue（課題）:
+            - Created
+            - Updated
+            - Comment created
+        - Pull Request（プルリクエスト）:
+            - Created
+            - Updated
+            - Merged
+            - Declined
+            - Comment created
+            - Comment deleted
+            - Comment updated
+            - Comment resolved
+            - Comment reopened
+
+6. 「Save」をクリック
+
+以上です！Bitbucketリポジトリでコードレビューを行うためのWebhookのセットアップが完了しました。

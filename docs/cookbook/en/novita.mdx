@@ -1,0 +1,158 @@
+---
+title: "Novita AI - Serverless GPU Platform"
+description: "Learn how to use Novita's models with Kodus"
+icon: "server"
+---
+
+## How Novita works
+
+Novita is a serverless infrastructure platform for AI, designed to scale open-source models with low latency and reduced cost. It supports hundreds of production-ready models — including Llama, Mistral, Claude, and Stable Diffusion — and provides optimized APIs, on-demand GPUs, and custom model deployments without any DevOps overhead.
+
+## Recommended Models
+
+We recommend good coding models with +100k context window.
+
+<Info>
+  {" "}
+  To more updated information, please visit [Novita's website](https://novita.ai/models/llm).{" "}
+</Info>
+
+| Model                              | Pricing    | Context Window |
+| ---------------------------------- | ---------- | -------------- |
+| **Deepseek v3 0324** `recommended` | $0.33/1.3  | ~128k tokens   |
+| **Deepseek R1 0528**               | $0.7/2.5   | ~128k tokens   |
+| **Llama 4 Maverick Instruct**      | $0.17/0.85 | ~100k tokens   |
+
+## Creating API Key
+
+<Warning>Novita Account is required to create API Key.</Warning>
+
+Go directly to [Novita's API Keys page](https://novita.ai/settings/key-management) to create a new API Key.
+
+Or, follow these steps:
+
+1. Go to your Novita console
+2. Click on the "Manage API Keys" button or go to your profile picture and click API Keys
+3. Click on "Add New Key" and fill with 'Kodus' or any name you want
+4. Click on "Confirm"
+5. Copy the API Key and save it somewhere safe
+
+
+
+<Snippet file="deploy-basic-setup.mdx" />
+
+### Configure Novita in Environment File
+
+Edit your `.env` file and configure the core settings. For **LLM Integration**, use Novita in Fixed Mode:
+
+```env
+# Core System Settings (update with your domains)
+WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
+WEB_PORT_API=443                               
+NEXTAUTH_URL="https://kodus-web.yourdomain.com"
+
+# Security Keys (generate with openssl commands above)
+WEB_NEXTAUTH_SECRET="your-generated-secret"
+API_CRYPTO_KEY="your-generated-hex-key"
+API_JWT_SECRET="your-generated-secret"
+API_JWT_REFRESH_SECRET="your-generated-secret"
+
+# Database Configuration
+API_PG_DB_PASSWORD="your-secure-db-password"
+API_MG_DB_PASSWORD="your-secure-db-password"
+
+# Novita Configuration (Fixed Mode) 
+API_LLM_PROVIDER_MODEL="deepseek-v3-0324"                    # Choose your preferred model
+API_OPENAI_FORCE_BASE_URL="https://api.novita.ai/v3/openai"  # Novita API URL
+API_OPEN_AI_API_KEY="your-novita-api-key"                    # Your Novita API Key
+
+# Git Provider Webhooks (choose your provider)
+API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
+# or API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
+# or GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
+```
+
+<Note>
+  Webhook URLs must reach the Webhooks service (port 3332). Use a dedicated webhooks domain or route `/.../webhook` to port 3332 in your reverse proxy.
+</Note>
+
+<Info>
+  **Fixed Mode is ideal for Novita** because it provides OpenAI-compatible APIs and requires only one API key. This simplifies your setup significantly.
+</Info>
+
+<Snippet file="deploy-installation.mdx" />
+
+### 6. Set Up Reverse Proxy (For Production)
+
+For webhooks and external access, configure Nginx:
+
+```nginx
+# Web App (port 3000)
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com;
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# API (port 3001)  
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com;
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Verify Novita Integration
+
+In addition to the basic installation verification, confirm that Novita is working:
+
+```bash
+# Verify Novita API connection specifically
+docker-compose logs api worker | grep -i novita
+```
+
+<Tip>
+  For detailed information about SSL setup, monitoring, and advanced configurations, see our [complete deployment guide](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm).
+</Tip>
+
+### Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="API Key Issues">
+    - Verify your API key is correct and active in [Novita's console](https://novita.ai/settings/key-management)
+    - Check if you have sufficient credits in your Novita account
+    - Ensure there are no extra spaces in your `.env` file
+  </Accordion>
+  
+  <Accordion title="Model Not Found">
+    - Check if the model name is correctly spelled in your configuration
+    - Verify the model is available in your Novita plan
+    - Try with a different model from our recommended list
+  </Accordion>
+  
+  <Accordion title="Connection Errors">
+    - Verify your server has internet access to reach `api.novita.ai`
+    - Check if there are any firewall restrictions
+    - Review the API/worker logs for detailed error messages
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,33 @@
+---
+title: 创建 Webhook
+icon: webhook
+---
+
+Kodus 通常会自动创建 webhook。如果没有发生，请按照以下步骤手动设置：
+
+<Note>
+  Webhook URL 必须指向 Webhooks 服务（端口 3332）。仅当反向代理将 `/.../webhook` 路径转发到 Webhooks 服务时，才能使用 API 域名。
+</Note>
+
+1. 前往您的 GitHub 仓库
+2. 单击"设置"
+3. 在左侧边栏中找到"Webhooks"
+4. 单击"添加 webhook"
+5. 配置您的 webhook：
+
+   - **Payload URL**：输入 `.env` 文件中的 URL：`API_GITHUB_CODE_MANAGEMENT_WEBHOOK`
+   - **Content type**：`application/json`
+   - **Secret**：留空
+   - **SSL verification**：启用 SSL 验证
+   - **Which events would you like to trigger this webhook?**：让我选择单个事件
+   - 勾选这些框：
+     - 工单评论
+     - 拉取请求审查评论
+     - 拉取请求审查线程
+     - 拉取请求审查
+     - 拉取请求
+     - 推送
+
+6. 单击"添加 webhook"
+
+您已成功为 GitHub 仓库中的代码审查设置了 webhook。

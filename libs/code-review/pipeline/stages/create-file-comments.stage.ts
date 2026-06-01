@@ -131,46 +131,46 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
 
             const lastAnalyzedCommit = allCommits[allCommits.length - 1];
 
-            // Save discarded suggestions to database
-            if (discardedSuggestions.length > 0) {
-                try {
-                    await this.savePullRequestSuggestions(
-                        context.organizationAndTeamData,
-                        context.pullRequest,
-                        context.repository,
-                        changedFiles,
-                        [], // No comment results since no suggestions were sent
-                        [], // No prioritized suggestions
-                        discardedSuggestions,
-                        context.platformType,
-                        context.fileMetadata,
-                        context.dryRun,
-                        allCommits,
-                    );
+            // Persist changed files (and any discarded suggestions) even when
+            // there are no valid suggestions — otherwise PRs with nothing to
+            // comment on land in Mongo with files: [].
+            try {
+                await this.savePullRequestSuggestions(
+                    context.organizationAndTeamData,
+                    context.pullRequest,
+                    context.repository,
+                    changedFiles,
+                    [], // No comment results since no suggestions were sent
+                    [], // No prioritized suggestions
+                    discardedSuggestions,
+                    context.platformType,
+                    context.fileMetadata,
+                    context.dryRun,
+                    allCommits,
+                );
 
-                    this.logger.log({
-                        message: `Saved ${discardedSuggestions.length} discarded suggestions to database for PR#${context.pullRequest.number}`,
-                        context: this.stageName,
-                        metadata: {
-                            organizationAndTeamData:
-                                context.organizationAndTeamData,
-                            prNumber: context.pullRequest.number,
-                            discardedSuggestionsCount:
-                                discardedSuggestions.length,
-                        },
-                    });
-                } catch (error) {
-                    this.logger.error({
-                        message: `Error saving discarded suggestions for PR#${context.pullRequest.number}`,
-                        context: this.stageName,
-                        error,
-                        metadata: {
-                            organizationAndTeamData:
-                                context.organizationAndTeamData,
-                            prNumber: context.pullRequest.number,
-                        },
-                    });
-                }
+                this.logger.log({
+                    message: `Saved PR#${context.pullRequest.number} with ${changedFiles.length} files and ${discardedSuggestions.length} discarded suggestions`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
+                        prNumber: context.pullRequest.number,
+                        changedFilesCount: changedFiles.length,
+                        discardedSuggestionsCount: discardedSuggestions.length,
+                    },
+                });
+            } catch (error) {
+                this.logger.error({
+                    message: `Error saving PR#${context.pullRequest.number} (no valid suggestions branch)`,
+                    context: this.stageName,
+                    error,
+                    metadata: {
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
+                        prNumber: context.pullRequest.number,
+                    },
+                });
             }
 
             return this.updateContext(context, (draft) => {
@@ -258,17 +258,30 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             dryRun,
         } = context;
 
-        // Sort and prioritize suggestions
-        const { sortedPrioritizedSuggestions, allDiscardedSuggestions } =
-            await this.suggestionService.sortAndPrioritizeSuggestions(
-                organizationAndTeamData,
-                codeReviewConfig,
-                pullRequest,
-                validSuggestionsToAnalyze,
-                discardedSuggestionsBySafeGuard,
-            );
+        // v3 pipeline: suggestions are already severity-normalized and deduplicated
+        // by agent-review.stage. No additional severity/quantity filtering needed.
+        //
+        // Sort before posting so all comments for the same file land together on
+        // GitHub, and within a file the most severe ones surface first.
+        const severityOrder: Record<string, number> = {
+            critical: 4,
+            high: 3,
+            medium: 2,
+            low: 1,
+        };
+        const sortedPrioritizedSuggestions = [...validSuggestionsToAnalyze].sort(
+            (a, b) => {
+                const fileA = a.relevantFile || '';
+                const fileB = b.relevantFile || '';
+                if (fileA < fileB) return -1;
+                if (fileA > fileB) return 1;
+                const rankA = severityOrder[(a.severity || '').toLowerCase()] ?? 0;
+                const rankB = severityOrder[(b.severity || '').toLowerCase()] ?? 0;
+                return rankB - rankA;
+            },
+        );
+        const allDiscardedSuggestions = [...discardedSuggestionsBySafeGuard];
 
-        // Extract discarded-by-quantity suggestions and group by severity for fallback
         const fallbackSuggestionsBySeverity =
             this.groupDiscardedByQuantitySuggestions(allDiscardedSuggestions);
 
@@ -286,6 +299,8 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 context.pullRequestMessagesConfig?.globalSettings
                     ?.suggestionCopyPrompt,
                 fallbackSuggestionsBySeverity,
+                allDiscardedSuggestions,
+                changedFiles,
             );
 
         // Save pull request suggestions — comments already posted at this point
@@ -359,13 +374,52 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         lastAnalyzedCommitFromContext: any,
         suggestionCopyPrompt?: boolean,
         fallbackSuggestionsBySeverity?: FallbackSuggestionsBySeverity,
+        allDiscardedSuggestions?: Partial<CodeSuggestion>[],
+        changedFiles: FileChange[] = [],
     ) {
         try {
+            // Children in a cluster are merged into their parent's
+            // actionStatement upstream, so we skip posting them as
+            // separate comments. Mark them with DISCARDED_BY_CLUSTERING
+            // so they still reach Mongo instead of vanishing silently
+            // — helps reconcile when a cluster link gets orphaned.
+            const relatedOrphans = sortedPrioritizedSuggestions.filter(
+                (s) =>
+                    s.clusteringInformation?.type === ClusteringType.RELATED,
+            );
+            if (relatedOrphans.length > 0 && allDiscardedSuggestions) {
+                for (const orphan of relatedOrphans) {
+                    allDiscardedSuggestions.push({
+                        ...orphan,
+                        priorityStatus:
+                            PriorityStatus.DISCARDED_BY_CLUSTERING,
+                    });
+                }
+                this.logger.log({
+                    message: `[CREATE-COMMENTS] ${relatedOrphans.length} related cluster children marked DISCARDED_BY_CLUSTERING`,
+                    context: this.stageName,
+                    metadata: {
+                        prNumber: pullRequest.number,
+                        count: relatedOrphans.length,
+                    },
+                });
+            }
+
+            // Skip suggestions pointing at files deleted in this PR — posting
+            // a comment on a removed file fails on every git provider (no line
+            // to attach to) and creates misleading reviews.
+            const removedFiles = new Set(
+                changedFiles
+                    .filter((f) => f?.status === 'removed')
+                    .map((f) => f.filename),
+            );
+
             const lineComments = sortedPrioritizedSuggestions
                 .filter(
                     (suggestion) =>
                         suggestion.clusteringInformation?.type !==
-                        ClusteringType.RELATED,
+                            ClusteringType.RELATED &&
+                        !removedFiles.has(suggestion.relevantFile),
                 )
                 .map((suggestion) => {
                     return {

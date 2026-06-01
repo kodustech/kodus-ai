@@ -1,0 +1,167 @@
+---
+title: "Troubleshooting Guide"
+description: "Solve common issues with Kodus."
+icon: "headset"
+---
+
+## Quick Fixes
+
+### "Run diagnostics"
+
+The installer ships with a doctor script that checks the stack and common misconfigurations.
+
+```bash
+cd kodus-installer
+./scripts/doctor.sh
+```
+
+### "I can't access the web interface"
+
+1. Check if the containers are running:
+
+```bash
+docker-compose ps kodus-web
+```
+
+2. Verify the ports are correctly mapped:
+
+```bash
+docker-compose port kodus-web 3000
+```
+
+3. Check the web container logs:
+
+```bash
+docker-compose logs kodus-web
+```
+
+### "Edge Runtime errors in `kodus-web` logs"
+
+If you see errors like `A Node.js API is used ... not supported in the Edge Runtime` (often with an `axios` import trace), part of the web app is running in the Edge Runtime, which does not support Node.js APIs.
+
+1. Update to the latest `kodus-web` image (re-run the installer or run `docker-compose pull kodus-web` and `docker-compose up -d`).
+2. If you are building from source, make sure auth/server routes run on the Node.js runtime (set `export const runtime = "nodejs"` and avoid `runtime = "edge"` on those routes).
+3. Rebuild and restart the container.
+
+### "Git webhooks aren't working"
+
+1. Verify your domain setup:
+
+```bash
+curl -I https://your-domain.com
+```
+
+2. Check the webhooks logs for webhook attempts:
+
+```bash
+docker-compose logs webhooks | grep webhook
+```
+
+3. Verify your reverse proxy configuration:
+
+```bash
+sudo nginx -t
+```
+
+### "Database connection issues"
+
+1. Check database container status:
+
+```bash
+docker-compose ps db_kodus_postgres
+docker-compose ps db_kodus_mongodb
+```
+
+2. Verify database logs:
+
+```bash
+docker-compose logs db_kodus_postgres
+docker-compose logs db_kodus_mongodb
+```
+
+3. Test database connections:
+
+```bash
+docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
+docker-compose exec db_kodus_mongodb mongosh -u $API_MG_DB_USERNAME -p $API_MG_DB_PASSWORD
+```
+
+### "Migration failed due to missing vector type"
+
+If you encounter the error "type vector does not exist" during migrations, this is because the pgvector extension is not enabled in your PostgreSQL database. Here's how to fix it:
+
+1. Connect to your PostgreSQL database:
+
+```bash
+docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
+```
+
+2. Enable the pgvector extension:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+3. After enabling the extension, try running your migrations again:
+
+```bash
+docker-compose exec api npm run migration:run
+```
+
+If you're still experiencing issues, you can verify the extension is properly installed:
+
+```sql
+SELECT * FROM pg_extension WHERE extname = 'vector';
+```
+
+## Common Problems
+
+### RabbitMQ Issues
+
+If you're seeing message queue errors:
+
+1. Check RabbitMQ status:
+
+```bash
+docker-compose logs rabbitmq
+```
+
+2. Access the management console at `http://localhost:15672` to verify queues and connections
+
+3. Restart the service if needed:
+
+```bash
+docker-compose restart rabbitmq
+```
+
+### Resource Problems
+
+If services are slow or crashing:
+
+1. Check resource usage:
+
+```bash
+docker stats
+```
+
+2. Verify container limits:
+
+```bash
+docker inspect $(docker-compose ps -q api) | grep -A 5 "Resources"
+```
+
+3. Adjust resource limits in docker-compose.yml if needed
+
+## Getting Help
+
+### What to Include in Support Requests
+
+- The exact error message
+- Relevant logs from affected services
+- Your deployment method (CLI, VM, etc.)
+- Steps to reproduce the issue
+
+### Where to Get Help
+
+- [Discord Community](https://discord.gg/TFZBRk9fT6)
+- [GitHub Issues](https://github.com/kodustech/kodus-installer/issues)

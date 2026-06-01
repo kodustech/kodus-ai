@@ -1,0 +1,14 @@
+description: Current-engine investigation eval
+
+providers:
+  - id: file://agent-provider.js
+    config:
+      label: gemini-2.5-flash-investigation
+      provider: google
+      model: gemini-2.5-flash
+      apiKeyEnv: API_GOOGLE_AI_API_KEY
+
+prompts:
+  - file://prompt-loader.js
+
+tests: file://datasets/smoke.json

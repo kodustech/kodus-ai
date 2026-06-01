@@ -2,7 +2,11 @@
 
 import { PARAMETERS_PATHS } from "@services/parameters";
 import { createOrUpdateCodeReviewParameter } from "@services/parameters/fetch";
-import { ParametersConfigKey } from "@services/parameters/types";
+import {
+    isCentralizedPrResponse,
+    ParametersConfigKey,
+    type CentralizedPrResponse,
+} from "@services/parameters/types";
 import { useQueryClient } from "@tanstack/react-query";
 import type { UseFormReturn } from "react-hook-form";
 import { unformatConfig } from "src/core/utils/helpers";
@@ -25,6 +29,10 @@ type SaveOptions = {
     prepare?: (
         formData: CodeReviewFormType,
     ) => Promise<SavePreparationResult> | SavePreparationResult;
+};
+
+type SaveSettingsResult = {
+    centralizedPr?: CentralizedPrResponse;
 };
 
 const defaultPrepare = (
@@ -78,6 +86,12 @@ export const useCodeReviewSettingsMutation = (params: {
     };
 
     const invalidateRelatedQueries = () => {
+        // Use "all" instead of "inactive" so the active query refetches
+        // from the backend after save. The backend's formatLevel() computes
+        // overriddenValue/overriddenLevel correctly — the optimistic cache
+        // update from syncFormattedConfigSnapshot lacks those fields,
+        // causing override indicators to show incorrect markers until the
+        // page is manually reloaded.
         void queryClient.invalidateQueries({
             queryKey: generateQueryKey(PARAMETERS_PATHS.GET_BY_KEY, {
                 params: {
@@ -85,7 +99,7 @@ export const useCodeReviewSettingsMutation = (params: {
                     teamId,
                 },
             }),
-            refetchType: "inactive",
+            refetchType: "all",
         });
         void queryClient.invalidateQueries({
             queryKey: generateQueryKey(
@@ -94,14 +108,14 @@ export const useCodeReviewSettingsMutation = (params: {
                     params: { teamId },
                 },
             ),
-            refetchType: "inactive",
+            refetchType: "all",
         });
     };
 
     const saveSettings = async (
         formData: CodeReviewFormType,
         options?: SaveOptions,
-    ) => {
+    ): Promise<SaveSettingsResult> => {
         const prepared = await (options?.prepare ?? defaultPrepare)(formData);
 
         const result = await createOrUpdateCodeReviewParameter(
@@ -111,13 +125,22 @@ export const useCodeReviewSettingsMutation = (params: {
             directoryId,
         );
 
-        if (result.error) {
-            throw new Error(`Failed to save settings: ${result.error}`);
+        if ((result as { error?: string })?.error) {
+            throw new Error(
+                `Failed to save settings: ${(result as { error: string }).error}`,
+            );
         }
 
-        syncFormattedConfigSnapshot(prepared.savedFormData);
+        if (isCentralizedPrResponse(result)) {
+            form.reset(prepared.savedFormData);
+            invalidateRelatedQueries();
+            return { centralizedPr: result };
+        }
+
         form.reset(prepared.savedFormData);
         invalidateRelatedQueries();
+
+        return {};
     };
 
     return { saveSettings };

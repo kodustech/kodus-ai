@@ -19,6 +19,7 @@ export type EnqueueCodeReviewJobInput = {
     organizationAndTeamData: OrganizationAndTeamData;
     teamAutomationId: string;
     correlationId?: string;
+    workflowJobId?: string;
 };
 
 @Injectable()

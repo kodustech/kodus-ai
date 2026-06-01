@@ -29,8 +29,9 @@ import {
 } from '@libs/identity/domain/user/contracts/user.service.contract';
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { createLogger } from '@kodus/flow';
+import { NotificationService } from '@libs/notifications/application/notification.service';
+import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
-import { sendConfirmationEmail } from '@libs/common/utils/email/sendMail';
 import { JoinOrganizationDto } from '@libs/identity/dtos/join-organization.dto';
 import { environment } from '@libs/ee/configs/environment';
 import {
@@ -63,6 +64,8 @@ export class JoinOrganizationUseCase implements IUseCase {
 
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
+
+        private readonly notificationService: NotificationService,
     ) {}
 
     public async execute(data: JoinOrganizationDto): Promise<IUser> {
@@ -155,34 +158,38 @@ export class JoinOrganizationUseCase implements IUseCase {
                     user.email,
                 );
 
-                await sendConfirmationEmail(
-                    token,
-                    user.email,
-                    organization.name,
-                    {
-                        organizationId,
-                        teamId: team.uuid,
+                await this.notificationService.emit({
+                    event: NotificationEvent.AUTH_EMAIL_CONFIRMATION,
+                    payload: {
+                        token,
+                        email: user.email,
+                        organizationName: organization.name,
+                        organizationAndTeamData: {
+                            organizationId,
+                            teamId: team.uuid,
+                        },
                     },
-                );
+                    organizationId,
+                    recipients: { kind: 'user', userId: user.uuid },
+                });
             }
-
-            this.logger.log({
-                message: 'User joined organization',
-                context: JoinOrganizationUseCase.name,
-                serviceName: JoinOrganizationUseCase.name,
-                metadata: { userId, organizationId },
-            });
 
             await this.cleanUp(originalOrgId);
 
             return updatedUser.toObject();
         } catch (error) {
             this.logger.error({
-                message: 'Error joining organization',
+                message: `join_org step=error ${(error as Error)?.message}`,
                 error,
                 context: JoinOrganizationUseCase.name,
                 serviceName: JoinOrganizationUseCase.name,
-                metadata: { userId, organizationId },
+                metadata: {
+                    step: 'error',
+                    userId,
+                    organizationId,
+                    errorMessage: (error as Error)?.message,
+                    errorName: (error as Error)?.name,
+                },
             });
 
             throw error;

@@ -11,7 +11,12 @@ import {
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PullRequestState } from '@libs/core/domain/enums';
-import { IPullRequestsRepository } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
+import {
+    BulkApplyError,
+    BulkApplyResult,
+    FileBulkOp,
+    IPullRequestsRepository,
+} from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
 import {
     IFile,
     IPullRequests,
@@ -54,12 +59,18 @@ export class PullRequestsRepository implements IPullRequestsRepository {
     async findOne(
         filter?: Partial<IPullRequests>,
     ): Promise<PullRequestsEntity | null> {
-        const doc = await this.pullRequestsModel.findOne(filter).lean().exec();
+        const doc = await this.pullRequestsModel
+            .findOne(filter as any)
+            .lean()
+            .exec();
         return doc ? mapSimpleModelToEntity(doc, PullRequestsEntity) : null;
     }
 
     async find(filter?: Partial<IPullRequests>): Promise<PullRequestsEntity[]> {
-        const docs = await this.pullRequestsModel.find(filter).lean().exec();
+        const docs = await this.pullRequestsModel
+            .find(filter as any)
+            .lean()
+            .exec();
         return mapSimpleModelsToEntities(docs, PullRequestsEntity);
     }
 
@@ -344,6 +355,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         prnumber: number,
         repositoryName: string,
         filePath: string,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<IFile | null> {
         const result = await this.pullRequestsModel
             .aggregate([
@@ -351,6 +363,8 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     $match: {
                         'number': prnumber,
                         'repository.name': repositoryName,
+                        'organizationId':
+                            organizationAndTeamData.organizationId,
                     },
                 },
                 {
@@ -835,12 +849,14 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         pullRequestNumber: number,
         repositoryName: string,
         newFile: Omit<IFile, 'id'>,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null> {
         const doc = await this.pullRequestsModel
             .findOneAndUpdate(
                 {
                     'number': pullRequestNumber,
                     'repository.name': repositoryName,
+                    'organizationId': organizationAndTeamData.organizationId,
                 },
                 {
                     $push: {
@@ -859,11 +875,238 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         return doc ? mapSimpleModelToEntity(doc, PullRequestsEntity) : null;
     }
 
+    /**
+     * Issue #1107: `handleExistingPullRequest` used to iterate
+     * `changedFiles` serially, calling `findFileWithSuggestions`
+     * + `updateFile` + N × `addSuggestionToFile` per file. A PR with
+     * a few thousand files produced ~21k sequential round-trips on
+     * a Mongo document that's also approaching the 16MB cap — every
+     * webhook event timed out at 180s and the next event repeated
+     * the same expensive path. This method collapses everything to
+     * a single read followed by a few `bulkWrite` calls.
+     *
+     * Accepts domain-level ops so the contract doesn't leak Mongo
+     * types. Chunks at 200 so any single command stays well under
+     * the 16MB per-request limit even when ops carry large payloads.
+     */
+    async bulkApplyFileChanges(
+        prUuid: string,
+        organizationId: string,
+        ops: FileBulkOp[],
+    ): Promise<BulkApplyResult> {
+        if (ops.length === 0) {
+            return { attempted: 0, modified: 0, errors: [] };
+        }
+        if (!organizationId) {
+            throw new Error(
+                'bulkApplyFileChanges requires organizationId for tenant isolation',
+            );
+        }
+        const bulkOps = ops.map((op) =>
+            this.translateFileBulkOp(prUuid, organizationId, op),
+        );
+        const CHUNK_SIZE = 200;
+        let modified = 0;
+        const errors: BulkApplyError[] = [];
+
+        for (let i = 0; i < bulkOps.length; i += CHUNK_SIZE) {
+            const chunk = bulkOps.slice(i, i + CHUNK_SIZE);
+            try {
+                // ordered: false — one bad op doesn't stop the rest,
+                // and every op is self-contained (adds a file or
+                // pushes suggestions onto an existing file by id).
+                const res = await this.pullRequestsModel.bulkWrite(
+                    chunk,
+                    { ordered: false },
+                );
+                modified += (res?.modifiedCount ?? 0) + (res?.upsertedCount ?? 0);
+            } catch (err: unknown) {
+                // MongoBulkWriteError still carries the partial result
+                // on `err.result` plus `err.writeErrors[]`. With
+                // ordered:false the unaffected ops in the chunk
+                // commit even when a few fail — we surface the
+                // failures up the stack instead of swallowing them.
+                const e = err as {
+                    result?: { modifiedCount?: number };
+                    writeErrors?: Array<{
+                        index?: number;
+                        code?: number;
+                        errmsg?: string;
+                    }>;
+                    message?: string;
+                };
+                modified += e?.result?.modifiedCount ?? 0;
+                const writeErrors = e?.writeErrors ?? [];
+                if (writeErrors.length === 0) {
+                    errors.push({
+                        opIndex: i,
+                        code: undefined,
+                        message: e?.message ?? 'bulkWrite failed',
+                    });
+                } else {
+                    for (const we of writeErrors) {
+                        errors.push({
+                            opIndex: i + (we.index ?? 0),
+                            code: we.code,
+                            message: we.errmsg ?? 'write error',
+                        });
+                    }
+                }
+            }
+        }
+
+        return { attempted: bulkOps.length, modified, errors };
+    }
+
+    /**
+     * Server-side aggregation that returns totals derived from the
+     * current `files` array without transferring the array itself.
+     *
+     * Used by `handleExistingPullRequest` to recompute
+     * `totalAdded/totalDeleted/totalChanges` from ground truth after
+     * a `bulkApplyFileChanges` run, so the totals can never drift
+     * from the actual sub-documents even if a chunk partially failed.
+     */
+    async computeFileTotals(
+        prUuid: string,
+        organizationId: string,
+    ): Promise<{
+        totalAdded: number;
+        totalDeleted: number;
+        totalChanges: number;
+    }> {
+        if (!organizationId) {
+            throw new Error(
+                'computeFileTotals requires organizationId for tenant isolation',
+            );
+        }
+        // Aggregation does NOT auto-cast string → ObjectId the way
+        // standard query operators do, so build the ObjectId here.
+        // The id may not be a valid 24-char hex (e.g. legacy data or
+        // tests that synthesize uuids); fall back to string match
+        // rather than throwing.
+        const match: Record<string, unknown> = {
+            organizationId,
+            ...(mongoose.Types.ObjectId.isValid(prUuid)
+                ? { _id: new mongoose.Types.ObjectId(prUuid) }
+                : { _id: prUuid }),
+        };
+        const result = await this.pullRequestsModel
+            .aggregate<{
+                totalAdded: number;
+                totalDeleted: number;
+                totalChanges: number;
+            }>([
+                { $match: match },
+                {
+                    $project: {
+                        _id: 0,
+                        totalAdded: {
+                            $sum: { $ifNull: ['$files.added', 0] },
+                        },
+                        totalDeleted: {
+                            $sum: { $ifNull: ['$files.deleted', 0] },
+                        },
+                        totalChanges: {
+                            $sum: { $ifNull: ['$files.changes', 0] },
+                        },
+                    },
+                },
+            ])
+            .exec();
+        const row = result?.[0];
+        return {
+            totalAdded: row?.totalAdded ?? 0,
+            totalDeleted: row?.totalDeleted ?? 0,
+            totalChanges: row?.totalChanges ?? 0,
+        };
+    }
+
+    private translateFileBulkOp(
+        prUuid: string,
+        organizationId: string,
+        op: FileBulkOp,
+    ): mongoose.mongo.AnyBulkWriteOperation<PullRequestsModel> {
+        // `uuid` is exposed on the entity by the simple-mapper as
+        // `_id.toString()`. The doc itself only carries `_id`, so the
+        // bulk filter must use `_id` — Mongoose auto-casts the string
+        // to ObjectId on the way in. This mirrors `update(...)` above
+        // and is the same trick `addFileToPullRequest` uses.
+        //
+        // `organizationId` is ANDed in for tenant isolation: an
+        // ObjectId is globally unique, but defense-in-depth prevents
+        // a stale uuid (e.g. from a swapped context) from ever
+        // matching a doc that belongs to another tenant.
+        const prFilter = {
+            _id: prUuid,
+            organizationId,
+        } as Record<string, unknown>;
+        switch (op.kind) {
+            case 'addFile':
+                return {
+                    updateOne: {
+                        filter: prFilter,
+                        update: { $push: { files: op.file as any } },
+                    },
+                };
+            case 'updateFile': {
+                // Reuse the same sanitizer that the per-file
+                // `updateFile()` method has applied historically.
+                // It drops empty/blank `reviewMode` and trims empty
+                // sub-fields from `codeReviewModelUsed` so webhook
+                // payloads (which never carry these pipeline-owned
+                // fields) cannot clobber values written by later
+                // review stages.
+                const sanitized = this.sanitizeCodeReviewConfigData(
+                    op.data as Partial<{
+                        reviewMode: unknown;
+                        codeReviewModelUsed: unknown;
+                    }> as any,
+                );
+                const $set: Record<string, unknown> = {};
+                for (const [k, v] of Object.entries(sanitized)) {
+                    $set[`files.$.${k}`] = v;
+                }
+                return {
+                    updateOne: {
+                        filter: { ...prFilter, 'files.id': op.fileId },
+                        update: { $set },
+                    },
+                };
+            }
+            case 'addSuggestions':
+                return {
+                    updateOne: {
+                        filter: { ...prFilter, 'files.id': op.fileId },
+                        update: {
+                            $push: {
+                                'files.$.suggestions': {
+                                    $each: op.suggestions as any[],
+                                },
+                            },
+                        },
+                    },
+                };
+        }
+    }
+
+    /**
+     * Stable generator for sub-document ids used in `bulkApplyFileChanges`.
+     * Exposed on the repository so the service can pre-compute file/
+     * suggestion ids before the bulkWrite — the alternative (letting
+     * Mongo generate during $push) doesn't return the new ids in a
+     * shape we can use to reference suggestions later.
+     */
+    newSubDocumentId(): string {
+        return new mongoose.Types.ObjectId().toString();
+    }
+
     async addSuggestionToFile(
         fileId: string,
         newSuggestion: Omit<ISuggestion, 'id'> & { id?: string },
         pullRequestNumber: number,
         repositoryName: string,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null> {
         const suggestionWithId = {
             ...newSuggestion,
@@ -875,6 +1118,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                 {
                     'number': pullRequestNumber,
                     'repository.name': repositoryName,
+                    'organizationId': organizationAndTeamData.organizationId,
                     'files.id': fileId,
                 },
                 {
@@ -913,8 +1157,17 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         pullRequest: PullRequestsEntity,
         updateData: Omit<Partial<IPullRequests>, 'uuid' | 'id'>,
     ): Promise<PullRequestsEntity | null> {
+        // Tenant-scoped: the entity always carries `organizationId`
+        // (schema `required: true`), so AND-ing it into the filter
+        // closes a defense-in-depth gap without changing the
+        // signature for any caller. A stale or swapped entity from
+        // another tenant can no longer accidentally write here.
+        const filter: Record<string, unknown> = { _id: pullRequest.uuid };
+        if (pullRequest.organizationId) {
+            filter.organizationId = pullRequest.organizationId;
+        }
         const doc = await this.pullRequestsModel.findOneAndUpdate(
-            { _id: pullRequest.uuid },
+            filter,
             { $set: updateData },
             { new: true },
         );
@@ -924,13 +1177,17 @@ export class PullRequestsRepository implements IPullRequestsRepository {
     async updateFile(
         fileId: string,
         updateData: Partial<IFile>,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null> {
         const sanitizedUpdateData =
             this.sanitizeCodeReviewConfigData(updateData);
 
         const doc = await this.pullRequestsModel
             .findOneAndUpdate(
-                { 'files.id': fileId },
+                {
+                    'files.id': fileId,
+                    'organizationId': organizationAndTeamData.organizationId,
+                },
                 {
                     $set: Object.entries(sanitizedUpdateData).reduce(
                         (acc, [key, value]) => ({
@@ -999,6 +1256,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
     async updateSuggestion(
         suggestionId: string,
         updateData: Partial<ISuggestion>,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null> {
         const updateFields = Object.entries(updateData).reduce(
             (acc, [key, value]) => {
@@ -1010,7 +1268,10 @@ export class PullRequestsRepository implements IPullRequestsRepository {
 
         const doc = await this.pullRequestsModel
             .findOneAndUpdate(
-                { 'files.suggestions.id': suggestionId },
+                {
+                    'files.suggestions.id': suggestionId,
+                    'organizationId': organizationAndTeamData.organizationId,
+                },
                 { $set: updateFields },
                 {
                     arrayFilters: [

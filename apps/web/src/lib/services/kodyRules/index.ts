@@ -41,4 +41,6 @@ export const KODY_RULES_PATHS = {
     FIND_RECOMMENDED_KODY_RULES: pathToApiUrl(
         "/kody-rules/find-recommended-kody-rules",
     ),
+    MANAGE_IMPORTED_KODY_RULES: pathToApiUrl("/kody-rules/imported/manage"),
+    COUNT_IMPORTED_KODY_RULES: pathToApiUrl("/kody-rules/imported/count"),
 } as const;

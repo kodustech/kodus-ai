@@ -1,0 +1,146 @@
+---
+title: "Decision Memory"
+description: "Capture e persista decisões de agentes de IA como arquivos estruturados no seu repositório."
+tag: 'alpha'
+---
+
+Decision Memory é a forma do Kodus lembrar **por que** um agente de IA fez as mudanças que fez — não apenas o diff, mas o raciocínio, as restrições e as alternativas consideradas. As decisões são capturadas automaticamente em cada turno do agente e armazenadas como arquivos markdown estruturados versionados junto ao seu código.
+
+## Por que existe
+
+A revisão de código detecta o que está errado em um diff. Ela não diz por que o autor foi com a abordagem A em vez da B, ou qual restrição forçou o contorno feio na linha 42. Para agentes de IA, esse contexto desaparece entre sessões — cada execução começa do zero.
+
+O Decision Memory resolve isso:
+
+- **Capturando raciocínio automaticamente** em cada evento de turno completo.
+- **Armazenando no repositório** para que o contexto viaje com o código, não com uma sessão.
+- **Escopo por PR e por módulo** para que você tenha contexto no nível da branch e conhecimento de módulo de longo prazo.
+
+## Como funciona
+
+Quando habilitado, o Kodus instala hooks nos eventos de turno completo do seu agente de IA. A cada turno, as decisões do agente são capturadas em:
+
+```
+.kody/
+├── pr/by-sha/<head-sha>.md    # Decisões de nível de PR (versionadas com o código)
+├── memory/<module-id>.md      # Decisões de nível de módulo (longo prazo)
+└── modules.yml                # Configuração de módulos
+```
+
+- A **memória de PR** fica na branch. Tem escopo para o SHA head atual — à medida que a branch evolui, novos arquivos são criados para cada estado significativo.
+- A **memória de módulo** é de longo prazo. Acumula decisões por módulo ao longo do tempo.
+- **`modules.yml`** informa ao Kodus como mapear caminhos para módulos (ex.: `src/auth/**` → módulo `auth`).
+
+## Agentes Suportados
+
+- **Claude Code** — via hook de configurações em stop/agent-turn-complete.
+- **Cursor** — via regras do workspace.
+- **Codex** — via entrada `notify` em `~/.codex/config.toml`.
+
+## Configuração
+
+Habilitar para todos os agentes detectados:
+
+```bash
+kodus decisions enable
+```
+
+Ou direcionar agentes específicos:
+
+```bash
+kodus decisions enable --agents claude,cursor
+kodus decisions enable --agents codex --codex-config ~/.codex/config.toml
+```
+
+Se uma configuração anterior estiver no lugar, force uma reinstalação:
+
+```bash
+kodus decisions enable --force
+```
+
+Verifique o que está configurado:
+
+```bash
+kodus decisions status
+```
+
+## Fluxo de Trabalho
+
+<Steps>
+  <Step title="Habilitar hooks">
+    ```bash
+    kodus decisions enable
+    ```
+
+    Isso instala arquivos de integração específicos do agente e adiciona `.kody/` ao git (criando um `modules.yml` se não existir).
+  </Step>
+  <Step title="Trabalhe normalmente">
+    Conforme você (ou seu agente) trabalha, cada evento de turno completo captura uma decisão em `.kody/pr/by-sha/<sha>.md`. Faça commit desses arquivos junto com suas alterações de código — o raciocínio agora está no controle de versão.
+  </Step>
+  <Step title="Revisar decisões capturadas">
+    ```bash
+    kodus decisions show                    # memória de PR da branch atual
+    kodus decisions show feat/auth          # decisões de uma branch específica
+    kodus decisions show auth               # decisões de módulo para 'auth'
+    ```
+  </Step>
+  <Step title="Promover para memória de longo prazo">
+    Quando um PR é mesclado, promova suas decisões de nível de PR para memória de nível de módulo para que persistam além da branch:
+
+    ```bash
+    kodus decisions promote                               # branch atual, todos os módulos correspondentes
+    kodus decisions promote --branch feat/auth            # uma branch específica
+    kodus decisions promote --branch feat/auth --modules auth,users
+    ```
+  </Step>
+</Steps>
+
+## O que é capturado
+
+Cada arquivo de decisão é markdown estruturado:
+
+- **Resumo** — o que o agente pretendia fazer.
+- **Contexto** — restrições, decisões anteriores, arquivos referenciados.
+- **Alternativas consideradas** — abordagens que o agente rejeitou e por quê.
+- **Resultado** — o que foi realmente alterado.
+
+O formato exato depende do evento de turno do agente; o CLI o normaliza em um formato consistente de frontmatter + corpo.
+
+## Desabilitando
+
+Remover todos os hooks e arquivos de integração:
+
+```bash
+kodus decisions disable
+```
+
+Isso não exclui dados em `.kody/` — seu histórico permanece intacto. Delete o diretório manualmente se quiser começar do zero.
+
+## Arquivos de contexto que o CLI lê
+
+Além de `.kody/`, o CLI coleta contexto do projeto a partir desses arquivos ao executar revisões:
+
+| Arquivo           | Descrição                                           |
+| ----------------- | --------------------------------------------------- |
+| `.kodus.md`       | Configuração e diretrizes específicas do Kodus      |
+| `claude.md`       | Diretrizes específicas do Claude                    |
+| `.cursor/rules/`  | Diretório de regras do Cursor IDE                   |
+
+Esses são ortogonais ao Decision Memory — eles descrevem contexto *permanente*, enquanto o Decision Memory captura raciocínio *turno a turno*.
+
+## Relacionados
+
+<CardGroup cols={2}>
+  <Card title="Agentes de IA" icon="robot" href="ai_agents">
+    Loops de revisão e correção com Claude Code, Cursor, Codex e Windsurf.
+  </Card>
+  <Card title="Conceitos" icon="book-open" href="concepts">
+    Kody Rules, configuração centralizada e modos de diff.
+  </Card>
+  <Card title="Referência de Comandos" icon="book" href="commands#kodus-decisions">
+    Listagem completa de flags do `kodus decisions`.
+  </Card>
+  <Card title="Solução de Problemas" icon="life-ring" href="troubleshooting">
+    Hooks de decisão não capturando? Veja o accordion dedicado.
+  </Card>
+</CardGroup>

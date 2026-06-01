@@ -1,0 +1,48 @@
+<Tabs>
+    <Tab title="Fixed Mode (Recommended for Self-Hosted)">
+        This is the simplest mode and recommended for self-hosted installations. You only need to configure a single LLM model.
+
+        ```env
+        # Fixed Mode Configuration
+        API_LLM_PROVIDER_MODEL="gpt-3.5-turbo"     # Model you want to use
+        API_OPENAI_FORCE_BASE_URL="https://your-api.com/v1"  # Your API provider URL
+        API_OPEN_AI_API_KEY="your-api-key"          # Your API provider key
+        ```
+
+        <Info>
+            This mode is ideal for self-hosted because:
+            - Requires only a single API key
+            - Works with any OpenAI-compatible API provider
+            - Easier to configure and maintain
+        </Info>
+
+        <Card
+            title="Model Configuration Guides"
+            icon="sparkles"
+            href="/cookbook/en"
+        >
+            Check our model-specific guides for detailed setup instructions with popular providers like Novita, OpenAI, Anthropic, and more.
+        </Card>
+
+    </Tab>
+
+    <Tab title="Automatic Mode (High Quality)">
+        This mode uses multiple LLM models to achieve the best possible results. Requires more configuration but offers the highest quality analysis.
+
+        ```env
+        # Automatic Mode Configuration
+        API_OPEN_AI_API_KEY=                       # OpenAI API key
+        API_GOOGLE_AI_API_KEY=                     # Google AI API key
+        API_ANTHROPIC_API_KEY=                     # Anthropic API key
+        API_NOVITA_AI_API_KEY=                     # Novita AI API key
+        API_VERTEX_AI_API_KEY=                     # Vertex AI API key
+        ```
+
+        <Info>
+            This mode offers the best quality because:
+            - Uses multiple specialized models
+            - Our pipeline is optimized to extract the best from each model
+            - Ideal for enterprise installations prioritizing quality
+        </Info>
+    </Tab>
+</Tabs>

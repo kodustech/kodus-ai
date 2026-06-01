@@ -1,0 +1,77 @@
+---
+title: "Github FGPAT トークン"
+---
+
+## FGPAT の概要
+
+Kody が自動コードレビューを実行できるようにするには、GitHub で Fine-Grained Personal Access Token（FGPAT）を生成する必要があります。このトークンにより、Kody はリポジトリに安全にアクセスし、制御された方法でコード分析を実行できます。
+
+## Fine-Grained アクセス権限の確認
+
+デフォルトでは、Fine-Grained PAT は組織のコンテンツにアクセスできない場合があります。以下の手順に従ってアクセスを確保してください：
+
+![title](/images/fgpat.png)
+
+1. 組織のオーナーである必要があります。
+1. GitHub で組織の設定に移動します：
+   - この URL を組織名に置き換えて使用できます：<small>https://github.com/organizations/YOUR_ORG_NAME/settings/personal-access-tokens)</small>
+1. **Fine-Grained Personal Access Tokens** の下で、Kody の安全なアクセスを有効にするために **「Allow access via fine-grained personal access tokens」** を選択します。
+
+## FGPAT（Fine-Grained Personal Access Token）の生成
+
+<iframe
+  width="560"
+  height="315"
+  src="https://www.youtube.com/embed/ESE-Hl-bAD0?si=pCufAgeLBe73K_g0"
+  title="YouTube video player"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  referrerpolicy="strict-origin-when-cross-origin"
+  allowfullscreen
+></iframe>
+
+トークンを正しく設定するには、以下の手順に従ってください：
+
+1. **GitHub にアクセスし、プロフィール設定に移動します**：
+
+   - [プロフィール設定ページにアクセスするにはここをクリックしてください](https://github.com/settings/profile)
+
+2. **`Developer Settings` に移動します**：
+
+   - 左サイドバーで下にスクロールして `Developer Settings` を見つけてクリックします。
+
+3. **`Personal Access Tokens` に移動します**：
+
+   - 引き続き左サイドバーで、`Developer Settings` の下の `Personal Access Tokens` を選択します。
+   - 次に [Fine-grained Tokens](https://github.com/settings/tokens?type=beta) をクリックします。
+
+4. **新しいトークンを生成します**：
+
+   - `Generate new token` ボタンをクリックします。
+
+5. **以下の仕様で新しいトークンを設定します**：
+
+   - **トークン名**：`kody_code_review` など識別しやすい名前を選択します。
+   - **有効期限**：可能であれば、少なくとも 180 日以上の長い有効期限を選択します。
+   - **リソースオーナー**：チームのリポジトリが組織下にあるため、組織をトークンオーナーとして設定していることを確認します。
+   - **リポジトリアクセス**：トークンがすべてのリポジトリにアクセスできるよう **すべてのリポジトリ**を選択します。
+   - **権限**：以下の権限を設定します：
+   - **リポジトリ**：
+     - **Actions**：読み取り権限。
+     - **コミットステータス**：読み取り権限。
+     - **コンテンツ**：読み取りと書き込み権限。
+     - **デプロイメント**：読み取り権限。
+     - **イシュー**：読み取り権限。
+     - **メタデータ**：読み取り権限。
+     - **プルリクエスト**：読み取りと書き込み権限。
+     - **Webhooks**：読み取りと書き込み権限。
+   - **組織**：
+     - **メンバー**：読み取り権限。
+
+6. **トークンを確定して保存します**：
+   - 権限を設定したら、`Generate token` をクリックします。
+   - 生成されたトークンをコピーして安全に保存してください。Kody の設定に必要になります。
+
+## Kody へのトークンの追加
+
+トークンを生成した後、自動化設定の Kody 設定画面に貼り付けます。自動化を有効にしようとするとすぐに、モーダルが自動的に開きます。

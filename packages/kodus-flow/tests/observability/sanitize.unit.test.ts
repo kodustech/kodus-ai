@@ -5,6 +5,8 @@
  * Covers: redaction correctness, structural sharing (performance), edge cases.
  */
 
+/* eslint-disable @typescript-eslint/naming-convention -- HTTP header fixtures (user-agent, set-cookie, etc.) */
+
 import { describe, it, expect } from 'vitest';
 import {
     deepSanitize,
@@ -44,6 +46,17 @@ describe('isSensitiveKey', () => {
         expect(isSensitiveKey('Token')).toBe(true);
         expect(isSensitiveKey('ACCESS_TOKEN')).toBe(true);
         expect(isSensitiveKey('ClientSecret')).toBe(true);
+    });
+
+    it('redacta cookie / set-cookie / proxy-authorization (HTTP)', () => {
+        expect(isSensitiveKey('cookie')).toBe(true);
+        expect(isSensitiveKey('Cookie')).toBe(true);
+        expect(isSensitiveKey('set-cookie')).toBe(true);
+        expect(isSensitiveKey('Set-Cookie')).toBe(true);
+        expect(isSensitiveKey('proxy-authorization')).toBe(true);
+        expect(isSensitiveKey('Proxy-Authorization')).toBe(true);
+        expect(isSensitiveKey('x-api-key')).toBe(true);
+        expect(isSensitiveKey('x-auth-token')).toBe(true);
     });
 
     it('não redacta chaves seguras', () => {
@@ -285,6 +298,59 @@ describe('deepSanitize — URL credential stripping em strings', () => {
 // ---------------------------------------------------------------------------
 // deepSanitize — edge cases
 // ---------------------------------------------------------------------------
+
+describe('deepSanitize — got/axios HTTPError shapes', () => {
+    it('redacta authorization em err.request.headers (got)', () => {
+        // Shape real de got HTTPError quando thrown por bitbucket.js
+        const gotError = {
+            name: 'HTTPError',
+            message: '429 Too Many Requests',
+            request: {
+                requestUrl: 'https://api.bitbucket.org/2.0/...',
+                options: {
+                    url: 'https://api.bitbucket.org/2.0/...',
+                    headers: {
+                        'authorization': 'Basic dXNlcjphcHBwYXNzd29yZA==',
+                        'user-agent': 'bitbucket.js',
+                    },
+                },
+                headers: {
+                    authorization: 'Basic dXNlcjphcHBwYXNzd29yZA==',
+                },
+            },
+            response: {
+                statusCode: 429,
+                headers: {
+                    'set-cookie': ['session=abc; HttpOnly'],
+                    'retry-after': '30',
+                },
+            },
+        };
+        const result = deepSanitize(gotError);
+        expect(result.request.options.headers.authorization).toBe('[REDACTED]');
+        expect(result.request.headers.authorization).toBe('[REDACTED]');
+        expect(result.response.headers['set-cookie']).toBe('[REDACTED]');
+        expect(result.response.headers['retry-after']).toBe('30');
+        expect(result.request.options.headers['user-agent']).toBe(
+            'bitbucket.js',
+        );
+        expect(result.response.statusCode).toBe(429);
+    });
+
+    it('redacta cookie em response.headers', () => {
+        const result = deepSanitize({
+            response: { headers: { cookie: 'sessionid=abc123' } },
+        });
+        expect(result.response.headers.cookie).toBe('[REDACTED]');
+    });
+
+    it('redacta proxy-authorization (case-insensitive + hyphens)', () => {
+        const result = deepSanitize({
+            headers: { 'Proxy-Authorization': 'Bearer xyz' },
+        });
+        expect(result.headers['Proxy-Authorization']).toBe('[REDACTED]');
+    });
+});
 
 describe('deepSanitize — edge cases', () => {
     it('retorna primitivos sem modificação', () => {

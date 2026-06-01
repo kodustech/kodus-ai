@@ -1,0 +1,155 @@
+---
+title: "Convierte tu documento de mejores prácticas en reglas de revisión"
+description: "Transforma tu manual de ingeniería en Kody Rules activas con plugins MCP opcionales."
+icon: "shield-check"
+---
+
+## Por qué esta guía es importante
+
+Todos los equipos de ingeniería tienen en algún lugar un documento de "mejores prácticas". El problema es que las sugerencias del IDE no lo leen, los revisores olvidan los matices y el documento pierde autoridad progresivamente. Esta guía muestra cómo convertir tu manual en reglas activas para que Kody las aplique automáticamente y cite la sección relevante cada vez que el código se desvíe.
+
+Nos centraremos en dos elementos fundamentales:
+
+- [Kody Rules](/how_to_use/es/code_review/configs/kody_rules) – codifica cada punto de política como verificaciones deterministas a nivel de archivo o de PR.
+- [Plugins personalizados](/cookbook/es/custom-plugin-install) – obtiene estándares de servidores MCP remotos cuando la fuente de verdad vive fuera de Git.
+
+Sigue el flujo y cualquier repositorio puede evolucionar de "PDF del manual" a "paquete de políticas vivas".
+
+
+## Lista de verificación previa
+
+- Tienes permiso para editar **Configuración de Code Review → Kody Rules**.
+- El paquete de políticas vive en el repositorio (p. ej., `docs/engineering-standards.md`). Si el tuyo está en otra ruta, ajusta en consecuencia. Si está en Notion, Confluence o Google Docs, planea exponerlo a través de un endpoint MCP remoto.
+- Sabes qué temas deben evaluarse a nivel de archivo (controladores, configs) versus a nivel de PR (feature flags, narrativas de despliegue, arquitectura).
+
+<Callout icon="layers">
+  Mantén el manual bajo control de versiones. Cada edición debe pasar por PRs con responsables que den su aprobación. Esa disciplina mantiene las reglas ancladas a la realidad.
+</Callout>
+
+## Fase 1 – Da forma a un paquete de políticas compatible con reglas
+
+1. Crea o reutiliza un archivo markdown como `docs/engineering-standards.md`. El único requisito: Kody debe poder referenciarlo mediante `@file:...`.
+2. Organiza el contenido en puntos cortos y verificables:
+
+```md
+# Engineering Standards
+
+## Error handling
+- Never swallow errors.
+- Do not log PII or secrets.
+- External requests must have a timeout and retry policy.
+
+## Architecture
+- No direct cross-module imports from `domain/*` into `web/*`.
+- New endpoints must include tracing fields (e.g., requestId) and structured logs.
+- Feature flags are mandatory for risky changes.
+```
+
+3. Añade metadatos como `[Owner: Backend Platform]` o `[Risk: High]` para ayudar a enrutar las infracciones.
+
+<Info>
+  Si la fuente de verdad permanece fuera de Git, adopta la misma estructura pero publícala a través de un servidor MCP remoto para que las reglas puedan llamar a `@MCP:policy_pack.getSection(...)`.
+</Info>
+
+<Tip>
+  Haz que cada punto sea atómico. Cuando se active una regla, no debe haber debate sobre qué hay que cambiar.
+</Tip>
+
+
+## Fase 2 – Apunta cada regla al documento real
+
+Las reglas pueden leer archivos y payloads de MCP remotos. Referencia el manual real en lugar de pegar fragmentos en cada instrucción.
+
+```text
+Use @file:docs/engineering-standards.md (Architecture section) as the policy source.
+Only flag code that clearly violates those bullets. If the section is missing, say so.
+```
+
+- Intercambia otras rutas de archivos para paquetes específicos de dominio (p. ej., `@file:docs/mobile.md`).
+- ¿Solo necesitas una parte del archivo? Añade anclas de línea — `@file:docs/engineering-standards.md#L40-L72` — para que la regla consuma solo esa sección.
+- Cuando la política proviene de Notion/Confluence/etc., reemplaza la referencia del archivo por `@MCP:policy_pack.getSection({"id":"security"})`.
+- Combina ambas cuando la regla necesite plantillas estáticas más datos dinámicos (p. ej., `@file` para el formato de log + `@MCP:piiRegistry.list()` para los campos sensibles actuales).
+
+<Callout icon="link">
+  Una sola referencia mantiene todo sincronizado. Actualiza el manual una vez y cada regla aplica la versión más reciente.
+</Callout>
+
+
+## Fase 3 – Traduce las secciones a Kody Rules
+
+Abre **Configuración de Code Review → Kody Rules** y mapea cada sección de política al ámbito apropiado.
+
+| Sección de política    | Tipo de regla | Ejemplo de ámbito                     | Severidad |
+| ---------------------- | ------------- | ------------------------------------- | --------- |
+| Manejo de errores      | Nivel archivo | `backend/**/*.ts`                      | Alta      |
+| Arquitectura           | Nivel PR      | Todos los archivos via `pr_files_diff` | Crítica   |
+| Logging y trazabilidad | Nivel archivo | `web/apps/**/controllers/**/*.ts`     | Media     |
+| Seguridad / PII        | Archivo + MCP | `**/*` con obtención de lista PII     | Crítica   |
+
+### Ejemplo a nivel de archivo
+
+```
+Name: Enforce tracing fields on new endpoints
+Scope: File
+Paths: web/apps/**/controllers/**/*.ts
+Severity: High
+Instructions:
+  Compare fileDiff with Architecture → New endpoints in @file:docs/engineering-standards.md.
+  Flag handlers that lack requestId tracing AND structured log statements.
+  Quote the diff chunk that violates the policy.
+```
+
+### Ejemplo a nivel de PR
+
+```
+Name: Require feature flags for risky changes
+Scope: Pull Request
+Severity: Critical
+Instructions:
+  Scan pr_files_diff for routes/services/domain files that add major functionality.
+  If no feature flag file is touched, cite "Architecture → Feature flags are mandatory" and request the rollout plan.
+```
+
+¿Necesitas datos actualizados para evaluar la regla? Llama a MCP dentro de las instrucciones:
+
+```
+Use @MCP:policy_pack.getSection({"id":"security"}) to fetch the latest restricted fields.
+```
+
+<Info>
+  Las reglas ya comprenden variables (`fileDiff`, `pr_files_diff`, etc.), referencias a archivos e invocaciones MCP. Consulta la matriz completa en la [guía de Kody Rules](/how_to_use/es/code_review/configs/kody_rules).
+</Info>
+
+
+## Fase 4 – Refleja estándares externos via MCP (opcional)
+
+A veces el manual (o parte de él) debe permanecer en Notion, Confluence, Google Docs u otro sistema. Aun así puedes pasárselo a Kody:
+
+1. Construye o adopta un endpoint MCP remoto que exponga `listSections()` y `getSection(id)`.
+2. Instálalo mediante **Agregar Plugin Personalizado**. Sigue la [guía de plugins personalizados](/cookbook/es/custom-plugin-install) para el flujo exacto.
+3. Reemplaza las referencias `@file` por `@MCP:policy_pack.getSection({"id":"architecture"})`.
+4. Almacena en caché las respuestas en el servidor MCP para que múltiples reglas compartan el payload por revisión.
+
+Ahora Kody aplica los mismos estándares independientemente de dónde viva el documento.
+
+## Fase 5 – Prueba, observa y mantén vivo el sistema
+
+<AccordionGroup>
+  <Accordion title="Crea un PR de verificación">
+    Crea un PR desechable que infrinja cada sección. Menciona @kody y verifica que los comentarios en línea y a nivel de PR citen los puntos correctos.
+  </Accordion>
+  <Accordion title="Ajusta el ruido y la severidad">
+    Durante el despliegue, observa con qué frecuencia se activa cada regla. Ajusta los globs de archivos, añade exclusiones o modifica la severidad hasta que la señal cumpla las expectativas.
+  </Accordion>
+  <Accordion title="Actualiza documentación y reglas juntas">
+    Cuando el manual cambie, actualiza el markdown (o payload de MCP) y las reglas relacionadas en el mismo PR para que los revisores puedan validar todo el pipeline.
+  </Accordion>
+</AccordionGroup>
+
+## Lista de verificación rápida
+
+- [ ] `docs/engineering-standards.md` (o equivalente MCP) existe con puntos etiquetados y analizables.
+- [ ] Cada regla referencia el paquete de políticas mediante `@file` o `@MCP`, asegurando que lee el texto más reciente.
+- [ ] Kody Rules a nivel de archivo y de PR cubren tus secciones críticas.
+- [ ] El plugin MCP opcional refleja estándares fuera del repositorio cuando es necesario.
+- [ ] Un PR de prueba confirmó los comentarios en línea y el resumen del PR antes del despliegue general.

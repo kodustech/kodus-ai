@@ -1,4 +1,6 @@
 import {
+    BulkApplyResult,
+    FileBulkOp,
     IPullRequestsRepository,
     PULL_REQUESTS_REPOSITORY_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
@@ -28,6 +30,43 @@ import { createLogger } from '@kodus/flow';
 export class PullRequestsService implements IPullRequestsService {
     private readonly logger = createLogger(PullRequestsService.name);
     private static readonly SAVE_TIMEOUT_MS = 180_000; // 3 min
+    /**
+     * Hard cap on the number of changed files we'll persist for a
+     * single PR. Above this we skip the whole save path and emit a
+     * single warn — see issue #1107.
+     *
+     * Rationale: per-file the new bulk path is O(1) Mongo round-trips
+     * for thousands of files, but two ceilings still bite very large
+     * PRs:
+     *   1. The PR document is capped at 16MB BSON. With 5000+ files
+     *      (each carrying suggestions, metadata, dates) we get
+     *      uncomfortably close.
+     *   2. Webhook traffic on a single PR (push, sync, comment) can
+     *      retrigger the save dozens of times. A 50-file save needs
+     *      to be cheap; a 10k-file save is something we'd rather
+     *      surface to the user than monopolise a worker for.
+     *
+     * Constant on purpose. The issue's proposal #4 (env-tunable) was
+     * rejected — we don't want an operator-tunable knob that quietly
+     * lets the failure return.
+     */
+    private static readonly MAX_FILES_PER_SAVE = 5000;
+
+    private static readonly BINARY_PATCH_EXT =
+        /\.(png|jpe?g|gif|svg|webp|ico|bmp|tiff?|pdf|zip|tar|gz|tgz|bz2|7z|rar|woff2?|ttf|otf|eot|mp4|mov|webm|mp3|wav|flac|ogg|psd|ai|sketch|fig|class|jar|exe|dll|so|dylib|wasm)$/i;
+
+    private static sanitizePatchForPersist(
+        filename: string | undefined,
+        patch: string | undefined,
+    ): string {
+        if (!patch) {
+            return '';
+        }
+        if (filename && PullRequestsService.BINARY_PATCH_EXT.test(filename)) {
+            return '';
+        }
+        return patch;
+    }
 
     constructor(
         @Inject(PULL_REQUESTS_REPOSITORY_TOKEN)
@@ -223,11 +262,13 @@ export class PullRequestsService implements IPullRequestsService {
         prnumber: number,
         repositoryName: string,
         filePath: string,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<IFile | null> {
         return this.pullRequestsRepository.findFileWithSuggestions(
             prnumber,
             repositoryName,
             filePath,
+            organizationAndTeamData,
         );
     }
 
@@ -266,11 +307,13 @@ export class PullRequestsService implements IPullRequestsService {
         pullRequestNumber: number,
         repositoryName: string,
         newFile: Omit<IFile, 'id'>,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null> {
         return this.pullRequestsRepository.addFileToPullRequest(
             pullRequestNumber,
             repositoryName,
             newFile,
+            organizationAndTeamData,
         );
     }
 
@@ -279,13 +322,38 @@ export class PullRequestsService implements IPullRequestsService {
         newSuggestion: Omit<ISuggestion, 'id'>,
         pullRequestNumber: number,
         repositoryName: string,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null> {
         return this.pullRequestsRepository.addSuggestionToFile(
             fileId,
             newSuggestion,
             pullRequestNumber,
             repositoryName,
+            organizationAndTeamData,
         );
+    }
+
+    bulkApplyFileChanges(
+        prUuid: string,
+        organizationId: string,
+        ops: FileBulkOp[],
+    ): Promise<BulkApplyResult> {
+        return this.pullRequestsRepository.bulkApplyFileChanges(
+            prUuid,
+            organizationId,
+            ops,
+        );
+    }
+
+    computeFileTotals(prUuid: string, organizationId: string) {
+        return this.pullRequestsRepository.computeFileTotals(
+            prUuid,
+            organizationId,
+        );
+    }
+
+    newSubDocumentId(): string {
+        return this.pullRequestsRepository.newSubDocumentId();
     }
 
     async findRecentByRepositoryId(
@@ -365,17 +433,24 @@ export class PullRequestsService implements IPullRequestsService {
     async updateFile(
         fileId: string,
         updateData: Partial<IFile>,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null> {
-        return this.pullRequestsRepository.updateFile(fileId, updateData);
+        return this.pullRequestsRepository.updateFile(
+            fileId,
+            updateData,
+            organizationAndTeamData,
+        );
     }
 
     async updateSuggestion(
         suggestionId: string,
         updateData: Partial<ISuggestion>,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null> {
         return this.pullRequestsRepository.updateSuggestion(
             suggestionId,
             updateData,
+            organizationAndTeamData,
         );
     }
 
@@ -420,6 +495,28 @@ export class PullRequestsService implements IPullRequestsService {
         commits: ICommit[],
         prLevelSuggestions?: ISuggestionByPR[],
     ): Promise<IPullRequests | null> {
+        // Gate from issue #1107 / fix A. Very large PRs hit the BSON
+        // 16MB document cap and waste the worker on every webhook
+        // event because the save never completes. Bail out early
+        // with a single warn so the worker can move on to the next
+        // job. The user-facing pipeline still gets a `null` (same
+        // shape as a timeout) so all downstream code paths already
+        // handle this.
+        const fileCount = changedFiles?.length ?? 0;
+        if (fileCount > PullRequestsService.MAX_FILES_PER_SAVE) {
+            this.logger.warn({
+                message: `PR#${pullRequest?.number} has ${fileCount} changed files (> ${PullRequestsService.MAX_FILES_PER_SAVE}); skipping aggregateAndSaveDataStructure`,
+                context: PullRequestsService.name,
+                metadata: {
+                    pullRequestNumber: pullRequest?.number,
+                    repositoryName: repository?.name,
+                    changedFilesCount: fileCount,
+                    threshold: PullRequestsService.MAX_FILES_PER_SAVE,
+                },
+            });
+            return null;
+        }
+
         try {
             return await this.withTimeout(
                 this.aggregateAndSaveInternal(
@@ -506,6 +603,24 @@ export class PullRequestsService implements IPullRequestsService {
             enrichedPullRequest.reviewers = foundReviewers;
         }
 
+        // Pre-flight user batch fetch: warms the Redis cache used by
+        // `getUserByUsername` in a single GraphQL call (GitHub only).
+        // The downstream extractUser/extractUsers (both in the update
+        // branch below and in initializeCodeReviewStructure via the
+        // initial branch) read from that cache, so this collapses up
+        // to 1+N+M parallel REST calls into 1 GraphQL request per save.
+        await this.prefetchUsersForExtraction(
+            [
+                enrichedPullRequest.user,
+                enrichedPullRequest.reviewers ??
+                    enrichedPullRequest.requested_reviewers,
+                enrichedPullRequest.assignees ??
+                    enrichedPullRequest.participants,
+            ],
+            organizationAndTeamData,
+            platformType,
+        );
+
         const existingPR =
             await this.pullRequestsRepository.findByNumberAndRepositoryName(
                 pullRequest?.number,
@@ -585,6 +700,7 @@ export class PullRequestsService implements IPullRequestsService {
         }
 
         return this.handleExistingPullRequest(
+            existingPR,
             enrichedPullRequest,
             repository,
             changedFiles,
@@ -827,7 +943,7 @@ export class PullRequestsService implements IPullRequestsService {
                 structure.prLevelSuggestions = prLevelSuggestions;
             }
 
-            return this.create(structure as Omit<IPullRequests, 'uuid'>);
+            return await this.create(structure as Omit<IPullRequests, 'uuid'>);
         } catch (error) {
             // Detect MongoDB duplicate key error (code 11000)
             const isDuplicateKeyError =
@@ -844,13 +960,10 @@ export class PullRequestsService implements IPullRequestsService {
                     },
                 });
 
-                // Race condition: webhook arrived almost simultaneously (< 1 second)
-                // The first webhook is already processing/processed everything
-                // Just find and return the existing PR (don't reprocess)
                 const existingPR =
-                    await this.pullRequestsRepository.findByNumberAndRepositoryName(
+                    await this.pullRequestsRepository.findByNumberAndRepositoryId(
                         pullRequest?.number,
-                        repository.name,
+                        repository.id,
                         organizationAndTeamData,
                     );
 
@@ -882,104 +995,251 @@ export class PullRequestsService implements IPullRequestsService {
         }
     }
 
+    /**
+     * Issue #1107: rewritten to use a single bulkWrite path instead of
+     * N+1 sequential round-trips. The previous version called
+     * `findFileWithSuggestions` + `updateFile` + per-suggestion
+     * `addSuggestionToFile` for every changed file — on a PR with a
+     * few thousand files (the report had ~5–10k) that produced tens
+     * of thousands of `findOneAndUpdate`s against a Mongo document
+     * close to the 16MB cap, and every webhook timed out at 180s.
+     *
+     * Reuses `existingPR` already loaded by `aggregateAndSaveInternal`
+     * so we don't pay for a second read of an already-large doc.
+     * Builds all operations in memory (no awaits in the loop) and
+     * dispatches them via `bulkApplyFileChanges`, which chunks the
+     * writes. Totals are computed in memory from the new view of
+     * `files` and written once at the end.
+     */
+    /**
+     * Issue #1107: rewritten to use a single bulkWrite path instead of
+     * N+1 sequential round-trips. The previous version called
+     * `findFileWithSuggestions` + `updateFile` + per-suggestion
+     * `addSuggestionToFile` for every changed file — on a PR with a
+     * few thousand files (the report had ~5–10k) that produced tens
+     * of thousands of `findOneAndUpdate`s against a Mongo document
+     * close to the 16MB cap, and every webhook timed out at 180s.
+     *
+     * Defensive behavior added beyond the raw rewrite:
+     *  - Reuses `existingPR` already loaded by
+     *    `aggregateAndSaveInternal`, avoiding a second read of an
+     *    already-large doc.
+     *  - Skips existing files missing `id` or `path` (would cause
+     *    silent no-match in positional `$` updates) and logs them.
+     *  - De-duplicates `changedFiles` by `filename`, since two
+     *    update ops targeting the same `files.$.id` in one chunk
+     *    can race; first occurrence wins.
+     *  - Inspects the `BulkApplyResult` and re-throws when there
+     *    were write errors so callers see the failure instead of a
+     *    silently partial save.
+     *  - Re-derives totals via a server-side aggregation
+     *    (`computeFileTotals`) so they are ground truth and never
+     *    drift from the actual sub-documents.
+     */
     private async handleExistingPullRequest(
+        existingPR: PullRequestsEntity,
         pullRequest: any,
         repository: any,
         changedFiles: Array<any>,
         prioritizedSuggestions: Array<ISuggestion>,
         unusedSuggestions: Array<ISuggestion>,
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<IPullRequests> {
+    ): Promise<IPullRequests | null> {
         try {
-            for (const file of changedFiles) {
-                const existingFile = await this.findFileWithSuggestions(
-                    pullRequest?.number,
-                    repository?.name,
-                    file?.filename,
-                );
+            if (!existingPR?.uuid) {
+                this.logger.error({
+                    message: `handleExistingPullRequest received existingPR without uuid for PR#${pullRequest?.number}`,
+                    context: PullRequestsService.name,
+                    metadata: {
+                        pullRequestNumber: pullRequest?.number,
+                        repositoryName: repository?.name,
+                    },
+                });
+                return null;
+            }
 
-                if (existingFile) {
-                    const updatedFile = {
-                        patch: file.patch ?? '',
+            const organizationId =
+                organizationAndTeamData?.organizationId ??
+                (existingPR as any)?.organizationId;
+            if (!organizationId) {
+                // No org context => can't safely scope writes. Bail
+                // rather than risk a cross-tenant filter mismatch.
+                this.logger.error({
+                    message: `handleExistingPullRequest missing organizationId for PR#${pullRequest?.number}`,
+                    context: PullRequestsService.name,
+                    metadata: {
+                        pullRequestNumber: pullRequest?.number,
+                        prUuid: existingPR.uuid,
+                    },
+                });
+                return null;
+            }
+
+            const existingByPath = new Map<string, IFile>();
+            let skippedInvalidExistingFiles = 0;
+            for (const f of existingPR.files ?? []) {
+                if (!f?.path || !f?.id) {
+                    skippedInvalidExistingFiles += 1;
+                    continue;
+                }
+                existingByPath.set(f.path, f);
+            }
+            if (skippedInvalidExistingFiles > 0) {
+                this.logger.warn({
+                    message: `Skipped ${skippedInvalidExistingFiles} existing files missing id/path on PR#${pullRequest?.number}`,
+                    context: PullRequestsService.name,
+                    metadata: {
+                        pullRequestNumber: pullRequest?.number,
+                        prUuid: existingPR.uuid,
+                        skippedCount: skippedInvalidExistingFiles,
+                    },
+                });
+            }
+
+            const ops: FileBulkOp[] = [];
+            const seenInBatch = new Set<string>();
+            let duplicateChangedFiles = 0;
+            let skippedInvalidChangedFiles = 0;
+            let newFilesCount = 0;
+            let totalNewSuggestions = 0;
+
+            for (const file of changedFiles ?? []) {
+                const filename: string | undefined = file?.filename;
+                if (!filename) {
+                    skippedInvalidChangedFiles += 1;
+                    continue;
+                }
+                if (seenInBatch.has(filename)) {
+                    duplicateChangedFiles += 1;
+                    continue;
+                }
+                seenInBatch.add(filename);
+
+                const newSuggestionsForFile = this.getSuggestionsForFile(
+                    filename,
+                    prioritizedSuggestions,
+                    unusedSuggestions,
+                ).map((s) => ({
+                    ...s,
+                    id: s.id || this.pullRequestsRepository.newSubDocumentId(),
+                }));
+
+                const existing = existingByPath.get(filename);
+
+                if (existing) {
+                    const fileFields = {
+                        patch: PullRequestsService.sanitizePatchForPersist(
+                            filename,
+                            file.patch,
+                        ),
                         status: file.status ?? '',
                         added: file.additions ?? 0,
                         deleted: file.deletions ?? 0,
                         changes: file.changes ?? 0,
                         reviewMode: file.reviewMode ?? '',
                         codeReviewModelUsed: file.codeReviewModelUsed ?? '',
+                        updatedAt: new Date().toISOString(),
                     };
 
-                    await this.updateFile(existingFile.id, updatedFile);
-
-                    const newSuggestions = this.getSuggestionsForFile(
-                        file.filename,
-                        prioritizedSuggestions,
-                        unusedSuggestions,
-                    );
-
-                    for (const suggestion of newSuggestions) {
-                        await this.addSuggestionToFile(
-                            existingFile.id,
-                            suggestion,
-                            pullRequest?.number,
-                            repository?.name,
-                        );
-                    }
-
-                    this.logger.log({
-                        message: `Added new suggestions to existing file ${file.filename} for PR#${pullRequest?.number}`,
-                        context: PullRequestsService.name,
-                        metadata: {
-                            fileId: existingFile.id,
-                            newSuggestionsCount: newSuggestions.length,
-                        },
+                    ops.push({
+                        kind: 'updateFile',
+                        fileId: existing.id,
+                        data: fileFields,
                     });
+
+                    if (newSuggestionsForFile.length > 0) {
+                        ops.push({
+                            kind: 'addSuggestions',
+                            fileId: existing.id,
+                            suggestions: newSuggestionsForFile,
+                        });
+                        totalNewSuggestions += newSuggestionsForFile.length;
+                    }
                 } else {
-                    const formattedFile = {
-                        path: file.filename,
+                    const newFile: IFile = {
+                        id: this.pullRequestsRepository.newSubDocumentId(),
+                        path: filename,
                         sha: file.sha,
-                        filename: file.filename.split('/').pop() || '',
+                        filename: filename.split('/').pop() || '',
                         previousName: file.previous_filename || '',
                         status: file.status,
                         createdAt: new Date().toISOString(),
                         updatedAt: new Date().toISOString(),
-                        suggestions: this.getSuggestionsForFile(
-                            file.filename,
-                            prioritizedSuggestions,
-                            unusedSuggestions,
-                        ),
+                        suggestions: newSuggestionsForFile,
                         added: file.additions ?? 0,
                         deleted: file.deletions ?? 0,
                         changes: file.changes ?? 0,
-                    };
+                    } as IFile;
 
-                    await this.pullRequestsRepository.addFileToPullRequest(
-                        pullRequest.number,
-                        repository.name,
-                        formattedFile,
-                    );
-
-                    this.logger.log({
-                        message: `Added new file ${file.filename} to PR#${pullRequest?.number}`,
-                        context: PullRequestsService.name,
-                        metadata: {
-                            filename: file.filename,
-                            suggestionsCount: formattedFile.suggestions.length,
-                        },
-                    });
+                    ops.push({ kind: 'addFile', file: newFile });
+                    newFilesCount += 1;
+                    totalNewSuggestions += newSuggestionsForFile.length;
                 }
             }
 
-            const newPrEntity = await this.findByNumberAndRepositoryName(
-                pullRequest?.number,
-                repository?.name,
-                organizationAndTeamData,
-            );
+            let bulkResult: BulkApplyResult = {
+                attempted: 0,
+                modified: 0,
+                errors: [],
+            };
 
+            if (ops.length > 0) {
+                bulkResult =
+                    await this.pullRequestsRepository.bulkApplyFileChanges(
+                        existingPR.uuid,
+                        organizationId,
+                        ops,
+                    );
+            }
+
+            if (bulkResult.errors.length > 0) {
+                // Don't silently swallow — log every failure and
+                // surface a single error so the caller sees it.
+                // Totals are still recomputed below from ground
+                // truth so the doc is left in a consistent state.
+                this.logger.error({
+                    message: `bulkApplyFileChanges had ${bulkResult.errors.length} write error(s) for PR#${pullRequest?.number}`,
+                    context: PullRequestsService.name,
+                    metadata: {
+                        pullRequestNumber: pullRequest?.number,
+                        prUuid: existingPR.uuid,
+                        attempted: bulkResult.attempted,
+                        modified: bulkResult.modified,
+                        errorSample: bulkResult.errors.slice(0, 5),
+                    },
+                });
+            }
+
+            this.logger.log({
+                message: `handleExistingPullRequest bulk-applied changes for PR#${pullRequest?.number}`,
+                context: PullRequestsService.name,
+                metadata: {
+                    pullRequestNumber: pullRequest?.number,
+                    repositoryName: repository?.name,
+                    changedFilesCount: changedFiles?.length ?? 0,
+                    bulkOpsCount: ops.length,
+                    bulkAttempted: bulkResult.attempted,
+                    bulkModified: bulkResult.modified,
+                    bulkErrors: bulkResult.errors.length,
+                    newFilesCount,
+                    newSuggestionsCount: totalNewSuggestions,
+                    duplicateChangedFiles,
+                    skippedInvalidChangedFiles,
+                    skippedInvalidExistingFiles,
+                },
+            });
+
+            // Ground-truth totals from server-side aggregation —
+            // never trust an in-memory projection here, because
+            // partial chunk failures or concurrent writes from
+            // another webhook could leave the projection wrong.
             const { totalAdded, totalDeleted, totalChanges } =
-                this.generateTotalFileMetrics(newPrEntity?.files || []);
+                await this.pullRequestsRepository.computeFileTotals(
+                    existingPR.uuid,
+                    organizationId,
+                );
 
-            const updatedPr = await this.update(newPrEntity, {
+            const updatedPr = await this.update(existingPR, {
                 totalAdded,
                 totalDeleted,
                 totalChanges,
@@ -998,6 +1258,7 @@ export class PullRequestsService implements IPullRequestsService {
                     changedFilesCount: changedFiles?.length,
                 },
             });
+            return null;
         }
     }
 
@@ -1162,6 +1423,76 @@ export class PullRequestsService implements IPullRequestsService {
                 },
             });
             return [];
+        }
+    }
+
+    /**
+     * Pre-flight: batch-fetch user data for all candidate user inputs
+     * (author + reviewers + assignees) via the platform's batch API
+     * (GitHub GraphQL today) and warm the `getUserByUsername` Redis
+     * cache. The per-user extractUser/extractUsers calls that follow
+     * then hit cache instead of fanning out N parallel REST round-trips.
+     *
+     * Opportunistic: silent no-op for non-GitHub platforms (the
+     * CodeManagementService wrapper returns null) and on any batch
+     * failure. The fallback path — per-user REST via extractUser — is
+     * always available.
+     */
+    private async prefetchUsersForExtraction(
+        inputs: Array<any | undefined>,
+        organizationAndTeamData: OrganizationAndTeamData,
+        platformType: PlatformType,
+    ): Promise<void> {
+        try {
+            const usernames = new Set<string>();
+
+            // Mirror the discriminator from extractUser: only users
+            // whose branch would call `getUserByUsername` are worth
+            // pre-fetching. Users with a valid email skip the lookup
+            // entirely and would just add noise to the batch.
+            const visit = (data: any) => {
+                if (!data) return;
+                const needsLookup =
+                    data?.role || (!data?.email && !data?.uniqueName);
+                if (!needsLookup) return;
+
+                const login =
+                    data?.login ||
+                    data?.username ||
+                    data?.nickname ||
+                    data?.descriptor ||
+                    '';
+                if (typeof login === 'string' && login.length > 0) {
+                    usernames.add(login);
+                }
+            };
+
+            for (const input of inputs) {
+                if (!input) continue;
+                if (Array.isArray(input)) {
+                    for (const u of input) visit(u);
+                } else {
+                    visit(input);
+                }
+            }
+
+            if (usernames.size === 0) return;
+
+            await this.codeManagement.getUsersByUsername(
+                {
+                    organizationAndTeamData,
+                    usernames: Array.from(usernames),
+                },
+                platformType,
+            );
+        } catch (err) {
+            this.logger.warn({
+                message:
+                    'User batch prefetch failed — falling back to per-user enrichment',
+                context: PullRequestsService.name,
+                error: err,
+                metadata: { organizationAndTeamData, platformType },
+            });
         }
     }
 

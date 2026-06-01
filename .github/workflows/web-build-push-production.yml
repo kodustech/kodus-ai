@@ -6,7 +6,7 @@ name: "Web: Build and Push Production Image"
 
 on:
     release:
-        types: [published]
+        types: [ published ]
     workflow_dispatch:
         inputs:
             image_tag:
@@ -25,10 +25,13 @@ jobs:
              startsWith(github.event.release.tag_name, 'web-'))
         permissions:
             contents: read
+            # Required by github/codeql-action/upload-sarif to publish
+            # Trivy findings to the repo's Security tab.
+            security-events: write
 
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@v4.2.2
+              uses: actions/checkout@v6.0.2
 
             - name: Capture Release Version
               run: |
@@ -43,7 +46,7 @@ jobs:
                   echo "RELEASE_VERSION=$TAG" >> $GITHUB_ENV
 
             - name: Configure AWS Credentials
-              uses: aws-actions/configure-aws-credentials@v4.1.0
+              uses: aws-actions/configure-aws-credentials@v6.1.0
               with:
                   aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
                   aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -96,14 +99,15 @@ jobs:
                   echo WEB_POSTHOG_KEY=$(aws ssm get-parameter --name /prod/kodus-web/WEB_POSTHOG_KEY --query 'Parameter.Value' --output text) >> .env
 
                   echo WEB_HOSTNAME_MCP_MANAGER=$(aws ssm get-parameter --name /prod/kodus-web/WEB_HOSTNAME_MCP_MANAGER --query 'Parameter.Value' --output text) >> .env
+                  echo WEB_HOSTNAME_HELPDESK=$(aws ssm get-parameter --name /prod/kodus-web/WEB_HOSTNAME_HELPDESK --query 'Parameter.Value' --output text) >> .env
                   echo WEB_RULE_FILES_DOCS=$(aws ssm get-parameter --name /prod/kodus-web/WEB_RULE_FILES_DOCS --query 'Parameter.Value' --output text) >> .env
 
             - name: Login to Amazon ECR
               id: login-ecr
-              uses: aws-actions/amazon-ecr-login@v2.0.1
+              uses: aws-actions/amazon-ecr-login@v2.1.4
 
             - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v3.10.0
+              uses: docker/setup-buildx-action@v4.0.0
 
             - name: Build and Push Docker Image
               env:
@@ -118,10 +122,30 @@ jobs:
                     -f docker/Dockerfile.web \
                     -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_SHA \
                     -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION \
-                    apps/web
+                    .
 
                   docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_SHA
                   docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION
+
+            # ---- CVE scan -----------------------------------------------------
+            # See selfhosted-build-push.yml for flag rationale. Advisory-only
+            # (`exit-code: 0`) until backlog triage — flip to `1` to block.
+            - name: Trivy scan — kodus-web
+              uses: aquasecurity/trivy-action@v0.36.0
+              with:
+                  image-ref: ${{ steps.login-ecr.outputs.registry }}/kodus-web-prod:${{
+                      env.RELEASE_VERSION }}
+                  format: "sarif"
+                  output: "trivy-web.sarif"
+                  severity: "CRITICAL,HIGH"
+                  ignore-unfixed: true
+                  exit-code: "0"
+
+            - name: Upload Trivy SARIF reports
+              uses: github/codeql-action/upload-sarif@v4
+              with:
+                  sarif_file: "trivy-web.sarif"
+                  category: "trivy-prod-web"
 
             - name: Cleanup Docker Images
               if: always()
@@ -132,20 +156,22 @@ jobs:
 
             - name: Notify Discord on Success
               if: success()
-              uses: sarisia/actions-status-discord@v1.15.3
+              uses: sarisia/actions-status-discord@v1.16.0
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK }}
-                  content: ":tada: Docker image `${{ env.RELEASE_VERSION }}` was built and pushed to Amazon ECR."
+                  content: ":tada: Docker image `${{ env.RELEASE_VERSION }}` was built and pushed
+                      to Amazon ECR."
                   title: "Build and Push: kodus-web (Cloud)"
                   username: "GitHub Actions"
-                  color: 0x00FF00
+                  color: 0xff00
 
             - name: Notify Discord on Failure
               if: failure()
-              uses: sarisia/actions-status-discord@v1.15.3
+              uses: sarisia/actions-status-discord@v1.16.0
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK }}
-                  content: ":x: Failed to build or push Docker image `${{ env.RELEASE_VERSION }}` to Amazon ECR. Check logs for details."
+                  content: ":x: Failed to build or push Docker image `${{ env.RELEASE_VERSION }}`
+                      to Amazon ECR. Check logs for details."
                   title: "Build and Push: kodus-web (Cloud)"
                   username: "GitHub Actions"
-                  color: 0xFF0000
+                  color: 0xff0000

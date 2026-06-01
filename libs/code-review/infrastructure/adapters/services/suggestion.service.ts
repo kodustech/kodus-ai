@@ -7,7 +7,7 @@ import {
     COMMENT_MANAGER_SERVICE_TOKEN,
     ICommentManagerService,
 } from '@libs/code-review/domain/contracts/CommentManagerService.contract';
-import { CreateSandboxParams } from '@libs/code-review/domain/contracts/sandbox.provider';
+import { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { ISuggestionService } from '@libs/code-review/domain/contracts/SuggestionService.contract';
 import {
     CrossFileContextSnippet,
@@ -38,7 +38,7 @@ import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfac
 
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
-import { extractLinesFromDiffHunk } from '@libs/common/utils/patch';
+import { extractLinesFromUnifiedDiff } from '@libs/common/utils/patch';
 import { LLM_ANALYSIS_SERVICE_TOKEN } from './llmAnalysis.service';
 
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
@@ -154,6 +154,7 @@ export class SuggestionService implements ISuggestionService {
                                     suggestion.implementationStatus,
                                 updatedAt: new Date().toISOString(),
                             },
+                            organizationAndTeamData,
                         );
                     }
                 }
@@ -208,7 +209,7 @@ export class SuggestionService implements ISuggestionService {
         patchWithLinesStr: string,
         codeSuggestions: Partial<CodeSuggestion>[],
     ) {
-        const visibleRanges = extractLinesFromDiffHunk(patchWithLinesStr);
+        const visibleRanges = extractLinesFromUnifiedDiff(patchWithLinesStr);
 
         return codeSuggestions?.filter((suggestion) => {
             const suggestionStart = suggestion?.relevantLinesStart;
@@ -246,7 +247,7 @@ export class SuggestionService implements ISuggestionService {
         memories?: Array<Partial<IKodyRule>>,
         externalReferences?: unknown[],
         externalReferenceErrors?: unknown[] | string,
-        sandboxCloneParams?: CreateSandboxParams,
+        getFreshCloneParams?: () => Promise<CreateSandboxParams>,
         documentationContext?: DocumentationContextItem[],
     ) {
         if (!suggestions?.length) {
@@ -268,7 +269,7 @@ export class SuggestionService implements ISuggestionService {
             memories,
             externalReferences,
             externalReferenceErrors,
-            sandboxCloneParams,
+            getFreshCloneParams,
             documentationContext,
         );
     }
@@ -343,7 +344,7 @@ export class SuggestionService implements ISuggestionService {
             );
         }
 
-        let prioritizedByQuantity: Partial<CodeSuggestion>[] = [];
+        let prioritizedByQuantity: Partial<CodeSuggestion>[];
 
         if (limitationType === LimitationType.SEVERITY && severityLimits) {
             // Nova lógica para limitação por severidade
@@ -1745,6 +1746,28 @@ export class SuggestionService implements ISuggestionService {
                         commentResult?.codeReviewFeedbackData &&
                         commentResult?.deliveryStatus !== DeliveryStatus.FAILED
                     ) {
+                        const commentId =
+                            commentResult?.codeReviewFeedbackData?.commentId;
+                        const pullRequestReviewId =
+                            commentResult?.codeReviewFeedbackData
+                                ?.pullRequestReviewId;
+
+                        if (!commentId || !pullRequestReviewId) {
+                            this.logger.error({
+                                message: `Suggestion enrichment missing comment IDs for PR#${pullRequest.number}`,
+                                context: SuggestionService.name,
+                                metadata: {
+                                    prNumber: pullRequest.number,
+                                    suggestionId: suggestion?.id,
+                                    commentId,
+                                    pullRequestReviewId,
+                                    deliveryStatus:
+                                        commentResult?.deliveryStatus,
+                                    organizationAndTeamData,
+                                },
+                            });
+                        }
+
                         return {
                             ...suggestion,
                             deliveryStatus: commentResult?.deliveryStatus,
@@ -1752,11 +1775,8 @@ export class SuggestionService implements ISuggestionService {
                                 ImplementationStatus.NOT_IMPLEMENTED,
                             comment: {
                                 ...(suggestion?.comment || {}),
-                                id: commentResult?.codeReviewFeedbackData
-                                    ?.commentId,
-                                pullRequestReviewId:
-                                    commentResult?.codeReviewFeedbackData
-                                        ?.pullRequestReviewId,
+                                id: commentId,
+                                pullRequestReviewId,
                             },
                         };
                     }
@@ -1814,6 +1834,27 @@ export class SuggestionService implements ISuggestionService {
                 suggestion?.priorityStatus === PriorityStatus.REPRIORIZED &&
                 result?.deliveryStatus === DeliveryStatus.SENT
             ) {
+                const repriorizedCommentId =
+                    result?.codeReviewFeedbackData?.commentId;
+                const repriorizedPullRequestReviewId =
+                    result?.codeReviewFeedbackData?.pullRequestReviewId;
+
+                if (
+                    result?.codeReviewFeedbackData &&
+                    (!repriorizedCommentId || !repriorizedPullRequestReviewId)
+                ) {
+                    this.logger.error({
+                        message: `Repriorized suggestion enrichment missing comment IDs`,
+                        context: SuggestionService.name,
+                        metadata: {
+                            suggestionId: suggestion?.id,
+                            commentId: repriorizedCommentId,
+                            pullRequestReviewId: repriorizedPullRequestReviewId,
+                            deliveryStatus: result?.deliveryStatus,
+                        },
+                    });
+                }
+
                 repriorizedSuggestions.push({
                     ...suggestion,
                     deliveryStatus: DeliveryStatus.SENT,
@@ -1821,10 +1862,9 @@ export class SuggestionService implements ISuggestionService {
                     comment: result?.codeReviewFeedbackData
                         ? {
                               ...(suggestion?.comment || {}),
-                              id: result.codeReviewFeedbackData.commentId,
+                              id: repriorizedCommentId,
                               pullRequestReviewId:
-                                  result.codeReviewFeedbackData
-                                      .pullRequestReviewId,
+                                  repriorizedPullRequestReviewId,
                           }
                         : suggestion?.comment,
                 });
@@ -1873,12 +1913,33 @@ export class SuggestionService implements ISuggestionService {
                         priorityStatus: PriorityStatus.PRIORITIZED, // Default para PR level
                         deliveryStatus: result.deliveryStatus as DeliveryStatus,
                         comment: result.codeReviewFeedbackData
-                            ? {
-                                  id: result.codeReviewFeedbackData.commentId,
-                                  pullRequestReviewId:
+                            ? (() => {
+                                  const prLevelCommentId =
+                                      result.codeReviewFeedbackData.commentId;
+                                  const prLevelReviewId =
                                       result.codeReviewFeedbackData
-                                          .pullRequestReviewId,
-                              }
+                                          .pullRequestReviewId;
+
+                                  if (!prLevelCommentId || !prLevelReviewId) {
+                                      this.logger.error({
+                                          message: `PR-level suggestion missing comment IDs`,
+                                          context: SuggestionService.name,
+                                          metadata: {
+                                              suggestionId: suggestion.id,
+                                              commentId: prLevelCommentId,
+                                              pullRequestReviewId:
+                                                  prLevelReviewId,
+                                              deliveryStatus:
+                                                  result.deliveryStatus,
+                                          },
+                                      });
+                                  }
+
+                                  return {
+                                      id: prLevelCommentId,
+                                      pullRequestReviewId: prLevelReviewId,
+                                  };
+                              })()
                             : undefined,
                         files: {
                             violatedFileSha:

@@ -1,6 +1,16 @@
 #!/bin/sh
 set -eu
 
+# Point yarn at a named-volume cache instead of the default
+# /usr/local/share/.cache/yarn — that path lives in the container's
+# writable layer, so every install bloated each container by ~4GB
+# (worse: it cached @next/swc binaries for every platform, including
+# Windows/macOS, that the Linux backend never runs). The volume is
+# declared in docker-compose.dev.yml and shared across services so a
+# single install populates the cache once.
+export YARN_CACHE_FOLDER=/yarn-cache
+mkdir -p "$YARN_CACHE_FOLDER"
+
 echo "▶ dev-entrypoint: starting (NODE_ENV=${NODE_ENV:-})"
 
 # ----------------------------------------------------------------
@@ -107,8 +117,22 @@ RUN_MIGRATIONS="${RUN_MIGRATIONS:-false}"
 RUN_SEEDS="${RUN_SEEDS:-false}"
 
 if [ "$RUN_MIGRATIONS" = "true" ]; then
-  echo "▶ Running Migrations..."
+  echo "▶ Running OLTP migrations..."
   npm run migration:run:internal
+  # TypeORM tries to create its `migrations` tracking table inside the
+  # configured schema BEFORE running any migration. The first analytics
+  # migration creates the schema, so the tracking table create dies with
+  # `schema "analytics" does not exist`. This fallback handles existing
+  # volumes (dev/CI) where the initdb create_analytics_schema.sql didn't
+  # run. Idempotent.
+  echo "▶ Ensuring analytics schema exists..."
+  npm run analytics:ensure-schema
+  echo "▶ Running analytics warehouse migrations..."
+  # Same Postgres host in self-hosted / dev; the loader cascades from
+  # ANALYTICS_PG_DB_* to API_PG_DB_* when the dedicated host is unset.
+  npm run analytics:migration:run:internal
+  # MCP manager owns its own schema and runs ensure-schema +
+  # migrations from its own service command (see docker-compose.dev.yml).
 else
   echo "▶ Skipping Migrations (RUN_MIGRATIONS=$RUN_MIGRATIONS)"
 fi

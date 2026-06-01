@@ -361,17 +361,13 @@ export class UnifiedLogHandler {
             return '';
         }
 
-        let directoryPath = '';
-
-        if (!directoryPathParam) {
-            directoryPath = await this.getDirectoryPath(
-                directoryId,
-                repositoryId,
-                organizationId,
-            );
-        } else {
-            directoryPath = directoryPathParam;
-        }
+        const directoryPath = !directoryPathParam
+            ? await this.getDirectoryPath(
+                  directoryId,
+                  repositoryId,
+                  organizationId,
+              )
+            : directoryPathParam;
 
         return directoryPath;
     }
@@ -385,16 +381,9 @@ export class UnifiedLogHandler {
             return '';
         }
 
-        let repositoryName = '';
-
-        if (!repositoryNameParam) {
-            repositoryName = await this.getRepositoryName(
-                repositoryId,
-                organizationId,
-            );
-        } else {
-            repositoryName = repositoryNameParam;
-        }
+        const repositoryName = !repositoryNameParam
+            ? await this.getRepositoryName(repositoryId, organizationId)
+            : repositoryNameParam;
 
         return repositoryName;
     }

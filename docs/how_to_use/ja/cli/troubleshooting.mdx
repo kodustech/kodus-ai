@@ -1,0 +1,131 @@
+---
+title: "トラブルシューティング"
+description: "Kodus CLI の一般的なエラー、終了コード、デバッグ方法。"
+---
+
+調査はまずここから始めましょう:
+
+```bash
+kodus status
+kodus auth status
+kodus review --verbose    # または --verbose 付きの任意のコマンド
+```
+
+`kodus status` は統合された状態（認証モード、組織、リポジトリ、フック、バージョン）を表示します。`--verbose` は解決された API URL とリクエストごとの詳細を出力します。
+
+## 一般的なエラー
+
+<AccordionGroup>
+  <Accordion title="コマンドが見つかりません: kodus">
+    CLI が `PATH` にありません。パッケージマネージャーのグローバルフラグで再インストールするか、一回限りの実行には `npx @kodus/cli <command>` を使用してください。
+
+    - `npm install -g @kodus/cli`
+    - `yarn global add @kodus/cli`
+    - `pnpm add -g @kodus/cli`
+    - `bun add -g @kodus/cli`
+
+    スキルインストーラー経由でインストールした場合は、`curl -fsSL https://review-skill.com/install | bash` を再実行して PATH エントリを修正してください。
+  </Accordion>
+
+  <Accordion title="AUTH_REQUIRED または 401 Unauthorized">
+    - `kodus auth status` で現在のモードを確認。
+    - チームキーを使用している場合は、<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a> でまだアクティブであることを確認。
+    - 個人ログインを使用している場合は、`kodus auth login` を再試行 — リフレッシュトークンが期限切れになっている可能性があります。
+    - CI の場合、`KODUS_TOKEN`（または `KODUS_TEAM_KEY`）がパイプラインが実行される環境に設定されていることを確認。
+    - セルフホストの場合、`KODUS_API_URL` が正しいインスタンスを向いていることを確認。
+  </Accordion>
+
+  <Accordion title="NOT_IN_GIT_REPO">
+    `kodus review` は git の作業ディレクトリが必要です。リポジトリに `cd` するか、`git init` で初期化してください。`kodus config repo` コマンドの場合は、`.` の代わりに `owner/repo` を明示的に渡すことができます。
+  </Accordion>
+
+  <Accordion title="レビューに非常に時間がかかる、または止まっているように見える">
+    大きなブランチ（数百のファイル、数千の行）は数分かかる場合があります。デフォルトのリクエストタイムアウトは60分です — 詳細モードで進行状況が確認できるはずです。
+
+    - `--verbose` でリクエストが進行中であることを確認。
+    - 非常に大きな差分の場合は、作業ツリーモードの代わりに `--branch <base>` または `--commit <sha>` を使用してください: これらによりバックエンドはインライン化されたファイル内容を受信する代わりに同じコミットをクローンできます。
+    - 必要に応じて `KODUS_REQUEST_TIMEOUT_MIN=90 kodus review` でタイムアウトを上書き。
+    - 実用的な場合は、より小さなブランチに分割してください。
+  </Accordion>
+
+  <Accordion title="ファイルがレビューからスキップされている">
+    レビューは `kodus config repo` で設定された `ignore-files` パターンを尊重します。現在の設定を一覧表示:
+
+    ```bash
+    kodus config repo show
+    ```
+
+    パターンを追加または削除できます:
+
+    ```bash
+    kodus config repo add-ignore-file . "**/*.generated.ts"
+    kodus config repo remove-ignore-file . "**/*.generated.ts"
+    ```
+
+    バイナリファイル、画像、ロックファイルはデフォルトでスキップされます。
+  </Accordion>
+
+  <Accordion title="レート制限に達した / トライアルが終了した">
+    トライアルモードでは1日5回のレビューが許可されています。`kodus auth login` でサインインするか、`kodus auth team-key --key kodus_xxxxx` でチームキーを設定して制限を引き上げてください。`kodus auth status` で現在の使用状況を確認できます。
+  </Accordion>
+
+  <Accordion title="API が無効なレスポンスを返した（JSON が期待されたが HTML が返された）">
+    `KODUS_API_URL` が API の代わりにリバースプロキシまたは Cloudflare Access ページに到達しています。確認事項:
+
+    - URL パス（余計な `/api`、`/v1` など）。
+    - 該当する場合、Cloudflare Access の資格情報（`CF_ACCESS_CLIENT_ID`、`CF_ACCESS_CLIENT_SECRET`）。
+    - プロキシが `Authorization` と `CF-Access-*` ヘッダーをそのまま転送していること。
+  </Accordion>
+
+  <Accordion title="API URL に HTTPS が必要です">
+    CLI は `localhost` と `127.0.0.1` 以外のすべてに対して非 HTTPS API URL を拒否します。セルフホスト型インスタンスに有効な TLS 証明書を用意するか、ローカル開発には `http://localhost:<port>` を使用してください。
+  </Accordion>
+
+  <Accordion title="Pre-push フックが実行されていません">
+    - インストールを確認: `kodus hook status`。
+    - `.git/hooks/pre-push` が実行可能であることを確認。
+    - 他のフックマネージャー（Husky、Lefthook、pre-commit）が `.git/hooks/pre-push` を上書きする可能性があります。それらをチェーンするか、`kodus hook install --force` で再インストールしてください。
+    - 単一のプッシュでフックをスキップ: `KODUS_SKIP_HOOK=1 git push`。
+  </Accordion>
+
+  <Accordion title="Decisions（メモリ）フックがキャプチャされていません">
+    - `kodus decisions status` でどのエージェントが接続されているかを確認。
+    - `kodus decisions enable --force` を再実行して統合ファイルを再インストール。
+    - Codex の場合、`~/.codex/config.toml` に `notify = ["kodus", "decisions", "capture", ...]` 行が含まれていることを確認するか、`--codex-config <path>` を渡してください。
+    - エージェントが実際にターン完了イベントを発行していることを確認（一部の古い Claude Code 設定では発行しません）。
+  </Accordion>
+
+  <Accordion title="デバイス制限に達しました">
+    セルフホスト型インスタンスは組織ごとにデバイス制限を強制できます。制限を増やすか、ダッシュボードから未使用のデバイスを削除するよう管理者に依頼してください。
+  </Accordion>
+</AccordionGroup>
+
+## 終了コード
+
+スクリプトと CI パイプラインで使用します。
+
+| コード | 意味                                                                   |
+| ------ | ---------------------------------------------------------------------- |
+| `0`    | 成功。問題が見つからないか、`--fail-on` 以下の問題が見つかった。       |
+| `1`    | `--fail-on` 重要度以上の問題が見つかった。                             |
+| `2`    | CLI 使用エラー（無効なフラグ、引数の欠落）。                           |
+| `3`    | 認証または認可の失敗。                                                 |
+| `4`    | ネットワークまたは API エラー（タイムアウト、5xx、無効なレスポンス）。 |
+| `5`    | git リポジトリにいない、またはレビューする変更がない。                 |
+
+<Tip>
+  CI では、`--fail-on error` と `--format json` と `--output review.json` を組み合わせて、終了コードのロジックに影響を与えずにパイプラインアーティファクトとして構造化された結果を公開します。
+</Tip>
+
+## デバッグのヒント
+
+- **任意のコマンドで `--verbose`** を使用すると、解決された API URL、リクエスト ID、タイミングが表示されます。
+- **`kodus schema`** は機械可読なコマンドスキーマを出力します — エージェントがフラグが見つからないと報告するときに便利です。
+- **`--agent`** は決定論的な機械可読出力を強制します; スクリプト作成時に `--format json` と組み合わせます。
+- **`KODUS_VERBOSE=true`** はセッション内の複数のコマンドにわたって詳細モードを永続化します。
+
+## ヘルプを得る
+
+- バグの報告: [github.com/kodustech/cli/issues](https://github.com/kodustech/cli/issues)
+- 機能リクエスト、設定の質問: Kodus アカウントマネージャー、または `support@kodus.io`。
+- セルフホストデプロイメントの場合は、イシューを申請するときに `kodus status --verbose` の出力を含めてください。

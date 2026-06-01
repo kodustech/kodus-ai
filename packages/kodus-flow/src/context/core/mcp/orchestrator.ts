@@ -213,7 +213,6 @@ export class MCPOrchestrator {
         const startedAt = Date.now();
 
         const runWorker = async (): Promise<void> => {
-            // eslint-disable-next-line no-constant-condition
             while (true) {
                 const currentIndex = index++;
                 if (currentIndex >= required.length) {

@@ -1,22 +1,178 @@
 {
-    "version": "1.1.0",
-    "lastUpdated": "2026-03-02",
+    "version": "1.2.0",
+    "lastUpdated": "2026-04-21",
     "models": [
+        {
+            "id": "claude-sonnet-4-6",
+            "displayName": "Claude Sonnet 4.6",
+            "provider": "anthropic",
+            "tier": "recommended",
+            "benchmarkScore": 88,
+            "description": "Latest Anthropic Sonnet. Strong balance of quality and cost for day-to-day code review.",
+            "speed": "medium",
+            "contextWindow": "200K",
+            "costTier": "$$$",
+            "strengths": [],
+            "weaknesses": [],
+            "apiKeyUrl": "https://console.anthropic.com/settings/keys",
+            "defaults": {
+                "temperature": 0,
+                "maxOutputTokens": 16384,
+                "reasoningEffort": "medium"
+            }
+        },
+        {
+            "id": "claude-opus-4-7",
+            "displayName": "Claude Opus 4.7",
+            "provider": "anthropic",
+            "tier": "recommended",
+            "benchmarkScore": 91,
+            "description": "Anthropic flagship. Highest quality for the hardest reviews — at premium cost.",
+            "speed": "slow",
+            "contextWindow": "1M",
+            "costTier": "$$$",
+            "strengths": [],
+            "weaknesses": [],
+            "apiKeyUrl": "https://console.anthropic.com/settings/keys",
+            "defaults": {
+                "temperature": 0,
+                "maxOutputTokens": 32768,
+                "reasoningEffort": "medium"
+            }
+        },
+        {
+            "id": "gemini-3.1-pro-preview-customtools",
+            "displayName": "Gemini 3.1 Pro (custom tools)",
+            "provider": "google_gemini",
+            "tier": "recommended",
+            "benchmarkScore": 87,
+            "description": "Google flagship variant with custom-tools support. Massive 1M context window.",
+            "speed": "medium",
+            "contextWindow": "1M",
+            "costTier": "$$$",
+            "strengths": [],
+            "weaknesses": [],
+            "apiKeyUrl": "https://aistudio.google.com/apikey",
+            "defaults": {
+                "temperature": 0,
+                "maxOutputTokens": 16384,
+                "reasoningEffort": "medium"
+            }
+        },
+        {
+            "id": "gpt-5.4",
+            "displayName": "GPT-5.4",
+            "provider": "openai",
+            "tier": "recommended",
+            "benchmarkScore": 85,
+            "description": "Latest OpenAI flagship. Consistent low latency and broad knowledge.",
+            "speed": "fast",
+            "contextWindow": "400K",
+            "costTier": "$$$",
+            "strengths": [],
+            "weaknesses": [],
+            "apiKeyUrl": "https://platform.openai.com/api-keys",
+            "defaults": {
+                "temperature": 0,
+                "maxOutputTokens": 16384,
+                "reasoningEffort": "medium"
+            }
+        },
+        {
+            "id": "kimi-k2.6",
+            "displayName": "Kimi K2.6 Coding",
+            "provider": "openai_compatible",
+            "providerDisplayName": "Moonshot AI",
+            "tier": "recommended",
+            "benchmarkScore": 86,
+            "description": "Moonshot model tuned for coding tasks — pick your plan below.",
+            "speed": "medium",
+            "contextWindow": "256K",
+            "costTier": "$",
+            "strengths": [],
+            "weaknesses": [],
+            "apiKeyUrl": "https://platform.moonshot.ai/console/api-keys",
+            "defaults": {
+                "temperature": 1,
+                "maxOutputTokens": 16384,
+                "baseURL": "https://api.moonshot.ai/v1",
+                "reasoningEffort": "medium"
+            },
+            "variants": [
+                {
+                    "id": "moonshot",
+                    "label": "Developer API",
+                    "description": "Pay-per-token. Concurrency scales with your recharge tier (Tier 1: 50 concurrent).",
+                    "baseURL": "https://api.moonshot.ai/v1",
+                    "apiKeyUrl": "https://platform.moonshot.ai/console/api-keys"
+                },
+                {
+                    "id": "kimi-code",
+                    "label": "Kimi Code Plan",
+                    "description": "Subscription plan with a dedicated coding endpoint. Capped at 30 concurrent requests.",
+                    "baseURL": "https://api.kimi.com/coding/v1",
+                    "apiKeyUrl": "https://www.kimi.com/code",
+                    "maxConcurrentRequests": 30
+                }
+            ],
+            "defaultVariantId": "moonshot",
+            "docsUrl": "https://docs.kodus.io/knowledge_base/en/how-to-use-moonshot-with-kodus"
+        },
+        {
+            "id": "glm-5.1",
+            "displayName": "GLM 5.1",
+            "provider": "openai_compatible",
+            "providerDisplayName": "Z.ai",
+            "tier": "recommended",
+            "benchmarkScore": 84,
+            "description": "Z.ai's latest. Connects directly to Z.ai — pick your plan below.",
+            "speed": "medium",
+            "contextWindow": "200K",
+            "costTier": "$",
+            "strengths": [],
+            "weaknesses": [],
+            "apiKeyUrl": "https://z.ai/manage-apikey/apikey-list",
+            "defaults": {
+                "temperature": 0,
+                "maxOutputTokens": 16384,
+                "baseURL": "https://api.z.ai/api/paas/v4/",
+                "reasoningEffort": "medium"
+            },
+            "variants": [
+                {
+                    "id": "paas",
+                    "label": "Developer API",
+                    "description": "Pay-per-token. Keys from the Z.ai API console.",
+                    "baseURL": "https://api.z.ai/api/paas/v4/",
+                    "apiKeyUrl": "https://z.ai/manage-apikey/apikey-list"
+                },
+                {
+                    "id": "coding-plan",
+                    "label": "Coding Plan",
+                    "description": "Flat-rate subscription. Lite/Pro tiers typically allow only 1 concurrent request — bump this in advanced settings if you're on Max.",
+                    "baseURL": "https://api.z.ai/api/coding/paas/v4",
+                    "apiKeyUrl": "https://z.ai/subscribe",
+                    "maxConcurrentRequests": 1
+                }
+            ],
+            "defaultVariantId": "paas",
+            "docsUrl": "https://docs.kodus.io/knowledge_base/en/how-to-use-z-ai-with-kodus"
+        },
         {
             "id": "claude-sonnet-4-5-20250929",
             "displayName": "Claude Sonnet 4.5",
             "provider": "anthropic",
-            "tier": "recommended",
+            "tier": "other",
             "benchmarkScore": 87.1,
-            "description": "Rank #1 overall. Best coverage and cross-file detection across all tested models.",
+            "description": "Previous Sonnet generation. Still solid, but superseded by Sonnet 4.6.",
             "speed": "medium",
             "contextWindow": "200K",
             "costTier": "$$$",
             "strengths": [
                 "Best cross-file detection (90.7%, +4.9pp above avg)",
-                "Highest coverage score (85.0%, +5.2pp above avg)"
+                "High coverage (85.0%, +5.2pp above avg)"
             ],
-            "weaknesses": ["Noise generation at 10.8% (rank #6/8)"],
+            "weaknesses": ["Noise generation at 10.8%"],
             "apiKeyUrl": "https://console.anthropic.com/settings/keys",
             "defaults": {
                 "temperature": 0,
@@ -27,15 +183,15 @@
             "id": "gemini-2.5-pro",
             "displayName": "Gemini 2.5 Pro",
             "provider": "google_gemini",
-            "tier": "recommended",
+            "tier": "other",
             "benchmarkScore": 86.8,
-            "description": "Rank #2 overall. Very low noise with strong local logic detection.",
+            "description": "Previous Gemini Pro generation. Superseded by Gemini 3.1 Pro.",
             "speed": "medium",
             "contextWindow": "1M",
             "costTier": "$$",
             "strengths": [
-                "Very low noise generation (4.3%, rank #2/8)",
-                "Strong local logic detection (86.5%, rank #3/8)"
+                "Very low noise generation (4.3%)",
+                "Strong local logic detection (86.5%)"
             ],
             "weaknesses": ["Coverage below average (78.0%)"],
             "apiKeyUrl": "https://aistudio.google.com/apikey",
@@ -50,15 +206,15 @@
             "provider": "anthropic",
             "tier": "bestValue",
             "benchmarkScore": 85.0,
-            "description": "Rank #4 overall. Highest coverage of all models with fastest response times.",
+            "description": "Fastest Claude with highest coverage. Good cheap fallback.",
             "speed": "fast",
             "contextWindow": "200K",
             "costTier": "$",
             "strengths": [
-                "Highest coverage of all models (88.8%, +9.0pp above avg)",
-                "Fastest responses (p90: 16.7s, p99: 18.9s)"
+                "Highest coverage of all models (88.8%)",
+                "Fastest responses (p90: 16.7s)"
             ],
-            "weaknesses": ["Higher noise generation (18.8%, rank #7/8)"],
+            "weaknesses": ["Higher noise generation (18.8%)"],
             "apiKeyUrl": "https://console.anthropic.com/settings/keys",
             "defaults": {
                 "temperature": 0,
@@ -71,15 +227,15 @@
             "provider": "openrouter",
             "tier": "bestValue",
             "benchmarkScore": 85.0,
-            "description": "Rank #3 overall. Best local logic detection with highest pass rate.",
+            "description": "Previous Kimi generation. Superseded by K2.6 Coding.",
             "speed": "slow",
             "contextWindow": "256K",
             "costTier": "$",
             "strengths": [
-                "Best local logic detection (92.7%, +7.3pp above avg)",
-                "Highest pass rate / fewest errors (52%, 36/75)"
+                "Best local logic detection (92.7%)",
+                "Highest pass rate / fewest errors"
             ],
-            "weaknesses": ["Highest noise generation (21.4%, rank #8/8)"],
+            "weaknesses": ["High noise generation (21.4%)"],
             "apiKeyUrl": "https://openrouter.ai/keys",
             "defaults": {
                 "temperature": 0,
@@ -92,12 +248,12 @@
             "provider": "google_gemini",
             "tier": "budget",
             "benchmarkScore": 83.9,
-            "description": "Rank #6 overall. Largest context window at lowest cost.",
+            "description": "Largest context window at lowest cost.",
             "speed": "medium",
             "contextWindow": "1M",
             "costTier": "$",
             "strengths": [
-                "High pass rate (42.7%, rank #3/8)",
+                "High pass rate (42.7%)",
                 "Low noise generation (9.8%)"
             ],
             "weaknesses": ["Coverage below average (77.6%)"],
@@ -113,17 +269,15 @@
             "provider": "openrouter",
             "tier": "budget",
             "benchmarkScore": 83.8,
-            "description": "Rank #7 overall. Lowest noise generation of all models at low cost via OpenRouter.",
+            "description": "Previous GLM generation. Superseded by GLM 5.1.",
             "speed": "slow",
             "contextWindow": "200K",
             "costTier": "$",
             "strengths": [
                 "Lowest noise generation of all models (4.0%)",
-                "Low cost via OpenRouter ($0.80/$2.56 per 1M tokens)"
+                "Low cost via OpenRouter"
             ],
-            "weaknesses": [
-                "Lowest coverage of all models (71.5%, -8.3pp below avg)"
-            ],
+            "weaknesses": ["Lowest coverage of all models (71.5%)"],
             "apiKeyUrl": "https://openrouter.ai/keys",
             "defaults": {
                 "temperature": 0,
@@ -136,15 +290,15 @@
             "provider": "google_gemini",
             "tier": "other",
             "benchmarkScore": 84.2,
-            "description": "Rank #5 overall. Strong local logic but weakest cross-file detection.",
+            "description": "Base Gemini 3.1 Pro without custom tools. Prefer the custom-tools variant above.",
             "speed": "slow",
             "contextWindow": "1M",
             "costTier": "$$$",
             "strengths": [
-                "Strong local logic (87.5%, rank #2/8)",
+                "Strong local logic (87.5%)",
                 "Low noise generation (8.7%)"
             ],
-            "weaknesses": ["Weakest cross-file detection (80.5%, last place)"],
+            "weaknesses": ["Weakest cross-file detection (80.5%)"],
             "apiKeyUrl": "https://aistudio.google.com/apikey",
             "defaults": {
                 "temperature": 0,
@@ -157,7 +311,7 @@
             "provider": "openai",
             "tier": "other",
             "benchmarkScore": 83.2,
-            "description": "Rank #8 overall. Most consistent latency with low noise.",
+            "description": "Previous GPT generation. Superseded by GPT-5.4.",
             "speed": "fast",
             "contextWindow": "400K",
             "costTier": "$$$",
@@ -165,7 +319,7 @@
                 "Most consistent latency (p50-p99: 19s-34s)",
                 "Low noise generation (8.2%)"
             ],
-            "weaknesses": ["Coverage well below average (74.6%, rank #7/8)"],
+            "weaknesses": ["Coverage well below average (74.6%)"],
             "apiKeyUrl": "https://platform.openai.com/api-keys",
             "defaults": {
                 "temperature": 0,

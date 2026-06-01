@@ -1,0 +1,173 @@
+---
+title: "Together AI - オープンソースモデル"
+description: "Together AIのモデルをKodusで使用する方法"
+icon: "users"
+---
+
+## Together AIの仕組み
+
+Together AIは、数行のコードだけで最先端のオープンソースモデルを簡単に実行できます。このプラットフォームは、高速推論、OpenAI互換のAPI、Llama 4、DeepSeekなどの最先端モデルへのアクセスを提供します。複雑さなしに信頼性が高くスケーラブルなAIインフラを必要とする開発者のために構築されています。
+
+## 推奨モデル
+
+高いコンテキストウィンドウと競争力のある価格を持つ優れたコーディングモデルを推奨します。
+
+<Info>
+  最新情報については、[Together AIの価格ページ](https://www.together.ai/pricing) をご覧ください。
+</Info>
+
+| モデル                              | 価格（100万トークン） | コンテキストウィンドウ |
+| ---------------------------------- | ------------------- | -------------- |
+| **Llama 4 Maverick** `recommended` | $0.27/$0.85         | 約128kトークン   |
+| **DeepSeek-V3**                    | $1.25               | 約128kトークン   |
+| **Llama 3.1 70B Turbo**            | $0.88               | 約128kトークン   |
+| **Qwen 2.5 72B**                   | $1.20               | 約128kトークン   |
+
+## APIキーの作成
+
+<Warning>APIキーを作成するにはTogether AIアカウントが必要です。</Warning>
+
+[Together AI Console](https://api.together.ai) に直接アクセスして新しいAPIキーを作成してください。
+
+または、以下の手順に従ってください：
+
+1. [api.together.ai](https://api.together.ai) でアカウントを作成するか、既にある場合はログインする
+2. メインダッシュボードで「Manage Account」セクションまでスクロールする
+3. 「API Keys」カードの「Manage Keys」ボタンをクリックする
+4. 「Add Key」ボタンをクリックする
+5. 「Kodus」または説明的な名前を付ける
+6. APIキーをコピーして、準備完了です！
+
+<Info>
+  新しいアカウントには、無料で始めるための$1クレジットが付いています。
+</Info>
+
+## 使用方法
+
+<Snippet file="deploy-basic-setup.mdx" />
+
+### 環境ファイルでTogether AIを設定する
+
+`.env` ファイルを編集してコア設定を行います。**LLMインテグレーション**には、固定モードでTogether AIを使用します：
+
+```env
+# コアシステム設定（ドメインを更新してください）
+WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
+WEB_PORT_API=443                               
+NEXTAUTH_URL="https://kodus-web.yourdomain.com"
+
+# セキュリティキー（上記のopensslコマンドで生成）
+WEB_NEXTAUTH_SECRET="your-generated-secret"
+API_CRYPTO_KEY="your-generated-hex-key"
+API_JWT_SECRET="your-generated-secret"
+API_JWT_REFRESH_SECRET="your-generated-secret"
+
+# データベース設定
+API_PG_DB_PASSWORD="your-secure-db-password"
+API_MG_DB_PASSWORD="your-secure-db-password"
+
+# Together AI設定（固定モード） 
+API_LLM_PROVIDER_MODEL="meta-llama/Meta-Llama-4-Maverick-Instruct"  # 希望するモデルを選択
+API_OPENAI_FORCE_BASE_URL="https://api.together.xyz/v1"             # Together AI API URL  
+API_OPEN_AI_API_KEY="your-together-api-key"                         # Your Together AI API Key
+
+# Gitプロバイダーのウェブフック（プロバイダーを選択）
+API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
+# または API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
+# または GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
+```
+
+<Note>
+  ウェブフックURLはWebhooksサービス（ポート3332）に到達する必要があります。専用のウェブフックドメインを使用するか、リバースプロキシで `/.../webhook` をポート3332にルーティングしてください。
+</Note>
+
+<Info>
+  **固定モードはTogether AIに最適です。** 競争力のある価格設定と最先端のオープンソースモデルへのアクセスを持つOpenAI互換のAPIを提供します。
+</Info>
+
+<Snippet file="deploy-installation.mdx" />
+
+### リバースプロキシのセットアップ（本番環境向け）
+
+ウェブフックと外部アクセスのためにNginxを設定します：
+
+```nginx
+# Webアプリ（ポート3000）
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com;
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# API（ポート3001）  
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com;
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Together AIインテグレーションの確認
+
+基本インストールの確認に加えて、Together AIが動作していることを確認します：
+
+```bash
+# Together AI API接続を具体的に確認する
+docker-compose logs api worker | grep -i together
+```
+
+<Tip>
+  SSLセットアップ、監視、高度な設定の詳細については、[完全なデプロイガイド](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm) を参照してください。
+</Tip>
+
+### トラブルシューティング
+
+<AccordionGroup>
+  <Accordion title="APIキーの問題">
+    - [Together AI Console](https://api.together.ai) でAPIキーが正しく有効であることを確認する
+    - Together AIアカウントに十分なクレジットがあるか確認する
+    - `.env` ファイルに余分なスペースがないことを確認する
+    - 新しいアカウントには$1の無料クレジットが付いています
+  </Accordion>
+  
+  <Accordion title="モデルが見つからない">
+    - 設定でモデル名が正しくスペルされているか確認する
+    - Together AIの現在のモデルライブラリでモデルが利用可能か確認する
+    - 推奨リストの別のモデルを試してみる
+    - [Together AIのモデルドキュメント](https://docs.together.ai/docs/serverless-models) を確認する
+  </Accordion>
+  
+  <Accordion title="接続エラー">
+    - サーバーが `api.together.xyz` にアクセスするインターネット接続があることを確認する
+    - ファイアウォールの制限がないか確認する
+    - 詳細なエラーメッセージについてAPI/ワーカーログを確認する
+    - 正しいAPIエンドポイントを使用していることを確認する
+  </Accordion>
+  
+  <Accordion title="レート制限">
+    - Together AIは寛大なレート制限を提供します（LLMの場合、最大6000リクエスト/分）
+    - Together AIダッシュボードで現在の使用量を確認する
+    - より高い制限のために上位プランへのアップグレードを検討する
+    - APIコールを最適化するために使用パターンを監視する
+  </Accordion>
+</AccordionGroup>

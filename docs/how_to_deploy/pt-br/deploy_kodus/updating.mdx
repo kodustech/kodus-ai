@@ -1,0 +1,35 @@
+---
+title: "Atualizando"
+description: "Atualize sua instalação do Kodus."
+icon: "arrow-up"
+---
+
+<Note>
+  Versões com telemetria anônima self-hosted vêm habilitadas por padrão e
+  enviam um heartbeat diário para `telemetry.kodus.io` com apenas
+  contadores agregados — nada de código, nomes ou identificadores.
+  Inspecione o que seria enviado com `yarn telemetry:preview`, ou defina
+  `KODUS_TELEMETRY_DISABLED=true` para optar por sair. Schema completo e
+  política em [Telemetria Anônima](/how_to_deploy/pt-br/deploy_kodus/telemetry).
+</Note>
+
+Para atualizar sua instalação do Kodus para a versão mais recente:
+
+```bash
+# Navegue até o diretório de instalação do Kodus
+cd kodus-installer
+
+# Obtenha as últimas alterações do repositório
+git pull
+
+# Se estiver fazendo upgrade da versão 1.x, atualize seu .env com as novas variáveis da versão 2.0
+# (RabbitMQ, MCP Manager e webhooks).
+
+# Re-execute o instalador para baixar imagens, iniciar serviços e executar migrações
+./scripts/install.sh
+
+# Opcional: executar diagnósticos
+./scripts/doctor.sh
+```
+
+

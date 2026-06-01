@@ -1,5 +1,3 @@
-import { isSelfHosted } from "src/core/utils/self-hosted";
-
 const BASE_SETUP_STEPS = [
     {
         id: "choose-workspace",
@@ -16,11 +14,6 @@ const BASE_SETUP_STEPS = [
     {
         id: "connecting-git-tool",
         path: "/setup/connecting-git-tool",
-    },
-    {
-        id: "byok",
-        path: "/setup/byok",
-        selfHostedOnly: true,
     },
     {
         id: "choosing-repositories",
@@ -42,13 +35,7 @@ const BASE_SETUP_STEPS = [
 
 type SetupStep = (typeof BASE_SETUP_STEPS)[number];
 
-export const SETUP_STEPS: SetupStep[] = BASE_SETUP_STEPS.filter((step) => {
-    if ("selfHostedOnly" in step && step.selfHostedOnly) {
-        return isSelfHosted;
-    }
-
-    return true;
-});
+export const SETUP_STEPS: SetupStep[] = [...BASE_SETUP_STEPS];
 
 export type SetupStepId = SetupStep["id"];
 

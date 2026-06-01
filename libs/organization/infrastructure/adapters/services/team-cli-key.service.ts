@@ -109,6 +109,8 @@ export class TeamCliKeyService implements ITeamCliKeyService {
             }
 
             return {
+                keyId: keyRecord.uuid,
+                keyName: keyRecord.name,
                 team: keyRecord.team,
                 organization: keyRecord.team.organization,
                 config: this.normalizeConfig(keyRecord.config),

@@ -1,0 +1,38 @@
+---
+title: "Frequência de Deploy"
+description: "Meça com que frequência sua equipe faz deploy de código para produção"
+---
+
+## O que é Frequência de Deploy
+
+A Frequência de Deploy mede quantas vezes sua equipe faz deploy de código para produção com sucesso dentro de um determinado período. Essa métrica é um indicador-chave da capacidade da sua equipe de entregar valor rapidamente e manter um pipeline de entrega fluido.
+
+## Como Calculamos
+
+Rastreamos automaticamente cada vez que sua equipe faz merge de código na branch principal (ou branch padrão). Como merges para a main normalmente disparam deploys, isso nos dá uma boa medida de com que frequência sua equipe entrega código para produção.
+
+**O que rastreamos:**
+- Cada merge para sua branch main/padrão
+- O período de tempo que você seleciona (diário, semanal, mensal)
+- Integrações de código bem-sucedidas
+
+**Como é calculado:**
+```
+Frequência de Deploy = (Número de Merges para Main) ÷ (Período em Semanas)
+```
+
+Por exemplo, se você faz merge 12 vezes para main em um período de 4 semanas, sua frequência de deploy é de 3 merges por semana.
+
+**Nota**: Medimos merges para main porque eles tipicamente representam quando o código está pronto para deploy em produção. Se sua equipe tem um fluxo de trabalho diferente (como deploy a partir de feature branches), essa métrica pode precisar de interpretação.
+
+## Por que é Importante
+
+Deploys frequentes garantem que novas funcionalidades e correções de bugs cheguem aos usuários rapidamente, aumentando a satisfação do cliente e a competitividade. Eles também reduzem riscos e facilitam a resolução de problemas.
+
+## Como Melhorar
+
+- Implemente pipelines CI/CD para deploys automatizados
+- Divida grandes alterações em PRs menores
+- Use feature flags para fazer deploy sem expor funcionalidades
+- Implemente infraestrutura como código para deploys repetíveis
+- Configure monitoramento abrangente e rollback rápido

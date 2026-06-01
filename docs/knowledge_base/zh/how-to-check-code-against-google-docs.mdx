@@ -1,0 +1,43 @@
+---
+title: "如何根据 Google Docs 规范检查代码"
+description: "验证拉取请求的实现是否符合 Google Docs 中编写的规范。"
+---
+
+产品规范和需求通常存放在 Google Docs 中。Kodus 可以获取文档内容并将其与 PR 差异进行比较，验证实现是否匹配规范。
+
+## 工作原理
+
+1. **连接 Google Docs 插件** — 在工作区的[插件](/how_to_use/en/code_review/plugins)页面中连接
+2. 确保文档对连接的帐户可访问
+3. 在 PR 中评论：
+
+```
+@kody -v business-logic https://docs.google.com/document/d/1abc123/edit
+```
+
+4. Kody 获取文档，提取需求，并与 PR 差异进行比较
+
+## 您获得什么
+
+Kody 生成结构化验证报告：
+
+- **发现**及严重性：MUST_FIX、SUGGESTION 或 INFO
+- **需求追溯** — 每个发现引用 Google Doc 中的文本
+- **已验证需求** — 正确实现的内容
+
+## 提示
+
+- 保持规范结构化，具有清晰的部分和编号需求以获得最佳效果
+- 您也可以内联粘贴规范内容：
+
+```
+@kody -v business-logic
+## Requirements
+1. Users with role "admin" can delete any comment
+2. Users can only edit their own comments within 24 hours
+3. Deleted comments show "[removed]" placeholder
+```
+
+- 将大文档分解为多个部分并分别验证以获得更集中的反馈
+
+更多详情，请参阅[业务逻辑验证](/how_to_use/en/code_review/business_logic_validation)。

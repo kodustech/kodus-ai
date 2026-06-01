@@ -22,7 +22,12 @@ type RichTextEditorProps = {
     maxLength?: number;
     enableMentions?: boolean;
     saveFormat?: "json" | "text";
-    onTriggerAction?: (pos: number) => void;
+    /**
+     * Called when the user types `@`. Return `true` if the consumer is going
+     * to open a mention popup (the `@` will be swallowed); return `false`/void
+     * to let Tiptap insert the literal `@` character.
+     */
+    onTriggerAction?: (pos: number) => boolean | void;
     editorRefAction?: (el: HTMLDivElement | null) => void;
     editorInstanceAction?: (editor: Editor | null) => void;
     showToolbar?: boolean;
@@ -235,7 +240,8 @@ export function RichTextEditor(props: RichTextEditorProps) {
     }, [onTrigger]);
 
     const handleTriggerMemoized = React.useCallback((pos: number) => {
-        onTriggerRef.current?.(pos);
+        const result = onTriggerRef.current?.(pos);
+        return result === true;
     }, []);
 
     const extensions = React.useMemo(() => {
@@ -335,6 +341,13 @@ export function RichTextEditor(props: RichTextEditorProps) {
             },
         },
     });
+
+    // Keep editable state in sync when disabled prop changes after creation
+    React.useEffect(() => {
+        if (editor && !editor.isDestroyed) {
+            editor.setEditable(!disabled);
+        }
+    }, [editor, disabled]);
 
     React.useEffect(() => {
         if (editor) {

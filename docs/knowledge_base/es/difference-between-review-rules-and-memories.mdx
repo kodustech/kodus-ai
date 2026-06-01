@@ -1,0 +1,61 @@
+---
+title: "Cuál es la diferencia entre Reglas de Revisión y Memorias"
+description: "Comprende cuándo usar Reglas de Revisión versus Memorias en Kody para obtener los mejores resultados en la revisión de código."
+---
+
+En la interfaz de Kody Rules configuras dos cosas distintas, y saber cuándo usar cada una hace que tus revisiones de código sean más efectivas.
+
+Una regla práctica:
+
+- **Las Memorias** le enseñan a Kody cómo funciona tu código para que las futuras revisiones y sugerencias sean más relevantes.
+- **Las Reglas de Revisión** le dicen a Kody qué debe marcar cuando un PR no cumple tus estándares.
+
+## Reglas de Revisión
+
+Las Reglas de Revisión son **verificaciones tradicionales de revisión de código** que se ejecutan durante la etapa dedicada de revisión. Analizan los diffs de archivos o el PR completo según tus criterios definidos.
+
+**Ideales para:**
+- Límites de arquitectura ("la capa de dominio no debe importar infraestructura")
+- Patrones de código ("evitar `==` en condiciones de bucle")
+- Requisitos de PR ("cada archivo de servicio debe tener una prueba")
+- Validación estructural usando variables como `fileDiff`, `pr_files_diff`
+
+**Cómo funcionan:**
+- Se aplican a nivel de archivo o de PR
+- Solo se ejecutan durante la revisión de código
+- Admiten referencias a archivos (`@file`, `@repo`) y funciones MCP
+- Producen sugerencias con niveles de severidad
+
+## Memorias
+
+Las Memorias son **instrucciones contextuales persistentes** que se inyectan en todas las interacciones — revisiones de código, conversaciones y sugerencias de IA. Representan el conocimiento de fondo que Kody debe conservar sobre tu código, tus convenciones y tus preferencias.
+
+**Ideales para:**
+- Contexto del código ("este repositorio refleja una API de terceros, así que algunos campos externos se mantienen intencionalmente en snake_case")
+- Preferencias para sugerencias ("cuando sugieras utilidades JS aquí, prefiere métodos nativos antes que Lodash")
+- Contexto de migración ("el módulo de facturación está a mitad de una migración, así que convienen cambios incrementales y no refactors amplios")
+- Contexto arquitectónico ("este servicio sigue arquitectura hexagonal y deja los adapters en los bordes")
+
+**Cómo funcionan:**
+- Se inyectan como contexto de alta prioridad en todos los prompts
+- Mejoran futuras sugerencias al darle a Kody contexto específico del repositorio
+- Se crean mediante conversación (`@kody remember: ...`) o manualmente en la interfaz
+- Con alcance a directorio, repositorio u organización
+- Kody deduplica automáticamente y resuelve conflictos entre memorias
+
+## Cuándo usar cada una
+
+| Escenario | Usar |
+|-----------|------|
+| Verificar si existe un archivo de prueba para cada servicio | Regla de Revisión |
+| "Este repositorio refleja una API externa, así que algunos campos de respuesta se mantienen intencionalmente en snake_case" | Memoria |
+| La descripción del PR debe seguir una plantilla | Regla de Revisión |
+| "En este servicio, las pruebas suelen vivir junto a la implementación y no en una carpeta central de tests" | Memoria |
+| Marcar importaciones que violan las capas de arquitectura | Regla de Revisión |
+| "El módulo de autenticación está a mitad de una migración, así que convienen cambios incrementales y no refactors amplios" | Memoria |
+
+## ¿Puedo convertir entre ellas?
+
+Sí. En el modal de Memorias Pendientes, puedes **convertir una memoria en una Regla de Revisión** si decides que necesita una aplicación más estructurada con rutas de archivos y niveles de severidad.
+
+Para más detalles, consulta [Kody Rules](/how_to_use/es/code_review/configs/kody_rules).

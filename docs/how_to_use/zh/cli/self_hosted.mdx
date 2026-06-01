@@ -1,0 +1,252 @@
+---
+title: "自托管配置"
+description: "将 Kodus CLI 连接到您的自托管 Kodus 实例。"
+---
+
+如果您在自己的基础设施上运行 Kodus，CLI 的使用方式完全相同 — 只需将其指向您的 API。
+
+## 连接到您的实例
+
+<Steps>
+  <Step title="设置 API URL">
+    告诉 CLI 您的 Kodus API 地址。选择一种方式：
+
+    <Tabs>
+      <Tab title="环境变量（推荐）">
+        ```bash
+        export KODUS_API_URL=https://kodus-api.yourcompany.com
+        ```
+
+        将其添加到 shell 配置文件（`~/.bashrc`、`~/.zshrc` 等）以永久生效：
+
+        ```bash
+        echo 'export KODUS_API_URL=https://kodus-api.yourcompany.com' >> ~/.zshrc
+        source ~/.zshrc
+        ```
+      </Tab>
+      <Tab title="配置文件">
+        创建或编辑 `~/.kodus/config.json`：
+
+        ```json
+        {
+          "apiUrl": "https://kodus-api.yourcompany.com",
+          "teamKey": "kodus_xxxxx",
+          "teamName": "Your Team",
+          "organizationName": "Your Org"
+        }
+        ```
+
+        运行 `kodus auth team-key` 时 CLI 会自动创建此文件，但您也可以手动创建。
+      </Tab>
+      <Tab title="内联（一次性）">
+        ```bash
+        KODUS_API_URL=https://kodus-api.yourcompany.com kodus review
+        ```
+      </Tab>
+    </Tabs>
+
+    <Warning>
+      **必须使用 HTTPS。** 出于安全考虑，CLI 会拒绝非 HTTPS URL。唯一的例外是 `localhost` 和 `127.0.0.1`（用于本地开发）。
+    </Warning>
+
+    **优先级：** `KODUS_API_URL` 环境变量 > `~/.kodus/config.json` 中的 apiUrl > 默认值（`https://api.kodus.io`）。
+  </Step>
+
+  <Step title="认证">
+    <Tabs>
+      <Tab title="团队密钥（推荐）">
+        从您的自托管 Kodus 仪表板生成团队密钥并配置：
+
+        ```bash
+        kodus auth team-key --key kodus_xxxxx
+        ```
+
+        或使用安装器同时设置 API URL 和团队密钥：
+
+        ```bash
+        curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+        ```
+
+        <Tip>团队密钥非常适合共享环境和 AI 代理配置 — 无需个人登录。</Tip>
+      </Tab>
+      <Tab title="个人登录">
+        ```bash
+        kodus auth login
+        ```
+
+        输入在自托管实例上注册的邮箱和密码。令牌以受限权限（600）存储在 `~/.kodus/credentials.json` 中。
+      </Tab>
+      <Tab title="CI/CD 令牌">
+        从个人账户生成令牌，然后在流水线中使用：
+
+        ```bash
+        # 生成（一次性，在已登录的机器上）
+        kodus auth token
+
+        # 在流水线中使用
+        export KODUS_API_URL=https://kodus-api.yourcompany.com
+        export KODUS_TOKEN=<generated-token>
+        kodus review --format json --fail-on error
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="验证连接">
+    ```bash
+    kodus auth status
+    ```
+
+    您应该看到认证模式、组织名称和令牌有效状态。使用详细模式可以查看正在使用的 API URL：
+
+    ```bash
+    kodus auth status --verbose
+    ```
+  </Step>
+</Steps>
+
+## Cloudflare Access（零信任）
+
+如果您的自托管 API 位于 [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/applications/) 之后，CLI 支持服务令牌认证。
+
+<Tabs>
+  <Tab title="环境变量">
+    ```bash
+    export KODUS_API_URL=https://kodus-api.yourcompany.com
+    export CF_ACCESS_CLIENT_ID=your-client-id.access
+    export CF_ACCESS_CLIENT_SECRET=your-client-secret
+    ```
+  </Tab>
+  <Tab title="配置文件">
+    ```json
+    {
+      "apiUrl": "https://kodus-api.yourcompany.com",
+      "teamKey": "kodus_xxxxx",
+      "cfAccessClientId": "your-client-id.access",
+      "cfAccessClientSecret": "your-client-secret"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+配置后，CLI 会在每个 API 请求中发送 `CF-Access-Client-Id` 和 `CF-Access-Client-Secret` 头。优先级：环境变量 > 配置文件。
+
+## 配置文件参考
+
+CLI 将配置存储在 `~/.kodus/config.json` 中：
+
+```json
+{
+  "apiUrl": "https://kodus-api.yourcompany.com",
+  "teamKey": "kodus_xxxxx",
+  "teamName": "Engineering",
+  "organizationName": "Acme Corp",
+  "cfAccessClientId": "your-client-id.access",
+  "cfAccessClientSecret": "your-client-secret"
+}
+```
+
+| 字段 | 必需 | 描述 |
+|------|------|------|
+| `apiUrl` | 否 | 自托管 API URL。可被 `KODUS_API_URL` 环境变量覆盖。 |
+| `teamKey` | 否 | 团队 API 密钥（以 `kodus_` 开头）。可被 `KODUS_TEAM_KEY` 环境变量覆盖。 |
+| `teamName` | 否 | 团队显示名称。 |
+| `organizationName` | 否 | 组织显示名称。 |
+| `cfAccessClientId` | 否 | Cloudflare Access 客户端 ID。可被 `CF_ACCESS_CLIENT_ID` 环境变量覆盖。 |
+| `cfAccessClientSecret` | 否 | Cloudflare Access 客户端密钥。可被 `CF_ACCESS_CLIENT_SECRET` 环境变量覆盖。 |
+
+<Info>
+  配置文件以 `0600` 权限创建（仅所有者可读写）。目录 `~/.kodus/` 以 `0700` 权限创建。
+</Info>
+
+## 环境变量汇总
+
+| 变量 | 描述 |
+|------|------|
+| `KODUS_API_URL` | 自托管 API 端点（需要 HTTPS，localhost 除外） |
+| `KODUS_TEAM_KEY` | 团队共享访问密钥 |
+| `KODUS_TOKEN` | CI/CD 流水线令牌 |
+| `CF_ACCESS_CLIENT_ID` | Cloudflare Access 客户端 ID |
+| `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access 客户端密钥 |
+| `KODUS_VERBOSE` | 设置为 `true` 以查看解析的 API URL 和请求详情 |
+
+## CI/CD 集成
+
+在 CI/CD 流水线中使用自托管实例时，将 API URL 和认证设置为环境变量：
+
+<Tabs>
+  <Tab title="GitHub Actions">
+    ```yaml
+    - name: Kodus Review
+      env:
+        KODUS_API_URL: ${{ secrets.KODUS_API_URL }}
+        KODUS_TEAM_KEY: ${{ secrets.KODUS_TEAM_KEY }}
+      run: npx @kodus/cli review --format json --fail-on error
+    ```
+  </Tab>
+  <Tab title="GitLab CI">
+    ```yaml
+    kodus-review:
+      script:
+        - npx @kodus/cli review --format json --fail-on error
+      variables:
+        KODUS_API_URL: $KODUS_API_URL
+        KODUS_TEAM_KEY: $KODUS_TEAM_KEY
+    ```
+  </Tab>
+  <Tab title="通用">
+    ```bash
+    export KODUS_API_URL=https://kodus-api.yourcompany.com
+    export KODUS_TEAM_KEY=kodus_xxxxx
+    npx @kodus/cli review --format json --fail-on error
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+  使用 `--fail-on error` 或 `--fail-on critical` 在发现超过严重级别阈值的问题时使流水线失败。
+</Tip>
+
+## 在团队中分发
+
+要一条命令完成团队入职，将 API URL 与技能安装器结合：
+
+```bash
+KODUS_API_URL=https://kodus-api.yourcompany.com \
+  curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+```
+
+这将安装 CLI、配置团队密钥，并将审查技能部署到检测到的 AI 代理（Claude Code、Cursor、Windsurf）— 全部指向您的自托管实例。
+
+## 故障排除
+
+<AccordionGroup>
+  <Accordion title="安全错误：API URL 必须使用 HTTPS 协议">
+    CLI 要求所有非 localhost URL 使用 HTTPS。确保您的自托管实例有有效的 TLS 证书。如果是本地测试，请使用 `http://localhost:<port>`。
+  </Accordion>
+
+  <Accordion title="连接被拒绝或超时">
+    - 验证 URL 可达：`curl -I https://kodus-api.yourcompany.com`
+    - 检查防火墙或 VPN 是否阻止了连接
+    - 如果在 Cloudflare Access 之后，确保已设置 `CF_ACCESS_CLIENT_ID` 和 `CF_ACCESS_CLIENT_SECRET`
+    - 使用 `--verbose` 查看正在使用的确切 URL
+  </Accordion>
+
+  <Accordion title="认证失败 (401)">
+    - 运行 `kodus auth status` 检查当前认证状态
+    - 如果使用团队密钥，在自托管仪表板上验证其有效性
+    - 如果使用个人登录，令牌在 1 小时后过期 — CLI 会自动刷新，但如果刷新令牌也已过期，您可能需要重新登录
+    - 确保 `KODUS_API_URL` 指向正确的实例
+  </Accordion>
+
+  <Accordion title="API 返回无效响应（期望 JSON，收到 HTML）">
+    这通常意味着 URL 命中的是反向代理、负载均衡器或 Cloudflare Access 页面，而不是实际的 API。请检查：
+    - URL 路径是否正确（没有多余的 `/api` 等）
+    - 如果适用，是否已配置 Cloudflare Access 凭据
+    - 反向代理是否正确转发请求
+  </Accordion>
+
+  <Accordion title="设备限制已达上限">
+    您的自托管实例可能对每个组织强制执行设备限制。联系管理员增加限制或从仪表板中移除旧设备。
+  </Accordion>
+</AccordionGroup>

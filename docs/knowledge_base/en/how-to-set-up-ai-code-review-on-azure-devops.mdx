@@ -1,0 +1,31 @@
+---
+title: "How to set up AI code review on Azure DevOps"
+description: "Install and configure Kodus for Azure DevOps repositories to get automated AI code review on every pull request."
+---
+
+Kodus integrates with Azure DevOps via webhooks. Once configured, every pull request gets reviewed automatically.
+
+## Steps
+
+1. **Create an account** at [kodus.io](https://kodus.io) or [self-host Kodus](/how_to_deploy/en/deploy_kodus/generic_vm)
+2. **Connect Azure DevOps** — authorize during setup and configure your Personal Access Token
+3. **Configure webhooks** — follow the guided setup to enable pull request events
+4. **Select repositories** — choose which Azure DevOps repositories Kodus should review
+5. **Open a pull request** — Kodus reviews it automatically
+
+## What you get
+
+- Automated reviews on every PR
+- Comments posted directly in the pull request
+- Customizable rules and suggestion controls
+- Business logic validation against linked work items
+
+## Custom configuration
+
+Drop a `kodus-config.yml` in your repo root to customize behavior per repository. The file overrides web settings automatically.
+
+## Using a Personal Access Token
+
+Azure DevOps requires a PAT for Kodus to access your repositories and post review comments. Make sure the token has the appropriate scopes for code read and PR comment access.
+
+For the full setup guide, see [Azure DevOps Webhooks](/how_to_deploy/en/platforms/azure_devops/azdevops_webhook) and [Azure DevOps PAT](/how_to_use/en/code_review/general_config/azure_devops_pat).

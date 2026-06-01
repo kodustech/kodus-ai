@@ -1,4 +1,12 @@
-FROM docker.io/library/node:22.22.0-slim AS base
+# syntax=docker/dockerfile:1.7
+# `# syntax=...` on line 1 enables BuildKit features like `--mount=type=cache`
+# and `--mount=type=secret`. Requires BuildKit (default in Docker 23+).
+
+# Global ARG — must be declared before the first FROM so it can be used in
+# the `oven/bun:${BUN_VERSION}-debian` stage below.
+ARG BUN_VERSION=1.2.12
+
+FROM docker.io/library/node:22.22.2-slim AS base
 WORKDIR /usr/src/app
 
 ARG API_CLOUD_MODE=false
@@ -9,9 +17,24 @@ ENV API_DEVELOPMENT_MODE=false
 ENV RELEASE_VERSION=${RELEASE_VERSION}
 ENV SENTRY_RELEASE=${RELEASE_VERSION}
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates git python3 make g++ procps \
-  && rm -rf /var/lib/apt/lists/*
+# Yarn1's default HTTP timeout is 30s, too tight for slow paths to
+# registry.npmjs.org from the GitHub Actions runners — a single laggy
+# tarball (e.g. date-fns) blows the whole `yarn install` after 4 retries
+# and aborts the bake. Yarn1 honours `network-timeout` from `.yarnrc`
+# (NOT the env var; YARN_HTTP_TIMEOUT does nothing on yarn1), so set it
+# globally here. Inherited by `deps` and `prod-deps` since they FROM base.
+RUN echo 'network-timeout 600000' > /root/.yarnrc
+
+# apt cache mounts persist /var/cache/apt and /var/lib/apt across builds so
+# repeated apt-get runs don't re-download the same .deb packages. The
+# `docker-clean` apt hook (ships in debian-slim) would delete the cache
+# after each install, defeating the mount — remove it first.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates git python3 make g++ procps
 
 RUN corepack disable \
   && npm i -g yarn@1.22.22
@@ -21,12 +44,32 @@ COPY package.json yarn.lock .npmrc ./
 COPY packages/kodus-common ./packages/kodus-common
 COPY packages/kodus-flow ./packages/kodus-flow
 
-# Build local packages first
-RUN cd packages/kodus-common && yarn install && yarn prepack
-RUN cd packages/kodus-flow && yarn install && yarn build
+# `YARN_CACHE_FOLDER` points yarn at a BuildKit cache mount so downloaded
+# tarballs survive across builds. `sharing=locked` serializes concurrent
+# access to the cache directory to avoid corruption (yarn v1 is not safe
+# under concurrent writes to its cache).
+#
+# The `npmrc` BuildKit secret (optional) lets CI inject auth for the
+# @kodus registry without the token ever landing in an image layer.
+# Usage: `docker buildx build --secret id=npmrc,src=$HOME/.npmrc ...`.
+# When the secret is absent (required=false), the repo-local .npmrc
+# copied above stays in effect — today that file only holds registry
+# URLs, no tokens, so builds still work unauthenticated.
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
+    --mount=type=cache,target=/yarn-cache,sharing=locked \
+    cd packages/kodus-common \
+  && YARN_CACHE_FOLDER=/yarn-cache yarn install \
+  && YARN_CACHE_FOLDER=/yarn-cache yarn prepack
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
+    --mount=type=cache,target=/yarn-cache,sharing=locked \
+    cd packages/kodus-flow \
+  && YARN_CACHE_FOLDER=/yarn-cache yarn install \
+  && YARN_CACHE_FOLDER=/yarn-cache yarn build
 
 # Install dependencies and link local packages
-RUN yarn install --frozen-lockfile
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
+    --mount=type=cache,target=/yarn-cache,sharing=locked \
+    YARN_CACHE_FOLDER=/yarn-cache yarn install --frozen-lockfile
 RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
 RUN rm -rf node_modules/@kodus/flow && cp -r packages/kodus-flow node_modules/@kodus/flow
 
@@ -54,16 +97,46 @@ COPY package.json yarn.lock .npmrc ./
 COPY packages/kodus-common ./packages/kodus-common
 COPY packages/kodus-flow ./packages/kodus-flow
 
-# Build local packages first
-RUN cd packages/kodus-common && yarn install && yarn prepack
-RUN cd packages/kodus-flow && yarn install && yarn build
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
+    --mount=type=cache,target=/yarn-cache,sharing=locked \
+    cd packages/kodus-common \
+  && YARN_CACHE_FOLDER=/yarn-cache yarn install \
+  && YARN_CACHE_FOLDER=/yarn-cache yarn prepack
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
+    --mount=type=cache,target=/yarn-cache,sharing=locked \
+    cd packages/kodus-flow \
+  && YARN_CACHE_FOLDER=/yarn-cache yarn install \
+  && YARN_CACHE_FOLDER=/yarn-cache yarn build
 
-# Install dependencies and link local packages
-RUN yarn install --frozen-lockfile && yarn cache clean
+# --production=true skips devDependencies (TypeScript, Nest CLI, Jest,
+# ESLint, etc.) since the `build` stage already produced the compiled
+# output in ../build/usr/src/app/dist. --prefer-offline + the shared yarn
+# cache means we reuse the tarballs already downloaded by `deps`.
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
+    --mount=type=cache,target=/yarn-cache,sharing=locked \
+    YARN_CACHE_FOLDER=/yarn-cache yarn install --frozen-lockfile --prefer-offline --production=true
+
+# Link local packages. Drop the nested node_modules/src/test that were
+# needed for `yarn prepack` but not at runtime — keeping them would
+# duplicate ~450MB inside the final image for no benefit. `dist/` and
+# `package.json` are what Node actually resolves.
+RUN rm -rf packages/kodus-common/node_modules packages/kodus-flow/node_modules \
+           packages/kodus-common/src packages/kodus-flow/src \
+           packages/kodus-common/test packages/kodus-flow/test
 RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
 RUN rm -rf node_modules/@kodus/flow && cp -r packages/kodus-flow node_modules/@kodus/flow
 
-FROM docker.io/library/node:22.22.0-slim AS runtime-common
+# Dedicated stage for the bun binary. Using the official oven/bun image
+# instead of `curl bun.sh/install | bash` because:
+#   - Docker Hub CDN is more reliable for tagged images than GitHub releases
+#     (the install script's internal curl hit 504s on GitHub during builds).
+#   - Buildx caches the pulled image; subsequent builds skip the download.
+#   - Eliminates `curl`/`unzip` installed just to delete them later.
+# BUN_VERSION is declared as a global ARG at the top of this file.
+FROM docker.io/oven/bun:${BUN_VERSION}-debian AS bun-source
+
+FROM docker.io/library/node:22.22.2-slim AS runtime-common
+LABEL org.opencontainers.image.source="https://github.com/kodustech/kodus-ai"
 WORKDIR /usr/src/app
 ENV NODE_ENV=production
 
@@ -77,12 +150,20 @@ ENV API_DEVELOPMENT_MODE=false
 ENV RELEASE_VERSION=${RELEASE_VERSION}
 ENV SENTRY_RELEASE=${RELEASE_VERSION}
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates procps git ripgrep \
-  && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates procps git ripgrep
+
+# Copy the bun binary from the official image and install kodus-graph with it.
+COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun
+RUN bun install -g @kodus/kodus-graph
 
 COPY --chown=1000:1000 --from=prod-deps /usr/src/app/node_modules ./node_modules
 COPY --chown=1000:1000 --from=build /usr/src/app/dist ./dist
+COPY --chown=1000:1000 --from=build /usr/src/app/libs/agents/skills ./libs/agents/skills
 COPY --chown=1000:1000 --from=build /usr/src/app/package.json ./package.json
 COPY --chown=1000:1000 --from=build /usr/src/app/default-kodus-config.yml ./default-kodus-config.yml
 COPY --chown=1000:1000 --from=build /usr/src/app/kodus-config.yml ./kodus-config.yml
@@ -90,8 +171,13 @@ COPY --chown=1000:1000 --from=build /usr/src/app/scripts ./scripts
 COPY --chown=1000:1000 --from=build /usr/src/app/tsconfig-paths-bootstrap.js ./tsconfig-paths-bootstrap.js
 
 COPY --chmod=0755 docker/prod-entrypoint.sh /usr/local/bin/prod-entrypoint
+COPY --chmod=0755 docker/prod-entrypoint-mcp-manager.sh /usr/local/bin/prod-entrypoint-mcp-manager
 
-# Give ownership of working directory to user 1000 so they can create files (like ormlogs.log)
+# Ensure the working directory is owned by user 1000 so Node can read
+# the tree as a non-root user. The image no longer writes files into
+# /usr/src/app at runtime (TypeORM CLI logs stream to stdout via
+# ormconfig.ts `logger: 'advanced-console'`), so this is strictly an
+# ownership fix for the non-root USER 1000 below — not a write path.
 RUN chown 1000:1000 /usr/src/app
 
 USER 1000
@@ -104,3 +190,6 @@ FROM runtime-common AS webhooks
 CMD ["node", "dist/apps/webhooks/main.js"]
 FROM runtime-common AS worker
 CMD ["node", "dist/apps/worker/main.js"]
+FROM runtime-common AS mcp-manager
+ENTRYPOINT ["/usr/local/bin/prod-entrypoint-mcp-manager"]
+CMD ["node", "dist/apps/mcp-manager/main.js"]

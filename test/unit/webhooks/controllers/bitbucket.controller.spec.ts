@@ -42,7 +42,7 @@ describe('BitbucketController', () => {
             expect(enqueueWebhookUseCase.execute).toHaveBeenCalledWith({
                 platformType: 'BITBUCKET',
                 event: 'pullrequest:created',
-                payload: { pullrequest: { id: 1 } },
+                payload: { pullrequest: { id: 1 }, isDataCenterEvent: false },
             });
         });
 
@@ -62,7 +62,7 @@ describe('BitbucketController', () => {
             expect(enqueueWebhookUseCase.execute).toHaveBeenCalledWith({
                 platformType: 'BITBUCKET',
                 event: 'pullrequest:updated',
-                payload: { pullrequest: { id: 1 } },
+                payload: { pullrequest: { id: 1 }, isDataCenterEvent: false },
             });
         });
 
@@ -120,6 +120,7 @@ describe('BitbucketController', () => {
                 payload: {
                     pullrequest: { id: 1 },
                     comment: { content: { raw: '@kody review' } },
+                    isDataCenterEvent: false,
                 },
             });
         });

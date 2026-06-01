@@ -267,6 +267,7 @@ describe('mapRepository - repository URL must be the web URL', () => {
                         },
                     },
                 },
+                isDataCenterEvent: false,
             };
 
             const result = mapper.mapRepository({ payload: payload as any });
@@ -326,6 +327,7 @@ describe('mapRepository - repository URL must be the web URL', () => {
                     full_name: 'workspace/repo',
                     uuid: 'repo-uuid',
                 },
+                isDataCenterEvent: false,
             };
 
             const result = mapper.mapRepository({ payload: payload as any });

@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import { deleteCookie, getCookie } from "cookies-next";
 import { signIn } from "next-auth/react";
 
+import { useConfig } from "@providers/ConfigProvider";
+
 export default function SsoCallbackPage() {
     const router = useRouter();
+    const { nodeEnv } = useConfig();
 
     useEffect(() => {
-        const domain =
-            process.env.WEB_NODE_ENV !== "development"
-                ? ".kodus.io"
-                : undefined;
+        const domain = nodeEnv !== "development" ? ".kodus.io" : undefined;
 
         const handoffCookie = getCookie("sso_handoff", { domain });
         deleteCookie("sso_handoff", { domain });
@@ -33,7 +33,7 @@ export default function SsoCallbackPage() {
         } else {
             router.push("/sign-out");
         }
-    }, [router]);
+    }, [router, nodeEnv]);
 
     return (
         <div className="flex h-screen items-center justify-center">

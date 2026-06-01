@@ -345,10 +345,253 @@ async function runForAccount(account) {
     return createdPRs;
 }
 
+/**
+ * Load targeted PR config from prs.json or PR_CONFIG env var.
+ * Format: { "prs": [{ "repo": "owner/name", "head": "branch", "base": "main", "title?": "..." }] }
+ */
+async function loadTargetedPRs() {
+    const envPath = process.env.PR_CONFIG;
+    const defaultPath = path.join(__dirname, 'prs.json');
+    const configPath = envPath
+        ? path.resolve(process.cwd(), envPath)
+        : defaultPath;
+
+    try {
+        await fs.access(configPath);
+        const raw = await fs.readFile(configPath, 'utf-8');
+        const data = JSON.parse(raw);
+        const prs = Array.isArray(data) ? data : data.prs;
+        if (!Array.isArray(prs) || prs.length === 0) return null;
+        return prs;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Azure DevOps variant: pr.repo is "<org>/<project>/<repoName>".
+ * Abandon any active PR with the same sourceRef, then create a new one.
+ */
+async function closeAndCreateAzurePR(pr, token) {
+    const segments = pr.repo.split('/').filter(Boolean);
+    if (segments.length < 3) {
+        console.error(`   ❌ Azure repo must be "<org>/<project>/<repo>": ${pr.repo}`);
+        return null;
+    }
+    const [org, project, repoName] = segments.slice(-3);
+    const apiBase = `https://dev.azure.com/${org}/${project}/_apis/git/repositories/${encodeURIComponent(repoName)}`;
+    const headers = {
+        'Authorization': getAzureAuthHeader(token),
+        'Content-Type': 'application/json',
+    };
+
+    try {
+        const sourceRef = `refs/heads/${pr.head}`;
+        const listUrl =
+            `${apiBase}/pullrequests?searchCriteria.status=active` +
+            `&searchCriteria.sourceRefName=${encodeURIComponent(sourceRef)}` +
+            `&api-version=6.0`;
+        const listResp = await fetch(listUrl, { headers });
+        if (listResp.ok) {
+            const data = await listResp.json();
+            for (const existing of data?.value ?? []) {
+                console.log(`   🗑️  Abandoning existing PR !${existing.pullRequestId}`);
+                await fetch(
+                    `${apiBase}/pullrequests/${existing.pullRequestId}?api-version=6.0`,
+                    {
+                        method: 'PATCH',
+                        headers,
+                        body: JSON.stringify({ status: 'abandoned' }),
+                    },
+                );
+                await new Promise((r) => setTimeout(r, 500));
+            }
+        }
+    } catch (e) {
+        console.warn(`   ⚠️  Failed to close existing Azure PRs: ${e.message}`);
+    }
+
+    const title = pr.title || `${pr.head} → ${pr.base}`;
+    console.log(`📝 Creating PR for ${pr.repo}: ${pr.head} → ${pr.base}`);
+
+    try {
+        const response = await fetch(`${apiBase}/pullrequests?api-version=6.0`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                title,
+                description: `Test PR: ${pr.head} → ${pr.base}`,
+                sourceRefName: `refs/heads/${pr.head}`,
+                targetRefName: `refs/heads/${pr.base}`,
+            }),
+        });
+        if (!response.ok) {
+            const err = await response.text();
+            console.error(`   ❌ Failed: ${err}`);
+            return null;
+        }
+        const data = await response.json();
+        const prUrl =
+            data?._links?.web?.href ||
+            `https://dev.azure.com/${org}/${project}/_git/${repoName}/pullrequest/${data.pullRequestId}`;
+        console.log(`   ✅ PR created: ${prUrl}`);
+        await new Promise((r) => setTimeout(r, 1500));
+        return prUrl;
+    } catch (e) {
+        console.error(`   ❌ Error: ${e.message}`);
+        return null;
+    }
+}
+
+/**
+ * Close existing PR for a specific head branch, then create a new one.
+ */
+async function closeAndCreatePR(pr, token) {
+    const platform = pr.platform || 'github';
+
+    if (platform === 'azuredevops') {
+        return await closeAndCreateAzurePR(pr, token);
+    }
+
+    const [owner, name] = pr.repo.split('/');
+
+    // Close existing PR with same head branch
+    try {
+        if (platform === 'github') {
+            const listResp = await fetch(
+                `https://api.github.com/repos/${owner}/${name}/pulls?state=open&head=${owner}:${pr.head}`,
+                { headers: { Authorization: `Bearer ${token}` } },
+            );
+            if (listResp.ok) {
+                const existing = await listResp.json();
+                for (const existingPr of existing) {
+                    console.log(`   🗑️  Closing existing PR #${existingPr.number}`);
+                    await fetch(
+                        `https://api.github.com/repos/${owner}/${name}/pulls/${existingPr.number}`,
+                        {
+                            method: 'PATCH',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ state: 'closed' }),
+                        },
+                    );
+                    await new Promise((r) => setTimeout(r, 1000));
+                }
+            }
+        }
+    } catch (e) {
+        console.warn(`   ⚠️  Failed to close existing PRs: ${e.message}`);
+    }
+
+    // Create new PR
+    const title = pr.title || `${pr.head} → ${pr.base}`;
+    console.log(`📝 Creating PR for ${pr.repo}: ${pr.head} → ${pr.base}`);
+
+    try {
+        if (platform === 'github') {
+            const response = await fetch(
+                `https://api.github.com/repos/${owner}/${name}/pulls`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        title,
+                        body: `Test PR: ${pr.head} → ${pr.base}`,
+                        head: pr.head,
+                        base: pr.base,
+                    }),
+                },
+            );
+            if (!response.ok) {
+                const err = await response.text();
+                console.error(`   ❌ Failed: ${err}`);
+                return null;
+            }
+            const data = await response.json();
+            console.log(`   ✅ PR created: ${data.html_url}`);
+            await new Promise((r) => setTimeout(r, 2000));
+            return data.html_url;
+        }
+    } catch (e) {
+        console.error(`   ❌ Error: ${e.message}`);
+        return null;
+    }
+}
+
+/**
+ * Run targeted mode — create specific PRs from prs.json config.
+ */
+async function runTargeted(targetedPRs) {
+    const limit = CONFIG.totalPRs;
+    if (limit && limit < targetedPRs.length) {
+        // Distribute evenly across repos instead of taking the first N
+        const byRepo = {};
+        for (const pr of targetedPRs) {
+            const repo = pr.repo;
+            if (!byRepo[repo]) byRepo[repo] = [];
+            byRepo[repo].push(pr);
+        }
+        const repos = Object.keys(byRepo);
+        const perRepo = Math.ceil(limit / repos.length);
+        const selected = [];
+        for (const repo of repos) {
+            selected.push(...byRepo[repo].slice(0, perRepo));
+        }
+        targetedPRs = selected.slice(0, limit);
+    }
+    console.log(`🎯 Targeted mode: ${targetedPRs.length} PR(s) to create${limit ? ` (limit: ${limit})` : ''}\n`);
+
+    const tokensByPlatform = {
+        github:
+            CONFIG.githubToken ||
+            process.env.GITHUB_TOKEN ||
+            process.env.GH_TOKEN,
+        azuredevops: CONFIG.azureDevOpsToken,
+    };
+
+    const createdPRs = [];
+    for (const pr of targetedPRs) {
+        if (!pr.repo || !pr.head || !pr.base) {
+            console.warn(`   ⚠️  Skipping invalid PR config: ${JSON.stringify(pr)}`);
+            continue;
+        }
+        const platform = pr.platform || 'github';
+        const prToken = tokensByPlatform[platform];
+        if (!prToken) {
+            console.error(
+                `   ❌ Missing token for platform '${platform}' — skipping ${pr.repo}`,
+            );
+            continue;
+        }
+        const url = await closeAndCreatePR(pr, prToken);
+        if (url) createdPRs.push(url);
+    }
+
+    return createdPRs;
+}
+
 async function main() {
     console.log('🚀 Kodus PR Creator\n');
     console.log(`🔗 API URL: ${CONFIG.kodusUrl}\n`);
 
+    // Check for targeted PRs config first
+    const targetedPRs = await loadTargetedPRs();
+    if (targetedPRs) {
+        const created = await runTargeted(targetedPRs);
+        if (created.length > 0) {
+            console.log('\n📋 Created PRs Summary:');
+            console.log(`   Total: ${created.length} PR(s)\n`);
+            created.forEach((url, i) => console.log(`   ${i + 1}. ${url}`));
+        }
+        return;
+    }
+
+    // Original flow — random PRs from account repos
     const accounts = await loadAccounts();
     const accountsToRun = accounts?.length
         ? accounts

@@ -1,0 +1,27 @@
+id: bitbucket-only
+description: |
+    Isolation probe: a full bitbucket × license-paid cell with all 5
+    P0 scenarios, NOTHING else (no github, gitlab, azure cells before
+    it). Compares against the smoke result (1 scenario alone, PASSED
+    on 2026-05-23T19:10) to determine whether the bb matrix failures
+    are caused by:
+
+      (a) intra-bb-cell repetition (5 scenarios sharing a token on bb)
+          → this matrix will also fail
+      (b) cross-cell pollution from github/gitlab cells running before
+          bb → this matrix will pass
+
+    No conclusion = no fix.
+
+scenarios:
+    - onboarding-webhook-registration
+    - code-review-basic
+    - command-review
+    - kody-rules-create-and-apply
+    - license-attribution
+    - per-seat-license-toggle
+
+cells:
+    - target: self-hosted
+      provider: bitbucket
+      license: license-paid

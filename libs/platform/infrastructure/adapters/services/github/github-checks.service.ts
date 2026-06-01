@@ -36,6 +36,7 @@ const checkStatusMap = {
 const checkConclusionMap = {
     [CheckConclusion.FAILURE]: GithubCheckConclusion.FAILURE,
     [CheckConclusion.SUCCESS]: GithubCheckConclusion.SUCCESS,
+    [CheckConclusion.NEUTRAL]: GithubCheckConclusion.NEUTRAL,
     [CheckConclusion.SKIPPED]: GithubCheckConclusion.SKIPPED,
 } as const;
 @Injectable()

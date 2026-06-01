@@ -1,0 +1,65 @@
+---
+title: "Cómo reducir el ruido y los falsos positivos en la revisión de código"
+description: "Ajusta tu revisión de código con IA para mostrar solo las sugerencias más relevantes y evitar la fatiga por alertas."
+---
+
+Demasiadas sugerencias de baja prioridad pueden hacer que los desarrolladores ignoren por completo el feedback de las revisiones de código. La clave está en ajustar la revisión para que muestre lo que importa y permanezca en silencio en lo que no.
+
+## Control de sugerencias
+
+Kodus te brinda un control detallado sobre cuántas sugerencias aparecen y con qué severidad:
+
+- **Máximo de sugerencias por PR** — limita el número total de sugerencias (por ejemplo, 9)
+- **Filtro de severidad** — muestra solo sugerencias por encima de un umbral (por ejemplo, Media y superiores)
+- **Modo de agrupación** — controla cómo se organizan las sugerencias en el PR
+
+Configura esto en **Configuración de Revisión de Código** → **Control de Sugerencias**, o en `kodus-config.yml`:
+
+```yaml
+suggestionControl:
+  groupingMode: full
+  limitationType: pr
+  maxSuggestions: 9
+  severityLevelFilter: medium
+```
+
+## Ignorar archivos y rutas
+
+Omite archivos que generan ruido (archivos de bloqueo, código generado, configuraciones):
+
+```yaml
+ignorePaths:
+  - yarn.lock
+  - package-lock.json
+  - "**/*.generated.ts"
+  - dist/**
+```
+
+## Omitir PRs por título
+
+Omite PRs que no necesitan revisión (versiones, actualizaciones de versión):
+
+```yaml
+ignoredTitleKeywords:
+  - "release"
+  - "bump version"
+  - "chore"
+```
+
+## Alternar categorías de análisis
+
+Desactiva categorías de revisión completas que no necesitas:
+
+```yaml
+reviewOptions:
+  security: true
+  code_style: true
+  refactoring: false        # desactivar si genera demasiado ruido
+  documentation_and_comments: false  # desactivar si no es relevante
+```
+
+## Cadencia de revisión
+
+Usa la **pausa automática** para evitar spam durante el desarrollo activo — Kodus pausa las revisiones cuando detecta pushes consecutivos rápidos (por defecto: 3 pushes en 15 minutos).
+
+Para más detalles, consulta [Configuración General](/how_to_use/es/code_review/configs/general) y [Control de Sugerencias](/how_to_use/es/code_review/configs/suggestion_control).

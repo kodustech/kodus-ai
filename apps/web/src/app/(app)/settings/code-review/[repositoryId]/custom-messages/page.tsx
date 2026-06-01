@@ -6,6 +6,7 @@ import { Page } from "@components/ui/page";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
+import { isCentralizedPrResponse } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { savePullRequestMessages } from "@services/pull-request-messages/fetch";
@@ -15,10 +16,13 @@ import { RotateCcwIcon, SaveIcon } from "lucide-react";
 import { PageBoundary } from "src/core/components/page-boundary";
 import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
-import { pathToApiUrl, unformatConfig } from "src/core/utils/helpers";
+import { unformatConfig } from "src/core/utils/helpers";
+import { apiProxyPath } from "src/core/utils/api-proxy";
 
 import { CodeReviewPagesBreadcrumb } from "../../_components/breadcrumb";
+import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import { CodeReviewSaveButton } from "../../_components/save-button";
+import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
 import {
     buildCustomMessagesEditorState,
     getCustomMessagesDirtySection,
@@ -85,8 +89,9 @@ function CustomMessagesContent() {
                 editorState.globalSettings,
             );
 
-            await savePullRequestMessages({
+            const mutationResult = await savePullRequestMessages({
                 uuid: pullRequestMessages.uuid,
+                teamId,
                 repositoryId,
                 directoryId,
                 startReviewMessage: unformattedMessages.startReviewMessage,
@@ -97,9 +102,19 @@ function CustomMessagesContent() {
             await queryClient.invalidateQueries({
                 predicate: (query) =>
                     (query.queryKey[0] as string)?.startsWith(
-                        pathToApiUrl("/pull-request-messages"),
+                        apiProxyPath("/pull-request-messages"),
                     ),
             });
+
+            if (isCentralizedPrResponse(mutationResult)) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        mutationResult,
+                        "Custom messages change proposed through centralized pull request.",
+                    ),
+                );
+                return;
+            }
 
             toast({
                 title: "Custom messages saved",
@@ -195,6 +210,7 @@ function CustomMessagesContent() {
             </Page.Header>
 
             <Page.Content>
+                <CentralizedConfigReadOnlyAlert />
                 <Tabs defaultValue="start-review-message" className="flex-1">
                     <TabsList>
                         <TabsTrigger value="start-review-message">

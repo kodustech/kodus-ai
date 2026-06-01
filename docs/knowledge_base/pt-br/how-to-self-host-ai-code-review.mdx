@@ -1,0 +1,39 @@
+---
+title: "Como hospedar uma ferramenta de revisão de código com IA por conta própria"
+description: "Implante o Kodus na sua própria infraestrutura com controle total sobre dados, modelos e configuração."
+---
+
+O Kodus é open-source e pode ser hospedado na sua própria infraestrutura. Isso lhe dá controle total sobre seus dados, acesso à rede e provedor de LLM.
+
+## Opções de implantação
+
+### Docker (recomendado)
+
+Implante o Kodus usando Docker Compose em qualquer VM:
+
+1. Clone o repositório do Kodus
+2. Configure as variáveis de ambiente
+3. Execute `docker compose up`
+4. Acesse a interface web e conecte seu provedor Git
+
+### Desenvolvimento local
+
+Para testes ou contribuição:
+
+1. Use o orquestrador para uma configuração local rápida
+2. Inclui todos os serviços em um único comando
+
+## O que você controla
+
+- **Dados** — todo o código e dados de revisão permanecem na sua infraestrutura
+- **Provedor de LLM** — use qualquer provedor ou modelos self-hosted
+- **Rede** — roda atrás do seu firewall, sem necessidade de acesso externo
+- **Configuração** — controle total sobre todas as configurações
+
+## Requisitos
+
+- Docker e Docker Compose
+- Recursos de computação suficientes para os serviços de API e worker
+- Acesso à rede para o seu provedor Git (GitHub, GitLab, Bitbucket)
+
+Para o guia completo de implantação, consulte [Implantar com Docker](/how_to_deploy/pt-br/deploy_kodus/generic_vm).

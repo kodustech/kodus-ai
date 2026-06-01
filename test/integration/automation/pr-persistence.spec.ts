@@ -19,14 +19,10 @@ import { LLM_ANALYSIS_SERVICE_TOKEN } from '@/code-review/infrastructure/adapter
 import { KODY_RULES_ANALYSIS_SERVICE_TOKEN } from '@/ee/codeBase/kodyRulesAnalysis.service';
 import { CodeManagementService } from '@/platform/infrastructure/adapters/services/codeManagement.service';
 import { WebhookContextService } from '@/platform/application/services/webhook-context.service';
-
-// Mock definitions
-const PlatformType = { GITHUB: 'GITHUB' };
+import { PlatformType } from '@/shared/domain/enums/platform-type.enum';
 
 describe('PR Persistence Integration Test', () => {
     let useCase: RunCodeReviewAutomationUseCase;
-    let mockExecuteAutomationService: any;
-    let mockPermissionValidationService: any;
 
     const mockIntegrationConfigService = {
         findIntegrationConfigWithTeams: jest.fn().mockResolvedValue([
@@ -55,7 +51,7 @@ describe('PR Persistence Integration Test', () => {
     // We mock this initially to simulate the CURRENT behavior (blocking)
     // In Phase 3, we will modify the code so that persistence happens BEFORE this validation check,
     // or inside the flow even if validation fails.
-    mockPermissionValidationService = {
+    const mockPermissionValidationService = {
         validateExecutionPermissions: jest.fn().mockResolvedValue({
             allowed: true,
             errorType: null,
@@ -68,10 +64,10 @@ describe('PR Persistence Integration Test', () => {
     // This is the key service where persistence happens.
     // We will verify that this service is called to "executeStrategy", which implies persistence in the current architecture,
     // OR if we introduce a direct persistence call, we'll spy on that.
-    mockExecuteAutomationService = { executeStrategy: jest.fn() };
+    const mockExecuteAutomationService = { executeStrategy: jest.fn() };
 
     const mockConfigService = {
-        get: jest.fn((key) => 'dummy'),
+        get: jest.fn((_key) => 'dummy'),
     };
     const mockCacheService = {
         getFromCache: jest.fn(),
@@ -215,7 +211,8 @@ describe('PR Persistence Integration Test', () => {
             codeManagementPayload: payload,
             event: 'pull_request.opened',
             platformType: PlatformType.GITHUB,
-            throwOnError: false,
+            organizationAndTeamData: {} as any,
+            teamAutomationId: 'test-automation-id',
         });
 
         // Assert

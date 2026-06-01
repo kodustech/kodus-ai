@@ -1,0 +1,46 @@
+---
+title: OAuth App de GitHub (Iniciar sesión con GitHub)
+icon: github
+---
+
+Usa esto si deseas que los usuarios inicien sesión en Kodus con GitHub. Esto es independiente de la integración de GitHub App utilizada para la automatización de revisiones de código y webhooks.
+
+## Requisitos previos
+
+- **WEB_DOMAIN**: URL de tu frontend (ej., `https://app.yourdomain.com` o `http://localhost:3000`)
+
+## Paso 1: Crear la OAuth App
+
+1. En GitHub, ve a **Settings** > **Developer Settings** > **OAuth Apps**
+2. Haz clic en **New OAuth App**
+3. Completa la información básica (Application name, Homepage URL)
+
+<img src="https://www.oauth.com/wp-content/uploads/2018/07/github_create_new_application-1024x717.png" alt="Página de OAuth Apps de GitHub mostrando el formulario de nueva aplicación" />
+
+## Paso 2: Configurar la URL de callback
+
+Establece la **Authorization callback URL** en:
+
+```
+WEB_DOMAIN/api/auth/callback/github
+```
+
+Asegúrate de que la URL coincida con tu dominio web real y el esquema (http/https).
+
+## Paso 3: Agregar las credenciales al .env
+
+Después de crear la app, copia las credenciales de GitHub y agrégalas a tu entorno de Kodus:
+
+```
+WEB_OAUTH_GITHUB_CLIENT_ID="your_client_id_here"
+WEB_OAUTH_GITHUB_CLIENT_SECRET="your_client_secret_here"
+```
+
+## Resumen de variables de entorno
+
+```bash
+WEB_OAUTH_GITHUB_CLIENT_ID="your_client_id_here"
+WEB_OAUTH_GITHUB_CLIENT_SECRET="your_client_secret_here"
+```
+
+Reinicia la aplicación web para aplicar los cambios.

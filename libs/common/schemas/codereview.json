@@ -22,21 +22,13 @@
                 },
                 "behaviourForExistingDescription": {
                     "type": "string",
-                    "enum": [
-                        "replace",
-                        "concatenate",
-                        "complement"
-                    ],
+                    "enum": ["replace", "concatenate", "complement"],
                     "default": "concatenate",
                     "description": "Defines how to handle existing descriptions."
                 },
                 "behaviourForNewCommits": {
                     "type": "string",
-                    "enum": [
-                        "none",
-                        "replace",
-                        "concatenate"
-                    ],
+                    "enum": ["none", "replace", "concatenate"],
                     "default": "none",
                     "description": "Defines how Kody updates the summary when new commits arrive."
                 }
@@ -144,20 +136,13 @@
             "properties": {
                 "groupingMode": {
                     "type": "string",
-                    "enum": [
-                        "minimal",
-                        "full"
-                    ],
+                    "enum": ["minimal", "full"],
                     "default": "full",
                     "description": "Defines the grouping mode for suggestions."
                 },
                 "limitationType": {
                     "type": "string",
-                    "enum": [
-                        "file",
-                        "pr",
-                        "severity"
-                    ],
+                    "enum": ["file", "pr", "severity"],
                     "default": "pr",
                     "description": "Defines the limitation type for suggestions."
                 },
@@ -169,12 +154,7 @@
                 },
                 "severityLevelFilter": {
                     "type": "string",
-                    "enum": [
-                        "critical",
-                        "high",
-                        "medium",
-                        "low"
-                    ],
+                    "enum": ["critical", "high", "medium", "low"],
                     "default": "medium",
                     "description": "Filter for the severity level of suggestions."
                 },
@@ -211,12 +191,7 @@
                             "description": "Maximum number of critical severity suggestions."
                         }
                     },
-                    "required": [
-                        "low",
-                        "medium",
-                        "high",
-                        "critical"
-                    ],
+                    "required": ["low", "medium", "high", "critical"],
                     "additionalProperties": false,
                     "description": "Limits for suggestions by severity level. Only used when limitationType is 'severity'."
                 }

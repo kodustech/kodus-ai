@@ -52,11 +52,37 @@ export const KODY_MENTION_NON_REVIEW_PATTERN =
     /^\s*@kody\b(?!\s+(start-review|review)(?=\s|$))/i;
 
 /**
- * Check if comment is a review command (@kody start-review or @kody review)
+ * Force re-review flag. Customers append `--force` (or `force`) to bypass
+ * the "no new commits / already reviewed" guard so they can re-run a review
+ * after fixing whatever made the previous run fail (e.g. topping up BYOK
+ * credits). Telemetry distinguishes it from the regular command via the
+ * `command-force` origin set by each provider's webhook handler.
+ */
+export const KODY_FORCE_REVIEW_COMMAND_PATTERN =
+    /^\s*@kody\s+(start-review|review)\s+--?force\b/i;
+
+/**
+ * Check if comment is a review command (@kody start-review or @kody review).
+ * Accepts an optional trailing flag like `--force`, so this still returns
+ * true for force runs — callers that need to distinguish use
+ * isForceReviewCommand().
  */
 export const isReviewCommand = (text: string | undefined | null): boolean => {
     if (!text) return false;
     return KODY_REVIEW_COMMAND_PATTERN.test(text);
+};
+
+/**
+ * Check if the review command carries the force flag (`@kody review --force`).
+ * Subset of isReviewCommand — when this returns true, isReviewCommand is
+ * already true. Callers use this to decide whether to record telemetry as
+ * `command-force` and to bypass the re-review guard.
+ */
+export const isForceReviewCommand = (
+    text: string | undefined | null,
+): boolean => {
+    if (!text) return false;
+    return KODY_FORCE_REVIEW_COMMAND_PATTERN.test(text);
 };
 
 /**

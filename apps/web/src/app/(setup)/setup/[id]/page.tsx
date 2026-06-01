@@ -25,7 +25,6 @@ import { useAuth } from "src/core/providers/auth.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { PlatformType } from "src/core/types";
 import { ClientSideCookieHelpers } from "src/core/utils/cookie";
-import { captureSegmentEvent } from "src/core/utils/segment";
 import { useOrganizationContext } from "src/features/organization/_providers/organization-context";
 
 type Integration = (typeof INTEGRATIONS_KEY)[keyof typeof INTEGRATIONS_KEY];
@@ -164,15 +163,6 @@ export default function Redirect() {
                     organizationAndTeamData,
                     installationId,
                 });
-
-                captureSegmentEvent({
-                    userId: userId!,
-                    event: "setup_git_integration_success",
-                    properties: {
-                        platform: params.id,
-                        teamId: teamId,
-                    },
-                });
             }
         } else if (integration === INTEGRATIONS_KEY.GITLAB) {
             if (organizationId) {
@@ -180,15 +170,6 @@ export default function Redirect() {
                     code,
                     integrationType: PlatformType.GITLAB,
                     organizationAndTeamData,
-                });
-
-                captureSegmentEvent({
-                    userId: userId!,
-                    event: "setup_git_integration_success",
-                    properties: {
-                        platform: params.id,
-                        teamId: teamId,
-                    },
                 });
             }
         }

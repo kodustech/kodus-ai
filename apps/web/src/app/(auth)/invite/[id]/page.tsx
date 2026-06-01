@@ -18,9 +18,9 @@ export default async function InvitePage({
 }) {
     const { id } = params;
     const userData = await getInviteData(id).catch((error) => {
-    console.error(`Failed to get invite data for id ${id}:`, error);
-    return null;
-});
+        console.error(`Failed to get invite data for id ${id}:`, error);
+        return null;
+    });
 
     if (!userData?.uuid || !userData?.email) {
         return (
@@ -31,8 +31,8 @@ export default async function InvitePage({
                         Invalid or expired invitation
                     </Heading>
                     <p className="text-text-secondary text-center text-sm">
-                        This invitation link is no longer valid. Please contact your
-                        organization administrator for a new invitation.
+                        This invitation link is no longer valid. Please contact
+                        your organization administrator for a new invitation.
                     </p>
                 </div>
             </Page.Root>

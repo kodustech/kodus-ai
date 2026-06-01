@@ -1,0 +1,48 @@
+---
+title: "如何修复 GitHub 或 GitLab 的 webhook 问题"
+description: "调试和解决 Git 提供商与 Kodus 之间的 webhook 连接问题。"
+---
+
+Webhooks 是 Kodus 了解 PR 何时打开或更新的方式。如果它们不工作，审查将不会触发。
+
+## 诊断问题
+
+### GitHub
+
+1. 前往代码库**设置** → **Webhooks**
+2. 找到 Kodus webhook
+3. 点击并检查**最近投递**
+4. 查找失败的投递（非 2xx 状态码）
+
+### GitLab
+
+1. 前往项目**设置** → **Webhooks**
+2. 找到 Kodus webhook
+3. 检查投递历史中的错误
+
+## 常见修复
+
+### Webhook URL 错误或过期
+
+如果您更改了 Kodus 部署 URL，请在 Git 提供商设置中更新 webhook URL。
+
+### SSL 证书问题
+
+如果您自托管，请确保 SSL 证书有效。GitHub 和 GitLab 拒绝具有无效证书的 webhooks。
+
+### 防火墙阻止
+
+如果 Kodus 在防火墙后面，请确保 Git 提供商的 IP 范围可以到达 webhook 端点。
+
+### Webhook 已删除
+
+重新通过 Kodus 设置流程注册 webhook，或手动添加 webhook URL。
+
+## 测试
+
+大多数 Git 提供商允许您**重新投递**最近的 webhook 载荷。使用此功能测试而无需创建新 PR。
+
+有关平台特定指南，请参阅：
+- [GitHub webhooks](/how_to_deploy/en/platforms/github/github_webhook)
+- [GitLab webhooks](/how_to_deploy/en/platforms/gitlab/gitlab_webhook)
+- [Bitbucket webhooks](/how_to_deploy/en/platforms/bitbucket/bitbucket_webhook)

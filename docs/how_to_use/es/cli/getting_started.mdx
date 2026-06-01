@@ -1,0 +1,180 @@
+---
+title: "Primeros Pasos"
+description: "Instala el CLI de Kodus, autentícate y ejecuta tu primera revisión."
+---
+
+Esta guía te lleva de cero a un diff revisado en menos de cinco minutos.
+
+<Steps>
+  <Step title="Instalar">
+    <Tabs>
+      <Tab title="Instalador de Skills (Recomendado)">
+        Instala el CLI y despliega los skills de Kodus en todos los agentes de IA detectados (Claude Code, Cursor, Codex, Windsurf):
+
+        ```bash
+        curl -fsSL https://review-skill.com/install | bash
+        ```
+      </Tab>
+      <Tab title="npm">
+        ```bash
+        npm install -g @kodus/cli
+        ```
+      </Tab>
+      <Tab title="npx (Sin Instalación)">
+        ```bash
+        npx @kodus/cli review
+        ```
+      </Tab>
+      <Tab title="curl">
+        ```bash
+        curl -fsSL https://raw.githubusercontent.com/kodustech/cli/main/install.sh | bash
+        ```
+      </Tab>
+    </Tabs>
+
+    <Note>Requiere Node.js >= 20.0.0.</Note>
+
+    Verifica la instalación:
+
+    ```bash
+    kodus --version
+    kodus status
+    ```
+  </Step>
+
+  <Step title="Autenticarse">
+    Elige la opción que se adapte a tu situación. También puedes omitir la autenticación y ejecutar `kodus review` directamente: funciona en modo de prueba con límites diarios.
+
+    <Tabs>
+      <Tab title="Desarrollador individual">
+        Inicia sesión con una cuenta personal:
+
+        ```bash
+        kodus auth login
+        ```
+
+        Los tokens se almacenan en `~/.kodus/credentials.json` y se actualizan automáticamente.
+      </Tab>
+      <Tab title="Equipo (clave compartida)">
+        Genera una clave de equipo en <a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a> y aplícala:
+
+        ```bash
+        kodus auth team-key --key kodus_xxxxx
+        ```
+
+        O distribuye el comando de inicio a tu equipo: instala el CLI y configura la clave de una sola vez:
+
+        ```bash
+        curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+        ```
+
+        <Warning>Guarda la clave cuando se muestre — no se volverá a mostrar.</Warning>
+      </Tab>
+      <Tab title="Agente de IA">
+        Para agentes de programación de IA (Claude Code, Cursor, Codex), las claves de equipo son la opción recomendada: sin inicio de sesión individual, sin indicaciones interactivas. Establece la clave una sola vez:
+
+        ```bash
+        export KODUS_TEAM_KEY=kodus_xxxxx
+        ```
+
+        Agrégala a tu perfil de shell para que el agente la recoja en cada ejecución.
+      </Tab>
+      <Tab title="CI/CD">
+        Desde una máquina con sesión iniciada, genera un token de larga duración:
+
+        ```bash
+        kodus auth token
+        ```
+
+        En tu pipeline, establece:
+
+        ```bash
+        export KODUS_TOKEN=<generated-token>
+        ```
+
+        Consulta [Configuración Self-Hosted](self_hosted) para ver ejemplos completos de CI.
+      </Tab>
+    </Tabs>
+
+    <Info>
+      **¿Usas Kodus auto-alojado?** Apunta el CLI a tu API antes de autenticarte:
+
+      ```bash
+      export KODUS_API_URL=https://kodus-api.yourcompany.com
+      ```
+
+      Se requiere HTTPS excepto para `localhost`.
+    </Info>
+
+    Confirma el estado de autenticación:
+
+    ```bash
+    kodus auth status
+    ```
+  </Step>
+
+  <Step title="Ejecutar tu primera revisión">
+    Dentro de cualquier repositorio git con cambios no confirmados:
+
+    ```bash
+    kodus review
+    ```
+
+    El CLI analiza el diff de tu árbol de trabajo, imprime un resumen y (en modo interactivo) te permite navegar archivo por archivo, previsualizar las correcciones sugeridas y aplicarlas.
+
+    Variaciones comunes:
+
+    ```bash
+    kodus review --staged             # Solo archivos preparados
+    kodus review --branch main        # Comparar la rama actual contra main
+    kodus review --commit abc123      # Analizar un solo commit
+    kodus review --fix                # Aplicar automáticamente todos los problemas corregibles
+    kodus review --prompt-only        # Salida compacta para agentes de IA
+    kodus review --fail-on error      # Salir con código distinto de cero en error o superior (apto para CI)
+    ```
+
+    <Tip>
+      Las revisiones del árbol de trabajo (predeterminado) y `--staged` incluyen el contenido de los archivos para que el backend vea tus cambios no confirmados. Los modos `--branch` y `--commit` omiten la inclusión ya que el backend puede obtener esos commits directamente: por eso esos modos funcionan bien en ramas enormes.
+    </Tip>
+  </Step>
+
+  <Step title="Elegir los siguientes pasos">
+    Según tu objetivo:
+
+    <CardGroup cols={2}>
+      <Card title="Automatizar en cada envío" icon="shield-check" href="commands#kodus-hook">
+        Instala el hook pre-push con `kodus hook install`.
+      </Card>
+      <Card title="Ejecutar revisiones en CI" icon="infinity" href="self_hosted#ci-cd-integration">
+        Ejemplos de GitHub Actions, GitLab CI y pipelines genéricos.
+      </Card>
+      <Card title="Conectar con un agente de IA" icon="robot" href="ai_agents">
+        Alimenta `--prompt-only` en Claude Code, Cursor o Codex para bucles de corrección autónomos.
+      </Card>
+      <Card title="Configurar el repositorio" icon="sliders" href="commands#kodus-config-repo">
+        Gestiona archivos ignorados, ramas base y configuraciones de revisión desde el CLI.
+      </Card>
+    </CardGroup>
+  </Step>
+</Steps>
+
+## Variables de Entorno
+
+Estas variables de entorno configuran el CLI en todos los comandos.
+
+| Variable                     | Descripción                                                               |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| `KODUS_API_URL`              | Endpoint de la API (predeterminado: `https://api.kodus.io`)               |
+| `KODUS_TEAM_KEY`             | Clave de equipo para acceso compartido y agentes de IA                    |
+| `KODUS_TOKEN`                | Token de CI/CD generado mediante `kodus auth token`                       |
+| `KODUS_VERBOSE`              | Establecer en `true` para salida detallada                                |
+| `KODUS_SKIP_HOOK`            | Establecer en `1` para omitir el hook pre-push en un solo `git push`      |
+| `KODUS_REQUEST_TIMEOUT_MIN`  | Tiempo de espera por solicitud en minutos (predeterminado: `60`)          |
+| `CF_ACCESS_CLIENT_ID`        | ID de cliente de Cloudflare Access (APIs detrás de Zero Trust)            |
+| `CF_ACCESS_CLIENT_SECRET`    | Secreto de cliente de Cloudflare Access                                   |
+
+Para configuraciones auto-alojadas, tokens y Cloudflare Access, consulta [Configuración Self-Hosted](self_hosted).
+
+## Solución de Problemas
+
+¿Encontraste un error? Consulta la [guía de Solución de Problemas](troubleshooting) para síntomas comunes y correcciones.

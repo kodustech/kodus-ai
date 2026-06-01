@@ -1,0 +1,30 @@
+---
+title: "如何在 GitHub 上设置 AI 代码审查"
+description: "安装和配置 Kodus 以在每个拉取请求上获得自动 AI 代码审查。"
+---
+
+在 GitHub 上设置 Kodus 只需几分钟。连接后，每个拉取请求都会自动审查。
+
+## 步骤
+
+1. **创建帐户** — 在 [kodus.io](https://kodus.io) 或[自托管 Kodus](/how_to_deploy/en/deploy_kodus/generic_vm)
+2. **连接 GitHub** — 在设置过程中安装 Kodus GitHub App
+3. **选择代码库** — 选择 Kodus 应审查的代码库
+4. **打开 PR** — Kodus 自动审查并发布评论
+
+## 您获得什么
+
+- 每个 PR 自动审查（或使用 `@kody start-review` 按需审查）
+- 直接在 PR 中发布的代码建议评论
+- 可自定义的规则、严重性过滤器和建议限制
+- 根据关联任务的业务逻辑验证
+
+## 自定义配置
+
+在代码库根目录放置 `kodus-config.yml` 以自定义每个代码库的行为。该文件自动覆盖 Web 设置。
+
+## 使用个人访问令牌
+
+对于私有代码库或权限更严格的组织，可能需要配置 GitHub 个人访问令牌（PAT）。
+
+完整设置指南，请参阅[快速开始](/how_to_use/en/quickstart)和 [GitHub App 设置](/how_to_deploy/en/platforms/github/github_app)。

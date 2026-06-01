@@ -1,0 +1,640 @@
+[
+  {
+    "pr_title": "Enhanced Pagination Performance for High-Volume Audit Logs",
+    "pr_url": "https://github.com/Wellington01/sentry-greptile/pull/122",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "WHAT: organization_context.member is accessed without a null check when checking for global access. WHY: Triggers an AttributeError and 500 error for superusers who are not members of the organization they are attempting to view. HOW: Add a null check for organization_context.member before accessing its attributes. enable_advanced = request.user.is_superuser or (organization_context.member and organization_context.member.has_global_access)",
+        "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+        "line": 71
+      },
+      {
+        "comment": "WHAT: math.floor and math.ceil are called directly on a datetime object in OptimizedCursorPaginator.get_item_key without numeric conversion. WHY: Causes a TypeError and 500 Internal Server Error when the optimized_pagination flag is used on the audit logs endpoint, as audit logs use datetime keys. HOW: Convert the datetime value to a float timestamp before applying math functions, similar to the implementation in DateTimePaginator. **Also found in:** - `src/sentry/api/paginator.py:839-841` def g",
+        "file": "src/sentry/api/paginator.py",
+        "line": 840
+      },
+      {
+        "comment": "WHAT: User-controlled cursor offset is passed to QuerySet slicing without non-negative validation when is_prev is true. WHY: Allows an attacker to trigger a Django AssertionError and cause a 500 Internal Server Error by providing a forged cursor with a negative offset (e.g., ?cursor=0:-1:1). HOW: Ensure offset is always non-negative by applying max(0, offset) regardless of the is_prev state. **Also found in:** - `src/sentry/api/paginator.py:877-882` - `src/sentry/api/paginator.py:179-184` start_",
+        "file": "src/sentry/api/paginator.py",
+        "line": 184
+      },
+      {
+        "comment": "WHAT: OptimizedCursorPaginator passes raw cursor values to the database without type conversion in the value_from_cursor and build_queryset paths. WHY: Unlike the existing DateTimePaginator, this creates a type mismatch (float vs. timestamp) in the extra() filter clause, which forces the database to perform full table scans instead of using the datetime index on large audit datasets. HOW: Override value_from_cursor in OptimizedCursorPaginator to ensure cursor values are converted to the field's ",
+        "file": "src/sentry/api/paginator.py",
+        "line": 843
+      }
+    ]
+  },
+  {
+    "pr_title": "Enhanced Pagination Performance for High-Volume Audit Logs",
+    "pr_url": "https://github.com/Wellington01/sentry-greptile/pull/123",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "OptimizedCursorPaginator.get_result incorrectly compares len(results) with offset + limit + extra, which is logically flawed when offset is non-zero. Slicing queryset[start:stop] returns at most (stop - start) items, so the count should be compared directly to limit + extra to determine if an additional row was fetched for lookahead. elif len(results) == limit + extra: results = results[:-1]",
+        "file": "src/sentry/api/paginator.py",
+        "line": 892
+      },
+      {
+        "comment": "The eviction limit of 1000 is hardcoded in the Lua script, ignoring the max_segment_spans configuration. This means the buffer will always evict to 1000 spans regardless of the value passed to the SpansBuffer constructor, leading to inconsistent behavior. -- Limit should be passed as an argument to the script if span_count > tonumber(ARGV[5]) then redis.call(\"zpopmin\", set_key, span_count - tonumber(ARGV[5]))",
+        "file": "src/sentry/scripts/spans/add-buffer.lua",
+        "line": 64
+      },
+      {
+        "comment": "The `organization_context.member` object is accessed without checking if it is `None`, which occurs when a superuser is not a member of the organization. enable_advanced = request.user.is_superuser or (organization_context.member and organization_context.member.has_global_access)",
+        "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+        "line": 71
+      },
+      {
+        "comment": "WHAT: ZUNIONSTORE is called for every span ingestion to merge child sets into the segment root. WHY: Sorted Set unions are O(N) operations; performing this for every span in a trace results in O(N^2) total work, which is significantly more expensive than the previous Set-based approach and can saturate Redis CPU when processing large payloads. HOW: Batch the merges or use a more efficient data structure that avoids full set unions during hot-path ingestion.",
+        "file": "src/sentry/scripts/spans/add-buffer.lua",
+        "line": 48
+      },
+      {
+        "comment": "A user-controlled negative offset in the cursor will cause an `AssertionError` when applied to a Django QuerySet if `is_prev` is True. **Also found in:** - `src/sentry/api/paginator.py:880-882` start_offset = max(0, offset) stop = start_offset + limit + extra",
+        "file": "src/sentry/api/paginator.py",
+        "line": 184
+      },
+      {
+        "comment": "WHAT: math.floor() and math.ceil() will raise a TypeError when applied to datetime objects. WHY: The OptimizedCursorPaginator is used in the audit logs endpoint where the sort key is a datetime, causing a guaranteed crash during item key generation. HOW: Implement datetime-to-float conversion in get_item_key, similar to DateTimePaginator, or ensure the input is numeric. **Also found in:** - `src/sentry/api/paginator.py:839-840` if isinstance(value, datetime): value = float(value.strftime('%s.%f'",
+        "file": "src/sentry/api/paginator.py",
+        "line": 840
+      }
+    ]
+  },
+  {
+    "pr_title": "feat(upsampling) - Support upsampled error count with performance optimizations",
+    "pr_url": "https://github.com/Wellington01/sentry-greptile/pull/124",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The `invalidate_upsampling_cache` function and its caching strategy are ineffective for a global allowlist. Since the cache key includes a hash of the specific `project_ids` in a query, invalidating only the current allowlist does not clear stale entries for other previously queried combinations of projects. Additionally, this function is currently unused and should be either correctly implemented with a consistent invalidation strategy (e.g., using a version prefix) or removed.",
+        "file": "src/sentry/api/helpers/error_upsampling.py",
+        "line": 74
+      },
+      {
+        "comment": "The substring check in `_is_error_focused_query` is easily bypassed by including \"event.type:error\" as a literal value in any filter (e.g., `tag:\"event.type:error\"`). Allows an attacker to trigger the upsampling transformation on non-error datasets, which combined with the removal of `ifNull` in the aggregation, results in event counts being incorrectly reported as zero. # Check for the presence of the event.type filter as a standalone token if re.search(r'\\bevent\\.type\\s*:\\s*error\\b', query):",
+        "file": "src/sentry/api/helpers/error_upsampling.py",
+        "line": 97
+      },
+      {
+        "comment": "The `_get_event_stats` function uses the `dataset` variable from the outer scope instead of the `scoped_dataset` passed as an argument. This logic error causes upsampling transformations to be applied to transaction datasets when the original request was for the `discover` dataset, resulting in incorrect zeroed-out counts. should_upsample = is_errors_query_for_error_upsampled_projects( snuba_params, organization, scoped_dataset, request",
+        "file": "src/sentry/api/endpoints/organization_events_stats.py",
+        "line": 222
+      },
+      {
+        "comment": "WHAT: Redis caching is applied to a check that is already efficiently handled by Sentry's in-memory options system. WHY: The roundtrip to Redis (1ms+) is significantly slower than the in-memory allowlist check (<0.1ms), resulting in a net performance loss for a function called multiple times per request. HOW: Remove the Redis `cache.get/set` logic and rely on the existing in-memory options cache. # options.get is already cached in memory; skip Redis and perform the check directly return _are_all",
+        "file": "src/sentry/api/helpers/error_upsampling.py",
+        "line": 40
+      },
+      {
+        "comment": "WHAT: `_are_all_projects_error_upsampled` performs an O(N*M) membership check by iterating over a list allowlist. WHY: For organizations with large project counts or allowlists, this linear search becomes a CPU bottleneck on the hot path. HOW: Convert the `allowlist` list to a `set` once before checking project memberships. allowlist = set(options.get(\"issues.client_error_sampling.project_allowlist\", [])) if not allowlist: return all(project_id in allowlist for project_id in project_ids)",
+        "file": "src/sentry/api/helpers/error_upsampling.py",
+        "line": 56
+      },
+      {
+        "comment": "The `upsampled_count` aggregation was changed to `sum(sample_weight)` without a null-handling fallback. This causes events with a `NULL` `sample_weight` (common in historical data) to be excluded from the sum, resulting in a reported count of 0 instead of the actual event count. Reverting to `ifNull(Column(\"sample_weight\"), 1)` ensures that unsampled events are correctly counted as 1. **Also found in:** - `src/sentry/search/events/datasets/discover.py:1048-1048` [Function(\"sum\", [Function(\"ifNul",
+        "file": "src/sentry/search/events/datasets/discover.py",
+        "line": 1050
+      },
+      {
+        "comment": "WHAT: The cache key uses Python's built-in `hash()` function on a tuple of project IDs. WHY: Python 3 hash randomization makes this value inconsistent across different worker processes, causing the shared Redis cache to have a near-zero hit rate while being polluted with redundant keys. HOW: Use a stable hashing algorithm like `hashlib.md5` or a canonical string representation if caching is truly necessary. project_key = hashlib.md5(\",\".join(map(str, sorted(snuba_params.project_ids))).encode()).",
+        "file": "src/sentry/api/helpers/error_upsampling.py",
+        "line": 27
+      }
+    ]
+  },
+  {
+    "pr_title": "GitHub OAuth Security Enhancement",
+    "pr_url": "https://github.com/Wellington01/sentry-greptile/pull/125",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The `state` parameter in `OAuthLoginView` uses the predictable `pipeline.signature` instead of a cryptographically secure random value tied to the user session. This allows an attacker to perform an OAuth CSRF attack, potentially linking their own GitHub installation to a victim's Sentry organization by crafting a callback URL with a valid `code` and the known `state` hash. if not request.GET.get(\"state\"): state = secrets.token_hex() pipeline.bind_state(\"oauth_state\", state) redirect_uri = absol",
+        "file": "src/sentry/integrations/github/integration.py",
+        "line": 413
+      },
+      {
+        "comment": "`GitHubInstallation.dispatch` skips the security verification of the authenticated user against the installation 'sender' if the `Integration` record is not found in the database. This creates a race condition where an attacker can bypass the intended security check by finishing the installation pipeline before Sentry's asynchronous webhook has created the record. integration = Integration.objects.get(external_id=installation_id) installations_exist = OrganizationIntegration.objects.filter( inte",
+        "file": "src/sentry/integrations/github/integration.py",
+        "line": 483
+      },
+      {
+        "comment": "WHAT: `Integration.objects.get` is called twice and queries by `external_id` without the `provider` field. WHY: This triggers redundant database round trips and forces two full table scans on `sentry_integration` because `external_id` is not the leading column of the composite index, leading to significant latency as the table grows. HOW: Fetch the `Integration` object once using `provider='github'` and `external_id=installation_id`, then reuse the instance for existence and status checks. integ",
+        "file": "src/sentry/integrations/github/integration.py",
+        "line": 475
+      }
+    ]
+  },
+  {
+    "pr_title": "Anonymous: Add configurable device limit",
+    "pr_url": "https://github.com/Wellington01/grafana-greptile/pull/109",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The `localCache` entry is set before calling the database to enforce the device limit, allowing blocked devices to bypass the limit on subsequent requests. Because `tagDeviceUI` returns early if the device ID is found in the cache, any device that triggers the limit once will be allowed to authenticate on its next attempt (e.g., after a page refresh) because the cache entry was already created. if setting.Env == setting.Dev { a.log.Debug(\"Tagging device for UI\", \"deviceID\", device.DeviceID, \"dev",
+        "file": "pkg/services/anonymous/anonimpl/impl.go",
+        "line": 64
+      },
+      {
+        "comment": "The device limit check is skipped entirely if the `X-Grafana-Device-Id` header is missing. This allows any anonymous user to bypass the configured limit by simply stripping the header from their requests, effectively making the limit enforcement optional for clients. func (a *AnonDeviceService) TagDevice(ctx context.Context, httpReq *http.Request, kind anonymous.DeviceKind) error { deviceID := httpReq.Header.Get(deviceIDHeader) if deviceID == \"\" { if a.anonStore.IsLimitReached(ctx) {",
+        "file": "pkg/services/anonymous/anonimpl/impl.go",
+        "line": 144
+      },
+      {
+        "comment": "Anonymous authentication fails when the device limit is reached, allowing a Denial of Service (DoS) attack. An unauthenticated attacker can spoof arbitrary device IDs to exhaust the limit and block access for all other anonymous users because the limit is enforced by blocking the authentication process. if err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil { a.log.Warn(\"Failed to tag anonymous session\", \"error\", err)",
+        "file": "pkg/services/anonymous/anonimpl/client.go",
+        "line": 47
+      },
+      {
+        "comment": "TagDevice is called synchronously in the Authenticate hot path, blocking anonymous requests on database operations that were previously asynchronous. This increases tail latency and can lead to thread exhaustion if the database is slow or under heavy load, even when no device limit is configured. Revert to asynchronous execution (goroutine) when no device limit is set, or at least ensure that general database latency doesn't block the critical path of authentication.",
+        "file": "pkg/services/anonymous/anonimpl/client.go",
+        "line": 50
+      },
+      {
+        "comment": "CreateOrUpdateDevice performs a SELECT COUNT(*) on every cache miss when deviceLimit > 0, which is inefficient and does not scale well with large datasets. This triggers a synchronous database scan for every new or recurring anonymous session (on cache miss), creating a bottleneck as the number of devices grows. Attempt to update the existing device first and only perform the count if the update fails (indicating a new or stale device). **Also found in:** - `pkg/services/anonymous/anonimpl/anons",
+        "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "line": 118
+      }
+    ]
+  },
+  {
+    "pr_title": "AuthZService: improve authz caching",
+    "pr_url": "https://github.com/Wellington01/grafana-greptile/pull/110",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The `requestCount` metric in `Check` always reports `cached=\"true\"` even when a cache miss leads to a database call via `getIdentityPermissions`. 157\ts.metrics.requestCount.WithLabelValues(\"false\", \"false\", req.GetVerb(), req.GetGroup(), req.GetResource()).Inc()",
+        "file": "pkg/services/authz/rbac/service.go",
+        "line": 157
+      },
+      {
+        "comment": "userPermDenialCacheKey uses an ambiguous string concatenation with underscores as separators, allowing for cache key collisions between different resource UIDs. func userPermDenialCacheKey(namespace, userUID, action, name, parent string) string { return fmt.Sprintf(\"%s.perm:%s:%s:%s:%s\", namespace, userUID, action, name, parent)",
+        "file": "pkg/services/authz/rbac/cache.go",
+        "line": 32
+      },
+      {
+        "comment": "The permDenialCache check only verifies the existence of an entry in the cache without checking its value, which could lead to incorrect denials if the cache is poisoned with false values. if denied, ok := s.permDenialCache.Get(ctx, permDenialKey); ok && denied { s.metrics.permissionCacheUsage.WithLabelValues(\"true\", checkReq.Action).Inc() s.metrics.requestCount.WithLabelValues(\"false\", \"true\", req.GetVerb(), req.GetGroup(), req.GetResource()).Inc() return &authzv1.CheckResponse{Allowed: false},",
+        "file": "pkg/services/authz/rbac/service.go",
+        "line": 121
+      },
+      {
+        "comment": "WHAT: `permDenialCache` is redundant and increases memory overhead. WHY: It caches individual resource-level denials which are already covered by the more general `permCache` (which stores all allowed resources for an action); this leads to duplicated data and unnecessary cache management overhead. HOW: Remove `permDenialCache` and rely on the authoritative `permCache` for both positive and negative results.",
+        "file": "pkg/services/authz/rbac/service.go",
+        "line": 121
+      },
+      {
+        "comment": "The `Check` method redundantly performs a database query when the action's permission cache (`permCache`) is present but indicates a denial, even though this cache is already authoritative for the action. 123\tcachedPerms, err := s.getCachedIdentityPermissions(ctx, checkReq.Namespace, checkReq.IdentityType, checkReq.UserUID, checkReq.Action) 124\tif err == nil { 125\t\tallowed, err := s.checkPermission(ctx, cachedPerms, checkReq) 126\t\tif err != nil {",
+        "file": "pkg/services/authz/rbac/service.go",
+        "line": 136
+      }
+    ]
+  },
+  {
+    "pr_title": "Plugins: Chore: Renamed instrumentation middleware to metrics middleware",
+    "pr_url": "https://github.com/Wellington01/grafana-greptile/pull/111",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Logging methods in `FakeLogger` append to internal slices (e.g., `InfoLogs.Calls`) without synchronization, causing data races when the logger is used across multiple goroutines in concurrent tests. func (f *FakeLogger) Info(msg string, args ...interface{}) { defer f.mtx.Unlock() f.InfoLogs.Calls = append(f.InfoLogs.Calls, struct { Args []interface{}",
+        "file": "pkg/plugins/log/fake.go",
+        "line": 7
+      },
+      {
+        "comment": "The middleware uses a pre-instantiated logger field instead of `log.FromContext(ctx)`, which prevents it from including contextual attributes added by the `ContextualLoggerMiddleware`. log.FromContext(ctx).Info(\"CallResource\", \"path\", req.Path) return m.next.CallResource(ctx, req, sender)",
+        "file": "pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go",
+        "line": 112
+      },
+      {
+        "comment": "LoggerMiddleware.logRequest calls FromContext and allocates a new wrapper on every request. This triggers multiple heap allocations (log provider slices, ConcreteLogger instances, and the grafanaInfraLogWrapper) on every plugin request, significantly increasing GC pressure on the high-throughput data egress path. Avoid re-calculating the contextual logger at the end of every request by passing the required attributes directly or caching the logger instance. // Consider passing required attribute",
+        "file": "pkg/services/pluginsintegration/clientmiddleware/logger_middleware.go",
+        "line": 58
+      },
+      {
+        "comment": "MetricsMiddleware shares a single instance with a mutable 'next' field across all concurrent requests. This causes a data race and unnecessary cache line bouncing/contention because 'Decorator.QueryData' reconstructs the middleware chain and overwrites 'imw.next' on every single request. Return a new instance of the middleware struct within the ClientMiddlewareFunc closure to ensure thread-safety and better scaling on multi-core systems. **Also found in:** - `pkg/services/pluginsintegration/clie",
+        "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+        "line": 81
+      }
+    ]
+  },
+  {
+    "pr_title": "Advanced Query Processing Architecture",
+    "pr_url": "https://github.com/Wellington01/grafana-greptile/pull/112",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Ad-hoc filters are added redundantly to the query expression during each manual call to applyTemplateVariables. This leads to duplicate label matchers in the LogQL selector (e.g., {job=\"grafana\", host=\"localhost\", host=\"localhost\"}), which can cause queries to exceed Loki's matcher limits or result in performance degradation. Modify the logic to only append ad-hoc filters once, or ensure applyTemplateVariables checks for existing filters before adding them.",
+        "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+        "line": 299
+      },
+      {
+        "comment": "User-controlled input is subject to multiple rounds of template variable interpolation across nested function calls. This allows for recursive variable expansion where an attacker-controlled variable value can contain references to other variables (e.g., $secret_var) that are then expanded in subsequent calls, potentially leading to sensitive data exposure or LogQL injection. Ensure interpolation happens exactly once at the entry point and subsequent calls operate on the expanded queries without",
+        "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+        "line": 299
+      }
+    ]
+  },
+  {
+    "pr_title": "FEATURE: automatically downsize large images",
+    "pr_url": "https://github.com/Wellington01/discourse-greptile/pull/109",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Downsizing in place invalidates the `tempfile` object's internal file descriptor, leading to incorrect SHA1 and filesize calculations in `Upload.create_for`. while attempt > 0 && File.size(tempfile.path) > SiteSetting.max_image_size_kb.kilobytes if OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: SiteSetting.allow_animated_thumbnails)",
+        "file": "app/controllers/uploads_controller.rb",
+        "line": 72
+      },
+      {
+        "comment": "Using percentages in `dimensions` for `gifsicle` will likely cause command failure as it expects `WIDTHxHEIGHT` format for `--resize-fit`. # For percentages, gifsicle should use --scale dimensions.to_s.end_with?('%') ? \"--scale #{dimensions.to_f / 100.0}\" : \"--resize-fit #{dimensions}\"",
+        "file": "app/models/optimized_image.rb",
+        "line": 139
+      },
+      {
+        "comment": "User-controlled input is passed to a shell command via backticks without escaping. Allows an attacker to execute arbitrary commands by providing a malicious 'type' parameter or URL extension that manipulates the tempfile path used in the ImageMagick command. system(*instructions, out: File::NULL, err: File::NULL)",
+        "file": "app/models/optimized_image.rb",
+        "line": 162
+      },
+      {
+        "comment": "User-provided URLs are passed to FileHelper.download without validation, enabling Server-Side Request Forgery (SSRF). An attacker can use this to probe the internal network or access cloud metadata services (e.g., 169.254.169.254), made worse by the increased 10MB download limit.",
+        "file": "app/controllers/uploads_controller.rb",
+        "line": 55
+      },
+      {
+        "comment": "Redefining `downsize` with fewer arguments breaks existing callers. The second definition of `self.downsize` (line 149) overwrites the first (line 145), causing `ArgumentError` in callers like `resize_emoji.rb:14` that pass 4 positional arguments. def self.downsize(from, to, width_or_dim, height_or_opts = {}, opts = {}) if width_or_dim.is_a?(String) && width_or_dim.include?('%') optimize(\"downsize\", from, to, width_or_dim, height_or_opts) optimize(\"downsize\", from, to, \"#{width_or_dim}x#{height_",
+        "file": "app/models/optimized_image.rb",
+        "line": 151
+      },
+      {
+        "comment": "Hardcoded 10MB limit in JavaScript bypasses SiteSettings. This allows large files to be uploaded regardless of admin configuration, shifting the validation burden from a cheap client-side check to expensive server-side downsizing. **Also found in:** - `app/assets/javascripts/discourse/lib/utilities.js:181-184` var maxSizeKB = Discourse.SiteSettings['max_' + type + '_size_kb'] || (10 * 1024); if (fileSizeKB > maxSizeKB) {",
+        "file": "app/assets/javascripts/discourse/lib/utilities.js",
+        "line": 184
+      },
+      {
+        "comment": "Iterative downsizing by 80% is inefficient and redundant. The loop performs multiple full-image read/write operations (up to 5 times) which is computationally expensive and may still fail to reach the target size for very large files. # Calculate the required scale once or use ImageMagick's JPEG extent define # OptimizedImage.downsize(tempfile.path, tempfile.path, \"#{target_resolution}\")",
+        "file": "app/controllers/uploads_controller.rb",
+        "line": 69
+      }
+    ]
+  },
+  {
+    "pr_title": "FEATURE: per-topic unsubscribe option in emails",
+    "pr_url": "https://github.com/Wellington01/discourse-greptile/pull/110",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The unsubscribe logic only downgrades 'watching' to 'regular', meaning users will still receive notifications for mentions and replies despite the email promising they will stop. TopicUser.change(current_user.id, params[:topic_id], notification_level: TopicUser.notification_levels[:muted])",
+        "file": "app/controllers/topics_controller.rb",
+        "line": 111
+      },
+      {
+        "comment": "A state-changing operation is performed via a GET request without CSRF protection. An attacker can craft a link or use an embedded image to force a logged-in user to change their topic notification settings without their consent. The action should either require a POST request with an authenticity token or include a unique, per-user signed token in the GET URL to verify intent.",
+        "file": "app/controllers/topics_controller.rb",
+        "line": 98
+      },
+      {
+        "comment": "User-controlled topic titles are rendered using triple mustaches (`{{{ }}}`), which bypasses client-side HTML escaping. While `fancyTitle` is typically sanitized on the server, the combination of `I18n.t` and triple mustaches increases the XSS risk if any part of the topic title contains malicious HTML that bypasses the server-side sanitizer. <strong>{{model.fancyTitle}}</strong>",
+        "file": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs",
+        "line": 3
+      },
+      {
+        "comment": "WHAT: TopicsController#unsubscribe performs heavy and redundant operations by instantiating a full TopicView and serializing the entire post stream. WHY: These operations load the first page of posts and their metadata into memory and serialize them into the response, which is unnecessary for a simple unsubscribe confirmation and significantly increases server load when bots or email scanners follow the link. HOW: Instantiate TopicView with `limit: 0` to skip post loading, and use a specialized,",
+        "file": "app/controllers/topics_controller.rb",
+        "line": 98
+      },
+      {
+        "comment": "A null pointer dereference occurs when `TopicUser.find_by` returns nil or when the record exists but has a `nil` notification level. level = TopicUser.notification_levels[:muted] tu = TopicUser.find_by(user_id: current_user.id, topic_id: params[:topic_id]) if tu && (tu.notification_level || TopicUser.notification_levels[:regular]) > TopicUser.notification_levels[:regular] level = TopicUser.notification_levels[:regular]",
+        "file": "app/controllers/topics_controller.rb",
+        "line": 113
+      }
+    ]
+  },
+  {
+    "pr_title": "Add comprehensive email validation for blocked users",
+    "pr_url": "https://github.com/Wellington01/discourse-greptile/pull/111",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "A nil value for 'email' causes a NoMethodError (nil =~ regexp) if SiteSetting restrictions are present. Add a guard 'return if value.blank?' at the start of validate_each to prevent crashes during validation when the email field is empty. def validate_each(record, attribute, value) return if value.blank? if (setting = SiteSetting.email_domains_whitelist).present?",
+        "file": "lib/validators/email_validator.rb",
+        "line": 5
+      },
+      {
+        "comment": "The custom EmailValidator replaces existing validation but fails to verify that the email address follows a valid format. This allows syntactically invalid strings to be accepted as emails when no domain restrictions or blocks are triggered. Incorporate a basic RFC-compliant format check or call 'Email.is_valid?' within the validator. def validate_each(record, attribute, value) unless Email.is_valid?(value) record.errors.add(attribute, I18n.t(:'user.email.invalid')) if (setting = SiteSetting.ema",
+        "file": "lib/validators/email_validator.rb",
+        "line": 4
+      },
+      {
+        "comment": "EmailValidator recompiles the domain whitelist/blacklist regular expressions from SiteSetting on every validation call. def email_in_restriction_setting?(setting, value) # Cache the compiled regex to avoid repeated compilation overhead @regex_cache ||= {} regexp = @regex_cache[setting] ||= begin",
+        "file": "lib/validators/email_validator.rb",
+        "line": 22
+      },
+      {
+        "comment": "The regex '@(#{domains})' is unanchored and matches substrings, allowing whitelist bypasses (e.g., 'user@allowed.com.attacker.com' matches '@allowed.com') and causing over-blocking (e.g., '@com' matches '@company.com'). Anchor the regex to the end of the string and ensure individual domains are properly separated (e.g., by using '\\A' and '\\z' or checking the domain part specifically). **Also found in:** - `lib/validators/email_validator.rb:20-21` - `lib/validators/email_validator.rb:19-21` domai",
+        "file": "lib/validators/email_validator.rb",
+        "line": 23
+      },
+      {
+        "comment": "Database lookups in PostgreSQL are case-sensitive by default, allowing users to bypass the block list by changing the case of their email (e.g., 'Spammer@Gmail.com'). Use a case-insensitive query like 'where(\"LOWER(email) = LOWER(?)\", email)' or normalize emails to lowercase before saving and querying. **Also found in:** - `app/assets/javascripts/discourse/controllers/create_account_controller.js:69-69` - `app/models/blocked_email.rb:12-13` def self.should_block?(email)",
+        "file": "app/models/blocked_email.rb",
+        "line": 12
+      },
+      {
+        "comment": "BlockedEmail.should_block? performs a synchronous database update (record.save) within the validation cycle. **Also found in:** - `app/models/blocked_email.rb:13-17` - `app/models/blocked_email.rb:15-17` def self.should_block?(email)",
+        "file": "app/models/blocked_email.rb",
+        "line": 19
+      }
+    ]
+  },
+  {
+    "pr_title": "Enhance embed URL handling and validation system",
+    "pr_url": "https://github.com/Wellington01/discourse-greptile/pull/112",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "WHAT: Ruby syntax error in ERB tag at line 6 ('end if' without a condition). WHY: Causes a 'SyntaxError: unexpected keyword_if' when the template is rendered, breaking the embed view entirely. HOW: Remove the trailing 'if' from the end tag.",
+        "file": "app/views/embed/best.html.erb",
+        "line": 6
+      },
+      {
+        "comment": "WHAT: Incorrect handling of protocol-relative URLs in 'absolutize_urls'. WHY: Corrupts links starting with '//' (e.g., //example.com) by prefixing them with the current host (e.g., http://site.com/example.com) instead of the scheme. HOW: Add a guard to ensure only path-relative URLs (starting with a single '/') are processed. if href.present? && href.start_with?('/') && !href.start_with?('//') a['href'] = \"#{prefix}/#{href.sub(/^\\/+/, '')}\"",
+        "file": "app/models/topic_embed.rb",
+        "line": 66
+      },
+      {
+        "comment": "WHAT: Functional regression in Disqus import task ignoring user-provided options. WHY: The 'category' and 'created_at' options are no longer passed to the import process, causing all imported topics to lose their original metadata and target category. HOW: Restore passing the options to the TopicEmbed import logic. post = TopicEmbed.import_remote(user, t[:link], title: t[:title], category: options[:category], created_at: t[:created_at])",
+        "file": "lib/tasks/disqus.thor",
+        "line": 148
+      },
+      {
+        "comment": "WHAT: Potential 'NoMethodError' when an RSS item has no content. WHY: Calling '.scrub' on 'i.content' will crash the background job if 'i.content' is nil, which occurs when a feed item lacks a body or description. HOW: Add a null guard using '.try(:scrub)' or an explicit check. content = CGI.unescapeHTML(i.content.to_s.scrub)",
+        "file": "app/jobs/scheduled/poll_feed.rb",
+        "line": 35
+      },
+      {
+        "comment": "WHAT: Invalid value assignment to 'iframe.height' attribute. WHY: Assigning a string with 'px' (e.g., '100px') to the HTML height attribute violates the specification which requires a non-negative integer, and can cause inconsistent behavior across browsers. HOW: Use 'iframe.style.height' for CSS values or pass an integer to 'iframe.height'. 21 +        iframe.style.height = e.data.height + \"px\";",
+        "file": "app/assets/javascripts/embed.js",
+        "line": 22
+      },
+      {
+        "comment": "WHAT: User-controlled `url` is interpolated into post content without escaping in `TopicEmbed.import`. WHY: Allows an attacker to inject arbitrary HTML or JavaScript (Stored XSS) via the `embed_url` parameter, as these posts bypass the standard sanitization pipeline due to the `raw_html` cook method. HOW: Wrap the `url` in `ERB::Util.html_escape` before interpolation. escaped_url = ERB::Util.html_escape(url) contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{escaped_ur",
+        "file": "app/models/topic_embed.rb",
+        "line": 13
+      },
+      {
+        "comment": "WHAT: Post content is rendered using the `raw` helper without ensuring prior sanitization. WHY: Bypasses XSS protections for posts created with the `raw_html` cook method, allowing execution of malicious scripts from imported feeds or remote URLs. HOW: Remove the `raw` helper or ensure `post.cooked` is always sanitized using a whitelist-based sanitizer before reaching this view. <div class='cooked'><%= post.cooked %></div>",
+        "file": "app/views/embed/best.html.erb",
+        "line": 19
+      },
+      {
+        "comment": "WHAT: `invalid_host?` only validates the host component of the URL. WHY: Enables SSRF attacks against internal services on non-standard ports of the allowed host via `open(url)`. HOW: Validate that the URI scheme is limited to `http/https` and the port is 80 or 443. def invalid_host? uri = URI(@embed_url) SiteSetting.embeddable_host != uri.host || ![80, 443, nil].include?(uri.port) || !['http', 'https'].include?(uri.scheme) rescue URI::InvalidURIError",
+        "file": "lib/topic_retriever.rb",
+        "line": 19
+      },
+      {
+        "comment": "WHAT: TopicRetriever executes PollFeed synchronously inside the perform_retrieve method. WHY: Triggers a complete RSS feed download and processing for every unique embed request, stalling Sidekiq workers and causing redundant workload when multiple new URLs are requested simultaneously. HOW: Enqueue PollFeed as a separate background job or only trigger it if a shared lock/throttle for the feed URL has expired.",
+        "file": "lib/topic_retriever.rb",
+        "line": 44
+      },
+      {
+        "comment": "WHAT: PollFeed#poll_feed performs a database lookup for every item in the RSS feed via TopicEmbed.import. WHY: Triggers N database queries per feed poll, leading to O(N) database overhead that scales with feed size and polling frequency. HOW: Pre-fetch existing embed URLs in a single query before the loop and only process items that are missing or have changed SHA1 values.",
+        "file": "app/jobs/scheduled/poll_feed.rb",
+        "line": 37
+      },
+      {
+        "comment": "WHAT: open(url).read is used without a specified timeout in import_remote. WHY: Can block Sidekiq worker threads indefinitely if the remote server is slow or unresponsive, eventually exhausting the worker pool. HOW: Use a library like Excon or Net::HTTP with explicit connect and read timeouts.",
+        "file": "app/models/topic_embed.rb",
+        "line": 50
+      },
+      {
+        "comment": "WHAT: Loose origin validation using 'indexOf' on 'e.origin'. WHY: Allows malicious domains that are substrings of the authorized discourseUrl (e.g., 'http://discourse.co' matching 'http://discourse.com') to successfully send postMessages, and fails completely if discourseUrl is protocol-relative (e.g., '//forum.com'). HOW: Extract the origin from discourseUrl and perform an exact equality check against e.origin. **Also found in:** - `app/assets/javascripts/embed.js:17-17` var discourseOrigin = n",
+        "file": "app/assets/javascripts/embed.js",
+        "line": 17
+      }
+    ]
+  },
+  {
+    "pr_title": "Async import of the appStore packages",
+    "pr_url": "https://github.com/Wellington01/cal.com-greptile/pull/123",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Sequential await in `getVideoAdapters` loop creates a performance bottleneck in the availability check path. Triggers O(N) latency growth relative to the number of user credentials because it waits for each dynamic import one by one. Use `await Promise.all(withCredentials.map(...))` to fetch all adapters concurrently. const videoAdapters = (await Promise.all(withCredentials.map(async (cred) => { const appName = cred.type.split(\"_\").join(\"\"); const app = await appStore[appName as keyof typeof app",
+        "file": "packages/core/videoClient.ts",
+        "line": 33
+      },
+      {
+        "comment": "Eager property initializers in `appStore` trigger all 28+ dynamic imports simultaneously upon module evaluation. This creates a significant memory and I/O spike during server startup or cold starts, defeating the benefits of lazy loading. Define properties as factory functions (e.g., `applecalendar: () => import('./applecalendar')`) to implement true on-demand loading. const appStore = { applecalendar: () => import(\"./applecalendar\"), caldavcalendar: () => import(\"./caldavcalendar\"), // ... use ",
+        "file": "packages/app-store/index.ts",
+        "line": 1
+      },
+      {
+        "comment": "Errors in the async callback of forEach will not be caught by the surrounding try-catch block, and the deletions are not awaited before sending emails. Use a for...of loop or await Promise.all() to ensure that calendar/video event deletions are completed and any errors are properly handled before proceeding to send the reschedule email. **Also found in:** - `packages/app-store/wipemycalother/lib/reschedule.ts:124-131` - `packages/trpc/server/routers/viewer/bookings.tsx:553-559` - `packages/trpc/",
+        "file": "packages/app-store/vital/lib/reschedule.ts",
+        "line": 131
+      },
+      {
+        "comment": "The 'forEach' loop with an async callback fails to await its operations, causing the 'apiDeletes' array to be incomplete when 'Promise.all(apiDeletes)' is called later. This leads to silent failures of recurring booking deletions and unhandled promise rejections if any operation fails, potentially crashing the process. Use 'Promise.all()' with 'map()' instead of 'forEach()'. **Also found in:** - `packages/features/bookings/lib/handleCancelBooking.ts:458-464` await Promise.all(bookingToDelete.use",
+        "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+        "line": 464
+      }
+    ]
+  },
+  {
+    "pr_title": "feat: 2fa backup codes",
+    "pr_url": "https://github.com/Wellington01/cal.com-greptile/pull/124",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Using 'throw new Error()' in the API handler will cause the server to return a non-JSON error page (HTML), crashing the client-side form which expects a JSON response with an error field. These error paths should use 'res.status(500).json({ error: ErrorCode.InternalServerError })' to maintain the API contract and prevent client-side parsing failures. if (!process.env.CALENDSO_ENCRYPTION_KEY) { console.error(\"Missing encryption key; cannot proceed with backup code login.\"); return res.status(500)",
+        "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+        "line": 52
+      },
+      {
+        "comment": "User-controlled input `backupCode` is used without type validation, leading to potential crashes. if (typeof req.body.backupCode !== \"string\") { return res.status(400).json({ error: ErrorCode.InvalidInput }); const index = backupCodes.indexOf(req.body.backupCode.replaceAll(\"-\", \"\"));",
+        "file": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+        "line": 61
+      },
+      {
+        "comment": "Concurrent login requests using different backup codes can lead to codes not being marked as used. // Use a database transaction or atomic update with optimistic locking/JSON path if supported by Prisma/Database to ensure all consumed codes are correctly removed.",
+        "file": "packages/features/auth/lib/next-auth-options.ts",
+        "line": 156
+      },
+      {
+        "comment": "Password verification is bypassed when a `totpCode` is provided in the credentials. **Also found in:** - `packages/features/auth/lib/next-auth-options.ts:128-128` if (user.password) { const isCorrectPassword = await verifyPassword(credentials.password, user.password);",
+        "file": "packages/features/auth/lib/next-auth-options.ts",
+        "line": 129
+      }
+    ]
+  },
+  {
+    "pr_title": "fix: handle collective multiple host on destinationCalendar",
+    "pr_url": "https://github.com/Wellington01/cal.com-greptile/pull/125",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Updating the Calendar interface's createEvent signature causes type errors in all implementations that were not updated (LarkCalendarService, Office365CalendarService, BaseCalendarService, etc.). These implementations will fail to compile as they do not accept the required credentialId parameter. 221:   createEvent(event: CalendarEvent, credentialId?: number): Promise<NewCalendarEventType>;",
+        "file": "packages/types/Calendar.d.ts",
+        "line": 221
+      },
+      {
+        "comment": "LarkCalendarService's createEvent and updateEvent methods are hardcoded to use the first destination calendar in the array, ignoring subsequent hosts. In collective bookings, this causes events to be created on the first host's calendar using other hosts' credentials, resulting in permission errors or incorrect state. 128:     const mainHostDestinationCalendar = event.destinationCalendar?.find(cal => cal.credentialId === this.credentialId); 129:     const calendarId = mainHostDestinationCalendar",
+        "file": "packages/app-store/larkcalendar/lib/CalendarService.ts",
+        "line": 129
+      },
+      {
+        "comment": "Rescheduling only deletes the first old calendar reference, leaving behind zombie events on other hosts' calendars in collective bookings. if (newBookingId) { const oldCalendarEvents = booking.references.filter((reference) => reference.type.includes(\"_calendar\")); for (const oldCalendarEvent of oldCalendarEvents) { if (oldCalendarEvent?.credentialId) {",
+        "file": "packages/core/EventManager.ts",
+        "line": 554
+      },
+      {
+        "comment": "WHAT: `createEvent` is called sequentially inside a loop over `event.destinationCalendar`. WHY: Triggers O(N) external API calls per request (where N is the number of hosts), leading to slow response times or timeouts for collective bookings with multiple hosts. HOW: Collect all credentials first, then use `Promise.all` to parallelize `createEvent` calls. const creationPromises = []; for (const destination of event.destinationCalendar) { // ... credential fetching ... if (credential) {",
+        "file": "packages/core/EventManager.ts",
+        "line": 339
+      },
+      {
+        "comment": "WHAT: `deleteEvent` is called sequentially inside nested loops over host references and recurring occurrences. WHY: For collective recurring series, this generates O(Hosts * Occurrences) sequential network requests, which will almost certainly exceed serverless execution timeouts (e.g., 5 hosts * 20 occurrences = 100 sequential API calls). HOW: Parallelize the inner loop over `updatedBookings` using `Promise.all` for each credential. const deletionPromises = updatedBookings.map(async (updBooking",
+        "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+        "line": 423
+      },
+      {
+        "comment": "WHAT: `prisma.credential.findUnique` is called inside loops over `destinationCalendar` and `calendarReference`. WHY: Triggers N+1 database queries per request, where N is the number of host destinations or booking references. HOW: Extract all `credentialId`s from the collection and fetch them in a single batch query using `prisma.credential.findMany({ where: { id: { in: ids } } })`. const missingCredIds = event.destinationCalendar .map(d => d.credentialId) .filter(id => id && !this.calendarCrede",
+        "file": "packages/core/EventManager.ts",
+        "line": 339
+      },
+      {
+        "comment": "Null pointer dereference occurs when `evt.destinationCalendar` is null or empty and the location is set to Google Meet. **Also found in:** - `packages/core/EventManager.ts:118-120` const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []; if (evt.location === MeetLocationType && mainHostDestinationCalendar?.integration !== \"google_calendar\") {",
+        "file": "packages/core/EventManager.ts",
+        "line": 121
+      },
+      {
+        "comment": "Broken fallback logic in `updateEvent` and `deleteEvent` uses a self-referential check for falsy `externalCalendarId`, preventing correct calendar identification when references are incomplete. **Also found in:** - `packages/app-store/googlecalendar/lib/CalendarService.ts:254-256` : event.destinationCalendar?.[0]?.externalId;",
+        "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+        "line": 256
+      },
+      {
+        "comment": "Inverted logic for `IS_TEAM_BILLING_ENABLED` allows users to reserve organization slugs without paying and prevents slug creation in non-billing environments. **Also found in:** - `packages/trpc/server/routers/viewer/organizations/create.handler.ts:151-151` ...(!IS_TEAM_BILLING_ENABLED ? { slug } : {}), ...(IS_TEAM_BILLING_ENABLED ? { requestedSlug: slug } : {}),",
+        "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+        "line": 153
+      }
+    ]
+  },
+  {
+    "pr_title": "feat: convert InsightsBookingService to use Prisma.sql raw queries",
+    "pr_url": "https://github.com/Wellington01/cal.com-greptile/pull/126",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Use the pre-computed `teamIds` variable (which includes the organization ID) when fetching `userIdsFromOrg` instead of re-mapping `teamsFromOrg`. const userIdsFromOrg = teamsFromOrg.length > 0 ? await MembershipRepository.findAllByTeamIds({ }).then((members) => members.map((m) => m.userId))",
+        "file": "packages/lib/server/service/insightsBooking.ts",
+        "line": 166
+      },
+      {
+        "comment": "Simplify `getBaseConditions` logic to remove unreachable branches, as `authConditions` is always a truthy `Prisma.Sql` object. if (filterConditions) { return Prisma.sql`(${authConditions}) AND (${filterConditions})`; return authConditions;",
+        "file": "packages/lib/server/service/insightsBooking.ts",
+        "line": 80
+      },
+      {
+        "comment": "Update the test for invalid options to expect a Zod error during construction, or change the service to use `safeParse` to maintain the previous 'NOTHING' result behavior. it(\"should throw error for invalid options\", () => { expect(() => new InsightsBookingService({ options: null as any,",
+        "file": "packages/lib/server/service/__tests__/insightsBooking.integration-test.ts",
+        "line": 211
+      },
+      {
+        "comment": "A type mismatch occurs when passing `userIdsFromOrg` to `Prisma.sql` because it is an array of objects `{ userId: number }` rather than numbers. This will cause the raw SQL query to fail with a database error when compared against the `userId` column. Map the result to an array of user IDs before use. if (userIdsFromOrg.length > 0) { const uniqueUserIds = Array.from(new Set(userIdsFromOrg.map((u) => u.userId))); conditions.push(Prisma.sql`(\"userId\" = ANY(${uniqueUserIds})) AND (\"isTeamBooking\" =",
+        "file": "packages/lib/server/service/insightsBooking.ts",
+        "line": 168
+      },
+      {
+        "comment": "buildOrgAuthorizationCondition loads all organization user IDs into application memory to construct an ANY() clause. const conditions: Prisma.Sql[] = [ Prisma.sql`(\"teamId\" IN (SELECT id FROM \"Team\" WHERE \"parentId\" = ${options.orgId} OR id = ${options.orgId})) AND (\"isTeamBooking\" = true)`, Prisma.sql`(\"userId\" IN (SELECT \"userId\" FROM \"Membership\" WHERE \"teamId\" IN (SELECT id FROM \"Team\" WHERE \"parentId\" = ${options.orgId} OR id = ${options.orgId}) AND \"accepted\" = true)) AND (\"isTeamBooking\" ",
+        "file": "packages/lib/server/service/insightsBooking.ts",
+        "line": 169
+      },
+      {
+        "comment": "Manually nesting Prisma.sql fragments via reduce creates deeply nested object structures. return Prisma.sql`(${Prisma.join(conditions.map(c => Prisma.sql`(${c})`), \" AND \")})`;",
+        "file": "packages/lib/server/service/insightsBooking.ts",
+        "line": 123
+      }
+    ]
+  },
+  {
+    "pr_title": "Fixing Re-authentication with passkeys",
+    "pr_url": "https://github.com/Wellington01/keycloak-greptile/pull/109",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The 'authenticate' method fails to call 'webauthnAuth.fillContextForm(context)', which is required to enable the Passkey Conditional UI on the password page. This prevents users from using passkeys to satisfy the password requirement during re-authentication or in flows where the user is already identified. public void authenticate(AuthenticationFlowContext context) { if (alreadyAuthenticatedUsingPasswordlessCredential(context)) { context.success(); if (webauthnAuth != null && webauthnAuth.isPas",
+        "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+        "line": 52
+      },
+      {
+        "comment": "The 'success(String)' implementation in the inner 'Result' class calls 'getAuthenticationSession().setAuthNote()' without a null check. This causes a NullPointerException in client authentication flows (e.g., direct grant or client credentials) where the authentication session can be null. public void success(String credentialType) { if (credentialType != null && getAuthenticationSession() != null) { getAuthenticationSession().setAuthNote(LAST_AUTHN_CREDENTIAL, credentialType); this.status = Flo",
+        "file": "services/src/main/java/org/keycloak/authentication/AuthenticationProcessor.java",
+        "line": 419
+      },
+      {
+        "comment": "WHAT: PasswordForm skips authentication if a passwordless credential was used previously, bypassing the explicit REQUIRED configuration of the authentication flow. WHY: This leads to an authentication factor downgrade; if a flow is configured to require both a Passkey and a Password (e.g., for high-security areas), the password requirement is silently dropped, allowing 1FA access when 2FA was mandated. HOW: Remove the hardcoded skip logic and rely on the authentication flow engine's 'Alternative",
+        "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java",
+        "line": 52
+      },
+      {
+        "comment": "WHAT: UsernameForm incorrectly identifies the last authentication credential as a 'password' upon successful username validation. WHY: An attacker can satisfy session conditions or custom authenticators that check for password authentication by only providing a valid username, potentially bypassing MFA or other security steps. HOW: Override the action method in UsernameForm or modify the base class to only set the credential type if a password was actually verified. **Also found in:** - `service",
+        "file": "services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java",
+        "line": 68
+      }
+    ]
+  },
+  {
+    "pr_title": "Add caching support for IdentityProviderStorageProvider.getForLogin operations",
+    "pr_url": "https://github.com/Wellington01/keycloak-greptile/pull/110",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Add AuthzClientCryptoProvider for authorization client cryptographic operations",
+    "pr_url": "https://github.com/Wellington01/keycloak-greptile/pull/111",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "WHAT: Potential unhandled NumberFormatException in readInteger() when processing a zero-length byte array. WHY: ASN.1 DER requires INTEGER fields to have at least one content octet; passing an empty array to the BigInteger constructor causes a runtime crash instead of a controlled IOException. HOW: Add a check for length > 0 before calling the BigInteger constructor. int length = readLength(); if (length <= 0) { throw new IOException(\"Invalid INTEGER length: \" + length); byte[] bytes = read(leng",
+        "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+        "line": 73
+      },
+      {
+        "comment": "WHAT: Broken indefinite-length encoding (BER) support in readSequence() and readNext(). WHY: When readLength() returns -1 for indefinite length, readSequence() skips its content loop and returns an empty list, while readNext() returns a truncated array, leading to incorrect parsing of the ASN.1 structure. HOW: Implement proper lookahead for the end-of-contents marker (00 00) when length is -1, or explicitly throw an IOException if BER is not supported. int length = readLength(); if (length == -1",
+        "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+        "line": 62
+      },
+      {
+        "comment": "User-provided signature components are silently truncated in integerToBytes if their length exceeds the expected coordinate length. This allows signatures with invalid large values (e.g., R' = R + n) to be accepted as if they were valid smaller values, potentially leading to signature malleability or bypasses of blacklists or range checks. if (qLength < bytes.length) { int offset = bytes.length - qLength; for (int i = 0; i < offset; i++) { if (bytes[i] != 0) throw new IllegalArgumentException(\"I",
+        "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+        "line": 158
+      },
+      {
+        "comment": "The getBouncyCastleProvider method returns the default JVM provider instead of the BouncyCastle provider. This violates the interface contract and can cause failures in components that rely on BouncyCastle-specific algorithms or features when this provider is active.",
+        "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+        "line": 67
+      },
+      {
+        "comment": "The ASN.1 decoder is overly permissive, ignoring the Class and Constructed/Primitive bits of tags and allowing tag numbers to overflow. While not directly exploitable in the current context, it deviates from DER standards and could lead to parsing inconsistencies in more complex scenarios.",
+        "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Decoder.java",
+        "line": 100
+      },
+      {
+        "comment": "Reduce redundant object allocations in asn1derToConcatenatedRS by avoiding the creation of new ASN1Decoder and ByteArrayInputStream instances for each sequence component. The current implementation wraps each component's byte array (already in memory) into a new decoder, leading to excessive short-lived objects during signature verification. // Consider refactoring ASN1Decoder to allow reading integers directly from the sequence // or reusing a single decoder instance to minimize GC pressure.",
+        "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+        "line": 135
+      },
+      {
+        "comment": "WHAT: Dead computation identified in concatenatedRSToASN1DER where two ASN1Encoder instances are created and written to but their results are immediately discarded. WHY: Performs redundant encoding operations that waste CPU and memory without affecting the output. HOW: Remove lines 115 and 116. **Also found in:** - `authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java:113-116` - `authz/client/src/main/java/org/keycloak/authorization/client/util/",
+        "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+        "line": 117
+      }
+    ]
+  },
+  {
+    "pr_title": "Add rolling-updates feature flag and compatibility framework",
+    "pr_url": "https://github.com/Wellington01/keycloak-greptile/pull/112",
+    "tool": "kodus",
+    "issues": []
+  }
+]

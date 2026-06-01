@@ -1,0 +1,167 @@
+---
+title: "Guía de solución de problemas"
+description: "Resuelve los problemas más comunes con Kodus."
+icon: "headset"
+---
+
+## Soluciones rápidas
+
+### "Ejecutar diagnósticos"
+
+El instalador incluye un script de diagnóstico que verifica el stack y las configuraciones incorrectas más comunes.
+
+```bash
+cd kodus-installer
+./scripts/doctor.sh
+```
+
+### "No puedo acceder a la interfaz web"
+
+1. Verifica si los contenedores están en ejecución:
+
+```bash
+docker-compose ps kodus-web
+```
+
+2. Verifica que los puertos estén correctamente mapeados:
+
+```bash
+docker-compose port kodus-web 3000
+```
+
+3. Revisa los logs del contenedor web:
+
+```bash
+docker-compose logs kodus-web
+```
+
+### "Errores de Edge Runtime en los logs de `kodus-web`"
+
+Si ves errores como `A Node.js API is used ... not supported in the Edge Runtime` (generalmente con un rastro de importación de `axios`), parte de la aplicación web se está ejecutando en el Edge Runtime, que no es compatible con las APIs de Node.js.
+
+1. Actualiza a la imagen más reciente de `kodus-web` (vuelve a ejecutar el instalador o ejecuta `docker-compose pull kodus-web` y `docker-compose up -d`).
+2. Si estás compilando desde el código fuente, asegúrate de que las rutas auth/server se ejecuten en el entorno de ejecución de Node.js (establece `export const runtime = "nodejs"` y evita `runtime = "edge"` en esas rutas).
+3. Reconstruye y reinicia el contenedor.
+
+### "Los webhooks de Git no funcionan"
+
+1. Verifica la configuración de tu dominio:
+
+```bash
+curl -I https://your-domain.com
+```
+
+2. Revisa los logs de webhooks para ver los intentos de webhook:
+
+```bash
+docker-compose logs webhooks | grep webhook
+```
+
+3. Verifica la configuración de tu proxy inverso:
+
+```bash
+sudo nginx -t
+```
+
+### "Problemas de conexión a la base de datos"
+
+1. Verifica el estado del contenedor de base de datos:
+
+```bash
+docker-compose ps db_kodus_postgres
+docker-compose ps db_kodus_mongodb
+```
+
+2. Revisa los logs de la base de datos:
+
+```bash
+docker-compose logs db_kodus_postgres
+docker-compose logs db_kodus_mongodb
+```
+
+3. Prueba las conexiones a la base de datos:
+
+```bash
+docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
+docker-compose exec db_kodus_mongodb mongosh -u $API_MG_DB_USERNAME -p $API_MG_DB_PASSWORD
+```
+
+### "La migración falló debido a un tipo vector faltante"
+
+Si encuentras el error "type vector does not exist" durante las migraciones, se debe a que la extensión pgvector no está habilitada en tu base de datos PostgreSQL. Así es como se soluciona:
+
+1. Conéctate a tu base de datos PostgreSQL:
+
+```bash
+docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
+```
+
+2. Habilita la extensión pgvector:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+3. Después de habilitar la extensión, intenta ejecutar tus migraciones de nuevo:
+
+```bash
+docker-compose exec api npm run migration:run
+```
+
+Si sigues teniendo problemas, puedes verificar que la extensión esté correctamente instalada:
+
+```sql
+SELECT * FROM pg_extension WHERE extname = 'vector';
+```
+
+## Problemas comunes
+
+### Problemas con RabbitMQ
+
+Si ves errores en la cola de mensajes:
+
+1. Verifica el estado de RabbitMQ:
+
+```bash
+docker-compose logs rabbitmq
+```
+
+2. Accede a la consola de administración en `http://localhost:15672` para verificar colas y conexiones
+
+3. Reinicia el servicio si es necesario:
+
+```bash
+docker-compose restart rabbitmq
+```
+
+### Problemas de recursos
+
+Si los servicios son lentos o se bloquean:
+
+1. Verifica el uso de recursos:
+
+```bash
+docker stats
+```
+
+2. Verifica los límites del contenedor:
+
+```bash
+docker inspect $(docker-compose ps -q api) | grep -A 5 "Resources"
+```
+
+3. Ajusta los límites de recursos en docker-compose.yml si es necesario
+
+## Obtener ayuda
+
+### Qué incluir en las solicitudes de soporte
+
+- El mensaje de error exacto
+- Logs relevantes de los servicios afectados
+- Tu método de despliegue (CLI, VM, etc.)
+- Pasos para reproducir el problema
+
+### Dónde obtener ayuda
+
+- [Comunidad en Discord](https://discord.gg/TFZBRk9fT6)
+- [Issues en GitHub](https://github.com/kodustech/kodus-installer/issues)

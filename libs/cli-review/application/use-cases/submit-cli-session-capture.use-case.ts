@@ -77,6 +77,9 @@ export class SubmitCliSessionCaptureUseCase implements IUseCase {
                 accepted: true,
             };
         } catch (error) {
+            const err =
+                error instanceof Error ? error : new Error(String(error));
+
             if (this.isDuplicateKeyError(error)) {
                 const existing =
                     await this.cliSessionCaptureRepository.findByDedupKey(
@@ -100,6 +103,7 @@ export class SubmitCliSessionCaptureUseCase implements IUseCase {
 
                     throw new Error(
                         'Duplicate CLI session capture detected but existing capture could not be resolved',
+                        { cause: error },
                     );
                 }
 
@@ -112,7 +116,7 @@ export class SubmitCliSessionCaptureUseCase implements IUseCase {
             this.logger.error({
                 message: 'Failed to persist CLI session capture',
                 context: SubmitCliSessionCaptureUseCase.name,
-                error,
+                error: err,
                 metadata: {
                     organizationId: organizationAndTeamData.organizationId,
                     teamId: organizationAndTeamData.teamId,

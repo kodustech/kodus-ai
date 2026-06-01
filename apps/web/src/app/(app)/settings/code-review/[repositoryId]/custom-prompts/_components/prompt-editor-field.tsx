@@ -131,7 +131,7 @@ function PromptEditorFieldComponent({
                         onChangeAction={handleChange}
                         placeholder={placeholder}
                         className="min-h-32"
-                        disabled={field.disabled}
+                        disabled={!canEdit || field.disabled}
                         groups={groups}
                         formatInsertByType={formatInsertByType}
                     />

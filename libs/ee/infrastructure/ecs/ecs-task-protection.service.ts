@@ -17,7 +17,22 @@ export class EcsTaskProtectionService implements ITaskProtectionService {
         private readonly httpService: HttpService,
         private readonly configService: ConfigService,
     ) {
-        this.ecsAgentUri = this.configService.get<string>('API_ECS_AGENT_URI');
+        const agentInjectedUri = process.env.ECS_AGENT_URI;
+        const configOverrideUri =
+            this.configService.get<string>('API_ECS_AGENT_URI');
+        this.ecsAgentUri = agentInjectedUri || configOverrideUri || undefined;
+
+        if (this.ecsAgentUri) {
+            this.logger.log({
+                message: 'ECS task protection configured',
+                metadata: {
+                    source: agentInjectedUri
+                        ? 'ECS_AGENT_URI (agent-injected)'
+                        : 'API_ECS_AGENT_URI (config override)',
+                },
+            } as any);
+        }
+
         const configuredTimeout = this.configService.get<string>(
             'API_ECS_TASK_PROTECTION_TIMEOUT_MS',
         );

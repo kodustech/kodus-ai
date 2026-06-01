@@ -36,7 +36,11 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
                 return null;
             }
 
-            // Process BYOK configuration by masking API keys
+            // Process BYOK configuration by masking sensitive credential
+            // fields (apiKey for non-Bedrock providers, awsBearerToken /
+            // awsAccessKeyId / awsSecretAccessKey / awsSessionToken for
+            // Bedrock). Bedrock configs have no apiKey, so the gating
+            // check has to consider the AWS fields as well.
             if (
                 organizationParametersKey ===
                 OrganizationParametersKey.BYOK_CONFIG
@@ -46,39 +50,24 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
                 if (
                     configValue &&
                     typeof configValue === 'object' &&
-                    (configValue.main?.apiKey || configValue.fallback?.apiKey)
+                    (this.slotHasSecrets(configValue.main) ||
+                        this.slotHasSecrets(configValue.fallback))
                 ) {
                     try {
                         const processedConfig = { ...configValue };
 
-                        // Process main if it exists and has apiKey
-                        if (configValue.main?.apiKey) {
-                            const decryptedMainApiKey = decrypt(
-                                configValue.main.apiKey,
+                        if (configValue.main) {
+                            processedConfig.main = this.maskSlotSecrets(
+                                configValue.main,
                             );
-                            const maskedMainApiKey =
-                                this.maskApiKey(decryptedMainApiKey);
-
-                            processedConfig.main = {
-                                ...configValue.main,
-                                apiKey: maskedMainApiKey,
-                            };
                         } else {
                             processedConfig.main = null;
                         }
 
-                        if (configValue.fallback?.apiKey) {
-                            const decryptedFallbackApiKey = decrypt(
-                                configValue.fallback.apiKey,
+                        if (configValue.fallback) {
+                            processedConfig.fallback = this.maskSlotSecrets(
+                                configValue.fallback,
                             );
-                            const maskedFallbackApiKey = this.maskApiKey(
-                                decryptedFallbackApiKey,
-                            );
-
-                            processedConfig.fallback = {
-                                ...configValue.fallback,
-                                apiKey: maskedFallbackApiKey,
-                            };
                         } else {
                             processedConfig.fallback = null;
                         }
@@ -91,7 +80,7 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
                         };
                     } catch (error) {
                         this.logger.error({
-                            message: 'Error decrypting API key',
+                            message: 'Error decrypting BYOK credentials',
                             context:
                                 FindByKeyOrganizationParametersUseCase.name,
                             error: error,
@@ -136,5 +125,36 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
         const firstTwo = apiKey.substring(0, 2);
         const lastThree = apiKey.substring(apiKey.length - 3);
         return `${firstTwo}...${lastThree}`;
+    }
+
+    /**
+     * Names of the encrypted credential fields on a BYOK slot. apiKey
+     * covers OpenAI/Anthropic/Gemini/OpenRouter/Novita/Vertex (SA JSON);
+     * the aws* fields cover Amazon Bedrock's two auth paths.
+     */
+    private static readonly SECRET_FIELDS = [
+        'apiKey',
+        'awsBearerToken',
+        'awsAccessKeyId',
+        'awsSecretAccessKey',
+        'awsSessionToken',
+    ] as const;
+
+    private slotHasSecrets(slot: any): boolean {
+        if (!slot || typeof slot !== 'object') return false;
+        return FindByKeyOrganizationParametersUseCase.SECRET_FIELDS.some(
+            (field) => typeof slot[field] === 'string' && slot[field],
+        );
+    }
+
+    private maskSlotSecrets(slot: any): any {
+        const masked: Record<string, any> = { ...slot };
+        for (const field of FindByKeyOrganizationParametersUseCase.SECRET_FIELDS) {
+            const value = slot[field];
+            if (typeof value === 'string' && value) {
+                masked[field] = this.maskApiKey(decrypt(value));
+            }
+        }
+        return masked;
     }
 }

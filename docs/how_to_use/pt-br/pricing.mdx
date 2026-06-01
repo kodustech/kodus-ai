@@ -1,0 +1,149 @@
+---
+title: "Detalhes de Preços"
+---
+
+Aqui está tudo o que você precisa saber sobre nossos preços para ajudá-lo a tomar a melhor decisão para sua organização. Para os detalhes mais recentes dos planos e preços atualizados, veja [kodus.io/pricing](https://kodus.io/pricing).
+
+## Planos em Resumo
+
+- **Community** — gratuito. BYOK. Self-hosted ou cloud.
+- **Teams** — $10/dev/mês + custos de tokens (BYOK). Apenas cloud. **Teste gratuito de 14 dias, sem cartão de crédito.** 20% de desconto com cobrança anual.
+- **Enterprise** — preço personalizado. Self-hosted ou cloud. Escolha **BYOK** ou **chave de API Kodus AI Tokens**.
+
+Todos os planos incluem usuários ilimitados, pull requests ilimitados e sem mínimo por assento.
+
+## Community vs. Teams vs. Enterprise
+
+O Kodus está disponível em três versões:
+
+- **Community:** Gratuito para usar e modificar. Disponível para implantações self-hosted e cloud.
+
+  - Traga suas próprias chaves de API (BYOK)
+  - Revisões de código ilimitadas e usuários ilimitados
+  - Issues ilimitados no Quality Radar
+  - Kody Learnings e Memory
+  - Kodus MCP
+  - Até 10 Kody Rules
+  - Até 3 plugins / MCPs (inclui o Kodus MCP padrão)
+  - ❌ Sem Cockpit (apenas Teams e Enterprise)
+  - Suporte da comunidade via Discord
+
+- **Teams:** Versão paga exclusiva para cloud. $10/dev/mês + custos de tokens (BYOK).
+
+  - Tudo do Community, mais:
+  - Kody Rules ilimitadas (sem limite de 10 regras)
+  - Plugins / MCPs ilimitados (sem limite de 3 plugins)
+  - **Fila prioritária para Kody Agents**
+  - **Kodus Cockpit** (métricas de engenharia)
+  - Suporte por e-mail + Discord
+  - Atualizações automáticas e manutenção
+  - **Teste gratuito de 14 dias** — sem cartão de crédito necessário
+  - **20% de desconto** com cobrança anual
+
+- **Enterprise:** Versão personalizada para uso enterprise. Disponível self-hosted ou cloud.
+
+  - Tudo do Teams, mais:
+  - SSO / SAML
+  - **RBAC, logs de auditoria e análises**
+  - **SOC 2 em progresso**
+  - Escolha de modelo de token: **BYOK** ou **chave de API Kodus AI Tokens** (tokens gerenciados cobrados pelo Kodus)
+  - Instância dedicada
+  - SLAs personalizados
+  - Até **5 horas/mês** de suporte dedicado
+  - Canal privado no Discord
+  - Recursos avançados de segurança
+  - Assistência de treinamento e integração
+  - Opções de personalização
+
+## Como Funciona a Precificação
+
+Nossa precificação é por desenvolvedor que cria ativamente pull requests na sua equipe. Isso mantém o faturamento alinhado com o valor à medida que sua equipe evolui:
+
+- **Pague por desenvolvedor ativo:** apenas desenvolvedores que contribuem com PRs contam para o seu assento.
+- **Ajustável a qualquer momento:** altere o número de desenvolvedores ativos pelas configurações da sua conta. Sem mínimos, sem lock-in anual na contagem de assentos.
+
+## BYOK é o Padrão em Todos os Planos
+
+O Kodus **não vende tokens LLM por padrão**. Community, Teams e Enterprise rodam com **Bring Your Own Key** (BYOK): você conecta sua própria conta de provedor — OpenAI, Anthropic, Gemini ou qualquer provedor compatível com OpenAI — e os tokens são cobrados diretamente por esse provedor no painel deles. O Kodus nunca cobra margem sobre tokens.
+
+A diferença de preço entre os planos é **o que o Kodus cobra além do seu gasto com tokens**, não o modelo de tokens em si:
+
+| Plano | O que você paga ao Kodus | Como os tokens são cobrados |
+| ---- | ------------------ | --------------------- |
+| **Community** | $0 | Você paga seu provedor LLM diretamente (BYOK) |
+| **Teams** | $10/dev ativo/mês | Você paga seu provedor LLM diretamente (BYOK) |
+| **Enterprise** | Personalizado (contrato) | BYOK, **ou** deixe o Kodus gerenciar tokens via **chave de API Kodus AI Tokens** e receba uma única fatura |
+
+Veja a [visão geral do BYOK](/how_to_use/pt-br/byok) para os provedores suportados e o fluxo de configuração. Tudo abaixo é sobre a **taxa do lado Kodus**.
+
+## Preços do Teams
+
+### $10 por desenvolvedor ativo por mês
+
+A assinatura Teams é **$10 por desenvolvedor ativo por mês**, além do que você paga ao seu provedor LLM por tokens. Sem margem do Kodus sobre tokens.
+
+O que o $10/dev/mês cobre:
+
+- **Hospedagem cloud** — totalmente gerenciada pelo Kodus, com atualizações automáticas e manutenção.
+- **Fila prioritária para Kody Agents** — o tráfego Teams é revisado antes do tráfego do plano gratuito.
+- **Kodus Cockpit** — métricas de engenharia e relatórios.
+- **Kody Rules e plugins/MCPs ilimitados** (sem limites de 10 regras / 3 plugins).
+- **Suporte por e-mail + Discord**.
+
+O que o custo de tokens cobre:
+
+- Cada chamada de API que o Kodus faz ao seu provedor LLM escolhido durante uma revisão.
+- Cobrado diretamente pelo provedor; você pode trocar de provedor a qualquer momento.
+- Você escolhe o modelo — econômico (ex.: Gemini Flash, GPT-5-mini) ou de fronteira (Claude 4.5 Sonnet, GPT-5).
+
+### Cadência de Cobrança
+
+- **Mensal:** $10/dev/mês, cobrado mensalmente.
+- **Anual:** 20% de desconto com cobrança uma vez por ano.
+- **Teste gratuito:** 14 dias no Teams, sem cartão de crédito necessário.
+- **Cancele a qualquer momento:** as alterações entram em vigor no final do ciclo de cobrança atual.
+
+## Preços Enterprise
+
+O Enterprise tem preço personalizado e é assinado via contrato. Você escolhe o modelo de token que se encaixa nas suas operações:
+
+- **BYOK** — igual ao Community e Teams, você traz suas próprias chaves LLM. O Kodus cobra apenas a taxa por assento.
+- **Chave de API Kodus AI Tokens** — o Kodus fornece uma chave de API gerenciada e cobra os tokens junto com a taxa por assento. Ideal para equipes que desejam um único fornecedor, uma única fatura e sem relacionamento direto com o provedor LLM.
+
+Os recursos exclusivos do Enterprise incluem SSO / SAML, RBAC com logs de auditoria e análises, opção de instância dedicada, SLAs personalizados, até **5 horas/mês** de suporte dedicado e um canal privado no Discord. SOC 2 está em andamento.
+
+[Entre em contato com vendas](https://kodus.io/pricing) para um orçamento personalizado para sua organização.
+
+## Pull Requests Ilimitados
+
+Sua equipe pode enviar quantos pull requests quiser — não há limite de PR em nenhum plano. O único limite rígido é em **pull requests muito grandes**: não revisamos PRs com mais de **200 arquivos alterados**. Limites de taxa do lado do provedor Git também podem se aplicar.
+
+## Programa Kody Pilot
+
+Subsidiamos o Kodus para equipes que movem a indústria para frente e para equipes que de outra forma não poderiam pagar. O **Programa Kody Pilot** oferece **descontos de 30–100%** para:
+
+- **Startups em estágio inicial**
+- **Projetos open-source** com desenvolvimento ativo
+- **Equipes em regiões economicamente desfavorecidas**
+- **Organizações sem fins lucrativos**
+
+### Como se Candidatar
+
+1. Junte-se à nossa comunidade no Discord em [discord.gg/TFZBRk9fT6](https://discord.gg/TFZBRk9fT6).
+2. Compartilhe o nome da sua organização, site e uma breve descrição do seu trabalho.
+3. Forneça comprovante de elegibilidade:
+   - Startups: estágio e rodada de financiamento (se houver).
+   - Open source: links para repositórios públicos.
+   - Regiões desfavorecidas: país e contexto.
+   - Sem fins lucrativos: comprovante de status sem fins lucrativos.
+4. Revisaremos sua candidatura em até 3 dias úteis.
+
+## Pagamentos e Cobrança
+
+- **Powered by Stripe:** os pagamentos são processados com segurança usando o Stripe, uma plataforma globalmente confiável.
+- **Cancele a qualquer momento:** você pode cancelar seu plano a qualquer momento; as alterações entram em vigor no final do seu ciclo de cobrança (mensal ou anual).
+- **Faturas e Nota Fiscal Brasileira:** para clientes brasileiros 🇧🇷, fornecemos faturas e emitimos Nota Fiscal para cada transação.
+
+---
+
+Dúvidas? Junte-se à nossa [comunidade no Discord](https://discord.gg/TFZBRk9fT6), ou verifique os detalhes mais recentes dos planos em [kodus.io/pricing](https://kodus.io/pricing).

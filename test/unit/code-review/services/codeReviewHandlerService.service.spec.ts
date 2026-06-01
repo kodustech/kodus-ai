@@ -31,8 +31,12 @@ describe('CodeReviewHandlerService - skip feedback control', () => {
 
     const service = new CodeReviewHandlerService(
         mockPipelineFactory as any,
-        {} as any,
         mockCodeManagement as any,
+        {
+            findByKey: jest.fn(),
+            createOrUpdateConfig: jest.fn(),
+        } as any,
+        { firstReviewCompleted: jest.fn() } as any,
     );
 
     const organizationAndTeamData = {

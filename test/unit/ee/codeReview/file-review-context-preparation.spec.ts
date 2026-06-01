@@ -5,7 +5,6 @@ import {
     ReviewModeResponse,
     ReviewModeConfig,
 } from '@/core/infrastructure/config/types/general/codeReview.type';
-import { TaskStatus } from '@/ee/kodyAST/interfaces/code-ast-analysis.interface';
 
 describe('FileReviewContextPreparation (EE)', () => {
     let service: FileReviewContextPreparation;
@@ -34,7 +33,7 @@ describe('FileReviewContextPreparation (EE)', () => {
     });
 
     describe('getRelevantFileContent', () => {
-        it('should return full file content and hasRelevantContent false when AST is removed', async () => {
+        it('should return full file content and hasRelevantContent false when no graph content', async () => {
             const file = {
                 filename: 'test.ts',
                 fileContent: 'const a = 1;',
@@ -46,9 +45,6 @@ describe('FileReviewContextPreparation (EE)', () => {
                     organizationId: 'org',
                     teamId: 'team',
                 },
-                tasks: {
-                    astAnalysis: { taskId: null }, // Simulated missing task
-                },
             } as any;
 
             // Accessing protected method for unit test
@@ -59,7 +55,6 @@ describe('FileReviewContextPreparation (EE)', () => {
 
             expect(result.relevantContent).toBe('const a = 1;');
             expect(result.hasRelevantContent).toBe(false);
-            expect(result.taskStatus).toBe(TaskStatus.TASK_STATUS_FAILED);
         });
 
         it('should fallback to file.content if fileContent is missing', async () => {
@@ -70,9 +65,6 @@ describe('FileReviewContextPreparation (EE)', () => {
 
             const context = {
                 organizationAndTeamData: {},
-                tasks: {
-                    astAnalysis: { taskId: null },
-                },
             } as any;
 
             const result = await (service as any).getRelevantFileContent(

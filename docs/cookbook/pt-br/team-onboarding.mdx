@@ -1,0 +1,139 @@
+---
+title: "Integração de um novo time"
+description: "Guia passo a passo para configurar o Kodus para um novo time — desde a conexão de repositórios até o ensino das primeiras convenções."
+icon: "users-gear"
+---
+
+## Visão geral
+
+Colocar um novo time em funcionamento com o Kodus leva cerca de 30 minutos. Este guia percorre a configuração completa para que seu time extraia valor desde o primeiro PR.
+
+## Passo 1 — Crie e configure o workspace
+
+1. Cadastre-se em [kodus.io](https://kodus.io) ou acesse sua instância auto-hospedada
+2. Crie um novo workspace para o seu time
+3. Conecte seu provedor Git (GitHub, GitLab, Bitbucket ou Azure DevOps)
+4. Selecione os repositórios a monitorar
+
+## Passo 2 — Defina a linha de base de revisão
+
+Comece com padrões sensatos antes de personalizar:
+
+```yaml
+# kodus-config.yml — coloque este arquivo na raiz de cada repositório
+reviewOptions:
+  security: true
+  code_style: true
+  kody_rules: true
+  refactoring: true
+  error_handling: true
+  maintainability: true
+  potential_issues: true
+  performance_and_optimization: true
+  business_logic: true
+
+suggestionControl:
+  groupingMode: full
+  limitationType: pr
+  maxSuggestions: 9
+  severityLevelFilter: medium
+
+automatedReviewActive: true
+```
+
+Isso fornece revisões automatizadas com um limite razoável de sugestões. Ajuste após uma semana com base no feedback.
+
+## Passo 3 — Importe regras existentes de ferramentas de IDE
+
+Se o seu time já usa regras do Cursor, Copilot ou Claude:
+
+1. Vá para **Configurações de Code Review** → **Kody Rules**
+2. O Kodus detecta arquivos `.cursorrules`, `.github/copilot-instructions.md` e `.claude`
+3. Importe os que fazem sentido para revisão de código
+
+Isso evita ter que reescrever regras do zero.
+
+## Passo 4 — Ensine suas 5 principais convenções
+
+Não tente codificar tudo no primeiro dia. Comece com as 5 convenções sobre as quais seu time mais discute:
+
+```
+@kody remember: we use camelCase for variables and PascalCase for types.
+```
+
+```
+@kody remember: all API responses use the standard envelope format
+{ data, error, meta }.
+```
+
+```
+@kody remember: we prefer composition over inheritance.
+Use interfaces and dependency injection.
+```
+
+```
+@kody remember: every public function must have JSDoc with
+@param and @returns descriptions.
+```
+
+```
+@kody remember: database queries go through the repository layer only.
+No direct DB access from services or controllers.
+```
+
+Estas se tornam Memories que se aplicam imediatamente a todas as revisões.
+
+## Passo 5 — Crie 2-3 regras críticas
+
+Adicione regras para coisas que nunca devem acontecer:
+
+```
+Name: No console.log in production code
+Scope: File
+Paths: src/**/*.ts
+Severity: High
+Instructions: Flag any console.log, console.warn, or console.error
+in fileDiff. Use the project logger instead.
+Exclude test files (*.spec.ts, *.test.ts).
+```
+
+```
+Name: No hardcoded API URLs
+Scope: File
+Paths: src/**/*.ts
+Severity: Critical
+Instructions: Flag any hardcoded URL (http:// or https://)
+in fileDiff that looks like an API endpoint.
+URLs must come from environment variables or config files.
+```
+
+## Passo 6 — Conecte a gestão de tarefas (opcional, mas recomendado)
+
+Conecte Jira, Linear, Notion ou ClickUp em **Configurações** → **Plugins** para habilitar a validação de lógica de negócio. Isso permite que o Kodus verifique se os PRs implementam o que as tarefas descrevem.
+
+## Passo 7 — Execute um PR piloto
+
+Abra um PR de teste e verifique:
+
+- [ ] Os comentários do Kodus aparecem no PR
+- [ ] As sugestões são relevantes e com a severidade correta
+- [ ] Suas regras personalizadas disparam quando deveriam
+- [ ] As Memories são refletidas no contexto de revisão
+
+## Passo 8 — Colete feedback após uma semana
+
+Após uma semana de revisões, consulte o time:
+
+- Há sugestões demais? → Aumente `severityLevelFilter` ou reduza `maxSuggestions`
+- As regras estão gerando muito ruído? → Restrinja os caminhos de arquivo ou adicione exclusões
+- Faltam padrões importantes? → Adicione novas regras ou Memories
+- Quer regras geradas automaticamente? → Clique em **Gerar Kody Rules** para obter sugestões do histórico de revisões
+
+## Dicas
+
+- Não sobrecarregue com regras no primeiro dia — comece pequeno e expanda
+- Deixe o time ensinar o Kody naturalmente por meio de conversas antes de formalizar como regras
+- Use `@kody start-review` nos primeiros PRs para que o time veja o Kodus em ação
+- Habilite a aprovação de memórias geradas por LLM se quiser revisar o que o Kody aprende
+
+Para o guia completo de configuração, consulte [Início Rápido](/how_to_use/pt-br/quickstart).

@@ -17,8 +17,74 @@ export interface SSOConfig<P extends SSOProtocol> {
     active: boolean;
     providerConfig: SSOProtocolConfigMap[P];
     domains: string[];
+    connectionTest?: SSOConnectionTestMetadata;
+    domainVerification?: SSODomainVerificationMetadata;
     createdAt?: string;
     updatedAt?: string;
+}
+
+export interface SSODomainVerificationRecord {
+    domain: string;
+    verifiedAt: string;
+    verifiedByEmail: string;
+}
+
+export interface SSODomainVerificationMetadata {
+    verifiedDomains: SSODomainVerificationRecord[];
+}
+
+export enum SSOConnectionTestStatus {
+    SUCCESS = "success",
+    FAILED = "failed",
+}
+
+export interface SSOConnectionTestMetadata {
+    status: SSOConnectionTestStatus;
+    configFingerprint: string;
+    testedAt: string;
+    testedBy?: string;
+    failureCode?: string;
+    failureMessage?: string;
+}
+
+export enum SSOConnectionTestSessionStatus {
+    PENDING = "pending",
+    SUCCESS = "success",
+    FAILED = "failed",
+}
+
+export interface StartSSOConnectionTestResponse {
+    sessionId: string;
+    redirectUrl: string;
+    configFingerprint: string;
+}
+
+export interface GetSSOConnectionTestResultResponse {
+    sessionId: string;
+    status: SSOConnectionTestSessionStatus;
+    configFingerprint: string;
+    failureCode?: string;
+    failureMessage?: string;
+    testedAt?: string;
+}
+
+export interface RequestSSODomainVerificationResponse {
+    domain: string;
+    contactEmail: string;
+    sent: boolean;
+}
+
+export interface ConfirmSSODomainVerificationResponse {
+    domain: string;
+    verifiedAt: string;
+    verifiedByEmail: string;
+}
+
+export interface SSODomainVerificationStatusItem {
+    domain: string;
+    verified: boolean;
+    verifiedAt?: string;
+    verifiedByEmail?: string;
 }
 
 export type SSOProtocolConfigMap = {

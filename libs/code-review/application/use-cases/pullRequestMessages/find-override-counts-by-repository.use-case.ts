@@ -95,27 +95,29 @@ export class FindOverrideCountsByRepositoryPullRequestMessagesUseCase {
                 FormattedConfigLevel.REPOSITORY,
             );
 
-            const directoryOverrideCounts = (directoryEntities ?? []).map((entity) => {
-                const directoryConfig = this.getConfigs(entity);
-                const directoryDelta = deepDifference(
-                    resolvedRepositoryConfig,
-                    directoryConfig,
-                );
+            const directoryOverrideCounts = (directoryEntities ?? []).map(
+                (entity) => {
+                    const directoryConfig = this.getConfigs(entity);
+                    const directoryDelta = deepDifference(
+                        resolvedRepositoryConfig,
+                        directoryConfig,
+                    );
 
-                const formattedDirectoryConfig = this.formatLevel(
-                    formattedRepositoryConfig,
-                    directoryDelta,
-                    FormattedConfigLevel.DIRECTORY,
-                );
-
-                return {
-                    directoryId: entity.directoryId,
-                    overrideCount: this.countOverridesRecursive(
-                        formattedDirectoryConfig,
+                    const formattedDirectoryConfig = this.formatLevel(
+                        formattedRepositoryConfig,
+                        directoryDelta,
                         FormattedConfigLevel.DIRECTORY,
-                    ),
-                };
-            });
+                    );
+
+                    return {
+                        directoryId: entity.directoryId,
+                        overrideCount: this.countOverridesRecursive(
+                            formattedDirectoryConfig,
+                            FormattedConfigLevel.DIRECTORY,
+                        ),
+                    };
+                },
+            );
 
             return {
                 repositoryId,

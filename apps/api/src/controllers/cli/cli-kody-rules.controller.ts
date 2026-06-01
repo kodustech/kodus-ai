@@ -140,6 +140,9 @@ export class CliKodyRulesController {
         return await this.createOrUpdateKodyRuleUseCase.execute(
             requiredFieldsBody,
             authContext.organizationId,
+            undefined,
+            undefined,
+            authContext.teamId,
         );
     }
 
@@ -189,6 +192,9 @@ export class CliKodyRulesController {
         return await this.createOrUpdateKodyRuleUseCase.execute(
             patchPayload,
             authContext.organizationId,
+            undefined,
+            undefined,
+            authContext.teamId,
         );
     }
 

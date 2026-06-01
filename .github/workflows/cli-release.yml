@@ -1,0 +1,96 @@
+name: "CLI: Release"
+
+# Trigger on tags like cli-v0.4.15. Namespaced so future publishable
+# packages in this monorepo can use their own prefix without colliding.
+#
+# Also callable from `selfhosted-build-push.yml` via `workflow_call`
+# so a self-hosted release can fan out and publish a matching CLI
+# release in the same orchestrated run.
+on:
+    push:
+        tags:
+            - 'cli-v*.*.*'
+    workflow_call:
+        inputs:
+            tag:
+                description: "CLI tag to publish (e.g. cli-v0.4.16)."
+                required: true
+                type: string
+
+jobs:
+    publish:
+        runs-on: ubuntu-latest
+        environment: ci
+        permissions:
+            contents: write
+            id-token: write
+        defaults:
+            run:
+                working-directory: apps/cli
+        env:
+            RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        steps:
+            - uses: actions/checkout@v6.0.2
+              with:
+                  # When invoked via workflow_call the caller's ref is
+                  # `main` (or whatever ref it ran on); pin to the tag
+                  # so the build, test, publish, and release all match
+                  # the artifact we're cutting.
+                  ref: ${{ inputs.tag || github.ref }}
+            - uses: actions/setup-node@v6.4.0
+              with:
+                  node-version: "24"
+                  cache: yarn
+                  cache-dependency-path: apps/cli/yarn.lock
+            - run: npm --version
+            - run: yarn install --frozen-lockfile
+            - run: yarn skills:validate
+            - run: yarn skills:prompt > /dev/null
+            - run: yarn build
+            - run: yarn test
+            - run: npm publish --provenance --access public
+
+            - name: Create GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  # Explicit tag_name is required when called via
+                  # workflow_call — `github.ref` is the caller's ref,
+                  # not the cli-v* tag.
+                  tag_name: ${{ env.RELEASE_TAG }}
+                  generate_release_notes: true
+
+            - name: Get previous release date
+              id: prev
+              working-directory: ${{ github.workspace }}
+              run: |
+                  prev=$(gh release list -R ${{ github.repository }} --limit 50 \
+                    --json tagName,publishedAt -q '[.[] | select(.tagName | startswith("cli-v"))][1].publishedAt // empty')
+                  echo "date=${prev:-$(date -d '-30 days' -Idate)}" >> "$GITHUB_OUTPUT"
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Generate changelog
+              working-directory: ${{ github.workspace }}
+              run: |
+                  end_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                  response=$(curl -sf -X POST "${{ secrets.CHANGELOG_API_URL }}/api/v1/changelog" \
+                    -H "Content-Type: application/json" \
+                    -d '{
+                      "owner": "${{ github.repository_owner }}",
+                      "repo": "${{ github.event.repository.name }}",
+                      "startDate": "${{ steps.prev.outputs.date }}",
+                      "endDate": "'"$end_date"'",
+                      "style": "end-user",
+                      "webhookUrl": "${{ secrets.WEBHOOK_URL }}"
+                    }')
+                  echo "$response" | jq -r '.changelog' > changelog.md
+                  echo "Generated changelog for $RELEASE_TAG"
+
+            - name: Update release notes
+              working-directory: ${{ github.workspace }}
+              run: |
+                  gh release edit "$RELEASE_TAG" \
+                    -R ${{ github.repository }} \
+                    --notes-file changelog.md
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

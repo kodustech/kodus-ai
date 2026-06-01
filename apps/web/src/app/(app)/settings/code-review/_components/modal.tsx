@@ -34,8 +34,6 @@ import {
 } from "@components/ui/popover";
 import {
     RichTextEditorWithMentions,
-    type MentionGroup,
-    type MentionGroupItem,
     type RichTextEditorWithMentionsRef,
 } from "@components/ui/rich-text-editor-with-mentions";
 import { Separator } from "@components/ui/separator";
@@ -58,11 +56,12 @@ import {
     KodyRulesStatus,
     KodyRulesType,
     KodyRuleWithInheritanceDetails,
+    resolveKodyRuleDisplaySeverity,
     type KodyRule,
     type LibraryRule,
 } from "@services/kodyRules/types";
+import { isCentralizedPrResponse } from "@services/parameters/types";
 import {
-    AtSign,
     CheckIcon,
     ChevronDown,
     Code2,
@@ -79,13 +78,52 @@ import {
     XIcon,
 } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
-import { useMCPMentions } from "src/core/hooks/use-mcp-mentions";
+import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { cn } from "src/core/utils/components";
 
 import type { FormattedDirectoryCodeReviewConfig } from "../_types";
+import { getCentralizedPrToastPayload } from "../_utils/centralized-pr-feedback";
 import { ExternalReferencesDisplay } from "../[repositoryId]/pr-summary/_components/external-references-display";
 
-const severityLevelFilterOptions = {
+const severityOptions: {
+    value: KodyRule["severity"];
+    label: string;
+    description: string;
+    textColor: string;
+    borderColor: string;
+}[] = [
+    {
+        value: "low",
+        label: "Low",
+        description: "Minor improvements and low-risk issues",
+        textColor: "text-info",
+        borderColor: "border-info",
+    },
+    {
+        value: "medium",
+        label: "Medium",
+        description: "Recommended fixes that improve correctness or quality",
+        textColor: "text-alert",
+        borderColor: "border-alert",
+    },
+    {
+        value: "high",
+        label: "High",
+        description: "Important problems that should be fixed in the PR",
+        textColor: "text-warning",
+        borderColor: "border-warning",
+    },
+    {
+        value: "critical",
+        label: "Critical",
+        description:
+            "Severe bugs, security vulnerabilities, or data loss risks",
+        textColor: "text-danger",
+        borderColor: "border-danger",
+    },
+];
+
+const severitySliderOptions = {
     low: { label: "Low", value: 0 },
     medium: { label: "Medium", value: 1 },
     high: { label: "High", value: 2 },
@@ -145,7 +183,7 @@ const GOOD_EXAMPLE_PLACEHOLDER = `for (var i = 1; i <= 10; i += 2)  // Compliant
 
 const getDirectoryPathForReplace = (
     directory: FormattedDirectoryCodeReviewConfig,
-) => `${directory.path.slice(1)}/`;
+) => `${(directory.folders?.[0]?.path ?? '').slice(1)}/`;
 const getKodyRulePathWithoutDirectoryPath = ({
     directory,
     rule,
@@ -293,129 +331,6 @@ function RuleSuggestions({
     );
 }
 
-function MCPToolsPopover({
-    mcpGroups,
-    disabled,
-    onInsertMention,
-}: {
-    mcpGroups: MentionGroup[];
-    disabled?: boolean;
-    onInsertMention: (app: string, tool: string) => void;
-}) {
-    const [selectedApp, setSelectedApp] =
-        React.useState<MentionGroupItem | null>(null);
-    const [tools, setTools] = React.useState<MentionGroup[] | null>(null);
-    const [isOpen, setIsOpen] = React.useState(false);
-
-    const apps = mcpGroups[0]?.items ?? [];
-
-    const handleSelectApp = async (app: MentionGroupItem) => {
-        if (app.children) {
-            const childGroups = await app.children();
-            setTools(childGroups);
-            setSelectedApp(app);
-        }
-    };
-
-    const handleBack = () => {
-        setSelectedApp(null);
-        setTools(null);
-    };
-
-    const handleInsertTool = (tool: MentionGroupItem) => {
-        const rawApp = String(tool.meta?.appName ?? "");
-        const app = rawApp
-            .toLowerCase()
-            .replace(/\bmcp\b/g, "")
-            .replace(/[^a-z0-9]+/g, "_")
-            .replace(/^_+|_+$/g, "");
-        const toolName = String(tool.label).toLowerCase();
-
-        onInsertMention(app, toolName);
-        setIsOpen(false);
-        setSelectedApp(null);
-        setTools(null);
-    };
-
-    return (
-        <Popover
-            open={isOpen}
-            onOpenChange={(open) => {
-                setIsOpen(open);
-                if (!open) {
-                    setSelectedApp(null);
-                    setTools(null);
-                }
-            }}>
-            <PopoverTrigger asChild>
-                <Button
-                    size="xs"
-                    variant="cancel"
-                    type="button"
-                    disabled={disabled}
-                    className="h-7 gap-1"
-                    rightIcon={<ChevronDown className="size-3" />}
-                    leftIcon={<AtSign className="size-3" />}>
-                    MCP
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent
-                align="end"
-                className="flex max-h-80 w-80 flex-col p-0">
-                <div className="border-card-lv3 flex shrink-0 items-center gap-2 border-b p-3">
-                    {selectedApp && (
-                        <button
-                            type="button"
-                            onClick={handleBack}
-                            className="text-text-secondary hover:text-text-primary text-xs transition-colors">
-                            ← Back
-                        </button>
-                    )}
-                    <span className="text-text-primary truncate text-xs font-medium">
-                        {selectedApp ? selectedApp.label : "Select MCP"}
-                    </span>
-                </div>
-                <div
-                    className="min-h-0 flex-1 overflow-y-auto p-2"
-                    onWheel={(e) => e.stopPropagation()}>
-                    {!selectedApp ? (
-                        <div className="flex flex-col gap-1">
-                            {apps.map((app) => (
-                                <button
-                                    key={app.value}
-                                    type="button"
-                                    className="hover:bg-card-lv3 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors"
-                                    onClick={() => handleSelectApp(app)}>
-                                    <span>{app.label}</span>
-                                    <ChevronDown className="text-text-secondary size-4 -rotate-90" />
-                                </button>
-                            ))}
-                            {apps.length === 0 && (
-                                <p className="text-text-secondary py-4 text-center text-xs">
-                                    No MCP connections available
-                                </p>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="flex flex-wrap gap-1.5">
-                            {tools?.flatMap((group) =>
-                                group.items.map((tool) => (
-                                    <button
-                                        key={tool.value}
-                                        type="button"
-                                        className="bg-tertiary-dark text-tertiary-light rounded px-2 py-1 font-mono text-xs transition-all hover:brightness-125"
-                                        onClick={() => handleInsertTool(tool)}>
-                                        {tool.label}
-                                    </button>
-                                )),
-                            )}
-                        </div>
-                    )}
-                </div>
-            </PopoverContent>
-        </Popover>
-    );
-}
 
 export const KodyRuleAddOrUpdateItemModal = ({
     repositoryId,
@@ -433,6 +348,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
     canEdit: boolean;
 }) => {
     const { toast } = useToast();
+    const { teamId } = useSelectedTeamId();
 
     const initialScope = rule?.scope ?? "file";
 
@@ -447,8 +363,6 @@ export const KodyRuleAddOrUpdateItemModal = ({
 
     const [isInheritanceDisabled, setIsInheritanceDisabled] =
         useState(isExcluded);
-
-    const { mcpGroups, formatInsertByType } = useMCPMentions();
 
     const editorRef = React.useRef<RichTextEditorWithMentionsRef>(null);
 
@@ -486,7 +400,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
                         : "",
             rule: rule?.rule ?? "",
             title: rule?.title ?? "",
-            severity: rule?.severity ?? "high",
+            severity: rule ? resolveKodyRuleDisplaySeverity(rule) : "high",
             scope: initialScope,
             badExample:
                 rule?.examples?.find(({ isCorrect }) => !isCorrect)?.snippet ??
@@ -525,7 +439,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
                 }
             }
 
-            await createOrUpdateKodyRule(
+            const mutationResult = await createOrUpdateKodyRule(
                 {
                     path: newPath,
                     rule: config.rule,
@@ -537,6 +451,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
                     origin: config.origin ?? KodyRulesOrigin.USER,
                     status: config.status ?? KodyRulesStatus.ACTIVE,
                     type: config.type ?? ruleType,
+                    centralizedConfig: rule?.centralizedConfig,
                     inheritance: {
                         ...(rule?.inheritance ?? {
                             inheritable: true,
@@ -548,12 +463,22 @@ export const KodyRuleAddOrUpdateItemModal = ({
                 },
                 repositoryId,
                 directory?.id,
+                teamId,
             );
 
-            toast({
-                description: `${entityLabel} ${rule?.uuid ? "updated" : "created"}`,
-                variant: "success",
-            });
+            if (isCentralizedPrResponse(mutationResult)) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        mutationResult,
+                        `${entityLabel} change proposed through centralized pull request.`,
+                    ),
+                );
+            } else {
+                toast({
+                    description: `${entityLabel} ${rule?.uuid ? "updated" : "created"}`,
+                    variant: "success",
+                });
+            }
 
             if (!onClose) {
                 magicModal.hide(true);
@@ -592,7 +517,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
         }
 
         try {
-            await createOrUpdateKodyRule(
+            const mutationResult = await createOrUpdateKodyRule(
                 {
                     path: rule?.path,
                     rule: rule?.rule,
@@ -604,6 +529,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
                     origin: rule?.origin ?? KodyRulesOrigin.USER,
                     status: rule?.status ?? KodyRulesStatus.ACTIVE,
                     type: rule?.type ?? ruleType,
+                    centralizedConfig: rule?.centralizedConfig,
                     inheritance: {
                         ...(rule?.inheritance ?? {
                             inheritable: true,
@@ -615,7 +541,18 @@ export const KodyRuleAddOrUpdateItemModal = ({
                 } as KodyRule,
                 rule?.repositoryId,
                 rule?.directoryId,
+                teamId,
             );
+
+            if (isCentralizedPrResponse(mutationResult)) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        mutationResult,
+                        "Rule inheritance change proposed through centralized pull request.",
+                    ),
+                );
+                return;
+            }
 
             setIsInheritanceDisabled(val);
 
@@ -1076,7 +1013,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
                                                             size="md"
                                                             variant="helper"
                                                             className="text-text-primary pointer-events-none h-full rounded-r-none ring-1">
-                                                            {directory?.path}/
+                                                            {directory?.folders?.[0]?.path ?? ''}/
                                                         </Badge>
                                                     )}
 
@@ -1218,99 +1155,72 @@ export const KodyRuleAddOrUpdateItemModal = ({
                                                 INSTRUCTIONS_PLACEHOLDER
                                             }
                                             saveFormat="text"
-                                            groups={mcpGroups}
-                                            formatInsertByType={
-                                                formatInsertByType
-                                            }
+                                            groups={[]}
                                             className="min-h-32"
                                             toolbarExtraActions={
-                                                <>
-                                                    {!isMemory && (
-                                                        <Popover>
-                                                            <PopoverTrigger
-                                                                asChild>
-                                                                <Button
-                                                                    size="xs"
-                                                                    variant="cancel"
-                                                                    type="button"
-                                                                    disabled={
-                                                                        field.disabled
-                                                                    }
-                                                                    className="h-7 gap-1"
-                                                                    rightIcon={
-                                                                        <ChevronDown className="size-3" />
-                                                                    }
-                                                                    leftIcon={
-                                                                        <Code2 className="size-3" />
-                                                                    }>
-                                                                    Variables
-                                                                </Button>
-                                                            </PopoverTrigger>
-                                                            <PopoverContent
-                                                                align="end"
-                                                                className="w-72 p-3">
-                                                                <div className="flex flex-col gap-3">
-                                                                    <span className="text-text-primary text-xs font-medium">
-                                                                        {watchScope ===
-                                                                        "file"
-                                                                            ? "File context"
-                                                                            : "PR context"}
-                                                                    </span>
-                                                                    <div className="flex flex-wrap gap-1.5">
-                                                                        {(watchScope ===
-                                                                        "file"
-                                                                            ? FILE_CONTEXT_VARIABLES
-                                                                            : PR_CONTEXT_VARIABLES
-                                                                        ).map(
-                                                                            (
-                                                                                v,
-                                                                            ) => (
-                                                                                <button
-                                                                                    key={
-                                                                                        v.key
-                                                                                    }
-                                                                                    type="button"
-                                                                                    className="bg-primary-dark text-primary-light rounded px-2 py-1 font-mono text-xs transition-all hover:brightness-125"
-                                                                                    onClick={() => {
-                                                                                        editorRef.current?.insertText(
-                                                                                            v.label,
-                                                                                        );
-                                                                                        editorRef.current?.focus();
-                                                                                    }}>
-                                                                                    {
-                                                                                        v.label
-                                                                                    }
-                                                                                </button>
-                                                                            ),
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            </PopoverContent>
-                                                        </Popover>
-                                                    )}
-
-                                                    {!isMemory &&
-                                                        mcpGroups.length >
-                                                            0 && (
-                                                            <MCPToolsPopover
-                                                                mcpGroups={
-                                                                    mcpGroups
-                                                                }
+                                                !isMemory ? (
+                                                    <Popover>
+                                                        <PopoverTrigger
+                                                            asChild>
+                                                            <Button
+                                                                size="xs"
+                                                                variant="cancel"
+                                                                type="button"
                                                                 disabled={
                                                                     field.disabled
                                                                 }
-                                                                onInsertMention={(
-                                                                    app,
-                                                                    tool,
-                                                                ) => {
-                                                                    editorRef.current?.insertMCPMention(
-                                                                        app,
-                                                                        tool,
-                                                                    );
-                                                                }}
-                                                            />
-                                                        )}
-                                                </>
+                                                                className="h-7 gap-1"
+                                                                rightIcon={
+                                                                    <ChevronDown className="size-3" />
+                                                                }
+                                                                leftIcon={
+                                                                    <Code2 className="size-3" />
+                                                                }>
+                                                                Variables
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent
+                                                            align="end"
+                                                            className="w-72 p-3">
+                                                            <div className="flex flex-col gap-3">
+                                                                <span className="text-text-primary text-xs font-medium">
+                                                                    {watchScope ===
+                                                                    "file"
+                                                                        ? "File context"
+                                                                        : "PR context"}
+                                                                </span>
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {(watchScope ===
+                                                                    "file"
+                                                                        ? FILE_CONTEXT_VARIABLES
+                                                                        : PR_CONTEXT_VARIABLES
+                                                                    ).map(
+                                                                        (
+                                                                            v,
+                                                                        ) => (
+                                                                            <button
+                                                                                key={
+                                                                                    v.key
+                                                                                }
+                                                                                type="button"
+                                                                                className="bg-primary-dark text-primary-light rounded px-2 py-1 font-mono text-xs transition-all hover:brightness-125"
+                                                                                onClick={() => {
+                                                                                    editorRef.current?.insertText(
+                                                                                        v.label,
+                                                                                    );
+                                                                                    editorRef.current?.focus();
+                                                                                }}>
+                                                                                {
+                                                                                    v.label
+                                                                                }
+                                                                            </button>
+                                                                        ),
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                ) : undefined
                                             }
                                         />
 
@@ -1361,13 +1271,6 @@ export const KodyRuleAddOrUpdateItemModal = ({
                         render={({ field, fieldState }) => {
                             if (isMemory) return <></>;
 
-                            const labels = Object.values(
-                                severityLevelFilterOptions,
-                            ).map((option) => option.label);
-                            const severityLevel =
-                                severityLevelFilterOptions[field.value];
-                            const numberValue = severityLevel?.value;
-
                             return (
                                 <div className="grid grid-cols-[1fr_3fr] gap-6">
                                     <FormControl.Root>
@@ -1387,102 +1290,115 @@ export const KodyRuleAddOrUpdateItemModal = ({
                                                     align="start"
                                                     className="flex max-w-prose flex-col gap-1 text-xs">
                                                     <p>
-                                                        Severity determines how
-                                                        likely this rule is to
-                                                        reach the user. Higher
-                                                        severity increases the
-                                                        chances of surfacing
-                                                        this rule in reviews.
+                                                        Severity defines how
+                                                        this rule&apos;s
+                                                        violations will be
+                                                        classified in code
+                                                        reviews.
                                                     </p>
 
                                                     <ul className="flex flex-col gap-1">
                                                         <li>
-                                                            <strong className="text-primary-light">
+                                                            <strong className="text-info">
                                                                 Low:
                                                             </strong>{" "}
-                                                            Minimal impact, less
-                                                            likely to appear.
+                                                            Minor improvements
+                                                            and low-risk issues.
                                                         </li>
                                                         <li>
-                                                            <strong className="text-primary-light">
+                                                            <strong className="text-alert">
                                                                 Medium:
                                                             </strong>{" "}
-                                                            Moderate importance,
-                                                            balanced visibility.
+                                                            Recommended fixes
+                                                            that improve
+                                                            correctness or
+                                                            quality.
                                                         </li>
                                                         <li>
-                                                            <strong className="text-primary-light">
+                                                            <strong className="text-warning">
                                                                 High:
                                                             </strong>{" "}
-                                                            High priority, more
-                                                            likely to surface.
+                                                            Important problems
+                                                            that should be fixed
+                                                            in the PR.
                                                         </li>
                                                         <li>
-                                                            <strong className="text-primary-light">
+                                                            <strong className="text-danger">
                                                                 Critical:
                                                             </strong>{" "}
-                                                            Maximum priority,
-                                                            most likely to be
-                                                            shown.
+                                                            Severe bugs,
+                                                            security
+                                                            vulnerabilities, or
+                                                            data loss risks.
                                                         </li>
                                                     </ul>
-
-                                                    <p>
-                                                        If no severity is
-                                                        selected,{" "}
-                                                        <strong className="text-primary-light">
-                                                            High
-                                                        </strong>{" "}
-                                                        will be used by default.
-                                                    </p>
                                                 </TooltipContent>
                                             </Tooltip>
                                         </FormControl.Label>
                                         <FormControl.Helper>
-                                            Select the minimum severity level
+                                            Choose how violations will be
+                                            classified
                                         </FormControl.Helper>
                                     </FormControl.Root>
 
                                     <FormControl.Input>
-                                        <div className="relative">
-                                            <div className="w-96">
+                                        <div className="flex flex-col gap-3">
+                                            <div className="relative w-full max-w-md">
                                                 <SliderWithMarkers
                                                     id={field.name}
-                                                    disabled={field.disabled}
                                                     min={0}
                                                     max={3}
                                                     step={1}
-                                                    labels={labels}
-                                                    value={numberValue}
+                                                    labels={Object.values(
+                                                        severitySliderOptions,
+                                                    ).map(
+                                                        (option) =>
+                                                            option.label,
+                                                    )}
+                                                    value={
+                                                        severitySliderOptions[
+                                                            field.value ??
+                                                                "high"
+                                                        ]?.value ?? 2
+                                                    }
+                                                    disabled={field.disabled}
                                                     onValueChange={(value) =>
                                                         field.onChange(
                                                             Object.entries(
-                                                                severityLevelFilterOptions,
+                                                                severitySliderOptions,
                                                             ).find(
-                                                                ([, v]) =>
-                                                                    v.value ===
+                                                                ([, option]) =>
+                                                                    option.value ===
                                                                     value,
-                                                            )?.[0],
+                                                            )?.[0] ?? "high",
                                                         )
                                                     }
-                                                    className={cn([
-                                                        {
-                                                            "[--slider-marker-background-active:#119DE4]":
-                                                                field.value ===
-                                                                "low",
-                                                            "[--slider-marker-background-active:#115EE4]":
-                                                                field.value ===
-                                                                "medium",
-                                                            "[--slider-marker-background-active:#6A57A4]":
-                                                                field.value ===
-                                                                "high",
-                                                            "[--slider-marker-background-active:#EF4B4B]":
-                                                                field.value ===
-                                                                "critical",
-                                                        },
-                                                    ])}
+                                                    className={cn({
+                                                        "[--slider-marker-background-active:#119DE4]":
+                                                            field.value ===
+                                                            "low",
+                                                        "[--slider-marker-background-active:#115EE4]":
+                                                            field.value ===
+                                                            "medium",
+                                                        "[--slider-marker-background-active:#6A57A4]":
+                                                            field.value ===
+                                                            "high",
+                                                        "[--slider-marker-background-active:#EF4B4B]":
+                                                            field.value ===
+                                                            "critical",
+                                                    })}
                                                 />
                                             </div>
+
+                                            <p className="text-text-secondary text-sm">
+                                                {
+                                                    severityOptions.find(
+                                                        (option) =>
+                                                            option.value ===
+                                                            field.value,
+                                                    )?.description
+                                                }
+                                            </p>
 
                                             <FormControl.Error>
                                                 {fieldState.error?.message}

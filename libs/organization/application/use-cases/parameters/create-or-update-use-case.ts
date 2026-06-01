@@ -51,7 +51,9 @@ export class CreateOrUpdateParametersUseCase {
                     organizationAndTeamData,
                 },
             });
-            throw new Error('Error creating or updating parameters');
+            throw new Error('Error creating or updating parameters', {
+                cause: error,
+            });
         }
     }
 }

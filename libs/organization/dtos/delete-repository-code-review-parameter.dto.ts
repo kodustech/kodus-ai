@@ -14,4 +14,9 @@ export class DeleteRepositoryCodeReviewParameterDto {
     @IsString()
     @ApiPropertyOptional({ example: 'src/services' })
     directoryId?: string;
+
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({ example: 'folder-uuid' })
+    folderId?: string;
 }

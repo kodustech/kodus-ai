@@ -51,7 +51,10 @@ export class PullRequestsModel extends CoreDocument {
         updatedAt: string;
     };
 
-    @Prop({ type: Array, required: true })
+    // files is optional with a default of [] so partial updates
+    // (e.g. bumping status/merged without re-sending the full payload)
+    // do not crash with "Path 'files' is required" validation errors.
+    @Prop({ type: Array, required: false, default: [] })
     public files: Array<{
         id: string;
         sha?: string;
@@ -61,9 +64,9 @@ export class PullRequestsModel extends CoreDocument {
         status: string;
         createdAt: string;
         updatedAt: string;
-        added: number;
-        deleted: number;
-        changes: number;
+        added?: number;
+        deleted?: number;
+        changes?: number;
         reviewMode: ReviewModeResponse;
         codeReviewModelUsed: {
             generateSuggestions: string;
@@ -185,4 +188,23 @@ PullRequestsSchema.index(
 PullRequestsSchema.index(
     { 'number': 1, 'repository.name': 1, 'organizationId': 1 },
     { name: 'idx_number_repo_name_org' },
+);
+
+// Watermark da ingestão analítica varre por `(updatedAt, _id)` ASC como
+// tupla — ver `PullRequestIngestionService.readWatermark` pra racional.
+// Compound `{ updatedAt: 1, _id: 1 }` serve tanto o filtro range quanto
+// o sort sem in-memory sort.
+// Em prod criar `{ background: true }` antes de virar a flag do cockpit
+// (autoIndex pode travar startup em coleções grandes).
+PullRequestsSchema.index(
+    { updatedAt: 1, _id: 1 },
+    { name: 'idx_updatedAt_for_analytics_ingestion' },
+);
+
+// Backfill chunked walks `createdAt` ASC in fixed windows (each PR lands
+// in exactly one window). Without this index the per-window query falls
+// back to in-memory sort and risks blowing memory on large collections.
+PullRequestsSchema.index(
+    { createdAt: 1 },
+    { name: 'idx_createdAt_for_analytics_backfill' },
 );

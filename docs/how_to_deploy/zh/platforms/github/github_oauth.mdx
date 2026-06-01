@@ -1,0 +1,46 @@
+---
+title: 创建 GitHub OAuth App（GitHub 登录）
+icon: github
+---
+
+如果您希望用户通过 GitHub 登录 Kodus，请使用此方式。这与用于代码审查自动化和 Webhook 的 GitHub App 集成是分开的。
+
+## 先决条件
+
+- **WEB_DOMAIN**：您的前端 URL（例如 `https://app.yourdomain.com` 或 `http://localhost:3000`）
+
+## 步骤 1：创建 OAuth App
+
+1. 在 GitHub 上，转到 **设置** > **开发者设置** > **OAuth Apps**
+2. 点击 **New OAuth App**
+3. 填写基本信息（Application name、Homepage URL）
+
+<img src="https://www.oauth.com/wp-content/uploads/2018/07/github_create_new_application-1024x717.png" alt="GitHub OAuth Apps 页面中的新建应用表单" />
+
+## 步骤 2：配置回调 URL
+
+将 **Authorization callback URL** 设置为：
+
+```
+WEB_DOMAIN/api/auth/callback/github
+```
+
+确保 URL 与您的实际域名和协议（http/https）一致。
+
+## 步骤 3：将凭据写入 .env
+
+创建完成后，从 GitHub 复制凭据并写入 Kodus 环境变量：
+
+```
+WEB_OAUTH_GITHUB_CLIENT_ID="your_client_id_here"
+WEB_OAUTH_GITHUB_CLIENT_SECRET="your_client_secret_here"
+```
+
+## 环境变量摘要
+
+```bash
+WEB_OAUTH_GITHUB_CLIENT_ID="your_client_id_here"
+WEB_OAUTH_GITHUB_CLIENT_SECRET="your_client_secret_here"
+```
+
+重启 Web 应用以生效。

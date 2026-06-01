@@ -16,6 +16,7 @@ import {
     IWorkflowJobRepository,
     WORKFLOW_JOB_REPOSITORY_TOKEN,
 } from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
+import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
 
 /**
  * Processor for WEBHOOK_PROCESSING jobs
@@ -57,10 +58,14 @@ export class WebhookProcessingJobProcessorService implements IJobProcessorServic
         ]);
     }
 
-    async process(jobId: string): Promise<void> {
+    async process(jobId: string, signal?: AbortSignal): Promise<void> {
         const job = await this.jobRepository.findOne(jobId);
         if (!job) {
             throw new Error(`Workflow job ${jobId} not found`);
+        }
+
+        if (signal?.aborted) {
+            throw new Error(`Job ${jobId} aborted before start`);
         }
 
         // Validate job type
@@ -138,7 +143,19 @@ export class WebhookProcessingJobProcessorService implements IJobProcessorServic
                     });
                     return;
                 }
-                await handler.execute(webhookParams);
+                // Race the handler against the parent's AbortSignal. When
+                // the router's 9-min timeout fires, the signal aborts and
+                // this line throws a JobAbortedError — the catch below
+                // marks the job FAILED and releases the worker slot
+                // instead of staying pinned for the full octokit
+                // retry-after (which can be ~1h on an exhausted GitHub
+                // App bucket). The handler promise keeps running zombie
+                // in the background until octokit settles; its result is
+                // discarded. See test/unit/automation/webhook-processing.
+                await raceWithAbortSignal(
+                    handler.execute(webhookParams),
+                    signal,
+                );
 
                 await this.jobRepository.update(jobId, {
                     status: JobStatus.COMPLETED,

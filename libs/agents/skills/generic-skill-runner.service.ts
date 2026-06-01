@@ -202,6 +202,19 @@ export class GenericSkillRunnerService {
                 try {
                     await orchestration.connectMCP();
                     await orchestration.registerMCPTools();
+
+                    const registeredTools = orchestration.getRegisteredTools();
+                    this.logger.log({
+                        message: `[GenericSkillRunner] MCP tools registered for skill '${skillName}'`,
+                        context: 'createFetcherOrchestration',
+                        metadata: {
+                            skillName,
+                            registeredToolCount: registeredTools.length,
+                            registeredToolNames: registeredTools.map(
+                                (t: { name?: string }) => t.name,
+                            ),
+                        },
+                    });
                 } catch (error) {
                     if (executionPolicy.onMcpConnectError === 'fallback') {
                         this.logger.warn(
@@ -624,6 +637,15 @@ export class GenericSkillRunnerService {
             });
 
         if (!filteredServers.length) {
+            this.logger.warn({
+                message: `[GenericSkillRunner] No servers remaining after filtering for skill '${skillName}'`,
+                context: 'createMCPAdapter',
+                metadata: {
+                    skillName,
+                    totalServers: mcpManagerServers?.length,
+                    resolvedRequiredTools,
+                },
+            });
             return null;
         }
         if (resolvedRequiredTools.length && !hasRequiredTools) {
@@ -634,6 +656,26 @@ export class GenericSkillRunnerService {
             );
             return null;
         }
+
+        this.logger.log({
+            message: `[GenericSkillRunner] MCP adapter created for skill '${skillName}'`,
+            context: 'createMCPAdapter',
+            metadata: {
+                skillName,
+                serverCount: filteredServers.length,
+                servers: filteredServers.map((s) => ({
+                    name: s.name,
+                    provider: s.provider,
+                    allowedToolCount: Array.isArray(s.allowedTools)
+                        ? s.allowedTools.length
+                        : 0,
+                    allowedTools: Array.isArray(s.allowedTools)
+                        ? s.allowedTools
+                        : [],
+                })),
+                resolvedRequiredTools,
+            },
+        });
 
         return createMCPAdapter({
             servers: filteredServers,

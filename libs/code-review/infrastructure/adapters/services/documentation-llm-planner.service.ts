@@ -1,3 +1,7 @@
+export const DOCUMENTATION_LLM_PLANNER_SERVICE_TOKEN = Symbol.for(
+    'DocumentationLLMPlannerService',
+);
+
 import { createLogger } from '@kodus/flow';
 import {
     BYOKConfig,
@@ -22,6 +26,7 @@ import {
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
+import { ObservabilityService } from '@libs/core/log/observability.service';
 import { Injectable } from '@nestjs/common';
 import path from 'path';
 
@@ -29,7 +34,10 @@ import path from 'path';
 export class DocumentationLLMPlannerService {
     private readonly logger = createLogger(DocumentationLLMPlannerService.name);
 
-    constructor(private readonly promptRunnerService: PromptRunnerService) {}
+    constructor(
+        private readonly promptRunnerService: PromptRunnerService,
+        private readonly observabilityService: ObservabilityService,
+    ) {}
 
     async planDocumentationByFile(params: {
         packages: RepositoryPackageReference[];
@@ -82,36 +90,58 @@ export class DocumentationLLMPlannerService {
                         },
                     };
 
-                    const response = await promptRunner
-                        .builder()
-                        .setParser(ParserType.ZOD, DocumentationPlannerSchema)
-                        .setLLMJsonMode(true)
-                        .setPayload(payload)
-                        .addPrompt({
-                            role: PromptRole.SYSTEM,
-                            prompt: prompt_code_review_documentation_planner_system,
-                        })
-                        .addPrompt({
-                            role: PromptRole.USER,
-                            prompt: prompt_code_review_documentation_planner_user,
-                        })
-                        .addMetadata({
-                            context: DocumentationLLMPlannerService.name,
-                            runName: `${runName}:${file.filename}`,
-                            metadata: {
+                    const fileRunName = `${runName}:${file.filename}`;
+                    const spanName = `${DocumentationLLMPlannerService.name}::${fileRunName}`;
+
+                    const { result: response } =
+                        await this.observabilityService.runLLMInSpan({
+                            spanName,
+                            runName: fileRunName,
+                            byokConfig,
+                            attrs: {
+                                type: promptRunner.executeMode,
+                                organizationId:
+                                    organizationAndTeamData?.organizationId,
                                 filePath: file.filename,
-                                language:
-                                    this.getLanguageNameForFile(
-                                        file.filename,
-                                    ) || 'Unknown',
-                                packageCandidates: filePackages.length,
-                                hasByokConfig: Boolean(byokConfig),
-                                organizationAndTeamData,
                             },
-                        })
-                        .setTemperature(0)
-                        .setRunName(`${runName}:${file.filename}`)
-                        .execute();
+                            exec: (callbacks) =>
+                                promptRunner
+                                    .builder()
+                                    .setParser(
+                                        ParserType.ZOD,
+                                        DocumentationPlannerSchema,
+                                    )
+                                    .setLLMJsonMode(true)
+                                    .setPayload(payload)
+                                    .addPrompt({
+                                        role: PromptRole.SYSTEM,
+                                        prompt: prompt_code_review_documentation_planner_system,
+                                    })
+                                    .addPrompt({
+                                        role: PromptRole.USER,
+                                        prompt: prompt_code_review_documentation_planner_user,
+                                    })
+                                    .addMetadata({
+                                        context:
+                                            DocumentationLLMPlannerService.name,
+                                        runName: fileRunName,
+                                        metadata: {
+                                            filePath: file.filename,
+                                            language:
+                                                this.getLanguageNameForFile(
+                                                    file.filename,
+                                                ) || 'Unknown',
+                                            packageCandidates:
+                                                filePackages.length,
+                                            hasByokConfig: Boolean(byokConfig),
+                                            organizationAndTeamData,
+                                        },
+                                    })
+                                    .setTemperature(0)
+                                    .setRunName(fileRunName)
+                                    .addCallbacks(callbacks)
+                                    .execute(),
+                        });
 
                     return {
                         file,

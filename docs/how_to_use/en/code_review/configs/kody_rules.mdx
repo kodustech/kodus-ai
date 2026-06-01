@@ -1,0 +1,363 @@
+---
+title: "Overview"
+description: "Kody Rules are customizable guidelines your team sets up to automatically enforce code quality, consistency, security, and maintainability."
+---
+
+
+<iframe
+  width="100%"
+  height="400"
+  src="https://www.youtube.com/embed/KrzlUmmJh3s?si=igZuKTjlfT2FwRVm"
+  title="YouTube video player"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  referrerpolicy="strict-origin-when-cross-origin"
+  allowfullscreen
+></iframe>
+
+## Two Types in the Kody Rules UI
+
+Kody Rules are organized into two categories, managed through a tabbed interface in your settings:
+
+<Tabs>
+  <Tab title="Review Rules">
+    Traditional code review rules that run during the dedicated code review stage. They analyze file diffs and PR metadata to enforce coding standards.
+
+    - Applied at **File-Level** or **Pull Request-Level**
+    - Support variables, file references, and MCP functions
+    - Triggered during automated code reviews
+  </Tab>
+
+  <Tab title="Memories">
+    Persistent contextual instructions that are injected across all prompts and conversations. Memories allow Kody to learn and retain how your codebase works so future reviews and suggestions are more relevant.
+
+    - Injected as **high-priority context** in code reviews, cross-file analysis, and conversations
+    - Created via **conversation with Kody** or **manually in the UI**
+    - Scoped to **directory**, **repository**, or **organization** level
+    - Support approval workflows for AI-generated memories
+  </Tab>
+</Tabs>
+
+## Review Rules
+
+### Create Custom Rules
+
+Define rules based on your team's exact needs. Review Rules can be applied at two different levels: **[File-Level](#file-level-rules)** and **[Pull Request-Level](#pull-request-level-rules)**. Both levels support variables, file references, and MCP functions to build powerful, context-aware rules.
+
+#### Variables, File References & MCP Functions
+
+Rules can access rich context through variables, file references, and MCP functions. Here's what's available:
+
+**Variables:**
+
+Variables represent the context data available during rule execution. Understanding what's available helps you compose better rules by combining variables with MCP functions and file references.
+
+- **File-Level**:
+  - `fileDiff` - The specific changes made to the individual file being analyzed
+
+- **PR-Level**:
+  - `pr_title` - The title of the Pull Request
+  - `pr_description` - The description/body of the Pull Request
+  - `pr_total_additions` - Total number of lines added
+  - `pr_total_deletions` - Total number of lines deleted
+  - `pr_total_files` - Total number of files changed
+  - `pr_total_lines_changed` - Total number of lines modified
+  - `pr_files_diff` - Complete diff of all changes across the entire Pull Request
+  - `pr_tags` - Tags associated with the Pull Request
+  - `pr_author` - Author of the Pull Request
+  - `pr_number` - Pull Request number
+
+Use these variables in your rule instructions to access context data, and combine them with MCP functions to fetch additional information or perform dynamic analysis.
+
+**File References:**
+
+Reference files directly in your rule instructions to compare code, validate patterns, enforce consistency, and leverage existing templates or standards.
+
+- **`@file:path/to/file.ts`** - Reference files in the same repository where you're editing the rule
+  - Use when referencing templates, examples, or configuration files within your current repository
+  - Example: `@file:src/services/userService.ts`
+
+- **`@repo:org/project`** - Reference files in another repository or when configuring rules outside a repo context
+  - Use when enforcing consistency across multiple repositories or referencing shared standards
+  - Example: `@repo:team/api-standards`
+
+**How File References Work:**
+
+- Kody identifies file references automatically when you save a rule
+- References are resolved in the background—watch the status indicator next to the editor to confirm completion
+- Use accurate blob-style paths (e.g., `src/utils/helpers.ts`) instead of placeholders
+- File contents are injected into the rule context, allowing Kody to compare, validate, or enforce patterns
+- Works in both File-Level and Pull Request-Level rules
+
+**MCP Functions:**
+
+Access MCP (Model Context Protocol) functions through the `@MCP` dropdown in the rule editor to fetch additional data and context. You can use any MCP tool or server connected in your workspace's [Plugins](/how_to_use/en/code_review/plugins) page.
+
+Available functions include:
+
+- Repository operations: List repositories, get repository files, content, and languages
+- PR analysis: Get pull request details, list commits, analyze PR file content
+- File content retrieval: Fetch file contents and diffs
+- Cross-file validation: Perform advanced analysis across multiple files
+- Custom integrations: Any MCP server you've connected as a plugin (Jira, custom tools, etc.)
+
+MCP functions execute during rule evaluation, enabling rules that adapt to current repository state and fetch real-time data.
+
+**Best Practices:**
+
+- Use specific file paths rather than generic placeholders
+- Reference stable files that represent your team's standards
+- Test file references exist before saving rules to avoid resolution errors
+- Combine variables, file references, and MCP functions for comprehensive validation
+
+#### File-Level Rules
+
+Analyze individual files to catch issues within specific code files.
+
+**Available Context:**
+
+See the [Variables, File References & MCP Functions](#variables-file-references--mcp-functions) section above for details. Available at this level: `fileDiff` variable, file references (`@file`, `@repo`), and MCP functions.
+
+**What You Can Do:**
+
+- Compare against reference files using `@file` or `@repo`
+- Fetch related files or repository data using MCP functions
+- Combine variables, file references, and MCP functions to validate patterns, check consistency, or enforce architectural rules
+
+**How to Configure:**
+
+- **Rule name**: Clearly define the rule purpose
+- **File Paths**: Limit rules to specific files or directories using glob patterns
+- **Severity**: Set to Critical, High, Medium, or Low
+- **Detailed Instructions**: Use `fileDiff`, reference files with `@file`/`@repo`, and call MCP functions to compose powerful rules with rich context
+
+**Configuration Example:**
+
+📋 **Rule**: "Avoid equality operators (==, !=) in loop termination conditions."
+
+📁 **Path**: `src/**/*.ts`
+
+⚠️ **Severity**: Critical
+
+📝 **Instructions**: "Using equality operators (== or !=) can cause infinite loops if exact values aren't matched."
+
+**❌ Bad Example:**
+
+```typescript
+// Risk of infinite loop if increment is not exactly 1
+for (let i = 0; i != 10; i += 2) {
+  console.log(i); // Will print 0, 2, 4, 6, 8, 10, 12, 14... forever
+}
+
+// Risk if array is modified during iteration
+let items = [1, 2, 3, 4, 5];
+for (let i = 0; i != items.length; i++) {
+  if (items[i] === 3) {
+    items.push(6); // Modifies length, can cause infinite loop
+  }
+}
+```
+
+**✅ Good Example:**
+
+```typescript
+// Safe: loop will always terminate
+for (let i = 0; i < 10; i += 2) {
+  console.log(i); // Will print 0, 2, 4, 6, 8 and stop
+}
+
+// Safe even if array is modified
+let items = [1, 2, 3, 4, 5];
+for (let i = 0; i < items.length; i++) {
+  if (items[i] === 3) {
+    items.push(6); // Loop will still terminate safely
+  }
+}
+```
+
+#### Pull Request-Level Rules
+
+Analyze the entire Pull Request for cross-file validation and PR-specific requirements.
+
+**Available Context:**
+
+See the [Variables, File References & MCP Functions](#variables-file-references--mcp-functions) section above for details. Available at this level: PR variables (`pr_title`, `pr_description`, `pr_files_diff`, etc.), file references (`@file`, `@repo`), and MCP functions.
+
+**What You Can Do:**
+
+- Validate PR metadata using variables like `pr_title`, `pr_description`, `pr_author`
+- Reference configuration files or templates using `@file` or `@repo`
+- Fetch additional context using MCP functions (e.g., check if related files exist, validate against repository structure)
+- Combine PR variables, file references, and MCP functions to create comprehensive validation rules
+
+**How to Configure:**
+
+The creation process is identical to file-level rules, but you must select the "Pull-request" scope. This broader context enables analysis of cross-file dependencies and overall PR quality.
+
+**Examples:**
+
+- Every service file must have a corresponding test file
+- PR description must be complete, clearly stating what was added or removed
+- When a new route is created in a controller, it must be registered in routes.json
+- Use `pr_total_lines_changed` to flag PRs exceeding size limits
+- Combine `pr_files_diff` with MCP functions to validate cross-file dependencies
+- Reference `@file:routes.json` to ensure new routes are registered
+- Use MCP functions to check if test files exist for modified service files
+
+#### Composing Powerful Rules
+
+Combine variables, MCP functions, and file references to create sophisticated rules with rich context. Here's what's available at each level:
+
+**File-Level Composition:**
+
+- Use `fileDiff` to analyze the specific changes in a file
+- Reference related files with `@file:path/to/template.ts` to compare against patterns
+- Call MCP functions to fetch repository data or check if related files exist
+- **Example**: "Analyze `fileDiff` and ensure it follows the pattern in `@file:src/utils/example.ts`. Use MCP to verify related test files exist."
+
+**PR-Level Composition:**
+
+- Use PR variables (`pr_title`, `pr_description`, `pr_files_diff`, etc.) to validate PR metadata and size
+- Reference configuration files with `@file:config.json` or `@repo:org/shared-config` to enforce consistency
+- Call MCP functions to perform cross-file validation, check repository structure, or fetch commit history
+- **Example**: "If `pr_files_diff` contains new routes, verify they're registered in `@file:routes.json`. Use MCP to check if corresponding test files exist for all modified service files."
+
+**Cross-Repository Validation:**
+
+- Reference files from other repositories with `@repo:org/project` to maintain consistency across projects
+- Combine with MCP functions to validate against shared standards or templates
+- **Example**: "Ensure API endpoints follow the pattern defined in `@repo:org/api-standards`. Use MCP to fetch the latest standards document."
+
+**Dynamic Analysis:**
+
+- MCP functions execute during rule evaluation, enabling rules that adapt to current repository state
+- Fetch real-time data about files, commits, or repository structure
+- **Example**: "Use MCP to check the current repository structure and ensure new files follow the existing directory patterns."
+
+This composition enables rules that understand not just code changes, but the broader context of your codebase, team practices, and project requirements.
+
+### Import from Rules Library
+
+Leverage proven best practices instantly:
+
+- Navigate to Discovery Rules in your Kodus dashboard.
+- Filter rules by severity, language, or tags.
+- Import and activate rules with a single click.
+
+**Examples:**
+
+- Security: "Disallow use of insecure MD5 hashing."
+- Maintainability: "Limit React components to less than 150 lines."
+
+## Memories
+
+Memories are persistent contextual instructions that Kody learns from your team's conversations and coding practices. Unlike Review Rules that run during code review, Memories are injected across all prompts and conversations to provide continuous, high-priority context and improve future suggestions.
+
+### How Memories Work
+
+- **Injected everywhere**: Memories are included in code review analysis (cross-file, safeguards, PR-level rules) and in conversational interactions
+- **High-priority context**: Memories are treated as high-priority guidance by the AI, ensuring your team's conventions are consistently applied
+- **Better future suggestions**: Memories help Kody avoid repeating the same mistaken assumptions about your repo
+- **Intelligent deduplication**: When a new memory is created, Kody uses an LLM-based resolution mechanism to determine whether to create it, skip it (if duplicate), or update an existing memory
+
+### Creating Memories
+
+There are two ways to create memories:
+
+#### Via Conversation
+
+The most natural way to create memories is through conversation with Kody in your PR comments. Kody detects both explicit and implicit intents to save conventions:
+
+**Explicit** — directly asking Kody to remember:
+
+```
+@kody remember: this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
+```
+
+```
+@kody please remember: this service follows hexagonal architecture and keeps adapters at the edge.
+```
+
+**Implicit** — stating a preference or convention that Kody captures:
+
+```
+@kody this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
+```
+
+```
+@kody in this service, tests usually live next to implementation files rather than in a central test folder.
+```
+
+```
+@kody the billing module is mid-migration, so prefer incremental fixes over broad refactors.
+```
+
+<Info>
+  Kody will NOT create memories for transient instructions (e.g., "fix this now"), debugging chatter, questions, vague statements, or requests explicitly scoped to a single task or PR.
+</Info>
+
+When a memory is created or updated, Kody responds with a confirmation and provides a **direct link** to view the memory in the UI.
+
+#### Via the UI
+
+You can also create memories manually:
+
+1. Go to **Code Review Settings** → **Repository** → **Kody Rules**
+2. Switch to the **Memories** tab
+3. Click **Add Memory** to create a new entry
+4. Fill in the memory content and scope
+
+### Memory Scopes
+
+Each memory has a scope that determines where it applies:
+
+| Scope | Description | Example |
+|-------|-------------|---------|
+| **Directory** | Applies to files matching a glob pattern within the repository | `src/components/ui`, `src/**/*.ts` |
+| **Repository** | Applies across the entire repository | All files in the repo |
+| **Organization** | Applies across all repositories in the organization | All repos in the org |
+
+### LLM-Generated Memories Approval
+
+By default, AI-generated memories are automatically activated. You can require manual approval before they take effect:
+
+1. Go to **Code Review Settings** → **Repository** → **Kody Rules** → **Memories** tab
+2. Enable **LLM-generated memories approval**
+
+When enabled:
+- AI-generated memories enter a **pending state** and are not active until approved
+- A notification badge appears showing pending memories count
+- Click **Pending Memories** to review, approve, discard, or convert pending items
+- Both new memory creations and updates to existing memories go through the approval flow
+
+You can also set this in `kodus-config.yml`:
+
+```yaml
+llmGeneratedMemoriesRequireApproval: true
+```
+
+### Pending Memories Review
+
+The Pending Memories modal shows two categories:
+
+- **New Memories**: AI-generated memories waiting for approval
+- **Memory Updates**: Proposed changes to existing memories
+
+For each pending item, you can:
+- **Apply**: Activate the memory or apply the update
+- **Discard**: Reject the memory or update
+- **Convert to Review Rule**: Transform a memory into a standard Review Rule
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Sync IDE Rules" icon="window" href="/how_to_use/en/code_review/configs/rules_file_detection">
+    Automatically import rules from Cursor, Copilot, Claude and other AI coding tools.
+  </Card>
+  <Card title="Repository Rules" icon="folder" href="/how_to_use/en/code_review/configs/repository_rules">
+    Create rules directly in your repository using structured markdown files.
+  </Card>
+  <Card title="AI Generation" icon="sparkles" href="/how_to_use/en/code_review/learning/kody_rules_generation">
+    Let AI generate rules based on your codebase patterns and past reviews.
+  </Card>
+</CardGroup>

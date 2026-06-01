@@ -28,6 +28,7 @@ export interface IPullRequestsService extends IPullRequestsRepository {
     updateSuggestion(
         suggestionId: string,
         updateData: Partial<ISuggestion>,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null>;
 
     aggregateAndSaveDataStructure(

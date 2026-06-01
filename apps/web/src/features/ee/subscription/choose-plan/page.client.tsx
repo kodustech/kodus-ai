@@ -38,6 +38,7 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "src/core/providers/auth.provider";
+import { useConfig } from "@providers/ConfigProvider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { CurrencyHelpers } from "src/core/utils/currency";
 import { addSearchParamsToUrl } from "src/core/utils/url";
@@ -388,6 +389,7 @@ function TeamsPlan({ plan }: { plan: Plan }) {
 
 function EnterprisePlan({ plan }: { plan: Plan }) {
     const { email } = useAuth();
+    const cfg = useConfig();
 
     return (
         <Card className="flex flex-col overflow-hidden">
@@ -425,7 +427,7 @@ function EnterprisePlan({ plan }: { plan: Plan }) {
                 <Link
                     target="_blank"
                     href={addSearchParamsToUrl(
-                        process.env.WEB_SUPPORT_TALK_TO_FOUNDER_URL ?? "",
+                        cfg.supportTalkToFounderUrl || "",
                         {
                             email,
                             notes: "I want to know more about Enterprise plan.",

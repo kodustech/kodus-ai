@@ -277,6 +277,26 @@ export class AuthService implements IAuthService {
         }
     }
 
+    async createHelpdeskToken(user: Partial<IUser>): Promise<string> {
+        const privateKey = this.jwtConfig.helpdeskPrivateKey;
+
+        if (!privateKey) {
+            throw new InternalServerErrorException(
+                'API_JWT_PRIVATE_KEY is not configured',
+            );
+        }
+
+        const payload = { sub: user.uuid };
+
+        return this.jwtService.sign(payload, {
+            algorithm: 'RS256',
+            secret: privateKey,
+            issuer: 'kodus-ai',
+            audience: 'kodus-helpdesk',
+            expiresIn: '5m',
+        } as any);
+    }
+
     private async createAuth(
         userEntity: Partial<IUser>,
         tokens: TokenResponse,
@@ -385,7 +405,9 @@ export class AuthService implements IAuthService {
                 clientSecret = process.env.API_GITHUB_CLIENT_SECRET;
                 break;
             case AuthProvider.GITLAB:
-                url = process.env.API_GITLAB_TOKEN_URL || 'https://gitlab.com/oauth/token';
+                url =
+                    process.env.API_GITLAB_TOKEN_URL ||
+                    'https://gitlab.com/oauth/token';
                 clientId = process.env.GLOBAL_GITLAB_CLIENT_ID;
                 clientSecret = process.env.GLOBAL_GITLAB_CLIENT_SECRET;
                 break;

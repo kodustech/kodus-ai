@@ -1,0 +1,141 @@
+---
+title: "Validación de Lógica de Negocio"
+description: "Compara tu pull request con reglas de negocio o especificaciones usando @kody -v business-logic."
+---
+
+## Descripción General
+
+La Validación de Lógica de Negocio te permite confirmar que un pull request implementa el comportamiento esperado descrito en una especificación, documento o ticket. Kody analiza el diff del PR, incorpora el contexto de negocio referenciado y señala las discrepancias antes de que hagas el merge.
+
+<img src="https://kodus.io/wp-content/uploads/2025/10/business-logic.gif" alt="Ejemplo de uso de la validación de lógica de negocio" />
+
+## Requisitos Previos
+- Si deseas que Kody **obtenga automáticamente el contexto de la tarea** desde herramientas como Jira, Linear, Notion o ClickUp, el plugin correspondiente debe estar conectado en la página de [Plugins](/how_to_use/es/code_review/plugins) de tu workspace.
+- Cualquier enlace que compartas (Jira, Slack, Google Docs, etc.) debe ser accesible a través de los plugins instalados en tu workspace.
+- Siempre puedes **proporcionar la especificación en línea** sin ningún plugin — simplemente pega los requisitos directamente en el comentario del PR.
+
+## Habilitando la Validación de Lógica de Negocio
+
+La Validación de Lógica de Negocio está **habilitada por defecto**. Puedes controlarla de dos formas:
+
+**Vía `kodus-config.yml`:**
+
+```yaml
+reviewOptions:
+  business_logic: true
+```
+
+**Vía la interfaz web:**
+
+Ve a **Configuración de Code Review** → **Repositorio** → **General** → **Tipos de Análisis** y activa **Lógica de Negocio**.
+
+Cuando está habilitada, Kody ejecuta la validación de lógica de negocio automáticamente durante cada revisión de PR, además del comando bajo demanda.
+
+## Ejecución Bajo Demanda
+
+También puedes activar la validación manualmente en cualquier momento:
+
+1. Abre el cuadro de comentarios principal del PR (fuera de las sugerencias de código en línea).
+2. Menciona a Kody y agrega el comando de validación: `@kody -v business-logic ...`.
+3. Proporciona el contenido de la especificación en línea o pega un enlace que Kody pueda obtener a través de los plugins disponibles.
+4. Envía el comentario y espera la respuesta de Kody en el mismo hilo.
+
+El comando solo se activa desde el cuadro de conversación principal; las respuestas dentro de sugerencias en línea son ignoradas.
+
+Puedes volver a ejecutar la validación en cualquier momento — simplemente publica el comando nuevamente en un nuevo comentario. Los seguimientos deben ser un comando nuevo; responder directamente al mensaje de Kody en la interfaz de Git no está soportado.
+
+### Ejemplos
+
+- Ticket de Jira: `@kody -v business-logic https://kodustech.atlassian.net/jira/software/c/projects/KC/boards/2?selectedIssue=KC-1292`
+- Issue de Linear: `@kody -v business-logic https://linear.app/your-team/issue/TEAM-123`
+- Página de Notion: `@kody -v business-logic https://www.notion.so/your-workspace/Feature-Spec-abc123`
+- Google Doc: `@kody -v business-logic https://docs.google.com/document/d/1234567890/edit`
+- Conversación de Slack: `@kody -v business-logic https://kodustech.slack.com/archives/C070E5E97DE/p1727814000000000`
+- Especificación en línea: `@kody -v business-logic Regla XYZ — los pedidos superiores a $500 deben emitir créditos de cashback.`
+
+## Qué Hace Kody
+
+1. **Obtiene el diff del PR** y los metadatos del pull request.
+2. **Recupera el contexto de la tarea** — desde la herramienta de gestión de tareas vinculada (Jira, Linear, etc.) o desde el texto en línea que proporcionaste.
+3. **Clasifica la calidad del contexto de la tarea** — determina qué tan exhaustivo puede ser el análisis según la información disponible.
+4. **Compara la implementación con los requisitos** — verifica cada criterio de aceptación contra el diff del PR.
+5. **Reporta los hallazgos** con niveles de severidad y trazabilidad de requisitos.
+
+Si Kody no puede acceder al recurso o carece de permisos, lo indicará para que puedas ajustar el acceso o proporcionar la información de otra manera.
+
+## Calidad del Contexto de la Tarea
+
+Kody clasifica automáticamente la calidad del contexto de la tarea antes del análisis, lo cual afecta la profundidad de la validación:
+
+| Calidad | Descripción | Comportamiento del Análisis |
+|---------|-------------|----------------------------|
+| **Completo** | Tiene título, descripción y criterios de aceptación | Análisis exhaustivo criterio por criterio |
+| **Parcial** | Tiene título y descripción pero no criterios de aceptación | Análisis de mejor esfuerzo basado en el comportamiento descrito |
+| **Mínimo** | Solo tiene un título o descripción muy corta | Conservador — solo señala brechas obvias |
+| **Vacío** | No se encontró contexto de tarea significativo | Devuelve una respuesta de "Se Necesita Información de la Tarea" |
+
+## Entendiendo el Resultado
+
+### Severidades de los Hallazgos
+
+Cada hallazgo incluye un nivel de severidad:
+
+- **MUST_FIX** — Una regla de negocio requerida no está implementada, es incorrecta o contradice los requisitos de la tarea
+- **SUGGESTION** — Un caso límite relevante, robustez o punto de mantenibilidad no está cubierto
+- **INFO** — Observación útil que no bloquea el cumplimiento
+
+### Hallazgos Rastreables
+
+Cada hallazgo es **rastreable a un requisito específico** del contexto de la tarea. Cada hallazgo incluye:
+
+- **Requisito** — La cita exacta de la tarea que establece el requisito
+- **Ausente en el código** — Lo que falta o está mal en el diff del PR
+- **Acción sugerida** — Una acción de implementación concreta
+
+Kody no inventa requisitos. Si un hallazgo no puede rastrearse a una oración específica en la tarea, no se reporta.
+
+### Detección de Desajuste de Alcance
+
+Si el diff del PR parece estar trabajando en un dominio diferente al de la propia tarea, Kody detecta esto como un **desajuste de alcance** y lo reporta como el hallazgo principal, en lugar de producir un análisis de brechas engañoso.
+
+### Ejemplo de Resultado
+
+```markdown
+## Validación de Reglas de Negocio
+
+**Tarea:** KC-1441 - Reglas Kody con alcance de equipo
+**Enlace de la Tarea:** https://kodustech.atlassian.net/browse/KC-1441
+**Estado:** Problemas Encontrados
+**Confianza:** alta
+
+### Hallazgos
+
+#### MUST_FIX: Sin evidencia de resolución de reglas con alcance de equipo en este diff del PR
+**Requisito:** "Las reglas deben resolverse por organización y equipo
+para evitar discrepancias de facturación entre workspaces."
+**Ausente en el código:** Sin evidencia en este diff del PR de agregar `teamId`
+a la ruta de persistencia o búsqueda relevante.
+**Acción sugerida:** Agregar `teamId` a los filtros de persistencia y consulta de reglas.
+
+#### SUGGESTION: Sin evidencia de manejo determinista de licencias mixtas
+**Requisito:** "Cuando los equipos tienen diferentes estados de suscripción,
+el comportamiento debe permanecer determinista."
+**Ausente en el código:** Sin evidencia en este diff del PR de lógica que maneje
+estados de suscripción mixtos.
+**Acción sugerida:** Agregar fallback determinista y manejo de errores
+con alcance al equipo.
+
+### Requisitos Verificados
+- CA #1: "Lecturas/escrituras con alcance de equipo" — Implementado en `rules.service.ts:42`
+- CA #2: "Ruta de facturación multi-workspace" — Implementado en `billing.service.ts:118`
+
+---
+*Análisis realizado por el Validador de Reglas de Negocio de Kodus AI*
+```
+
+## Consejos
+
+- Divide las especificaciones grandes en secciones y valídalas individualmente para mantener el feedback enfocado.
+- Al compartir enlaces privados, verifica que el plugin requerido (p. ej., Jira, Slack, Google Drive) esté instalado y autorizado para tu workspace.
+- Después de abordar los hallazgos, vuelve a ejecutar el comando para confirmar que el PR ahora se alinea con las reglas de negocio.
+- Proporciona criterios de aceptación en tu tarea para el análisis más exhaustivo — las tareas con criterios explícitos obtienen validación criterio por criterio.

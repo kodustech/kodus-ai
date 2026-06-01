@@ -1,0 +1,150 @@
+---
+title: "Revisión de PRs para cumplimiento normativo (SOC2, HIPAA)"
+description: "Configura Kody Rules y Memorias para aplicar requisitos de registro de auditoría, manejo de datos y control de acceso."
+icon: "file-shield"
+---
+
+## Por qué el cumplimiento normativo necesita revisión automatizada
+
+Los marcos de cumplimiento como SOC2, HIPAA y GDPR requieren prácticas de codificación específicas en torno al manejo de datos, el control de acceso y el registro de auditoría. Las revisiones manuales detectan algunas infracciones, pero son inconsistentes, especialmente cuando el revisor no es un especialista en seguridad.
+
+Este cookbook configura reglas que aplican los requisitos de cumplimiento en cada PR.
+
+## Paso 1 — Define tus Memorias de cumplimiento
+
+Empieza enseñando a Kody los principios de cumplimiento de alto nivel:
+
+```
+@kody remember: we are SOC2 compliant. All data access must be logged
+with who accessed what, when, and from where.
+```
+
+```
+@kody remember: PII (personally identifiable information) must never
+appear in logs, error messages, or API responses. PII includes:
+name, email, phone, address, SSN, date of birth, IP address.
+```
+
+```
+@kody remember: all data at rest must be encrypted. Database fields
+containing PII must use application-level encryption.
+```
+
+```
+@kody remember: access control follows least privilege principle.
+New endpoints default to authenticated + authorized, never public.
+```
+
+## Paso 2 — Crea reglas de registro de auditoría
+
+### Regla de registro de auditoría
+
+```
+Name: Data mutations must have audit logging
+Scope: File
+Paths: src/services/**/*.ts, src/repositories/**/*.ts
+Severity: Critical
+Instructions:
+  If fileDiff contains create, update, or delete operations
+  on user data or sensitive records, verify that an audit log
+  entry is created. Look for calls to auditService.log(),
+  AuditLogger, or @Audited decorator.
+  Reference @file:src/shared/audit/audit.service.ts for
+  the approved audit patterns.
+```
+
+### Regla de retención de datos
+
+```
+Name: Soft delete required for user data
+Scope: File
+Paths: src/**/*.ts
+Severity: Critical
+Instructions:
+  Flag any hard delete (DELETE FROM, .delete(), .destroy())
+  on tables/collections that contain user data.
+  User data must use soft delete (deletedAt timestamp)
+  for compliance with data retention policies.
+```
+
+## Paso 3 — Crea reglas de manejo de datos
+
+### Prevención de exposición de PII
+
+```
+Name: No PII in logs or error responses
+Scope: File
+Paths: src/**/*.ts
+Severity: Critical
+Instructions:
+  Check fileDiff for logging statements (logger.*, console.*)
+  and error response builders that might include PII fields:
+  email, name, phone, address, ssn, dateOfBirth, ipAddress.
+  These must be redacted or excluded before logging/responding.
+```
+
+### Requisito de cifrado
+
+```
+Name: PII fields must use encryption helpers
+Scope: File
+Paths: src/entities/**/*.ts, src/models/**/*.ts
+Severity: Critical
+Instructions:
+  If fileDiff adds or modifies entity/model fields that contain
+  PII (see list above), verify they use the @Encrypted decorator
+  or encryptionService helper. Reference
+  @file:src/shared/encryption/encryption.service.ts.
+```
+
+## Paso 4 — Crea reglas de control de acceso
+
+```
+Name: New endpoints must have auth guards
+Scope: Pull Request
+Severity: Critical
+Instructions:
+  Check pr_files_diff for new route definitions or controller
+  methods. Every new endpoint must include:
+  1. Authentication guard (@UseGuards(AuthGuard))
+  2. Authorization decorator (@Roles or @Permissions)
+  3. Rate limiting (@Throttle or equivalent)
+  If any endpoint is intentionally public, it must have
+  an explicit @Public() decorator with a code comment
+  explaining why.
+```
+
+## Paso 5 — Añade una verificación de cumplimiento a nivel de PR
+
+```
+Name: Compliance impact assessment
+Scope: Pull Request
+Severity: High
+Instructions:
+  If pr_files_diff touches any file in src/entities/,
+  src/models/, or database migrations, check whether:
+  1. New fields handling PII are documented
+  2. Data flow changes are noted in pr_description
+  3. Privacy impact is considered
+  If the PR adds new data collection, flag it for
+  privacy review.
+```
+
+## Paso 6 — Configura para la aplicación
+
+1. Habilita **Solicitar cambios** para que las infracciones de cumplimiento bloqueen el merge
+2. Configura todas las reglas de cumplimiento en severidad **Crítica**
+3. Usa la herencia de reglas para aplicar las reglas de cumplimiento en todos los repositorios de la organización
+
+## Lista de verificación
+
+- [ ] Las Memorias de cumplimiento enseñan los principios de alto nivel
+- [ ] La regla de registro de auditoría cubre todas las rutas de mutación de datos
+- [ ] La regla de exposición de PII cubre logs y respuestas de error
+- [ ] La regla de cifrado cubre las definiciones de entidades y modelos
+- [ ] La regla de control de acceso cubre todos los nuevos endpoints
+- [ ] Solicitar cambios habilitado para hallazgos críticos
+- [ ] Las reglas están configuradas a nivel de organización para consistencia
+- [ ] Un PR de prueba verificó que las reglas se activan correctamente
+
+Para más información sobre la configuración de reglas, consulta [Kody Rules](/how_to_use/es/code_review/configs/kody_rules).

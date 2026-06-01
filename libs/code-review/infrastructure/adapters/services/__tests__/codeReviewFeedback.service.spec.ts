@@ -87,9 +87,11 @@ describe('CodeReviewFeedbackService', () => {
                 true,
             );
 
-            expect(
-                repository.updateSyncedSuggestionsFlag,
-            ).toHaveBeenCalledWith('org-001', ['sug-001', 'sug-002'], true);
+            expect(repository.updateSyncedSuggestionsFlag).toHaveBeenCalledWith(
+                'org-001',
+                ['sug-001', 'sug-002'],
+                true,
+            );
         });
     });
 

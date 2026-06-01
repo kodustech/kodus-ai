@@ -5,7 +5,7 @@ import { Button } from "@components/ui/button";
 import { Link } from "@components/ui/link";
 import type { FormattedCustomMessageEntity } from "@services/pull-request-messages/types";
 import type { FormattedConfigLevel } from "src/app/(app)/settings/code-review/_types";
-import { pathToApiUrl } from "src/core/utils/helpers";
+import { apiProxyPath } from "src/core/utils/api-proxy";
 import { useFetch } from "src/core/utils/reactQuery";
 
 import {
@@ -22,6 +22,7 @@ export const RouteButtonWithOverrideCount = ({
     level,
     config,
     customMessagesOverrideCount,
+    kodyRulesOverrideCount,
 }: {
     label: string;
     href: string;
@@ -30,12 +31,23 @@ export const RouteButtonWithOverrideCount = ({
     level: FormattedConfigLevel;
     config?: FormattedCodeReviewConfig;
     customMessagesOverrideCount?: number;
+    kodyRulesOverrideCount?: number;
 }) => {
     const isCustomMessagesRoute = href === "custom-messages";
+    const isKodyRulesRoute = href === "kody-rules";
 
-    const routeOverrideCount = isCustomMessagesRoute
-        ? (customMessagesOverrideCount ?? 0)
-        : countConfigOverridesByRoute(config, href, level);
+    const configOverrideCount =
+        countConfigOverridesByRoute(config, href, level) ?? 0;
+
+    let routeOverrideCount: number | null;
+    if (isCustomMessagesRoute) {
+        routeOverrideCount = customMessagesOverrideCount ?? 0;
+    } else if (isKodyRulesRoute) {
+        routeOverrideCount =
+            configOverrideCount + (kodyRulesOverrideCount ?? 0);
+    } else {
+        routeOverrideCount = configOverrideCount;
+    }
 
     return (
         <Link className="w-full" href={to}>
@@ -72,7 +84,7 @@ export const useCustomMessagesOverrideCount = ({
     enabled: boolean;
 }) => {
     const { data: customMessagesData } = useFetch<FormattedCustomMessageEntity>(
-        pathToApiUrl("/pull-request-messages/find-by-repository-or-directory"),
+        apiProxyPath("/pull-request-messages/find-by-repository-or-directory"),
         {
             params: {
                 repositoryId: scopeRepositoryId,

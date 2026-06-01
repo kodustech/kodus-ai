@@ -11,6 +11,7 @@
         "pretty": true, // Formata a saída do compilador
         "newLine": "lf", // Define o caractere de nova linha
         "downlevelIteration": true, // Suporte a iteração em targets mais antigos
+        "ignoreDeprecations": "6.0", // Silence TS 7.0 deprecation warnings
 
         /* Emissão */
         "declaration": false, // Não gera .d.ts no desenvolvimento

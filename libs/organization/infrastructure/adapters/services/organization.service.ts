@@ -2,6 +2,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 
 import {
+    DEFAULT_RELEASE_TRACK,
+    type ReleaseTrack,
+} from '@libs/feature-gate/domain/release-track';
+import {
     IOrganizationRepository,
     ORGANIZATION_REPOSITORY_TOKEN,
 } from '@libs/organization/domain/organization/contracts/organization.repository.contract';
@@ -69,5 +73,24 @@ export class OrganizationService implements IOrganizationService {
 
     public async deleteOne(filter: Partial<IOrganization>): Promise<void> {
         await this.organizationRepository.deleteOne(filter);
+    }
+
+    public async getReleaseTrack(
+        organizationId: string,
+    ): Promise<ReleaseTrack> {
+        try {
+            // The repository's `findById` is misnamed — it actually
+            // queries by `user.uuid`, not by `organization.uuid` (see
+            // `findOneByUserId` below, which delegates to it). For
+            // release-track we have the organization uuid in hand, so
+            // use `findOne({ uuid })` which filters on the entity's own
+            // primary key.
+            const org = await this.organizationRepository.findOne({
+                uuid: organizationId,
+            });
+            return org?.releaseTrack ?? DEFAULT_RELEASE_TRACK;
+        } catch {
+            return DEFAULT_RELEASE_TRACK;
+        }
     }
 }

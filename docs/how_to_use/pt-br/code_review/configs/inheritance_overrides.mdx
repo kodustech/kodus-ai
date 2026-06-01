@@ -1,0 +1,73 @@
+---
+title: "Herança e Sobrescrita de Configuração"
+description: "Como as configurações Global → Repositório → Diretório herdam, sobrescrevem e se propagam."
+---
+
+## Visão Geral
+
+As configurações do Kodus funcionam em três níveis: **Global**, **Repositório** e **Diretório**.
+
+<Note>
+O nível mais específico prevalece: Diretório > Repositório > Global
+</Note>
+
+```
+Global
+ ├─ Repositório A
+ │   ├─ Diretório A1
+ │   └─ Diretório A2
+ └─ Repositório B
+```
+
+## Como Funciona
+
+Os campos herdam do nível pai por padrão. Quando você altera um campo no Global, todos os repositórios e diretórios sem uma sobrescrita são atualizados automaticamente.
+
+<Info>
+As sobrescritas são por campo. Você pode sobrescrever um campo e herdar todo o resto.
+</Info>
+
+Uma vez sobrescrito, um campo para de seguir o pai e usa seu valor local.
+
+## Exemplos
+
+<Tabs>
+  <Tab title="Alteração global se propaga">
+    Você altera **Limites de severidade** no Global.
+    
+    Todos os repositórios e diretórios sem uma sobrescrita são atualizados automaticamente. Os que têm sobrescrita permanecem inalterados.
+  </Tab>
+
+  <Tab title="Sobrescrita de repositório">
+    No Repositório X, você sobrescreve a **Mensagem de início de revisão**.
+    
+    Os diretórios dentro do Repositório X agora herdam do Repositório X (a menos que tenham sua própria sobrescrita).
+  </Tab>
+
+  <Tab title="Retornar à herança">
+    No Repositório Y, você remove a sobrescrita de **Categorias ativas**.
+    
+    O campo segue o Global novamente e recebe futuras alterações globais.
+  </Tab>
+</Tabs>
+
+## Boas Práticas
+
+- Comece no Global com padrões sólidos
+- Sobrescreva apenas quando tiver uma necessidade específica para aquele repositório/diretório
+
+## Perguntas Frequentes
+
+<AccordionGroup>
+  <Accordion title="Se eu alterar algo no Global, isso vai quebrar meus ajustes locais?">
+    Não. As sobrescritas locais permanecem inalteradas.
+  </Accordion>
+
+  <Accordion title="Posso sobrescrever apenas um campo e herdar o restante?">
+    Sim. As sobrescritas são por campo.
+  </Accordion>
+
+  <Accordion title="Um Diretório herda do Repositório ou do Global?">
+    Do Repositório primeiro. Se o Repositório não tiver uma sobrescrita para aquele campo, herda do Global.
+  </Accordion>
+</AccordionGroup>

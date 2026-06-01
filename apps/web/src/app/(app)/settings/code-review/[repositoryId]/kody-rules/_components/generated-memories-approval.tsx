@@ -9,23 +9,21 @@ import { useAsyncAction } from "@hooks/use-async-action";
 import { useReactQueryInvalidateQueries } from "@hooks/use-invalidate-queries";
 import { PARAMETERS_PATHS } from "@services/parameters";
 import { createOrUpdateCodeReviewParameter } from "@services/parameters/fetch";
-import { useOptionalParameterQuery } from "@services/parameters/hooks";
 import {
+    isCentralizedPrResponse,
     ParametersConfigKey,
-    type CentralizedConfigValue,
 } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { OverrideIndicator } from "src/app/(app)/settings/code-review/_components/override";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
+import { getCentralizedPrToastPayload } from "../../../_utils/centralized-pr-feedback";
 import { useCodeReviewConfig } from "../../../../_components/context";
 import { useCodeReviewRouteParams } from "../../../../_hooks";
 
 export const GeneratedMemoriesApprovalSetting = () => {
     const config = useCodeReviewConfig();
-    const { centralizedConfigParameter } = useFeatureFlags();
     const { teamId } = useSelectedTeamId();
     const { repositoryId, directoryId } = useCodeReviewRouteParams();
     const { invalidateQueries, generateQueryKey } =
@@ -37,32 +35,12 @@ export const GeneratedMemoriesApprovalSetting = () => {
         repositoryId,
     );
 
-    const centralizedConfig = useOptionalParameterQuery<CentralizedConfigValue>(
-        ParametersConfigKey.CENTRALIZED_CONFIG,
-        teamId,
-        {
-            uuid: "",
-            configKey: ParametersConfigKey.CENTRALIZED_CONFIG,
-            configValue: {
-                enabled: false,
-                repository: {
-                    id: "",
-                    name: "",
-                },
-            },
-        },
-    );
-
-    const isDisabledByCentralizedConfig =
-        centralizedConfigParameter === true &&
-        centralizedConfig.data?.configValue?.enabled === true;
-
     const currentValue =
         config?.llmGeneratedMemoriesRequireApproval?.value ?? false;
 
     const [handleToggle, { loading }] = useAsyncAction(async () => {
         try {
-            await createOrUpdateCodeReviewParameter(
+            const mutationResult = await createOrUpdateCodeReviewParameter(
                 {
                     llmGeneratedMemoriesRequireApproval: !currentValue,
                 },
@@ -70,6 +48,16 @@ export const GeneratedMemoriesApprovalSetting = () => {
                 repositoryId,
                 directoryId,
             );
+
+            if (isCentralizedPrResponse(mutationResult)) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        mutationResult,
+                        "Change proposed through centralized pull request.",
+                    ),
+                );
+                return;
+            }
 
             await Promise.all([
                 invalidateQueries({
@@ -112,7 +100,7 @@ export const GeneratedMemoriesApprovalSetting = () => {
             size="lg"
             variant="helper"
             className="w-full justify-between p-0"
-            disabled={!canEdit || loading || isDisabledByCentralizedConfig}
+            disabled={!canEdit || loading}
             onClick={() => handleToggle()}>
             <Card color="none" className="w-full">
                 <CardHeader>

@@ -1,0 +1,144 @@
+---
+title: "Security-first review pipeline"
+description: "Set up Kody Rules focused on OWASP top 10, secrets detection, and secure coding patterns."
+icon: "shield-halved"
+---
+
+## Why a security-focused pipeline
+
+Generic code review catches style and bugs. But security vulnerabilities — SQL injection, hardcoded secrets, insecure auth patterns — need dedicated rules that treat findings as critical blockers.
+
+This cookbook sets up a security-first layer on top of your existing review.
+
+## Step 1 — Enable security analysis
+
+Make sure security analysis is enabled:
+
+```yaml
+reviewOptions:
+  security: true
+```
+
+This gives you Kodus' built-in security checks. The rules below add your team's specific security policies on top.
+
+## Step 2 — Create OWASP-focused rules
+
+### SQL injection prevention
+
+```
+Name: No raw SQL queries
+Scope: File
+Paths: **/*.ts, **/*.js, **/*.py
+Severity: Critical
+Instructions:
+  Flag any use of string concatenation or template literals
+  to build SQL queries. Look for patterns like:
+  - `query("SELECT ... " + variable)`
+  - `query(\`SELECT ... ${variable}\`)`
+  - `execute(f"SELECT ... {variable}")`
+  Must use parameterized queries or an ORM instead.
+```
+
+### Hardcoded secrets detection
+
+```
+Name: No hardcoded secrets or credentials
+Scope: File
+Paths: **/*
+Severity: Critical
+Instructions:
+  Flag any string that looks like an API key, password,
+  token, or secret in fileDiff. Patterns to catch:
+  - Variables named *_KEY, *_SECRET, *_TOKEN, *_PASSWORD
+    assigned to string literals
+  - Strings matching patterns like "sk_live_", "ghp_",
+    "AKIA", "Bearer " followed by a long string
+  - Connection strings with embedded passwords
+  Secrets must come from environment variables or a vault.
+```
+
+### Authentication bypass
+
+```
+Name: Auth middleware must not be skipped
+Scope: Pull Request
+Severity: Critical
+Instructions:
+  Check pr_files_diff for any route or controller that
+  handles user data without auth middleware. Look for:
+  - New routes without @UseGuards, @Authenticated,
+    or equivalent decorators
+  - Middleware bypass patterns like skipAuth: true
+  - Public endpoints that access user-specific data
+  Reference @file:src/shared/auth/guards/ for the
+  approved auth patterns.
+```
+
+### XSS prevention
+
+```
+Name: No dangerouslySetInnerHTML without sanitization
+Scope: File
+Paths: **/*.tsx, **/*.jsx
+Severity: Critical
+Instructions:
+  Flag any use of dangerouslySetInnerHTML in fileDiff.
+  If used, verify the input is sanitized with DOMPurify
+  or an equivalent library. Unsanitized HTML injection
+  is a critical XSS vulnerability.
+```
+
+## Step 3 — Teach security Memories
+
+Create persistent conventions that apply everywhere:
+
+```
+@kody remember: all user input must be validated and sanitized
+before use. Never trust client-side data.
+```
+
+```
+@kody remember: all API endpoints that handle sensitive data
+must use HTTPS only and include rate limiting.
+```
+
+```
+@kody remember: error messages must never expose stack traces,
+internal paths, or database details to the client.
+```
+
+## Step 4 — Configure for zero tolerance
+
+For security rules, you want critical findings to block:
+
+1. Enable **Request Changes** in PR Workflow settings so Kody requests changes when critical issues are found
+2. Set security rules to **Critical** severity so they always surface above any severity filter
+3. Do NOT set a low `maxSuggestions` limit — security findings should never be suppressed
+
+## Step 5 — Add a dependency audit rule (optional)
+
+If you use MCP plugins, you can check dependencies:
+
+```
+Name: No known vulnerable dependencies
+Scope: Pull Request
+Severity: Critical
+Instructions:
+  If pr_files_diff modifies package.json, requirements.txt,
+  or any dependency file, use @MCP to check for known
+  vulnerabilities in the added or updated packages.
+  Flag any dependency with known critical CVEs.
+```
+
+## Checklist
+
+- [ ] Security analysis enabled in reviewOptions
+- [ ] SQL injection rule covers all DB-interacting code
+- [ ] Secrets detection rule covers all file types
+- [ ] Auth bypass rule references your actual auth patterns
+- [ ] XSS rule covers all frontend component files
+- [ ] Security Memories teach general secure coding principles
+- [ ] Request Changes enabled for critical findings
+- [ ] A test PR confirmed rules fire correctly
+
+For more on configuring rules, see [Kody Rules](/how_to_use/en/code_review/configs/kody_rules).

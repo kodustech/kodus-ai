@@ -518,8 +518,7 @@ my-skill/
 - [Cortex 2026 Benchmark](https://www.cortex.io/report/engineering-in-the-age-of-ai-2026-benchmark-report)
 
 ### Evals e observabilidade
-- LangSmith — traces + trajectory evals
-- Langfuse (OSS) — tracing + datasets
+- Langfuse — tracing + datasets + trajectory evals
 - Phoenix/Arize (OSS) — observabilidade + evals
 - OpenTelemetry GenAI conventions
 

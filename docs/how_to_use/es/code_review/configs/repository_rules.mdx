@@ -1,0 +1,153 @@
+---
+title: "Reglas del Repositorio"
+description: "Crea Kody Rules personalizadas directamente en tu repositorio usando archivos markdown con plantillas estructuradas."
+---
+
+<Info>
+Las Reglas del Repositorio usan el mismo mecanismo de sincronización automática que la detección de archivos de reglas del IDE. Habilita "Auto-sincronizar reglas del repositorio" en la configuración para activar ambas funciones. Consulta <a href="/how_to_use/es/code_review/configs/rules_file_detection">Detección de Archivos de Reglas</a> para la configuración.
+</Info>
+
+## Cómo Usar
+Puedes crear Kody Rules personalizadas directamente en tu repositorio colocando archivos markdown estructurados en directorios específicos. Esto te permite versionar tus reglas junto con tu código y compartirlas con tu equipo.
+
+### Sincronización
+- **Detección Automática**: Las reglas del repositorio se detectan y sincronizan automáticamente cuando están habilitadas
+- **Sincronización Manual**: Agrega `@kody-sync` a cualquier archivo de regla para sincronizarlo individualmente (funciona incluso con la sincronización automática deshabilitada)
+- **Aplicación Web**: Las reglas sincronizadas aparecen en el panel de tu aplicación web de Kodus
+- **Actualizaciones en Tiempo Real**: Los cambios en los archivos de reglas se sincronizan cuando se cierran los Pull Requests
+
+## Ubicación de los Archivos
+
+Coloca tus archivos de reglas en uno de estos directorios:
+- `.kody/rules/**/*.md`
+- `rules/**/*.md`
+
+## Plantilla de Regla
+
+Cada archivo de regla debe seguir exactamente esta estructura de plantilla:
+
+```markdown
+---
+title: "<nombre de la regla>"
+scope: "file"            # "file" o "pull_request"
+path: []                 # lista de globs. ejemplo: ["**/*.ts", "apps/web/**"]
+severity_min: "high"     # "low", "medium", "high", "critical"
+languages: []            # opcional. ej: ["jsts", "go", "php", "ruby", "java", "csharp", "dart", "kotlin", "rust"]
+buckets: []              # opcional. ej: ["style-conventions", "error-handling", "security"]
+uuid: ""                 # opcional. usar para ID de regla estable
+enabled: true            # opcional
+---
+
+## Instructions
+Describe qué revisar y cómo decidir. Sé directo y objetivo.
+- Enfócate en seguridad, rendimiento e impactos en el contrato público.
+- Proporciona preferencias o patrones del equipo cuando sea aplicable.
+- Si es una regla de PR, explica qué considerar en el conjunto de cambios.
+
+## Examples
+
+### Bad example
+\`\`\`lang
+// pega aquí un contraejemplo corto que viole la regla
+\`\`\`
+
+### Good example  
+\`\`\`lang
+// pega aquí un ejemplo corto que siga la regla
+\`\`\`
+```
+## Campos de la Plantilla
+
+### Campos Requeridos
+
+| Campo | Descripción | Valores |
+|-------|-------------|---------|
+| `title` | Nombre de la regla mostrado en la interfaz | Cualquier cadena descriptiva |
+| `scope` | Alcance del análisis de la regla | `"file"` o `"pull_request"` |
+| `path` | Rutas de archivos donde aplica la regla | Array de patrones glob |
+| `severity_min` | Nivel mínimo de severidad | `"low"`, `"medium"`, `"high"`, `"critical"` |
+
+## Ejemplos de Reglas
+
+### Ejemplo de Regla a Nivel de Archivo
+```markdown
+---
+title: "Avoid console.log in production code"
+scope: "file"
+path: ["src/**/*.ts", "src/**/*.tsx"]
+severity_min: "medium"
+languages: ["jsts"]
+buckets: ["style-conventions"]
+enabled: true
+---
+
+## Instructions
+Check for console.log statements in production TypeScript/JavaScript files.
+- Console logs should not appear in production code
+- Use proper logging libraries instead
+- Allow console.log only in development utilities
+
+## Examples
+
+### Bad example
+\`\`\`typescript
+function processUser(user: User) {
+  console.log('Processing user:', user.id);
+  return user.process();
+}
+\`\`\`
+
+### Good example
+\`\`\`typescript
+import { logger } from './logger';
+
+function processUser(user: User) {
+  logger.info('Processing user:', user.id);
+  return user.process();
+}
+\`\`\`
+```
+
+### Ejemplo de Regla a Nivel de Pull Request
+```markdown
+---
+title: "New API endpoints must have tests"
+scope: "pull_request"
+path: ["**/*"]
+severity_min: "high"
+buckets: ["testing"]
+enabled: true
+---
+
+## Instructions
+When new API endpoints are added, ensure corresponding tests are included in the PR.
+- Check for new route definitions in controllers
+- Verify test files exist for new endpoints
+- Ensure both positive and negative test cases
+
+## Examples
+
+### Bad example
+Added new endpoint `/api/users/profile` but no test file included in the PR.
+
+### Good example
+Added new endpoint `/api/users/profile` with corresponding test file `tests/api/users/profile.test.ts` that covers success and error cases.
+```
+
+## Requisitos de Configuración
+
+Para usar las Reglas del Repositorio, tienes dos opciones:
+
+### Opción 1: Habilitar Sincronización Automática (Recomendado)
+1. **Habilitar Detección de Archivos de Reglas**: Activa "Auto-sincronizar reglas del repositorio" en la configuración
+2. **Crear archivos de reglas**: Coloca archivos `.md` en los directorios `.kody/rules/**` o `rules/**`
+3. **Sincronización automática**: Todos los archivos de reglas se sincronizan cuando se cierran los PRs
+
+### Opción 2: Sincronización Manual (Selectiva)
+1. **Crear archivos de reglas**: Coloca archivos `.md` en los directorios `.kody/rules/**` o `rules/**`
+2. **Agregar marcador de sincronización**: Incluye `@kody-sync` en cualquier parte del archivo de regla
+3. **Hacer commit de los cambios**: Solo los archivos marcados se sincronizarán (el interruptor de sincronización automática permanece desactivado)
+
+<Tip>
+Las Reglas del Repositorio usan el mismo mecanismo de sincronización que [Detección de Archivos de Reglas](/how_to_use/es/code_review/configs/rules_file_detection). Usa la sincronización manual (`@kody-sync`) para sincronizar selectivamente reglas específicas sin habilitar la sincronización automática.
+</Tip>

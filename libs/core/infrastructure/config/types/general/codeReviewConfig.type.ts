@@ -45,8 +45,14 @@ export type RepositoryCodeReviewConfig = CodeReviewParameterBaseConfig & {
     directories?: Array<DirectoryCodeReviewConfig>;
 };
 
-export type DirectoryCodeReviewConfig = CodeReviewParameterBaseConfig & {
+export type DirectoryFolder = {
+    id: string;
+    name: string;
     path: string;
+};
+
+export type DirectoryCodeReviewConfig = CodeReviewParameterBaseConfig & {
+    folders: DirectoryFolder[];
 };
 
 export enum FormattedConfigLevel {

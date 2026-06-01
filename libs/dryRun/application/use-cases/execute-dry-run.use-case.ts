@@ -2,7 +2,6 @@ import { IdGenerator, createLogger } from '@kodus/flow';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { TaskStatus } from '@libs/ee/kodyAST/interfaces/code-ast-analysis.interface';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { OrganizationParametersKey } from '@libs/core/domain/enums/organization-parameters-key.enum';
@@ -241,12 +240,6 @@ export class ExecuteDryRunUseCase {
                 validCrossFileSuggestions: [],
                 externalPromptContext: {},
                 correlationId,
-                tasks: {
-                    astAnalysis: {
-                        taskId: null,
-                        status: TaskStatus.TASK_STATUS_UNSPECIFIED,
-                    },
-                },
             } as unknown as CodeReviewPipelineContext;
 
             const result = await this.dryRunPipeline.execute(context);

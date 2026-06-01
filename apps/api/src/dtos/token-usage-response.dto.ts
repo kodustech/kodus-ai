@@ -14,6 +14,19 @@ export class TokenUsageBaseDto {
     @ApiProperty()
     outputReasoning: number;
 
+    @ApiProperty({
+        required: false,
+        description: 'Input tokens served from provider prompt cache.',
+    })
+    cacheRead?: number;
+
+    @ApiProperty({
+        required: false,
+        description:
+            'Input tokens that created cache entries on this call (Anthropic).',
+    })
+    cacheWrite?: number;
+
     @ApiProperty()
     model: string;
 }
@@ -85,6 +98,19 @@ export class TokenUsageTotalsDto {
 
     @ApiProperty()
     totalTokens: number;
+
+    @ApiProperty({
+        required: false,
+        description: 'Input tokens served from provider prompt cache.',
+    })
+    cacheReadTokens?: number;
+
+    @ApiProperty({
+        required: false,
+        description:
+            'Input tokens that created cache entries on this call (Anthropic).',
+    })
+    cacheWriteTokens?: number;
 }
 
 export class CostEstimateDataDto {

@@ -11,6 +11,7 @@ import { deleteCookie, setCookie } from "cookies-next";
 import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import integrationFactory from "src/core/integrations/integrationFactory";
 import { useAllTeams } from "src/core/providers/all-teams-context";
+import { useConfig } from "@providers/ConfigProvider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import type { AwaitedReturnType } from "src/core/types";
 import { safeArray } from "src/core/utils/safe-array";
@@ -26,6 +27,7 @@ export const ProviderOptionButton = (props: {
 
     const router = useRouter();
     const pathname = usePathname();
+    const cfg = useConfig();
     const { teamId } = useSelectedTeamId();
     const { teams } = useAllTeams();
     const { githubEnterpriseServerPat } = useFeatureFlags();
@@ -36,6 +38,7 @@ export const ProviderOptionButton = (props: {
     ) => {
         const integrationConnector = integrationFactory.getConnector(
             provider.toLowerCase(),
+            cfg,
         );
 
         if (!integrationConnector) return;

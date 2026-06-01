@@ -34,7 +34,13 @@ import { Check } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { safeArray } from "src/core/utils/safe-array";
 
-export default function AssignReposModal({ userId }: { userId: string }) {
+export default function AssignReposModal({
+    userId,
+    onSave,
+}: {
+    userId: string;
+    onSave?: () => void;
+}) {
     const { teamId } = useSelectedTeamId();
 
     const [isPopoverOpen, setIsPopoverOpen] = useState(false);
@@ -108,6 +114,7 @@ export default function AssignReposModal({ userId }: { userId: string }) {
             // The selectedRepoIds Set can be used directly here
             const selectedIds = Array.from(selectedRepoIds);
             await assignRepos(selectedIds, userId, teamId);
+            onSave?.();
             magicModal.hide();
         },
     );
@@ -209,10 +216,7 @@ export default function AssignReposModal({ userId }: { userId: string }) {
                             variant="primary"
                             loading={isSaving}
                             onClick={saveSelectionAction}
-                            disabled={
-                                isInitializing ||
-                                selectedRepositories.length === 0
-                            }>
+                            disabled={isInitializing}>
                             Save changes
                         </Button>
                     </DialogFooter>

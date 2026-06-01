@@ -1,7 +1,12 @@
 import { ChatVertexAI } from '@langchain/google-vertexai';
 import { resolveModelOptions } from './resolver';
 import { buildJsonModeOptions } from './jsonMode';
-import { AdapterBuildParams, ProviderAdapter, LLM_TIMEOUT_MS, LLM_MAX_RETRIES } from './types';
+import { AdapterBuildParams, ProviderAdapter, LLM_MAX_RETRIES } from './types';
+
+interface VertexCredentials {
+    project_id: string;
+    [key: string]: unknown;
+}
 
 export class VertexAdapter implements ProviderAdapter {
     build(params: AdapterBuildParams): ChatVertexAI {
@@ -18,16 +23,16 @@ export class VertexAdapter implements ProviderAdapter {
             );
         }
         const credentials = Buffer.from(encoded, 'base64').toString('utf-8');
+        const parsedCredentials = JSON.parse(credentials) as VertexCredentials;
+        const location = process.env.API_VERTEX_AI_LOCATION || 'us-central1';
 
         const payload: ConstructorParameters<typeof ChatVertexAI>[0] = {
             model,
             authOptions: {
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                credentials: JSON.parse(credentials),
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-                projectId: JSON.parse(credentials).project_id,
+                credentials: parsedCredentials,
+                projectId: parsedCredentials.project_id,
             },
-            location: 'us-east5',
+            location,
             ...(resolved.temperature !== undefined
                 ? { temperature: resolved.temperature }
                 : {}),

@@ -1,0 +1,30 @@
+---
+title: "Por que minhas revisões de código estão pausadas"
+description: "Entenda o comportamento de pausa automática do Kodus e como retomar as revisões de código automatizadas."
+---
+
+Se o Kodus parou de revisar seus PRs depois de funcionar bem antes, provavelmente é devido ao recurso de **pausa automática**.
+
+## O que é a pausa automática
+
+A pausa automática evita spam de revisões durante o desenvolvimento ativo. Quando o Kodus detecta pushes consecutivos rápidos (padrão: 3 pushes em 15 minutos), ele pausa as revisões até que a atividade se estabilize.
+
+Isso é um recurso, não um bug — evita inundar os PRs com múltiplas revisões enquanto você ainda está fazendo pushes ativos de alterações.
+
+## Como retomar
+
+- **Aguarde** o período de resfriamento passar e faça um push novamente
+- **Comente** `@kody start-review` no PR para acionar uma revisão imediatamente
+- **Mude a cadência** para "Automático" se quiser sempre revisões em cada push
+
+## Alterando o comportamento
+
+Vá em **Configurações de Revisão de Código** → **Geral** → **Cadência de Revisão**:
+
+| Modo | Comportamento |
+|------|---------------|
+| **Automático** | Revisa a cada push — sem pausas |
+| **Pausa automática** | Pausa durante pushes rápidos (padrão) |
+| **Manual** | Apenas revisa quando você comenta `@kody start-review` |
+
+Para detalhes, consulte [Configuração Geral](/how_to_use/pt-br/code_review/configs/general).

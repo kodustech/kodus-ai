@@ -1,0 +1,42 @@
+---
+title: "GitLab PAT Token"
+---
+
+## Introduction to the PAT
+
+To enable Kody to perform automatic Code Reviews, you need to generate a Personal Access Token (PAT) in GitLab. This token allows Kody to securely access your repositories and conduct code analysis in a controlled way.
+
+## Generating the PAT (Personal Access Token)
+
+Follow these steps to set up the token correctly:
+
+1. **Access GitLab and go to your profile settings**:
+
+   - [Click here to access the profile settings page](https://gitlab.com/-/user_settings/personal_access_tokens).
+
+2. **Navigate to `Access Tokens`**:
+
+   - In the left sidebar, scroll to find `Access Tokens` and click on it.
+
+3. **Add a new token**:
+
+   - Click on the `Add new token` button.
+
+4. **Set up the new token with the following specifications**:
+
+   - **Token Name**: Choose an easily identifiable name, such as `kody_code_review`.
+   - **Expiration Date**: If possible, select a long expiration date, preferably at least 180 days.
+   - **Permissions**: Set the following permissions:
+     - **api**: Read access.
+     - **read_api**: Read access.
+     - **read_user**: Read access.
+     - **read_repository**: Read access.
+     - **write_repository**: Read access.
+
+5. **Finalize and save the token**:
+   - After configuring the permissions, click `Generate token`.
+   - Make sure to copy the generated token and store it securely, as you’ll need it to configure Kody.
+
+## Adding the Token to Kody
+
+After generating the token, paste it into the Kody automation setup screen. The configuration modal will open automatically when you attempt to enable the automation.

@@ -1,0 +1,152 @@
+---
+title: "Anonymous Telemetry"
+description: "What the self-hosted heartbeat sends, why we collect it, and how to disable it."
+icon: "satellite-dish"
+---
+
+Each self-hosted Kodus instance sends **one anonymous heartbeat per day** to
+`https://telemetry.kodus.io`. The payload contains aggregated counters and
+runtime metadata only — never code, identities, or anything that could trace
+back to you or your users.
+
+This page documents exactly what is sent, why, where it goes, and how to
+turn it off.
+
+## What we send
+
+A single `POST /v1/heartbeat` once per UTC day, ~700 bytes. Example payload
+(redacted UUID for clarity):
+
+```json
+{
+  "schema_version": 1,
+  "instance_id": "0188f5c5-5b8f-4f45-92d4-b20c25df0b5a",
+  "sent_at": "2026-05-04T03:17:00.000Z",
+  "kodus": {
+    "version": "0.4.15",
+    "deployment": "docker",
+    "uptime_hours": 124
+  },
+  "runtime": {
+    "node_version": "v20.11.1",
+    "os": "linux",
+    "arch": "x64",
+    "cpu_count": 8,
+    "db_type": "postgres",
+    "db_version": "PostgreSQL 15.4"
+  },
+  "usage_7d": {
+    "active_users": 12,
+    "organizations": 1,
+    "teams": 2,
+    "repos_connected": 9,
+    "prs_reviewed": 184,
+    "suggestions_generated": 0,
+    "suggestions_applied": 0
+  },
+  "config": {
+    "kody_rules_enabled": true,
+    "agent_review_repos_pct": 0,
+    "integrations": ["github", "slack"]
+  }
+}
+```
+
+The full schema lives in the [kodus-beacon repository](https://github.com/kodustech/kodus-beacon/blob/main/docs/api.md) — it is enforced server-side
+with a strict validator that rejects any unknown field with a `400`.
+
+## What we never send
+
+By design, the schema cannot carry:
+
+- User emails, names, OAuth tokens, API keys
+- Repository names, branch names, PR titles, commit messages, code content
+- Customer-identifying strings (org slugs, workspace names, custom domains)
+- IP addresses (the receiver hashes the source IP with a daily-rotating
+  salt for abuse detection only and never persists the raw IP)
+- Any free-form text field
+
+The receiver enforces a 5 KB body limit and rejects any field outside the
+documented schema, so a misconfigured client cannot accidentally leak data.
+
+## Why we collect this
+
+Anonymous heartbeats let us answer questions we otherwise cannot answer for
+self-hosted users:
+
+- Which versions of Kodus are still in use, and how fast new releases get
+  adopted
+- How operators deploy (Docker / Kubernetes / bare metal), so we prioritise
+  the platforms people actually run
+- Whether features like Kody Rules are reaching self-hosted users at all
+- Volume signals (PRs reviewed per fleet, repos connected) so we can size
+  capacity decisions
+
+It does **not** let us identify any specific instance, customer, or user. We
+do not contact you based on telemetry. We do not share or sell the data.
+
+## Inspect what your instance would send
+
+Before any heartbeat leaves your instance, you can dump the exact payload
+that the daily cron would build:
+
+```bash
+yarn telemetry:preview
+```
+
+This boots a minimal Kodus context, runs the same collector the cron uses,
+and prints the JSON to stdout — without sending it. Pipe it through `jq` to
+explore:
+
+```bash
+yarn telemetry:preview | jq '.usage_7d'
+```
+
+## Disable telemetry
+
+Set `KODUS_TELEMETRY_DISABLED=true` in your environment. The cron skips
+silently — no heartbeat is sent, ever, until you flip it back.
+
+```bash
+# .env
+KODUS_TELEMETRY_DISABLED=true
+```
+
+Accepted truthy values (case-insensitive): `1`, `true`, `yes`, `on`. Any
+other value (including empty) keeps telemetry enabled.
+
+## Where the data lives
+
+- **Receiver:** a small Node.js service (Fastify) deployed at
+  `telemetry.kodus.io`. Source code is public:
+  [kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon).
+- **Storage:** Neon Postgres, US region, encrypted at rest, TLS-only.
+  Two tables — `telemetry_instances` (one row per instance, last seen
+  + version) and `telemetry_heartbeats` (one row per instance per UTC
+  day, payload stored as JSONB).
+- **Retention:** individual heartbeat rows are kept for **12 months**.
+  After that we aggregate the counters into historical statistics
+  (e.g. "X active instances in January 2026") and drop the per-day
+  rows. The instance row stays — it carries no time-series, only the
+  most recent version + last-seen timestamp.
+- **Access:** product engineering team only, via individual Neon
+  credentials with audit logging. The data is never shared with third
+  parties and never used to train any AI model.
+
+## Source code you can audit
+
+Both ends are open and small enough to read end-to-end:
+
+- **Client** (what runs on your instance): the cron, collector, and HTTP
+  transport live under [`libs/telemetry/`](https://github.com/kodustech/kodus-ai/tree/main/libs/telemetry)
+  and [`apps/worker/src/cron/self-hosted-beacon.cron.ts`](https://github.com/kodustech/kodus-ai/blob/main/apps/worker/src/cron/self-hosted-beacon.cron.ts).
+- **Server** (what runs at `telemetry.kodus.io`): the entire receiver is
+  ~80 lines of Fastify route + a Postgres upsert. See
+  [kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon).
+
+## Questions
+
+If something here is unclear or you want a field added, removed, or
+documented further, open an issue at
+[kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon/issues)
+or reach out on [Discord](https://discord.gg/TFZBRk9fT6).

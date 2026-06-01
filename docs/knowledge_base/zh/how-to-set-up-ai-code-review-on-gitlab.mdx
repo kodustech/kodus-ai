@@ -1,0 +1,27 @@
+---
+title: "如何在 GitLab 上设置 AI 代码审查"
+description: "为 GitLab 项目安装和配置 Kodus 以在每个合并请求上获得自动 AI 代码审查。"
+---
+
+Kodus 通过 OAuth 和 webhooks 与 GitLab 集成。配置完成后，合并请求会自动审查。
+
+## 步骤
+
+1. **创建帐户** — 在 [kodus.io](https://kodus.io) 或[自托管 Kodus](/how_to_deploy/en/deploy_kodus/generic_vm)
+2. **连接 GitLab** — 在设置过程中通过 OAuth 授权
+3. **配置 webhooks** — 按照引导设置启用合并请求事件
+4. **选择项目** — 选择 Kodus 应审查的 GitLab 项目
+5. **打开合并请求** — Kodus 自动审查
+
+## 您获得什么
+
+- 每个 MR 自动审查
+- 直接在合并请求中发布的评论
+- 可自定义的规则和建议控制
+- 根据关联任务的业务逻辑验证
+
+## 自定义配置
+
+在代码库根目录放置 `kodus-config.yml` 以自定义每个项目的行为。
+
+完整设置指南，请参阅 [GitLab OAuth](/how_to_deploy/en/platforms/gitlab/gitlab_oauth) 和 [GitLab Webhooks](/how_to_deploy/en/platforms/gitlab/gitlab_webhook)。

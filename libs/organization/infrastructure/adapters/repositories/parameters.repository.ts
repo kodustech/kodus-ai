@@ -6,6 +6,7 @@ import {
     Repository,
     UpdateQueryBuilder,
 } from 'typeorm';
+import { v4 as uuidv4 } from 'uuid';
 
 import { ParametersModel } from './schemas/parameters.model';
 
@@ -206,5 +207,50 @@ export class ParametersRepository implements IParametersRepository {
             .getOne();
 
         return mapSimpleModelToEntity(parametersSelected, ParametersEntity);
+    }
+
+    async createNewActiveVersion<K extends ParametersKey>(
+        configKey: K,
+        teamId: string,
+        configValue: IParameters<K>['configValue'],
+        nextVersion: number,
+    ): Promise<ParametersEntity<K> | undefined> {
+        return this.parametersRepository.manager.transaction(
+            async (manager) => {
+                // Bulk-deactivate every currently-active row for this
+                // (teamId, configKey) — not just the single row the caller
+                // read. If a previous race left an orphan active row behind,
+                // it is swept here in the same atomic operation.
+                await manager
+                    .createQueryBuilder()
+                    .update(ParametersModel)
+                    .set({ active: false })
+                    .where('team_id = :teamId', { teamId })
+                    .andWhere('"configKey" = :configKey', { configKey })
+                    .andWhere('active = :active', { active: true })
+                    .execute();
+
+                const newUuid = uuidv4();
+                await manager
+                    .createQueryBuilder()
+                    .insert()
+                    .into(ParametersModel)
+                    .values({
+                        uuid: newUuid,
+                        configKey,
+                        configValue,
+                        team: { uuid: teamId } as never,
+                        active: true,
+                        version: nextVersion,
+                    })
+                    .execute();
+
+                const created = await manager.findOne(ParametersModel, {
+                    where: { uuid: newUuid },
+                });
+                if (!created) return undefined;
+                return mapSimpleModelToEntity(created, ParametersEntity);
+            },
+        );
     }
 }

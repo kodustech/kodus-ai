@@ -1,0 +1,148 @@
+name: "E2E: cloud matrix"
+
+# Minimal token scope — CodeQL actions/missing-workflow-permissions.
+# These jobs only read the repo (checkout); provider/cloud creds come
+# from secrets, not GITHUB_TOKEN. No job writes back to the repo.
+permissions:
+    contents: read
+
+# Runs the matrix runner against the existing cloud QA target. Cloud is a
+# permanent environment, so this job does NOT provision anything — it
+# authenticates as pre-existing test tenants (free / trial / paid) and
+# exercises real provider integrations against the QA cloud URL.
+#
+# Trigger:
+#   - workflow_call from qa-build-push-and-pr-green.yml after the GitOps PR
+#     merges and the QA cloud rolls out the new image.
+#   - workflow_dispatch for manual runs.
+
+on:
+    workflow_call:
+        inputs:
+            image_tag:
+                description: "Image tag deployed to cloud QA (informational only)"
+                required: false
+                type: string
+                default: ""
+            matrix_file:
+                description: "Matrix YAML path under tests/e2e/"
+                required: false
+                default: matrix/fast.yml
+                type: string
+    workflow_dispatch:
+        inputs:
+            image_tag:
+                description: "Image tag deployed to cloud QA (informational only)"
+                required: false
+                default: ""
+                type: string
+            matrix_file:
+                description: "Matrix YAML path under tests/e2e/"
+                required: false
+                default: matrix/fast.yml
+                type: string
+
+concurrency:
+    group: e2e-cloud-${{ inputs.image_tag || github.sha }}
+    cancel-in-progress: true
+
+jobs:
+    cloud-matrix:
+        name: ${{ matrix.cell.provider }} × ${{ matrix.cell.license }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 25
+        strategy:
+            fail-fast: false
+            matrix:
+                cell:
+                    - { provider: github, license: paid }
+                    - { provider: gitlab, license: paid }
+                    - { provider: bitbucket, license: paid }
+                    - { provider: azure-devops, license: paid }
+                    - { provider: github, license: free }
+                    - { provider: github, license: trial }
+        steps:
+            - name: Checkout monorepo
+              uses: actions/checkout@v6.0.2
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+
+            - name: Install e2e deps
+              working-directory: tests/e2e
+              run: npm install --no-audit --no-fund
+
+            - name: Run cloud matrix shard
+              env:
+                  TARGET_BASE_URL: ${{ vars.CLOUD_QA_API_URL || 'https://api-qa.kodus.io' }}
+                  TARGET_WEB_URL: ${{ vars.CLOUD_QA_WEB_URL || 'https://app-qa.kodus.io' }}
+
+                  GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
+                  GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
+                  GH_TEST_PR_NUMBER: ${{ secrets.GH_TEST_PR_NUMBER }}
+
+                  GL_TEST_TOKEN: ${{ secrets.GL_TEST_TOKEN }}
+                  GL_TEST_REPO: ${{ secrets.GL_TEST_REPO }}
+                  GL_TEST_MR_IID: ${{ secrets.GL_TEST_MR_IID }}
+
+                  BB_TEST_USER: ${{ secrets.BB_TEST_USER }}
+                  BB_TEST_APP_PASSWORD: ${{ secrets.BB_TEST_APP_PASSWORD }}
+                  BB_TEST_REPO: ${{ secrets.BB_TEST_REPO }}
+                  BB_TEST_PR_ID: ${{ secrets.BB_TEST_PR_ID }}
+
+                  AZ_TEST_TOKEN: ${{ secrets.AZ_TEST_TOKEN }}
+                  AZ_TEST_ORG: ${{ secrets.AZ_TEST_ORG }}
+                  AZ_TEST_PROJECT: ${{ secrets.AZ_TEST_PROJECT }}
+                  AZ_TEST_REPO: ${{ secrets.AZ_TEST_REPO }}
+                  AZ_TEST_PR_ID: ${{ secrets.AZ_TEST_PR_ID }}
+
+                  CLOUD_TENANT_PAID_EMAIL: ${{ secrets.CLOUD_TENANT_PAID_EMAIL }}
+                  CLOUD_TENANT_PAID_PASSWORD: ${{ secrets.CLOUD_TENANT_PAID_PASSWORD }}
+                  CLOUD_TENANT_TRIAL_EMAIL: ${{ secrets.CLOUD_TENANT_TRIAL_EMAIL }}
+                  CLOUD_TENANT_TRIAL_PASSWORD: ${{ secrets.CLOUD_TENANT_TRIAL_PASSWORD }}
+                  CLOUD_TENANT_FREE_EMAIL: ${{ secrets.CLOUD_TENANT_FREE_EMAIL }}
+                  CLOUD_TENANT_FREE_PASSWORD: ${{ secrets.CLOUD_TENANT_FREE_PASSWORD }}
+              run: |
+                  CELL_MATRIX=$(mktemp --suffix=.yml)
+                  cat >"$CELL_MATRIX" <<EOF
+                  id: cloud-shard-${{ matrix.cell.provider }}-${{ matrix.cell.license }}
+                  scenarios:
+                    - code-review-basic
+                    - kody-rules-create-and-apply
+                    - license-attribution
+                  cells:
+                    - target: cloud
+                      provider: ${{ matrix.cell.provider }}
+                      license: ${{ matrix.cell.license }}
+                  EOF
+                  export MATRIX_FILE="$CELL_MATRIX"
+                  ./tests/e2e/provisioning/cloud/target.sh
+
+            - name: Upload evidence
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: e2e-cloud-${{ matrix.cell.provider }}-${{ matrix.cell.license }}
+                  path: tests/e2e/evidence/
+                  if-no-files-found: warn
+                  retention-days: 14
+
+    aggregate:
+        name: Aggregate evidence
+        runs-on: ubuntu-latest
+        needs: cloud-matrix
+        if: always()
+        steps:
+            - uses: actions/download-artifact@v4
+              with:
+                  pattern: e2e-cloud-*
+                  merge-multiple: true
+                  path: evidence
+
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: e2e-cloud-matrix
+                  path: evidence/
+                  retention-days: 30

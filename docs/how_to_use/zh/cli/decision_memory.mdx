@@ -1,0 +1,146 @@
+---
+title: "决策记忆"
+description: "将 AI 代理的决策以结构化文件形式捕获并持久化到代码仓库。"
+tag: 'alpha'
+---
+
+决策记忆是 Kodus 记住 AI 代理所作变更 **原因** 的方式 — 不只是 diff，还包括推理、约束和考量过的替代方案。每次代理 turn 时自动捕获，保存为与代码同版本控制的结构化 markdown 文件。
+
+## 为什么需要它
+
+代码审查能捕获 diff 的问题，却无法说明作者为什么选择方案 A 而不是 B，或是为什么第 42 行存在那个看似丑陋的变通方法。对 AI 代理来说，这些上下文在会话之间会丢失 — 每次运行都是从零开始。
+
+决策记忆解决方式：
+
+- **每个 turn-complete 事件自动捕获推理**。
+- **存入代码仓库**，让上下文随代码迁移，而不是随会话消失。
+- **按 PR 和模块作用域划分**，兼顾分支级上下文与长期模块知识。
+
+## 工作原理
+
+启用后，Kodus 会挂钩到 AI 代理的 turn-complete 事件。每次 turn，代理的决策会被捕获到：
+
+```
+.kody/
+├── pr/by-sha/<head-sha>.md    # PR 级别决策（与代码同版本控制）
+├── memory/<module-id>.md      # 模块级别决策（长期）
+└── modules.yml                # 模块配置
+```
+
+- **PR 记忆** 存在于分支上。按当前 head SHA 作用域 — 分支演进时，每个有意义状态都会产生新文件。
+- **模块记忆** 是长期的。随时间累积每个模块的决策。
+- **`modules.yml`** 告诉 Kodus 如何将路径映射到模块（例如 `src/auth/**` → `auth` 模块）。
+
+## 支持的代理
+
+- **Claude Code** — 通过 settings 钩子在 stop/agent-turn-complete 事件触发。
+- **Cursor** — 通过工作区规则。
+- **Codex** — 通过 `~/.codex/config.toml` 中的 `notify` 条目。
+
+## 设置
+
+为所有检测到的代理启用：
+
+```bash
+kodus decisions enable
+```
+
+或指定代理：
+
+```bash
+kodus decisions enable --agents claude,cursor
+kodus decisions enable --agents codex --codex-config ~/.codex/config.toml
+```
+
+若已有旧配置，可强制重装：
+
+```bash
+kodus decisions enable --force
+```
+
+查看接入情况：
+
+```bash
+kodus decisions status
+```
+
+## 工作流
+
+<Steps>
+  <Step title="启用钩子">
+    ```bash
+    kodus decisions enable
+    ```
+
+    这会安装代理专用的集成文件，并将 `.kody/` 加入 git（如不存在则创建 `modules.yml`）。
+  </Step>
+  <Step title="正常工作">
+    当您（或您的代理）工作时，每个 turn-complete 事件都会将决策写入 `.kody/pr/by-sha/<sha>.md`。将这些文件与代码变更一同提交 — 推理过程现在已进入版本控制。
+  </Step>
+  <Step title="审阅已捕获的决策">
+    ```bash
+    kodus decisions show                    # 当前分支的 PR 记忆
+    kodus decisions show feat/auth          # 指定分支的决策
+    kodus decisions show auth               # 'auth' 模块的决策
+    ```
+  </Step>
+  <Step title="提升为长期记忆">
+    PR 合并后，将其 PR 级别决策提升为模块级别记忆，使其在分支之外持久存在：
+
+    ```bash
+    kodus decisions promote                               # 当前分支，所有匹配模块
+    kodus decisions promote --branch feat/auth            # 指定分支
+    kodus decisions promote --branch feat/auth --modules auth,users
+    ```
+  </Step>
+</Steps>
+
+## 捕获内容
+
+每个决策文件是结构化 markdown：
+
+- **Summary** — 代理想做什么。
+- **Context** — 约束、先前决策、引用文件。
+- **Alternatives considered** — 代理拒绝的方案及原因。
+- **Outcome** — 实际变更。
+
+确切结构取决于代理的 turn 事件；CLI 会将其归一化为一致的 frontmatter + 正文格式。
+
+## 禁用
+
+移除所有钩子和集成文件：
+
+```bash
+kodus decisions disable
+```
+
+此操作不会删除 `.kody/` 中的数据 — 历史保持完整。如需完全清空，请手动删除该目录。
+
+## CLI 读取的上下文文件
+
+除 `.kody/` 外，CLI 在运行审查时还会从以下文件获取项目上下文：
+
+| 文件 | 描述 |
+|------|------|
+| `.kodus.md` | Kodus 专用配置和指南 |
+| `claude.md` | Claude 专用指南 |
+| `.cursor/rules/` | Cursor IDE 规则目录 |
+
+这些与决策记忆正交 — 它们描述 *稳定* 上下文，而决策记忆捕获 *逐 turn* 推理。
+
+## 相关
+
+<CardGroup cols={2}>
+  <Card title="AI 代理" icon="robot" href="ai_agents">
+    与 Claude Code、Cursor、Codex、Windsurf 的审查-修复循环。
+  </Card>
+  <Card title="核心概念" icon="book-open" href="concepts">
+    Kody Rules、集中化配置与 diff 模式。
+  </Card>
+  <Card title="命令参考" icon="book" href="commands#kodus-decisions">
+    完整的 `kodus decisions` 标志清单。
+  </Card>
+  <Card title="故障排查" icon="life-ring" href="troubleshooting">
+    决策钩子没有捕获？见对应折叠项。
+  </Card>
+</CardGroup>

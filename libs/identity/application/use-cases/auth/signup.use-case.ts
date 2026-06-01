@@ -1,12 +1,13 @@
 import { createLogger } from '@kodus/flow';
 import { Inject, Injectable } from '@nestjs/common';
 
+import { environment } from '@libs/ee/configs/environment';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { DuplicateRecordException } from '@libs/core/infrastructure/filters/duplicate-record.exception';
+import { EmailService } from '@libs/common/email/services/email.service';
 import { generateRandomOrgName } from '@libs/common/utils/helpers';
-import posthogClient from '@libs/common/utils/posthog';
-import { identify, track } from '@libs/common/utils/segment';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import {
     USER_SERVICE_TOKEN,
@@ -17,7 +18,6 @@ import {
     ORGANIZATION_SERVICE_TOKEN,
     IOrganizationService,
 } from '@libs/organization/domain/organization/contracts/organization.service.contract';
-import { IOrganization } from '@libs/organization/domain/organization/interfaces/organization.interface';
 import {
     ITeamService,
     TEAM_SERVICE_TOKEN,
@@ -33,6 +33,10 @@ import { CreateProfileUseCase } from '../profile/create.use-case';
 import { CreateTeamUseCase } from '@libs/organization/application/use-cases/team/create.use-case';
 import { SignUpDTO } from '@libs/identity/dtos/create-user-organization.dto';
 
+export interface SignUpOptions {
+    preVerified?: boolean;
+}
+
 @Injectable()
 export class SignUpUseCase implements IUseCase {
     private readonly logger = createLogger(SignUpUseCase.name);
@@ -47,9 +51,14 @@ export class SignUpUseCase implements IUseCase {
         private readonly teamService: ITeamService,
         private readonly createProfileUseCase: CreateProfileUseCase,
         private readonly createTeamUseCase: CreateTeamUseCase,
+        private readonly emailService: EmailService,
+        private readonly telemetry: TelemetryService,
     ) {}
 
-    public async execute(payload: SignUpDTO): Promise<Partial<IUser>> {
+    public async execute(
+        payload: SignUpDTO,
+        options?: SignUpOptions,
+    ): Promise<Partial<IUser>> {
         const { email, password, name, organizationId } = payload;
 
         this.logger.error({
@@ -64,11 +73,15 @@ export class SignUpUseCase implements IUseCase {
                 throw new DuplicateRecordException('User already exists');
             }
 
+            const status =
+                options?.preVerified || !environment.API_CLOUD_MODE
+                    ? STATUS.ACTIVE
+                    : STATUS.PENDING;
             const user: Omit<IUser, 'uuid'> = {
                 email,
                 password,
                 role: Role.CONTRIBUTOR,
-                status: STATUS.PENDING,
+                status,
                 organization: {
                     name: generateRandomOrgName(name),
                 },
@@ -118,6 +131,8 @@ export class SignUpUseCase implements IUseCase {
                 team = await this.createTeamUseCase.execute({
                     teamName: `${name} - team`,
                     organizationId: createdUser.organization.uuid,
+                    organizationName: createdUser.organization.name,
+                    actorUserId: createdUser.uuid,
                 });
 
                 if (!team) {
@@ -143,29 +158,24 @@ export class SignUpUseCase implements IUseCase {
                 teamRole: isOwner
                     ? TeamMemberRole.TEAM_LEADER
                     : TeamMemberRole.MEMBER,
-                status: isOwner,
+                status: isOwner || !!options?.preVerified,
             });
 
             if (!member) {
                 throw new Error('Failed to create team member');
             }
 
-            identify(createdUser.uuid, {
-                name,
+            void this.emailService.createContact({ email, name }, this.logger);
+
+            void this.telemetry.userSignedUp({
+                userId: createdUser.uuid,
                 email,
-                organizationId: user.organization.uuid,
-                organizationName: user.organization.name,
+                name,
+                organizationId: createdUser.organization.uuid,
+                organizationName: createdUser.organization.name,
+                teamId: team.uuid,
+                teamName: team.name,
             });
-
-            track(createdUser.uuid, 'signed_up');
-
-            posthogClient.organizationIdentify(
-                user.organization as IOrganization,
-            );
-            posthogClient.userIdentify(createdUser);
-            posthogClient.teamIdentify(team);
-
-            this.sendWebhook(user, payload, user.organization.name);
 
             return createdUser.toObject();
         } catch (error) {
@@ -182,61 +192,6 @@ export class SignUpUseCase implements IUseCase {
             });
 
             throw error;
-        }
-    }
-
-    private async sendWebhook(
-        user: Partial<IUser>,
-        payload: SignUpDTO,
-        organizationName: string,
-    ): Promise<void> {
-        const webhookUrl = process.env.API_SIGNUP_NOTIFICATION_WEBHOOK;
-
-        if (!webhookUrl) {
-            return;
-        }
-
-        try {
-            const webhookData = {
-                email: user?.email,
-                organization: organizationName,
-                name: payload.name,
-            };
-
-            if (!webhookData.email || !webhookData.organization) {
-                throw new Error('Invalid data for webhook');
-            }
-
-            let response;
-            let retries = 3;
-            while (retries > 0) {
-                response = await fetch(webhookUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(webhookData),
-                });
-
-                if (response.ok) {
-                    break;
-                }
-                console.error(
-                    `Failed to send webhook (${retries} attempts remaining):`,
-                    response.statusText,
-                );
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-                retries--;
-            }
-            if (retries === 0) {
-                throw new Error('Error calling signup notification webhook');
-            }
-        } catch (error) {
-            this.logger.error({
-                message: 'Failed to send webhook.',
-                context: SignUpUseCase.name,
-                error: error,
-            });
         }
     }
 

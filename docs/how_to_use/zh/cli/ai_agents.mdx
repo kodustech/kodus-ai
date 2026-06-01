@@ -1,0 +1,117 @@
+---
+title: "AI 代理"
+description: "将 Kodus CLI 与 AI 编码代理集成，实现自主审查-修复循环。"
+---
+
+CLI 内置了一种精简、结构化的输出模式（`--prompt-only`），专为 AI 编码代理解析和执行而设计。搭配团队密钥后，可以实现自主的审查-修复循环 — 代理审查、应用修复、再次审查并提交，关键路径完全无需人工介入。
+
+## 支持的代理
+
+- **Claude Code** — 通过技能安装器原生支持。
+- **Cursor** — 原生技能。
+- **Codex** — 原生技能，通过 `notify` 钩子支持决策记忆。
+- **Windsurf** — 通过 `--prompt-only` 输出。
+
+任何能够执行 shell 命令并解析结构化文本的代理，都能直接使用 `kodus review --prompt-only`。
+
+## 最快捷的配置
+
+一键安装 CLI 与所有代理技能：
+
+```bash
+curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+```
+
+此命令会：
+
+1. 全局安装 `@kodus/cli` 可执行文件。
+2. 将团队密钥配置到 `~/.kodus/config.json`。
+3. 将 Kodus 技能部署到每个检测到的代理（Claude Code、Cursor、Codex、Windsurf）。
+
+无需个人登录，无交互提示，即时可用于代理循环。
+
+## 审查-修复循环
+
+<Steps>
+  <Step title="代理运行审查">
+    ```bash
+    kodus review --prompt-only
+    ```
+
+    CLI 返回结构化问题，包含文件路径、行号、严重级别和建议修复 — 以紧凑文本格式呈现，便于 LLM 消费。
+  </Step>
+  <Step title="代理应用修复">
+    代理读取输出，决定应用哪些修复（或通过 `--fix` 全部接受），并相应编辑文件。
+  </Step>
+  <Step title="代理重新运行审查">
+    ```bash
+    kodus review --prompt-only --fail-on error
+    ```
+
+    带 `--fail-on error` 时，只要还有 error 或更高级别的问题，循环就会非零退出。代理继续循环；审查通过后进程 0 退出，代理继续下一步。
+  </Step>
+  <Step title="代理提交并推送">
+    审查通过后，代理提交并推送。作为额外保障，可以安装 pre-push 钩子（`kodus hook install`），为手动推送提供双保险。
+  </Step>
+</Steps>
+
+## 代理的团队密钥认证
+
+强烈推荐代理使用团队密钥 — 无需注册、无交互登录、便于轮换、按设备追踪。
+
+```bash
+export KODUS_TEAM_KEY=kodus_xxxxx
+kodus review --prompt-only
+```
+
+在 <a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a> 生成密钥，并将页面显示的安装命令分发给团队。
+
+<Warning>请在显示密钥时保存 — 之后将无法再次查看。</Warning>
+
+## 关键的输出标志
+
+| 标志 | 用途 |
+|------|------|
+| `--prompt-only` | 供解析的精简结构化输出。审查循环中使用。 |
+| `--agent` | 强制任意命令输出为确定性、机器可读格式。 |
+| `--format json` | 完整 JSON payload。严格解析场景搭配 `--agent`。 |
+| `--fail-on` | 退出码门槛。只要此项非零，循环就继续。 |
+| `--fields <csv>` | 缩减 JSON/代理 payload（例如 `summary,issues.file,issues.severity`），有助于保持代理上下文窗口精简。 |
+
+## 与决策记忆结合
+
+将代理循环与 [决策记忆](decision_memory) 结合，将每次代理 turn 背后的推理捕获为仓库中的结构化文件。循环处理 *做了什么*；记忆处理 *为什么*。
+
+```bash
+kodus decisions enable
+# 此后每次代理 turn 都会在 .kody/ 下写入决策文件
+```
+
+## 示例：Claude Code 循环 + 业务验证
+
+```bash
+# 在 Claude Code 会话中，代理可以运行：
+kodus review --prompt-only --fail-on error    # 通用审查
+kodus pr business-validation --task-id KC-1441 --dry-run   # 对照任务检查
+kodus review --prompt-only --fix               # 自动应用可修复问题
+git commit -am "fix: KC-1441 address review findings"
+```
+
+使用技能安装器后，Claude Code 的 Kodus 技能知道何时调用这些命令 — 您无需做 prompt 工程。
+
+## 相关
+
+<CardGroup cols={2}>
+  <Card title="决策记忆" icon="brain" href="decision_memory">
+    将代理决策持久化为仓库中的结构化文件。
+  </Card>
+  <Card title="核心概念" icon="book-open" href="concepts">
+    审查模式、diff 模式和代理输出标志。
+  </Card>
+  <Card title="命令参考" icon="book" href="commands">
+    完整的标志清单。
+  </Card>
+  <Card title="故障排查" icon="life-ring" href="troubleshooting">
+    代理循环问题、钩子异常、超时。
+  </Card>
+</CardGroup>

@@ -1,0 +1,46 @@
+---
+title: "AI Model Security"
+---
+
+## Models Used
+
+Kodus uses the following language models for code analysis:
+
+- **GPT-4o and derivatives** (OpenAI)
+- **Gemini 1.5 Pro and derivatives** (Google)
+- **Claude 3.5 Sonnet and derivatives** (Anthropic)
+
+## Data Handling
+
+Your code is processed temporarily and never used for training:
+
+- Data retained only during the review session
+- Immediately discarded after completion
+- Never used to train or improve models
+- Privacy maintained per provider agreements
+
+## Terms of Use for Each Model
+
+- **GPT-4o and derivatives**: [GPT-4o Terms of Use](https://openai.com/enterprise-privacy/)
+- **Gemini 1.5 Pro and derivatives**: [Gemini 1.5 Pro Terms of Use](https://ai.google.dev/gemini-api/terms)
+- **Claude 3.5 Sonnet and derivatives**: [Claude 3.5 Sonnet Terms of Use](https://support.anthropic.com/en/articles/7996885-how-do-you-use-personal-data-in-model-training)
+
+## Security Measures
+
+- **Encryption**: Data encrypted in transit and at rest
+- **Data Isolation**: Models don't store or retain data after processing
+- **Controlled Access**: Strict access controls for authorized personnel only (see [Workspace Roles](/how_to_use/en/workspace_roles))
+- **Regular Audits**: Periodic security audits for compliance
+- **Security Updates**: Regular patches and updates
+
+## Self-hosted telemetry
+
+If you run Kodus self-hosted, each instance sends one anonymous daily
+heartbeat to `telemetry.kodus.io` with aggregated counters and runtime
+metadata — never code, identities, or anything that could trace back to
+your users. You can inspect the exact payload with `yarn telemetry:preview`
+or disable it with `KODUS_TELEMETRY_DISABLED=true`. Full schema, retention
+policy, and source code links are documented in
+[Anonymous Telemetry](/how_to_deploy/en/deploy_kodus/telemetry).
+
+Questions? Contact our support team or join [Discord](https://discord.gg/TFZBRk9fT6).

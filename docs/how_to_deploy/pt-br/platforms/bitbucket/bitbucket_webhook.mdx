@@ -1,0 +1,46 @@
+---
+title: Criando um Webhook
+icon: webhook
+---
+
+O Kodus geralmente cria o webhook automaticamente. Se isso não aconteceu, siga estas etapas para configurá-lo manualmente:
+
+<Note>
+  As URLs de webhook devem alcançar o serviço de Webhooks (porta 3332). Usar o domínio da API só funciona se seu proxy reverso rotear os caminhos `/.../webhook` para o serviço de webhooks.
+</Note>
+
+1. Navegue até seu repositório no Bitbucket
+2. Clique em "Repository settings" na barra lateral esquerda
+3. Selecione "Webhooks"
+4. Clique em "Add webhook"
+5. Configure seu webhook:
+
+   - **Title**: Kodus Code Review
+   - **URL**: Insira a URL onde deseja receber as notificações, a URL que você colocou em `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` no arquivo `.env`
+   - **Status**: Active
+   - **SSL/TLS**: Marque Enable SSL verification
+   - **Triggers**: Selecione estes eventos:
+        - Repository:
+            - Push
+            - Updated
+            - Commit comment created
+            - Build status created
+            - Build status updated
+        - Issue
+            - Created
+            - Updated
+            - Comment created
+        - Pull Request
+            - Created
+            - Updated
+            - Merged
+            - Declined
+            - Comment created
+            - Comment deleted
+            - Comment updated
+            - Comment resolved
+            - Comment reopened
+
+6. Clique em "Save"
+
+Pronto! Você configurou com sucesso um webhook para revisões de código no seu repositório Bitbucket.

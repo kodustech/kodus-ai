@@ -1,0 +1,37 @@
+# Kodus feature catalog — single source of truth for feature lifecycle.
+#
+# - `key`: the PostHog feature flag key the runtime calls (e.g. `agent-review`).
+# - `stage`: lifecycle. draft | concept | alpha | beta | general-availability.
+# - `audience`: where the feature can run. Subset of [cloud, self-hosted].
+# - `description`: customer-facing copy. Used as seed for the LLM-generated
+#   changelog. Tone: direct, no buzzwords, speaks to the user's problem.
+# - `documentation_url`: optional Mintlify path (e.g. how_to_use/en/...).
+#
+# Allowlists for private beta (stage=alpha) do NOT live here — they live
+# on the linked PostHog feature flag's release conditions. This keeps the
+# repo free of customer-identifying ids and lets the rollout be edited
+# without a PR + deploy + snapshot regeneration.
+#
+# Promotion is a PR with CODEOWNERS approval. Any change here triggers
+# `yarn feature-gate:snapshot:check` in CI to verify the snapshot is up to date.
+
+schema_version: 1
+
+features:
+    agent-review:
+        name: "Agent-first code review"
+        stage: general-availability
+        audience: [cloud, self-hosted]
+        description: >-
+            A new code review engine built on three specialized agents —
+            context, suggestion, and validation — replacing the single-shot
+            model. Higher precision, fewer false positives.
+
+    github-enterprise-server-pat:
+        name: "GitHub Enterprise Server (PAT auth)"
+        stage: beta
+        audience: [cloud, self-hosted]
+        description: >-
+            Connect a GitHub Enterprise Server installation using a personal
+            access token, for environments where the GitHub App flow isn't
+            available.

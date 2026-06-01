@@ -6,10 +6,19 @@ import {
 import {
     ISandboxProvider,
     SANDBOX_PROVIDER_TOKEN,
-} from '@libs/code-review/domain/contracts/sandbox.provider';
-import { DocumentationLLMPlannerService } from '@libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service';
-import { DocumentationPackageDiscoveryService } from '@libs/code-review/infrastructure/adapters/services/documentation-package-discovery.service';
-import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
+} from '@libs/sandbox/domain/contracts/sandbox.provider';
+import {
+    DOCUMENTATION_LLM_PLANNER_SERVICE_TOKEN,
+    DocumentationLLMPlannerService,
+} from '@libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service';
+import {
+    DOCUMENTATION_PACKAGE_DISCOVERY_SERVICE_TOKEN,
+    DocumentationPackageDiscoveryService,
+} from '@libs/code-review/infrastructure/adapters/services/documentation-package-discovery.service';
+import {
+    DOCUMENTATION_SEARCH_EXA_SERVICE_TOKEN,
+    DocumentationSearchExaService,
+} from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { GatherDocumentationContextStage } from '@libs/code-review/pipeline/stages/gather-documentation-context.stage';
 import posthog from '@libs/common/utils/posthog';
@@ -18,6 +27,7 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
+import { CloneParamsResolverService } from '@libs/code-review/pipeline/services/clone-params-resolver.service';
 
 jest.mock('@libs/common/utils/posthog', () => ({
     __esModule: true,
@@ -42,6 +52,13 @@ describe('GatherDocumentationContextStage', () => {
         pullRequest: { number: 7 },
         repository: { id: 'r1', name: 'repo' },
         organizationAndTeamData: { organizationId: 'o1', teamId: 't1' },
+        // `sandboxHandle.remoteCommands` present so the stage proceeds to
+        // discoverPackages instead of short-circuiting on the no-sandbox
+        // guard added after the 2026-05-13 rate-limit incident. Tests
+        // exercising the discovery flow assume a sandbox is available.
+        sandboxHandle: {
+            remoteCommands: { grep: jest.fn() },
+        },
         changedFiles: [
             {
                 filename: 'src/a.ts',
@@ -65,7 +82,7 @@ describe('GatherDocumentationContextStage', () => {
         >;
     };
 
-    const independentFixture: FixtureInput = {
+    const _independentFixture: FixtureInput = {
         pullRequestNumber: 123,
         repositoryId: 'tmp-repo-id',
         repositoryName: 'kodus-ai',
@@ -95,7 +112,7 @@ describe('GatherDocumentationContextStage', () => {
         ],
     };
 
-    function buildIndependentContext(
+    function _buildIndependentContext(
         fixtureInput: FixtureInput,
     ): CodeReviewPipelineContext {
         return {
@@ -124,7 +141,7 @@ describe('GatherDocumentationContextStage', () => {
         } as unknown as CodeReviewPipelineContext;
     }
 
-    function buildPromptRunnerServiceMock(): PromptRunnerService {
+    function _buildPromptRunnerServiceMock(): PromptRunnerService {
         const service = {
             builder: jest.fn(() => {
                 const state: { payload?: any } = {};
@@ -178,7 +195,7 @@ describe('GatherDocumentationContextStage', () => {
         return service as unknown as PromptRunnerService;
     }
 
-    function buildRealPromptRunnerService(): PromptRunnerService {
+    function _buildRealPromptRunnerService(): PromptRunnerService {
         const logger = new Logger('DocumentationPromptIntegrationTest');
         const byokProviderService = new BYOKProviderService();
         const llmProviderService = new LLMProviderService(
@@ -223,7 +240,7 @@ describe('GatherDocumentationContextStage', () => {
             providers: [
                 GatherDocumentationContextStage,
                 {
-                    provide: DocumentationPackageDiscoveryService,
+                    provide: DOCUMENTATION_PACKAGE_DISCOVERY_SERVICE_TOKEN,
                     useValue: discoveryService,
                 },
                 {
@@ -231,16 +248,20 @@ describe('GatherDocumentationContextStage', () => {
                     useValue: configService,
                 },
                 {
-                    provide: DocumentationLLMPlannerService,
+                    provide: DOCUMENTATION_LLM_PLANNER_SERVICE_TOKEN,
                     useValue: plannerService,
                 },
                 {
-                    provide: DocumentationSearchExaService,
+                    provide: DOCUMENTATION_SEARCH_EXA_SERVICE_TOKEN,
                     useValue: searchService,
                 },
                 {
                     provide: SANDBOX_PROVIDER_TOKEN,
                     useValue: sandboxProvider,
+                },
+                {
+                    provide: CloneParamsResolverService,
+                    useValue: { resolve: jest.fn() },
                 },
                 {
                     provide: CodeManagementService,
@@ -266,10 +287,18 @@ describe('GatherDocumentationContextStage', () => {
         expect(discoveryService.discoverPackages).not.toHaveBeenCalled();
     });
 
-    it('should skip when documentation feature flag is disabled', async () => {
-        (posthog.isFeatureEnabled as jest.Mock).mockResolvedValueOnce(false);
+    it('should skip discovery when sandbox is unavailable (avoids manifest-fan-out fallback)', async () => {
+        // Reproduce the 2026-05-13 condition: legacy engine runs without
+        // a sandbox handle, so falling into the discovery service would
+        // trigger `buildManifestCandidatesForFile` and burn ~100 GitHub
+        // requests per PR on manifests that don't exist. The stage must
+        // short-circuit to an empty result instead.
+        const context = {
+            ...baseContext,
+            sandboxHandle: undefined,
+        } as unknown as CodeReviewPipelineContext;
 
-        const result = await stage.execute(baseContext);
+        const result = await stage.execute(context);
 
         expect(result.discoveredPackages).toEqual([]);
         expect(result.documentationQueryPlanByFile).toEqual({});

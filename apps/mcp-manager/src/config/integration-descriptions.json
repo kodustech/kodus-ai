@@ -1,0 +1,45 @@
+{
+    "composio": {
+        "integrations": {
+            "notion": "Update and validate documentation against code changes, sync review statuses, and convert comments into actionable tasks to keep docs and code perfectly aligned.",
+            "googledocs": "Auto‑generate or update a Google Doc with PR summaries, push review comments as inline document comments, and keep tables and charts in sync with code changes.",
+            "jira": "Create and manage issues: add comments and watchers, bulk‑create and assign tickets, link issues and sprints, run JQL searches, and transition statuses—keeping tickets and code perfectly in sync.",
+            "sentry": "Access project and team info, retrieve and update issues and events, and create releases—bringing error tracking and release management into your code reviews.",
+            "linear": "Create and manage Linear issues: create, update, and label tasks, add comments, fetch cycles, projects, and states, and run queries—keeping code reviews and your roadmap perfectly in sync.",
+            "gmail": "Send, receive, and manage emails with advanced filtering, attachment handling, and automated email workflows.",
+            "github": "Manage repositories, issues, pull requests, and releases with comprehensive GitHub integration for seamless development workflow.",
+            "slack": "Read-only Slack: search messages across the workspace, list channels/users, and fetch conversation history and replies.",
+            "trello": "Create cards, manage boards, and organize projects with Trello's visual project management capabilities.",
+            "discordbot": "Send messages, manage servers, and integrate team communication through Discord's platform.",
+            "zoom": "Schedule meetings, manage participants, and integrate video conferencing into your workflow.",
+            "calendar": "Create events, manage schedules, and synchronize calendar activities with your development process.",
+            "drive": "Upload, download, and manage files with Google Drive integration for seamless document sharing.",
+            "sheets": "Create, update, and manage Google Sheets with data synchronization and automated spreadsheet workflows.",
+            "asana": "Create tasks, manage projects, and track progress with Asana's comprehensive project management features.",
+            "hubspot": "Manage contacts, deals, and customer relationships with HubSpot's CRM integration.",
+            "salesforce": "Access and manage customer data, leads, and opportunities through Salesforce CRM integration.",
+            "shopify": "Manage products, orders, and customer data with Shopify e-commerce platform integration.",
+            "stripe": "Process payments, manage subscriptions, and handle financial transactions through Stripe integration.",
+            "dropbox": "Upload, download, and manage files with Dropbox cloud storage integration.",
+            "onedrive": "Access and manage files through Microsoft OneDrive cloud storage integration.",
+            "teams": "Send messages, manage channels, and integrate team communication through Microsoft Teams.",
+            "outlook": "Send, receive, and manage emails with Microsoft Outlook integration for comprehensive email management.",
+            "datadog": "Manage Datadog from Kodus—monitors, metrics/logs/traces, incidents & SLOs, synthetics, and dashboards.",
+            "clickup": "Create tasks, manage projects, and track progress with ClickUp's comprehensive project management features.",
+            "figma": "Pull Figma resources into Kodus—files, components, styles, variables, comments—and export tokens to Tailwind.",
+            "posthog": "Create and control PostHog feature flags from Kodus: per-user overrides, flag details, frontend status, and project/early-access lists."
+        }
+    },
+    "kodusmcp": {
+        "integrations": {
+            "context7-default": "Context7 MCP pulls up-to-date, version-specific documentation and code examples straight from the source — and places them directly into your prompt.",
+            "kodus-docs-default": "Kodus Docs MCP exposes the official Kodus documentation as MCP tools, allowing Kodus to respond with official snippets, setup guides, and examples always up to date.",
+            "kodus-github-issues-default": "Read github issues using your existing kodus integration in your selected repositories.",
+            "sentry-default": "Sentry MCP allows agents to access project and team info, retrieve and update issues and events, and create releases—bringing error tracking and release management into your code reviews.",
+            "exa-default": "Exa Search MCP allows agents to search for information in multiple codebases and retrieve relevant results.",
+            "kodus-osv-default": "Kodus OSV MCP allows agents to query for known package vulnerabilities in your codebase.",
+            "linear-default": "Create and manage Linear issues: create, update, and label tasks, add comments, fetch cycles, projects, and states, and run queries—keeping code reviews and your roadmap perfectly in sync.",
+            "atlassian-rovo-default": "Atlassian Rovo MCP enables agents to search across your Atlassian ecosystem (Jira, Confluence) and retrieve relevant knowledge and context."
+        }
+    }
+}

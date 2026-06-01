@@ -1,0 +1,115 @@
+---
+title: "Geral"
+---
+
+## Configurações Principais
+
+<Note>
+  Kodus possui três níveis de configuração: Global, Repositório e Diretório. Saiba como funcionam em <a href="/how_to_use/pt-br/code_review/configs/inheritance_overrides">Herança e Sobrescrita de Configuração</a>.
+</Note>
+
+### Prioridade de Configuração
+O `kodus-config.yml` na raiz do seu repositório sobrescreve as configurações da interface web. Nenhuma configuração adicional é necessária — basta fazer commit do arquivo.
+
+<Accordion title="Exemplo de kodus-config.yml">
+```yaml
+version: '1.2'
+summary:
+  generatePRSummary: true
+  customInstructions: ''
+  behaviourForExistingDescription: concatenate
+ignorePaths:
+  - yarn.lock
+  - package-lock.json
+  - package.json
+  - .env
+baseBranches: []
+reviewOptions:
+  security: true
+  code_style: true
+  kody_rules: true
+  refactoring: true
+  error_handling: true
+  maintainability: true
+  potential_issues: true
+  documentation_and_comments: true
+  performance_and_optimization: true
+  business_logic: true
+suggestionControl:
+  groupingMode: full
+  limitationType: pr
+  maxSuggestions: 9
+  severityLevelFilter: medium
+ignoredTitleKeywords: []
+automatedReviewActive: true
+pullRequestApprovalActive: false
+isRequestChangesActive: false
+llmGeneratedMemoriesRequireApproval: false
+```
+</Accordion>
+
+## Comportamento de Revisão
+
+### Revisão Automatizada
+
+Kody pode revisar PRs automaticamente quando abertos, ou apenas quando você comentar `@kody start-review`.
+
+<Info>
+  Isso afeta apenas a **revisão inicial**. Para commits subsequentes, veja Cadência de Revisão abaixo.
+</Info>
+
+#### Cadência de Revisão
+
+Como Kody lida com revisões em commits subsequentes:
+
+<Tabs>
+  <Tab title="Automático">
+    Revisa cada novo push. Feedback contínuo sobre todas as alterações.
+  </Tab>
+  
+  <Tab title="Auto-pause">
+    Pausa as revisões durante pushes consecutivos rápidos (ex.: 3 pushes em 15 minutos). Evita spam durante codificação ativa.
+    
+    Padrões: 3 pushes / 15 minutos
+  </Tab>
+  
+  <Tab title="Manual">
+    Execute revisões de acompanhamento apenas quando você comentar `@kody start-review`.
+  </Tab>
+</Tabs>
+
+### Fluxo do PR
+
+#### Auto-aprovar PRs
+Kody aprova PRs quando nenhum problema é encontrado.
+
+**Plataformas:** GitHub, GitLab, Bitbucket
+
+#### Solicitar Alterações
+Kody solicita alterações ao encontrar problemas críticos.
+
+**Plataformas:** GitHub, Bitbucket
+
+### Condições de Pulo
+
+**Arquivos Ignorados:** Use padrões glob (ex.: `**/*.js`), um por linha. Padrão: `yarn.lock`, `package-lock.json`, `package.json`, `.env`
+
+**Títulos Ignorados:** Pule PRs com palavras-chave específicas (sem distinção de maiúsculas/minúsculas, máx. 100 caracteres)
+
+**Branches Base:** Branches adicionais para revisar além do padrão (dev, release, master)
+
+## Tipos de Análise
+
+### Qualidade de Código
+- Security: Injeção SQL, XSS, ameaças de segurança
+- Performance: Cache, otimização de consultas, melhorias de velocidade
+- Error Handling: Gerenciamento de exceções, mensagens de erro
+- Potential Issues: Null pointers, vazamentos de recursos, loops infinitos
+
+### Estrutura de Código
+- Refactoring: Organização do código, tamanho de funções, duplicações
+- Maintainability: Padrões de código preparados para o futuro
+- Code Style: Formatação consistente e padrões
+- Documentation: Comentários claros e documentação de API
+- Kody Rules: Aplicação de regras personalizadas
+- Business Logic: Valida a implementação do PR em relação aos requisitos da tarefa e critérios de aceite

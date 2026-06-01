@@ -43,9 +43,11 @@ export const useIssue = (
 };
 
 export const useSuspenseIssuesCount = () =>
-    useSuspenseFetch<number>(pathToApiUrl("/issues/count"), undefined, {
-        staleTime: 30_000,
-    });
+    useSuspenseFetch<number>(
+        pathToApiUrl("/issues/count"),
+        { params: { status: "open" } },
+        { staleTime: 30_000 },
+    );
 
 export const useIssueCreationConfig = (teamId: string | undefined) => {
     return useOptionalParameterQuery<

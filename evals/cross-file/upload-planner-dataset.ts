@@ -1,26 +1,25 @@
 #!/usr/bin/env npx ts-node
 
 /**
- * Upload local planner eval dataset (JSONL) to LangSmith.
+ * Upload local planner eval dataset (JSONL) to Langfuse.
  *
  * Usage:
  *   npx ts-node evals/cross-file/upload-planner-dataset.ts --env=.env.prod --dataset-name="planner-eval-v2"
- *   npx ts-node evals/cross-file/upload-planner-dataset.ts --env=.env.prod --dataset-id=<uuid> --replace
+ *   npx ts-node evals/cross-file/upload-planner-dataset.ts --env=.env.prod --dataset-name="planner-eval-v2" --replace
  *   npx ts-node evals/cross-file/upload-planner-dataset.ts --dry-run
  *
  * Flags:
  *   --env=<path>            Path to .env file (default: auto from DOTENV_CONFIG_PATH)
  *   --dry-run               Validate JSONL without uploading
- *   --dataset-name=<name>   Create a new dataset with this name
- *   --dataset-id=<uuid>     Use existing dataset by UUID
- *   --replace               Delete all existing examples before uploading (requires --dataset-id)
+ *   --dataset-name=<name>   Create (or reuse) a dataset with this name
+ *   --replace               Delete all existing items in the dataset before uploading
  *   --file=<path>           Path to JSONL file (default: evals/cross-file/datasets/planner-eval.jsonl)
  */
 
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Client } from 'langsmith';
+import { LangfuseClient } from '@langfuse/client';
 import { Logger } from '@nestjs/common';
 
 // ─── CLI Args ──────────────────────────────────────────────────────────────────
@@ -42,23 +41,24 @@ if (envPath) {
 const dryRun = args.includes('--dry-run');
 const replace = args.includes('--replace');
 const datasetName = getArg('dataset-name');
-const datasetId = getArg('dataset-id');
-const filePath = getArg('file') ?? 'evals/cross-file/datasets/planner-eval.jsonl';
+const filePath =
+    getArg('file') ?? 'evals/cross-file/datasets/planner-eval.jsonl';
 
 // ─── Validation ────────────────────────────────────────────────────────────────
 
 const logger = new Logger('UploadPlannerDataset');
 
-if (!dryRun && !process.env.LANGCHAIN_API_KEY && !process.env.LANGSMITH_API_KEY) {
-    throw new Error('Missing LANGCHAIN_API_KEY or LANGSMITH_API_KEY. Pass --env=<path> or set the env var.');
+if (
+    !dryRun &&
+    (!process.env.LANGFUSE_PUBLIC_KEY || !process.env.LANGFUSE_SECRET_KEY)
+) {
+    throw new Error(
+        'Missing LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY. Pass --env=<path> or set the env vars.',
+    );
 }
 
-if (!dryRun && !datasetName && !datasetId) {
-    throw new Error('Provide --dataset-name=<name> (to create) or --dataset-id=<uuid> (to use existing).');
-}
-
-if (replace && !datasetId) {
-    throw new Error('--replace requires --dataset-id=<uuid>.');
+if (!dryRun && !datasetName) {
+    throw new Error('Provide --dataset-name=<name>.');
 }
 
 // ─── Parse JSONL ───────────────────────────────────────────────────────────────
@@ -90,20 +90,30 @@ function parseJsonlFile(filepath: string): DatasetExample[] {
         try {
             const parsed = JSON.parse(lines[i]) as DatasetExample;
 
-            // Validate required fields
-            if (!parsed.inputs?.changedFiles || !Array.isArray(parsed.inputs.changedFiles)) {
+            if (
+                !parsed.inputs?.changedFiles ||
+                !Array.isArray(parsed.inputs.changedFiles)
+            ) {
                 throw new Error('Missing or invalid inputs.changedFiles');
             }
-            if (!parsed.inputs?.changedFilenames || !Array.isArray(parsed.inputs.changedFilenames)) {
+            if (
+                !parsed.inputs?.changedFilenames ||
+                !Array.isArray(parsed.inputs.changedFilenames)
+            ) {
                 throw new Error('Missing or invalid inputs.changedFilenames');
             }
-            if (!parsed.outputs?.expectedSymbols || !Array.isArray(parsed.outputs.expectedSymbols)) {
+            if (
+                !parsed.outputs?.expectedSymbols ||
+                !Array.isArray(parsed.outputs.expectedSymbols)
+            ) {
                 throw new Error('Missing or invalid outputs.expectedSymbols');
             }
 
             examples.push(parsed);
         } catch (err) {
-            throw new Error(`Failed to parse line ${i + 1}: ${(err as Error).message}`);
+            throw new Error(
+                `Failed to parse line ${i + 1}: ${(err as Error).message}`,
+            );
         }
     }
 
@@ -117,13 +127,16 @@ async function main() {
     const examples = parseJsonlFile(filePath);
     logger.log(`Parsed ${examples.length} examples.`);
 
-    // Summary
     for (let i = 0; i < examples.length; i++) {
         const ex = examples[i];
         const files = ex.inputs.changedFilenames.join(', ');
-        const symbols = ex.outputs.expectedSymbols.join(', ') || '(none)';
-        const upstream = (ex.outputs.expectedUpstreamSymbols ?? []).join(', ') || '(none)';
-        logger.log(`  [${i + 1}] files=[${files}] symbols=[${symbols}] upstream=[${upstream}]`);
+        const symbols =
+            ex.outputs.expectedSymbols.join(', ') || '(none)';
+        const upstream =
+            (ex.outputs.expectedUpstreamSymbols ?? []).join(', ') || '(none)';
+        logger.log(
+            `  [${i + 1}] files=[${files}] symbols=[${symbols}] upstream=[${upstream}]`,
+        );
     }
 
     if (dryRun) {
@@ -131,48 +144,33 @@ async function main() {
         return;
     }
 
-    const client = new Client();
+    const client = new LangfuseClient();
 
-    // Resolve or create dataset
-    let targetDatasetId: string;
-
-    if (datasetId) {
-        targetDatasetId = datasetId;
-        logger.log(`Using existing dataset: ${datasetId}`);
-    } else {
-        logger.log(`Creating new dataset: "${datasetName}"...`);
-        const dataset = await client.createDataset(datasetName!, {
-            description: `Planner eval dataset uploaded from ${filePath}`,
-            dataType: 'kv',
-        });
-        targetDatasetId = dataset.id;
-        logger.log(`Created dataset: ${dataset.id}`);
-    }
-
-    // Replace existing examples if requested
-    if (replace) {
-        logger.log('Deleting existing examples (--replace)...');
-        const existingIds: string[] = [];
-        for await (const example of client.listExamples({ datasetId: targetDatasetId })) {
-            existingIds.push(example.id);
-        }
-        if (existingIds.length > 0) {
-            await client.deleteExamples(existingIds);
-            logger.log(`Deleted ${existingIds.length} existing examples.`);
-        } else {
-            logger.log('No existing examples to delete.');
-        }
-    }
-
-    // Upload examples
-    logger.log(`Uploading ${examples.length} examples...`);
-    await client.createExamples({
-        inputs: examples.map((ex) => ex.inputs),
-        outputs: examples.map((ex) => ex.outputs),
-        datasetId: targetDatasetId,
+    // Upsert dataset (Langfuse createDataset is idempotent by name)
+    logger.log(`Ensuring dataset "${datasetName}"...`);
+    await client.api.datasets.create({
+        name: datasetName!,
+        description: `Planner eval dataset uploaded from ${filePath}`,
     });
 
-    logger.log(`Successfully uploaded ${examples.length} examples to dataset ${targetDatasetId}.`);
+    if (replace) {
+        logger.log(
+            'NOTE: --replace was requested but Langfuse does not expose bulk delete via the public SDK. Re-upload will create new items alongside existing ones — delete stale items from the UI if needed.',
+        );
+    }
+
+    logger.log(`Uploading ${examples.length} items...`);
+    for (const ex of examples) {
+        await client.api.datasetItems.create({
+            datasetName: datasetName!,
+            input: ex.inputs,
+            expectedOutput: ex.outputs,
+        });
+    }
+
+    logger.log(
+        `Uploaded ${examples.length} items to dataset "${datasetName}".`,
+    );
 }
 
 main().catch((error) => {

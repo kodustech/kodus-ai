@@ -44,6 +44,7 @@ export enum IntegrationCategory {
 export enum AuthMode {
     OAUTH = "oauth",
     TOKEN = "token",
+    BASIC = "basic",
 }
 
 export type OrganizationAndTeamData = {

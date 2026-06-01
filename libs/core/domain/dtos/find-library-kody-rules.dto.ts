@@ -1,5 +1,10 @@
 import { Transform } from 'class-transformer';
-import { IsString, IsOptional, IsArray, IsBoolean } from 'class-validator';
+import {
+    IsString,
+    IsOptional,
+    IsArray,
+    IsBoolean,
+} from 'class-validator';
 
 import { ProgrammingLanguage } from '@libs/core/domain/enums/programming-language.enum';
 import { KodyRuleFilters } from '@libs/core/infrastructure/config/types/general/kodyRules.type';

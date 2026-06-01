@@ -1,0 +1,156 @@
+---
+title: "Telemetria Anônima"
+description: "O que o heartbeat self-hosted envia, por que coletamos e como desligar."
+icon: "satellite-dish"
+---
+
+Cada instância self-hosted do Kodus envia **um heartbeat anônimo por dia**
+para `https://telemetry.kodus.io`. O payload contém apenas contadores
+agregados e metadados de runtime — nunca código, identidades, ou qualquer
+coisa que possa rastrear até você ou seus usuários.
+
+Esta página documenta exatamente o que é enviado, por quê, para onde vai e
+como desligar.
+
+## O que enviamos
+
+Um único `POST /v1/heartbeat` por dia UTC, ~700 bytes. Exemplo de payload
+(UUID redigido pra clareza):
+
+```json
+{
+  "schema_version": 1,
+  "instance_id": "0188f5c5-5b8f-4f45-92d4-b20c25df0b5a",
+  "sent_at": "2026-05-04T03:17:00.000Z",
+  "kodus": {
+    "version": "0.4.15",
+    "deployment": "docker",
+    "uptime_hours": 124
+  },
+  "runtime": {
+    "node_version": "v20.11.1",
+    "os": "linux",
+    "arch": "x64",
+    "cpu_count": 8,
+    "db_type": "postgres",
+    "db_version": "PostgreSQL 15.4"
+  },
+  "usage_7d": {
+    "active_users": 12,
+    "organizations": 1,
+    "teams": 2,
+    "repos_connected": 9,
+    "prs_reviewed": 184,
+    "suggestions_generated": 0,
+    "suggestions_applied": 0
+  },
+  "config": {
+    "kody_rules_enabled": true,
+    "agent_review_repos_pct": 0,
+    "integrations": ["github", "slack"]
+  }
+}
+```
+
+O schema completo está no [repositório kodus-beacon](https://github.com/kodustech/kodus-beacon/blob/main/docs/api.md) — é validado no servidor por um validador estrito que rejeita qualquer
+campo desconhecido com `400`.
+
+## O que nunca enviamos
+
+Por design, o schema não pode carregar:
+
+- E-mails de usuários, nomes, tokens OAuth, API keys
+- Nomes de repositórios, branches, títulos de PR, mensagens de commit,
+  conteúdo de código
+- Strings que identifiquem o cliente (org slugs, nomes de workspace,
+  domínios customizados)
+- Endereços IP (o receiver hashia o IP de origem com um salt rotacionado
+  diariamente apenas para detecção de abuso e nunca persiste o IP cru)
+- Qualquer campo de texto livre
+
+O receiver impõe um limite de 5 KB no body e rejeita qualquer campo fora do
+schema documentado, então um cliente mal configurado não consegue vazar
+dados acidentalmente.
+
+## Por que coletamos isso
+
+Heartbeats anônimos nos permitem responder perguntas que de outra forma não
+conseguiríamos responder pra usuários self-hosted:
+
+- Quais versões do Kodus ainda estão em uso, e com que velocidade novos
+  releases são adotados
+- Como os operadores fazem deploy (Docker / Kubernetes / bare metal), pra
+  priorizarmos as plataformas que as pessoas realmente usam
+- Se features como Kody Rules estão chegando aos usuários self-hosted
+- Sinais de volume (PRs revisados na frota, repos conectados) pra
+  dimensionar decisões de capacidade
+
+Isso **não** nos permite identificar nenhuma instância, cliente ou usuário
+específico. Não entramos em contato com você baseado em telemetria. Não
+compartilhamos nem vendemos os dados.
+
+## Inspecione o que sua instância enviaria
+
+Antes de qualquer heartbeat sair da sua instância, você pode imprimir o
+payload exato que o cron diário construiria:
+
+```bash
+yarn telemetry:preview
+```
+
+Esse comando inicializa um contexto Kodus mínimo, roda o mesmo coletor que
+o cron usa, e imprime o JSON em stdout — sem enviar. Pipe pra `jq` pra
+explorar:
+
+```bash
+yarn telemetry:preview | jq '.usage_7d'
+```
+
+## Desligar a telemetria
+
+Defina `KODUS_TELEMETRY_DISABLED=true` no seu ambiente. O cron pula
+silenciosamente — nenhum heartbeat é enviado, jamais, até você reverter.
+
+```bash
+# .env
+KODUS_TELEMETRY_DISABLED=true
+```
+
+Valores aceitos como verdadeiros (case-insensitive): `1`, `true`, `yes`,
+`on`. Qualquer outro valor (incluindo vazio) mantém a telemetria ligada.
+
+## Onde os dados ficam
+
+- **Receiver:** um pequeno serviço Node.js (Fastify) deployado em
+  `telemetry.kodus.io`. Código-fonte público:
+  [kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon).
+- **Storage:** Neon Postgres, região US, criptografado em repouso, somente
+  TLS. Duas tabelas — `telemetry_instances` (uma row por instância, last
+  seen + version) e `telemetry_heartbeats` (uma row por instância por dia
+  UTC, payload em JSONB).
+- **Retenção:** rows individuais de heartbeat ficam por **12 meses**.
+  Depois disso, agregamos os contadores em estatísticas históricas (ex:
+  "X instâncias ativas em Janeiro/2026") e droppamos as rows por dia. A
+  row da instância permanece — não carrega séries temporais, apenas a
+  versão mais recente + timestamp de last seen.
+- **Acesso:** apenas o time de engenharia de produto, via credenciais
+  individuais da Neon com auditoria. Os dados nunca são compartilhados
+  com terceiros e nunca são usados pra treinar nenhum modelo de IA.
+
+## Código-fonte que você pode auditar
+
+As duas pontas são abertas e pequenas o suficiente pra ler de cabo a rabo:
+
+- **Cliente** (o que roda na sua instância): cron, coletor e transporte
+  HTTP em [`libs/telemetry/`](https://github.com/kodustech/kodus-ai/tree/main/libs/telemetry)
+  e [`apps/worker/src/cron/self-hosted-beacon.cron.ts`](https://github.com/kodustech/kodus-ai/blob/main/apps/worker/src/cron/self-hosted-beacon.cron.ts).
+- **Servidor** (o que roda em `telemetry.kodus.io`): o receiver inteiro
+  são ~80 linhas de rota Fastify + um upsert em Postgres. Veja
+  [kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon).
+
+## Dúvidas
+
+Se algo aqui não estiver claro ou você quiser que um campo seja
+adicionado, removido ou documentado em mais detalhe, abra uma issue em
+[kodustech/kodus-beacon](https://github.com/kodustech/kodus-beacon/issues)
+ou nos chame no [Discord](https://discord.gg/TFZBRk9fT6).

@@ -1,0 +1,88 @@
+---
+title: "Kodus CLI"
+description: "在终端中进行 AI 代码审查、业务验证和代理工作流。"
+---
+
+Kodus CLI 直接在终端中审查您的代码变更 — 在代码进入 Pull Request 之前捕获 Bug、安全问题和风格违规。它使用与 Kodus PR 审查相同的引擎，但作用于您的工作目录、暂存区、分支或特定提交。
+
+## 适用人群
+
+- **独立开发者**：在推送前进行预检查。
+- **团队**：在所有克隆、IDE 和 CI 作业之间共享一套审查规则，无需每位开发者单独登录。
+- **AI 编码代理**（Claude Code、Cursor、Codex、Windsurf）：通过结构化输出实现审查-修复循环。
+- **CI/CD 流水线**：根据严重级别阈值使构建失败。
+
+## 输出示例
+
+运行 `kodus review` 对工作目录变更执行审查，会生成结构化报告：受影响的文件、按严重级别分组的问题、可预览并应用的建议修复，以及可用于脚本的退出码。
+
+<img src="/images/kodus_cli_review.jpg" alt="在 CLI 中进行 AI 代码审查"/>
+
+在 `--prompt-only` 模式下，同一审查会变成紧凑、结构化的文本，便于 AI 代理解析并执行。
+
+## 功能概览
+
+<CardGroup cols={2}>
+  <Card title="交互式审查" icon="terminal">
+    浏览文件、预览修复建议，逐一应用。
+  </Card>
+  <Card title="自动修复" icon="wand-magic-sparkles">
+    使用 `--fix` 一键应用所有可修复的问题。
+  </Card>
+  <Card title="AI 代理集成" icon="robot">
+    将 `--prompt-only` 输出提供给 Claude Code、Cursor 或 Windsurf，实现自主审查-修复循环。
+  </Card>
+  <Card title="Pre-push 钩子" icon="shield-check">
+    通过 `kodus hook install` 阻止超过严重级别阈值问题的推送。
+  </Card>
+  <Card title="PR 建议" icon="code-pull-request">
+    直接在终端获取 Kody 对开放 Pull Request 的建议。
+  </Card>
+  <Card title="业务验证" icon="clipboard-check">
+    在合并前验证本地差异是否满足任务验收标准。
+  </Card>
+  <Card title="Kody Rules" icon="scale-balanced">
+    创建、更新和查看 AI 在每次审查中应用的团队规则。
+  </Card>
+  <Card title="决策记忆" icon="brain">
+    将 AI 代理的决策持久化为与代码同版本控制的结构化文件。
+  </Card>
+</CardGroup>
+
+## 限制
+
+| | 试用（无需账户） | 已认证 |
+|---|---|---|
+| 每日审查次数 | 5 | 根据您的计划 |
+| 每次审查文件数 | 10 | 100 |
+| 每文件行数 | 500 | — |
+| 每文件最大 diff 大小 | 500 KB | 500 KB |
+| 每文件最大内容大小 | 2 MB | 2 MB |
+
+试用限制每天重置。运行 `kodus auth status` 查看当前使用情况。
+
+## CLI 与 Kodus Web
+
+CLI 与 Kodus Web 仪表板共享同一个审查引擎、规则和仓库设置。当您希望在 **PR 尚未创建之前** 审查代码（本地分支、暂存差异或代理循环中），请使用 CLI；Web 仪表板则用于 PR 审查、指标和团队级配置。
+
+通过 `kodus config repo` 和 `kodus rules` 所做的更改会同时应用到两端。
+
+## 下一步
+
+<CardGroup cols={2}>
+  <Card title="快速开始" icon="rocket" href="getting_started">
+    安装、认证并运行您的第一次审查。
+  </Card>
+  <Card title="命令参考" icon="book" href="commands">
+    所有命令、标志和选项。
+  </Card>
+  <Card title="AI 代理" icon="robot" href="ai_agents">
+    与编码代理建立自主审查-修复循环。
+  </Card>
+  <Card title="自托管" icon="server" href="self_hosted">
+    将 CLI 连接到您自己的 Kodus 实例。
+  </Card>
+  <Card title="故障排查" icon="life-ring" href="troubleshooting">
+    常见错误、退出码和调试方法。
+  </Card>
+</CardGroup>

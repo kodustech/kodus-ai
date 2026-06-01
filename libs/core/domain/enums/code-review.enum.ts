@@ -24,6 +24,7 @@ export enum ClusteringType {
 export enum CodeReviewVersion {
     LEGACY = 'legacy',
     v2 = 'v2',
+    V3_AGENT = 'v3-agent',
 }
 
 export enum ReviewModeResponse {

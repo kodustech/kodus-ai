@@ -1,0 +1,47 @@
+---
+title: "Seguridad del Modelo de IA"
+---
+
+## Modelos Utilizados
+
+Kodus utiliza los siguientes modelos de lenguaje para el análisis de código:
+
+- **GPT-4o y derivados** (OpenAI)
+- **Gemini 1.5 Pro y derivados** (Google)
+- **Claude 3.5 Sonnet y derivados** (Anthropic)
+
+## Manejo de Datos
+
+Tu código se procesa temporalmente y nunca se usa para entrenamiento:
+
+- Los datos se retienen solo durante la sesión de revisión
+- Se descartan inmediatamente después de completarse
+- Nunca se usan para entrenar o mejorar modelos
+- Privacidad mantenida según los acuerdos con cada proveedor
+
+## Términos de Uso de Cada Modelo
+
+- **GPT-4o y derivados**: [Términos de Uso de GPT-4o](https://openai.com/enterprise-privacy/)
+- **Gemini 1.5 Pro y derivados**: [Términos de Uso de Gemini 1.5 Pro](https://ai.google.dev/gemini-api/terms)
+- **Claude 3.5 Sonnet y derivados**: [Términos de Uso de Claude 3.5 Sonnet](https://support.anthropic.com/en/articles/7996885-how-do-you-use-personal-data-in-model-training)
+
+## Medidas de Seguridad
+
+- **Cifrado**: Datos cifrados en tránsito y en reposo
+- **Aislamiento de Datos**: Los modelos no almacenan ni retienen datos después del procesamiento
+- **Acceso Controlado**: Controles de acceso estrictos solo para personal autorizado (consulta [Roles del Espacio de Trabajo](/how_to_use/es/workspace_roles))
+- **Auditorías Regulares**: Auditorías de seguridad periódicas para cumplimiento
+- **Actualizaciones de Seguridad**: Parches y actualizaciones regulares
+
+## Telemetría self-hosted
+
+Si ejecutas Kodus self-hosted, cada instancia envía un heartbeat diario
+anónimo a `telemetry.kodus.io` con contadores agregados y metadatos de
+runtime — nunca código, identidades, ni nada que pueda rastrearse hasta
+tus usuarios. Puedes inspeccionar la carga útil exacta con
+`yarn telemetry:preview` o desactivarla con
+`KODUS_TELEMETRY_DISABLED=true`. El schema completo, la política de
+retención y los enlaces al código fuente están documentados en
+[Telemetría Anónima](/how_to_deploy/es/deploy_kodus/telemetry).
+
+¿Preguntas? Contacta a nuestro equipo de soporte o únete a [Discord](https://discord.gg/TFZBRk9fT6).

@@ -4,6 +4,7 @@ import { REQUEST } from '@nestjs/core';
 import { Request } from 'express';
 
 import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
+import { CacheService } from '@libs/core/cache/cache.service';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
@@ -14,30 +15,79 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
     private readonly logger = createLogger(
         GetCodeManagementMemberListUseCase.name,
     );
+    private static readonly CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
     constructor(
         private readonly codeManagementService: CodeManagementService,
         @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
         private readonly pullRequestHandlerService: PullRequestHandlerService,
+        private readonly cacheService: CacheService,
         @Inject(REQUEST)
         private readonly request: Request & {
             user: { organization: { uuid: string } };
         },
     ) {}
 
-    public async execute(): Promise<{ name: string; id: string | number }[]> {
+    public async execute(
+        teamId?: string,
+    ): Promise<{ name: string; id: string | number }[]> {
         const organizationAndTeamData: OrganizationAndTeamData = {
             organizationId: this.request.user.organization.uuid,
+            teamId,
         };
 
-        const platformMembers = await this.fetchMembersFromCodeIntegration(
-            organizationAndTeamData,
-        );
+        const cacheKey =
+            teamId !== undefined
+                ? `org_members_${organizationAndTeamData.organizationId}_${teamId}`
+                : `org_members_${organizationAndTeamData.organizationId}`;
 
-        if (platformMembers.length > 0) {
-            return platformMembers;
+        try {
+            const cached =
+                await this.cacheService.getFromCache<
+                    { name: string; id: string | number }[]
+                >(cacheKey);
+
+            if (cached?.length > 0) {
+                return cached;
+            }
+        } catch {
+            // Cache miss or error, proceed with fetch
         }
 
-        return await this.fetchMembersFromPullRequests(organizationAndTeamData);
+        const [platformMembers, prMembers] = await Promise.all([
+            this.fetchMembersFromCodeIntegration(organizationAndTeamData),
+            this.fetchMembersFromPullRequests(organizationAndTeamData),
+        ]);
+        const mergedMembers = this.normalizeMembers([
+            ...platformMembers,
+            ...prMembers,
+        ]);
+
+        if (mergedMembers.length > 0) {
+            await this.cacheService
+                .addToCache(
+                    cacheKey,
+                    mergedMembers,
+                    GetCodeManagementMemberListUseCase.CACHE_TTL,
+                )
+                .catch(() => {});
+        }
+
+        return mergedMembers;
+    }
+
+    public async refreshMembers(
+        teamId?: string,
+    ): Promise<{ name: string; id: string | number }[]> {
+        const organizationId = this.request.user.organization.uuid;
+        const cacheKey =
+            teamId !== undefined
+                ? `org_members_${organizationId}_${teamId}`
+                : `org_members_${organizationId}`;
+
+        await this.cacheService.removeFromCache(cacheKey);
+
+        return this.execute(teamId);
     }
 
     private async fetchMembersFromCodeIntegration(
@@ -112,7 +162,9 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
             }
         }
 
-        return Array.from(uniqueMembers.values());
+        return Array.from(uniqueMembers.values()).sort((a, b) =>
+            a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+        );
     }
 
     private normalizeMember(member: {

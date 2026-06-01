@@ -1,0 +1,131 @@
+---
+title: "Kodus for monorepos"
+description: "Configure directory-level rules, path-specific overrides, and rule inheritance to get precise code reviews in a monorepo."
+icon: "folder-tree"
+---
+
+## The challenge
+
+In a monorepo, different packages have different standards. Your React frontend cares about component patterns, your NestJS backend cares about dependency injection, and your shared libs care about API stability. A one-size-fits-all review doesn't work.
+
+## Strategy overview
+
+Kodus supports three config levels that map naturally to a monorepo:
+
+| Level | Applies to | Example |
+|-------|-----------|---------|
+| **Organization** | All repos | "Never commit `.env` files" |
+| **Repository** | The monorepo | "Use conventional commits" |
+| **Directory** | A specific package | "React components must use PascalCase" |
+
+## Step 1 — Map your packages
+
+Identify the distinct areas in your monorepo and their review needs:
+
+```
+monorepo/
+├── apps/
+│   ├── web/          → React rules, component patterns
+│   ├── api/          → NestJS rules, architecture boundaries
+│   └── mobile/       → React Native rules
+├── libs/
+│   ├── shared/       → API stability, breaking change detection
+│   └── ui/           → Design system compliance
+└── infra/            → Terraform/IaC rules
+```
+
+## Step 2 — Create directory-level configs
+
+Go to **Code Review Settings** → **Repository** → click on a directory to configure it.
+
+Each directory can have its own:
+- **Kody Rules** (file-level and PR-level)
+- **Review options** (which analysis types to enable)
+- **Suggestion control** (severity filters, max suggestions)
+- **Ignored paths**
+
+## Step 3 — Write targeted rules
+
+### Frontend rules (scope: `apps/web/`)
+
+```
+Name: React components must use design system tokens
+Scope: File
+Paths: apps/web/src/components/**/*.tsx
+Severity: High
+Instructions:
+  Check fileDiff for hardcoded colors, spacing, or font sizes.
+  Components must import tokens from @file:libs/ui/src/tokens.ts.
+  Flag any hex color, pixel value, or font-size not from the token file.
+```
+
+### Backend rules (scope: `apps/api/`)
+
+```
+Name: Domain layer must not import from infrastructure
+Scope: File
+Paths: apps/api/src/domain/**/*.ts
+Severity: Critical
+Instructions:
+  Check fileDiff for any import from "../infrastructure",
+  "../../infrastructure", or any path containing "/infrastructure/".
+  Domain modules must only depend on other domain modules
+  and shared interfaces.
+```
+
+### Shared library rules (scope: `libs/shared/`)
+
+```
+Name: Public API changes require changeset
+Scope: Pull Request
+Severity: High
+Instructions:
+  If pr_files_diff modifies any file in libs/shared/src/index.ts
+  or adds/removes exports, check that a changeset file exists
+  in the .changeset/ directory. If missing, flag it as a
+  potential breaking change without documentation.
+```
+
+## Step 4 — Use Memories for cross-cutting conventions
+
+Some conventions apply everywhere. Teach them as Memories:
+
+```
+@kody remember: in this monorepo, all packages use ESM imports.
+CommonJS require() is not allowed anywhere.
+```
+
+```
+@kody remember: shared libs must maintain backward compatibility.
+Any breaking change requires a major version bump and a changeset.
+```
+
+## Step 5 — Configure suggestion control per directory
+
+High-traffic packages might need stricter limits:
+
+- **apps/web/** — max 5 suggestions, medium severity filter (frontend moves fast)
+- **libs/shared/** — max 15 suggestions, low severity filter (stability matters)
+- **infra/** — max 3 suggestions, high severity filter (fewer but critical)
+
+## Step 6 — Ignore generated paths
+
+Add monorepo-specific ignores to avoid noise:
+
+```yaml
+ignorePaths:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/*.generated.ts"
+  - "**/prisma/migrations/**"
+  - "**/coverage/**"
+```
+
+## Tips
+
+- Start with 2-3 rules per directory and expand based on what your team actually flags in reviews
+- Use rule inheritance — org-level rules cover security, repo-level covers conventions, directory-level covers architecture
+- If a rule fires too often in one package but is valid elsewhere, exclude that directory from the rule rather than weakening it
+
+For more on directory configs, see [Directory-Level Configuration](/how_to_use/en/code_review/configs/directory_level). For rule inheritance, see [Rules Inheritance](/how_to_use/en/code_review/configs/rules_inheritance).

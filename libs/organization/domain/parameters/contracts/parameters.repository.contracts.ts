@@ -32,4 +32,24 @@ export interface IParametersRepository {
         configKey: K,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<ParametersEntity<K>>;
+
+    /**
+     * Atomically deactivates every currently-active row for
+     * (teamId, configKey) and inserts a brand-new active row with
+     * `version = nextVersion`. The deactivate + insert run inside a single
+     * transaction so a concurrent writer cannot observe the team without an
+     * active config; the underlying partial unique index then guarantees
+     * that two transactions racing the same flow cannot both commit.
+     *
+     * The bulk deactivate is intentional (not "deactivate the one row we
+     * just read"): it sweeps any orphan active rows left behind by the
+     * unfixed flow, making this method self-healing for teams that are
+     * already in the corrupt state.
+     */
+    createNewActiveVersion<K extends ParametersKey>(
+        configKey: K,
+        teamId: string,
+        configValue: IParameters<K>['configValue'],
+        nextVersion: number,
+    ): Promise<ParametersEntity<K> | undefined>;
 }

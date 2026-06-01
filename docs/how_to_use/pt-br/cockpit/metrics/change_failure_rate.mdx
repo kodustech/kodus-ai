@@ -1,0 +1,68 @@
+---
+title: "Taxa de Bugs"
+description: "Meça a porcentagem de PRs que são correções de bugs (também conhecido como Taxa de Falha de Mudança)"
+---
+
+## O que é Taxa de Bugs
+
+A Taxa de Bugs mede a porcentagem de Pull Requests que são correções de bugs ou melhorias em relação ao número total de PRs. Essa métrica ajuda a entender quanto do esforço de desenvolvimento é gasto corrigindo problemas versus construindo novos recursos. Ela também pode ser lida como "Taxa de Falha de Mudança" — a taxa na qual as mudanças resultam em falhas.
+
+## Como Calculamos
+
+Identificamos automaticamente quais PRs são correções de bugs usando modelos de linguagem de IA (LLM) que analisam os nomes e descrições dos Pull Requests. O sistema então calcula a porcentagem de trabalho relacionado a bugs em relação à sua atividade total de PRs.
+
+**O que rastreamos:**
+- PRs identificados como correções de bugs por análise de IA
+- Número total de PRs no período
+- A porcentagem de trabalho relacionado a bugs
+
+**Como é calculado:**
+```
+Taxa de Bugs = (PRs de Correção de Bugs) ÷ (Total de PRs) × 100
+```
+
+Por exemplo, se 3 de 15 PRs são identificados como correções de bugs, sua taxa de bugs é 20%.
+
+**Como identificamos correções de bugs:**
+Usamos modelos de linguagem avançados para analisar títulos de PR e classificá-los automaticamente. A IA procura padrões como:
+- "Fix bug in..." ou "Bug fix for..."
+- "Resolve issue with..." ou "Fix problem in..."
+- "Patch for..." ou "Hotfix:..."
+
+## Por que é Importante
+
+A Taxa de Bugs é um indicador-chave do foco de desenvolvimento e da qualidade do código da sua equipe. Entender essa taxa ajuda a:
+
+- **Foco de Desenvolvimento**: Ver quanto tempo é gasto corrigindo versus construindo
+- **Qualidade de Código**: Identificar se está gastando muito tempo em bugs
+- **Melhoria de Processo**: Entender se o processo de desenvolvimento precisa de otimização
+- **Planejamento de Recursos**: Planejar quanto esforço alocar para correções de bugs
+
+## Como Melhorar
+
+- Implemente estratégias abrangentes de testes (unitários, integração, E2E)
+- Use ferramentas automatizadas (linters, analisadores estáticos) em pré-produção
+- Garanta revisões de código completas para todas as alterações
+- Divida grandes funcionalidades em partes menores e testáveis
+- Use feature flags para implantações mais seguras
+- Realize revisões pós-incidente para prevenir recorrências
+
+## Boas Práticas para Nomenclatura de PRs
+
+Para ajudar a IA a identificar correções de bugs com precisão, considere estas convenções de nomenclatura:
+
+### Bons Nomes para PRs de Correção de Bugs
+- "Fix: User login fails with invalid credentials"
+- "Bug fix: Memory leak in data processing module"
+- "Resolve issue: API returns 500 error for large requests"
+- "Patch: Fix null pointer exception in user service"
+
+### Evite Nomes Vagos
+- "Fix stuff" ou "Bug fix"
+- "Update code" ou "Improve performance"
+- "Fix things" ou "Resolve issues"
+
+### Funcionalidade vs Correção de Bug
+- **Correção de Bug**: "Fix: Payment validation fails for expired cards"
+- **Funcionalidade**: "Add: New payment method support"
+- **Melhoria**: "Enhance: Payment validation error messages"

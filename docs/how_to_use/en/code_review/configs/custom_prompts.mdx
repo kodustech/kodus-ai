@@ -1,0 +1,549 @@
+---
+title: "Custom Prompts"
+description: "Customize Kody's review prompts for each category and severity level to match your team's needs"
+---
+
+Custom Prompts give you complete control over how Kody analyzes your code and communicates findings. Tailor what the AI looks for in each review category, how it classifies severity, and how it presents suggestions to match your team's standards and communication style.
+
+<Card
+  title="Access Custom Prompts Settings"
+  icon="gear"
+  href="https://app.kodus.io/settings/code-review/global/custom-prompts"
+>
+  Configure your custom prompts for all repositories in your organization
+</Card>
+
+## Why Use Custom Prompts?
+
+<CardGroup cols={2}>
+  <Card title="Team-Specific Standards" icon="users">
+    Align Kody's reviews with your team's unique coding standards, architectural patterns, and best practices
+  </Card>
+  <Card title="Model Optimization" icon="brain">
+    Craft prompts optimized for your specific AI model's strengths when using BYOK
+  </Card>
+  <Card title="Focus Control" icon="bullseye">
+    Direct Kody's attention to issues that matter most to your project and reduce noise
+  </Card>
+  <Card title="Communication Style" icon="comments">
+    Customize how Kody presents suggestions - detailed for critical issues or concise for minor ones
+  </Card>
+</CardGroup>
+
+## How Custom Prompts Work
+
+Custom Prompts operate at three levels:
+
+### Category Prompts
+
+Define what Kody looks for in each review category:
+
+<Tabs>
+  <Tab title="Bug">
+    **Focus:** Code correctness and execution issues
+    
+    Default coverage:
+    - Execution breaks (unhandled exceptions)
+    - Wrong results (incorrect output)
+    - Resource leaks (files, connections, memory)
+    - State corruption (invalid object/data states)
+    - Logic errors (incorrect control flow)
+    - Race conditions (concurrent access issues)
+    
+    **Max length:** 2000 characters
+  </Tab>
+
+  <Tab title="Security">
+    **Focus:** Security vulnerabilities and data protection
+    
+    Default coverage:
+    - Injection vulnerabilities (SQL/NoSQL/command/LDAP)
+    - Auth/AuthN flaws (missing checks, privilege escalation)
+    - Data exposure (sensitive data in logs/responses)
+    - Crypto issues (weak algorithms, hardcoded keys)
+    - Input validation gaps (missing sanitization/bounds checks)
+    - Session management (predictable tokens, missing expiration)
+    
+    **Max length:** 2000 characters
+  </Tab>
+
+  <Tab title="Performance">
+    **Focus:** Speed, efficiency, and resource optimization
+    
+    Default coverage:
+    - Algorithm complexity (O(n²) when O(n) possible)
+    - Redundant operations (duplicate calculations, unnecessary loops)
+    - Memory waste (large allocations, leaks)
+    - Blocking operations (synchronous I/O in critical paths)
+    - Database inefficiency (N+1, missing indexes, full scans)
+    - Cache misses (not leveraging available caching)
+    
+    **Max length:** 2000 characters
+  </Tab>
+</Tabs>
+
+### Severity Prompts
+
+Define how Kody classifies issue severity:
+
+<Tabs>
+  <Tab title="Critical">
+    **Definition:** Issues requiring immediate attention
+    
+    Default examples:
+    - Application crash/downtime
+    - Data loss/corruption
+    - Security breach (unauthorized access/data exfiltration)
+    - Critical operation failure (auth/payment/authorization)
+    - Direct financial loss operations
+    - Memory leaks causing inevitable crash
+    
+    **Max length:** 2000 characters
+  </Tab>
+
+  <Tab title="High">
+    **Definition:** Significant issues needing near-term resolution
+    
+    Default examples:
+    - Important functionality broken
+    - Memory leaks causing eventual crash
+    - Performance degradation affecting UX under normal load
+    - Security issues with indirect exploitation paths
+    - Financial calculation errors affecting revenue
+    
+    **Max length:** 2000 characters
+  </Tab>
+
+  <Tab title="Medium">
+    **Definition:** Moderate improvements recommended
+    
+    Default examples:
+    - Partially broken functionality
+    - Performance issues in specific scenarios
+    - Security weaknesses requiring specific conditions
+    - Incorrect but recoverable data
+    - Non-critical business logic errors with workarounds
+    
+    **Max length:** 2000 characters
+  </Tab>
+
+  <Tab title="Low">
+    **Definition:** Minor enhancements for incremental improvement
+    
+    Default examples:
+    - Minor performance overhead
+    - Low-risk security improvements
+    - Incorrect metrics/logs
+    - Rarely affecting few users
+    - Edge-case issues
+    
+    **Max length:** 2000 characters
+  </Tab>
+</Tabs>
+
+### Suggestion Prompts
+
+Control how Kody communicates each individual suggestion. This customizes the message format and tone that appears in PR comments, like:
+
+```
+The new file 'create-or-update-issues-parameter.dto.ts' does not follow 
+the company's naming convention. According to the Kody Rules, all new files 
+must use camelCase. Please rename the file to 'createOrUpdateIssuesParameter.dto.ts' 
+to adhere to the standard.
+```
+
+Your custom prompt instructs Kody on how to write suggestion messages. The prompt receives context about the severity level, problem description, suggested code, and whether it's a Kody Rules violation. Kody uses this context along with your prompt to generate appropriate messages for each suggestion.
+
+You can customize the tone, level of detail, and communication style based on your team's needs - from detailed explanations for critical issues to concise feedback for minor ones.
+
+## External References
+
+All custom prompts—Category, Severity, Suggestion, and PR Summary—support referencing real files from the codebases Kody can access. When you save an update, Kody automatically detects external references and resolves them for future reviews.
+
+- Use `@file:path/to/file.ts` to point at files in the repository you're editing; Kody will try to locate the path locally first.
+- Include `@repo:org/project` when referencing files from another repository or when editing prompts at the global level.
+- Prefer precise blob-style paths rather than placeholders so the model can reliably find the right file.
+- After saving, Kody processes the references in the background. Check the status indicator beside the prompt editor to confirm when resolution completes.
+
+## Best Practices
+
+### Be Specific to Your Context
+
+<CardGroup cols={2}>
+  <Card title="Do: Context-Specific" icon="check">
+    ```
+    Bug category prompt:
+    Focus on null pointer exceptions in our 
+    Java services, unclosed database connections 
+    in DAO layer, and race conditions in our 
+    async event handlers. Check for proper 
+    resource cleanup in try-finally blocks.
+    ```
+  </Card>
+  <Card title="Don't: Too Generic" icon="xmark">
+    ```
+    Bug category prompt:
+    Look for bugs in the code.
+    Check for issues and problems.
+    ```
+  </Card>
+</CardGroup>
+
+### Avoid Redundancy Between Prompts
+
+Each category and severity should have a distinct focus. Don't repeat the same instructions across different prompts.
+
+<Accordion title="Example: Proper Separation">
+  **Bug Category:**
+  Focus on execution correctness, null pointer exceptions, and resource cleanup in our Java services.
+
+  **Security Category:**
+  Focus on SQL injection, XSS, and CSRF in our API endpoints. Verify input sanitization and parameterized queries.
+
+  **Performance Category:**
+  Focus on N+1 queries, missing database indexes, and inefficient loops in data processing.
+
+  **Result:** Each prompt has a clear, non-overlapping focus.
+</Accordion>
+
+<Accordion title="Anti-pattern: Redundant Prompts">
+  **Bug Category:**
+  Check for null pointers, SQL injection, and slow queries.
+
+  **Security Category:**
+  Look for SQL injection, null pointers, and performance issues.
+
+  **Performance Category:**
+  Find slow queries, null pointers, and security vulnerabilities.
+
+  **Problem:** All prompts overlap, confusing the model and reducing review quality.
+</Accordion>
+
+### Be Careful with Examples
+
+<Tabs>
+  <Tab title="Good: Pattern Description">
+    ```
+    Detect SQL injection in database queries:
+    - Raw string concatenation in SQL statements
+    - User input directly in query strings
+    - Missing parameterized queries or ORMs
+    - Dynamic query construction without sanitization
+    ```
+    
+    This describes the pattern broadly, catching multiple variations.
+  </Tab>
+
+  <Tab title="Risky: Specific Example">
+    ```
+    Detect SQL injection like this:
+    query = "SELECT * FROM users WHERE id = " + userId
+    ```
+    
+    The model might only flag this exact pattern and miss:
+    - Template literals: `SELECT * FROM users WHERE id = ${userId}`
+    - String formatting: `f"SELECT * FROM users WHERE id = {userId}"`
+    - Other SQL injection vectors
+  </Tab>
+</Tabs>
+
+### Keep Suggestions Scannable
+
+For suggestion prompts, make messages easy to scan since developers review many at once:
+
+<Tabs>
+  <Tab title="Good: Clear Structure">
+    ```
+    Write suggestions with clear structure. For critical issues, 
+    start with the 🚨 emoji, state the problem, then show "Fix:" 
+    followed by the code. For other severities, keep it simple - 
+    just the problem and the suggested code.
+    
+    Put important information first so developers can quickly 
+    understand what needs to be done.
+    ```
+    
+    Clear hierarchy, important information first
+  </Tab>
+  
+  <Tab title="Bad: Wall of Text">
+    ```
+    Explain the problem and why it's important because it could 
+    cause issues in production and developers should fix it by 
+    applying the suggested code changes that will resolve the issue.
+    ```
+    
+    Hard to scan, buries the action
+  </Tab>
+</Tabs>
+
+### Use Context Meaningfully
+
+Only differentiate suggestion formats when there's a real reason:
+
+<Tabs>
+  <Tab title="Good: Meaningful Difference">
+    ```
+    For Kody Rules violations, use a stricter tone: 
+    "**Team Standard**: [problem]. Required: [code]"
+    
+    For standard suggestions, use a friendlier tone:
+    "[problem]. Suggested: [code]"
+    
+    The difference in language makes the requirement level clear.
+    ```
+    
+    Clear distinction: rules are requirements, suggestions are recommendations
+  </Tab>
+  
+  <Tab title="Bad: Superficial Label">
+    ```
+    For Kody Rules, add "[RULE]" prefix before the problem.
+    For suggestions, add "[SUGGESTION]" prefix before the problem.
+    Otherwise format them the same way.
+    ```
+    
+    Just adding labels doesn't add value
+  </Tab>
+</Tabs>
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Industry-Specific Requirements">
+    **Scenario:** Healthcare application with HIPAA compliance requirements
+    
+    **Custom Security Prompt:**
+    ```
+    Focus on HIPAA compliance in data handling:
+    - PHI (Protected Health Information) exposure in logs or errors
+    - Missing encryption for PHI at rest and in transit
+    - Inadequate access controls for patient data
+    - Audit logging gaps for PHI access
+    - Data retention violations
+    - Missing patient consent verification
+    ```
+    
+    **Benefit:** Kody catches compliance-specific issues that generic security reviews might miss.
+  </Accordion>
+
+  <Accordion title="Tech Stack Optimization">
+    **Scenario:** React/Node.js application with specific patterns
+    
+    **Custom Bug Prompt:**
+    ```
+    Focus on React and Node.js common pitfalls:
+    - Missing dependency arrays in useEffect/useMemo
+    - Unhandled promise rejections in async handlers
+    - Memory leaks from event listener cleanup
+    - Race conditions in state updates
+    - Missing error boundaries
+    - Uncaught exceptions in Express middleware
+    ```
+    
+    **Benefit:** Reviews are laser-focused on your stack's specific gotchas.
+  </Accordion>
+
+  <Accordion title="Model-Specific Tuning">
+    **Scenario:** Using Gemini 2.5 Flash via BYOK for cost optimization
+    
+    **Custom Performance Prompt:**
+    ```
+    Analyze algorithmic efficiency and resource usage.
+    List specific issues in this format:
+    1. Issue type and location
+    2. Current complexity
+    3. Optimization suggestion
+    4. Expected improvement
+    
+    Prioritize: database queries, loops, memory allocations.
+    ```
+    
+    **Benefit:** Structured output format that Gemini handles exceptionally well, improving review quality.
+  </Accordion>
+
+  <Accordion title="Severity Calibration">
+    **Scenario:** Startup moving fast, needs different severity thresholds
+    
+    **Custom Critical Prompt:**
+    ```
+    Only flag as Critical if:
+    - Production data could be deleted or corrupted
+    - Security breach allowing direct data exfiltration
+    - Payment processing failures
+    - Complete service outage for core features
+    
+    Note: Performance issues are never Critical unless causing crashes.
+    ```
+    
+    **Benefit:** Reduces alert fatigue by aligning severity with business impact.
+  </Accordion>
+
+  <Accordion title="Severity-Based Communication">
+    **Scenario:** Want detailed explanations for critical issues but concise feedback for minor ones
+    
+    **Custom Suggestion Prompt:**
+    ```
+    When writing suggestions, adjust the level of detail based on severity:
+    
+    For Critical issues: Start with "🚨 CRITICAL:" followed by the problem. 
+    Add a line explaining "This requires immediate attention." Then provide 
+    the fix with "Fix:" prefix.
+    
+    For High severity: Use "⚠️" emoji, state the problem, then show the fix 
+    with "Fix:" prefix.
+    
+    For Medium and Low: Keep it brief - just state the problem and show the 
+    suggested code directly without extra explanation.
+    ```
+    
+    **Benefit:** Critical issues get extra context while minor issues stay brief, improving review efficiency.
+  </Accordion>
+
+  <Accordion title="Direct and Concise Feedback">
+    **Scenario:** Team prefers minimal, actionable feedback
+    
+    **Custom Suggestion Prompt:**
+    ```
+    Be direct and concise. State the problem in one sentence, then immediately 
+    show the fix with "Fix:" prefix. No additional context or explanations.
+    ```
+    
+    **Benefit:** Every suggestion is short and to-the-point without extra context.
+  </Accordion>
+
+  <Accordion title="Educational Suggestions">
+    **Scenario:** Junior developers benefit from detailed explanations
+    
+    **Custom Suggestion Prompt:**
+    ```
+    Structure suggestions in three parts:
+    
+    1. **Issue:** State the problem clearly
+    2. **Why this matters:** Explain the impact based on severity:
+       - Critical: Could cause production failures or security vulnerabilities
+       - High: May lead to bugs or performance problems  
+       - Medium/Low: Improves code quality and maintainability
+    3. **Fix:** Show the recommended code change
+    
+    Make explanations educational and help developers learn why it matters.
+    ```
+    
+    **Benefit:** Every suggestion includes educational context about importance.
+  </Accordion>
+
+  <Accordion title="Different Tone for Rules vs Suggestions">
+    **Scenario:** Kody Rules are strict requirements, suggestions are recommendations
+    
+    **Custom Suggestion Prompt:**
+    ```
+    Use different tones based on the type:
+    
+    For Kody Rules violations:
+    - Start with "**Team Standard Violation**" in bold
+    - State the problem
+    - Add "This violates documented team standards."
+    - Show "Required fix:" followed by the code
+    
+    For standard suggestions:
+    - State the problem directly
+    - Show "Suggested improvement:" followed by the code
+    - Use a friendly, recommendatory tone
+    ```
+    
+    **Benefit:** Clear distinction between mandatory rules and optional suggestions.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Reviews Are Too Noisy">
+    **Symptoms:** Too many low-value suggestions after customization
+    
+    **Solutions:**
+    - Make prompts more specific and focused
+    - Add exclusions for patterns you want to ignore
+    - Raise minimum severity threshold in [Suggestion Control](/how_to_use/en/code_review/configs/suggestion_control)
+    - Check for redundancy between category and severity prompts
+  </Accordion>
+
+  <Accordion title="Missing Expected Issues">
+    **Symptoms:** Kody doesn't catch issues it should
+    
+    **Solutions:**
+    - Review your prompt for being too narrow or example-specific
+    - Check if the issue falls under a category you didn't customize
+    - Try resetting to default to see if the issue is caught
+    - Consider if the issue might be classified under a different severity
+  </Accordion>
+
+  <Accordion title="Inconsistent Results">
+    **Symptoms:** Same type of issue flagged sometimes but not always
+    
+    **Solutions:**
+    - Ensure prompts are clear and unambiguous
+    - Remove conflicting instructions across different prompts
+    - Check if you're using examples that are too specific
+    - Consider if different models in primary/fallback have different capabilities
+  </Accordion>
+
+  <Accordion title="Not Sure What to Customize">
+    **Symptoms:** Want to use custom prompts but unsure where to start
+    
+    **Solutions:**
+    - Start by running default reviews for a week
+    - Note patterns in false positives or missed issues
+    - Customize only the specific prompt related to those patterns
+    - Keep other prompts at default until you see a clear need
+  </Accordion>
+</AccordionGroup>
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="Do custom prompts apply to all repositories?">
+    It depends on where you set them:
+    
+    - **Global settings:** Apply to all repositories in your organization
+    - **Per-repository settings:** Override global settings for that specific repo
+    
+    This lets you have organization-wide standards with repository-specific overrides when needed.
+  </Accordion>
+
+  <Accordion title="Can I see the default prompts before customizing?">
+    Yes. Click into any prompt in settings to view default content.
+  </Accordion>
+
+  <Accordion title="What happens to existing PRs when I change prompts?">
+    Changes only affect new reviews. Re-run with `@kody start-review` to apply new prompts to existing PRs.
+  </Accordion>
+
+  <Accordion title="Can I customize prompts with kodus-config.yml?">
+    No. Custom prompts are web-only to ensure intentional changes. Other settings (ignored paths, branches) can use `kodus-config.yml`.
+  </Accordion>
+
+  <Accordion title="Should I customize all prompts or just some?">
+    Only customize prompts with clear, specific needs. Keep others at default to benefit from our improvements. Start with 1-2 prompts.
+  </Accordion>
+
+  <Accordion title="How do custom prompts work with BYOK?">
+    Works seamlessly. Tailor prompts to your model's strengths. Both primary and fallback use the same custom prompts.
+  </Accordion>
+
+  <Accordion title="What's the difference between Category/Severity prompts and Suggestion prompts?">
+    **Category/Severity prompts** control what Kody analyzes and how it classifies issues. **Suggestion prompts** control how Kody presents findings to your team. You can customize both independently.
+  </Accordion>
+
+  <Accordion title="Can I use markdown in suggestion prompts?">
+    Yes. Suggestion prompts support standard markdown formatting including bold, italic, code blocks, and links.
+  </Accordion>
+
+  <Accordion title="What happens if my suggestion template has syntax errors?">
+    Kody will fall back to the default suggestion format and notify you of the error in settings.
+  </Accordion>
+
+  <Accordion title="Do suggestion prompts work for both Kody Rules and standard suggestions?">
+    Yes. Use the `isKodyRule` variable to create different messages for rules vs suggestions in the same prompt.
+  </Accordion>
+</AccordionGroup>

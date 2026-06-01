@@ -1,0 +1,77 @@
+---
+title: "规则文件检测"
+description: "自动检测和导入您现有的流行 AI 编码工具的规则文件,以使用您团队已建立的编码标准增强 Kody 的代码审查功能。"
+---
+
+Kodus 可以自动同步和导入您现有的 IDE 规则文件,以使用您团队已建立的编码标准和偏好增强 Kody 的代码审查。
+
+<Frame caption="在设置中启用从代码库自动同步规则">
+  <img src="/images/sync-rules.png" />
+</Frame>
+
+## 什么是规则文件检测?
+
+规则文件检测会自动检测和导入代码库中流行 AI 编码工具和助手的配置文件。这确保 Kody 理解并尊重您现有的编码标准,无需手动设置。
+
+## 支持的规则文件
+
+Kodus 自动检测和导入以下规则文件模式:
+
+### Cursor
+- `.cursorrules` - 主 Cursor 规则文件(旧版)
+- `.cursor/rules/**/*.mdc` - 子目录中的 Cursor 规则
+
+### GitHub Copilot
+- `.github/copilot-instructions.md` - Copilot 指令
+- `.github/instructions/**/*.instructions.md` - 详细指令文件
+
+### Claude
+- `CLAUDE.md` - Claude 特定规则
+- `.claude/settings.json` - Claude 配置设置
+
+### Windsurf
+- `.windsurfrules` - Windsurf IDE 规则
+
+### Sourcegraph Cody
+- `.sourcegraph/**/*.rule.md` - Cody 规则文件
+
+### OpenCode
+- `.opencode.json` - OpenCode 配置
+
+### Aider
+- `.aider.conf.yml` - Aider 配置
+- `.aiderignore` - Aider 忽略模式
+
+### 通用/内部规则
+- `.rules/**/*` - 通用规则目录
+- `.kody/rules/*` - Kody 特定规则
+- `docs/coding-standards/**/*` - 基于文档的编码标准
+
+## 工作原理
+
+### 初始设置
+1. **启用自动同步**:在设置中切换"从代码库自动同步规则"选项
+2. **首次同步模态框**:将出现一个模态框,询问您是否要首次同步
+3. **代码库扫描**:当您确认时,Kodus 会扫描整个代码库以查找支持的规则文件
+4. **规则生成**:LLM 处理找到的文件并自动创建相应的 Kody 规则
+
+### 持续同步
+- **自动更新**:当拉取请求关闭时自动同步
+- **检测到文件更改**:
+  - **新规则文件** → 创建新 Kody 规则
+  - **修改的规则文件** → 更新现有 Kody 规则
+  - **删除的规则文件** → 删除相应的 Kody 规则
+
+### 手动同步(切换禁用)
+
+您可以在不启用自动同步的情况下同步单个规则文件:
+
+1. 在规则文件中的任何位置添加 `@kody-sync`
+2. 提交更改
+3. Kody 将仅同步该特定文件
+
+这使您可以选择性地同步规则,而无需为所有文件启用自动同步。
+
+<Warning>
+如果您手动编辑从 IDE 规则文件创建的 Kody 规则,下次修改和同步相应文件时,您的更改将被覆盖。
+</Warning>

@@ -1,27 +1,13 @@
 import { UserRole } from "@enums";
 
-export enum Action {
-    Manage = "manage", // wildcard for any action
-    Create = "create",
-    Read = "read",
-    Update = "update",
-    Delete = "delete",
-}
+// Single source of truth: the enums live in the backend domain layer and are
+// re-exported here so the frontend can never drift from the API's contract.
+import {
+    Action,
+    ResourceType,
+} from "@libs/identity/domain/permissions/enums/permissions.enum";
 
-export enum ResourceType {
-    All = "all",
-    PullRequests = "pull_requests",
-    Issues = "issues",
-    Cockpit = "cockpit",
-    Billing = "billing",
-    CodeReviewSettings = "code_review_settings",
-    GitSettings = "git_settings",
-    UserSettings = "user_settings",
-    OrganizationSettings = "organization_settings",
-    PluginSettings = "plugin_settings",
-    Logs = "logs",
-    KodyRules = "kody_rules",
-}
+export { Action, ResourceType };
 
 export type PermissionsMap = {
     [K in ResourceType]?: {

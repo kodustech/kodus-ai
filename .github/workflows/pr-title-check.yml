@@ -1,0 +1,46 @@
+name: PR Title Check
+
+on:
+    pull_request:
+        types: [opened, edited, reopened, synchronize]
+
+permissions:
+    pull-requests: read
+
+jobs:
+    title-check:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Verify PR title follows Conventional Commits
+              env:
+                  TITLE: ${{ github.event.pull_request.title }}
+              run: |
+                  set -euo pipefail
+
+                  # Allowed types drive changelog routing:
+                  #   feat       -> Improvements (or a tracked feature when Feature: footer is present)
+                  #   fix        -> Bug fixes
+                  #   perf       -> Performance
+                  #   docs|style|refactor|test|chore|ci|build  -> not user-facing, hidden from changelog
+                  pattern='^(feat|fix|perf|docs|style|refactor|test|chore|ci|build)(\([^)]+\))?!?: .+'
+
+                  if [[ "$TITLE" =~ $pattern ]]; then
+                      echo "OK: PR title is a Conventional Commits message."
+                      exit 0
+                  fi
+
+                  echo "::error::PR title does not follow Conventional Commits."
+                  echo ""
+                  echo "Got:"
+                  echo "  $TITLE"
+                  echo ""
+                  echo "Expected one of:"
+                  echo "  feat(scope): short description       -> Improvements section of changelog"
+                  echo "  fix(scope): short description        -> Bug fixes section of changelog"
+                  echo "  perf(scope): short description       -> Performance section of changelog"
+                  echo "  docs|style|refactor|test|chore|ci|build(scope): ...   -> hidden from changelog"
+                  echo ""
+                  echo "If this PR contributes to a tracked PostHog Early Access feature,"
+                  echo "add a 'Feature: <flag-key>' line to the PR body. See"
+                  echo ".github/PULL_REQUEST_TEMPLATE.md for the full template."
+                  exit 1

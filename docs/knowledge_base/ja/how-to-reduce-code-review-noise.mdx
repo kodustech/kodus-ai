@@ -1,0 +1,65 @@
+---
+title: "コードレビューのノイズと誤検知を減らす方法"
+description: "AIコードレビューを調整して、最も関連性の高い提案のみを表示し、アラート疲れを回避します。"
+---
+
+優先度の低い提案が多すぎると、開発者はコードレビューのフィードバックを完全に無視してしまう可能性があります。重要なことを表示し、重要でないことは表示しないようにレビューを調整することが重要です。
+
+## 提案のコントロール
+
+Kodusでは、表示される提案の数と重要度を細かく制御できます：
+
+- **PRごとの最大提案数** — 提案の総数を制限します（例：9件）
+- **重要度フィルター** — 閾値以上の提案のみ表示します（例：中以上）
+- **グループ化モード** — PRで提案がどのように整理されるかを制御します
+
+**コードレビュー設定** → **提案コントロール** または `kodus-config.yml` で設定します：
+
+```yaml
+suggestionControl:
+  groupingMode: full
+  limitationType: pr
+  maxSuggestions: 9
+  severityLevelFilter: medium
+```
+
+## ファイルとパスを無視する
+
+ノイズを生成するファイルをスキップします（ロックファイル、生成されたコード、設定ファイル）：
+
+```yaml
+ignorePaths:
+  - yarn.lock
+  - package-lock.json
+  - "**/*.generated.ts"
+  - dist/**
+```
+
+## タイトルによってPRをスキップする
+
+レビューが不要なPRをスキップします（リリース、バージョンバンプ）：
+
+```yaml
+ignoredTitleKeywords:
+  - "release"
+  - "bump version"
+  - "chore"
+```
+
+## 分析カテゴリの切り替え
+
+不要なレビューカテゴリ全体を無効にします：
+
+```yaml
+reviewOptions:
+  security: true
+  code_style: true
+  refactoring: false        # ノイズが多すぎる場合は無効化
+  documentation_and_comments: false  # 関連性がない場合は無効化
+```
+
+## レビューの頻度
+
+アクティブな開発中のスパムを防ぐために**自動一時停止**を使用します — Kodusは連続した急速なプッシュを検出したときにレビューを一時停止します（デフォルト：15分以内に3回のプッシュ）。
+
+詳細については、[一般設定](/how_to_use/ja/code_review/configs/general)と[提案コントロール](/how_to_use/ja/code_review/configs/suggestion_control)を参照してください。

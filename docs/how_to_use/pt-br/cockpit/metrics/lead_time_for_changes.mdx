@@ -1,0 +1,43 @@
+---
+title: "Tempo de Ciclo de PR"
+description: "Meça o tempo desde o primeiro commit até o deploy em produção"
+---
+
+## O que é Tempo de Ciclo de PR
+
+O Tempo de Ciclo de PR mede o tempo total desde quando um desenvolvedor faz o primeiro commit até que esse código seja mesclado com sucesso na branch padrão. Essa métrica representa a velocidade de entrega de ponta a ponta do seu processo de desenvolvimento.
+
+## Como Calculamos
+
+Rastreamos automaticamente o tempo entre seu primeiro commit e quando esse código é mesclado na branch padrão (main/master). Como merges para main tipicamente representam quando o código está pronto para produção, isso nos dá uma boa medida do tempo de ciclo de desenvolvimento.
+
+**O que rastreamos:**
+- Tempo do primeiro commit até o merge do PR
+- O ciclo de desenvolvimento completo
+- Quanto tempo o código leva para ser integrado
+
+**O que não contamos:**
+- Tempo gasto em planejamento ou design (antes do primeiro commit)
+- Tempo após o merge (deploy, adoção pelos usuários, etc.)
+- Mudanças com falha ou abandonadas
+
+**Como é calculado:**
+```
+Tempo de Ciclo de PR = (Hora do Merge do PR) - (Hora do Primeiro Commit)
+```
+
+Usamos o 75º percentil (P75) para mostrar o tempo de ciclo típico, filtrando outliers incomumente longos que poderiam distorcer sua compreensão do desempenho normal.
+
+## Por que é Importante
+
+O Tempo de Ciclo de PR é uma métrica crítica que mede a capacidade da sua equipe de completar o trabalho de desenvolvimento com eficiência. Tempos de ciclo altos podem indicar grandes tamanhos de lote, processos de revisão demorados ou gargalos no fluxo de trabalho de desenvolvimento.
+
+
+## Como Melhorar
+
+- Divida grandes mudanças em PRs menores (200-400 linhas)
+- Defina expectativas e diretrizes claras de revisão
+- Use verificações automatizadas para detectar problemas antes da revisão
+- Distribua a carga de revisão por toda a equipe
+- Obtenha feedback antecipado durante o desenvolvimento
+- Use uma estratégia de branching consistente

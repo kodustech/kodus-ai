@@ -1,0 +1,58 @@
+---
+title: GitLab OAuth App (Sign in with GitLab)
+icon: gitlab
+---
+
+Use this if you want users to sign in to Kodus with GitLab. This is separate from the GitLab webhook integration used for code review automation.
+
+## Prerequisites
+
+- **WEB_DOMAIN**: Your Frontend URL (e.g., `https://app.yourdomain.com` or `http://localhost:3000`)
+
+## Step 1: Create the OAuth App
+
+1. In GitLab, go to **User Settings** > **Applications**
+2. Click **New application**
+3. Fill in the application name and the redirect URI
+
+## Step 2: Configure the Callback URL
+
+Set the **Redirect URI** to:
+
+```
+WEB_DOMAIN/api/auth/callback/gitlab
+```
+
+Make sure the URL matches your actual web domain and scheme (http/https).
+
+## Step 3: Configure Scopes
+
+Set the scopes in GitLab to match the scopes below:
+
+```
+WEB_GITLAB_SCOPES="read_api read_user read_repository"
+```
+
+## Step 4: Add Credentials to .env
+
+After creating the app, copy the credentials from GitLab and add them to your Kodus environment:
+
+```
+WEB_OAUTH_GITLAB_CLIENT_ID="your_client_id_here"
+WEB_OAUTH_GITLAB_CLIENT_SECRET="your_client_secret_here"
+WEB_GITLAB_SCOPES="read_api read_user read_repository"
+WEB_GITLAB_OAUTH_URL="https://gitlab.com/oauth/authorize"
+```
+
+For self-managed GitLab, replace the OAuth URL with your instance domain (e.g., `https://gitlab.yourdomain.com/oauth/authorize`).
+
+## Summary of Environment Variables
+
+```bash
+WEB_OAUTH_GITLAB_CLIENT_ID="your_client_id_here"
+WEB_OAUTH_GITLAB_CLIENT_SECRET="your_client_secret_here"
+WEB_GITLAB_SCOPES="read_api read_user read_repository"
+WEB_GITLAB_OAUTH_URL="https://gitlab.com/oauth/authorize"
+```
+
+Restart the web application to apply the changes.

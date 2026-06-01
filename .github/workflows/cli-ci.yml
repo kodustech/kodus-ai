@@ -1,0 +1,36 @@
+name: "CLI: PR Tests"
+
+on:
+    pull_request:
+        branches: [main]
+        paths:
+            - "apps/cli/**"
+            - ".github/workflows/cli-ci.yml"
+    push:
+        branches: [main]
+        paths:
+            - "apps/cli/**"
+            - ".github/workflows/cli-ci.yml"
+
+permissions:
+    contents: read
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: apps/cli
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: actions/setup-node@v6.4.0
+              with:
+                  node-version: "22"
+                  cache: yarn
+                  cache-dependency-path: apps/cli/yarn.lock
+            - run: yarn install --frozen-lockfile
+            - run: yarn skills:validate
+            - run: yarn skills:prompt > /dev/null
+            - run: yarn build
+            - run: yarn test
+            - run: yarn vitest run --config vitest.integration.config.ts

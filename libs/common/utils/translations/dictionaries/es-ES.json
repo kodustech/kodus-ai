@@ -5,7 +5,9 @@
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## ¡Revisión de código completada! 🔥\n\nLa revisión de código se completó con éxito según sus configuraciones actuales.\n\n",
-        "withoutComments": "# Revisión de Kody completada\n**¡Grandes noticias!** 🎉\nNo se encontraron problemas que coincidan con sus configuraciones de revisión actuales.\n\n¡Sigue con el excelente trabajo! 🚀"
+        "withoutComments": "# Revisión de Kody completada\n**¡Grandes noticias!** 🎉\nNo se encontraron problemas que coincidan con sus configuraciones de revisión actuales.\n\n¡Sigue con el excelente trabajo! 🚀",
+        "withErrors": "## Revisión de Código No Completada ⚠️\n\nLa revisión falló antes de poder generar sugerencias.\n\n**Motivo:** {{errorMessage}}\n\nDespués de corregir el problema, comenta `@kody review` en este PR para volver a ejecutar la revisión.\n\n",
+        "partialErrorsNotice": "\n\n> ⚠️ Nota: algunas etapas de la revisión no pudieron completarse en esta ejecución, por lo que se omitió la aprobación automática (cuando está habilitada). Consulta los detalles en {{dashboardUrl}} y luego comenta `@kody review` en este PR para reintentar una vez resuelto el problema.\n"
     },
     "pullRequestSummaryMarkdown": {
         "title": "Resumen de PR (Comentario creado por [Kody](https://kodus.io) 🤖)",

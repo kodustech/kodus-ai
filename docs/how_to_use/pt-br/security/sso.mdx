@@ -1,0 +1,49 @@
+---
+title: "Single Sign-On"
+description: "Habilite o Single Sign-On (SSO) para acesso seguro e eficiente ao Kodus."
+---
+
+## Visão Geral
+
+O Single Sign-On (SSO) permite gerenciar o acesso ao Kodus por meio de um único provedor de identidade, simplificando a autenticação e aumentando a segurança.
+
+## Primeiros Passos
+
+<Steps>
+    <Step title="Acessar as configurações de SSO">
+        Navegue até as configurações da sua organização em
+        [app.kodus.io/organization/sso](https://app.kodus.io/organization/sso)
+    </Step>
+
+    <Step title="Preencher a configuração do seu IdP">
+        Preencha as configurações do seu IdP, como o ID do emissor, a URL e o certificado de assinatura. Esses dados podem ser preenchidos manualmente ou fornecendo a URL de metadados ou um arquivo XML de metadados do seu IdP.
+
+        <Info>
+            Esses valores geralmente podem ser encontrados na documentação do seu IdP ou no console de administração deles.
+        </Info>
+    </Step>
+
+    <Step title="Configurar o Kodus como SP no seu IdP">
+        Configure o Kodus como um SP no seu IdP fornecendo nosso ID de entidade (`kodus-orchestrator` por padrão) e a URL de callback da sua organização encontrada na página de configurações de SSO.
+
+        Certifique-se de que o formato do ID de nome está definido como e-mail.
+
+        <Warning>
+            Certifique-se de desabilitar certificados de assinatura na configuração de SP do seu IdP.
+        </Warning>
+    </Step>
+
+    <Step title="Habilitar e testar o SSO">
+        Habilite o SSO no Kodus e teste a configuração fazendo logout e login novamente. Ao tentar fazer login com um domínio de e-mail associado ao seu IdP, você terá a opção de fazer login via SSO.
+    </Step>
+
+</Steps>
+
+## Configuração Opcional
+
+### Mapeamento de Atributos
+
+Você pode mapear os seguintes atributos do seu IdP para os usuários do Kodus, melhorando a experiência do usuário.
+
+-   Primeiro Nome, mapeado para `firstName`
+-   Sobrenome, mapeado para `lastName`

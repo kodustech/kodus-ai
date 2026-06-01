@@ -1,0 +1,44 @@
+---
+title: "Can I use my own LLM provider for code review"
+description: "Bring your own API key and choose your preferred LLM provider for AI-powered code review with Kodus."
+---
+
+Yes. Kodus supports Bring Your Own Key (BYOK) on every plan, letting you use your preferred LLM provider. You pay the provider directly — Kodus never marks up tokens and never sees your key in plain text.
+
+## How it works
+
+1. Open **Settings → BYOK** ([app.kodus.io/organization/byok](https://app.kodus.io/organization/byok))
+2. Pick a **recommended model** from the curated catalog, or click **Configure manually** for any other provider/endpoint
+3. Paste your API key and click **Test & save** — Kodus validates the key with a cheap metadata call before persisting
+
+## Curated recommended models
+
+Ready-to-click cards with pre-tuned defaults (temperature, max tokens, reasoning level):
+
+- Claude Sonnet 4.6 / Opus 4.7 (Anthropic)
+- Gemini 3.1 Pro custom tools (Google)
+- GPT-5.4 (OpenAI)
+- Kimi K2.6 Coding (Moonshot AI — Developer API or Kimi Code Plan)
+- GLM 5.1 (Z.ai — Developer API or Coding Plan)
+
+For models outside this list, the **Configure manually** wizard walks you through any OpenAI, Anthropic, Google, OpenRouter, Novita, or OpenAI-compatible endpoint.
+
+## Why use your own provider
+
+- **Data control** — requests go directly to your provider
+- **Cost management** — use your existing billing relationship, no markup
+- **Model choice** — pick the model that works best for your codebase
+- **Compliance** — meet internal requirements for AI tool usage
+- **Fallback resilience** — configure a Main + Fallback to keep reviews running during provider outages
+
+## Self-hosted LLM providers
+
+If you self-host Kodus, you can point BYOK at self-hosted or aggregator endpoints like:
+
+- Novita, Groq, Together AI, Fireworks AI
+- Chutes, Synthetic
+- Your own Ollama / vLLM / TGI instance (via the `OpenAI Compatible` provider)
+
+For setup guides, see the [Cookbook](/cookbook/en/novita) and the provider-specific docs in the knowledge base.
+
+For the full BYOK flow (catalog, manual wizard, plan selectors, advanced tuning), see [Bring Your Own Key](/how_to_use/en/byok).

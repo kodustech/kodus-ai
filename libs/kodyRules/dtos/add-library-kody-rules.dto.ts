@@ -33,6 +33,15 @@ export class AddLibraryKodyRulesDto {
     @IsOptional()
     @IsString()
     @ApiPropertyOptional({
+        description:
+            'Team identifier used to resolve team-scoped centralized configuration.',
+        example: '2e4f7a61-3c8c-4af5-bf25-2d0cbb19c4d1',
+    })
+    teamId?: string;
+
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({
         format: 'uuid',
         example: '1e6f6a92-5b4b-4b7d-9c31-4f55f4e9cbd1',
     })

@@ -1,0 +1,59 @@
+---
+title: "Token de API do Bitbucket"
+---
+
+## Introdução
+
+Para habilitar Kody a realizar code reviews automáticos no Bitbucket Cloud, você precisa gerar um **Token de API**. Esse token permite que Kody acesse seus repositórios, pull requests, webhooks, issues, pipelines etc., com as permissões específicas listadas abaixo.
+
+---
+
+## Gerando o Token de API no Bitbucket
+
+1. Acesse diretamente a [página de tokens API do Atlassian](https://id.atlassian.com/manage-profile/security/api-tokens) (ou, no seu perfil Atlassian, navegue até **Security → API tokens**).
+2. Clique em **Create API token with scopes**.
+3. Dê um nome ao token (por exemplo `kody_code_review`) e defina uma data de expiração.
+4. Se solicitado, selecione **Bitbucket** como aplicativo.
+5. Selecione todos os escopos necessários (veja abaixo).
+6. Revise suas escolhas e clique em **Create token**.
+7. **Copie** o token imediatamente e armazene-o com segurança — após a criação você não poderá visualizá-lo novamente.
+
+---
+
+## Escopos Necessários para Kody
+
+O token deve incluir **todos** os seguintes escopos para funcionalidade completa com Kody:
+
+| Escopo                        | Finalidade / O que habilita                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| `read:user:bitbucket`         | Lê informações básicas do usuário ou conta.                                                  |
+| `read:workspace:bitbucket`    | Lê informações sobre o workspace (projetos, membros, repositórios).                          |
+| `read:project:bitbucket`      | Lê metadados sobre projetos.                                                                 |
+| `read:repository:bitbucket`   | Lê código, branches, arquivos fonte em repositórios.                                         |
+| `write:repository:bitbucket`  | Modifica conteúdos do repositório quando necessário (comentários, atualizações de arquivos, etc.). |
+| `admin:repository:bitbucket`  | Operações administrativas no repositório: gerenciar webhooks, permissões, configurações do repositório. |
+| `read:pullrequest:bitbucket`  | Visualiza pull requests, seus status e comentários.                                          |
+| `write:pullrequest:bitbucket` | Cria ou modifica comentários de pull request; aprova, recusa ou mescla PRs.                  |
+| `read:issue:bitbucket`        | Lê informações do rastreador de issues.                                                      |
+| `read:webhook:bitbucket`      | Visualiza webhooks existentes e suas configurações.                                          |
+| `write:webhook:bitbucket`     | Cria ou atualiza webhooks.                                                                   |
+| `read:pipeline:bitbucket`     | Lê status/logs de pipelines associados a repositórios ou PRs.                               |
+
+> ⚠️ Certifique-se de conceder apenas essas permissões necessárias; evite conceder mais do que o necessário para reduzir o risco de segurança.
+
+---
+
+## Adicionando o Token ao Kody
+
+- Uma vez que o token for gerado com todos os escopos necessários, cole-o na **tela de configuração de integração/automação do Kody** ao habilitar a integração com Bitbucket.
+- Certifique-se de que o token tem `admin:repository:bitbucket` (ou equivalente) se Kody precisar configurar webhooks ou ouvir eventos de pull request.
+
+---
+
+## Notas Importantes
+
+- O token será **exibido apenas uma vez** após a criação. Salve-o com segurança, pois você **não** poderá visualizá-lo novamente.
+- Defina uma **data de expiração** se possível, para limitar o tempo de vida do token.
+- Se o token for comprometido, revogue-o imediatamente e crie um novo.
+- Audite periodicamente os tokens e seus escopos para confirmar que ainda são necessários e válidos.
+- Verifique se o seu plano/conta do Bitbucket permite todos os escopos acima; alguns escopos (projeto, workspace, admin) podem depender da assinatura/permissões.

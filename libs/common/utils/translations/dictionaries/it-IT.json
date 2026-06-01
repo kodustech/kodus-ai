@@ -5,7 +5,9 @@
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## Revisione del codice completata! 🔥\n\nLa revisione del codice è stata completata con successo in base alle tue configurazioni attuali.\n\n",
-        "withoutComments": "# Revisione di Kody completata\n**Ottime notizie!** 🎉\nNon sono stati trovati problemi che corrispondono alle tue configurazioni di revisione attuali.\n\nContinua così! 🚀"
+        "withoutComments": "# Revisione di Kody completata\n**Ottime notizie!** 🎉\nNon sono stati trovati problemi che corrispondono alle tue configurazioni di revisione attuali.\n\nContinua così! 🚀",
+        "withErrors": "## Revisione del codice non completata ⚠️\n\nLa revisione è fallita prima che fosse possibile generare suggerimenti.\n\n**Motivo:** {{errorMessage}}\n\nDopo aver risolto il problema, commenta `@kody review` su questa PR per rieseguire la revisione.\n\n",
+        "partialErrorsNotice": "\n\n> ⚠️ Nota: alcune fasi della revisione non hanno potuto essere completate in questa esecuzione, quindi l'approvazione automatica (quando abilitata) è stata saltata. Consulta i dettagli su {{dashboardUrl}} e poi commenta `@kody review` su questa PR per riprovare una volta risolto il problema.\n"
     },
     "pullRequestSummaryMarkdown": {
         "title": "Riepilogo PR (Commento creato da [Kody](https://kodus.io) 🤖)",

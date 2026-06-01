@@ -1,0 +1,584 @@
+---
+title: "BYOK - Bring Your Own Key"
+description: "Configure your own API keys for maximum flexibility and cost control. Available on every Kodus plan."
+---
+
+BYOK (Bring Your Own Key) is the **default way Kodus uses LLMs across every plan** — Community, Teams, and Enterprise. You connect your own provider account, pick a model, pay only for what you use, and monitor costs directly on your provider's dashboard. Kodus never marks up tokens and never sees your key in plain text.
+
+<Card
+  title="How this maps to plans"
+  icon="scale-balanced"
+  href="/how_to_use/en/pricing#byok-is-the-default-across-all-plans"
+>
+  BYOK is free on Community, included on Teams ($10/active dev/month on top of your token spend), and one of two options on Enterprise (the other being a Kodus-managed API key).
+</Card>
+
+## Getting Started
+
+The BYOK screen has two paths: pick a **recommended model** from the curated catalog (fastest path, 90% of cases) or **configure any provider manually** (escape hatch for custom endpoints or uncurated models).
+
+<Steps>
+  <Step title="Open BYOK Settings">
+    Go to [app.kodus.io/organization/byok](https://app.kodus.io/organization/byok).
+  </Step>
+
+  <Step title="Pick a recommended model">
+    The **Main model** section shows a grid of curated models we've benchmarked for code review. Click any card to start connecting it.
+  </Step>
+
+  <Step title="Paste your API key and test">
+    Each card expands inline with a single input — just the API key. Click **Test** to probe the provider, or **Test & save** to run the test and persist the config on success.
+  </Step>
+
+  <Step title="Add a Fallback (recommended)">
+    Once the Main model is configured, a **Fallback model** section appears. If your main provider hits rate limits or goes down, Kodus falls back automatically.
+  </Step>
+</Steps>
+
+<Info>
+  **Test before saving.** The **Test** button probes your provider with a cheap metadata call (no LLM inference is performed). It catches invalid keys, wrong base URLs, and network issues before they break your first code review.
+</Info>
+
+## Recommended Models
+
+These six models are curated for code review. They all appear in the catalog on `/organization/byok` and come pre-tuned with sensible defaults (temperature, max output tokens, and reasoning effort set to `medium`).
+
+<CardGroup cols={2}>
+  <Card title="Claude Sonnet 4.6" icon="crown">
+    **Best balance of quality and cost**
+
+    Anthropic's latest Sonnet. Adaptive extended thinking, strong cross-file analysis, 200K context window.
+
+    - **Provider:** Anthropic
+    - **Model ID:** `claude-sonnet-4-6`
+    - **Key:** [console.anthropic.com](https://console.anthropic.com/settings/keys)
+  </Card>
+
+  <Card title="Claude Opus 4.7" icon="star">
+    **Flagship quality**
+
+    Top-tier Anthropic model for the hardest reviews. 1M context, premium price.
+
+    - **Provider:** Anthropic
+    - **Model ID:** `claude-opus-4-7`
+    - **Key:** [console.anthropic.com](https://console.anthropic.com/settings/keys)
+  </Card>
+
+  <Card title="Gemini 3.1 Pro (custom tools)" icon="brain">
+    **Largest context**
+
+    Google's flagship with custom-tools support. 1M context window — strongest on large PRs and monorepos.
+
+    - **Provider:** Google Gemini
+    - **Model ID:** `gemini-3.1-pro-preview-customtools`
+    - **Key:** [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+  </Card>
+
+  <Card title="GPT-5.4" icon="sparkles">
+    **Fast and consistent**
+
+    OpenAI's latest flagship. Reliable low latency, broad knowledge, 400K context.
+
+    - **Provider:** OpenAI
+    - **Model ID:** `gpt-5.4`
+    - **Key:** [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+  </Card>
+
+  <Card title="Kimi K2.6 Coding" icon="moon">
+    **Coding-specialized, cheap**
+
+    Moonshot AI's coding-tuned model. Two plans: Developer API (pay-per-token) or Kimi Code Plan (subscription with dedicated endpoint).
+
+    - **Provider:** OpenAI-compatible (Moonshot AI)
+    - **Model ID:** `kimi-k2.6`
+    - **Keys:** [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) or [kimi.com/code](https://www.kimi.com/code)
+  </Card>
+
+  <Card title="GLM 5.1" icon="bolt">
+    **Best subscription value**
+
+    Z.ai's latest. Two plans: Developer API (pay-per-token) or GLM Coding Plan (flat-rate subscription).
+
+    - **Provider:** OpenAI-compatible (Z.ai)
+    - **Model ID:** `glm-5.1`
+    - **Keys:** [z.ai console](https://z.ai/manage-apikey/apikey-list) or [z.ai/subscribe](https://z.ai/subscribe)
+  </Card>
+</CardGroup>
+
+<Info>
+  **Our default recommendation:** Start with **Claude Sonnet 4.6** for the best overall code-review experience. If cost is the priority, **GLM 5.1 on the Coding Plan** or **Kimi K2.6 on the Kimi Code Plan** give flat-rate subscriptions that cap your monthly spend.
+</Info>
+
+## Plan selector (GLM 5.1 and Kimi K2.6)
+
+Z.ai and Moonshot both offer a subscription plan with a **different endpoint** than their pay-per-token Developer API. The curated card for each of these models shows a **Plan** selector so you can pick the right endpoint before pasting your key.
+
+<Tabs>
+  <Tab title="GLM 5.1 (Z.ai)">
+    | Plan | Endpoint | Keys from | Best for |
+    | --- | --- | --- | --- |
+    | **Developer API** | `https://api.z.ai/api/paas/v4/` | [z.ai/manage-apikey](https://z.ai/manage-apikey/apikey-list) | Bursty workloads, pay-per-token |
+    | **Coding Plan** | `https://api.z.ai/api/coding/paas/v4` | [z.ai/subscribe](https://z.ai/subscribe) | Predictable team volume, flat monthly fee |
+
+    <Warning>
+      GLM Coding Plan keys **only** work on `/api/coding/paas/v4`. The Lite and Pro tiers are often capped at **1 concurrent request** — Kodus pre-fills `maxConcurrentRequests=1` when you pick this plan. Bump it in Advanced settings if you're on the Max tier (up to 30).
+    </Warning>
+  </Tab>
+
+  <Tab title="Kimi K2.6 (Moonshot AI)">
+    | Plan | Endpoint | Keys from | Best for |
+    | --- | --- | --- | --- |
+    | **Developer API** | `https://api.moonshot.ai/v1` | [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) | Pay-per-token, concurrency scales with recharge tier |
+    | **Kimi Code Plan** | `https://api.kimi.com/coding/v1` | [kimi.com/code](https://www.kimi.com/code) | Subscription with dedicated coding endpoint |
+
+    <Info>
+      Kimi Code Plan is documented at a cap of 30 concurrent requests. Kodus pre-fills `maxConcurrentRequests=30` when you pick that plan.
+    </Info>
+  </Tab>
+</Tabs>
+
+## Configure manually
+
+When the model you want isn't in the curated list (custom endpoint, self-hosted LLM, or a provider we haven't benchmarked), click **Configure manually** at the bottom of the catalog. This opens `/organization/byok/manual?slot=main` — a step-by-step wizard:
+
+<Steps>
+  <Step title="Pick a provider">
+    Choose from OpenAI, Anthropic, Google Gemini, OpenRouter, Novita, or **OpenAI Compatible** (for any OpenAI-format endpoint).
+  </Step>
+
+  <Step title="Enter the base URL (if required)">
+    OpenAI-compatible providers need an explicit base URL. The field only appears when you pick that provider.
+  </Step>
+
+  <Step title="Pick or type the model ID">
+    If Kodus can list models from the provider, you get a dropdown. Otherwise (e.g. self-hosted or when platform keys aren't configured), type the exact model ID manually.
+  </Step>
+
+  <Step title="Paste the API key">
+    The key field appears once provider and model are set.
+  </Step>
+
+  <Step title="Tune advanced settings (optional)">
+    Temperature, max tokens, reasoning effort, and max concurrent requests — all optional. Defaults are sensible for most providers.
+  </Step>
+
+  <Step title="Test and save">
+    Click **Test & save** to run the connection probe and persist on success.
+  </Step>
+</Steps>
+
+<Tip>
+  The same manual route works for Fallback — navigate with `?slot=fallback`, or use the **Add fallback** link after Main is saved.
+</Tip>
+
+## Supported Providers
+
+<Tabs>
+  <Tab title="OpenAI">
+    **Best for:** Latest GPT models and reliable performance.
+
+    **Get an API key:**
+    1. Visit [OpenAI API Keys](https://platform.openai.com/api-keys)
+    2. Create a new key for Kodus
+    3. Add billing information
+  </Tab>
+
+  <Tab title="Google Gemini">
+    **Best for:** Large-context reviews (1M tokens) and competitive pricing.
+
+    **Get an API key:**
+    1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+    2. Create a new key
+    3. Enable billing in Google Cloud Console
+  </Tab>
+
+  <Tab title="Anthropic Claude">
+    **Best for:** Nuanced analysis and adaptive extended thinking.
+
+    **Get an API key:**
+    1. Visit [Anthropic Console](https://console.anthropic.com/)
+    2. Create an account and generate a key
+    3. Add credits
+  </Tab>
+
+  <Tab title="Novita AI">
+    **Best for:** Open-source models at competitive prices.
+
+    **Get an API key:**
+    1. Sign up at [Novita AI](https://novita.ai/)
+    2. Navigate to API settings
+    3. Generate a key
+
+    <Card title="Novita Setup Guide" icon="rocket" href="/cookbook/en/novita">
+      Detailed setup with screenshots.
+    </Card>
+  </Tab>
+
+  <Tab title="OpenRouter">
+    **Best for:** One billing relationship across many models.
+
+    **Get an API key:**
+    1. Create an account at [OpenRouter](https://openrouter.ai/)
+    2. Add credits
+    3. Generate a key in settings
+
+    <Warning>
+      OpenRouter routes each request to a different upstream provider by default, which can cause quality and latency drift between calls. **Pin specific upstreams** under Advanced settings → OpenRouter routing to keep behavior stable. See [Pinning OpenRouter providers](#pinning-openrouter-providers).
+    </Warning>
+  </Tab>
+
+  <Tab title="OpenAI Compatible">
+    **Best for:** Specialized providers (Moonshot, Z.ai, Fireworks, Together, Groq, DeepSeek) or self-hosted endpoints.
+
+    **How to configure:**
+    1. In the manual wizard, pick **OpenAI Compatible** as the provider.
+    2. Enter the base URL (e.g. `https://api.moonshot.ai/v1`, `https://api.z.ai/api/paas/v4/`, `https://api.fireworks.ai/inference/v1`).
+    3. Provide the key and model ID.
+
+    <CardGroup cols={2}>
+      <Card title="Z.ai (GLM) guide" href="/knowledge_base/en/how-to-use-z-ai-with-kodus" icon="bolt">
+        Full Z.ai setup with Coding Plan details.
+      </Card>
+      <Card title="Moonshot (Kimi) guide" href="/knowledge_base/en/how-to-use-moonshot-with-kodus" icon="moon">
+        Kimi K2.6 + Kimi Code Plan setup.
+      </Card>
+      <Card title="Fireworks AI" href="/knowledge_base/en/how-to-use-fireworks-with-kodus" icon="fire">
+        Fireworks-specific setup.
+      </Card>
+      <Card title="Together AI" href="/knowledge_base/en/how-to-use-together-ai-with-kodus" icon="handshake">
+        Together AI setup.
+      </Card>
+    </CardGroup>
+  </Tab>
+</Tabs>
+
+## Reasoning / Extended Thinking
+
+All six recommended models support reasoning. The BYOK form exposes a **Thinking** toggle (Off / Low / Medium / High / Custom) under **Advanced settings**, pre-filled to **Medium** for every recommended model.
+
+### Preset levels
+
+When you pick Low / Medium / High, Kodus translates the level to each provider's native format automatically:
+
+| Provider | How "medium" maps |
+| --- | --- |
+| **Anthropic** (Claude Sonnet 4.6 / Opus 4.7) | `thinking: { type: "adaptive" }` + `outputConfig: { effort: "medium" }` |
+| **Google** (Gemini 3.1 Pro) | `thinkingConfig: { thinkingLevel: "medium" }` |
+| **OpenAI** (GPT-5.4) | `reasoningEffort: "medium"` |
+| **OpenRouter** | `reasoning: { effort: "medium" }` |
+| **OpenAI-compatible** (Kimi K2.6 / GLM 5.1) | `thinking: { type: "enabled" }` — binary on/off, level ignored |
+
+<Note>
+  Kimi and GLM currently expose reasoning as a single on/off flag. Picking Low, Medium, or High all emit the same payload (thinking enabled). When their APIs add level granularity, Kodus will start forwarding it.
+</Note>
+
+### Custom JSON override
+
+Picking **Custom** in the Thinking toggle reveals a JSON textarea. Paste the provider options directly — **Kodus auto-wraps them under the active provider's namespace**. You don't need to know the Vercel AI SDK routing rules.
+
+Use this when:
+
+- You need a specific `budgetTokens` value for Claude (instead of the preset effort mapping)
+- You want to enable/disable thinking on a per-model basis for OpenAI-compatible providers
+- You want fields beyond reasoning — **caching, service tier, safety settings, `user` tagging, etc.** The override is merged into `providerOptions`, so any adapter field passes through
+- The provider ships a new field Kodus hasn't wrapped yet
+
+#### Examples (paste directly — no namespace needed)
+
+<Tabs>
+  <Tab title="Anthropic">
+    Override Claude's thinking budget to exactly 20,000 tokens:
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budgetTokens": 20000 }
+    }
+    ```
+
+    Enable prompt caching (non-reasoning example):
+
+    ```json
+    {
+      "cacheControl": { "type": "ephemeral" }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Google Gemini">
+    Explicit thinking budget (Gemini 2.5) or level (Gemini 3+):
+
+    ```json
+    {
+      "thinkingConfig": { "thinkingBudget": 16000 }
+    }
+    ```
+
+    Adjust safety settings:
+
+    ```json
+    {
+      "safetySettings": [
+        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE" }
+      ]
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI">
+    Reasoning with OpenAI-specific fields:
+
+    ```json
+    {
+      "reasoningEffort": "high",
+      "serviceTier": "flex",
+      "store": false,
+      "user": "kodus-review"
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenRouter">
+    Force reasoning + ignore a specific upstream:
+
+    ```json
+    {
+      "reasoning": { "effort": "high" },
+      "ignore": ["deepinfra"]
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI-compatible (Kimi, GLM, etc.)">
+    Enable thinking with a budget hint:
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budget_tokens": 25000 }
+    }
+    ```
+
+    Explicitly disable thinking:
+
+    ```json
+    {
+      "thinking": { "type": "disabled" }
+    }
+    ```
+
+    <Warning>
+      Fields the upstream provider doesn't recognize (e.g. `budget_tokens` on a server that ignores it) are silently dropped. Check the provider's docs to confirm what they accept.
+    </Warning>
+  </Tab>
+</Tabs>
+
+#### Going manual with namespaces (power users)
+
+If your JSON already contains a known namespace key at the top level (`anthropic`, `google`, `openai`, `openrouter`, `openaiCompatible`), Kodus leaves it untouched. Useful if you want to mix multiple provider namespaces or be explicit:
+
+```json
+{
+  "openrouter": {
+    "reasoning": { "effort": "high" },
+    "provider": { "order": ["moonshot"], "allow_fallbacks": false }
+  }
+}
+```
+
+Under the hood, these are the namespace mappings Kodus uses:
+
+| BYOK provider | Namespace key |
+| --- | --- |
+| `anthropic` | `anthropic` |
+| `google_gemini` / `google_vertex` | `google` |
+| `openai` | `openai` |
+| `open_router` | `openrouter` |
+| `openai_compatible` / `novita` | `openaiCompatible` |
+
+#### Gotchas
+
+- **Valid JSON only.** Missing commas or trailing commas break the parse and Kodus ignores the override.
+- **Precedence:** the JSON override **fully replaces** the effort-preset's namespace block — if you override `anthropic.thinking` but forget `anthropic.outputConfig`, that field won't be sent. OpenRouter routing (Pin providers / Allow fallbacks) is the one exception: it deep-merges with your override under `openrouter`.
+- **Unknown provider = no wrap.** If your BYOK provider isn't in the namespace table above, Kodus passes the JSON through as-is. Rare — only applies if you configure a provider Kodus doesn't recognize.
+
+## Pinning OpenRouter providers
+
+OpenRouter is a router — when you request a model (e.g. `moonshotai/kimi-k2.5`), it forwards the call to one of several upstream providers (Moonshot direct, Together, Groq, Fireworks, Novita…). Each call can land on a different backend. That's convenient, but it introduces silent variance:
+
+- **Quality drift** — upstreams run different precisions (FP8, INT4, full) and give subtly different outputs for identical prompts
+- **Tool-calling inconsistency** — some backends don't support function calling the same way, leading to malformed tool use
+- **Reasoning format variance** — one upstream honors `reasoning_effort`, another only `thinking.enabled`, another ignores both
+- **Latency swings** — p50 can jump from 800ms to 4s between calls as routing changes
+- **Rate-limit surprises** — you hit quota on a backend you didn't explicitly choose
+
+### How to pin
+
+When your BYOK provider is **OpenRouter**, the Advanced settings panel shows an **OpenRouter routing** section with two fields:
+
+- **Pin providers (in order)** — comma-separated list of upstream names (e.g. `moonshot, together`). OpenRouter tries them in order and uses the first available.
+- **Allow fallbacks** — when off, requests hard-fail if none of the pinned providers are available. When on (default), OpenRouter can fall back to any other upstream that serves the model.
+
+<Tip>
+  For a **stable** setup, pin a single provider and turn off fallbacks (`Pin: moonshot`, `Allow fallbacks: off`). Requests will always hit the same upstream or fail loudly — no silent quality changes. The tradeoff is zero resilience if that one upstream goes down; pair it with a different BYOK Fallback (e.g. Anthropic) to absorb outages.
+</Tip>
+
+<Warning>
+  Upstream names must match OpenRouter's catalog. Check the provider tags on [openrouter.ai/docs/features/provider-routing](https://openrouter.ai/docs/features/provider-routing) — common values include `moonshot`, `together`, `groq`, `fireworks`, `novita`.
+</Warning>
+
+Under the hood, Kodus emits this into the Vercel AI SDK call:
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot", "together"],
+      "allow_fallbacks": false
+    }
+  }
+}
+```
+
+### Advanced: raw JSON override
+
+If you need fields beyond `order` and `allow_fallbacks` (e.g. `ignore`, `data_collection`, `require_parameters`), switch **Thinking** to **Custom** in Advanced settings and paste the full routing payload — it's merged into `providerOptions` alongside any reasoning config:
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot"],
+      "allow_fallbacks": false,
+      "ignore": ["deepinfra"],
+      "data_collection": "deny"
+    },
+    "reasoning": { "effort": "medium" }
+  }
+}
+```
+
+## Concurrency and rate limits
+
+The `maxConcurrentRequests` field (under **Advanced settings**) caps how many inflight requests Kodus sends to your provider in parallel. Most of the time, the default is fine — but subscription plans with strict concurrency caps need it set explicitly.
+
+### Defaults Kodus pre-fills
+
+| Provider / plan | Pre-filled value | Why |
+| --- | --- | --- |
+| **GLM Coding Plan (Lite/Pro)** | `1` | Subscription allows only one in-flight request. Going higher triggers 429s. |
+| **GLM Coding Plan (Max)** | `1` (bump manually) | Max allows up to 30, but we default to the safe value. Raise in Advanced settings. |
+| **Kimi Code Plan** | `30` | Moonshot's documented cap on the coding endpoint. |
+| **GLM Developer API** | _(empty)_ | Limits scale per key; no sensible global default. |
+| **Kimi Developer API** | _(empty)_ | Scales with your recharge tier (Tier 1 ≈ 50, Tier 5 ≈ 1000). |
+| **Anthropic / OpenAI / Google / OpenRouter** | _(empty)_ | Providers enforce their own TPM/RPM; Kodus doesn't cap. |
+
+### When to tune it
+
+<CardGroup cols={2}>
+  <Card title="Raise it" icon="arrow-up">
+    - You have a high-tier recharge on Moonshot/OpenRouter and want higher throughput on big PRs
+    - You bumped your GLM Coding Plan to **Max** and want to use the full 30-concurrent budget
+    - Reviews feel serialized on multi-file PRs and you're not seeing 429s
+  </Card>
+  <Card title="Lower it" icon="arrow-down">
+    - You see `429` or `Too much concurrency` errors in review logs
+    - Your provider warns about rate limits on the dashboard
+    - You want to conserve Coding Plan window (5h/weekly) across more PRs
+  </Card>
+</CardGroup>
+
+<Tip>
+  **Concurrency vs. RPM vs. TPM.** `maxConcurrentRequests` only caps parallel inflight requests. Many providers also enforce separate **RPM** (requests per minute) and **TPM** (tokens per minute) limits. If you're hitting RPM/TPM while concurrency looks fine, the fix is usually to upgrade your tier or spread load across time — not to change `maxConcurrentRequests`.
+</Tip>
+
+<Note>
+  **Fallback interaction.** When Main hits a 429 and Kodus fails over to the Fallback model, the Fallback's own `maxConcurrentRequests` applies. Setting a generous Fallback on a different provider is a good way to absorb bursts when your Main is on a tight subscription.
+</Note>
+
+## Best Practices
+
+### Security
+
+<CardGroup cols={2}>
+  <Card title="Dedicated Keys" icon="shield-check">
+    Create separate API keys for Kodus. Makes usage auditing and key rotation easier.
+  </Card>
+  <Card title="Regular Rotation" icon="arrows-rotate">
+    Rotate keys periodically and update them in BYOK settings.
+  </Card>
+  <Card title="Monitor Usage" icon="chart-bar">
+    Check your provider dashboards for unusual patterns.
+  </Card>
+  <Card title="Secure Storage" icon="lock">
+    Never commit keys to repositories. Kodus stores them encrypted at rest and in transit.
+  </Card>
+</CardGroup>
+
+### Fallback Strategy
+
+- Use a **different provider** for Main and Fallback (e.g. Anthropic main, Google fallback). Protects against provider-specific outages.
+- Subscriptions with tight concurrency limits (GLM Coding Plan Lite/Pro, Kimi Code Plan) make poor solo configurations — pair them with a pay-per-token Fallback so bursty PRs don't starve.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="'Invalid API key' when clicking Test">
+    - Copy the key without extra spaces, quotes, or trailing newlines.
+    - Confirm billing is enabled and the account has credits.
+    - For GLM Coding Plan / Kimi Code Plan keys, make sure you picked the matching **Plan** in the card — subscription keys don't work on the Developer API endpoint and vice versa.
+  </Accordion>
+
+  <Accordion title="'Endpoint not found' when clicking Test">
+    - Verify the base URL matches the provider exactly (trailing slash matters for some).
+    - For OpenAI-compatible providers, the models endpoint is usually `{baseURL}/models`.
+  </Accordion>
+
+  <Accordion title="Model not found at review time (key test passed)">
+    - The **Test** button validates the key/endpoint but doesn't verify the specific model ID. If you typed a model that doesn't exist (typo), the first real review fails.
+    - Cross-check the model ID against the provider's catalog before saving.
+  </Accordion>
+
+  <Accordion title="'Rate limited' or 'Too much concurrency'">
+    - Lower **Max concurrent requests** in Advanced settings.
+    - On GLM Coding Plan Lite/Pro, stay at **1 concurrent**. Upgrade to Max (30 concurrent) if you need more throughput.
+    - On Kimi Code Plan, the documented cap is **30 concurrent**.
+  </Accordion>
+
+  <Accordion title="Self-hosted env vars not showing">
+    - If Kodus is configured via `.env` (self-hosted Fixed Mode), the BYOK screen shows a blue info banner with the active provider/model — the key is never displayed for security.
+    - Saving a BYOK config on top of `.env` prompts a confirm dialog before overriding.
+  </Accordion>
+
+  <Accordion title="High or unexpected costs">
+    - Reasoning adds tokens. If cost is spiking, lower **Thinking** from Medium to Low, or switch to a cheaper model for Main.
+    - Check your provider dashboard for the per-model breakdown.
+    - Set a monthly cap at the provider level.
+  </Accordion>
+</AccordionGroup>
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="Can I switch providers anytime?">
+    Yes. The change takes effect for the next review — no redeploy required.
+  </Accordion>
+
+  <Accordion title="What happens if my API key runs out of credits?">
+    Reviews automatically switch to the Fallback model if one is configured. Without a Fallback, the review fails and returns an error. Always configure a Fallback.
+  </Accordion>
+
+  <Accordion title="How does the primary/fallback system work?">
+    Main handles every review by default. If it fails (rate limit, 5xx, timeout), Kodus retries once on Fallback. You pay only for the provider that actually processed the review.
+  </Accordion>
+
+  <Accordion title="Should I use the same provider for Main and Fallback?">
+    No. Different providers protect against provider-specific outages. A common pairing: Anthropic Main + Google Fallback, or GLM Coding Plan Main + Anthropic Fallback for spike coverage.
+  </Accordion>
+
+  <Accordion title="Do you store our API keys securely?">
+    Yes. Keys are encrypted at rest and in transit and never logged in plain text. The BYOK status endpoint never returns the raw key.
+  </Accordion>
+
+  <Accordion title="Can I use a self-hosted LLM (e.g. Ollama, vLLM)?">
+    Yes — via the **OpenAI Compatible** provider in the manual wizard. Enter your endpoint's base URL, the model ID it exposes, and a placeholder API key (most self-hosted runtimes ignore the key header but still require one).
+  </Accordion>
+</AccordionGroup>

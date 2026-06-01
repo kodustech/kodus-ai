@@ -1,0 +1,128 @@
+---
+title: "Proxy inverso"
+description: "Configura un proxy inverso para Kodus."
+icon: "server" 
+tags: ["reverse-proxy", "nginx"]
+---
+
+<Info>
+Paso opcional: Solo necesario si no usarás ningún balanceador de carga o servidor proxy.
+</Info>
+
+Para hacer que tu instancia de Kodus sea accesible desde sistemas externos (necesario para los webhooks de revisión de código y el acceso público), deberás configurar un proxy inverso con Nginx.
+
+Aquí hay una configuración de Nginx de ejemplo para dos subdominios:
+
+```nginx
+# Bloque de servidor para la aplicación web de Kodus
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com; # Reemplaza con el dominio real de tu aplicación web
+
+    location / {
+        proxy_pass http://localhost:3000; # Apunta al contenedor de la aplicación web de Kodus
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_buffer_size 16k;
+        proxy_buffers 8 16k;
+        proxy_busy_buffers_size 32k;
+    }
+}
+
+# Bloque de servidor para la API de Kodus
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com; # Reemplaza con el dominio real de tu API
+
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332; # Apunta al servicio de Webhooks de Kodus
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001; # Apunta al servicio de API de Kodus
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+<Note>
+  Los webhooks son gestionados por un servicio separado (puerto 3332). El bloque `location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook` es necesario si las URLs de tus webhooks usan el dominio de la API.
+</Note>
+
+### Opcional: Subdominio dedicado para webhooks
+
+Si prefieres un dominio separado para los webhooks (ej., `kodus-webhooks.yourdomain.com`), agrega un bloque de servidor que apunte al servicio de webhooks:
+
+```nginx
+server {
+    listen 80;
+    server_name kodus-webhooks.yourdomain.com;
+
+    location / {
+        proxy_pass http://localhost:3332; # Servicio de webhooks
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+Guarda esta configuración en `/etc/nginx/sites-available/kodus` (o con el nombre de tu elección, ej., `kodus-web` y `kodus-api` como archivos separados si lo prefieres) y crea un enlace simbólico para habilitarla:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/kodus /etc/nginx/sites-enabled/
+sudo nginx -t  # Probar la configuración
+sudo systemctl reload nginx  # Aplicar los cambios
+```
+
+<Info>
+  **Actualización importante de configuración para el proxy inverso:**
+
+  Después de configurar el proxy inverso con `kodus-web.yourdomain.com` y `kodus-api.yourdomain.com` (o los subdominios que hayas elegido), **debes** asegurarte de que tu archivo `.env` refleje correctamente estas URLs públicas. Específicamente, verifica: 
+  - `WEB_HOSTNAME_API`: Debe establecerse con **solo el hostname** de tu API pública (ej., `kodus-api.yourdomain.com`), sin ningún protocolo (`http://` o `https://`).
+  - `WEB_PORT_API`: Debe corresponder al puerto público en el que tu API es accesible (típicamente `443` para HTTPS o `80` para HTTP). El esquema (http/https) que usa el frontend para llamar a la API generalmente se infiere de este puerto o está codificado en la lógica del frontend para usar HTTPS.
+  - URLs de webhook (ej., `API_GITHUB_CODE_MANAGEMENT_WEBHOOK`): Asegúrate de que resuelvan al **servicio de webhooks**. Puedes usar el dominio de la API solo si `/.../webhook` enruta al puerto `3332`, o usa un dominio dedicado para webhooks (ej., `https://kodus-webhooks.yourdomain.com/github/webhook`).
+
+  No actualizar esto correctamente puede resultar en problemas de autenticación, incapacidad de la aplicación web para conectarse a la API, o webhooks que no funcionan.
+</Info>
+
+### Habilitar SSL (recomendado)
+
+Para despliegues en producción, recomendamos encarecidamente configurar SSL con Let's Encrypt:
+
+```bash
+# Instalar Certbot para Let's Encrypt
+sudo apt-get update
+sudo apt-get install certbot python3-certbot-nginx
+
+# Obtener e instalar certificados para ambos dominios
+sudo certbot --nginx -d kodus-web.yourdomain.com -d kodus-api.yourdomain.com # Reemplaza con tus dominios reales
+```
+
+Esto configurará automáticamente tu Nginx para usar HTTPS y redirigir el tráfico HTTP para ambos subdominios.

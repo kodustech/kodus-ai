@@ -1,0 +1,288 @@
+---
+title: "本地快速开始"
+description: "在本地计算机上运行 Kodus — API、Worker、Webhooks、Web UI 和所有依赖项，一条命令全部启动。"
+icon: "laptop"
+---
+
+<Note>
+  本指南用于本地开发目的。对于生产部署，请参阅[部署 Kodus](/how_to_deploy/zh/deploy_kodus/generic_vm) 指南。
+</Note>
+
+<Note>
+  本地开发使用 `API_CLOUD_MODE=false` 运行 — 与自托管实例相同的模式 —
+  这意味着到 `telemetry.kodus.io` 的每日匿名心跳默认启用。如果您不希望
+  本地实验出现在集群中,请在 `.env` 中设置 `KODUS_TELEMETRY_DISABLED=true`。
+  请参阅 [匿名遥测](/how_to_deploy/zh/deploy_kodus/telemetry) 了解发送
+  内容和检查方式。
+</Note>
+
+## 先决条件
+
+- Node.js（LTS 版本）
+- Docker
+- Yarn 或 NPM
+- LLM API 密钥
+
+## 运行项目
+
+<Tabs>
+  <Tab title="自动设置（推荐）">
+      要进行快速自动设置，请使用我们的设置脚本：
+
+      ```bash
+      git clone https://github.com/kodustech/kodus-ai.git
+      cd kodus-ai
+      yarn setup
+      ```
+
+      此脚本将自动：
+      - ✅ 检查所有必需的依赖项（Node.js、Yarn、Docker、OpenSSL）
+      - ✅ 安装项目依赖项
+      - ✅ 创建和配置 `.env` 文件
+      - ✅ 自动生成所有必需的安全密钥
+      - ✅ 设置 Docker 网络
+      - ✅ 提供清晰的后续步骤
+
+    ### 选择您的 LLM 模式（必需）
+
+    在启动服务之前选择一种模式并填写您的 .env。
+
+    <Snippet file="llm-api-keys.mdx" />
+
+      ### 后续步骤
+
+      **基本设置：**
+      ```bash
+      yarn docker:start
+      yarn migrate:dev
+      yarn seed
+      ```
+
+      **带外部集成（webhook 等）：**
+      ```bash
+      yarn docker:start
+      yarn migrate:dev
+      yarn seed
+      yarn tunnel  # 为外部服务创建公共端点
+      ```
+
+      一切运行后，在浏览器中打开 **http://localhost:3000**。
+  </Tab>
+  <Tab title="手动设置">
+      如果您更喜欢手动配置所有内容：
+
+      ### 1. 克隆仓库
+
+      ```bash
+      git clone https://github.com/kodustech/kodus-ai.git
+      ```
+
+      ### 2. 安装依赖项
+
+      ```bash
+      yarn install
+      ```
+
+      ### 3. 配置环境变量
+
+      ```bash
+      cp .env.example .env
+      ```
+      ### 4. 选择您的 LLM 模式（必需）
+
+在启动服务之前选择一种模式并填写您的 .env。
+
+      <Snippet file="llm-api-keys.mdx" />
+
+      ### 5. 生成安全密钥
+
+      在配置环境变量之前，您需要为 JWT 令牌和其他与安全相关的配置生成安全密钥：
+
+      ```bash
+      # 用于大多数安全密钥（JWT 密钥等）
+      openssl rand -base64 32
+
+      # 用于加密密钥和代码管理密钥
+      openssl rand -hex 32
+
+      # 用于 webhook 令牌（URL 安全）
+      openssl rand -base64 32 | tr -d '=' | tr '/+' '_-'
+      ```
+
+      您需要为这些安全密钥生成值：
+      - `JWT_SECRET`（使用 `openssl rand -base64 32`）
+      - `JWT_REFRESH_SECRET`（使用 `openssl rand -base64 32`）
+      - `CODE_MANAGEMENT_SECRET`（使用 `openssl rand -hex 32`）
+      - `CODE_MANAGEMENT_WEBHOOK_TOKEN`（使用 `openssl rand -base64 32 | tr -d '=' | tr '/+' '_-'`）
+
+
+      ### 6. 设置 Docker 网络
+
+      创建所需的 Docker 网络：
+
+      ```bash
+      docker network create kodus-backend-services || true
+      docker network create shared-network || true
+      ```
+
+      ### 7. 启动开发环境
+
+      使用 Docker 启动服务：
+
+      ```bash
+      yarn docker:start
+      ```
+
+      此命令启动：
+
+      - Kodus API
+      - Worker（异步任务）
+      - Webhooks 服务
+      - Kodus Web 应用程序
+      - PostgreSQL 数据库
+      - MongoDB 数据库
+      - RabbitMQ
+      - 所需的网络配置
+
+      如需为外部服务创建公共端点：
+      ```bash
+      yarn tunnel
+      ```
+
+      ### 8. 首次设置
+
+      如果这是您第一次运行该项目，请执行以下命令：
+
+      运行数据库迁移：
+
+      ```bash
+      yarn migrate:dev
+      ```
+
+      填充初始数据：
+
+      ```bash
+      yarn seed
+      ```
+
+      ### 9. 服务端点
+
+      访问服务：
+
+      - Web UI：`http://localhost:3000`
+      - API：`http://localhost:3001`
+      - RabbitMQ 管理界面：`http://localhost:15672`
+      - 调试端口：`9229`
+
+  </Tab>
+</Tabs>
+
+
+## 开发工作流程
+
+### 基本本地开发
+
+1. **启动服务**：`yarn docker:start`
+2. **运行迁移**：`yarn migrate:dev`
+3. **加载种子数据**：`yarn seed`
+4. **打开应用**：访问 `http://localhost:3000`
+5. **健康检查**：`yarn dev:health-check`
+
+### 带外部集成的开发
+
+如果您需要测试与外部服务的集成（如 Git webhook）：
+
+1. **启动服务**：`yarn docker:start && yarn migrate:dev && yarn seed`
+2. **创建隧道**：`yarn tunnel`（创建公共端点）
+3. **更新 webhook URL**：隧道命令会自动更新您的 `.env`
+4. **配置 Git 提供商**：在 Git 提供商的 webhook 设置中使用隧道 URL
+5. **测试集成**：触发 webhook 并监控日志
+
+<Info>
+  **隧道优势：**
+  - 在本地测试真实的 webhook 集成
+  - 调试外部服务通信
+  - 与团队成员共享您的开发环境
+  - 测试移动应用或其他外部客户端
+</Info>
+
+## 故障排除
+
+### 快速健康检查
+
+```bash
+yarn dev:health-check
+```
+
+此综合健康检查验证：
+- ✅ **服务**：Kodus API、Worker、Webhooks、Web、PostgreSQL、MongoDB、RabbitMQ
+- 🔌 **端口可用性**：Web（3000）、API（3001）、PostgreSQL（5432）、MongoDB（27017）、RabbitMQ（5672/15672）
+- 🗄️ **数据库设置**：迁移和种子数据
+- 🌐 **API 端点**：健康端点和基本连接
+
+
+### 手动验证
+
+1. **检查 Web UI**：在浏览器中访问 `http://localhost:3000`
+2. **检查 API 健康**：在浏览器中访问 `http://localhost:3001/health`
+3. **检查 RabbitMQ**：访问 `http://localhost:15672`（默认凭据：`guest`/`guest`）
+4. **验证数据库连接**：检查日志以查看成功的数据库连接
+5. **测试 webhook 端点**：您的 Git 提供商 webhook 应指向 `http://localhost:3332/[provider]/webhook`（或在反向代理将 `/.../webhook` 转发到 Webhooks 服务时使用 API 域名）
+
+
+### 设置脚本问题
+
+如果自动设置脚本（`yarn setup`）失败：
+
+**缺少依赖项：**
+```bash
+# 检查是否安装了所有必需的工具
+node --version
+yarn --version
+docker --version
+openssl version
+```
+
+**Docker 权限问题：**
+```bash
+# 将您的用户添加到 docker 组（Linux/macOS）
+sudo usermod -aG docker $USER
+# 然后注销并重新登录
+```
+
+**网络创建错误：**
+```bash
+# 检查网络是否已存在
+docker network ls | grep kodus
+# 如果需要，删除冲突的网络
+docker network rm kodus-backend-services shared-network
+```
+
+### 常见问题
+
+**端口冲突：**
+- 确保端口 3000（Web）、3001（API）、5432（PostgreSQL）、27017（MongoDB）和 5672/15672（RabbitMQ）可用
+- 在启动 Kodus 之前停止使用这些端口的其他服务
+
+**环境变量未加载：**
+- 验证项目根目录中存在 `.env` 文件
+- 检查变量赋值中是否没有尾随空格
+- 确保所有必需的安全密钥都已正确生成
+
+**健康检查失败：**
+- 运行 `yarn dev:health-check` 以获取详细诊断
+- 检查容器是否完全启动（在 `yarn docker:start` 后等待 1-2 分钟）
+- 验证数据库迁移和种子数据是否已加载
+- 使用 `yarn docker:logs` 检查 API 日志以查找启动错误
+
+**API 无响应：**
+- 容器启动后 API 需要时间才能完全初始化
+- 检查迁移和种子数据是否已加载
+- 验证 `.env` 文件是否包含所有必需的变量
+- 运行健康检查以查看哪些特定组件失败
+
+**外部服务的 webhook 问题：**
+- 使用 `yarn tunnel` 为外部 webhook 创建公共端点
+- 更新 Git 提供商的 webhook URL 以使用隧道 URL
+- 测试 webhook 集成时确保隧道正在运行
+- 检查隧道日志以查找连接问题

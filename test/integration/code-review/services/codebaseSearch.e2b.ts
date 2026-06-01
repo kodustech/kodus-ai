@@ -587,7 +587,7 @@ async function main() {
             assert(result.success, 'merge: search succeeds');
 
             // Get ground truth: how many individual rg lines match?
-            const rawMatchCount = await countGrepFiles(
+            const _rawMatchCount = await countGrepFiles(
                 'PlatformType',
                 '**/e2bSandbox.service.ts',
             );

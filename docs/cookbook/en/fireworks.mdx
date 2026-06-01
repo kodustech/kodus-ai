@@ -1,0 +1,180 @@
+---
+title: "Fireworks AI - Fast Inference Platform"
+description: "Learn how to use Fireworks AI's models with Kodus"
+icon: "fire"
+---
+
+## How Fireworks AI works
+
+Fireworks AI is the fastest inference platform for generative AI, designed to build and run magical AI applications in seconds. The platform provides serverless access to popular open-source models like DeepSeek, Llama, Qwen, and Mistral with optimized speed, high throughput, and minimal latency. Built for developers who need reliable, blazing-fast AI infrastructure without GPU management complexity.
+
+## Recommended Models
+
+We recommend good coding models with competitive pricing and high context windows.
+
+<Info>
+  For the most updated information, please visit [Fireworks AI's pricing page](https://fireworks.ai/pricing).
+</Info>
+
+| Model                              | Pricing (1M tokens) | Context Window |
+| ---------------------------------- | ------------------- | -------------- |
+| **Llama 4 Maverick** `recommended` | $0.22/$0.88         | ~131k tokens   |
+| **Llama 4 Scout**                  | $0.15/$0.60         | ~131k tokens   |
+| **DeepSeek V3**                    | $0.90               | ~128k tokens   |
+| **Qwen3 235B**                     | $0.22/$0.88         | ~131k tokens   |
+
+## Creating API Key
+
+<Warning>Fireworks AI Account is required to create API Key.</Warning>
+
+Go directly to [Fireworks AI Console](https://app.fireworks.ai) to create a new API Key.
+
+Or, follow these steps:
+
+1. Visit [app.fireworks.ai](https://app.fireworks.ai) and create an account or sign in
+2. Once logged in, navigate to the **API Keys** page in your account settings
+3. Click **"Create API Key"** button
+4. Give your key a descriptive name (e.g., 'Kodus' or any name you prefer)
+5. Click **"Create"** to generate the key
+6. Copy the API key immediately and save it somewhere secure - you won't be able to see it again
+
+<Info>
+  New accounts come with $1 in free credits to get started with your projects.
+</Info>
+
+## How to use
+
+<Snippet file="deploy-basic-setup.mdx" />
+
+### Configure Fireworks AI in Environment File
+
+Edit your `.env` file and configure the core settings. For **LLM Integration**, use Fireworks AI in Fixed Mode:
+
+```env
+# Core System Settings (update with your domains)
+WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
+WEB_PORT_API=443                               
+NEXTAUTH_URL="https://kodus-web.yourdomain.com"
+
+# Security Keys (generate with openssl commands above)
+WEB_NEXTAUTH_SECRET="your-generated-secret"
+API_CRYPTO_KEY="your-generated-hex-key"
+API_JWT_SECRET="your-generated-secret"
+API_JWT_REFRESH_SECRET="your-generated-secret"
+
+# Database Configuration
+API_PG_DB_PASSWORD="your-secure-db-password"
+API_MG_DB_PASSWORD="your-secure-db-password"
+
+# Fireworks AI Configuration (Fixed Mode) 
+API_LLM_PROVIDER_MODEL="accounts/fireworks/models/llama4-maverick-instruct-basic"  # Choose your preferred model
+API_OPENAI_FORCE_BASE_URL="https://api.fireworks.ai/inference/v1"                  # Fireworks AI API URL  
+API_OPEN_AI_API_KEY="your-fireworks-api-key"                                       # Your Fireworks AI API Key
+
+# Git Provider Webhooks (choose your provider)
+API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
+# or API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
+# or GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
+```
+
+<Note>
+  Webhook URLs must reach the Webhooks service (port 3332). Use a dedicated webhooks domain or route `/.../webhook` to port 3332 in your reverse proxy.
+</Note>
+
+<Info>
+  **Fixed Mode is ideal for Fireworks AI** because it provides OpenAI-compatible APIs with blazing-fast inference speeds and access to cutting-edge open-source models with zero setup time.
+</Info>
+
+<Snippet file="deploy-installation.mdx" />
+
+### Set Up Reverse Proxy (For Production)
+
+For webhooks and external access, configure Nginx:
+
+```nginx
+# Web App (port 3000)
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com;
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# API (port 3001)  
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com;
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Verify Fireworks AI Integration
+
+In addition to the basic installation verification, confirm that Fireworks AI is working:
+
+```bash
+# Verify Fireworks AI API connection specifically
+docker-compose logs api worker | grep -i fireworks
+```
+
+<Tip>
+  For detailed information about SSL setup, monitoring, and advanced configurations, see our [complete deployment guide](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm).
+</Tip>
+
+### Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="API Key Issues">
+    - Verify your API key is correct and active in [Fireworks AI Console](https://app.fireworks.ai)
+    - Check if you have sufficient credits in your Fireworks AI account
+    - Ensure there are no extra spaces in your `.env` file
+    - New accounts receive $1 in free credits to get started
+  </Accordion>
+  
+  <Accordion title="Model Not Found">
+    - Check if the model name is correctly spelled in your configuration
+    - Verify the model is available in Fireworks AI's current model library
+    - Try with a different model from our recommended list
+    - Check the [Fireworks AI models documentation](https://docs.fireworks.ai/getting-started/recommended-open-models)
+  </Accordion>
+  
+  <Accordion title="Connection Errors">
+    - Verify your server has internet access to reach `api.fireworks.ai`
+    - Check if there are any firewall restrictions
+    - Review the API/worker logs for detailed error messages
+    - Ensure you're using the correct API endpoint
+  </Accordion>
+  
+  <Accordion title="Performance Issues">
+    - Fireworks AI provides industry-leading speeds with minimal latency
+    - Check your network connectivity for optimal performance
+    - Consider using dedicated deployments for enterprise workloads
+    - Monitor your usage patterns to optimize API calls
+  </Accordion>
+  
+  <Accordion title="Rate Limiting">
+    - Fireworks AI provides high rate limits on serverless infrastructure
+    - Check your current usage in the Fireworks AI dashboard
+    - Consider upgrading to dedicated deployments for higher throughput
+    - Contact Fireworks AI support for enterprise rate limit adjustments
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,30 @@
+---
+title: "如何从 Cursor、Copilot 或 Claude 导入规则"
+description: "将现有 AI 编码工具规则同步到 Kodus，使相同的标准在 IDE 和代码审查中都得到执行。"
+---
+
+如果您已经在 Cursor、GitHub Copilot、Claude 或其他 AI 编码工具中定义了规则，可以将它们导入 Kodus，使相同的约定在代码审查中得到执行。
+
+## 工作原理
+
+Kodus 检测代码库中的规则文件并提供同步为 Kody 规则的选项。支持的文件格式包括：
+
+- `.cursorrules`（Cursor）
+- `.github/copilot-instructions.md`（GitHub Copilot）
+- `.claude` 文件（Claude）
+- 其他 AI 工具配置文件
+
+## 设置
+
+1. 前往**代码审查设置** → **Kody 规则**
+2. Kodus 自动检测代码库中兼容的规则文件
+3. 审查检测到的规则并导入您想要的规则
+4. 导入的规则作为 Kody 规则添加，在代码审查期间执行
+
+## 为什么这很重要
+
+如果不同步，您的 IDE 和代码审查工具会执行不同的标准。开发者遵循 Cursor 的规则可能仍然在审查期间被标记 — 反之亦然。
+
+导入确保整个工作流中**统一的编码标准来源**。
+
+更多详情，请参阅[同步 IDE 规则](/how_to_use/en/code_review/configs/rules_file_detection)。

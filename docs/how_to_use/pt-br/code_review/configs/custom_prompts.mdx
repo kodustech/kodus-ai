@@ -1,0 +1,549 @@
+---
+title: "Prompts Personalizados"
+description: "Personalize os prompts de revisão de Kody para cada categoria e nível de severidade de acordo com as necessidades da sua equipe"
+---
+
+Os Prompts Personalizados oferecem controle total sobre como Kody analisa seu código e comunica os achados. Adapte o que a IA busca em cada categoria de revisão, como ela classifica a severidade e como apresenta sugestões para corresponder aos padrões e ao estilo de comunicação da sua equipe.
+
+<Card
+  title="Acessar Configurações de Prompts Personalizados"
+  icon="gear"
+  href="https://app.kodus.io/settings/code-review/global/custom-prompts"
+>
+  Configure seus prompts personalizados para todos os repositórios da sua organização
+</Card>
+
+## Por Que Usar Prompts Personalizados?
+
+<CardGroup cols={2}>
+  <Card title="Padrões Específicos da Equipe" icon="users">
+    Alinhe as revisões de Kody com os padrões de codificação únicos, padrões arquiteturais e boas práticas da sua equipe
+  </Card>
+  <Card title="Otimização de Modelo" icon="brain">
+    Crie prompts otimizados para os pontos fortes do seu modelo de IA específico ao usar BYOK
+  </Card>
+  <Card title="Controle de Foco" icon="bullseye">
+    Direcione a atenção de Kody para os problemas mais relevantes para o seu projeto e reduza o ruído
+  </Card>
+  <Card title="Estilo de Comunicação" icon="comments">
+    Personalize como Kody apresenta sugestões — detalhadas para problemas críticos ou concisas para problemas menores
+  </Card>
+</CardGroup>
+
+## Como os Prompts Personalizados Funcionam
+
+Os Prompts Personalizados operam em três níveis:
+
+### Prompts de Categoria
+
+Definem o que Kody busca em cada categoria de revisão:
+
+<Tabs>
+  <Tab title="Bug">
+    **Foco:** Corretude do código e problemas de execução
+    
+    Cobertura padrão:
+    - Falhas de execução (exceções não tratadas)
+    - Resultados incorretos (saída errada)
+    - Vazamentos de recursos (arquivos, conexões, memória)
+    - Corrupção de estado (estados inválidos de objetos/dados)
+    - Erros de lógica (fluxo de controle incorreto)
+    - Condições de corrida (problemas de acesso concorrente)
+    
+    **Comprimento máximo:** 2000 caracteres
+  </Tab>
+
+  <Tab title="Security">
+    **Foco:** Vulnerabilidades de segurança e proteção de dados
+    
+    Cobertura padrão:
+    - Vulnerabilidades de injeção (SQL/NoSQL/command/LDAP)
+    - Falhas de autenticação/autorização (verificações ausentes, escalada de privilégios)
+    - Exposição de dados (dados sensíveis em logs/respostas)
+    - Problemas de criptografia (algoritmos fracos, chaves hardcoded)
+    - Lacunas na validação de entrada (falta de sanitização/verificação de limites)
+    - Gestão de sessão (tokens previsíveis, sem expiração)
+    
+    **Comprimento máximo:** 2000 caracteres
+  </Tab>
+
+  <Tab title="Performance">
+    **Foco:** Velocidade, eficiência e otimização de recursos
+    
+    Cobertura padrão:
+    - Complexidade de algoritmos (O(n²) quando O(n) é possível)
+    - Operações redundantes (cálculos duplicados, loops desnecessários)
+    - Desperdício de memória (grandes alocações, vazamentos)
+    - Operações bloqueantes (I/O síncrono em caminhos críticos)
+    - Ineficiência de banco de dados (N+1, índices ausentes, varreduras completas)
+    - Cache misses (não aproveitando o cache disponível)
+    
+    **Comprimento máximo:** 2000 caracteres
+  </Tab>
+</Tabs>
+
+### Prompts de Severidade
+
+Definem como Kody classifica a severidade dos problemas:
+
+<Tabs>
+  <Tab title="Critical">
+    **Definição:** Problemas que exigem atenção imediata
+    
+    Exemplos padrão:
+    - Crash/indisponibilidade da aplicação
+    - Perda/corrupção de dados
+    - Violação de segurança (acesso não autorizado/exfiltração de dados)
+    - Falha em operação crítica (autenticação/pagamento/autorização)
+    - Operações com perda financeira direta
+    - Vazamentos de memória causando crash inevitável
+    
+    **Comprimento máximo:** 2000 caracteres
+  </Tab>
+
+  <Tab title="High">
+    **Definição:** Problemas significativos que precisam de resolução em breve
+    
+    Exemplos padrão:
+    - Funcionalidade importante quebrada
+    - Vazamentos de memória causando crash eventual
+    - Degradação de performance afetando a UX sob carga normal
+    - Problemas de segurança com caminhos de exploração indiretos
+    - Erros em cálculos financeiros afetando a receita
+    
+    **Comprimento máximo:** 2000 caracteres
+  </Tab>
+
+  <Tab title="Medium">
+    **Definição:** Melhorias moderadas recomendadas
+    
+    Exemplos padrão:
+    - Funcionalidade parcialmente quebrada
+    - Problemas de performance em cenários específicos
+    - Fraquezas de segurança que requerem condições específicas
+    - Dados incorretos mas recuperáveis
+    - Erros de lógica de negócio não críticos com workarounds
+    
+    **Comprimento máximo:** 2000 caracteres
+  </Tab>
+
+  <Tab title="Low">
+    **Definição:** Pequenas melhorias para aprimoramento incremental
+    
+    Exemplos padrão:
+    - Pequena sobrecarga de performance
+    - Melhorias de segurança de baixo risco
+    - Métricas/logs incorretos
+    - Afeta raramente poucos usuários
+    - Problemas em casos de borda
+    
+    **Comprimento máximo:** 2000 caracteres
+  </Tab>
+</Tabs>
+
+### Prompts de Sugestão
+
+Controlam como Kody comunica cada sugestão individual. Isso personaliza o formato e o tom da mensagem que aparece nos comentários do PR, como:
+
+```
+The new file 'create-or-update-issues-parameter.dto.ts' does not follow 
+the company's naming convention. According to the Kody Rules, all new files 
+must use camelCase. Please rename the file to 'createOrUpdateIssuesParameter.dto.ts' 
+to adhere to the standard.
+```
+
+Seu prompt personalizado instrui Kody sobre como escrever mensagens de sugestão. O prompt recebe contexto sobre o nível de severidade, descrição do problema, código sugerido e se é uma violação de Kody Rules. Kody usa esse contexto junto com seu prompt para gerar mensagens apropriadas para cada sugestão.
+
+Você pode personalizar o tom, o nível de detalhe e o estilo de comunicação com base nas necessidades da sua equipe — desde explicações detalhadas para problemas críticos até feedback conciso para problemas menores.
+
+## Referências Externas
+
+Todos os prompts personalizados — de Categoria, Severidade, Sugestão e Resumo de PR — suportam referências a arquivos reais das bases de código que Kody pode acessar. Quando você salva uma atualização, Kody detecta automaticamente as referências externas e as resolve para revisões futuras.
+
+- Use `@file:caminho/para/arquivo.ts` para apontar para arquivos no repositório que você está editando; Kody tentará localizar o caminho localmente primeiro.
+- Inclua `@repo:org/projeto` ao referenciar arquivos de outro repositório ou ao editar prompts no nível global.
+- Prefira caminhos precisos no estilo blob em vez de placeholders para que o modelo encontre o arquivo correto de forma confiável.
+- Após salvar, Kody processa as referências em segundo plano. Verifique o indicador de status ao lado do editor de prompts para confirmar quando a resolução for concluída.
+
+## Boas Práticas
+
+### Seja Específico ao Seu Contexto
+
+<CardGroup cols={2}>
+  <Card title="Faça: Específico ao Contexto" icon="check">
+    ```
+    Prompt de categoria Bug:
+    Foque em null pointer exceptions nos nossos
+    serviços Java, conexões de banco não fechadas
+    na camada DAO e condições de corrida nos nossos
+    handlers de eventos assíncronos. Verifique a
+    limpeza adequada de recursos em blocos try-finally.
+    ```
+  </Card>
+  <Card title="Não Faça: Muito Genérico" icon="xmark">
+    ```
+    Prompt de categoria Bug:
+    Procure bugs no código.
+    Verifique problemas e questões.
+    ```
+  </Card>
+</CardGroup>
+
+### Evite Redundância Entre Prompts
+
+Cada categoria e severidade deve ter um foco distinto. Não repita as mesmas instruções em diferentes prompts.
+
+<Accordion title="Exemplo: Separação Adequada">
+  **Categoria Bug:**
+  Foque na corretude da execução, null pointer exceptions e limpeza de recursos nos nossos serviços Java.
+
+  **Categoria Security:**
+  Foque em SQL injection, XSS e CSRF nos nossos endpoints de API. Verifique a sanitização de entrada e consultas parametrizadas.
+
+  **Categoria Performance:**
+  Foque em consultas N+1, índices de banco ausentes e loops ineficientes no processamento de dados.
+
+  **Resultado:** Cada prompt tem um foco claro e sem sobreposição.
+</Accordion>
+
+<Accordion title="Anti-padrão: Prompts Redundantes">
+  **Categoria Bug:**
+  Verifique null pointers, SQL injection e consultas lentas.
+
+  **Categoria Security:**
+  Procure SQL injection, null pointers e problemas de performance.
+
+  **Categoria Performance:**
+  Encontre consultas lentas, null pointers e vulnerabilidades de segurança.
+
+  **Problema:** Todos os prompts se sobrepõem, confundindo o modelo e reduzindo a qualidade da revisão.
+</Accordion>
+
+### Cuidado com Exemplos
+
+<Tabs>
+  <Tab title="Bom: Descrição de Padrão">
+    ```
+    Detecte SQL injection em consultas de banco:
+    - Concatenação de string bruta em instruções SQL
+    - Entrada do usuário diretamente em strings de consulta
+    - Ausência de consultas parametrizadas ou ORMs
+    - Construção dinâmica de consultas sem sanitização
+    ```
+    
+    Isso descreve o padrão de forma abrangente, capturando múltiplas variações.
+  </Tab>
+
+  <Tab title="Arriscado: Exemplo Específico">
+    ```
+    Detecte SQL injection como este:
+    query = "SELECT * FROM users WHERE id = " + userId
+    ```
+    
+    O modelo pode sinalizar apenas esse padrão exato e perder:
+    - Template literals: `SELECT * FROM users WHERE id = ${userId}`
+    - Formatação de string: `f"SELECT * FROM users WHERE id = {userId}"`
+    - Outros vetores de SQL injection
+  </Tab>
+</Tabs>
+
+### Mantenha as Sugestões Escaneáveis
+
+Para prompts de sugestão, torne as mensagens fáceis de escanear, já que os desenvolvedores revisam muitas de uma vez:
+
+<Tabs>
+  <Tab title="Bom: Estrutura Clara">
+    ```
+    Escreva sugestões com estrutura clara. Para problemas críticos,
+    comece com o emoji 🚨, descreva o problema e mostre "Fix:"
+    seguido do código. Para outras severidades, mantenha simples —
+    apenas o problema e o código sugerido.
+    
+    Coloque as informações importantes primeiro para que os
+    desenvolvedores entendam rapidamente o que precisa ser feito.
+    ```
+    
+    Hierarquia clara, informações importantes primeiro
+  </Tab>
+  
+  <Tab title="Ruim: Bloco de Texto">
+    ```
+    Explique o problema e por que é importante porque pode
+    causar problemas em produção e os desenvolvedores devem corrigi-lo
+    aplicando as alterações de código sugeridas que resolverão o problema.
+    ```
+    
+    Difícil de escanear, enterra a ação
+  </Tab>
+</Tabs>
+
+### Use o Contexto de Forma Significativa
+
+Diferencie os formatos de sugestão apenas quando há uma razão real:
+
+<Tabs>
+  <Tab title="Bom: Diferença Significativa">
+    ```
+    Para violações de Kody Rules, use um tom mais rígido:
+    "**Padrão da Equipe**: [problema]. Obrigatório: [código]"
+    
+    Para sugestões padrão, use um tom mais amigável:
+    "[problema]. Sugerido: [código]"
+    
+    A diferença na linguagem deixa claro o nível de obrigatoriedade.
+    ```
+    
+    Distinção clara: regras são requisitos, sugestões são recomendações
+  </Tab>
+  
+  <Tab title="Ruim: Rótulo Superficial">
+    ```
+    Para Kody Rules, adicione o prefixo "[RULE]" antes do problema.
+    Para sugestões, adicione o prefixo "[SUGGESTION]" antes do problema.
+    Caso contrário, formate-os da mesma forma.
+    ```
+    
+    Apenas adicionar rótulos não agrega valor
+  </Tab>
+</Tabs>
+
+## Casos de Uso
+
+<AccordionGroup>
+  <Accordion title="Requisitos Específicos de Setor">
+    **Cenário:** Aplicação de saúde com requisitos de conformidade HIPAA
+    
+    **Prompt de Security Personalizado:**
+    ```
+    Focus on HIPAA compliance in data handling:
+    - PHI (Protected Health Information) exposure in logs or errors
+    - Missing encryption for PHI at rest and in transit
+    - Inadequate access controls for patient data
+    - Audit logging gaps for PHI access
+    - Data retention violations
+    - Missing patient consent verification
+    ```
+    
+    **Benefício:** Kody captura problemas específicos de conformidade que revisões de segurança genéricas podem perder.
+  </Accordion>
+
+  <Accordion title="Otimização de Stack Tecnológica">
+    **Cenário:** Aplicação React/Node.js com padrões específicos
+    
+    **Prompt de Bug Personalizado:**
+    ```
+    Focus on React and Node.js common pitfalls:
+    - Missing dependency arrays in useEffect/useMemo
+    - Unhandled promise rejections in async handlers
+    - Memory leaks from event listener cleanup
+    - Race conditions in state updates
+    - Missing error boundaries
+    - Uncaught exceptions in Express middleware
+    ```
+    
+    **Benefício:** As revisões são focadas nas armadilhas específicas da sua stack.
+  </Accordion>
+
+  <Accordion title="Ajuste Específico de Modelo">
+    **Cenário:** Usando Gemini 2.5 Flash via BYOK para otimização de custos
+    
+    **Prompt de Performance Personalizado:**
+    ```
+    Analyze algorithmic efficiency and resource usage.
+    List specific issues in this format:
+    1. Issue type and location
+    2. Current complexity
+    3. Optimization suggestion
+    4. Expected improvement
+    
+    Prioritize: database queries, loops, memory allocations.
+    ```
+    
+    **Benefício:** Formato de saída estruturado que o Gemini lida excepcionalmente bem, melhorando a qualidade das revisões.
+  </Accordion>
+
+  <Accordion title="Calibração de Severidade">
+    **Cenário:** Startup em ritmo acelerado, precisa de limites de severidade diferentes
+    
+    **Prompt Critical Personalizado:**
+    ```
+    Only flag as Critical if:
+    - Production data could be deleted or corrupted
+    - Security breach allowing direct data exfiltration
+    - Payment processing failures
+    - Complete service outage for core features
+    
+    Note: Performance issues are never Critical unless causing crashes.
+    ```
+    
+    **Benefício:** Reduz a fadiga de alertas ao alinhar a severidade com o impacto no negócio.
+  </Accordion>
+
+  <Accordion title="Comunicação Baseada em Severidade">
+    **Cenário:** Deseja explicações detalhadas para problemas críticos, mas feedback conciso para problemas menores
+    
+    **Prompt de Sugestão Personalizado:**
+    ```
+    When writing suggestions, adjust the level of detail based on severity:
+    
+    For Critical issues: Start with "🚨 CRITICAL:" followed by the problem. 
+    Add a line explaining "This requires immediate attention." Then provide 
+    the fix with "Fix:" prefix.
+    
+    For High severity: Use "⚠️" emoji, state the problem, then show the fix 
+    with "Fix:" prefix.
+    
+    For Medium and Low: Keep it brief - just state the problem and show the 
+    suggested code directly without extra explanation.
+    ```
+    
+    **Benefício:** Problemas críticos recebem contexto extra enquanto problemas menores ficam concisos, melhorando a eficiência da revisão.
+  </Accordion>
+
+  <Accordion title="Feedback Direto e Conciso">
+    **Cenário:** A equipe prefere feedback mínimo e acionável
+    
+    **Prompt de Sugestão Personalizado:**
+    ```
+    Be direct and concise. State the problem in one sentence, then immediately 
+    show the fix with "Fix:" prefix. No additional context or explanations.
+    ```
+    
+    **Benefício:** Cada sugestão é curta e direta sem contexto extra.
+  </Accordion>
+
+  <Accordion title="Sugestões Educativas">
+    **Cenário:** Desenvolvedores júnior se beneficiam de explicações detalhadas
+    
+    **Prompt de Sugestão Personalizado:**
+    ```
+    Structure suggestions in three parts:
+    
+    1. **Issue:** State the problem clearly
+    2. **Why this matters:** Explain the impact based on severity:
+       - Critical: Could cause production failures or security vulnerabilities
+       - High: May lead to bugs or performance problems  
+       - Medium/Low: Improves code quality and maintainability
+    3. **Fix:** Show the recommended code change
+    
+    Make explanations educational and help developers learn why it matters.
+    ```
+    
+    **Benefício:** Cada sugestão inclui contexto educacional sobre sua importância.
+  </Accordion>
+
+  <Accordion title="Tom Diferente para Regras vs Sugestões">
+    **Cenário:** Kody Rules são requisitos obrigatórios, sugestões são recomendações
+    
+    **Prompt de Sugestão Personalizado:**
+    ```
+    Use different tones based on the type:
+    
+    For Kody Rules violations:
+    - Start with "**Team Standard Violation**" in bold
+    - State the problem
+    - Add "This violates documented team standards."
+    - Show "Required fix:" followed by the code
+    
+    For standard suggestions:
+    - State the problem directly
+    - Show "Suggested improvement:" followed by the code
+    - Use a friendly, recommendatory tone
+    ```
+    
+    **Benefício:** Distinção clara entre regras obrigatórias e sugestões opcionais.
+  </Accordion>
+</AccordionGroup>
+
+## Solução de Problemas
+
+<AccordionGroup>
+  <Accordion title="Revisões Estão com Muito Ruído">
+    **Sintomas:** Muitas sugestões de baixo valor após a personalização
+    
+    **Soluções:**
+    - Torne os prompts mais específicos e focados
+    - Adicione exclusões para padrões que você quer ignorar
+    - Aumente o limiar mínimo de severidade em [Controle de Sugestões](/how_to_use/pt-br/code_review/configs/suggestion_control)
+    - Verifique redundâncias entre prompts de categoria e severidade
+  </Accordion>
+
+  <Accordion title="Problemas Esperados Não São Encontrados">
+    **Sintomas:** Kody não captura problemas que deveria
+    
+    **Soluções:**
+    - Revise seu prompt para ver se está muito restrito ou muito específico em exemplos
+    - Verifique se o problema se enquadra em uma categoria que você não personalizou
+    - Tente redefinir para o padrão para ver se o problema é detectado
+    - Considere se o problema pode ser classificado sob uma severidade diferente
+  </Accordion>
+
+  <Accordion title="Resultados Inconsistentes">
+    **Sintomas:** O mesmo tipo de problema é sinalizado às vezes, mas não sempre
+    
+    **Soluções:**
+    - Garanta que os prompts sejam claros e sem ambiguidades
+    - Remova instruções conflitantes entre diferentes prompts
+    - Verifique se está usando exemplos muito específicos
+    - Considere se modelos diferentes no primário/fallback têm capacidades diferentes
+  </Accordion>
+
+  <Accordion title="Não Sabe o Que Personalizar">
+    **Sintomas:** Quer usar prompts personalizados, mas não sabe por onde começar
+    
+    **Soluções:**
+    - Comece executando revisões padrão por uma semana
+    - Anote padrões de falsos positivos ou problemas perdidos
+    - Personalize apenas o prompt específico relacionado a esses padrões
+    - Mantenha outros prompts no padrão até ver uma necessidade clara
+  </Accordion>
+</AccordionGroup>
+
+## Perguntas Frequentes
+
+<AccordionGroup>
+  <Accordion title="Os prompts personalizados se aplicam a todos os repositórios?">
+    Depende de onde você os define:
+    
+    - **Configurações globais:** Aplicam-se a todos os repositórios da sua organização
+    - **Configurações por repositório:** Sobrescrevem as configurações globais para aquele repositório específico
+    
+    Isso permite ter padrões em toda a organização com sobrescritas específicas por repositório quando necessário.
+  </Accordion>
+
+  <Accordion title="Posso ver os prompts padrão antes de personalizar?">
+    Sim. Clique em qualquer prompt nas configurações para ver o conteúdo padrão.
+  </Accordion>
+
+  <Accordion title="O que acontece com PRs existentes quando eu altero os prompts?">
+    As alterações afetam apenas novas revisões. Execute novamente com `@kody start-review` para aplicar novos prompts a PRs existentes.
+  </Accordion>
+
+  <Accordion title="Posso personalizar prompts com kodus-config.yml?">
+    Não. Os prompts personalizados são apenas via interface web para garantir alterações intencionais. Outras configurações (caminhos ignorados, branches) podem usar `kodus-config.yml`.
+  </Accordion>
+
+  <Accordion title="Devo personalizar todos os prompts ou apenas alguns?">
+    Personalize apenas prompts com necessidades claras e específicas. Mantenha os outros no padrão para se beneficiar das nossas melhorias. Comece com 1 a 2 prompts.
+  </Accordion>
+
+  <Accordion title="Como os prompts personalizados funcionam com BYOK?">
+    Funciona perfeitamente. Adapte os prompts aos pontos fortes do seu modelo. Tanto o primário quanto o fallback usam os mesmos prompts personalizados.
+  </Accordion>
+
+  <Accordion title="Qual é a diferença entre prompts de Categoria/Severidade e prompts de Sugestão?">
+    **Prompts de Categoria/Severidade** controlam o que Kody analisa e como classifica os problemas. **Prompts de Sugestão** controlam como Kody apresenta os achados para sua equipe. Você pode personalizar ambos de forma independente.
+  </Accordion>
+
+  <Accordion title="Posso usar markdown em prompts de sugestão?">
+    Sim. Os prompts de sugestão suportam formatação markdown padrão incluindo negrito, itálico, blocos de código e links.
+  </Accordion>
+
+  <Accordion title="O que acontece se meu template de sugestão tiver erros de sintaxe?">
+    Kody voltará ao formato de sugestão padrão e notificará você sobre o erro nas configurações.
+  </Accordion>
+
+  <Accordion title="Os prompts de sugestão funcionam tanto para Kody Rules quanto para sugestões padrão?">
+    Sim. Use a variável `isKodyRule` para criar mensagens diferentes para regras vs sugestões no mesmo prompt.
+  </Accordion>
+</AccordionGroup>

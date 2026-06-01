@@ -28,9 +28,9 @@ export class PolicyGuard implements CanActivate {
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const policyHandlers =
-            this.reflector.get<PolicyHandler[]>(
+            this.reflector.getAllAndOverride<PolicyHandler[]>(
                 CHECK_POLICIES_KEY,
-                context.getHandler(),
+                [context.getHandler(), context.getClass()],
             ) || [];
 
         const request = context.switchToHttp().getRequest();

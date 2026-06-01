@@ -109,7 +109,7 @@ class CliConfigDto {
 
 export class CliReviewRequestDto {
     @IsString()
-    @MaxLength(5000000, { message: 'Diff too large (max 5MB)' })
+    @MaxLength(20000000, { message: 'Diff too large (max 20MB)' })
     @ApiProperty({
         example: 'diff --git a/src/app.ts b/src/app.ts\n+const x = 1;',
     })
@@ -144,6 +144,26 @@ export class CliReviewRequestDto {
     @MaxLength(40, { message: 'Commit SHA too long' })
     @ApiPropertyOptional({ example: 'a1b2c3d4e5f6g7h8i9j0' })
     commitSha?: string; // git rev-parse HEAD
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(40, { message: 'Merge-base SHA too long' })
+    @ApiPropertyOptional({
+        description:
+            "Merge-base between HEAD and the upstream default branch (git merge-base HEAD origin/main). The sandbox checks out this commit (guaranteed to be on the remote) and applies the diff on top, so reviews work for branches not yet pushed and uncommitted changes.",
+        example: 'a1b2c3d4e5f6g7h8i9j0',
+    })
+    mergeBaseSha?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(255, { message: 'GitHub PAT too long' })
+    @ApiPropertyOptional({
+        description:
+            "Optional GitHub Personal Access Token. Trial users (anonymous) need this to clone private repositories — for public repos it's not required. The token is held in memory for the pipeline run only and is never persisted.",
+        example: '<your-github-personal-access-token>',
+    })
+    githubPat?: string;
 
     @IsOptional()
     @IsEnum(PlatformType)

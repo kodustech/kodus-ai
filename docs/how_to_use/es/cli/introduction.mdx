@@ -1,0 +1,88 @@
+---
+title: "CLI de Kodus"
+description: "Revisión de código con IA, validación de negocio y flujos de trabajo de agentes — desde tu terminal."
+---
+
+El CLI de Kodus revisa tus cambios de código directamente desde la terminal, detectando errores, problemas de seguridad e infracciones de estilo antes de que lleguen a un pull request. Es el mismo motor de Kodus que se ejecuta en tus PRs, pero apuntado a tu árbol de trabajo, diff preparado, rama o commit.
+
+## Para quién es
+
+- **Desarrolladores individuales** ejecutando una verificación previa al commit antes de enviar.
+- **Equipos** que quieren un conjunto de reglas de revisión compartidas en cada clon, IDE y trabajo de CI, sin que cada desarrollador tenga que iniciar sesión.
+- **Agentes de programación de IA** (Claude Code, Cursor, Codex, Windsurf) ejecutando bucles de revisión y corrección con salida estructurada.
+- **Pipelines de CI/CD** que fallan compilaciones con problemas por encima de un umbral de severidad.
+
+## Cómo se ve
+
+Ejecutar `kodus review` contra un cambio del árbol de trabajo produce un informe estructurado: archivos afectados, problemas agrupados por severidad, correcciones sugeridas que puedes previsualizar y aplicar, y un código de salida seguro para scripting.
+
+<img src="/images/kodus_cli_review.jpg" alt="Revisión de código con IA en tu CLI"/>
+
+En el modo `--prompt-only`, la misma revisión se convierte en texto compacto y estructurado optimizado para que un agente de IA lo analice y actúe sobre él.
+
+## Qué puedes hacer
+
+<CardGroup cols={2}>
+  <Card title="Revisión Interactiva" icon="terminal">
+    Navega por archivos, previsualiza correcciones y aplícalas una a una desde tu terminal.
+  </Card>
+  <Card title="Corrección Automática" icon="wand-magic-sparkles">
+    Aplica todos los problemas corregibles a la vez con `--fix`.
+  </Card>
+  <Card title="Integración con Agentes de IA" icon="robot">
+    Alimenta la salida `--prompt-only` en Claude Code, Cursor o Windsurf para bucles autónomos de revisión y corrección.
+  </Card>
+  <Card title="Hook Pre-Push" icon="shield-check">
+    Bloquea envíos con problemas por encima de un umbral de severidad con `kodus hook install`.
+  </Card>
+  <Card title="Sugerencias de PR" icon="code-pull-request">
+    Obtén las sugerencias de Kody en un pull request abierto sin salir de tu terminal.
+  </Card>
+  <Card title="Validación de Negocio" icon="clipboard-check">
+    Valida que un diff local satisfaga los criterios de aceptación de una tarea antes de fusionar.
+  </Card>
+  <Card title="Kody Rules" icon="scale-balanced">
+    Crea, actualiza y revisa las reglas del equipo que la IA aplica durante cada revisión.
+  </Card>
+  <Card title="Decision Memory" icon="brain">
+    Persiste las decisiones de los agentes de IA como archivos estructurados versionados junto a tu código.
+  </Card>
+</CardGroup>
+
+## Límites
+
+|                        | Prueba (Sin Cuenta) | Autenticado              |
+| ---------------------- | ------------------- | ------------------------ |
+| Revisiones por día     | 5                   | Según tu plan            |
+| Archivos por revisión  | 10                  | 100                      |
+| Líneas por archivo     | 500                 | —                        |
+| Tamaño máximo de diff por archivo | 500 KB   | 500 KB                   |
+| Contenido máximo por archivo | 2 MB          | 2 MB                     |
+
+Los límites de prueba se restablecen diariamente. Ejecuta `kodus auth status` para comprobar tu uso actual.
+
+## CLI vs Kodus Web
+
+El CLI y el panel web de Kodus comparten el mismo motor de revisión, reglas y configuraciones de repositorio. Usa el CLI cuando quieras revisiones **antes de que exista el PR**: en una rama local, un diff preparado o dentro de un bucle de agente. Usa el panel web para revisiones de PR, métricas y configuración a nivel de equipo.
+
+Los cambios que hagas mediante `kodus config repo` y `kodus rules` se aplican en ambas superficies.
+
+## Próximos pasos
+
+<CardGroup cols={2}>
+  <Card title="Primeros Pasos" icon="rocket" href="getting_started">
+    Instala, autentícate y ejecuta tu primera revisión.
+  </Card>
+  <Card title="Referencia de Comandos" icon="book" href="commands">
+    Todos los comandos, flags y opciones.
+  </Card>
+  <Card title="Agentes de IA" icon="robot" href="ai_agents">
+    Configura bucles autónomos de revisión y corrección con agentes de programación.
+  </Card>
+  <Card title="Self-Hosted" icon="server" href="self_hosted">
+    Conecta el CLI a tu propia instancia de Kodus.
+  </Card>
+  <Card title="Solución de Problemas" icon="life-ring" href="troubleshooting">
+    Errores comunes, códigos de salida y cómo depurar.
+  </Card>
+</CardGroup>

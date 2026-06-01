@@ -1,0 +1,82 @@
+---
+title: "Solución de Problemas"
+description: "Solución de problemas de Revisión de Código de Kody"
+---
+
+## ¿La Revisión de Código de Kody No Funciona? Pasos para Solucionar Problemas Comunes
+
+### Problemas con el Token
+
+Si estás conectado mediante un token, asegúrate de verificar estos puntos:
+
+- **Usuarios de GitHub**: Verifica que tu token esté habilitado para tu organización:
+  1. Debes ser el propietario de la organización.
+  2. Ve a la configuración de tu organización en GitHub:
+     - Usa la siguiente URL y reemplaza `YOUR_ORG_NAME` con el nombre de tu organización:
+       <small>
+         `https://github.com/organizations/YOUR_ORG_NAME/settings/member_privileges`
+       </small>
+       .
+  3. En **Tokens de Acceso Personal de Grano Fino**, asegúrate de que **"Permitir acceso mediante tokens de acceso personal de grano fino"** esté seleccionado.
+- **Token de Acceso Personal (PAT)**: Confirma que tu token esté configurado para tu organización y tenga los permisos requeridos. [Gestionar tokens](https://github.com/settings/tokens?type=beta).
+- **Vencimiento del Token**: Asegúrate de que tu token esté activo. [Verificar estado del token](https://github.com/settings/tokens?type=beta).
+
+<Frame caption="Tu token debe mostrar el logo de tu organización. Si muestra tu foto de perfil personal, tu token está configurado para acceso personal en lugar de acceso organizacional.
+">
+    ![Ejemplo de Token](/images/token.png)
+
+</Frame>
+
+---
+
+### Problemas de Configuración
+
+- **Revisiones Automatizadas**: Asegúrate de que las revisiones automatizadas estén habilitadas en tu [Configuración Global](https://app.kodus.io/automations/AutomationCodeReview/global/general). Si están deshabilitadas, inicia las revisiones manualmente con `@kody start-review`.
+- **Tipos de Revisión**: Asegúrate de que al menos un tipo de revisión esté seleccionado para que Kody proporcione sugerencias. [Configurar tipos de revisión](https://app.kodus.io/automations/AutomationCodeReview/global/general).
+- **Revisiones de Ramas**: Por defecto, Kody revisa los PRs mergeados en la rama predeterminada. Para incluir ramas adicionales, [actualiza tu configuración](https://app.kodus.io/automations/AutomationCodeReview/global/general).
+- **PRs Grandes**: Ten en cuenta que los PRs con un alto número de cambios pueden tardar más en procesarse.
+
+---
+
+### Configuración Global vs. de Repositorio
+
+Kodus usa un sistema de configuración jerárquico. Así es como funciona:
+
+- **Configuración Global**: Aplicada a todos los repositorios por defecto.
+- **Configuración Específica del Repositorio**: Si está configurada, anulará la configuración global para ese repositorio específico.
+
+#### Pasos para Solucionar Problemas
+
+1. **Verificar la Configuración Global**: Revisa y confirma que la configuración global sea correcta. [Acceder a la Configuración Global](https://app.kodus.io/automations/AutomationCodeReview/global/general).
+2. **Verificar la Configuración del Repositorio**:
+   - Navega a la sección **Por Repositorios** en tu configuración.
+   - Confirma si hay configuraciones personalizadas para el repositorio en cuestión.
+3. **Alinear o Limpiar Configuraciones**:
+   - Para aplicar la configuración global, limpia cualquier configuración específica del repositorio.
+   - Alternativamente, ajusta la configuración específica del repositorio para satisfacer tus necesidades.
+
+#### Síntomas Comunes
+
+- Las revisiones automatizadas no se activan para un repositorio.
+- Kody aplica configuraciones o sugerencias inesperadas.
+- La configuración global no se refleja en repositorios específicos.
+
+
+## Sin Respuesta o Sin Comentarios de Kody
+
+Revisa esta lista de verificación rápida:
+
+1. ¿El PR contiene cambios de código revisables (no solo documentación o imágenes)? Kody puede omitir si no hay nada relevante para analizar.
+2. ¿La rama está en alcance? Por defecto, solo se revisan los PRs que apuntan a la rama predeterminada, a menos que se configuren ramas base adicionales.
+3. **PRs Grandes:** Kody revisa PRs con hasta 200 **archivos revisables** (después de aplicar los patrones de ignorado). Ejemplo: PR con 250 archivos totales pero 60 son archivos `.lock` → Kody revisa los 190 archivos restantes ✅
+4. Modo: Si las revisiones automatizadas están deshabilitadas, actívalas manualmente con `@kody start-review`.
+5. Cadencia de push: Si usas auto-pausa, espera el tiempo de enfriamiento o solicita una revisión manual.
+6. Overrides del repositorio: Los ajustes específicos del repositorio pueden anular los globales. Límpialos o alinealos según sea necesario.
+
+<Card title="Modos y Cadencia de Revisión" icon="clock" href="/how_to_use/es/code_review/configs/general">
+  Verifica la revisión automatizada, la cadencia y los filtros de ramas.
+</Card>
+
+<Card title="Límites y Precios" icon="scale-balanced" href="/how_to_use/es/pricing">
+  Aprende sobre los límites sugeridos y cómo afectan las revisiones.
+</Card>

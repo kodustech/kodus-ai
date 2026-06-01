@@ -1,0 +1,291 @@
+---
+title: "Inicio rápido local"
+description: "Pone en marcha Kodus en tu máquina local — API, Worker, Webhooks, interfaz web y todas las dependencias con un solo comando."
+icon: "laptop"
+---
+
+<Note>
+  Esta guía es para propósitos de desarrollo local. Para el despliegue en producción,
+  consulta la guía [Desplegar Kodus](/how_to_deploy/es/deploy_kodus/generic_vm).
+</Note>
+
+<Note>
+  El dev local se ejecuta con `API_CLOUD_MODE=false`, el mismo modo que una
+  instancia self-hosted — lo que significa que el heartbeat anónimo diario
+  a `telemetry.kodus.io` está habilitado por defecto. Si no quieres que
+  tus experimentos locales aparezcan en la flota, define
+  `KODUS_TELEMETRY_DISABLED=true` en tu `.env`. Consulta
+  [Telemetría Anónima](/how_to_deploy/es/deploy_kodus/telemetry) para ver
+  qué se envía y cómo inspeccionarlo.
+</Note>
+
+## Requisitos previos
+
+- Node.js (versión LTS)
+- Docker
+- Yarn o NPM
+- Claves de API de LLM
+
+## Ejecutar el proyecto
+
+<Tabs>
+  <Tab title="Configuración automatizada (recomendada)">
+      Para una configuración rápida y automatizada, utiliza nuestro script de configuración:
+
+      ```bash
+      git clone https://github.com/kodustech/kodus-ai.git
+      cd kodus-ai
+      yarn setup
+      ```
+
+      Este script realizará automáticamente:
+      - ✅ Verificar todas las dependencias requeridas (Node.js, Yarn, Docker, OpenSSL)
+      - ✅ Instalar las dependencias del proyecto
+      - ✅ Crear y configurar el archivo `.env`
+      - ✅ Generar todas las claves de seguridad requeridas automáticamente
+      - ✅ Configurar las redes de Docker
+      - ✅ Proporcionar los próximos pasos de forma clara
+
+    ### Elige tu modo LLM (obligatorio)
+
+    Selecciona un modo y completa tu .env antes de iniciar los servicios.
+
+    <Snippet file="llm-api-keys.mdx" />
+
+      ### Próximos pasos
+
+      **Configuración básica:**
+      ```bash
+      yarn docker:start
+      yarn migrate:dev
+      yarn seed
+      ```
+
+      **Con integraciones externas (webhooks, etc.):**
+      ```bash
+      yarn docker:start
+      yarn migrate:dev
+      yarn seed
+      yarn tunnel  # Crea un endpoint público para servicios externos
+      ```
+
+      Una vez que todo esté en funcionamiento, abre **http://localhost:3000** en tu navegador.
+  </Tab>
+  <Tab title="Configuración manual">
+      Si prefieres configurar todo manualmente:
+
+      ### 1. Clonar el repositorio
+
+      ```bash
+      git clone https://github.com/kodustech/kodus-ai.git
+      ```
+
+      ### 2. Instalar dependencias
+
+      ```bash
+      yarn install
+      ```
+
+      ### 3. Configurar las variables de entorno
+
+      ```bash
+      cp .env.example .env
+      ```
+      ### 4. Elige tu modo LLM (obligatorio)
+
+Selecciona un modo y completa tu .env antes de iniciar los servicios.
+
+      <Snippet file="llm-api-keys.mdx" />
+
+      ### 5. Generar claves de seguridad
+
+      Antes de configurar las variables de entorno, necesitarás generar claves seguras para los tokens JWT y otras configuraciones relacionadas con la seguridad:
+
+      ```bash
+      # Para la mayoría de las claves de seguridad (secretos JWT, etc.)
+      openssl rand -base64 32
+
+      # Para claves criptográficas y secretos de gestión de código
+      openssl rand -hex 32
+
+      # Para tokens de webhook (seguros para URL)
+      openssl rand -base64 32 | tr -d '=' | tr '/+' '_-'
+      ```
+
+      Necesitarás generar valores para estas claves de seguridad:
+      - `JWT_SECRET` (usar `openssl rand -base64 32`)
+      - `JWT_REFRESH_SECRET` (usar `openssl rand -base64 32`)
+      - `CODE_MANAGEMENT_SECRET` (usar `openssl rand -hex 32`)
+      - `CODE_MANAGEMENT_WEBHOOK_TOKEN` (usar `openssl rand -base64 32 | tr -d '=' | tr '/+' '_-'`)
+
+
+      ### 6. Configurar las redes de Docker
+
+      Crea las redes de Docker requeridas:
+
+      ```bash
+      docker network create kodus-backend-services || true
+      docker network create shared-network || true
+      ```
+
+      ### 7. Iniciar el entorno de desarrollo
+
+      Lanza los servicios usando Docker:
+
+      ```bash
+      yarn docker:start
+      ```
+
+      Este comando inicia:
+
+      - Kodus API
+      - Worker (trabajos asíncronos)
+      - Servicio de Webhooks
+      - Aplicación Web de Kodus
+      - Base de datos PostgreSQL
+      - Base de datos MongoDB
+      - RabbitMQ
+      - Configuraciones de red requeridas
+
+      Para crear también un endpoint público para servicios externos:
+      ```bash
+      yarn tunnel
+      ```
+
+      ### 8. Configuración inicial
+
+      Si es la primera vez que ejecutas el proyecto, ejecuta los siguientes comandos:
+
+      Ejecutar migraciones de base de datos:
+
+      ```bash
+      yarn migrate:dev
+      ```
+
+      Cargar datos iniciales:
+
+      ```bash
+      yarn seed
+      ```
+
+      ### 9. Endpoints de los servicios
+
+      Accede a los servicios en:
+
+      - Interfaz web: `http://localhost:3000`
+      - API: `http://localhost:3001`
+      - Gestión de RabbitMQ: `http://localhost:15672`
+      - Puerto de depuración: `9229`
+
+  </Tab>
+</Tabs>
+
+
+## Flujo de trabajo de desarrollo
+
+### Desarrollo local básico
+
+1. **Iniciar servicios**: `yarn docker:start`
+2. **Ejecutar migraciones**: `yarn migrate:dev`
+3. **Cargar datos iniciales**: `yarn seed`
+4. **Abrir la aplicación**: Visita `http://localhost:3000`
+5. **Verificación de salud**: `yarn dev:health-check`
+
+### Desarrollo con integraciones externas
+
+Si necesitas probar integraciones con servicios externos (como webhooks de Git):
+
+1. **Iniciar servicios**: `yarn docker:start && yarn migrate:dev && yarn seed`
+2. **Crear túnel**: `yarn tunnel` (crea un endpoint público)
+3. **Actualizar URLs de webhook**: El comando tunnel actualiza tu `.env` automáticamente
+4. **Configurar el proveedor Git**: Usa la URL del túnel en la configuración de webhooks de tu proveedor Git
+5. **Probar la integración**: Dispara webhooks y monitorea los logs
+
+<Info>
+  **Ventajas del túnel:**
+  - Probar integraciones de webhook reales localmente
+  - Depurar comunicaciones con servicios externos
+  - Compartir tu entorno de desarrollo con compañeros de equipo
+  - Probar aplicaciones móviles u otros clientes externos
+</Info>
+
+## Solución de problemas
+
+### Verificación rápida de salud
+
+```bash
+yarn dev:health-check
+```
+
+Esta verificación de salud exhaustiva valida:
+- ✅ **Servicios**: Kodus API, Worker, Webhooks, Web, PostgreSQL, MongoDB, RabbitMQ
+- 🔌 **Disponibilidad de puertos**: Web (3000), API (3001), PostgreSQL (5432), MongoDB (27017), RabbitMQ (5672/15672)
+- 🗄️ **Configuración de base de datos**: Migraciones y datos iniciales
+- 🌐 **Endpoints de API**: Endpoints de salud y conectividad básica
+
+
+### Verificación manual
+
+1. **Verificar la interfaz web**: Visita `http://localhost:3000` en tu navegador
+2. **Verificar la salud de la API**: Visita `http://localhost:3001/health`
+3. **Verificar RabbitMQ**: Visita `http://localhost:15672` (credenciales por defecto: `guest`/`guest`)
+4. **Verificar las conexiones de base de datos**: Revisa los logs para confirmar conexiones exitosas a la base de datos
+5. **Probar los endpoints de webhook**: Los webhooks de tu proveedor Git deben apuntar a `http://localhost:3332/[proveedor]/webhook` (o al dominio de tu API si un proxy inverso enruta `/.../webhook` al servicio de webhooks)
+
+
+### Problemas con el script de configuración
+
+Si el script de configuración automatizada (`yarn setup`) falla:
+
+**Dependencias faltantes:**
+```bash
+# Verificar si todas las herramientas requeridas están instaladas
+node --version
+yarn --version
+docker --version
+openssl version
+```
+
+**Problemas de permisos con Docker:**
+```bash
+# Agregar tu usuario al grupo docker (Linux/macOS)
+sudo usermod -aG docker $USER
+# Luego cierra sesión y vuelve a iniciarla
+```
+
+**Errores al crear redes:**
+```bash
+# Verificar si las redes ya existen
+docker network ls | grep kodus
+# Eliminar redes conflictivas si es necesario
+docker network rm kodus-backend-services shared-network
+```
+
+### Problemas comunes
+
+**Conflictos de puertos:**
+- Asegúrate de que los puertos 3000 (Web), 3001 (API), 5432 (PostgreSQL), 27017 (MongoDB) y 5672/15672 (RabbitMQ) estén disponibles
+- Detén otros servicios que usen estos puertos antes de iniciar Kodus
+
+**Variables de entorno no se cargan:**
+- Verifica que tu archivo `.env` exista en la raíz del proyecto
+- Comprueba que no haya espacios al final en las asignaciones de variables
+- Asegúrate de que todas las claves de seguridad requeridas se hayan generado correctamente
+
+**Fallos en la verificación de salud:**
+- Ejecuta `yarn dev:health-check` para obtener diagnósticos detallados
+- Comprueba si los contenedores están completamente iniciados (espera 1-2 minutos después de `yarn docker:start`)
+- Verifica que las migraciones de base de datos y los datos iniciales estén cargados
+- Revisa los logs de la API con `yarn docker:logs` para ver errores de inicio
+
+**La API no responde:**
+- La API tarda un tiempo en inicializarse completamente después de que el contenedor arranca
+- Verifica si las migraciones y los datos iniciales están cargados
+- Comprueba que el archivo `.env` tenga todas las variables requeridas
+- Ejecuta la verificación de salud para ver qué componentes específicos están fallando
+
+**Problemas de webhooks con servicios externos:**
+- Usa `yarn tunnel` para crear un endpoint público para webhooks externos
+- Actualiza las URLs de webhook de tu proveedor Git para usar la URL del túnel
+- Asegúrate de que el túnel esté activo cuando pruebes integraciones de webhook
+- Revisa los logs del túnel para detectar problemas de conexión

@@ -1,0 +1,78 @@
+---
+title: "Getting Started"
+---
+
+<Steps>
+  <Step title="Create an Account">
+    Sign up by entering your name, email, and password, or use a social provider like Google, GitHub, or GitLab.
+  </Step>
+
+  <Step title="Configure a Code Management Tool">
+    <AccordionGroup>
+        <Accordion title="Set Up GitHub" icon="github">
+            Connect GitHub via OAuth or token:
+              - **OAuth (Recommended)**: Click the "via OAuth" button. You'll be redirected to GitHub's authentication page.
+                - ✅ Kody appears as a dedicated bot in PRs
+                - ✅ Better audit trail (clear distinction between human and AI reviews)
+                - Requires `owner` permissions for your organization
+                - Grant access to all repositories you want Kody to analyze (you can adjust this later)
+              - **Token**: Reviews appear under your username. <a href="/how_to_use/en/code_review/general_config/github_pat">Visit the GitHub Token Setup page for detailed instructions.</a>
+
+            <Note>Using GitHub Enterprise? Allowlist Kodus's IP `52.55.217.197` in your network firewall before connecting.</Note>
+        </Accordion>
+
+        <Accordion title="Set Up GitLab" icon="gitlab">
+            Connect GitLab via OAuth or token:
+              - **OAuth (Recommended)**: Click the "via OAuth" button, and you'll be redirected to GitLab's authentication page.
+                - ✅ Kody appears as a dedicated bot in PRs
+                - Grant access to all repositories you want Kody to analyze (you can adjust this later)
+              - **Token**: Reviews appear under your username. <a href="/how_to_use/en/code_review/general_config/gitlab_pat">Visit the GitLab Token Setup page for detailed instructions.</a>
+
+            <Note>Using a self-hosted GitLab instance? Allowlist Kodus's IP `52.55.217.197` in your network firewall before connecting.</Note>
+        </Accordion>
+              <Accordion title="Set Up Bitbucket" icon="bitbucket">
+            Connect Bitbucket via OAuth or token:
+              - **Token**: <a href="/how_to_use/en/code_review/general_config/bitbucket_pat">Visit the Bitbucket Token Setup page for detailed instructions.</a>
+
+            <Note>Using Bitbucket Data Center (self-hosted)? Allowlist Kodus's IP `52.55.217.197` in your network firewall before connecting.</Note>
+        </Accordion>
+        <Accordion title="Set Up Azure DevOps" icon="microsoft">
+            Connect Azure DevOps via OAuth or token:
+              - **Token**: <a href="/how_to_use/en/code_review/general_config/azure_devops_pat">Visit the Azure DevOps Token Setup page for detailed instructions.</a>
+
+            <Note>Using Azure DevOps Server (self-hosted)? Allowlist Kodus's IP `52.55.217.197` in your network firewall before connecting.</Note>
+        </Accordion>
+    </AccordionGroup>
+
+
+  </Step>
+
+<Step title="Select Repositories">
+  Choose the repositories you want Kody to access for automated reviews and
+  actionable insights.
+</Step>
+
+<Step title="Run Your First PR Review">
+  Select a pull request (PR) for Kody to review. This will showcase the power of
+  automated code reviews. Once selected, Kody will perform the review directly
+  in your Git tool. Don’t worry, this is just for the first time—after that,
+  Kody will automatically review every PR you open.
+</Step>
+<Step title="Enjoy Kody Automated Reviews! 🔥">
+  Sit back and let Kody streamline your review process with intelligent
+  suggestions and actionable insights.
+</Step>
+
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={1}>
+  <Card
+    title="Configure Kody with your team Rules"
+    icon="Hand-love"
+    href="code_review/configs/kody_rules"
+  >
+    Learn how to configure Kody with your team rules.
+  </Card>
+</CardGroup>

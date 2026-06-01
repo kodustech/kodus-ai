@@ -416,6 +416,58 @@ export class CheckIfPRCanBeApprovedCronProvider {
             },
             prNumber: prNumber,
         };
+
+        const lastExecution =
+            await this.automationExecutionService.findLatestExecutionByFilters({
+                status: AutomationStatus.SUCCESS,
+                teamAutomation: { uuid: teamAutomationId },
+                pullRequestNumber: prNumber,
+                repositoryId: repository?.id,
+            });
+
+        const lastAnalyzedCommitSha = this.getLastAnalyzedCommitSha(
+            lastExecution?.dataExecution?.lastAnalyzedCommit,
+        );
+
+        if (lastAnalyzedCommitSha) {
+            const currentPullRequest =
+                await this.codeManagementService.getPullRequest(
+                    {
+                        organizationAndTeamData,
+                        repository: {
+                            id: repository?.id,
+                            name: repository?.name,
+                        },
+                        prNumber: prNumber,
+                    },
+                    platformType,
+                );
+
+            const currentHeadSha =
+                currentPullRequest?.head?.sha ||
+                (currentPullRequest as any)?.headSha ||
+                (currentPullRequest as any)?.head?.commit?.sha;
+
+            if (currentHeadSha && currentHeadSha !== lastAnalyzedCommitSha) {
+                this.logger.log({
+                    message: `Skipping approval for PR#${prNumber} due to new commit since last reviewed commit`,
+                    context: CheckIfPRCanBeApprovedCronProvider.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repository: {
+                            id: repository?.id,
+                            name: repository?.name,
+                        },
+                        prNumber,
+                        lastAnalyzedCommitSha,
+                        currentHeadSha,
+                    },
+                });
+
+                return false;
+            }
+        }
+
         try {
             let reviewComments: any[];
 
@@ -642,6 +694,30 @@ export class CheckIfPRCanBeApprovedCronProvider {
             Array.isArray(inProgressExecutions) &&
             inProgressExecutions.length > 0
         );
+    }
+
+    private getLastAnalyzedCommitSha(lastAnalyzedCommit?: any): string | null {
+        if (!lastAnalyzedCommit) {
+            return null;
+        }
+
+        if (typeof lastAnalyzedCommit === 'string') {
+            return lastAnalyzedCommit;
+        }
+
+        if (typeof lastAnalyzedCommit === 'object') {
+            if (lastAnalyzedCommit.sha) {
+                return lastAnalyzedCommit.sha;
+            }
+            if (lastAnalyzedCommit.commitSha) {
+                return lastAnalyzedCommit.commitSha;
+            }
+            if (lastAnalyzedCommit.commit?.sha) {
+                return lastAnalyzedCommit.commit.sha;
+            }
+        }
+
+        return null;
     }
 
     private async setPullRequestMessagesConfig(

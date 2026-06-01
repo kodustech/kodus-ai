@@ -1,0 +1,68 @@
+---
+title: "Como validar regras de negócio antes do merge"
+description: "Identifique requisitos ausentes, casos extremos esquecidos e lacunas de lógica no seu pull request antes que o código chegue à produção."
+---
+
+Revisões de código normalmente focam na qualidade do código — segurança, performance, estilo. Mas frequentemente ignoram a pergunta: **esse código realmente faz o que o negócio pediu?** A Validação de Lógica de Negócio preenche essa lacuna.
+
+## O que é verificado
+
+O Kodus compara o diff do seu PR com os requisitos da tarefa e identifica:
+
+- **Implementações ausentes** — critérios de aceitação não cobertos no código
+- **Implementações parciais** — requisitos apenas parcialmente atendidos
+- **Incompatibilidades de escopo** — quando o PR está trabalhando em uma área diferente do que a tarefa descreve
+- **Casos extremos** — cenários de negócio mencionados na tarefa mas não tratados
+
+## Como usar
+
+### Automático (padrão)
+
+Com `business_logic: true` nas suas opções de revisão (habilitado por padrão), o Kodus valida automaticamente as regras de negócio durante cada revisão de PR quando um plugin de gerenciamento de tarefas está conectado.
+
+### Sob demanda
+
+Comente em qualquer PR com um link ou especificação inline:
+
+```
+@kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292
+```
+
+```
+@kody -v business-logic
+Pedidos acima de R$500 devem emitir créditos de cashback.
+Códigos de desconto não podem ser combinados com recompensas de fidelidade.
+Frete grátis aplica-se apenas a pedidos domésticos.
+```
+
+## Fontes de tarefa suportadas
+
+Conecte via [Plugins](/how_to_use/pt-br/code_review/plugins) para buscar contexto de tarefas automaticamente:
+
+| Fonte | Como referenciar |
+|-------|-----------------|
+| **Jira** | Cole a URL da issue do Jira |
+| **Linear** | Cole a URL da issue do Linear |
+| **Notion** | Cole a URL da página do Notion |
+| **ClickUp** | Cole a URL da tarefa do ClickUp |
+| **Google Docs** | Cole a URL do documento |
+| **Slack** | Cole um permalink de mensagem do Slack |
+| **Inline** | Escreva os requisitos diretamente no comentário do PR |
+
+## Entendendo o resultado
+
+Cada achado tem uma severidade:
+
+- **MUST_FIX** — uma regra de negócio obrigatória está ausente ou em contradição
+- **SUGGESTION** — um caso extremo ou ponto de robustez não foi coberto
+- **INFO** — observação que não bloqueia a conformidade
+
+Cada achado inclui a **citação exata** da tarefa que estabelece o requisito, garantindo que nada seja inventado.
+
+## Dicas
+
+- Tarefas com critérios de aceitação explícitos recebem a validação mais completa
+- Após corrigir os problemas, reexecute o comando para confirmar a conformidade
+- Se o escopo do PR não corresponder à tarefa, o Kody sinaliza uma incompatibilidade de escopo em vez de especular
+
+Para detalhes, consulte [Validação de Lógica de Negócio](/how_to_use/pt-br/code_review/business_logic_validation).

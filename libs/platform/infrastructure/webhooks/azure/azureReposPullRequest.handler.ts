@@ -1,12 +1,14 @@
 import { createHash } from 'crypto';
 
 import { createLogger } from '@kodus/flow';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
+import { EnqueueAstGraphUpdateOnMergedUseCase } from '@libs/code-review/application/use-cases/enqueue-ast-graph-update-on-merged.use-case';
 import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
 import {
     hasReviewMarker,
+    isForceReviewCommand,
     isKodyMentionNonReview,
     isReviewCommand,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
@@ -27,6 +29,14 @@ import {
     IPullRequestsService,
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
+import {
+    IOutboxMessageRepository,
+    OUTBOX_MESSAGE_REPOSITORY_TOKEN,
+} from '@libs/core/workflow/domain/contracts/outbox-message.repository.contract';
+import {
+    SANDBOX_INVALIDATE_ROUTING_KEY,
+    SandboxInvalidatePayload,
+} from '@libs/sandbox/domain/events/sandbox-invalidate.event';
 import { CodeManagementService } from '../../adapters/services/codeManagement.service';
 
 @Injectable()
@@ -45,6 +55,10 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
         private readonly enqueueImplementationCheckUseCase: EnqueueImplementationCheckUseCase,
         @Inject(PULL_REQUESTS_SERVICE_TOKEN)
         private readonly pullRequestsService: IPullRequestsService,
+        @Inject(OUTBOX_MESSAGE_REPOSITORY_TOKEN)
+        private readonly outboxRepository: IOutboxMessageRepository,
+        @Optional()
+        private readonly enqueueAstGraphUpdateOnMergedUseCase?: EnqueueAstGraphUpdateOnMergedUseCase,
     ) {}
 
     /**
@@ -244,7 +258,7 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                                     message:
                                         'Failed to enqueue implementation check',
                                     context: AzureReposPullRequestHandler.name,
-                                    error: e,
+                                    error: e instanceof Error ? e : undefined,
                                     metadata: {
                                         repository,
                                         prId,
@@ -256,8 +270,46 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
 
                     this.generateIssuesFromPrClosedUseCase.execute(params);
 
+                    const prStatus = params?.payload?.resource?.status;
+                    const merged = prStatus === 'completed';
+                    const abandoned = prStatus === 'abandoned';
+
+                    // Durable sandbox invalidation via outbox (SBX-05).
+                    // Azure fires git.pullrequest.updated with status=completed (merged) or
+                    // status=abandoned (closed without merge). Both paths must invalidate the sandbox.
+                    if ((merged || abandoned) && context.organizationAndTeamData) {
+                        const sandboxPrKey = `${context.organizationAndTeamData.organizationId}:${repository.id}:${params?.payload?.resource?.pullRequestId}`;
+                        this.outboxRepository.create({
+                            jobId: undefined,
+                            exchange: 'sandbox.events',
+                            routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
+                            payload: {
+                                prKey: sandboxPrKey,
+                                reason: 'pr_closed',
+                            } satisfies SandboxInvalidatePayload,
+                        }).catch((err) => {
+                            this.logger.warn({
+                                message: '[SBX-05] Failed to write sandbox invalidation outbox message',
+                                context: AzureReposPullRequestHandler.name,
+                                error: err instanceof Error ? err : undefined,
+                                metadata: { prKey: sandboxPrKey },
+                            });
+                        });
+                    }
+
+                    // TODO(SBX-05): Azure Repos does not expose a distinct force-push event;
+                    // force-pushes arrive as git.pullrequest.updated with a new commit SHA.
+                    // Add force-push outbox write here when Azure surfaces a dedicated event or flag.
+                    let changedFiles:
+                        | Array<{
+                              filename: string;
+                              previous_filename?: string;
+                              status: string;
+                          }>
+                        | undefined;
+
                     try {
-                        if (params?.payload?.resource?.status === 'completed') {
+                        if (merged) {
                             if (context.organizationAndTeamData) {
                                 const baseRefFull =
                                     params?.payload?.resource?.targetRefName; // refs/heads/main
@@ -271,40 +323,56 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                                         },
                                     });
                                 if (baseRefFull !== defaultBranch) {
-                                    return;
-                                }
-                                const changedFiles =
-                                    await this.codeManagement.getFilesByPullRequestId(
-                                        {
-                                            organizationAndTeamData:
-                                                context.organizationAndTeamData,
-                                            repository: {
-                                                id: repository.id,
-                                                name: repository.name,
+                                    changedFiles = undefined;
+                                } else {
+                                    changedFiles =
+                                        await this.codeManagement.getFilesByPullRequestId(
+                                            {
+                                                organizationAndTeamData:
+                                                    context.organizationAndTeamData,
+                                                repository: {
+                                                    id: repository.id,
+                                                    name: repository.name,
+                                                },
+                                                prNumber:
+                                                    params?.payload?.resource
+                                                        ?.pullRequestId,
                                             },
+                                        );
+
+                                    this.enqueueAstGraphUpdateOnMergedUseCase
+                                        ?.execute({
                                             prNumber:
                                                 params?.payload?.resource
                                                     ?.pullRequestId,
-                                        },
-                                    );
-
-                                this.eventEmitter.emit(
-                                    'pull-request.closed',
-                                    new PullRequestClosedEvent(
-                                        context.organizationAndTeamData,
-                                        repository,
-                                        params?.payload?.resource
-                                            ?.pullRequestId,
-                                        changedFiles || [],
-                                    ),
-                                );
+                                            repoExternalId: repository.id,
+                                            repoName: repository.name,
+                                            platform:
+                                                PlatformType.AZURE_REPOS,
+                                            baseBranch: baseRefFull,
+                                            newSha:
+                                                params?.payload?.resource
+                                                    ?.lastMergeCommit
+                                                    ?.commitId,
+                                            organizationAndTeamData:
+                                                context.organizationAndTeamData,
+                                        })
+                                        .catch((e) => {
+                                            this.logger.warn({
+                                                message: `[AST-GRAPH] Failed to enqueue graph update after PR#${prId} merge`,
+                                                context:
+                                                    AzureReposPullRequestHandler.name,
+                                                error: e,
+                                            });
+                                        });
+                                }
                             }
                         }
                     } catch (e) {
                         this.logger.error({
                             message: 'Failed to sync Kody Rules after PR merge',
                             context: AzureReposPullRequestHandler.name,
-                            error: e,
+                            error: e instanceof Error ? e : undefined,
                             metadata: {
                                 prId,
                                 eventType,
@@ -313,6 +381,19 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                                     context.organizationAndTeamData,
                             },
                         });
+                    }
+
+                    if (context.organizationAndTeamData) {
+                        this.eventEmitter.emit(
+                            'pull-request.closed',
+                            new PullRequestClosedEvent(
+                                context.organizationAndTeamData,
+                                repository,
+                                params?.payload?.resource?.pullRequestId,
+                                changedFiles || [],
+                                merged,
+                            ),
+                        );
                     }
 
                     break;
@@ -339,7 +420,7 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                 },
                 message: `Successfully processed Azure Repos event '${eventType}' for PR ID: ${prId}`,
             });
-        } catch (error) {
+        } catch (error: any) {
             this.logger.error({
                 context: AzureReposPullRequestHandler.name,
                 serviceName: AzureReposPullRequestHandler.name,
@@ -349,8 +430,8 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                     repoName,
                     organizationAndTeamData: context.organizationAndTeamData,
                 },
-                message: `Error processing Azure Repos pull request #${prId}: ${error.message}`,
-                error,
+                message: `Error processing Azure Repos pull request #${prId}: ${error?.message}`,
+                error: error instanceof Error ? error : undefined,
             });
             throw error;
         }
@@ -432,6 +513,7 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
             }
 
             const isStartCommand = isReviewCommand(comment.body);
+            const isForceCommand = isForceReviewCommand(comment.body);
             const hasMarker = hasReviewMarker(comment.body);
 
             if (isStartCommand && !hasMarker) {
@@ -451,7 +533,7 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                     payload: {
                         ...payload,
                         action: 'synchronize',
-                        origin: 'command',
+                        origin: isForceCommand ? 'command-force' : 'command',
                         triggerCommentId: comment?.id,
                     },
                 };
@@ -495,7 +577,7 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                 this.chatWithKodyFromGitUseCase.execute(params);
                 return;
             }
-        } catch (error) {
+        } catch (error: any) {
             this.logger.error({
                 context: AzureReposPullRequestHandler.name,
                 serviceName: AzureReposPullRequestHandler.name,
@@ -503,8 +585,8 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                     prId,
                     repository,
                 },
-                message: `Error processing Azure Repos comment: ${error.message}`,
-                error,
+                message: `Error processing Azure Repos comment: ${error?.message}`,
+                error: error instanceof Error ? error : undefined,
             });
             throw error;
         }
@@ -634,11 +716,11 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
 
             // Default: Return true (new commit or no stored PR)
             return true;
-        } catch (error) {
+        } catch (error: any) {
             this.logger.error({
-                message: `Error in shouldTriggerCodeReview: ${error.message}`,
+                message: `Error in shouldTriggerCodeReview: ${error?.message}`,
                 context: AzureReposPullRequestHandler.name,
-                error,
+                error: error instanceof Error ? error : undefined,
                 metadata: { prId },
             });
             // Fail safe: process it if check fails

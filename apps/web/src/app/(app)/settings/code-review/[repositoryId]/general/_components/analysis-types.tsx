@@ -2,13 +2,16 @@
 
 import { useMemo } from "react";
 import { Button } from "@components/ui/button";
+import { Badge } from "@components/ui/badge";
 import { Checkbox } from "@components/ui/checkbox";
 import { FormControl } from "@components/ui/form-control";
 import { Heading } from "@components/ui/heading";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import { useGetCodeReviewLabels } from "@services/parameters/hooks";
+import { getMCPPlugins } from "@services/mcp-manager/fetch";
+import { MCPServiceUnavailableError } from "@services/mcp-manager/utils";
+import { useQuery } from "@tanstack/react-query";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
-import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { useCurrentConfigLevel } from "src/app/(app)/settings/_hooks";
 
 import {
@@ -18,6 +21,35 @@ import {
 import { OverrideIndicatorForm } from "../../../_components/override";
 import { type CodeReviewFormType } from "../../../_types";
 
+const TASK_MANAGEMENT_HINTS = [
+    "jira",
+    "linear",
+    "notion",
+    "clickup",
+    "googledocs",
+    "atlassianrovo",
+    "githubissues",
+];
+
+function normalizeToken(value: string): string {
+    return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function hasTaskManagementConnection(
+    connections: Array<{ appName: string; provider: string }>,
+): boolean {
+    return connections.some((conn) => {
+        const aliases = [conn.appName, conn.provider]
+            .map(normalizeToken)
+            .filter(Boolean);
+        return aliases.some((alias) =>
+            TASK_MANAGEMENT_HINTS.some(
+                (hint) => alias.includes(hint) || hint.includes(alias),
+            ),
+        );
+    });
+}
+
 interface CheckboxCardOption {
     value: string;
     name: string;
@@ -26,23 +58,40 @@ interface CheckboxCardOption {
 
 export const AnalysisTypes = () => {
     const currentLevel = useCurrentConfigLevel();
-    const { businessLogic } = useFeatureFlags();
     const form = useFormContext<CodeReviewFormType>();
-    const codeReviewVersion =
-        useWatch({
-            control: form.control,
-            name: "codeReviewVersion.value",
-        }) || "v2";
     const reviewOptions = useWatch({
         control: form.control,
         name: "reviewOptions",
     });
-    const { data: labels = [], isLoading } =
-        useGetCodeReviewLabels(codeReviewVersion);
-    const isBusinessLogicEnabled = businessLogic === true;
+    const { data: labels = [], isLoading } = useGetCodeReviewLabels("v2");
+
+    // Business-logic review used to be gated by a `businessLogic`
+    // client-side feature flag. The flag was promoted to GA in the
+    // feature-gate PR, so the MCP plugin lookup it guarded now runs for
+    // every org.
+    const { data: mcpPlugins, isFetched: isMCPFetched } = useQuery({
+        queryKey: ["mcp-plugins-task-management"],
+        staleTime: 5 * 60 * 1000,
+        retry: false,
+        queryFn: async () => {
+            try {
+                return await getMCPPlugins();
+            } catch (error) {
+                if (error instanceof MCPServiceUnavailableError) {
+                    return null;
+                }
+                return null;
+            }
+        },
+    });
+    const hasTaskMcp = useMemo(() => {
+        if (!mcpPlugins) return false;
+        const connected = mcpPlugins.filter((p) => p.isConnected);
+        return hasTaskManagementConnection(connected);
+    }, [mcpPlugins]);
     const visibleLabels = useMemo(
-        () => filterVisibleReviewLabels(labels, isBusinessLogicEnabled),
-        [isBusinessLogicEnabled, labels],
+        () => filterVisibleReviewLabels(labels, true),
+        [labels],
     );
     const visibleLabelTypes = useMemo(
         () => visibleLabels.map((label) => label.type),
@@ -120,6 +169,11 @@ export const AnalysisTypes = () => {
                                     const isEnabled =
                                         normalizedOptions[option.value]
                                             ?.value || false;
+                                    const showMcpWarning =
+                                        option.value === "business_logic" &&
+                                        isEnabled &&
+                                        isMCPFetched &&
+                                        !hasTaskMcp;
                                     return (
                                         <ToggleGroup.ToggleGroupItem
                                             key={option.value}
@@ -128,10 +182,10 @@ export const AnalysisTypes = () => {
                                             <Button
                                                 size="lg"
                                                 variant="helper"
-                                                className="w-full items-start py-5">
+                                                className={`w-full items-start py-5 ${showMcpWarning ? "border-danger" : ""}`}>
                                                 <div className="flex w-full flex-row justify-between gap-6">
                                                     <div className="flex min-w-0 flex-col gap-2">
-                                                        <div className="flex items-center gap-2">
+                                                        <div className="flex flex-wrap items-center gap-2">
                                                             <Heading
                                                                 variant="h3"
                                                                 className="truncate">
@@ -140,6 +194,14 @@ export const AnalysisTypes = () => {
                                                             <OverrideIndicatorForm
                                                                 fieldName={`reviewOptions.${option.value}`}
                                                             />
+                                                            {showMcpWarning && (
+                                                                <Badge className="bg-red-500/10 text-red-500 border-red-500/20 text-[10px] whitespace-nowrap">
+                                                                    Connect a
+                                                                    task
+                                                                    management
+                                                                    MCP
+                                                                </Badge>
+                                                            )}
                                                         </div>
 
                                                         <p className="text-text-secondary text-xs">

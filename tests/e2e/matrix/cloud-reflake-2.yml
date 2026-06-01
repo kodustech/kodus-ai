@@ -1,0 +1,8 @@
+id: license-trial-only
+description: Final reflake of license-attribution × cloud × github × trial
+scenarios:
+    - license-attribution
+cells:
+    - target: cloud
+      provider: github
+      license: trial

@@ -1,0 +1,49 @@
+---
+title: "单点登录"
+description: "启用单点登录(SSO)以安全高效地访问 Kodus。"
+---
+
+## 概述
+
+单点登录(SSO)允许您通过单一身份提供商管理对 Kodus 的访问,简化身份验证并增强安全性。
+
+## 入门
+
+<Steps>
+    <Step title="访问 SSO 设置">
+        导航到您的组织设置
+        [app.kodus.io/organization/sso](https://app.kodus.io/organization/sso)
+    </Step>
+
+    <Step title="填写您的 IdP 配置">
+        填写您的 IdP 设置,例如其发行者 ID、其 URL 和签名证书。这些可以手动填写,也可以通过提供 IdP 的元数据 URL 或元数据 XML 文件来填写。
+
+        <Info>
+            这些值通常可以在 IdP 的文档或管理控制台中找到。
+        </Info>
+    </Step>
+
+    <Step title="在 IdP 中将 Kodus 配置为 SP">
+        通过提供我们的实体 ID(默认为 `kodus-orchestrator`)和 SSO 设置页面中找到的组织回调 URL,在 IdP 中将 Kodus 配置为 SP。
+
+        确保名称 ID 格式设置为电子邮件。
+
+        <Warning>
+            确保在 IdP 的 SP 配置中禁用签名证书。
+        </Warning>
+    </Step>
+
+    <Step title="启用并测试 SSO">
+        在 Kodus 中启用 SSO 并通过注销然后重新登录来测试配置。当尝试使用与 IdP 关联的电子邮件域登录时,您将可以选择通过 SSO 登录。
+    </Step>
+
+</Steps>
+
+## 可选配置
+
+### 映射属性
+
+您可以将以下属性从 IdP 映射到 Kodus 用户,改善用户体验。
+
+-   名字,映射到 `firstName`
+-   姓氏,映射到 `lastName`

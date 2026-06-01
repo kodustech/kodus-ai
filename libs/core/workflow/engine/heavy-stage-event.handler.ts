@@ -25,7 +25,7 @@ import {
     IInboxMessageRepository,
     INBOX_MESSAGE_REPOSITORY_TOKEN,
 } from '@libs/core/workflow/domain/contracts/inbox-message.repository.contract';
-import { RabbitMQErrorHandler } from '@libs/core/infrastructure/queue/rabbitmq-error.handler';
+import { createRabbitMQErrorHandlerWithFallback } from '@libs/core/infrastructure/queue/rabbitmq-error.handler';
 
 /**
  * Generic handler for heavy stage completion events
@@ -59,10 +59,9 @@ export class HeavyStageEventHandler {
         queue: 'workflow.events.stage.completed',
         allowNonJsonMessages: false,
         errorBehavior: MessageHandlerErrorBehavior.ACK,
-        errorHandler: (channel, msg, err) =>
-            RabbitMQErrorHandler.instance?.handle(channel, msg, err, {
-                dlqRoutingKey: 'workflow.events.dlq',
-            }),
+        errorHandler: createRabbitMQErrorHandlerWithFallback(
+            'workflow.events.dlq',
+        ),
         queueOptions: {
             arguments: {
                 'x-queue-type': 'quorum',
@@ -77,10 +76,9 @@ export class HeavyStageEventHandler {
         queue: 'workflow.events.stage.completed',
         allowNonJsonMessages: false,
         errorBehavior: MessageHandlerErrorBehavior.ACK,
-        errorHandler: (channel, msg, err) =>
-            RabbitMQErrorHandler.instance?.handle(channel, msg, err, {
-                dlqRoutingKey: 'workflow.events.dlq',
-            }),
+        errorHandler: createRabbitMQErrorHandlerWithFallback(
+            'workflow.events.dlq',
+        ),
         queueOptions: {
             arguments: {
                 'x-queue-type': 'quorum',

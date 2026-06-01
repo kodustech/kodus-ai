@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Page } from "@components/ui/page";
-import { Spinner } from "@components/ui/spinner";
 import { useDebounce } from "@hooks/use-debounce";
 import {
     useInfinitePullRequestExecutions,
@@ -95,33 +94,6 @@ export function PullRequestsPageClient() {
         );
     }, [pullRequests]);
 
-    const loadMoreRef = useRef<HTMLDivElement | null>(null);
-
-    useEffect(() => {
-        const node = loadMoreRef.current;
-
-        if (!node) return;
-
-        const observer = new IntersectionObserver(
-            (entries) => {
-                const [entry] = entries;
-
-                if (
-                    entry?.isIntersecting &&
-                    hasNextPage &&
-                    !isFetchingNextPage
-                ) {
-                    fetchNextPage();
-                }
-            },
-            { rootMargin: "0px 0px 200px 0px" },
-        );
-
-        observer.observe(node);
-
-        return () => observer.disconnect();
-    }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
-
     return (
         <Page.Root className="pb-0">
             <Page.Header className="max-w-full">
@@ -184,23 +156,13 @@ export function PullRequestsPageClient() {
                         </p>
                     </div>
                 ) : (
-                    <>
-                        <PrDataTable
-                            data={groupedPullRequests}
-                            loading={isLoading && !groupedPullRequests.length}
-                        />
-                        <div
-                            ref={loadMoreRef}
-                            className="h-6 w-full"
-                            aria-hidden
-                        />
-                        {isFetchingNextPage &&
-                            groupedPullRequests.length > 0 && (
-                                <div className="flex justify-center py-4">
-                                    <Spinner className="size-5" />
-                                </div>
-                            )}
-                    </>
+                    <PrDataTable
+                        data={groupedPullRequests}
+                        loading={isLoading && !groupedPullRequests.length}
+                        hasNextPage={hasNextPage}
+                        isFetchingNextPage={isFetchingNextPage}
+                        fetchNextPage={fetchNextPage}
+                    />
                 )}
             </Page.Content>
         </Page.Root>

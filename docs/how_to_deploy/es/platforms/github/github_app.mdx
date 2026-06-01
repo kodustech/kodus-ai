@@ -1,0 +1,118 @@
+---
+title: Crear una GitHub App
+icon: github
+---
+
+Si deseas ejecutar Kody con una GitHub App, necesitas crear una. Esta app permite que Kody interactúe con tus repositorios, gestione pull requests y reciba webhooks.
+
+<Note>Si deseas habilitar "Iniciar sesión con GitHub" para los usuarios de la plataforma, ese es un proceso separado de OAuth App y no interfiere con los permisos de la GitHub App. Esta guía se centra en la integración funcional. Consulta <a href="/how_to_deploy/es/platforms/github/github_oauth">OAuth App de GitHub</a>.</Note>
+
+## Requisitos previos
+
+Ten listos los dominios de tu aplicación:
+
+- **WEB_DOMAIN**: URL de tu frontend (ej., `https://app.yourdomain.com` o `http://localhost:3000`)
+- **API_DOMAIN**: URL de tu backend/API (ej., `https://api.yourdomain.com` o `http://localhost:3000` para configuraciones de monorepo/proxy)
+- **WEBHOOK_DOMAIN** (opcional): Dominio público para webhooks (ej., `https://kodus-webhooks.yourdomain.com`). Si enrutas `/.../webhook` en el dominio de la API, puedes usar `API_DOMAIN`.
+
+## Paso 1: Crear la GitHub App
+
+1. En GitHub, ve a **Settings** > **Developer Settings** > **GitHub Apps**
+2. Haz clic en **New GitHub App**
+3. Completa la información básica (Name, Homepage URL) según tu preferencia
+
+<img src="https://success.skyhighsecurity.com/@api/deki/files/66490/Click_newGithubApp.png?revision=1" alt="Página de configuración de GitHub Apps resaltando el botón New GitHub App" />
+
+## Paso 2: Configurar las URLs de callback y configuración
+
+<img src="https://kodus.io/wp-content/uploads/2026/01/githuapp-urls.gif" alt="Webhook de GitHub App" />
+
+Este paso es fundamental para garantizar que la instalación y la redirección funcionen correctamente. Completa los campos a continuación, reemplazando `WEB_DOMAIN` con tu URL real:
+
+- **Callback URL**:
+  ```
+  WEB_DOMAIN/api/auth/callback/github
+  ```
+  Esta URL se utiliza para completar el flujo de autorización.
+
+- **Setup URL**:
+  ```
+  WEB_DOMAIN/setup/github
+  ```
+
+- Marca la opción: **Redirect on update**
+  Esto garantiza que, tras instalar la app, los usuarios sean redirigidos de regreso a Kodus para completar la configuración.
+
+## Paso 3: Configurar el webhook
+
+El webhook notifica a Kodus sobre los eventos en tus pull requests.
+
+<Note>
+  Los webhooks son gestionados por un servicio separado (puerto 3332). Si usas el dominio de la API aquí, asegúrate de que tu proxy inverso enrute `/github/webhook` al servicio de webhooks. De lo contrario, usa un dominio dedicado para webhooks.
+</Note>
+
+- **Webhook URL**:
+  ```
+  WEBHOOK_DOMAIN/github/webhook
+  ```
+
+- Asegúrate de que la opción **Active** esté marcada
+
+## Paso 4: Recopilar credenciales y agregarlas al .env
+
+<img src="https://kodus.io/wp-content/uploads/2026/01/gthubapp-env.gif" alt="Webhook de GitHub App" />
+
+Ahora necesitas obtener las credenciales generadas por GitHub y agregarlas a las variables de entorno de Kodus.
+
+### App ID
+
+En la parte superior de la página "About" de tu app, copia el **App ID**.
+
+Agrega a tu `.env`:
+```
+API_GITHUB_APP_ID=your_app_id_here
+```
+
+### Client Secret
+
+Ve a la sección **Client secrets** y haz clic en **Generate a new client secret**.
+
+Copia el valor generado.
+
+Agrega a tu `.env`:
+```
+API_GITHUB_CLIENT_SECRET=your_client_secret_here
+```
+
+### Private Key
+
+Desplázate hasta el final de la página y haz clic en **Generate a private key**.
+
+Esto descargará un archivo `.pem`. Abre este archivo con un editor de texto y copia todo el contenido.
+
+Agrega a tu `.env`:
+```
+API_GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY----- ..."
+```
+
+### Installation URL
+
+Abre tu GitHub App y haz clic en **Install App**. Copia la URL de la barra de direcciones del navegador (tiene el formato `https://github.com/apps/<app-slug>/installations/new`).
+
+Agrega a tu `.env`:
+```
+WEB_GITHUB_INSTALL_URL="https://github.com/apps/your-app/installations/new"
+```
+
+## Resumen de variables de entorno
+
+Al finalizar, tu archivo de configuración debe contener:
+
+```bash
+API_GITHUB_APP_ID=123456
+API_GITHUB_CLIENT_SECRET=example_secret_123
+API_GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY----- ..."
+WEB_GITHUB_INSTALL_URL="https://github.com/apps/your-app/installations/new"
+```
+
+Haz clic en **Save Changes** en GitHub y reinicia tu aplicación Kodus para aplicar los cambios.

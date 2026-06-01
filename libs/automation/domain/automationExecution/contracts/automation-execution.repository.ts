@@ -38,6 +38,19 @@ export interface IAutomationExecutionRepository {
         data: AutomationExecutionEntity[];
         total: number;
     }>;
+    findCliReviewExecutionsByOrganization(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId?: string;
+        userEmail?: string;
+        since?: Date;
+        skip?: number;
+        take?: number;
+        order?: 'ASC' | 'DESC';
+        includeTotal?: boolean;
+    }): Promise<{
+        data: AutomationExecutionEntity[];
+        total: number;
+    }>;
     findLatestExecutionByFilters(
         filters?: Partial<any>,
     ): Promise<AutomationExecutionEntity | null>;

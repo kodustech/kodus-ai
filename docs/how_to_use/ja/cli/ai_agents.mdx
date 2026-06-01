@@ -1,0 +1,117 @@
+---
+title: "AIエージェント"
+description: "Kodus CLI を AI コーディングエージェントと統合して、自律的なレビュー・修正ループを実現します。"
+---
+
+CLI には、AIコーディングエージェントが解析して行動するために設計された最小限の構造化出力モード（`--prompt-only`）が搭載されています。チームキーと組み合わせることで、エージェントがレビューし、修正を適用し、再レビューし、コミットする—重要なパスに人間が介在しない—自律的なレビュー・修正ループが実現します。
+
+## 対応エージェント
+
+- **Claude Code** — スキルインストーラー経由のネイティブスキル。
+- **Cursor** — ネイティブスキル。
+- **Codex** — `notify` フック経由の Decision Memory を持つネイティブスキル。
+- **Windsurf** — `--prompt-only` 出力経由。
+
+シェルコマンドを実行して構造化テキストを解析できる他のエージェントでも、`kodus review --prompt-only` はそのまま動作します。
+
+## 最速のセットアップ
+
+CLI と全エージェントスキルを一度にインストール:
+
+```bash
+curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+```
+
+これにより:
+
+1. `@kodus/cli` バイナリをグローバルにインストール。
+2. `~/.kodus/config.json` にチームキーを設定。
+3. 検出された全エージェント（Claude Code、Cursor、Codex、Windsurf）に Kodus スキルをデプロイ。
+
+個別ログインなし。インタラクティブなプロンプトなし。すぐにエージェントループに対応。
+
+## レビュー・修正ループ
+
+<Steps>
+  <Step title="エージェントがレビューを実行">
+    ```bash
+    kodus review --prompt-only
+    ```
+
+    CLI はファイルパス、行番号、重要度、提案された修正を含む構造化された問題を、LLM が消費するために設計されたコンパクトなテキスト形式で返します。
+  </Step>
+  <Step title="エージェントが修正を適用">
+    エージェントは出力を読み取り、どの修正を適用するか決定し（または `--fix` で全て受け入れ）、ファイルを編集します。
+  </Step>
+  <Step title="エージェントが再レビューを実行">
+    ```bash
+    kodus review --prompt-only --fail-on error
+    ```
+
+    `--fail-on error` により、エラーレベル以上の問題が残っている間はループがゼロ以外で終了します。エージェントはループを継続し、レビューがクリーンになるとプロセスは0で終了し、エージェントは次に進みます。
+  </Step>
+  <Step title="エージェントがコミットとプッシュ">
+    レビューがクリーンになったら、エージェントはコミットしてプッシュします。オプションで、手動プッシュ時の追加セーフティネットとして pre-push フックをインストール（`kodus hook install`）できます。
+  </Step>
+</Steps>
+
+## エージェント用チームキー認証
+
+チームキーはエージェントに強く推奨されます — 個別のサインアップなし、インタラクティブなログインなし、簡単なローテーション、デバイスごとの追跡。
+
+```bash
+export KODUS_TEAM_KEY=kodus_xxxxx
+kodus review --prompt-only
+```
+
+<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a> でキーを生成し、そこに表示されるインストールコマンドをチームに配布してください。
+
+<Warning>キーが表示されたときに保存してください — 再表示されません。</Warning>
+
+## 重要な出力フラグ
+
+| フラグ           | 用途                                                                |
+| ---------------- | ------------------------------------------------------------------- |
+| `--prompt-only`  | 解析用コンパクト構造化出力。レビューループで使用。                  |
+| `--agent`        | すべてのコマンドで決定論的な機械可読出力を強制。                    |
+| `--format json`  | 完全な JSON ペイロード。厳密なパーサーには `--agent` と組み合わせて。|
+| `--fail-on`      | 終了コードゲート。ゼロ以外の間、ループは継続。                      |
+| `--fields <csv>` | JSON/エージェントペイロードを絞り込む（例: `summary,issues.file,issues.severity`）。エージェントのコンテキストウィンドウを小さく保つのに便利。 |
+
+## Decision Memory との組み合わせ
+
+エージェントループを [Decision Memory](decision_memory) と組み合わせて、エージェントの各ターンの背後にある推論をリポジトリ内の構造化ファイルとして記録します。ループは*何が*変わったかを処理し、メモリは*なぜ*を記録します。
+
+```bash
+kodus decisions enable
+# これ以降、エージェントの各ターンで .kody/ 以下に決定ファイルが書き込まれます
+```
+
+## 例: ビジネス検証を含む Claude Code ループ
+
+```bash
+# Claude Code セッションで、エージェントは以下を実行できます:
+kodus review --prompt-only --fail-on error    # 一般的なレビュー
+kodus pr business-validation --task-id KC-1441 --dry-run   # タスクに対して確認
+kodus review --prompt-only --fix               # 修正可能な問題を自動適用
+git commit -am "fix: KC-1441 address review findings"
+```
+
+スキルインストーラーを使用すると、Claude Code の Kodus スキルはこれらをいつ実行するかを認識します — あなた側でプロンプトエンジニアリングは不要です。
+
+## 関連
+
+<CardGroup cols={2}>
+  <Card title="Decision Memory" icon="brain" href="decision_memory">
+    エージェントの決定をリポジトリ内の構造化ファイルとして永続化。
+  </Card>
+  <Card title="コンセプト" icon="book-open" href="concepts">
+    レビューモード、差分モード、エージェント出力フラグ。
+  </Card>
+  <Card title="コマンドリファレンス" icon="book" href="commands">
+    完全なフラグ一覧。
+  </Card>
+  <Card title="トラブルシューティング" icon="life-ring" href="troubleshooting">
+    エージェントループの問題、フックの問題、タイムアウト。
+  </Card>
+</CardGroup>

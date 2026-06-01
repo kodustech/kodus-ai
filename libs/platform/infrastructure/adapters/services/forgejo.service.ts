@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
 
 import { createLogger } from '@kodus/flow';
+import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
 import { getLabelShield } from '@libs/common/utils/codeManagement/labels';
@@ -54,6 +55,7 @@ import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeM
 import {
     CodeManagementConnectionStatus,
     ICodeManagementService,
+    PullRequestFileChange,
 } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
 import { Organization } from '@libs/platform/domain/platformIntegrations/types/codeManagement/organization.type';
@@ -262,7 +264,7 @@ export class ForgejoService implements Omit<
         description?: string;
         commitMessage?: string;
         author?: { name: string; email?: string };
-        files: { path: string; content: string }[];
+        files: PullRequestFileChange[];
     }): Promise<Partial<PullRequest> | null> {
         const {
             organizationAndTeamData,
@@ -364,7 +366,7 @@ export class ForgejoService implements Omit<
         repository: { id: string; name: string };
         branchName?: string;
         baseBranch?: string;
-        files: { path: string; content: string }[];
+        files: PullRequestFileChange[];
         message?: string;
         author?: { name: string; email?: string };
     }): Promise<boolean> {
@@ -413,24 +415,89 @@ export class ForgejoService implements Omit<
                     }
                     : undefined;
 
+            const branchAlreadyExists =
+                resolvedBranchName === resolvedBaseBranch
+                    ? true
+                    : await this.checkForgejoBranchExists(
+                          client,
+                          repoInfo,
+                          resolvedBranchName,
+                      );
+
+            const fileExistsReferenceBranch = branchAlreadyExists
+                ? resolvedBranchName
+                : resolvedBaseBranch;
+
+            const fileExistsEntries = await Promise.all(
+                files.map(async (file) => {
+                    const exists = await this.checkForgejoFileExists(
+                        client,
+                        repoInfo,
+                        fileExistsReferenceBranch,
+                        file.path,
+                    );
+
+                    return [file.path, exists] as const;
+                }),
+            );
+
+            const fileExistsByPath = new Map(fileExistsEntries);
+
+            const changes = files
+                .map((file) => {
+                    const operation = file.operation || 'upsert';
+                    const fileExists = fileExistsByPath.get(file.path) === true;
+
+                    if (operation === 'delete') {
+                        if (!fileExists) {
+                            return null;
+                        }
+
+                        return {
+                            operation: 'delete' as const,
+                            path: file.path,
+                        } as any;
+                    }
+
+                    if (typeof file.content !== 'string') {
+                        throw new Error(
+                            `File content is required for upsert operation: ${file.path}`,
+                        );
+                    }
+
+                    return {
+                        operation: fileExists
+                            ? ('update' as const)
+                            : ('create' as const),
+                        path: file.path,
+                        content: file.content,
+                    } as any;
+                })
+                .filter((change): change is NonNullable<typeof change> =>
+                    Boolean(change),
+                );
+
+            if (changes.length === 0) {
+                return true;
+            }
+
             const res = await repoChangeFiles({
                 client,
                 path: repoInfo,
                 body: {
-                    files: files.map((f) => ({
-                        operation: 'create',
-                        path: f.path,
-                        content: f.content,
-                    })),
+                    files: changes,
                     message: resolvedMessage,
-                    branch: resolvedBaseBranch,
+                    branch: branchAlreadyExists
+                        ? resolvedBranchName
+                        : resolvedBaseBranch,
                     ...(tokenAuthorIdentity
                         ? {
                             author: tokenAuthorIdentity,
                             committer: tokenAuthorIdentity,
                         }
                         : {}),
-                    ...(resolvedBranchName !== resolvedBaseBranch
+                    ...(!branchAlreadyExists &&
+                    resolvedBranchName !== resolvedBaseBranch
                         ? {
                             new_branch: resolvedBranchName,
                         }
@@ -452,6 +519,78 @@ export class ForgejoService implements Omit<
             });
             return false;
         }
+    }
+
+    private async checkForgejoBranchExists(
+        client: Client,
+        repoInfo: { owner: string; repo: string },
+        branchName: string,
+    ): Promise<boolean> {
+        try {
+            await getTree({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    sha: branchName,
+                },
+                query: {
+                    recursive: false,
+                },
+            });
+
+            return true;
+        } catch (error) {
+            if (this.isForgejoNotFoundError(error)) {
+                return false;
+            }
+
+            throw error;
+        }
+    }
+
+    private async checkForgejoFileExists(
+        client: Client,
+        repoInfo: { owner: string; repo: string },
+        branchName: string,
+        filePath: string,
+    ): Promise<boolean> {
+        try {
+            await repoGetContents({
+                client,
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    filepath: filePath.replace(/^\/+/, ''),
+                },
+                query: {
+                    ref: branchName,
+                },
+            });
+
+            return true;
+        } catch (error) {
+            if (this.isForgejoNotFoundError(error)) {
+                return false;
+            }
+
+            throw error;
+        }
+    }
+
+    private isForgejoNotFoundError(error: unknown): boolean {
+        const candidate = error as
+            | {
+                  status?: number;
+                  code?: number;
+                  response?: { status?: number };
+              }
+            | undefined;
+
+        const status =
+            candidate?.status || candidate?.code || candidate?.response?.status;
+
+        return status === 404;
     }
 
     private extractRepoInfo(
@@ -1720,6 +1859,7 @@ export class ForgejoService implements Omit<
         return this.getFilesByPullRequestId(params);
     }
 
+
     async isDraftPullRequest(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
@@ -1937,7 +2077,13 @@ export class ForgejoService implements Omit<
                 },
             );
 
-            return commits.map((c) => this.transformCommit(c));
+            return commits
+                .map((c) => this.transformCommit(c))
+                .sort(
+                    (a, b) =>
+                        new Date(a?.commit?.author?.date || '').getTime() -
+                        new Date(b?.commit?.author?.date || '').getTime(),
+                );
         } catch (error) {
             this.logger.error({
                 message: 'Error getting commits for PR',
@@ -2425,7 +2571,12 @@ export class ForgejoService implements Omit<
 
             const client = this.createForgejoClient(authDetail);
 
-            const description = params.summary ?? params.body;
+            // Truncate at the adapter boundary so the per-platform limit
+            // is enforced consistently — see fit-pr-description.ts.
+            const description = fitPRDescription(
+                params.summary ?? params.body ?? '',
+                PlatformType.FORGEJO,
+            );
 
             const result = await repoEditPullRequest({
                 client,
@@ -3840,5 +3991,21 @@ export class ForgejoService implements Omit<
             });
             return [];
         }
+    }
+
+    async getRepositoryContentBatch(
+        _params: any,
+    ): Promise<Map<string, any> | null> {
+        // Not implemented for Forgejo — callers fall back to per-file
+        // `getRepositoryContentFile`.
+        return null;
+    }
+
+    async getUsersByUsername(
+        _params: any,
+    ): Promise<Map<string, any> | null> {
+        // Not implemented for Forgejo — callers fall back to per-user
+        // `getUserByUsername`.
+        return null;
     }
 }

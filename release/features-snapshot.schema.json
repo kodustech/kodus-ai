@@ -1,0 +1,80 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://kodus.io/schemas/features-snapshot.json",
+    "title": "Kodus features snapshot",
+    "description": "Read model derived from release/features.yaml. Read by FeatureGateService at runtime to resolve feature stages locally on self-hosted, and as the lifecycle metadata layer on cloud.",
+    "type": "object",
+    "required": ["schema_version", "generated_at", "source", "features"],
+    "additionalProperties": false,
+    "properties": {
+        "schema_version": {
+            "type": "integer",
+            "const": 1
+        },
+        "generated_at": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "source": {
+            "type": "string",
+            "enum": ["manual"],
+            "description": "Reserved for future ingestion modes. Currently always 'manual' — produced from release/features.yaml."
+        },
+        "features": {
+            "type": "object",
+            "description": "Map of feature flag key (kebab-case) to its catalog entry.",
+            "patternProperties": {
+                "^[a-z0-9][a-z0-9-]*$": {
+                    "$ref": "#/$defs/feature"
+                }
+            },
+            "additionalProperties": false
+        }
+    },
+    "$defs": {
+        "feature": {
+            "type": "object",
+            "required": ["name", "stage"],
+            "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Customer-friendly feature name. Used as changelog headline."
+                },
+                "stage": {
+                    "type": "string",
+                    "enum": ["alpha", "beta", "general-availability"]
+                },
+                "description": {
+                    "type": "string"
+                },
+                "documentation_url": {
+                    "type": "string"
+                },
+                "audience": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": ["cloud", "self-hosted"]
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                },
+                "promoted_at": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string", "format": "date-time" }
+                },
+                "pr_refs": {
+                    "type": "array",
+                    "items": { "type": "integer" },
+                    "uniqueItems": true,
+                    "description": "Optional. PR numbers that contributed to this feature. Not required at PR-author time; an automation may populate this later from heuristics (date range, touched files, title grep)."
+                },
+                "feature_flag_id": {
+                    "type": ["integer", "null"],
+                    "description": "Reserved for future correlation with PostHog flag ids. Currently unused by the YAML-driven generator."
+                }
+            }
+        }
+    }
+}

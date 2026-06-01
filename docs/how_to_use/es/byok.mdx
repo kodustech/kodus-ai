@@ -1,0 +1,584 @@
+---
+title: "BYOK - Trae Tu Propia Clave"
+description: "Configura tus propias claves de API para máxima flexibilidad y control de costos. Disponible en todos los planes de Kodus."
+---
+
+BYOK (Bring Your Own Key) es la **forma predeterminada en que Kodus usa LLMs en todos los planes** — Community, Teams y Enterprise. Conectas tu propia cuenta de proveedor, eliges un modelo, pagas solo por lo que usas y monitoreas los costos directamente en el panel de tu proveedor. Kodus nunca aplica márgenes sobre los tokens y nunca ve tu clave en texto plano.
+
+<Card
+  title="Cómo se relaciona con los planes"
+  icon="scale-balanced"
+  href="/how_to_use/es/pricing#byok-is-the-default-across-all-plans"
+>
+  BYOK es gratuito en Community, incluido en Teams ($10/desarrollador activo/mes sobre tu gasto en tokens) y una de dos opciones en Enterprise (la otra es una clave de API administrada por Kodus).
+</Card>
+
+## Primeros pasos
+
+La pantalla de BYOK tiene dos caminos: elegir un **modelo recomendado** del catálogo curado (la vía más rápida, 90% de los casos) o **configurar cualquier proveedor manualmente** (salida de escape para endpoints personalizados o modelos no curados).
+
+<Steps>
+  <Step title="Abrir la configuración de BYOK">
+    Ve a [app.kodus.io/organization/byok](https://app.kodus.io/organization/byok).
+  </Step>
+
+  <Step title="Elegir un modelo recomendado">
+    La sección **Modelo principal** muestra una cuadrícula de modelos curados que hemos evaluado para revisión de código. Haz clic en cualquier tarjeta para empezar a conectarlo.
+  </Step>
+
+  <Step title="Pegar tu clave de API y probar">
+    Cada tarjeta se expande en línea con un único campo — solo la clave de API. Haz clic en **Test** para verificar el proveedor, o en **Test & save** para ejecutar la prueba y persistir la configuración si tiene éxito.
+  </Step>
+
+  <Step title="Agregar un modelo de respaldo (recomendado)">
+    Una vez configurado el modelo principal, aparece una sección **Modelo de respaldo**. Si tu proveedor principal alcanza límites de tasa o deja de estar disponible, Kodus conmuta automáticamente.
+  </Step>
+</Steps>
+
+<Info>
+  **Prueba antes de guardar.** El botón **Test** verifica tu proveedor con una llamada de metadatos económica (no se realiza inferencia LLM). Detecta claves inválidas, URLs base incorrectas y problemas de red antes de que rompan tu primera revisión de código.
+</Info>
+
+## Modelos recomendados
+
+Estos seis modelos están curados para revisión de código. Todos aparecen en el catálogo en `/organization/byok` y vienen preajustados con valores por defecto razonables (temperatura, máximo de tokens de salida y esfuerzo de razonamiento configurado en `medium`).
+
+<CardGroup cols={2}>
+  <Card title="Claude Sonnet 4.6" icon="crown">
+    **Mejor equilibrio entre calidad y costo**
+
+    El último Sonnet de Anthropic. Razonamiento extendido adaptativo, análisis sólido entre archivos, ventana de contexto de 200K.
+
+    - **Proveedor:** Anthropic
+    - **ID del modelo:** `claude-sonnet-4-6`
+    - **Clave:** [console.anthropic.com](https://console.anthropic.com/settings/keys)
+  </Card>
+
+  <Card title="Claude Opus 4.7" icon="star">
+    **Calidad insignia**
+
+    Modelo de primer nivel de Anthropic para las revisiones más exigentes. Contexto de 1M, precio premium.
+
+    - **Proveedor:** Anthropic
+    - **ID del modelo:** `claude-opus-4-7`
+    - **Clave:** [console.anthropic.com](https://console.anthropic.com/settings/keys)
+  </Card>
+
+  <Card title="Gemini 3.1 Pro (custom tools)" icon="brain">
+    **Mayor contexto**
+
+    Modelo insignia de Google con soporte para herramientas personalizadas. Ventana de contexto de 1M — el más robusto en PRs grandes y monorepos.
+
+    - **Proveedor:** Google Gemini
+    - **ID del modelo:** `gemini-3.1-pro-preview-customtools`
+    - **Clave:** [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+  </Card>
+
+  <Card title="GPT-5.4" icon="sparkles">
+    **Rápido y consistente**
+
+    Último modelo insignia de OpenAI. Latencia baja confiable, conocimiento amplio, contexto de 400K.
+
+    - **Proveedor:** OpenAI
+    - **ID del modelo:** `gpt-5.4`
+    - **Clave:** [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+  </Card>
+
+  <Card title="Kimi K2.6 Coding" icon="moon">
+    **Especializado en código, económico**
+
+    Modelo de Moonshot AI ajustado para código. Dos planes: Developer API (pago por token) o Kimi Code Plan (suscripción con endpoint dedicado).
+
+    - **Proveedor:** Compatible con OpenAI (Moonshot AI)
+    - **ID del modelo:** `kimi-k2.6`
+    - **Claves:** [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) o [kimi.com/code](https://www.kimi.com/code)
+  </Card>
+
+  <Card title="GLM 5.1" icon="bolt">
+    **Mejor valor por suscripción**
+
+    Último de Z.ai. Dos planes: Developer API (pago por token) o GLM Coding Plan (suscripción a tarifa plana).
+
+    - **Proveedor:** Compatible con OpenAI (Z.ai)
+    - **ID del modelo:** `glm-5.1`
+    - **Claves:** [consola de z.ai](https://z.ai/manage-apikey/apikey-list) o [z.ai/subscribe](https://z.ai/subscribe)
+  </Card>
+</CardGroup>
+
+<Info>
+  **Nuestra recomendación predeterminada:** Comienza con **Claude Sonnet 4.6** para la mejor experiencia general de revisión de código. Si el costo es prioridad, **GLM 5.1 en el Coding Plan** o **Kimi K2.6 en el Kimi Code Plan** ofrecen suscripciones a tarifa plana que limitan tu gasto mensual.
+</Info>
+
+## Selector de plan (GLM 5.1 y Kimi K2.6)
+
+Z.ai y Moonshot ofrecen cada uno un plan de suscripción con un **endpoint distinto** al de su Developer API de pago por token. La tarjeta curada para cada uno de estos modelos muestra un selector de **Plan** para que elijas el endpoint correcto antes de pegar tu clave.
+
+<Tabs>
+  <Tab title="GLM 5.1 (Z.ai)">
+    | Plan | Endpoint | Claves desde | Ideal para |
+    | --- | --- | --- | --- |
+    | **Developer API** | `https://api.z.ai/api/paas/v4/` | [z.ai/manage-apikey](https://z.ai/manage-apikey/apikey-list) | Cargas variables, pago por token |
+    | **Coding Plan** | `https://api.z.ai/api/coding/paas/v4` | [z.ai/subscribe](https://z.ai/subscribe) | Volumen predecible de equipo, tarifa mensual fija |
+
+    <Warning>
+      Las claves del GLM Coding Plan **solo** funcionan en `/api/coding/paas/v4`. Los niveles Lite y Pro suelen estar limitados a **1 solicitud concurrente** — Kodus rellena previamente `maxConcurrentRequests=1` cuando eliges este plan. Auméntalo en la configuración avanzada si estás en el nivel Max (hasta 30).
+    </Warning>
+  </Tab>
+
+  <Tab title="Kimi K2.6 (Moonshot AI)">
+    | Plan | Endpoint | Claves desde | Ideal para |
+    | --- | --- | --- | --- |
+    | **Developer API** | `https://api.moonshot.ai/v1` | [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) | Pago por token, la concurrencia escala con el nivel de recarga |
+    | **Kimi Code Plan** | `https://api.kimi.com/coding/v1` | [kimi.com/code](https://www.kimi.com/code) | Suscripción con endpoint de código dedicado |
+
+    <Info>
+      El Kimi Code Plan está documentado con un tope de 30 solicitudes concurrentes. Kodus rellena previamente `maxConcurrentRequests=30` cuando eliges ese plan.
+    </Info>
+  </Tab>
+</Tabs>
+
+## Configurar manualmente
+
+Cuando el modelo que quieres no está en la lista curada (endpoint personalizado, LLM auto-alojado, o un proveedor que no hemos evaluado), haz clic en **Configure manually** al final del catálogo. Esto abre `/organization/byok/manual?slot=main` — un asistente paso a paso:
+
+<Steps>
+  <Step title="Elegir un proveedor">
+    Elige entre OpenAI, Anthropic, Google Gemini, OpenRouter, Novita o **OpenAI Compatible** (para cualquier endpoint con formato OpenAI).
+  </Step>
+
+  <Step title="Ingresar la URL base (si es necesario)">
+    Los proveedores compatibles con OpenAI necesitan una URL base explícita. El campo solo aparece cuando eliges ese proveedor.
+  </Step>
+
+  <Step title="Elegir o escribir el ID del modelo">
+    Si Kodus puede listar los modelos del proveedor, obtienes un menú desplegable. De lo contrario (por ejemplo, auto-alojado o cuando las claves de la plataforma no están configuradas), escribe el ID exacto del modelo manualmente.
+  </Step>
+
+  <Step title="Pegar la clave de API">
+    El campo de la clave aparece una vez que el proveedor y el modelo están definidos.
+  </Step>
+
+  <Step title="Ajustar configuración avanzada (opcional)">
+    Temperatura, máximo de tokens, esfuerzo de razonamiento y máximo de solicitudes concurrentes — todo opcional. Los valores predeterminados son razonables para la mayoría de los proveedores.
+  </Step>
+
+  <Step title="Probar y guardar">
+    Haz clic en **Test & save** para ejecutar la prueba de conexión y persistir si tiene éxito.
+  </Step>
+</Steps>
+
+<Tip>
+  La misma ruta manual funciona para el respaldo — navega con `?slot=fallback`, o usa el enlace **Add fallback** después de guardar el principal.
+</Tip>
+
+## Proveedores compatibles
+
+<Tabs>
+  <Tab title="OpenAI">
+    **Ideal para:** Los últimos modelos GPT y rendimiento confiable.
+
+    **Obtener una clave de API:**
+    1. Visita [OpenAI API Keys](https://platform.openai.com/api-keys)
+    2. Crea una nueva clave para Kodus
+    3. Agrega información de facturación
+  </Tab>
+
+  <Tab title="Google Gemini">
+    **Ideal para:** Revisiones con gran contexto (1M tokens) y precios competitivos.
+
+    **Obtener una clave de API:**
+    1. Ve a [Google AI Studio](https://aistudio.google.com/app/apikey)
+    2. Crea una nueva clave
+    3. Habilita la facturación en Google Cloud Console
+  </Tab>
+
+  <Tab title="Anthropic Claude">
+    **Ideal para:** Análisis detallado y razonamiento extendido adaptativo.
+
+    **Obtener una clave de API:**
+    1. Visita [Anthropic Console](https://console.anthropic.com/)
+    2. Crea una cuenta y genera una clave
+    3. Agrega créditos
+  </Tab>
+
+  <Tab title="Novita AI">
+    **Ideal para:** Modelos de código abierto a precios competitivos.
+
+    **Obtener una clave de API:**
+    1. Regístrate en [Novita AI](https://novita.ai/)
+    2. Navega a la configuración de API
+    3. Genera una clave
+
+    <Card title="Guía de configuración de Novita" icon="rocket" href="/cookbook/es/novita">
+      Configuración detallada con capturas de pantalla.
+    </Card>
+  </Tab>
+
+  <Tab title="OpenRouter">
+    **Ideal para:** Una sola relación de facturación para muchos modelos.
+
+    **Obtener una clave de API:**
+    1. Crea una cuenta en [OpenRouter](https://openrouter.ai/)
+    2. Agrega créditos
+    3. Genera una clave en la configuración
+
+    <Warning>
+      OpenRouter enruta cada solicitud a un proveedor upstream diferente por defecto, lo que puede provocar variación de calidad y latencia entre llamadas. **Fija upstreams específicos** en Advanced settings → OpenRouter routing para mantener un comportamiento estable. Consulta [Fijar proveedores de OpenRouter](#fijar-proveedores-de-openrouter).
+    </Warning>
+  </Tab>
+
+  <Tab title="OpenAI Compatible">
+    **Ideal para:** Proveedores especializados (Moonshot, Z.ai, Fireworks, Together, Groq, DeepSeek) o endpoints auto-alojados.
+
+    **Cómo configurar:**
+    1. En el asistente manual, elige **OpenAI Compatible** como proveedor.
+    2. Ingresa la URL base (por ejemplo, `https://api.moonshot.ai/v1`, `https://api.z.ai/api/paas/v4/`, `https://api.fireworks.ai/inference/v1`).
+    3. Proporciona la clave y el ID del modelo.
+
+    <CardGroup cols={2}>
+      <Card title="Guía de Z.ai (GLM)" href="/knowledge_base/es/how-to-use-z-ai-with-kodus" icon="bolt">
+        Configuración completa de Z.ai con detalles del Coding Plan.
+      </Card>
+      <Card title="Guía de Moonshot (Kimi)" href="/knowledge_base/es/how-to-use-moonshot-with-kodus" icon="moon">
+        Configuración de Kimi K2.6 + Kimi Code Plan.
+      </Card>
+      <Card title="Fireworks AI" href="/knowledge_base/es/how-to-use-fireworks-with-kodus" icon="fire">
+        Configuración específica de Fireworks.
+      </Card>
+      <Card title="Together AI" href="/knowledge_base/es/how-to-use-together-ai-with-kodus" icon="handshake">
+        Configuración de Together AI.
+      </Card>
+    </CardGroup>
+  </Tab>
+</Tabs>
+
+## Razonamiento / Pensamiento extendido
+
+Los seis modelos recomendados soportan razonamiento. El formulario de BYOK expone un interruptor **Thinking** (Off / Low / Medium / High / Custom) bajo **Configuración avanzada**, preconfigurado en **Medium** para cada modelo recomendado.
+
+### Niveles predefinidos
+
+Cuando eliges Low / Medium / High, Kodus traduce el nivel al formato nativo de cada proveedor automáticamente:
+
+| Proveedor | Cómo se mapea "medium" |
+| --- | --- |
+| **Anthropic** (Claude Sonnet 4.6 / Opus 4.7) | `thinking: { type: "adaptive" }` + `outputConfig: { effort: "medium" }` |
+| **Google** (Gemini 3.1 Pro) | `thinkingConfig: { thinkingLevel: "medium" }` |
+| **OpenAI** (GPT-5.4) | `reasoningEffort: "medium"` |
+| **OpenRouter** | `reasoning: { effort: "medium" }` |
+| **Compatible con OpenAI** (Kimi K2.6 / GLM 5.1) | `thinking: { type: "enabled" }` — binario on/off, el nivel se ignora |
+
+<Note>
+  Kimi y GLM actualmente exponen el razonamiento como un único indicador on/off. Elegir Low, Medium o High emite el mismo payload (thinking habilitado). Cuando sus APIs añadan granularidad de nivel, Kodus empezará a reenviarla.
+</Note>
+
+### Sobrescritura con JSON personalizado
+
+Elegir **Custom** en el interruptor de Thinking revela un área de texto JSON. Pega directamente las opciones del proveedor — **Kodus las envuelve automáticamente bajo el namespace del proveedor activo**. No necesitas conocer las reglas de enrutamiento del Vercel AI SDK.
+
+Úsalo cuando:
+
+- Necesitas un valor específico de `budgetTokens` para Claude (en lugar del mapeo predefinido de esfuerzo)
+- Quieres habilitar/deshabilitar el razonamiento por modelo en proveedores compatibles con OpenAI
+- Quieres campos más allá del razonamiento — **caching, service tier, safety settings, etiquetado `user`, etc.** La sobrescritura se fusiona en `providerOptions`, por lo que cualquier campo del adaptador pasa
+- El proveedor lanza un nuevo campo que Kodus aún no ha envuelto
+
+#### Ejemplos (pega directamente — sin namespace)
+
+<Tabs>
+  <Tab title="Anthropic">
+    Sobrescribir el presupuesto de pensamiento de Claude a exactamente 20,000 tokens:
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budgetTokens": 20000 }
+    }
+    ```
+
+    Habilitar el caching de prompts (ejemplo no relacionado con razonamiento):
+
+    ```json
+    {
+      "cacheControl": { "type": "ephemeral" }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Google Gemini">
+    Presupuesto de pensamiento explícito (Gemini 2.5) o nivel (Gemini 3+):
+
+    ```json
+    {
+      "thinkingConfig": { "thinkingBudget": 16000 }
+    }
+    ```
+
+    Ajustar los safety settings:
+
+    ```json
+    {
+      "safetySettings": [
+        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE" }
+      ]
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI">
+    Razonamiento con campos específicos de OpenAI:
+
+    ```json
+    {
+      "reasoningEffort": "high",
+      "serviceTier": "flex",
+      "store": false,
+      "user": "kodus-review"
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenRouter">
+    Forzar razonamiento + ignorar un upstream específico:
+
+    ```json
+    {
+      "reasoning": { "effort": "high" },
+      "ignore": ["deepinfra"]
+    }
+    ```
+  </Tab>
+
+  <Tab title="Compatible con OpenAI (Kimi, GLM, etc.)">
+    Habilitar pensamiento con una sugerencia de presupuesto:
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budget_tokens": 25000 }
+    }
+    ```
+
+    Deshabilitar explícitamente el pensamiento:
+
+    ```json
+    {
+      "thinking": { "type": "disabled" }
+    }
+    ```
+
+    <Warning>
+      Los campos que el proveedor upstream no reconoce (por ejemplo, `budget_tokens` en un servidor que lo ignora) se descartan silenciosamente. Consulta la documentación del proveedor para confirmar qué acepta.
+    </Warning>
+  </Tab>
+</Tabs>
+
+#### Modo manual con namespaces (usuarios avanzados)
+
+Si tu JSON ya contiene una clave de namespace conocida en el nivel superior (`anthropic`, `google`, `openai`, `openrouter`, `openaiCompatible`), Kodus lo deja intacto. Útil si quieres mezclar múltiples namespaces de proveedores o ser explícito:
+
+```json
+{
+  "openrouter": {
+    "reasoning": { "effort": "high" },
+    "provider": { "order": ["moonshot"], "allow_fallbacks": false }
+  }
+}
+```
+
+Internamente, estos son los mapeos de namespace que Kodus usa:
+
+| Proveedor BYOK | Clave de namespace |
+| --- | --- |
+| `anthropic` | `anthropic` |
+| `google_gemini` / `google_vertex` | `google` |
+| `openai` | `openai` |
+| `open_router` | `openrouter` |
+| `openai_compatible` / `novita` | `openaiCompatible` |
+
+#### Detalles a tener en cuenta
+
+- **Solo JSON válido.** Las comas faltantes o sobrantes rompen el análisis y Kodus ignora la sobrescritura.
+- **Precedencia:** la sobrescritura JSON **reemplaza por completo** el bloque de namespace del preset de esfuerzo — si sobrescribes `anthropic.thinking` pero olvidas `anthropic.outputConfig`, ese campo no se enviará. El enrutamiento de OpenRouter (Pin providers / Allow fallbacks) es la única excepción: se fusiona en profundidad con tu sobrescritura bajo `openrouter`.
+- **Proveedor desconocido = sin envoltura.** Si tu proveedor de BYOK no está en la tabla de namespaces anterior, Kodus pasa el JSON tal cual. Raro — solo aplica si configuras un proveedor que Kodus no reconoce.
+
+## Fijar proveedores de OpenRouter
+
+OpenRouter es un enrutador — cuando solicitas un modelo (por ejemplo, `moonshotai/kimi-k2.5`), reenvía la llamada a uno de varios proveedores upstream (Moonshot directo, Together, Groq, Fireworks, Novita…). Cada llamada puede caer en un backend diferente. Es conveniente, pero introduce variación silenciosa:
+
+- **Variación de calidad** — los upstreams corren diferentes precisiones (FP8, INT4, completa) y entregan salidas sutilmente distintas para prompts idénticos
+- **Inconsistencia en tool-calling** — algunos backends no soportan function calling de la misma forma, lo que provoca llamadas a herramientas mal formadas
+- **Variación en el formato de razonamiento** — un upstream respeta `reasoning_effort`, otro solo `thinking.enabled`, otro ignora ambos
+- **Oscilaciones de latencia** — el p50 puede saltar de 800ms a 4s entre llamadas a medida que cambia el enrutamiento
+- **Sorpresas de rate-limit** — alcanzas la cuota en un backend que no elegiste explícitamente
+
+### Cómo fijarlos
+
+Cuando tu proveedor de BYOK es **OpenRouter**, el panel de Advanced settings muestra una sección **OpenRouter routing** con dos campos:
+
+- **Pin providers (in order)** — lista separada por comas de nombres de upstream (por ejemplo, `moonshot, together`). OpenRouter los prueba en orden y usa el primero disponible.
+- **Allow fallbacks** — cuando está desactivado, las solicitudes fallan de forma contundente si ninguno de los proveedores fijados está disponible. Cuando está activado (valor por defecto), OpenRouter puede recurrir a cualquier otro upstream que sirva el modelo.
+
+<Tip>
+  Para una configuración **estable**, fija un único proveedor y desactiva los fallbacks (`Pin: moonshot`, `Allow fallbacks: off`). Las solicitudes siempre impactarán en el mismo upstream o fallarán de forma ruidosa — sin cambios silenciosos de calidad. La contrapartida es cero resiliencia si ese upstream se cae; emparéjalo con un Fallback de BYOK distinto (por ejemplo, Anthropic) para absorber las caídas.
+</Tip>
+
+<Warning>
+  Los nombres de upstream deben coincidir con el catálogo de OpenRouter. Revisa las etiquetas de proveedor en [openrouter.ai/docs/features/provider-routing](https://openrouter.ai/docs/features/provider-routing) — los valores comunes incluyen `moonshot`, `together`, `groq`, `fireworks`, `novita`.
+</Warning>
+
+Internamente, Kodus emite esto en la llamada del Vercel AI SDK:
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot", "together"],
+      "allow_fallbacks": false
+    }
+  }
+}
+```
+
+### Avanzado: sobrescritura con JSON en crudo
+
+Si necesitas campos más allá de `order` y `allow_fallbacks` (por ejemplo, `ignore`, `data_collection`, `require_parameters`), cambia **Thinking** a **Custom** en Advanced settings y pega el payload de enrutamiento completo — se fusiona en `providerOptions` junto con cualquier configuración de razonamiento:
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot"],
+      "allow_fallbacks": false,
+      "ignore": ["deepinfra"],
+      "data_collection": "deny"
+    },
+    "reasoning": { "effort": "medium" }
+  }
+}
+```
+
+## Concurrencia y límites de tasa
+
+El campo `maxConcurrentRequests` (bajo **Configuración avanzada**) limita cuántas solicitudes simultáneas envía Kodus a tu proveedor en paralelo. La mayoría de las veces, el valor predeterminado es suficiente — pero los planes de suscripción con topes de concurrencia estrictos necesitan configurarlo explícitamente.
+
+### Valores predeterminados que Kodus rellena
+
+| Proveedor / plan | Valor preconfigurado | Por qué |
+| --- | --- | --- |
+| **GLM Coding Plan (Lite/Pro)** | `1` | La suscripción solo permite una solicitud en curso. Subirlo dispara errores 429. |
+| **GLM Coding Plan (Max)** | `1` (aumentar manualmente) | Max permite hasta 30, pero usamos el valor seguro por defecto. Súbelo en la configuración avanzada. |
+| **Kimi Code Plan** | `30` | Tope documentado por Moonshot en el endpoint de código. |
+| **GLM Developer API** | _(vacío)_ | Los límites escalan por clave; sin un valor global razonable. |
+| **Kimi Developer API** | _(vacío)_ | Escala con tu nivel de recarga (Tier 1 ≈ 50, Tier 5 ≈ 1000). |
+| **Anthropic / OpenAI / Google / OpenRouter** | _(vacío)_ | Los proveedores aplican sus propios TPM/RPM; Kodus no lo limita. |
+
+### Cuándo ajustarlo
+
+<CardGroup cols={2}>
+  <Card title="Subirlo" icon="arrow-up">
+    - Tienes un nivel de recarga alto en Moonshot/OpenRouter y quieres más rendimiento en PRs grandes
+    - Actualizaste tu GLM Coding Plan a **Max** y quieres usar el presupuesto completo de 30 concurrentes
+    - Las revisiones se sienten serializadas en PRs con múltiples archivos y no ves errores 429
+  </Card>
+  <Card title="Bajarlo" icon="arrow-down">
+    - Ves errores `429` o `Too much concurrency` en los logs de revisión
+    - Tu proveedor advierte sobre límites de tasa en el panel
+    - Quieres conservar la ventana del Coding Plan (5h/semanal) entre más PRs
+  </Card>
+</CardGroup>
+
+<Tip>
+  **Concurrencia vs. RPM vs. TPM.** `maxConcurrentRequests` solo limita las solicitudes simultáneas en curso. Muchos proveedores también aplican límites separados de **RPM** (solicitudes por minuto) y **TPM** (tokens por minuto). Si estás alcanzando RPM/TPM mientras la concurrencia se ve bien, la solución suele ser subir de nivel o distribuir la carga en el tiempo — no cambiar `maxConcurrentRequests`.
+</Tip>
+
+<Note>
+  **Interacción con el respaldo.** Cuando el principal recibe un 429 y Kodus conmuta al modelo de respaldo, se aplica el `maxConcurrentRequests` del propio respaldo. Configurar un respaldo generoso en un proveedor distinto es una buena forma de absorber ráfagas cuando tu principal está en una suscripción ajustada.
+</Note>
+
+## Mejores prácticas
+
+### Seguridad
+
+<CardGroup cols={2}>
+  <Card title="Claves dedicadas" icon="shield-check">
+    Crea claves de API separadas para Kodus. Facilita la auditoría de uso y la rotación de claves.
+  </Card>
+  <Card title="Rotación regular" icon="arrows-rotate">
+    Rota las claves periódicamente y actualízalas en la configuración de BYOK.
+  </Card>
+  <Card title="Monitorear el uso" icon="chart-bar">
+    Revisa los paneles de tu proveedor para detectar patrones inusuales.
+  </Card>
+  <Card title="Almacenamiento seguro" icon="lock">
+    Nunca confirmes claves en repositorios. Kodus las almacena cifradas en reposo y en tránsito.
+  </Card>
+</CardGroup>
+
+### Estrategia de respaldo
+
+- Usa un **proveedor diferente** para el principal y el respaldo (por ejemplo, Anthropic principal, Google respaldo). Protege contra interrupciones específicas del proveedor.
+- Las suscripciones con límites de concurrencia estrictos (GLM Coding Plan Lite/Pro, Kimi Code Plan) son malas configuraciones en solitario — empárlalas con un respaldo de pago por token para que los PRs variables no se queden sin recursos.
+
+## Solución de problemas
+
+<AccordionGroup>
+  <Accordion title="'Invalid API key' al hacer clic en Test">
+    - Copia la clave sin espacios extra, comillas o saltos de línea al final.
+    - Confirma que la facturación esté habilitada y la cuenta tenga créditos.
+    - Para claves del GLM Coding Plan / Kimi Code Plan, asegúrate de haber elegido el **Plan** correspondiente en la tarjeta — las claves de suscripción no funcionan en el endpoint del Developer API y viceversa.
+  </Accordion>
+
+  <Accordion title="'Endpoint not found' al hacer clic en Test">
+    - Verifica que la URL base coincida exactamente con el proveedor (la barra al final importa para algunos).
+    - Para proveedores compatibles con OpenAI, el endpoint de modelos suele ser `{baseURL}/models`.
+  </Accordion>
+
+  <Accordion title="Modelo no encontrado al momento de la revisión (la prueba de clave pasó)">
+    - El botón **Test** valida la clave/endpoint pero no verifica el ID específico del modelo. Si escribiste un modelo que no existe (error de tipeo), la primera revisión real falla.
+    - Verifica el ID del modelo contra el catálogo del proveedor antes de guardar.
+  </Accordion>
+
+  <Accordion title="'Rate limited' o 'Too much concurrency'">
+    - Baja **Max concurrent requests** en la configuración avanzada.
+    - En GLM Coding Plan Lite/Pro, mantente en **1 concurrente**. Actualiza a Max (30 concurrentes) si necesitas más rendimiento.
+    - En Kimi Code Plan, el tope documentado es **30 concurrentes**.
+  </Accordion>
+
+  <Accordion title="Variables de entorno de alojamiento autónomo no aparecen">
+    - Si Kodus está configurado mediante `.env` (Modo Fijo auto-alojado), la pantalla de BYOK muestra un banner informativo azul con el proveedor/modelo activo — la clave nunca se muestra por seguridad.
+    - Guardar una configuración de BYOK sobre `.env` abre un diálogo de confirmación antes de sobrescribir.
+  </Accordion>
+
+  <Accordion title="Costos altos o inesperados">
+    - El razonamiento agrega tokens. Si el costo se dispara, baja **Thinking** de Medium a Low, o cambia a un modelo más barato como principal.
+    - Consulta el panel de tu proveedor para el desglose por modelo.
+    - Establece un tope mensual a nivel del proveedor.
+  </Accordion>
+</AccordionGroup>
+
+## Preguntas frecuentes
+
+<AccordionGroup>
+  <Accordion title="¿Puedo cambiar de proveedor en cualquier momento?">
+    Sí. El cambio surte efecto para la siguiente revisión — sin necesidad de redespliegue.
+  </Accordion>
+
+  <Accordion title="¿Qué sucede si mi clave de API se queda sin créditos?">
+    Las revisiones cambian automáticamente al modelo de respaldo si hay uno configurado. Sin un respaldo, la revisión falla y devuelve un error. Siempre configura un respaldo.
+  </Accordion>
+
+  <Accordion title="¿Cómo funciona el sistema principal/respaldo?">
+    El modelo principal gestiona todas las revisiones por defecto. Si falla (límite de tasa, 5xx, tiempo de espera), Kodus reintenta una vez en el respaldo. Solo pagas por el proveedor que efectivamente procesó la revisión.
+  </Accordion>
+
+  <Accordion title="¿Debería usar el mismo proveedor para el principal y el respaldo?">
+    No. Proveedores diferentes protegen contra interrupciones específicas del proveedor. Un emparejamiento común: Anthropic principal + Google respaldo, o GLM Coding Plan principal + Anthropic respaldo para cubrir picos.
+  </Accordion>
+
+  <Accordion title="¿Almacenan nuestras claves de API de forma segura?">
+    Sí. Las claves se cifran en reposo y en tránsito y nunca se registran en texto plano. El endpoint de estado de BYOK nunca devuelve la clave en crudo.
+  </Accordion>
+
+  <Accordion title="¿Puedo usar un LLM auto-alojado (por ejemplo, Ollama, vLLM)?">
+    Sí — mediante el proveedor **OpenAI Compatible** en el asistente manual. Ingresa la URL base de tu endpoint, el ID del modelo que expone y una clave de API de marcador de posición (la mayoría de los runtimes auto-alojados ignoran el header de la clave pero aún así requieren uno).
+  </Accordion>
+</AccordionGroup>

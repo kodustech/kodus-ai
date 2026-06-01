@@ -8,9 +8,12 @@ import {
     TableHeader,
     TableRow,
 } from "@components/ui/table";
+import { useSuspenseGetCodeReviewParameter } from "@services/parameters/hooks";
 import { useCodeReviewConfig } from "src/app/(app)/settings/_components/context";
+import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { cn } from "src/core/utils/components";
 
+import { useCodeReviewRouteParams } from "../../../../_hooks";
 import { ReviewCadenceType } from "../../../_types";
 
 /* Match @variable-name, @variable_name, @variableName */
@@ -62,6 +65,56 @@ const ReviewCadencePreview = () => {
     return (
         <p className="text-sm">
             <strong>{cadenceCopy.label}</strong>: {cadenceCopy.description}
+        </p>
+    );
+};
+
+const ReviewScopePreview = () => {
+    const { repositoryId, directoryId } = useCodeReviewRouteParams();
+    const { teamId } = useSelectedTeamId();
+    const { configValue } = useSuspenseGetCodeReviewParameter(teamId);
+
+    if (repositoryId === "global") {
+        return (
+            <p className="text-sm">
+                This PR was reviewed using <strong>global</strong>{" "}
+                configuration.
+            </p>
+        );
+    }
+
+    if (!directoryId) {
+        return (
+            <p className="text-sm">
+                This PR was reviewed using <strong>repository</strong>{" "}
+                configuration.
+            </p>
+        );
+    }
+
+    const repository = configValue?.repositories?.find(
+        (r) => r.id === repositoryId,
+    );
+    const group = repository?.directories?.find(
+        (d) => d.id === directoryId,
+    );
+    const folders = (group as any)?.folders ?? [];
+    const primaryPath = folders[0]?.path ?? "/src/example";
+    const remaining = folders.length - 1;
+
+    return (
+        <p className="text-sm">
+            This PR was reviewed using directory configuration (
+            <code className="bg-card-lv2 rounded px-1 text-xs">
+                {primaryPath}
+            </code>
+            {remaining > 0 && (
+                <>
+                    {" "}
+                    and {remaining} other{remaining > 1 ? "s" : ""}
+                </>
+            )}
+            ).
         </p>
     );
 };
@@ -253,6 +306,12 @@ export const dropdownItems = {
                 </ul>
             </SimpleCollapsible>
         ),
+    },
+    reviewScope: {
+        label: "Review scope",
+        description:
+            "Shows which configuration level was used to review this PR",
+        example: <ReviewScopePreview />,
     },
 } satisfies Record<
     string,

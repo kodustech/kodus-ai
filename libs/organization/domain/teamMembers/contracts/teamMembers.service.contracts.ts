@@ -17,10 +17,12 @@ export interface ITeamMemberService extends ITeamMemberRepository {
     updateOrCreateMembers(
         members: IMembers[],
         organizationAndTeamData: OrganizationAndTeamData,
+        inviterEmail?: string,
     ): Promise<IUpdateOrCreateMembersResponse>;
 
     sendInvitations(
         usersToSendInvitation: Partial<IUser[]>,
         organizationAndTeamData: OrganizationAndTeamData,
+        inviterEmail?: string,
     );
 }

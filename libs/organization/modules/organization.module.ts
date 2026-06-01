@@ -7,6 +7,7 @@ import { IntegrationConfigModule } from '@libs/integrations/modules/config.modul
 import { IntegrationModule } from '@libs/integrations/modules/integrations.module';
 import { GetOrganizationNameUseCase } from '../application/use-cases/organization/get-organization-name';
 import { GetOrganizationsByDomainUseCase } from '../application/use-cases/organization/get-organizations-domain.use-case';
+import { GetReleaseTrackUseCase } from '../application/use-cases/organization/get-release-track.use-case';
 import { UpdateInfoOrganizationAndPhoneUseCase } from '../application/use-cases/organization/update-infos.use-case';
 import { ORGANIZATION_REPOSITORY_TOKEN } from '../domain/organization/contracts/organization.repository.contract';
 import { ORGANIZATION_SERVICE_TOKEN } from '../domain/organization/contracts/organization.service.contract';
@@ -31,6 +32,7 @@ import { TeamModule } from './team.module';
         GetOrganizationNameUseCase,
         UpdateInfoOrganizationAndPhoneUseCase,
         GetOrganizationsByDomainUseCase,
+        GetReleaseTrackUseCase,
         {
             provide: ORGANIZATION_SERVICE_TOKEN,
             useClass: OrganizationService,
@@ -46,6 +48,7 @@ import { TeamModule } from './team.module';
         GetOrganizationNameUseCase,
         UpdateInfoOrganizationAndPhoneUseCase,
         GetOrganizationsByDomainUseCase,
+        GetReleaseTrackUseCase,
     ],
 })
 export class OrganizationModule {}

@@ -155,6 +155,21 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         );
     }
 
+    findCliReviewExecutionsByOrganization(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId?: string;
+        userEmail?: string;
+        since?: Date;
+        skip?: number;
+        take?: number;
+        order?: 'ASC' | 'DESC';
+        includeTotal?: boolean;
+    }): Promise<{ data: AutomationExecutionEntity[]; total: number }> {
+        return this.automationExecutionRepository.findCliReviewExecutionsByOrganization(
+            params,
+        );
+    }
+
     findByPeriodAndTeamAutomationId(
         startDate: Date,
         endDate: Date,

@@ -18,7 +18,11 @@ import { toast } from "@components/ui/toaster/use-toast";
 import { useTimeout } from "@hooks/use-timeout";
 import { deleteKodyRule } from "@services/kodyRules/fetch";
 import type { KodyRule } from "@services/kodyRules/types";
+import { isCentralizedPrResponse } from "@services/parameters/types";
 import { TrashIcon } from "lucide-react";
+import { useSelectedTeamId } from "src/core/providers/selected-team-context";
+
+import { getCentralizedPrToastPayload } from "../_utils/centralized-pr-feedback";
 
 type DeleteKodyRuleModalProps = {
     rule: KodyRule;
@@ -29,6 +33,7 @@ export const DeleteKodyRuleConfirmationModal = ({
     rule,
     onSuccess,
 }: DeleteKodyRuleModalProps) => {
+    const { teamId } = useSelectedTeamId();
     const [enabled, setEnabled] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
@@ -43,15 +48,24 @@ export const DeleteKodyRuleConfirmationModal = ({
         magicModal.lock();
 
         try {
-            await deleteKodyRule(rule.uuid);
+            const mutationResult = await deleteKodyRule(rule.uuid, teamId);
 
             magicModal.hide(true);
             onSuccess?.();
 
-            toast({
-                description: "Kody Rule successfully removed.",
-                variant: "success",
-            });
+            if (isCentralizedPrResponse(mutationResult)) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        mutationResult,
+                        "Kody Rule removal proposed through centralized pull request.",
+                    ),
+                );
+            } else {
+                toast({
+                    description: "Kody Rule successfully removed.",
+                    variant: "success",
+                });
+            }
         } catch (error) {
             console.error("Error removing Kody Rule:", error);
 
@@ -97,7 +111,7 @@ export const DeleteKodyRuleConfirmationModal = ({
                             Instructions:
                         </strong>
 
-                        <Card className="max-h-[300px] overflow-y-scroll">
+                        <Card className="max-h-75 overflow-y-scroll">
                             <CardHeader className="py-4">
                                 <Markdown>{rule.rule}</Markdown>
                             </CardHeader>

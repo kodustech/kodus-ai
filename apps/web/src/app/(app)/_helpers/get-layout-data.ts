@@ -1,10 +1,11 @@
 import { cache } from "react";
-import { getBYOK } from "@services/organizationParameters/fetch";
+import { getLLMConfigStatus } from "@services/organizationParameters/fetch";
 import { getOrganizationName } from "@services/organizations/fetch";
+import { getOrganizationReleaseTrack } from "@services/organizations/release-track";
 import { getPermissions } from "@services/permissions/fetch";
 import { getTeams } from "@services/teams/fetch";
 import { FEATURE_FLAGS } from "src/core/config/feature-flags";
-import { isFeatureEnabled } from "src/core/utils/posthog-server-side";
+import { isFeatureEnabled } from "src/core/feature-gate/resolver";
 import {
     getUsersWithLicense,
     validateOrganizationLicense,
@@ -17,53 +18,29 @@ import {
  */
 export const getLayoutData = cache(
     async (teamId: string, _organizationId: string) => {
+        const releaseTrackPromise = getOrganizationReleaseTrack();
+
         const [
             permissions,
             organizationName,
             organizationLicense,
             usersWithAssignedLicense,
-            byokConfig,
-            tokenUsagePageFeatureFlag,
-            codeReviewDryRunFeatureFlag,
-            businessLogicFeatureFlag,
-            committableSuggestionsFeatureFlag,
-            ssoFeatureFlag,
-            cliKeysFeatureFlag,
-            kodyRuleSuggestionsFeatureFlag,
+            llmConfigStatus,
             githubEnterpriseServerPatFeatureFlag,
-            centralizedConfigParameterFeatureFlag,
         ] = await Promise.all([
             getPermissions().catch(() => ({})),
             getOrganizationName().catch(() => ""),
             validateOrganizationLicense({ teamId }).catch(() => null),
             getUsersWithLicense({ teamId }).catch(() => []),
-            getBYOK().catch(() => null),
-            isFeatureEnabled({ feature: FEATURE_FLAGS.tokenUsagePage }).catch(
-                () => false,
-            ),
-            isFeatureEnabled({ feature: FEATURE_FLAGS.codeReviewDryRun }).catch(
-                () => false,
-            ),
-            isFeatureEnabled({
-                feature: FEATURE_FLAGS.businessLogic,
-            }).catch(() => false),
-            isFeatureEnabled({
-                feature: FEATURE_FLAGS.committableSuggestions,
-                identifier: "organization",
-            }).catch(() => false),
-            isFeatureEnabled({ feature: FEATURE_FLAGS.sso }).catch(() => false),
-            isFeatureEnabled({ feature: FEATURE_FLAGS.cliKeys }).catch(
-                () => false,
-            ),
-            isFeatureEnabled({
-                feature: FEATURE_FLAGS.kodyRuleSuggestions,
-            }).catch(() => false),
-            isFeatureEnabled({
-                feature: FEATURE_FLAGS.githubEnterpriseServerPat,
-            }).catch(() => false),
-            isFeatureEnabled({
-                feature: FEATURE_FLAGS.centralizedConfigParameter,
-            }).catch(() => false),
+            getLLMConfigStatus().catch(() => null),
+            releaseTrackPromise
+                .then((releaseTrack) =>
+                    isFeatureEnabled({
+                        feature: FEATURE_FLAGS.githubEnterpriseServerPat,
+                        releaseTrack,
+                    }),
+                )
+                .catch(() => false),
         ]);
 
         return {
@@ -71,18 +48,9 @@ export const getLayoutData = cache(
             organizationName,
             organizationLicense,
             usersWithAssignedLicense,
-            byokConfig,
+            llmConfigStatus,
             featureFlags: {
-                tokenUsagePage: tokenUsagePageFeatureFlag,
-                codeReviewDryRun: codeReviewDryRunFeatureFlag,
-                businessLogic: businessLogicFeatureFlag,
-                committableSuggestions: committableSuggestionsFeatureFlag,
-                sso: ssoFeatureFlag,
-                cliKeys: cliKeysFeatureFlag,
-                kodyRuleSuggestions: kodyRuleSuggestionsFeatureFlag,
                 githubEnterpriseServerPat: githubEnterpriseServerPatFeatureFlag,
-                centralizedConfigParameter:
-                    centralizedConfigParameterFeatureFlag,
             },
         };
     },

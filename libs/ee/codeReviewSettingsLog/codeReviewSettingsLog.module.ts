@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { ContextResolutionModule } from '@libs/core/context-resolution/context-resolution.module';
+import { LicenseModule } from '@libs/ee/license/license.module';
 import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
 import { PermissionsModule } from '@libs/identity/modules/permissions.module';
 import { FindCodeReviewSettingsLogsUseCase } from './application/use-cases/find-code-review-settings-logs.use-case';
@@ -38,6 +39,7 @@ import { AuditLogListener } from './listeners/audit-log.listener';
         forwardRef(() => PermissionValidationModule),
         ContextResolutionModule,
         forwardRef(() => PermissionsModule),
+        LicenseModule,
     ],
     providers: [
         {

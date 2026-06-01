@@ -1,0 +1,31 @@
+---
+title: "Cómo configurar la revisión de código con IA en Azure DevOps"
+description: "Instala y configura Kodus para repositorios de Azure DevOps para obtener revisión de código automatizada con IA en cada pull request."
+---
+
+Kodus se integra con Azure DevOps mediante webhooks. Una vez configurado, cada pull request se revisa automáticamente.
+
+## Pasos
+
+1. **Crea una cuenta** en [kodus.io](https://kodus.io) o [aloja Kodus tú mismo](/how_to_deploy/es/deploy_kodus/generic_vm)
+2. **Conecta Azure DevOps** — autoriza durante la configuración y configura tu Token de Acceso Personal
+3. **Configura webhooks** — sigue la configuración guiada para habilitar los eventos de pull request
+4. **Selecciona repositorios** — elige qué repositorios de Azure DevOps debe revisar Kodus
+5. **Abre un pull request** — Kodus lo revisa automáticamente
+
+## Qué obtienes
+
+- Revisiones automatizadas en cada PR
+- Comentarios publicados directamente en el pull request
+- Reglas y controles de sugerencias personalizables
+- Validación de lógica de negocio contra elementos de trabajo vinculados
+
+## Configuración personalizada
+
+Coloca un archivo `kodus-config.yml` en la raíz de tu repositorio para personalizar el comportamiento por repositorio. El archivo anula la configuración de la web automáticamente.
+
+## Usar un Token de Acceso Personal
+
+Azure DevOps requiere un PAT para que Kodus pueda acceder a tus repositorios y publicar comentarios de revisión. Asegúrate de que el token tenga los alcances apropiados para lectura de código y acceso a comentarios de PR.
+
+Para la guía de configuración completa, consulta [Webhooks de Azure DevOps](/how_to_deploy/es/platforms/azure_devops/azdevops_webhook) y [PAT de Azure DevOps](/how_to_use/es/code_review/general_config/azure_devops_pat).

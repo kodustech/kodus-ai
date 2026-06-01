@@ -1,0 +1,16 @@
+id: github-only
+description: |
+    Single github × license-paid cell with code-review-basic — a clean
+    fresh-tenant smoke (matrix mode, not the persistent-tenant smoke
+    mode) to validate the deployed image end-to-end after the Grupo C
+    DI refactor. Fresh tenant avoids the multi-integration resolution
+    quirk that the persistent dev-matrix tenant hits when it has both
+    github and bitbucket integrations from prior smokes.
+
+scenarios:
+    - code-review-basic
+
+cells:
+    - target: self-hosted
+      provider: github
+      license: license-paid

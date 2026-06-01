@@ -1,0 +1,41 @@
+---
+title: "Como validar se um PR implementa um ticket do Jira"
+description: "Use o Kodus para comparar seu pull request com os critérios de aceitação do Jira e identificar requisitos ausentes antes do merge."
+---
+
+Você escreveu o código, mas ele realmente implementou tudo o que o ticket do Jira pedia? A Validação de Lógica de Negócio compara o diff do seu PR com os requisitos da tarefa e sinaliza qualquer coisa ausente, incompleta ou desalinhada.
+
+## Como funciona
+
+1. **Conecte o plugin do Jira** na página de [Plugins](/how_to_use/pt-br/code_review/plugins) do seu workspace
+2. Comente no seu PR:
+
+```
+@kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292
+```
+
+3. O Kody busca o ticket do Jira (título, descrição, critérios de aceitação), lê o diff do PR e os compara
+
+## O que você recebe
+
+O Kody produz um relatório estruturado com:
+
+- **Status** — Problemas Encontrados ou Conforme
+- **Achados** com níveis de severidade:
+  - **MUST_FIX** — uma regra de negócio obrigatória não foi implementada
+  - **SUGGESTION** — um caso extremo ou ponto de robustez não foi coberto
+  - **INFO** — observação útil que não bloqueia a conformidade
+- **Rastreamento de requisitos** — cada achado cita o requisito exato do ticket do Jira
+- **Requisitos Verificados** — o que foi implementado corretamente, com referências de arquivo/linha
+
+## Validação automática
+
+Com `business_logic: true` nas suas opções de revisão (habilitado por padrão), o Kody valida automaticamente contra tarefas vinculadas durante cada revisão de PR — sem necessidade de comando manual.
+
+## Dicas para melhores resultados
+
+- Adicione **critérios de aceitação** nos seus tickets do Jira — tarefas com critérios explícitos recebem validação critério por critério
+- Se o escopo do PR não corresponder ao ticket, o Kody detecta a **incompatibilidade de escopo** em vez de produzir achados enganosos
+- Você pode reexecutar a validação após corrigir os achados para confirmar a conformidade
+
+Para detalhes, consulte [Validação de Lógica de Negócio](/how_to_use/pt-br/code_review/business_logic_validation).

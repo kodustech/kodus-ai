@@ -41,7 +41,7 @@ const getLabelShield = (label: string) => {
         return '';
     }
 
-    const shield = `![${labelData?.name}](https://img.shields.io/badge/${labelData?.name?.replace(/ /g, '\_')}-`;
+    const shield = `![${labelData?.name}](https://img.shields.io/badge/${labelData?.name?.replace(/ /g, '_')}-`;
 
     switch (labelData.type) {
         case LabelType.PERFORMANCE_AND_OPTIMIZATION:

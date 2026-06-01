@@ -1,0 +1,88 @@
+---
+title: "Kodus CLI"
+description: "AI 駆動のコードレビュー、ビジネス検証、エージェントワークフロー — ターミナルから。"
+---
+
+Kodus CLI はターミナルから直接コードの変更をレビューします — バグ、セキュリティの問題、スタイル違反をプルリクエストに到達する前に検出します。PR で動作する Kodus エンジンと同じですが、作業ツリー、ステージング済み差分、ブランチ、またはコミットを対象にします。
+
+## 対象ユーザー
+
+- **個人開発者** — プッシュ前のコミット前チェック。
+- **チーム** — 各開発者がサインインすることなく、すべてのクローン、IDE、CI ジョブで共有のレビュールールセットが必要な場合。
+- **AI コーディングエージェント**（Claude Code、Cursor、Codex、Windsurf）— 構造化出力によるレビュー・修正ループを実行。
+- **CI/CD パイプライン** — 重要度の閾値を超える問題でビルドを失敗させる。
+
+## 見た目
+
+作業ツリーの変更に対して `kodus review` を実行すると、構造化されたレポートが生成されます: 影響を受けるファイル、重要度でグループ化された問題、プレビューして適用できる提案された修正、スクリプトに安全な終了コード。
+
+<img src="/images/kodus_cli_review.jpg" alt="CLI での AI コードレビュー"/>
+
+`--prompt-only` モードでは、同じレビューが AI エージェントが解析して行動するために最適化されたコンパクトな構造化テキストになります。
+
+## できること
+
+<CardGroup cols={2}>
+  <Card title="インタラクティブレビュー" icon="terminal">
+    ターミナルからファイルを閲覧し、修正をプレビューして1つずつ適用。
+  </Card>
+  <Card title="自動修正" icon="wand-magic-sparkles">
+    `--fix` で修正可能な問題を全て一度に適用。
+  </Card>
+  <Card title="AI エージェント統合" icon="robot">
+    自律的なレビュー・修正ループのために `--prompt-only` 出力を Claude Code、Cursor、または Windsurf に渡す。
+  </Card>
+  <Card title="Pre-push フック" icon="shield-check">
+    `kodus hook install` で重要度の閾値を超える問題でプッシュをブロック。
+  </Card>
+  <Card title="PR 提案" icon="code-pull-request">
+    ターミナルを離れずにオープンなプルリクエストの Kody の提案を取得。
+  </Card>
+  <Card title="ビジネス検証" icon="clipboard-check">
+    マージ前にローカルの差分がタスクの受け入れ基準を満たしているか検証。
+  </Card>
+  <Card title="Kody Rules" icon="scale-balanced">
+    AI がすべてのレビュー中に適用するチームルールを作成、更新、確認。
+  </Card>
+  <Card title="Decision Memory" icon="brain">
+    AI エージェントの決定をコードと並行してバージョン管理された構造化ファイルとして永続化。
+  </Card>
+</CardGroup>
+
+## 制限
+
+|                          | トライアル（アカウントなし） | 認証済み              |
+| ------------------------ | ---------------------------- | --------------------- |
+| 1日あたりのレビュー数    | 5                            | プランによる          |
+| レビューごとのファイル数 | 10                           | 100                   |
+| ファイルごとの行数       | 500                          | —                     |
+| ファイルごとの最大差分   | 500 KB                       | 500 KB                |
+| ファイルごとの最大内容   | 2 MB                         | 2 MB                  |
+
+トライアルの制限は毎日リセットされます。現在の使用状況を確認するには `kodus auth status` を実行してください。
+
+## CLI と Kodus Web の比較
+
+CLI と Kodus ウェブダッシュボードは同じレビューエンジン、ルール、リポジトリ設定を共有します。**PR が存在する前に** — ローカルブランチ、ステージング済み差分、またはエージェントループ内で — レビューが必要な場合は CLI を使用してください。PR レビュー、メトリクス、チームレベルの設定にはウェブダッシュボードを使用してください。
+
+`kodus config repo` と `kodus rules` を通じて行った変更は、両方のサーフェスに適用されます。
+
+## 次のステップ
+
+<CardGroup cols={2}>
+  <Card title="はじめに" icon="rocket" href="getting_started">
+    インストール、認証、最初のレビューを実行。
+  </Card>
+  <Card title="コマンドリファレンス" icon="book" href="commands">
+    すべてのコマンド、フラグ、オプション。
+  </Card>
+  <Card title="AI エージェント" icon="robot" href="ai_agents">
+    コーディングエージェントとの自律的なレビュー・修正ループを設定。
+  </Card>
+  <Card title="セルフホスト" icon="server" href="self_hosted">
+    CLI を独自の Kodus インスタンスに接続。
+  </Card>
+  <Card title="トラブルシューティング" icon="life-ring" href="troubleshooting">
+    一般的なエラー、終了コード、デバッグ方法。
+  </Card>
+</CardGroup>

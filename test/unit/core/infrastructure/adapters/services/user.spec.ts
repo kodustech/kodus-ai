@@ -27,10 +27,10 @@ describe('User SignUp', () => {
     let usersRepository: IUserRepository;
 
     let profileService: ProfilesService;
-    let profileRepository: IProfileRepository;
+    let _profileRepository: IProfileRepository;
 
     let teamService: TeamService;
-    let teamRepository: ITeamRepository;
+    let _teamRepository: ITeamRepository;
 
     const mockUsersRepository = {
         findOne: jest.fn(),
@@ -103,12 +103,14 @@ describe('User SignUp', () => {
         );
 
         profileService = profileModule.get<ProfilesService>(ProfilesService);
-        profileRepository = profileModule.get<IProfileRepository>(
+        _profileRepository = profileModule.get<IProfileRepository>(
             PROFILE_REPOSITORY_TOKEN,
         );
 
         teamService = teamModule.get<TeamService>(TeamService);
-        teamRepository = teamModule.get<ITeamRepository>(TEAM_REPOSITORY_TOKEN);
+        _teamRepository = teamModule.get<ITeamRepository>(
+            TEAM_REPOSITORY_TOKEN,
+        );
     });
 
     afterEach(() => {

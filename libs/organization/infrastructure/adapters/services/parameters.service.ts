@@ -74,6 +74,20 @@ export class ParametersService implements IParametersService {
         );
     }
 
+    createNewActiveVersion<K extends ParametersKey>(
+        configKey: K,
+        teamId: string,
+        configValue: IParameters<K>['configValue'],
+        nextVersion: number,
+    ): Promise<ParametersEntity<K> | undefined> {
+        return this.parametersRepository.createNewActiveVersion(
+            configKey,
+            teamId,
+            configValue,
+            nextVersion,
+        );
+    }
+
     async createOrUpdateConfig<K extends ParametersKey>(
         parametersKey: K,
         configValue: ParametersEntity<K>['configValue'],
@@ -107,40 +121,25 @@ export class ParametersService implements IParametersService {
                       );
             }
 
-            if (existingParameters) {
-                const disabled =
-                    await this.disableExistingParameters(existingParameters);
-
-                if (!disabled) {
-                    throw new Error(
-                        'Error disabling existing code review config parameters',
-                    );
-                }
-            }
-
-            return this.createNewParameters(
+            // Atomic deactivate-then-insert for the versioned code review
+            // config. Replaces the previous three-step find/update/insert,
+            // which had no transaction boundary and was the source of the
+            // "two active versions for the same team" production bug.
+            // `await` is required so a QueryFailedError from the partial
+            // unique index (raised when two writers race past the app-level
+            // guard) propagates into the surrounding catch instead of
+            // escaping as an unhandled rejection.
+            return await this.parametersRepository.createNewActiveVersion(
                 parametersKey,
-                configValue,
                 teamId,
+                configValue,
                 version,
             );
         } catch (err) {
-            throw new BadRequestException(err);
+            throw new BadRequestException('Failed to save parameters', {
+                cause: err,
+            });
         }
-    }
-
-    private async disableExistingParameters<K extends ParametersKey>(
-        existingParameters: ParametersEntity<K>,
-    ): Promise<boolean> {
-        await this.update(
-            {
-                uuid: existingParameters.uuid,
-            },
-            {
-                active: false,
-            },
-        );
-        return true;
     }
 
     private async updateExistingParameters<K extends ParametersKey>(

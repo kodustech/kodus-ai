@@ -74,6 +74,7 @@ Most suggestions that reach you are AMBIGUOUS — they describe a theoretical de
 - The concern is mitigated by callers, wrappers, or surrounding code
 - The suggestion argues "what if X happens" but X never happens in practice
 - The suggestion criticizes a design choice rather than identifying a runtime defect
+- **Syntax error claims** (missing commas, brackets, semicolons, or other syntax elements): The code under review compiles and passes CI before reaching you. If a suggestion claims a syntax error, verify character-by-character against the actual file content you read. If the file content shows correct syntax (e.g., the comma IS present between enum members), the suggestion is a false positive — discard it. The file content is the source of truth, not the suggestion.
 
 **Keep (verdict: true) ONLY when you have CONCRETE evidence:**
 - You found an actual caller that triggers the problematic path WITHOUT mitigation

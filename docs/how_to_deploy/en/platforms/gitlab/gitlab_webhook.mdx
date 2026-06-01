@@ -1,0 +1,29 @@
+---
+title: Creating a Webhook
+icon: webhook
+---
+
+Kodus usually creates the webhook automatically. If that didn't happen, follow these steps to set it up manually:
+
+<Note>
+  Webhook URLs must reach the Webhooks service (port 3332). Using the API domain only works if your reverse proxy routes `/.../webhook` paths to the webhooks service.
+</Note>
+
+1. Navigate to your GitLab project
+2. Go to "Settings" > "Webhooks"
+3. Configure your webhook:
+
+   - **URL**: Enter the URL from your `.env` file: `API_GITLAB_CODE_MANAGEMENT_WEBHOOK`
+   - **Check Show full URL**
+   - **Name**: (optional) Kodus Code Review
+   - **Description**: (optional) Kodus Code Review Webhook
+   - **Secret token**: Leave blank
+   - **SSL verification**: Enable SSL verification
+   - **Trigger**: Select the following events:
+     - Comments
+     - Issue events
+     - Merge request events
+
+4. Click "Add webhook"
+
+You've successfully set up a webhook for code reviews in your GitLab repository.

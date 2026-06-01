@@ -1,0 +1,78 @@
+---
+title: "Rule Inheritance"
+description: "How Global → Repository → Directory rules are inherited, and how to stop or exclude inheritance at specific levels."
+---
+
+## Overview
+
+By default, Kody Rules are inherited down the hierarchy:
+
+**Global → Repository → Directory**
+
+The effective rule set at each level is:
+- Rules defined at that level, plus
+- Rules inherited from the parent level,
+- Minus any rules explicitly excluded at that level.
+
+## Default behavior
+
+- Global rules apply to all repositories and directories by default.
+- Repository rules inherit all Global rules, plus any rules defined specifically for that repository.
+- Directory rules inherit all rules from their repository, plus any rules defined specifically for that directory.
+
+No action is required to enable inheritance — it is automatic.
+
+## Breaking inheritance
+
+There are two ways to stop a rule from being inherited:
+
+### 1) Mark a rule as non‑inheritable (at creation time)
+
+When creating a rule at any level (Global, Repository, or Directory), you can mark it as “non‑inheritable.”
+
+Effect:
+- The rule applies only at the level where it was created.
+- It does not appear in child levels.
+
+Use this when a rule is intentionally specific to a particular scope and should not flow down the hierarchy.
+
+### 2) Exclude a parent rule from a child level
+
+From a child configuration (Repository or Directory), you can explicitly exclude a rule that would otherwise be inherited from the parent.
+
+Effect:
+- The rule is not applied at that exact child level.
+- The exclusion does not cascade further — grandchildren still see the parent’s rule unless they also exclude it (or the rule was created as non‑inheritable).
+
+Use this to fine‑tune behavior for a specific repository or directory without affecting other children.
+
+## Examples
+
+### Excluding at the repository level
+
+Suppose a Global rule “Require tests for new endpoints” exists. In repository “shop”, you exclude this rule at the repository level.
+
+Result:
+- At the repository level, the rule no longer applies.
+- If you have a configured directory inside the same repository (e.g., `apps/api`), that directory still inherits the Global rule and will apply it — unless you also exclude it at the directory level, or the original Global rule was created as non‑inheritable.
+
+### Creating a non‑inheritable Global rule
+
+You create a Global rule and mark it as non‑inheritable.
+
+Result:
+- The rule applies only at the Global level.
+- Repositories and directories do not inherit it.
+
+## Practical tips
+
+- Keep foundational rules at the Global level so all repos benefit by default.
+- Use non‑inheritable rules for highly specific contexts that shouldn’t affect children.
+- Use child‑level exclusions to make targeted exceptions without impacting other repos or directories.
+
+## Related
+
+- <a href="/how_to_use/en/code_review/configs/kody_rules">Kody Rules Overview</a>
+- <a href="/how_to_use/en/code_review/configs/directory_level">Directory-Level Settings</a>
+- <a href="/how_to_use/en/code_review/configs/inheritance_overrides">Config Inheritance & Overrides</a>
+- <a href="/how_to_use/en/code_review/configs/centralized_config">Centralized Config</a> — manage rules as YAML files under `.kody-rules/` in a single repository.

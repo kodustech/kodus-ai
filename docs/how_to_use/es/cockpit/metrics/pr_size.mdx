@@ -1,0 +1,41 @@
+---
+title: "Tamaño del PR"
+description: "Mide el tamaño promedio de tus Pull Requests"
+---
+
+## Qué es el Tamaño del PR
+
+El Tamaño del PR mide el número promedio de cambios (líneas añadidas, modificadas o eliminadas) en tus Pull Requests. Esta métrica te ayuda a entender cómo tu equipo divide el trabajo y puede indicar posibles cuellos de botella en el proceso de desarrollo.
+
+## Cómo lo Calculamos
+
+Medimos automáticamente el tamaño de cada Pull Request contando el total de líneas de código que se añadieron, modificaron o eliminaron.
+
+**Lo que Rastreamos:**
+- Total de líneas modificadas en cada PR
+- Adiciones, modificaciones y eliminaciones
+- El tamaño promedio en todos tus PRs
+
+**Cómo se Calcula:**
+```
+Tamaño del PR = (Total de Líneas Añadidas + Modificadas + Eliminadas) ÷ (Número de PRs)
+```
+
+Por ejemplo, si tienes 3 PRs con 50, 100 y 150 líneas modificadas, tu tamaño promedio de PR es 100 líneas.
+
+## Por qué es Importante
+
+El Tamaño del PR es una métrica crítica que impacta múltiples aspectos de tu proceso de desarrollo:
+
+- **Calidad de la Revisión**: Los PRs más pequeños son más fáciles de revisar exhaustivamente
+- **Velocidad de Despliegue**: Los cambios más pequeños se pueden desplegar con mayor frecuencia
+- **Gestión de Riesgos**: Los cambios grandes aumentan el riesgo de introducir errores
+- **Colaboración del Equipo**: Los PRs más pequeños permiten una retroalimentación e iteración más rápidas
+
+## Cómo Mejorar
+
+- Usar feature flags para el despliegue incremental
+- Dividir las historias de usuario en tareas más pequeñas y enfocadas
+- Establecer límites claros de tamaño de PR (se recomiendan 200-400 líneas)
+- Construir rebanadas verticales en lugar de capas técnicas
+- Refactorizar regularmente para mantener la modularidad

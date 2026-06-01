@@ -15,6 +15,7 @@ import { PULL_REQUEST_MESSAGES_SERVICE_TOKEN } from '../domain/pullRequestMessag
 import { PullRequestMessagesRepository } from '../infrastructure/adapters/repositories/pullRequestMessages.repository';
 import { PullRequestMessagesModelInstance } from '../infrastructure/adapters/repositories/schemas/mongoose/pullRequestMessages.model';
 import { PullRequestMessagesService } from '../infrastructure/adapters/services/pullRequestMessages.service';
+import { CentralizedConfigModule } from '@libs/centralized-config/modules/centralized-config.module';
 
 @Module({
     imports: [
@@ -24,6 +25,7 @@ import { PullRequestMessagesService } from '../infrastructure/adapters/services/
         forwardRef(() => ParametersModule),
         forwardRef(() => PermissionsModule),
         forwardRef(() => ContextResolutionModule),
+        forwardRef(() => CentralizedConfigModule),
     ],
     providers: [
         CreateOrUpdatePullRequestMessagesUseCase,

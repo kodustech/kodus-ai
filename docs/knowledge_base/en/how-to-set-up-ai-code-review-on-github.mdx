@@ -1,0 +1,30 @@
+---
+title: "How to set up AI code review on GitHub"
+description: "Install and configure Kodus for GitHub repositories to get automated AI code review on every pull request."
+---
+
+Setting up Kodus on GitHub takes a few minutes. Once connected, every pull request gets reviewed automatically.
+
+## Steps
+
+1. **Create an account** at [kodus.io](https://kodus.io) or [self-host Kodus](/how_to_deploy/en/deploy_kodus/generic_vm)
+2. **Connect GitHub** — install the Kodus GitHub App when prompted during setup
+3. **Select repositories** — choose which repositories Kodus should review
+4. **Open a PR** — Kodus reviews it automatically and posts comments
+
+## What you get
+
+- Automated reviews on every PR (or on-demand with `@kody start-review`)
+- Comments posted directly in the PR with code suggestions
+- Customizable rules, severity filters, and suggestion limits
+- Business logic validation against linked tasks
+
+## Custom configuration
+
+Drop a `kodus-config.yml` in your repo root to customize behavior per repository. The file overrides web settings automatically.
+
+## Using a Personal Access Token
+
+For private repositories or organizations with stricter permissions, you may need to configure a GitHub Personal Access Token (PAT).
+
+For the full setup guide, see [Quickstart](/how_to_use/en/quickstart) and [GitHub App setup](/how_to_deploy/en/platforms/github/github_app).

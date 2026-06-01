@@ -56,6 +56,31 @@ export interface CodeReviewTimelineItem {
     finishedAt?: string | null;
 }
 
+/**
+ * Mirrors `ReviewWarning` from the backend
+ * (libs/code-review/infrastructure/agents/llm/review-warnings.ts).
+ * Emitted when the configured model's context window forced the
+ * adaptive-fit pipeline into a degraded path. Surfaced in the admin
+ * dashboard so operators can see when reviews ran at reduced fidelity;
+ * intentionally absent from the PR author's GitHub comment.
+ */
+export type ReviewWarningKind =
+    | "PROMPT_COMPACTED"
+    | "CALLGRAPH_DROPPED"
+    | "HUNK_HEADERS_ONLY"
+    | "DIFF_TRUNCATED"
+    | "LOW_SIGNAL_FILES_DROPPED"
+    | "HEAVY_PASSES_SKIPPED";
+
+export interface ReviewWarning {
+    kind: ReviewWarningKind;
+    reason: "small_context_window";
+    contextWindowTokens: number;
+    modelName: string;
+    detail?: string;
+    agentName?: string;
+}
+
 export interface PullRequestExecution {
     prId: string;
     prNumber: number;
@@ -82,6 +107,8 @@ export interface PullRequestExecution {
     reviewedCommitUrl?: string | null;
     compareUrl?: string | null;
     executionId?: string | null;
+    /** Adaptive-fit fidelity warnings — absent for full-fidelity runs. */
+    reviewWarnings?: ReviewWarning[];
 }
 
 export type PullRequestExecutionsPayload =

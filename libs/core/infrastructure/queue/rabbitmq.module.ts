@@ -74,19 +74,41 @@ export class RabbitMQWrapperModule {
                     return null;
                 }
 
+                // Wait policy for AMQP connection at bootstrap:
+                //   - worker/webhook: fail-fast (wait: true). They only exist
+                //     to consume from the queue — booting "successfully" while
+                //     the connection is broken just masks failures as runtime
+                //     "channel is not available" errors scattered everywhere.
+                //   - api: optimistic (wait: false). HTTP surface keeps
+                //     serving (healthchecks, reads) even if the broker is
+                //     degraded, and the amqp connection manager reconnects.
+                //   - Override for any component via API_RABBITMQ_WAIT=true|false.
+                const componentType = (
+                    process.env.COMPONENT_TYPE || ''
+                ).toLowerCase();
+                const waitOverride = process.env.API_RABBITMQ_WAIT;
+                const waitForConnection =
+                    waitOverride === 'true'
+                        ? true
+                        : waitOverride === 'false'
+                          ? false
+                          : componentType === 'worker' ||
+                            componentType === 'webhook';
+
                 return {
                     exchanges: RABBITMQ_TOPOLOGY_CONFIG.exchanges,
                     uri: configService.get<string>(
                         'rabbitMQConfig.API_RABBITMQ_URI',
                     ),
                     connectionInitOptions: {
-                        wait: false,
+                        wait: waitForConnection,
                         timeout: 5000,
                     },
+
                     connectionManagerOptions: {
-                        heartbeatIntervalInSeconds: 60,
+                        heartbeatIntervalInSeconds: 30,
+                        reconnectTimeInSeconds: 10,
                     },
-                    reconnectTimeInSeconds: 10,
                     enableControllerDiscovery: options.enableConsumers,
                     prefetchCount:
                         configService.get<number>(
@@ -111,6 +133,13 @@ export class RabbitMQWrapperModule {
                                 ) ?? 20,
                             default: false,
                         },
+                        'channel-cli-code-review': {
+                            prefetchCount:
+                                configService.get<number>(
+                                    'workflowQueue.WORKFLOW_QUEUE_CLI_CODE_REVIEW_PREFETCH',
+                                ) ?? 20,
+                            default: false,
+                        },
                         'channel-check-implementation': {
                             prefetchCount:
                                 configService.get<number>(
@@ -123,6 +152,14 @@ export class RabbitMQWrapperModule {
                                 configService.get<number>(
                                     'workflowQueue.WORKFLOW_QUEUE_FEEDBACK_PREFETCH',
                                 ) ?? 20,
+                            default: false,
+                        },
+                        'channel-ast-graph-build': {
+                            prefetchCount: 5,
+                            default: false,
+                        },
+                        'channel-ast-graph-incremental': {
+                            prefetchCount: 5,
                             default: false,
                         },
                     },

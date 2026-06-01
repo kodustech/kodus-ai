@@ -71,6 +71,36 @@ export const checkPermissions = (params: {
 };
 
 /**
+ * Like checkPermissions, but passes when the user satisfies ANY of the
+ * provided action/resource pairs (OR semantics). PolicyGuard combines
+ * multiple handlers with AND, so use this single handler for endpoints
+ * whose non-sensitive payload is legitimately needed by more than one area.
+ *
+ * THIS DOES NOT ENSURE REPO SCOPED PERMISSIONS.
+ *
+ * @param options Action/resource pairs; the request passes if any one matches.
+ * @returns
+ */
+export const checkAnyPermission = (
+    options: Array<{ action: Action; resource: ResourceType }>,
+    status: STATUS[] = [STATUS.ACTIVE],
+): PolicyHandler => {
+    return (ability, request) => {
+        if (!request.user?.organization?.uuid) {
+            return false;
+        }
+
+        if (!status.includes(request.user.status)) {
+            return false;
+        }
+
+        return options.some(({ action, resource }) =>
+            ability.can(action, resource),
+        );
+    };
+};
+
+/**
  * Creates a policy handler that checks if the user has the specified action on the resource
  * for the repository identified in the request (from params, query, body or custom).
  *

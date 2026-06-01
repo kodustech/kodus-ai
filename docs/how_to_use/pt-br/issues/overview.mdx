@@ -1,0 +1,133 @@
+---
+title: "Visão Geral"
+description: "Rastreie e gerencie sugestões não implementadas com o recurso Kody Issues."
+---
+
+## Resumo Rápido
+
+- **Rastreamento automático**: Captura automaticamente sugestões não implementadas de PRs fechados
+- **Resolução inteligente**: Resolve automaticamente quando sugestões são implementadas em PRs futuros
+- **Filtragem avançada**: Salve visualizações personalizadas por status, severidade e categoria
+- **Zero configuração**: Funciona automaticamente com seu fluxo de trabalho de revisão de código existente
+
+## O que É
+
+O recurso **Kody Issues** rastreia automaticamente todas as sugestões geradas pelo Kody que **não foram implementadas** nos seus pull requests (PRs). Ele funciona como um sonar, fornecendo uma lista em tempo real de melhorias pendentes para garantir que você nunca perca de vista feedback crítico.
+
+<Frame caption="Painel do Kody Issues mostrando sugestões rastreadas com filtros e gerenciamento de status">
+  <img src="/images/issues.png" alt="Kody Issues Dashboard" />
+</Frame>
+
+## Principais Benefícios
+
+<CardGroup cols={2}>
+  <Card title="Visibilidade Contínua" icon="eye">
+    Mantenha-se sempre ciente de melhorias pendentes sem rastreamento manual
+  </Card>
+  <Card title="Rastreamento de Qualidade" icon="chart-line">
+    Priorize e enderece correções críticas com eficiência usando níveis de severidade
+  </Card>
+  <Card title="Prevenção de Erros" icon="shield-check">
+    Garanta que sugestões vitais não se percam durante o desenvolvimento
+  </Card>
+  <Card title="Flexibilidade da Equipe" icon="users">
+    Personalize status e severidades para se adequar perfeitamente ao seu fluxo de trabalho
+  </Card>
+</CardGroup>
+
+## Como Funciona
+
+### 1. Criação de Issues
+
+<Note>
+  Issues são criados apenas quando PRs são **fechados** — não quando são abertos ou
+  durante a revisão.
+</Note>
+
+<Warning>
+  Regras do Kody do tipo **PR** não geram issues. Apenas sugestões a nível de arquivo e específicas de código criam issues rastreáveis.
+</Warning>
+
+- Quando um PR é **fechado**, o Kody compila todas as sugestões feitas naquele PR que **não foram aplicadas**
+- Para cada sugestão não implementada, o Kody cria automaticamente um **Issue** vinculado ao repositório
+- Cada issue inclui o contexto original da sugestão, localização do arquivo e nível de severidade
+
+### 2. Resolução Automática
+
+- Se um desenvolvedor implementar a mudança sugerida em um **PR subsequente**, o Kody marca o Issue associado como **Resolvido**
+- O Kody corresponde inteligentemente as mudanças implementadas aos issues existentes usando análise de código
+- A resolução acontece automaticamente sem intervenção manual
+
+### 3. Gerenciamento Manual
+
+#### Controle de Status
+
+- **Aberto**: Novos issues que precisam de atenção
+- **Resolvido**: Marcado automaticamente quando as sugestões são implementadas
+- **Descartado**: Marcado manualmente quando as sugestões não são relevantes para sua equipe
+
+#### Ajuste de Severidade
+
+- Cada Issue tem um nível de severidade (`Crítico`, `Alto`, `Médio`, `Baixo`)
+- Você pode atualizar os níveis de severidade a qualquer momento para refletir as prioridades da sua equipe
+- Use a severidade para focar nas melhorias de maior impacto primeiro
+
+### 4. Filtragem Avançada
+
+<Warning>
+  Filtros são ferramentas poderosas — salve visualizações personalizadas para acessar rapidamente os issues
+  mais importantes para o seu fluxo de trabalho.
+</Warning>
+
+- **Filtros de status**: Aberto, Resolvido, Descartado
+- **Filtros de severidade**: Crítico, Alto, Médio, Baixo
+- **Filtros de categoria**: Segurança, Desempenho, Estilo de Código, etc.
+- **Filtros de repositório**: Foque em projetos específicos
+- **Salvar visualizações personalizadas**: Aplique automaticamente seus filtros preferidos
+
+## Por que é Importante
+
+### Para Equipes de Desenvolvimento
+
+- **Nunca perca o controle** de melhorias de código importantes
+- **Priorize o trabalho** com base no impacto real e na severidade
+- **Aprenda padrões** de sugestões comumente descartadas vs. implementadas
+
+### Para Gerentes de Engenharia
+
+- **Acompanhe tendências** de qualidade de código em repositórios
+- **Identifique gargalos** na implementação de sugestões
+- **Meça a melhoria** no acompanhamento de revisão de código
+
+## Boas Práticas
+
+<CardGroup cols={1}>
+  <Card title="Sessões de Revisão Regulares" icon="calendar">
+    Agende revisões semanais da equipe de issues abertos para manter o ritmo de qualidade de código
+  </Card>
+  <Card title="Diretrizes de Severidade" icon="triangle-exclamation">
+    Estabeleça padrões de equipe para quando ajustar os níveis de severidade dos issues
+  </Card>
+  <Card title="Critérios de Descarte" icon="circle-xmark">
+    Crie diretrizes claras para quando issues devem ser descartados vs. implementados
+  </Card>
+</CardGroup>
+
+## Próximos Passos
+
+<CardGroup cols={2}>
+  <Card
+    title="Configuração de Kody Rules"
+    icon="user-police"
+    href="/how_to_use/pt-br/code_review/configs/kody_rules"
+  >
+    Configure regras personalizadas que serão rastreadas como issues
+  </Card>
+  <Card
+    title="Aprendizado da Equipe"
+    icon="graduation-cap"
+    href="/how_to_use/pt-br/code_review/learning/kody_learning"
+  >
+    Saiba como o Kody melhora as sugestões com base no feedback da sua equipe
+  </Card>
+</CardGroup>

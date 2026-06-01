@@ -1,0 +1,358 @@
+{
+  "prs": [
+    {
+      "repo": "ai-code-review-benchmark/sentry",
+      "head": "replays-delete-stable",
+      "base": "replays-delete-vulnerable",
+      "title": "Replays Self-Serve Bulk Delete System",
+      "source_url": "https://github.com/ai-code-review-evaluation/sentry-greptile/pull/5",
+      "golden_comments": [
+        {
+          "comment": "Breaking changes in error response format",
+          "severity": "Medium"
+        },
+        {
+          "comment": "Detector validator uses wrong key when updating type",
+          "severity": "Medium"
+        },
+        {
+          "comment": "Using zip(error_ids, events.values()) assumes the get_multi result preserves the input order; dict value order is not guaranteed to match error_ids, so event data can be paired with the wrong ID (missing nodes also shift alignment).",
+          "severity": "Low"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/sentry",
+      "head": "ecosystem-sync-integration-after",
+      "base": "ecosystem-sync-integration-before",
+      "title": "feat(ecosystem): Implement cross-system issue synchronization",
+      "source_url": "https://github.com/getsentry/sentry/pull/77754",
+      "golden_comments": [
+        {
+          "comment": "Shared mutable default in dataclass timestamp",
+          "severity": "Medium"
+        },
+        {
+          "comment": "The method name has a typo: test_from_dict_inalid_data should be test_from_dict_invalid_data.",
+          "severity": "Low"
+        },
+        {
+          "comment": "Method name says 'empty_array' but tests empty dict - consider renaming to 'test_from_dict_empty_dict' for clarity.",
+          "severity": "Low"
+        },
+        {
+          "comment": "to_dict() returns a datetime for queued; if this dict is passed in task kwargs (e.g., via apply_async), JSON serialization may fail depending on the serializer, which can cause enqueue errors.",
+          "severity": "Medium"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/sentry",
+      "head": "queue-assignment-enhancement-after",
+      "base": "queue-assignment-enhancement-before",
+      "title": "feat(uptime): Add ability to use queues to manage parallelism",
+      "source_url": "https://github.com/getsentry/sentry/pull/95633",
+      "golden_comments": [
+        {
+          "comment": "The queue.shutdown() method with 'immediate=False' parameter may not exist in the standard Python queue module. This could cause AttributeError at runtime. Verify the correct API or implement a custom shutdown mechanism.",
+          "severity": "High"
+        },
+        {
+          "comment": "The magic number 50 for max_wait is used repeatedly throughout the tests. Consider extracting this as a named constant to improve maintainability.",
+          "severity": "Low"
+        },
+        {
+          "comment": "The test test_thread_queue_parallel_error_handling has a docstring that doesn't match the test implementation.",
+          "severity": "Low"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/sentry",
+      "head": "workflow-engine-stateful-detector-after",
+      "base": "workflow-engine-stateful-detector-before",
+      "title": "feat(workflow_engine): Add in hook for producing occurrences from the stateful detector",
+      "source_url": "https://github.com/getsentry/sentry/pull/80168",
+      "golden_comments": [
+        {
+          "comment": "MetricAlertDetectorHandler inherits from StatefulDetectorHandler but only contains pass, failing to implement its required abstract methods: counter_names (property), get_dedupe_value(), get_group_key_values(), and build_occurrence_and_event_data(). This will cause a TypeError at runtime when the class is instantiated.",
+          "severity": "High"
+        },
+        {
+          "comment": "Docstring says this returns a list of DetectorEvaluationResult, but the method now returns a dict keyed by DetectorGroupKey. Consider updating the docstring to match the new return type.",
+          "severity": "Low"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/grafana-codex",
+      "head": "authz-service-improve-caching-pr",
+      "base": "cache-optimization-baseline",
+      "title": "AuthZService: improve authz caching",
+      "source_url": "https://github.com/grafana/grafana/pull/103633",
+      "golden_comments": [
+        {
+          "comment": "The Check operation exhibits asymmetric cache trust logic: cached permission grants are trusted and returned immediately, but cached denials from the same permission cache are ignored, leading to a fresh database lookup. This allows stale cached grants to provide access to revoked resources, posing a security risk. ",
+          "severity": "High"
+        },
+        {
+          "comment": "The test comment says the cached permissions 'allow access', but the map stores false for dashboards:uid:dash1, so checkPermission will still treat this scope as not allowed.",
+          "severity": "Low"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/grafana-codex",
+      "head": "plugins/rename-instrumentation-middleware-to-metrics-middleware",
+      "base": "plugin-loading-baseline",
+      "title": "Plugins: Chore: Renamed instrumentation middleware to metrics middleware",
+      "source_url": "https://github.com/grafana/grafana/pull/76186",
+      "golden_comments": [
+        {
+          "comment": "The ContextualLoggerMiddleware methods (QueryData, CallResource, CheckHealth, CollectMetrics) panic when a nil request is received. This occurs because they directly access req.PluginContext (via the instrumentContext function) without first checking if req is nil. This is a regression, as previous middleware layers gracefully handled nil requests.",
+          "severity": "High"
+        },
+        {
+          "comment": "The traceID is no longer logged for plugin requests. During a refactoring, the tracing import and the logic to extract and add traceID from the context to log parameters were removed from the LoggerMiddleware. The newly introduced ContextualLoggerMiddleware does not add this information, resulting in missing traceID in plugin request logs and impacting debugging and request tracing capabilities.",
+          "severity": "Low"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/grafana-codex",
+      "head": "query-splitting-enhancements",
+      "base": "query-splitting-baseline",
+      "title": "Advanced Query Processing Architecture",
+      "source_url": "https://github.com/grafana/grafana/pull/107534",
+      "golden_comments": [
+        {
+          "comment": "The applyTemplateVariables method is called with request.filters as the third parameter, but this parameter is not used in the corresponding test setup.",
+          "severity": "Low"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/discourse-cursor",
+      "head": "embed-url-handling-post",
+      "base": "embed-url-handling-pre",
+      "title": "Enhance embed URL handling and validation system",
+      "source_url": "https://github.com/discourse/discourse/commit/4f8aed295a29954023b2849c060ef4fb299d1b5d",
+      "golden_comments": [
+        {
+          "comment": "SSRF vulnerability using open(url) without validation",
+          "severity": "Critical"
+        },
+        {
+          "comment": "The current origin validation using indexOf is insufficient and can be bypassed. An attacker could use a malicious domain like evil-discourseUrl.com to pass this check.",
+          "severity": "Medium"
+        },
+        {
+          "comment": "postMessage targetOrigin should be the origin (scheme+host+port), not the full referrer URL; using the full URL will cause the message to be dropped and prevent resizing.",
+          "severity": "Medium"
+        },
+        {
+          "comment": "The code sets X-Frame-Options: ALLOWALL which completely disables clickjacking protection. The referer validation can be bypassed (referer headers are easily spoofed), and the fallback to empty string for nil referer masks validation failures.",
+          "severity": "Medium"
+        },
+        {
+          "comment": "The TopicEmbed.import method is susceptible to a NoMethodError if the contents parameter is nil when attempting to append a string, and an XSS vulnerability due to unescaped url interpolation in the generated HTML.",
+          "severity": "Medium"
+        },
+        {
+          "comment": "The ERB block closes with end if, which is invalid Ruby/ERB and will raise at render; it should just be end to close the if block.",
+          "severity": "Medium"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/discourse-cursor",
+      "head": "website-url-display",
+      "base": "user-profile-enhancement",
+      "title": "UX: show complete URL path if website domain is same as instance domain",
+      "source_url": "https://github.com/discourse/discourse/commit/267d8be1f556ed59639ced396c885bb44586da19",
+      "golden_comments": [
+        {
+          "comment": "The include_website_name method is missing the required ? suffix. Rails serializers expect include_ methods to end with ? for conditional attribute inclusion, a convention followed by other methods in this serializer. Without it, the website_name attribute may not be conditionally included as intended. Additionally, the '.' << website_host string concatenation should be replaced with '.' + website_host or '.#{website_host}' to avoid mutating string literals, which can lead to issues.",
+          "severity": "Medium"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/discourse-cursor",
+      "head": "group-dm-user-addition-post",
+      "base": "group-dm-user-addition-pre",
+      "title": "FIX: proper handling of group memberships",
+      "source_url": "https://github.com/discourse/discourse/commit/060cda77729cb1c4a827560e09e89a7b22078ba9",
+      "golden_comments": [
+        {
+          "comment": " The findMembers() call is now asynchronous and unhandled. The controller may not have member data immediately available, creating a race condition.",
+          "severity": "High"
+        },
+        {
+          "comment": "In the next action, capping the next offset at user_count can produce an empty page (e.g., total equal to limit results in offset == total, showing 2/2 with no members). This can cause confusing UX on the last page.",
+          "severity": "Medium"
+        },
+        {
+          "comment": "HTTP method mismatch in .remove_member - test uses PUT but remove_member action expects DELETE",
+          "severity": "Medium"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/cal.com",
+      "head": "insights-performance-optimization",
+      "base": "insights-query-foundation",
+      "title": "feat: convert InsightsBookingService to use Prisma.sql raw queries",
+      "source_url": "https://github.com/calcom/cal.com/pull/22345",
+      "golden_comments": [
+        {
+          "comment": "In getBaseConditions(), the else if (filterConditions) and final else branches are unreachable. This is because getAuthorizationConditions() always returns a non-null Prisma.Sql object, making authConditions always truthy, which means only the first two if/else if conditions are ever evaluated.",
+          "severity": "Low"
+        },
+        {
+          "comment": "Fetching userIdsFromOrg only when teamsFromOrg.length > 0 can exclude org-level members for orgs without child teams; consider deriving from teamIds (which includes orgId) or removing the guard so org-only orgs still include member user bookings.",
+          "severity": "Medium"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/cal.com",
+      "head": "calendar-cache-enhanced",
+      "base": "calendar-cache-base",
+      "title": "feat: add calendar cache status and actions (#22532)",
+      "source_url": "https://github.com/calcom/cal.com/pull/22532",
+      "golden_comments": [
+        {
+          "comment": "The updateManyByCredentialId call uses an empty data object, which prevents Prisma's @updatedAt decorator from updating the updatedAt timestamp. This results in inaccurate cache status tracking, as the timestamp isn't updated when the cache is refreshed. To fix this, explicitly set the updatedAt field.",
+          "severity": "Medium"
+        },
+        {
+          "comment": "logic: macOS-specific sed syntax with empty string after -i flag will fail on Linux systems",
+          "severity": "Low"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/keycloak",
+      "head": "passkey-integration-buggy",
+      "base": "passkey-auth-baseline",
+      "title": "Fixing Re-authentication with passkeys",
+      "source_url": "https://github.com/keycloak/keycloak/pull/41249",
+      "golden_comments": [
+        {
+          "comment": "ConditionalPasskeysEnabled() called without UserModel parameter",
+          "severity": "Medium"
+        },
+        {
+          "comment": "With isConditionalPasskeysEnabled(UserModel user) requiring user != null, authenticate(...) will not call webauthnAuth.fillContextForm(context) on the initial login page where context.getUser() is still null, so conditional passkey UI will not be set up for first-time passkey login. Consider whether this should also be enabled when no user has been selected yet so ID-less passkey authentication on the initial login form continues to work.",
+          "severity": "Medium"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/keycloak",
+      "head": "feature-idp-cache-implementation",
+      "base": "feature-idp-cache-baseline",
+      "title": "Add caching support for IdentityProviderStorageProvider.getForLogin operations",
+      "source_url": "https://github.com/keycloak/keycloak/pull/32918",
+      "golden_comments": [
+        {
+          "comment": "Recursive caching call using session instead of delegate",
+          "severity": "Critical"
+        },
+        {
+          "comment": "Cleanup reference uses incorrect alias - should be 'idp-alias-' + i instead of 'alias'.",
+          "severity": "Medium"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/keycloak",
+      "head": "feature-clients-authz-implementation",
+      "base": "feature-clients-authz-baseline",
+      "title": "Add Client resource type and scopes to authorization schema",
+      "source_url": "https://github.com/keycloak/keycloak/pull/36880",
+      "golden_comments": [
+        {
+          "comment": "Inconsistent feature flag bug causing orphaned permissions. The AdminPermissions event listener, responsible for cleaning up permissions upon role, client, or group removal, is incorrectly guarded by the ADMIN_FINE_GRAINED_AUTHZ (V1) feature flag. This is inconsistent with other methods in the class that use ADMIN_FINE_GRAINED_AUTHZ_V2. Consequently, if ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled but V1 is not, the permission cleanup logic will not execute, leading to orphaned permission data. Cleanup should occur regardless of which fine-grained authorization version is enabled.",
+          "severity": "High"
+        },
+        {
+          "comment": "In hasPermission(ClientModel client, String scope), the resource lookup uses findByName(server, client.getId(), server.getId()), but AdminPermissionsSchema.getOrCreateResource creates per-client resources with the owner set to resourceServer.getClientId(), so this lookup will never find those resources and will always fall back to the 'all-clients' resource, effectively ignoring client-specific permissions.",
+          "severity": "High"
+        },
+        {
+          "comment": "In getClientsWithPermission(String scope), iterating resourceStore.findByType(server, AdminPermissionsSchema.CLIENTS_RESOURCE_TYPE) and returning resource.getName() will only ever consider the type-level 'Clients' resource (per-client resources have no type) and return its name, while AvailableRoleMappingResource#getRoleIdsWithPermissions expects actual client IDs to pass to realm.getClientById, which can lead to incorrect behavior or a null client and subsequent failures.",
+          "severity": "High"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/keycloak",
+      "head": "feature-html-sanitizer-implementation",
+      "base": "feature-html-sanitizer-baseline",
+      "title": "Add HTML sanitizer for translated message resources",
+      "source_url": "https://github.com/keycloak/keycloak/pull/37429",
+      "golden_comments": [
+        {
+          "comment": "The translation is in Italian instead of Lithuanian. This should be translated to Lithuanian to match the file's locale (messages_lt.properties).",
+          "severity": "Medium"
+        },
+        {
+          "comment": "The totpStep1 value uses Traditional Chinese terms in the Simplified Chinese file (zh_CN), which is likely incorrect for this locale. Please verify the locale‑appropriate translation.",
+          "severity": "Medium"
+        },
+        {
+          "comment": "The anchor sanitization logic has a potential issue where it consumes English matcher groups without proper validation. If the translated text has more anchor tags than the English text, this could lead to incorrect validation results.",
+          "severity": "Low"
+        },
+        {
+          "comment": "The method name 'santizeAnchors' should be 'sanitizeAnchors' (missing 'i').",
+          "severity": "Low"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/keycloak",
+      "head": "feature-token-context-implementation",
+      "base": "feature-token-context-baseline",
+      "title": "Implement access token context encoding framework",
+      "source_url": "https://github.com/keycloak/keycloak/pull/37634",
+      "golden_comments": [
+        {
+          "comment": "Wrong parameter in null check (grantType vs. rawTokenId)",
+          "severity": "Critical"
+        },
+        {
+          "comment": "In isAccessTokenId, the substring for the grant shortcut and the equality check look inverted: the grant shortcut occupies indices 4–5 (substring(4,6)), and a match should return true (combined with UUID check), not false.",
+          "severity": "High"
+        },
+        {
+          "comment": "Javadoc mentions \"usually like 3-letters shortcut\" but some implementations use 2-letter shortcuts (\"ac\", \"cc\", \"rt\", \"te\", \"pc\", \"ci\", \"ro\"). Consider updating documentation to reflect actual usage pattern.",
+          "severity": "Low"
+        },
+        {
+          "comment": " Catching generic RuntimeException is too broad. The implementation throws IllegalArgumentException specifically - catch that instead for more precise testing.",
+          "severity": "Low"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/keycloak",
+      "head": "feature-recovery-keys-implementation",
+      "base": "feature-recovery-keys-foundation",
+      "title": "Implement recovery key support for user storage providers",
+      "source_url": "https://github.com/keycloak/keycloak/pull/38446",
+      "golden_comments": [
+        {
+          "comment": "Unsafe raw List deserialization without type safety. Calling Optional.get() directly on the Optional returned by RecoveryAuthnCodesUtils.getCredential(user) without checking isPresent() can lead to a NoSuchElementException if the Optional is empty.",
+          "severity": "Medium"
+        },
+        {
+          "comment": "After creating the RecoveryAuthnCodesCredentialModel, consider setting its id from the stored credential (e.g., myUser.recoveryCodes.getId()); otherwise getId() will be null and downstream removal by id (e.g., removeStoredCredentialById in the authenticator flow) may not work.",
+          "severity": "Low"
+        }
+      ]
+    }
+  ]
+}

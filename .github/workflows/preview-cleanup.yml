@@ -12,7 +12,7 @@ permissions:
 
 on:
     pull_request:
-        types: [closed]
+        types: [ closed ]
 
 jobs:
     cleanup-comment:
@@ -22,7 +22,7 @@ jobs:
             pull-requests: write
         steps:
             - name: Mark preview as closed
-              uses: actions/github-script@v7
+              uses: actions/github-script@v9.0.0
               with:
                   script: |
                       const marker = '## Preview Environment';

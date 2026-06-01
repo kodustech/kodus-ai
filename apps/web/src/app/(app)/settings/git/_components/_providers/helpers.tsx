@@ -6,6 +6,7 @@ import { AuthMode, PlatformType } from "src/core/types";
 
 import { AzureReposModal } from "../_modals/_providers/azure-repos";
 import { BitbucketModal } from "../_modals/_providers/bitbucket";
+import { ForgejoModal } from "../_modals/_providers/forgejo";
 import { GithubModal } from "../_modals/_providers/github";
 import { GitlabModal } from "../_modals/_providers/gitlab";
 
@@ -16,13 +17,14 @@ const onSaveToken = async (params: {
     email?: string;
     organizationName?: string;
     selfHostedUrl?: string;
+    authMode?: AuthMode;
     integrationKey: INTEGRATIONS_KEY;
     integrationType: PlatformType;
     onSuccess: () => void;
 }) => {
     const integrationResponse = await createCodeManagementIntegration({
         integrationType: params.integrationType,
-        authMode: AuthMode.TOKEN,
+        authMode: params.authMode ?? AuthMode.TOKEN,
         token: params.token,
         host: params.selfHostedUrl,
         username: params.username,
@@ -74,11 +76,19 @@ const openBitbucketModal = async (props: {
 }) =>
     magicModal.show(() => (
         <BitbucketModal
-            onSaveAction={async (token, username, email) => {
+            onSaveAction={async (
+                token,
+                username,
+                email,
+                selfHostedUrl,
+                authMode,
+            ) => {
                 await onSaveToken({
                     token,
                     username,
                     email,
+                    selfHostedUrl,
+                    authMode,
                     teamId: props.teamId,
                     onSuccess: props.onSaveToken,
                     integrationKey: INTEGRATIONS_KEY.BITBUCKET,
@@ -126,6 +136,25 @@ const openGithubModal = async (props: {
                     teamId: props.teamId,
                     integrationType: PlatformType.GITHUB,
                     integrationKey: INTEGRATIONS_KEY.GITHUB,
+                    onSuccess: props.onSaveToken,
+                });
+            }}
+        />
+    ));
+
+const openForgejoModal = async (props: {
+    teamId: string;
+    onSaveToken: () => void;
+}) =>
+    magicModal.show(() => (
+        <ForgejoModal
+            onSaveToken={async (token, selfHostedUrl) => {
+                await onSaveToken({
+                    token,
+                    selfHostedUrl,
+                    teamId: props.teamId,
+                    integrationType: PlatformType.FORGEJO,
+                    integrationKey: INTEGRATIONS_KEY.FORGEJO,
                     onSuccess: props.onSaveToken,
                 });
             }}
@@ -183,5 +212,8 @@ export const openProviderModal = ({
 
         case "azure_repos":
             return openAzureReposModal({ teamId, onSaveToken });
+
+        case "forgejo":
+            return openForgejoModal({ teamId, onSaveToken });
     }
 };

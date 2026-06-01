@@ -1,0 +1,33 @@
+---
+title: Criando um Webhook
+icon: webhook
+---
+
+O Kodus geralmente cria o webhook automaticamente. Se isso não aconteceu, siga estas etapas para configurá-lo manualmente:
+
+<Note>
+  As URLs de webhook devem alcançar o serviço de Webhooks (porta 3332). Usar o domínio da API só funciona se seu proxy reverso rotear os caminhos `/.../webhook` para o serviço de webhooks.
+</Note>
+
+1. Acesse seu repositório no GitHub
+2. Clique em "Settings"
+3. Encontre "Webhooks" na barra lateral esquerda
+4. Clique em "Add webhook"
+5. Configure seu webhook:
+
+   - **Payload URL**: Insira a URL do seu arquivo `.env`: `API_GITHUB_CODE_MANAGEMENT_WEBHOOK`
+   - **Content type**: `application/json`
+   - **Secret**: Deixe em branco
+   - **SSL verification**: Habilite a verificação SSL
+   - **Which events would you like to trigger this webhook?**: Let me select individual events
+   - Marque estas opções:
+     - Issue comment
+     - Pull request review comments
+     - Pull request review threads
+     - Pull request reviews
+     - Pull requests
+     - Pushes
+
+6. Clique em "Add webhook"
+
+Você configurou com sucesso um webhook para revisões de código no seu repositório GitHub.

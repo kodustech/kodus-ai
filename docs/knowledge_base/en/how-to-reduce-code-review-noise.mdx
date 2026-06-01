@@ -1,0 +1,65 @@
+---
+title: "How to reduce code review noise and false positives"
+description: "Fine-tune your AI code review to surface only the most relevant suggestions and avoid alert fatigue."
+---
+
+Too many low-priority suggestions can make developers ignore code review feedback entirely. The key is to tune the review so it surfaces what matters and stays quiet on what doesn't.
+
+## Suggestion control
+
+Kodus gives you fine-grained control over how many suggestions appear and at what severity:
+
+- **Max suggestions per PR** — limit the total number of suggestions (e.g., 9)
+- **Severity filter** — only show suggestions at or above a threshold (e.g., Medium and above)
+- **Grouping mode** — control how suggestions are organized in the PR
+
+Configure these in **Code Review Settings** → **Suggestion Control**, or in `kodus-config.yml`:
+
+```yaml
+suggestionControl:
+  groupingMode: full
+  limitationType: pr
+  maxSuggestions: 9
+  severityLevelFilter: medium
+```
+
+## Ignore files and paths
+
+Skip files that generate noise (lock files, generated code, configs):
+
+```yaml
+ignorePaths:
+  - yarn.lock
+  - package-lock.json
+  - "**/*.generated.ts"
+  - dist/**
+```
+
+## Skip PRs by title
+
+Skip PRs that don't need review (releases, version bumps):
+
+```yaml
+ignoredTitleKeywords:
+  - "release"
+  - "bump version"
+  - "chore"
+```
+
+## Toggle analysis categories
+
+Disable entire review categories you don't need:
+
+```yaml
+reviewOptions:
+  security: true
+  code_style: true
+  refactoring: false        # disable if too noisy
+  documentation_and_comments: false  # disable if not relevant
+```
+
+## Review cadence
+
+Use **Auto-pause** to prevent spam during active development — Kodus pauses reviews when it detects rapid consecutive pushes (default: 3 pushes in 15 minutes).
+
+For details, see [General Configuration](/how_to_use/en/code_review/configs/general) and [Suggestion Control](/how_to_use/en/code_review/configs/suggestion_control).

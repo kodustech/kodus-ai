@@ -8,7 +8,7 @@ import {
     CliReviewResponse,
     CliReviewIssue,
 } from '@libs/cli-review/domain/types/cli-review.types';
-import { convertToHunksWithLinesNumbers } from '@libs/common/utils/patch';
+import { convertToUnifiedDiffWithLineNumbers } from '@libs/common/utils/patch';
 import { createLogger } from '@kodus/flow';
 import * as crypto from 'crypto';
 
@@ -16,31 +16,37 @@ import * as crypto from 'crypto';
 export class CliInputConverter {
     private readonly logger = createLogger(CliInputConverter.name);
     /**
-     * Converts CLI input to FileChange[] for pipeline processing
+     * Converts CLI input to FileChange[] for pipeline processing.
+     *
+     * The agent engine always runs inside a cloned sandbox, so file bodies
+     * are read on demand via the readFile tool — we don't need the client
+     * to ship `fileContent`. Clients can send either a full list of files
+     * in `config.files` (each with its patch) or just the unified diff
+     * string in `input.diff`, and we'll parse file changes out of it.
      */
     convertToFileChanges(input: CliReviewInput): FileChange[] {
-        const isFastMode = input.config?.fast === true || !input.config?.files;
-
-        if (isFastMode) {
-            // Fast mode: Only diff provided, parse files from unified diff
-            return this.parseFilesFromDiff(input.diff);
-        } else {
-            // Normal mode: Full file content provided
-            return this.convertFromFilesList(input.config.files || []);
+        if (input.config?.files && input.config.files.length > 0) {
+            return this.convertFromFilesList(input.config.files);
         }
+        return this.parseFilesFromDiff(input.diff);
     }
 
     /**
-     * Parse files from unified diff (fast mode)
-     * Extracts individual file changes from a unified diff string
+     * Parse files from a unified diff string.
+     *
+     * Used when the CLI client didn't ship a structured file list — we
+     * extract each `diff --git` block and build a FileChange from it. The
+     * agent will read the actual file bodies from the cloned sandbox via
+     * the readFile tool, so we intentionally leave `fileContent` undefined.
      */
     private parseFilesFromDiff(unifiedDiff: string): FileChange[] {
-        const files: FileChange[] = [];
+        if (!unifiedDiff || typeof unifiedDiff !== 'string') {
+            return [];
+        }
 
-        // Remove context section markers (CLI enrichment)
+        const files: FileChange[] = [];
         const cleanedDiff = this.removeContextSections(unifiedDiff);
 
-        // Split by file (diff --git markers)
         const diffBlocks = cleanedDiff
             .split(/(?=diff --git)/g)
             .filter((b) => b.trim());
@@ -56,9 +62,10 @@ export class CliInputConverter {
                 files.push({
                     filename,
                     patch: block,
-                    patchWithLinesStr: convertToHunksWithLinesNumbers(block, {
-                        filename,
-                    }),
+                    patchWithLinesStr: convertToUnifiedDiffWithLineNumbers(
+                        block,
+                        { filename },
+                    ),
                     status,
                     additions,
                     deletions,
@@ -68,7 +75,7 @@ export class CliInputConverter {
                     blob_url: '',
                     raw_url: '',
                     contents_url: '',
-                    fileContent: undefined, // No file content in fast mode
+                    fileContent: undefined,
                 });
             } catch (error) {
                 this.logger.error({
@@ -90,7 +97,9 @@ export class CliInputConverter {
     }
 
     /**
-     * Convert from files list (normal mode with full content)
+     * Convert from files list (structured input — each file carries its
+     * own patch). `fileContent` is accepted but not required; the agent
+     * will read full file bodies from the cloned sandbox anyway.
      */
     private convertFromFilesList(
         files: CliReviewInput['config']['files'],
@@ -98,7 +107,7 @@ export class CliInputConverter {
         return files.map((file) => ({
             filename: file.path,
             patch: file.diff,
-            patchWithLinesStr: convertToHunksWithLinesNumbers(file.diff, {
+            patchWithLinesStr: convertToUnifiedDiffWithLineNumbers(file.diff, {
                 filename: file.path,
             }),
             status: file.status as any,
@@ -153,7 +162,6 @@ export class CliInputConverter {
      * Remove context sections added by CLI (.cursorrules, claude.md, etc)
      */
     private removeContextSections(diff: string): string {
-        // Remove sections like "=== Cursor Rules ===" etc
         const cleaned = diff.replace(
             /^===\s+[^\n]+\s+===[\s\S]*?(?=^diff\s+--git|$)/gm,
             '',
@@ -162,18 +170,26 @@ export class CliInputConverter {
     }
 
     /**
-     * Extract filename from diff block
+     * Extract filename from a diff block.
      */
     private extractFilename(diffBlock: string): string | null {
-        // Try +++ b/ format first (most common)
         let match = diffBlock.match(/\+\+\+ b\/(.+)/);
         if (match) return match[1].trim();
 
-        // Try diff --git format
         match = diffBlock.match(/diff --git a\/(.+) b\//);
         if (match) return match[1].trim();
 
         return null;
+    }
+
+    /**
+     * Detect file status from diff markers.
+     */
+    private detectFileStatus(diffBlock: string): FileChange['status'] {
+        if (diffBlock.includes('new file mode')) return 'added';
+        if (diffBlock.includes('deleted file mode')) return 'removed';
+        if (diffBlock.includes('rename from')) return 'renamed';
+        return 'modified';
     }
 
     /**
@@ -204,16 +220,6 @@ export class CliInputConverter {
 
     private countDeletions(diff: string): number {
         return this.countChanges(diff).deletions;
-    }
-
-    /**
-     * Detect file status from diff markers
-     */
-    private detectFileStatus(diffBlock: string): FileChange['status'] {
-        if (diffBlock.includes('new file mode')) return 'added';
-        if (diffBlock.includes('deleted file mode')) return 'removed';
-        if (diffBlock.includes('rename from')) return 'renamed';
-        return 'modified';
     }
 
     /**

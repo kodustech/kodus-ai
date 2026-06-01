@@ -47,7 +47,9 @@ function createMocks() {
     };
 
     const automationExecutionService = {
-        create: jest.fn().mockResolvedValue({ uuid: 'exec-1', dataExecution: {} }),
+        create: jest
+            .fn()
+            .mockResolvedValue({ uuid: 'exec-1', dataExecution: {} }),
         update: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -66,6 +68,15 @@ function createMocks() {
         }),
     };
 
+    const pipelineObserver = {
+        onPipelineStart: jest.fn().mockResolvedValue(undefined),
+        onPipelineFinish: jest.fn().mockResolvedValue(undefined),
+        onStageStart: jest.fn().mockResolvedValue(undefined),
+        onStageFinish: jest.fn().mockResolvedValue(undefined),
+        onStageError: jest.fn().mockResolvedValue(undefined),
+        onStageSkipped: jest.fn().mockResolvedValue(undefined),
+    };
+
     const useCase = new ExecuteCliReviewUseCase(
         converter as any,
         pipelineStrategy as any,
@@ -74,6 +85,7 @@ function createMocks() {
         teamAutomationService as any,
         kodyRulesService as any,
         kodyRulesValidationService as any,
+        pipelineObserver as any,
     );
 
     return {
@@ -85,6 +97,7 @@ function createMocks() {
         teamAutomationService,
         kodyRulesService,
         kodyRulesValidationService,
+        pipelineObserver,
     };
 }
 
@@ -231,9 +244,7 @@ describe('ExecuteCliReviewUseCase', () => {
         });
 
         it('should handle repos without http_url and fallback to name', () => {
-            const repos = [
-                { id: '333', name: 'no-url-repo' },
-            ];
+            const repos = [{ id: '333', name: 'no-url-repo' }];
 
             const result = useCase.resolveRepositoryFromRemote(
                 'https://github.com/org/no-url-repo.git',
@@ -284,9 +295,9 @@ describe('ExecuteCliReviewUseCase', () => {
         });
 
         it('should strip git@ prefix and convert colon to slash', () => {
-            expect(
-                useCase.normalizeGitUrl('git@github.com:org/repo.git'),
-            ).toBe('github.com/org/repo');
+            expect(useCase.normalizeGitUrl('git@github.com:org/repo.git')).toBe(
+                'github.com/org/repo',
+            );
         });
 
         it('should strip .git suffix', () => {
@@ -302,9 +313,9 @@ describe('ExecuteCliReviewUseCase', () => {
         });
 
         it('should lowercase', () => {
-            expect(
-                useCase.normalizeGitUrl('https://GitHub.com/Org/Repo'),
-            ).toBe('github.com/org/repo');
+            expect(useCase.normalizeGitUrl('https://GitHub.com/Org/Repo')).toBe(
+                'github.com/org/repo',
+            );
         });
     });
 
@@ -398,8 +409,7 @@ describe('ExecuteCliReviewUseCase', () => {
                             {
                                 id: '123',
                                 name: 'my-repo',
-                                http_url:
-                                    'https://github.com/org/my-repo',
+                                http_url: 'https://github.com/org/my-repo',
                             },
                         ],
                     },
@@ -427,10 +437,7 @@ describe('ExecuteCliReviewUseCase', () => {
             expect(result.config.kodyRules).toHaveLength(2);
             expect(
                 kodyRulesValidationService.filterKodyRules,
-            ).toHaveBeenCalledWith(
-                [globalRule, repoRule],
-                '123',
-            );
+            ).toHaveBeenCalledWith([globalRule, repoRule], '123');
         });
 
         it('should use "global" repositoryId when no git context', async () => {
@@ -499,11 +506,8 @@ describe('ExecuteCliReviewUseCase', () => {
         };
 
         it('should use global repositoryId in trial mode', async () => {
-            const {
-                useCase,
-                pipelineStrategy,
-                kodyRulesService,
-            } = createMocks();
+            const { useCase, pipelineStrategy, kodyRulesService } =
+                createMocks();
 
             // Mock pipeline execution to return a valid cliResponse
             const mockExecute = jest
@@ -528,7 +532,9 @@ describe('ExecuteCliReviewUseCase', () => {
             });
 
             // In trial mode, should NOT load kody rules
-            expect(kodyRulesService.findByOrganizationId).not.toHaveBeenCalled();
+            expect(
+                kodyRulesService.findByOrganizationId,
+            ).not.toHaveBeenCalled();
             expect(result.issues).toHaveLength(0);
 
             mockExecute.mockRestore();
@@ -559,9 +565,7 @@ describe('ExecuteCliReviewUseCase', () => {
 
             kodyRulesService.findByOrganizationId.mockResolvedValue({
                 toObject: () => ({
-                    rules: [
-                        makeRule({ repositoryId: 'repo-555' }),
-                    ],
+                    rules: [makeRule({ repositoryId: 'repo-555' })],
                 }),
             });
 
@@ -603,10 +607,7 @@ describe('ExecuteCliReviewUseCase', () => {
             expect(result.issues).toHaveLength(1);
             expect(
                 kodyRulesValidationService.filterKodyRules,
-            ).toHaveBeenCalledWith(
-                expect.any(Array),
-                'repo-555',
-            );
+            ).toHaveBeenCalledWith(expect.any(Array), 'repo-555');
 
             mockExecute.mockRestore();
         });

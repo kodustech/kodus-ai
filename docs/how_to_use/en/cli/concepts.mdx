@@ -1,0 +1,146 @@
+---
+title: "Concepts"
+description: "Mental models to get the most out of the Kodus CLI."
+---
+
+A short tour of the ideas that show up everywhere in the CLI. Read this once and the rest of the docs will make more sense.
+
+## Diff Modes
+
+Every review needs to answer one question: *what changed?* The CLI supports four diff modes, each with a different source of truth.
+
+| Mode                | Source of diff                                | Inlines files? | When to use                                            |
+| ------------------- | --------------------------------------------- | -------------- | ------------------------------------------------------ |
+| **Working tree** (default) | Uncommitted changes in your working directory | Yes            | Mid-development, before staging anything.              |
+| **Staged** (`--staged`)    | `git diff --cached`                           | Yes            | About to commit — same scope as `git commit`.           |
+| **Branch** (`--branch <base>`) | `base..HEAD` committed diff              | No             | Pre-merge review of the whole branch.                   |
+| **Commit** (`--commit <sha>`) | The diff introduced by a single commit     | No             | Audit one commit, cherry-pick review.                   |
+
+<Tip>
+  **Why does inlining matter?** Working-tree and staged reviews send file contents alongside the diff because the backend can't see your uncommitted work. Branch and commit modes skip inlining — the backend clones the same commit directly. That's why branch/commit reviews work on huge diffs where working-tree reviews would exceed request size limits.
+</Tip>
+
+## Review Modes
+
+Three output styles, same underlying review.
+
+- **Interactive** (default) — a TUI that lists files, expands issues, and applies fixes one at a time with a preview. The natural way to work in a terminal.
+- **Auto-fix** (`--fix`) — applies every fixable issue at once, with a single confirmation. Use when you trust the rules and want to batch-apply.
+- **Prompt-only** (`--prompt-only`) — minimal, structured text designed for AI agents to parse and act on. Pair with `--fail-on` in an agent loop so the loop exits cleanly when the review is clean.
+
+You can also use `--format json` or `--format markdown` with any command for non-interactive consumers (CI, scripts, webhooks).
+
+## Authentication Modes
+
+Pick one per machine. The CLI auto-detects what's available.
+
+- **Trial** — no auth. 5 reviews per day. Good for "try it once".
+- **Personal login** (`kodus auth login`) — an individual account. Tokens refresh automatically.
+- **Team key** (`kodus auth team-key --key kodus_xxxxx`) — one shared key for a team, generated in the dashboard. Recommended for AI agents and anywhere you don't want interactive logins.
+- **CI/CD token** (`kodus auth token`) — a long-lived token for pipelines. Generated from a logged-in machine, used via `KODUS_TOKEN`.
+
+See [Getting Started](getting_started) for the full decision tree.
+
+## Kody Rules
+
+A **Kody Rule** is a structured rule the Kodus reviewer applies during every review, scoped to a repository or global to your team.
+
+```
+Rule
+├── title          "No console.log in production code"
+├── rule           "Avoid leaving console.log in committed code"
+├── severity       low | medium | high | critical
+├── scope          file | pull request
+├── path           **/*.ts       (glob for file targeting)
+└── repo-id        <uuid> | global
+```
+
+Rules layer on top of the general Kodus review — the AI uses them as additional criteria, not replacements.
+
+Manage rules from the dashboard or from the CLI with `kodus rules create|update|view`. The CLI is useful when you want rules in version control (generate them from a script, check into a repo, re-apply on provisioning).
+
+## Repository Settings
+
+Every repository in Kodus has settings that govern how reviews behave: ignored files, base branch patterns, title filters, feature toggles. These live in the Kodus backend and are mirrored anywhere the repo is reviewed (web PRs, CLI reviews, agent loops).
+
+From the CLI:
+
+```bash
+kodus config repo list                 # See your configured repos
+kodus config repo show                 # See settings for the current repo
+kodus config repo setup                # Guided wizard
+kodus config repo set . reviewEnabled true
+kodus config repo add-ignore-file . "**/*.generated.ts"
+kodus config repo open                 # Jump to the web dashboard
+```
+
+`kodus config repo` and `kodus config remote` are aliases for the same command group.
+
+## Centralized Config
+
+Normally, each repository's settings live in Kodus. **Centralized Config** lets a team store those settings in a single source-of-truth git repository — every change becomes a pull request against that repo, giving you review and version history on your review configuration itself.
+
+Enable, sync, or inspect state:
+
+```bash
+kodus config centralized status
+kodus config centralized init owner/config-repo --sync-option pr
+kodus config centralized sync
+kodus config centralized disable
+```
+
+Use Centralized Config when your team wants auditable, versioned control over review settings. Keep the default (per-repo settings in Kodus) when that ceremony is overkill.
+
+## Decision Memory
+
+Decision Memory is Kodus's way of persisting the *reasoning* behind AI agent work — not just the diff, but the "why".
+
+When enabled, Kodus installs hooks in Claude Code, Cursor, or Codex that fire on every turn-complete event and capture structured decisions to:
+
+```
+.kody/
+├── pr/by-sha/<head-sha>.md    # PR-level decisions (versioned with code)
+├── memory/<module-id>.md      # Module-level decisions (long-term)
+└── modules.yml                # Module configuration
+```
+
+PR-level memory lives on the branch. When a PR merges, promote its decisions to module-level memory (`kodus decisions promote`) so future work on that module starts with the accumulated context.
+
+Full walk-through: [Decision Memory](decision_memory).
+
+## Business Validation
+
+Where `kodus review` asks "is this code good?", `kodus pr business-validation` asks "does this diff actually do what the task said to do?". You point it at a Linear/Jira/URL-based task and a diff source (working tree, staged, branch, commit) and it checks the implementation against the task's acceptance criteria.
+
+```bash
+kodus pr business-validation --task-id KC-1441 --branch main
+kodus pr business-validation --task-url https://linear.app/… --staged
+```
+
+Pair with a pre-merge check to catch "code works, but it's not what was asked for" before human review.
+
+## AI Agent Output (`--prompt-only` and `--agent`)
+
+Two related flags, different jobs.
+
+- **`--prompt-only`** — output is optimized for an AI agent to parse and act on. Only works on commands that produce review-style output (`review`, `pr suggestions`).
+- **`--agent`** — global flag that enforces **deterministic, machine-readable** output on any command. Use when a script or agent parses CLI output; combine with `--format json` for strictness.
+
+Most agent integrations just need `--prompt-only`. Reach for `--agent` when you're orchestrating the CLI from a harness or a tool-calling loop that has strict format expectations.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Command Reference" icon="book" href="commands">
+    Full command + flag listing.
+  </Card>
+  <Card title="AI Agents" icon="robot" href="ai_agents">
+    Build review-fix loops with coding agents.
+  </Card>
+  <Card title="Decision Memory" icon="brain" href="decision_memory">
+    Capture and promote agent decisions across branches.
+  </Card>
+  <Card title="Troubleshooting" icon="life-ring" href="troubleshooting">
+    Common errors and exit codes.
+  </Card>
+</CardGroup>

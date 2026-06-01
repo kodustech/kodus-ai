@@ -38,6 +38,8 @@ export interface RemoteCommands {
     grep: (pattern: string, path: string, glob?: string) => Promise<string>;
     read: (path: string, start: number, end: number) => Promise<string>;
     listDir: (path: string, maxDepth: number) => Promise<string>;
+    /** Run an arbitrary read-only shell command in the sandbox. */
+    exec?: (command: string) => Promise<{ stdout: string; exitCode: number }>;
 }
 
 //#region Constants
@@ -454,6 +456,7 @@ export class CollectCrossFileContextsService {
             spanName,
             runName,
             attrs: spanAttrs,
+            byokConfig,
             exec: (callbacks) => builder.addCallbacks(callbacks).execute(),
         });
 
@@ -1217,6 +1220,7 @@ export class CollectCrossFileContextsService {
                 spanName,
                 runName,
                 attrs: spanAttrs,
+                byokConfig,
                 exec: (callbacks) => builder.addCallbacks(callbacks).execute(),
             });
 

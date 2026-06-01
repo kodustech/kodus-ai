@@ -73,11 +73,6 @@ export class UpdateCodeReviewParameterRepositoriesUseCase {
         try {
             const { organizationAndTeamData } = body;
 
-            await this.ensureManualChangesAllowed(
-                organizationAndTeamData,
-                body.actor?.source,
-            );
-
             const codeReviewConfigs = await this.parametersService.findByKey(
                 ParametersKey.CODE_REVIEW_CONFIG,
                 organizationAndTeamData,
@@ -183,7 +178,10 @@ export class UpdateCodeReviewParameterRepositoriesUseCase {
                 this.logger.error({
                     message:
                         'Error emitting audit log event for repository update',
-                    error: error,
+                    error:
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error)),
                     context: UpdateCodeReviewParameterRepositoriesUseCase.name,
                 });
             }
@@ -198,13 +196,16 @@ export class UpdateCodeReviewParameterRepositoriesUseCase {
                 message:
                     'Error creating or updating code review parameter repositories',
                 context: UpdateCodeReviewParameterRepositoriesUseCase.name,
-                error: error,
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
                 metadata: {
                     parametersKey: ParametersKey.CODE_REVIEW_CONFIG,
                     organizationAndTeamData: body.organizationAndTeamData,
                 },
             });
-            throw new Error('Error creating or updating parameters');
+            throw new Error('Error creating or updating parameters', {
+                cause: error,
+            });
         }
     }
 

@@ -1,0 +1,65 @@
+---
+title: "Como reduzir ruído e falsos positivos na revisão de código"
+description: "Ajuste sua revisão de código com IA para exibir apenas as sugestões mais relevantes e evitar o cansaço por excesso de alertas."
+---
+
+Muitas sugestões de baixa prioridade podem fazer os desenvolvedores ignorarem completamente o feedback das revisões de código. O segredo é ajustar a revisão para que ela mostre o que importa e fique quieta no que não importa.
+
+## Controle de sugestões
+
+O Kodus oferece controle refinado sobre quantas sugestões aparecem e em qual severidade:
+
+- **Máximo de sugestões por PR** — limite o número total de sugestões (ex.: 9)
+- **Filtro de severidade** — mostre apenas sugestões acima de um limite (ex.: Média e acima)
+- **Modo de agrupamento** — controle como as sugestões são organizadas no PR
+
+Configure isso em **Configurações de Revisão de Código** → **Controle de Sugestões**, ou em `kodus-config.yml`:
+
+```yaml
+suggestionControl:
+  groupingMode: full
+  limitationType: pr
+  maxSuggestions: 9
+  severityLevelFilter: medium
+```
+
+## Ignorar arquivos e caminhos
+
+Ignore arquivos que geram ruído (arquivos de lock, código gerado, configurações):
+
+```yaml
+ignorePaths:
+  - yarn.lock
+  - package-lock.json
+  - "**/*.generated.ts"
+  - dist/**
+```
+
+## Ignorar PRs pelo título
+
+Ignore PRs que não precisam de revisão (releases, atualizações de versão):
+
+```yaml
+ignoredTitleKeywords:
+  - "release"
+  - "bump version"
+  - "chore"
+```
+
+## Alternar categorias de análise
+
+Desative categorias inteiras de revisão que você não precisa:
+
+```yaml
+reviewOptions:
+  security: true
+  code_style: true
+  refactoring: false        # desative se estiver gerando muito ruído
+  documentation_and_comments: false  # desative se não for relevante
+```
+
+## Cadência de revisão
+
+Use **Pausa automática** para evitar spam durante o desenvolvimento ativo — o Kodus pausa as revisões quando detecta pushes consecutivos rápidos (padrão: 3 pushes em 15 minutos).
+
+Para detalhes, consulte [Configuração Geral](/how_to_use/pt-br/code_review/configs/general) e [Controle de Sugestões](/how_to_use/pt-br/code_review/configs/suggestion_control).

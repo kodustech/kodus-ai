@@ -25,6 +25,7 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
     readonly stageName = 'CreatePrLevelCommentsStage';
     readonly label = 'Posting PR Comments';
     readonly visibility = StageVisibility.PRIMARY;
+    readonly errorSeverity = 'partial' as const;
     private readonly logger = createLogger(CreatePrLevelCommentsStage.name);
 
     constructor(

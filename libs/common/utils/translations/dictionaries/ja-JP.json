@@ -5,7 +5,9 @@
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## コードレビュー完了！ 🔥\n\n現在の設定に基づいてコードレビューが正常に完了しました。\n\n",
-        "withoutComments": "# Kodyレビュー完了\n**素晴らしいニュースです！** 🎉\n現在のレビュー設定に一致する問題は見つかりませんでした。\n\nこの調子で頑張ってください! 🚀"
+        "withoutComments": "# Kodyレビュー完了\n**素晴らしいニュースです！** 🎉\n現在のレビュー設定に一致する問題は見つかりませんでした。\n\nこの調子で頑張ってください! 🚀",
+        "withErrors": "## コードレビューを完了できませんでした ⚠️\n\n提案を生成する前にレビューが失敗しました。\n\n**理由:** {{errorMessage}}\n\n問題を修正した後、この PR に `@kody review` とコメントしてレビューを再実行してください。\n\n",
+        "partialErrorsNotice": "\n\n> ⚠️ 注意: 今回のレビューで一部の処理を完了できなかったため、自動承認（有効な場合）はスキップされました。詳細は {{dashboardUrl}} で確認し、問題を解決したらこの PR に `@kody review` とコメントしてもう一度実行してください。\n"
     },
     "pullRequestSummaryMarkdown": {
         "title": "PRサマリー([Kody](https://kodus.io)によって作成されたコメント 🤖)",

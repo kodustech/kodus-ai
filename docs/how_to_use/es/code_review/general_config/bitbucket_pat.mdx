@@ -1,0 +1,59 @@
+---
+title: "Token API de Bitbucket"
+---
+
+## Introducción
+
+Para permitir que Kody realice revisiones de código automáticas en Bitbucket Cloud, necesitas generar un **Token API**. Este token permite a Kody acceder a tus repositorios, pull requests, webhooks, issues, pipelines, etc., con los permisos específicos listados a continuación.
+
+---
+
+## Generar el Token API en Bitbucket
+
+1. Abre directamente la [página de tokens API de Atlassian](https://id.atlassian.com/manage-profile/security/api-tokens) (o, desde tu perfil de Atlassian, navega a **Security → API tokens**).
+2. Haz clic en **Create API token with scopes**.
+3. Dale un nombre al token (por ejemplo `kody_code_review`) y establece una fecha de vencimiento.
+4. Si se te solicita, selecciona **Bitbucket** como la aplicación.
+5. Selecciona todos los alcances requeridos (ver más abajo).
+6. Revisa tus elecciones, luego haz clic en **Create token**.
+7. **Copia** el token inmediatamente y guárdalo de forma segura — después de la creación no podrás verlo nuevamente.
+
+---
+
+## Alcances Requeridos para Kody
+
+El token debe incluir **todos** los siguientes alcances para la funcionalidad completa con Kody:
+
+| Alcance                         | Propósito / Qué Habilita                                                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| `read:user:bitbucket`         | Leer información básica del usuario o cuenta.                                               |
+| `read:workspace:bitbucket`    | Leer información sobre el workspace (proyectos, miembros, repositorios).                   |
+| `read:project:bitbucket`      | Leer metadatos sobre proyectos.                                                             |
+| `read:repository:bitbucket`   | Leer código, ramas, archivos fuente en repositorios.                                       |
+| `write:repository:bitbucket`  | Modificar el contenido del repositorio cuando sea necesario (comentarios, actualizaciones de archivos, etc.). |
+| `admin:repository:bitbucket`  | Operaciones administrativas en el repositorio: gestionar webhooks, permisos, configuración. |
+| `read:pullrequest:bitbucket`  | Ver pull requests, sus estados, comentarios.                                               |
+| `write:pullrequest:bitbucket` | Crear o modificar comentarios de pull request; aprobar, rechazar o mergear PRs.            |
+| `read:issue:bitbucket`        | Leer información del rastreador de issues.                                                 |
+| `read:webhook:bitbucket`      | Ver webhooks existentes y su configuración.                                                |
+| `write:webhook:bitbucket`     | Crear o actualizar webhooks.                                                               |
+| `read:pipeline:bitbucket`     | Leer estado/logs de pipelines asociados con repositorios o PRs.                            |
+
+> ⚠️ Asegúrate de otorgar solo estos permisos necesarios; evita otorgar más de lo requerido para reducir el riesgo de seguridad.
+
+---
+
+## Agregar el Token a Kody
+
+- Una vez que el token esté generado con todos los alcances requeridos, pégalo en la **pantalla de configuración de integración/automatización de Kody** al habilitar la integración con Bitbucket.
+- Asegúrate de que el token tenga `admin:repository:bitbucket` (o equivalente) si Kody necesita configurar webhooks o escuchar eventos de pull request.
+
+---
+
+## Notas Importantes
+
+- El token se **mostrará solo una vez** al momento de la creación. Guárdalo de forma segura, porque **no** podrás verlo nuevamente.
+- Establece una **fecha de vencimiento** si es posible, para limitar la vida útil del token.
+- Si el token alguna vez se ve comprometido, revócalo inmediatamente y crea uno nuevo.
+- Audita periódicamente los tokens y sus alcances para confirmar que todavía son necesarios y válidos.
+- Verifica si tu plan/cuenta de Bitbucket permite todos los alcances anteriores; algunos alcances (proyecto, workspace, admin) pueden depender de la suscripción/permisos.

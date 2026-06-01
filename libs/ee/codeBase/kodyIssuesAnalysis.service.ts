@@ -65,6 +65,7 @@ export class KodyIssuesAnalysisService {
                 spanName,
                 runName,
                 attrs: spanAttrs,
+                byokConfig,
                 exec: async (callbacks) => {
                     return await promptRunner
                         .builder()
@@ -162,6 +163,7 @@ export class KodyIssuesAnalysisService {
             const { result } = await this.observabilityService.runLLMInSpan({
                 spanName,
                 runName,
+                byokConfig,
                 attrs: spanAttrs,
                 exec: async (callbacks) => {
                     return await promptRunner

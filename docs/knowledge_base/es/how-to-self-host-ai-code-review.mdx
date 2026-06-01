@@ -1,0 +1,39 @@
+---
+title: "Cómo alojar de forma autónoma una herramienta de revisión de código con IA"
+description: "Despliega Kodus en tu propia infraestructura con control total sobre los datos, los modelos y la configuración."
+---
+
+Kodus es de código abierto y puede alojarse de forma autónoma en tu propia infraestructura. Esto te brinda control total sobre tus datos, el acceso a la red y el proveedor de LLM.
+
+## Opciones de despliegue
+
+### Docker (recomendado)
+
+Despliega Kodus usando Docker Compose en cualquier VM:
+
+1. Clona el repositorio de Kodus
+2. Configura las variables de entorno
+3. Ejecuta `docker compose up`
+4. Accede a la interfaz web y conecta tu proveedor de Git
+
+### Desarrollo local
+
+Para pruebas o contribuciones:
+
+1. Usa el orquestador para una configuración local rápida
+2. Incluye todos los servicios en un solo comando
+
+## Qué controlas
+
+- **Datos** — todo el código y los datos de revisión permanecen en tu infraestructura
+- **Proveedor de LLM** — usa cualquier proveedor o modelos alojados de forma autónoma
+- **Red** — se ejecuta detrás de tu firewall, sin necesidad de acceso externo
+- **Configuración** — control total sobre todos los ajustes
+
+## Requisitos
+
+- Docker y Docker Compose
+- Recursos de cómputo suficientes para los servicios de API y worker
+- Acceso de red a tu proveedor de Git (GitHub, GitLab, Bitbucket)
+
+Para la guía de despliegue completa, consulta [Desplegar con Docker](/how_to_deploy/es/deploy_kodus/generic_vm).

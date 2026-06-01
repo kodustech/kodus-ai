@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ValidateSuggestionsStage } from '@libs/code-review/pipeline/stages/validate-suggestions.stage';
-import { AST_ANALYSIS_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/ASTAnalysisService.contract';
+import { SandboxSyntaxValidator } from '@libs/code-review/infrastructure/adapters/services/sandboxSyntaxValidator.service';
+import { SuggestionLLMValidator } from '@libs/code-review/infrastructure/adapters/services/suggestionLLMValidator.service';
 import {
     CodeSuggestion,
     FileChange,
@@ -76,12 +77,12 @@ describe('ValidateSuggestionsStage – maxInputTokens file skip', () => {
     let stage: ValidateSuggestionsStage;
     let stageAny: any;
 
-    const mockAstAnalysisService = {
-        checkSuggestionSimplicity: jest.fn(),
-        startValidate: jest.fn(),
-        awaitTask: jest.fn(),
-        getValidate: jest.fn(),
-        validateWithLLM: jest.fn(),
+    const mockSandboxSyntaxValidator = {
+        validate: jest.fn().mockResolvedValue({ isValid: true, errors: [] }),
+    };
+
+    const mockSuggestionLLMValidator = {
+        validate: jest.fn().mockResolvedValue({ isValid: true }),
     };
 
     beforeEach(async () => {
@@ -89,8 +90,12 @@ describe('ValidateSuggestionsStage – maxInputTokens file skip', () => {
             providers: [
                 ValidateSuggestionsStage,
                 {
-                    provide: AST_ANALYSIS_SERVICE_TOKEN,
-                    useValue: mockAstAnalysisService,
+                    provide: SandboxSyntaxValidator,
+                    useValue: mockSandboxSyntaxValidator,
+                },
+                {
+                    provide: SuggestionLLMValidator,
+                    useValue: mockSuggestionLLMValidator,
                 },
             ],
         }).compile();
@@ -124,7 +129,7 @@ describe('ValidateSuggestionsStage – maxInputTokens file skip', () => {
                 makeSuggestion('s2', 'medium.ts'),
             ];
 
-            const candidates = await stageAny.prepareValidationCandidates(
+            const _candidates = await stageAny.prepareValidationCandidates(
                 suggestions,
                 files,
                 undefined, // no maxInputTokens
@@ -235,7 +240,7 @@ describe('ValidateSuggestionsStage – maxInputTokens file skip', () => {
                 makeSuggestion('s3', 'large.ts'),
             ];
 
-            const candidates = await stageAny.prepareValidationCandidates(
+            const _candidates = await stageAny.prepareValidationCandidates(
                 suggestions,
                 files,
                 10000,
@@ -267,7 +272,7 @@ describe('ValidateSuggestionsStage – maxInputTokens file skip', () => {
                 makeSuggestion('s4', 'huge.ts'),
             ];
 
-            const candidates = await stageAny.prepareValidationCandidates(
+            const _candidates = await stageAny.prepareValidationCandidates(
                 suggestions,
                 files,
                 10000,
@@ -293,7 +298,7 @@ describe('ValidateSuggestionsStage – maxInputTokens file skip', () => {
             const files = [makeFile('exact.ts', content)];
             const suggestions = [makeSuggestion('s1', 'exact.ts')];
 
-            const candidates = await stageAny.prepareValidationCandidates(
+            const _candidates = await stageAny.prepareValidationCandidates(
                 suggestions,
                 files,
                 10000,

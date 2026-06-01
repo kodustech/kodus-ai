@@ -10,7 +10,6 @@ export const API_ROUTES = {
     refreshToken: "/auth/refresh",
     getInviteData: "/user/invite",
     completeUserInvitation: "/user/invite/complete-invitation",
-    segmentTrack: "/segment/track",
     posthogTrack: "/posthog/track",
     loginOAuth: "/auth/oauth",
     checkForEmailExistence: "/user/email",

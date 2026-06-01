@@ -1,0 +1,74 @@
+---
+title: "Plugins"
+description: "Plugins are a way to bring external business context directly into Kody's review workflow."
+tag: 'beta'
+---
+
+<Callout icon="alien" iconType="regular">This is a beta feature. It is not yet production-ready and may not work as expected.</Callout>
+
+## Overview
+
+Plugins let you bring external business context directly into Kody's review workflow. They extend Kody's understanding with data from tools such as Jira, so feedback and actions stay aligned with your team's processes.
+
+## What Plugins Are
+
+Plugins are Model Context Protocol (MCP) servers curated by Kodus. Each plugin exposes specific capabilities—like fetching tasks or checking specs—that Kody can use while collaborating with you on pull requests.
+
+## Kodus MCP
+
+Every workspace ships with the Kodus MCP already connected. It aggregates secure adapters for every supported Git provider—GitHub, GitLab, Bitbucket, and Azure DevOps—so you never need to install separate code-manipulation plugins.
+
+Beyond source control, the Kodus MCP unlocks first-party automations:
+
+- Manage Kody rules directly from a review thread (create, edit, or remove).
+- Open Kody issues manually when you need a custom follow-up outside of the automated flow.
+
+## Using Plugins in Suggestions
+
+<img src="https://kodus.io/wp-content/uploads/2025/10/comment-mcp.gif" alt="Example of using a plugin in a suggestion" />
+
+
+Interact with a plugin inside a code review suggestion by explicitly mentioning Kody in your comment. Once invoked, Kody calls the relevant plugin and replies in the same thread.
+
+### Example prompts
+
+- `@kody, update this kody rule to ignore test files`
+- `@kody, move this task https://jira.com/task-123 to DONE`
+
+These prompts keep the discussion in context and let teammates follow the full conversation insida e the PR.
+
+## Validating Business Logic
+
+Use the `@kody -v business-logic` command when you want Kody to compare a pull request against a specification. Provide the spec content inline or share a link:
+
+- `@kody -v business-logic https://jira.com/task-123`
+
+Kody will fetch the referenced specification through the plugin and confirm whether the implementation matches the documented behavior.
+
+<Card title="Business Logic Validation Guide" icon="shield-check" href="/how_to_use/en/code_review/business_logic_validation">
+    Explore the in-depth walkthrough with prerequisites and troubleshooting for `@kody -v business-logic`.
+</Card>
+
+## Controlling Access
+
+Kody only sees the tools you enable for each workspace. Install the plugins that matter to your workflow and keep everything else private.
+
+## Custom Plugins
+
+Bring your own MCP servers when you need capabilities beyond the curated catalog.
+
+1. Open the plugin catalog inside your workspace and click **Add Custom Plugin**.
+2. Provide the endpoint details:
+   - **Plugin Name** (required) and optional **Description** to help teammates understand the integration.
+   - Optional **Logo URL** for a recognizable icon in the catalog.
+   - The MCP **URL** that hosts your server along with the expected **Protocol** (HTTP or WebSocket).
+   - Any required **Authorization** method or custom headers for authentication.
+3. Click **Create Plugin** to instantly make it available to Kody within the current workspace.
+
+Custom plugins follow the same permissions model as curated integrations: only workspaces where the plugin is installed can invoke it, and Kody never accesses endpoints you do not explicitly configure.
+
+## Tips
+
+- Mention Kody only once per request so the correct plugin runs without duplication.
+- Keep links accessible to your workspace; Kody needs permission to reach the target resource through the plugin.
+- Review the plugin catalog periodically—new integrations are added as Kodus curates additional MCP servers.

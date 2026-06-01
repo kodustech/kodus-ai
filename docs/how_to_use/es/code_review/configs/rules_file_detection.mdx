@@ -1,0 +1,77 @@
+---
+title: "Detección de Archivos de Reglas"
+description: "Detecta e importa automáticamente tus archivos de reglas existentes de herramientas de codificación con IA populares para mejorar las capacidades de revisión de código de Kody con los estándares de codificación establecidos de tu equipo."
+---
+
+Kodus puede sincronizar e importar automáticamente tus archivos de reglas del IDE existentes para mejorar la revisión de código de Kody con los estándares de codificación y preferencias establecidas de tu equipo.
+
+<Frame caption="Habilita la sincronización automática de reglas del repositorio en tu configuración">
+  <img src="/images/sync-rules.png" />
+</Frame>
+
+## ¿Qué es la Detección de Archivos de Reglas?
+
+La Detección de Archivos de Reglas detecta e importa automáticamente archivos de configuración de herramientas y asistentes de codificación con IA populares en tu repositorio. Esto garantiza que Kody entienda y respete tus estándares de codificación existentes sin necesidad de configuración manual.
+
+## Archivos de Reglas Soportados
+
+Kodus detecta e importa automáticamente los siguientes patrones de archivos de reglas:
+
+### Cursor
+- `.cursorrules` - Archivo principal de reglas de Cursor (heredado)
+- `.cursor/rules/**/*.mdc` - Reglas de Cursor en subdirectorios
+
+### GitHub Copilot
+- `.github/copilot-instructions.md` - Instrucciones de Copilot
+- `.github/instructions/**/*.instructions.md` - Archivos de instrucciones detalladas
+
+### Claude
+- `CLAUDE.md` - Reglas específicas de Claude
+- `.claude/settings.json` - Configuración de Claude
+
+### Windsurf
+- `.windsurfrules` - Reglas del IDE Windsurf
+
+### Sourcegraph Cody
+- `.sourcegraph/**/*.rule.md` - Archivos de reglas de Cody
+
+### OpenCode
+- `.opencode.json` - Configuración de OpenCode
+
+### Aider
+- `.aider.conf.yml` - Configuración de Aider
+- `.aiderignore` - Patrones de ignorado de Aider
+
+### Reglas Genéricas/Internas
+- `.rules/**/*` - Directorio de reglas genéricas
+- `.kody/rules/*` - Reglas específicas de Kody
+- `docs/coding-standards/**/*` - Estándares de codificación basados en documentación
+
+## Cómo Funciona
+
+### Configuración Inicial
+1. **Habilitar Sincronización Automática**: Activa la opción "Auto-sincronizar reglas del repositorio" en tu configuración
+2. **Modal de Primera Sincronización**: Aparecerá un modal preguntando si deseas sincronizar por primera vez
+3. **Escaneo del Repositorio**: Al confirmar, Kodus escanea todo tu repositorio en busca de archivos de reglas soportados
+4. **Generación de Reglas**: Un LLM procesa los archivos encontrados y crea automáticamente las Kody Rules correspondientes
+
+### Sincronización Continua
+- **Actualizaciones Automáticas**: La sincronización ocurre automáticamente cuando se cierra un Pull Request
+- **Cambios de Archivos Detectados**: 
+  - **Nuevos archivos de reglas** → Crea nuevas Kody Rules
+  - **Archivos de reglas modificados** → Actualiza las Kody Rules existentes  
+  - **Archivos de reglas eliminados** → Elimina las Kody Rules correspondientes
+
+### Sincronización Manual (Interruptor Deshabilitado)
+
+Puedes sincronizar archivos de reglas individuales sin habilitar la sincronización automática:
+
+1. Agrega `@kody-sync` en cualquier parte de tu archivo de regla
+2. Haz commit del cambio
+3. Kody sincronizará solo ese archivo específico
+
+Esto te permite sincronizar selectivamente reglas sin habilitar la sincronización automática para todos los archivos.
+
+<Warning>
+Si editas manualmente una Kody Rule que fue creada desde un archivo de regla del IDE, tus cambios serán sobreescritos la próxima vez que el archivo correspondiente sea modificado y sincronizado.
+</Warning>

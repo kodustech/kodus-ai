@@ -1,0 +1,54 @@
+---
+title: "如何使用项目特定上下文审查 PR"
+description: "让 Kody 访问您的项目文档、手册和架构指南以获得更相关的代码审查。"
+---
+
+通用代码审查发现通用问题。要获得真正与项目相关的反馈，Kody 需要理解您的具体上下文 — 架构决策、约定和业务规则。
+
+## 提供上下文的方式
+
+### 记忆
+
+通过对话教 Kody 您的约定：
+
+```
+@kody remember: this project uses hexagonal architecture.
+Domain layer must never depend on infrastructure.
+```
+
+记忆持久保存并应用于所有未来的审查。
+
+### 规则中的文件引用
+
+直接在规则中引用您自己的文档：
+
+```
+说明：验证新端点遵循 @file:docs/api-conventions.md 中的模式
+并使用 @file:src/shared/base-controller.ts 中定义的基类。
+```
+
+### 自定义提示
+
+添加 Kody 在每次审查中包含的项目特定说明：
+
+1. 前往**代码审查设置** → **自定义提示**
+2. 添加架构描述、团队指南或领域知识等上下文
+3. Kody 在每次代码审查分析中包含此内容
+
+### MCP 插件
+
+连接外部工具为 Kody 提供更丰富的上下文：
+
+- **Jira/Linear** — 任务需求和验收标准
+- **Slack** — 团队讨论和决策
+- **Google Docs** — 规范和设计文档
+- **自定义 MCP 服务器** — 团队使用的任何工具
+
+## 示例工作流
+
+1. 通过**记忆**定义架构规则：`@kody remember: we follow CQRS pattern in this service`
+2. 创建引用文档的**审查规则**：`@file:docs/architecture.md`
+3. 连接 **Jira** 使 Kody 根据任务需求验证 PR
+4. 添加领域特定知识的**自定义提示**
+
+更多详情，请参阅[自定义提示](/how_to_use/en/code_review/configs/custom_prompts)和[插件](/how_to_use/en/code_review/plugins)。

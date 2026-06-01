@@ -23,6 +23,18 @@ export const getOrganizationMembers = async (params: { teamId: string }) => {
     );
 };
 
+export const refreshOrganizationMembers = async (params: {
+    teamId: string;
+}) => {
+    return authorizedFetch<Array<OrganizationMember>>(
+        pathToApiUrl("/code-management/organization-members/refresh"),
+        {
+            method: "POST",
+            params: { teamId: params.teamId },
+        },
+    );
+};
+
 export const startTeamTrial = async (params: {
     teamId: string;
     organizationId: string;

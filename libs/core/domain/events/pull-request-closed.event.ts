@@ -14,5 +14,6 @@ export class PullRequestClosedEvent {
             previous_filename?: string;
             status: string;
         }>,
+        public readonly merged: boolean = true,
     ) {}
 }

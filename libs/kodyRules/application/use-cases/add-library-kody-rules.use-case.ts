@@ -10,7 +10,9 @@ import { AuthorizationService } from '@libs/identity/infrastructure/adapters/ser
 import {
     IKodyRule,
     KodyRulesOrigin,
+    KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { CentralizedPrMetadata } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
 
 import { CreateOrUpdateKodyRulesUseCase } from './create-or-update.use-case';
 import { AddLibraryKodyRulesDto } from '@libs/kodyRules/dtos/add-library-kody-rules.dto';
@@ -28,7 +30,9 @@ export class AddLibraryKodyRulesUseCase {
         private readonly authorizationService: AuthorizationService,
     ) {}
 
-    async execute(libraryKodyRules: AddLibraryKodyRulesDto) {
+    async execute(
+        libraryKodyRules: AddLibraryKodyRulesDto,
+    ): Promise<Partial<IKodyRule>[] | CentralizedPrMetadata> {
         try {
             if (!this.request.user.organization.uuid) {
                 throw new Error('Organization ID not found');
@@ -45,6 +49,7 @@ export class AddLibraryKodyRulesUseCase {
             });
 
             const results: Partial<IKodyRule>[] = [];
+            let centralizedPrResult: CentralizedPrMetadata | null = null;
 
             for await (const repoId of libraryKodyRules.repositoriesIds) {
                 const kodyRule: CreateKodyRuleDto = {
@@ -55,18 +60,28 @@ export class AddLibraryKodyRulesUseCase {
                     repositoryId: repoId,
                     examples: libraryKodyRules.examples,
                     origin: KodyRulesOrigin.LIBRARY,
+                    type: KodyRulesType.STANDARD,
                 };
 
                 const result =
                     await this.createOrUpdateKodyRulesUseCase.execute(
                         kodyRule,
                         this.request.user.organization.uuid,
+                        undefined,
+                        undefined,
+                        libraryKodyRules.teamId,
                     );
 
                 if (!result) {
                     throw new Error('Failed to add library Kody rule');
                 }
-                results.push(result);
+                if (
+                    (result as CentralizedPrMetadata)?.mode === 'centralized-pr'
+                ) {
+                    centralizedPrResult = result as CentralizedPrMetadata;
+                } else {
+                    results.push(result);
+                }
             }
 
             // Processar diretórios se existirem
@@ -84,12 +99,16 @@ export class AddLibraryKodyRulesUseCase {
                         directoryId: directoryInfo.directoryId,
                         examples: libraryKodyRules.examples,
                         origin: KodyRulesOrigin.LIBRARY,
+                        type: KodyRulesType.STANDARD,
                     };
 
                     const result =
                         await this.createOrUpdateKodyRulesUseCase.execute(
                             kodyRule,
                             this.request.user.organization.uuid,
+                            undefined,
+                            undefined,
+                            libraryKodyRules.teamId,
                         );
 
                     if (!result) {
@@ -97,8 +116,19 @@ export class AddLibraryKodyRulesUseCase {
                             'Failed to add library Kody rule for directory',
                         );
                     }
-                    results.push(result);
+                    if (
+                        (result as CentralizedPrMetadata)?.mode ===
+                        'centralized-pr'
+                    ) {
+                        centralizedPrResult = result as CentralizedPrMetadata;
+                    } else {
+                        results.push(result);
+                    }
                 }
+            }
+
+            if (centralizedPrResult) {
+                return centralizedPrResult;
             }
 
             return results;

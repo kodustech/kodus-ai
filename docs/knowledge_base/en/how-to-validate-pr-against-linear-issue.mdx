@@ -1,0 +1,40 @@
+---
+title: "How to validate Linear issues against pull requests"
+description: "Ensure your pull request implements what the Linear issue describes by using AI-powered business logic validation."
+---
+
+Linear issues often contain detailed requirements, acceptance criteria, and scope definitions. Kodus can compare your PR against the Linear issue to catch gaps before merging.
+
+## How it works
+
+1. **Connect the Linear plugin** in your workspace's [Plugins](/how_to_use/en/code_review/plugins) page
+2. Comment on your PR:
+
+```
+@kody -v business-logic https://linear.app/your-team/issue/TEAM-123
+```
+
+3. Kody fetches the Linear issue context, reads the PR diff, and produces a gap analysis
+
+## What you get
+
+- **Findings** with severity: MUST_FIX, SUGGESTION, or INFO
+- **Requirement tracing** — each finding quotes the exact text from the Linear issue
+- **Scope mismatch detection** — if the PR is working in a different domain than the issue
+- **Requirements Verified** — what was correctly implemented
+
+## Automatic validation
+
+When `business_logic: true` is enabled (default), Kody automatically retrieves task context from Linear during every PR review if the plugin is connected.
+
+## Tips
+
+- Write clear acceptance criteria in your Linear issues for the most thorough validation
+- You can also paste requirements inline if you prefer not to link the issue:
+
+```
+@kody -v business-logic Orders above $500 must issue cashback credits.
+Discount codes cannot be combined with loyalty rewards.
+```
+
+For details, see [Business Logic Validation](/how_to_use/en/code_review/business_logic_validation).

@@ -42,7 +42,7 @@ export async function GET() {
             {
                 cache: "no-store",
                 headers: {
-                    Accept: "application/vnd.github+json",
+                    "Accept": "application/vnd.github+json",
                     "User-Agent": "kodus-web",
                 },
             },

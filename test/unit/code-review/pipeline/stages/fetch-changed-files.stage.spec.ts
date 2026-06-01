@@ -36,7 +36,7 @@ describe('FetchChangedFilesStage', () => {
 
     const createBaseContext = (
         overrides: Partial<CodeReviewPipelineContext> = {},
-    ): CodeReviewPipelineContext => ({
+    ) => ({
         dryRun: { enabled: false },
         organizationAndTeamData: mockOrganizationAndTeamData as any,
         repository: {
@@ -65,7 +65,6 @@ describe('FetchChangedFilesStage', () => {
         codeReviewConfig: {
             ignorePaths: [],
         } as any,
-        batches: [],
         preparedFileContexts: [],
         validSuggestions: [],
         discardedSuggestions: [],
@@ -96,7 +95,7 @@ describe('FetchChangedFilesStage', () => {
 
     describe('fetching changed files', () => {
         it('should fetch and process changed files successfully', async () => {
-            const mockFiles = [
+            const mockFiles: any[] = [
                 {
                     filename: 'src/test.ts',
                     status: 'modified',
@@ -148,7 +147,7 @@ describe('FetchChangedFilesStage', () => {
         });
 
         it('should reuse preliminaryFiles from context when available', async () => {
-            const mockFiles = [
+            const mockFiles: any[] = [
                 {
                     filename: 'src/test.ts',
                     status: 'modified',
@@ -472,8 +471,8 @@ describe('FetchChangedFilesStage', () => {
     });
 
     describe('edge cases', () => {
-        it('should handle exactly 500 files (at the limit)', async () => {
-            const files = Array.from({ length: 500 }, (_, i) => ({
+        it('should handle exactly 350 files (at the legacy limit)', async () => {
+            const files = Array.from({ length: 350 }, (_, i) => ({
                 filename: `file${i}.ts`,
                 status: 'modified',
                 additions: 1,
@@ -491,8 +490,27 @@ describe('FetchChangedFilesStage', () => {
             const context = createBaseContext();
             const result = await (stage as any).executeStage(context);
 
-            expect(result.changedFiles).toHaveLength(500);
+            expect(result.changedFiles).toHaveLength(350);
             expect(result.statusInfo).toBeUndefined(); // No skip status
+        });
+
+        it('should SKIP at 351 files on legacy engine (over the limit)', async () => {
+            const files = Array.from({ length: 351 }, (_, i) => ({
+                filename: `file${i}.ts`,
+                status: 'modified',
+                additions: 1,
+                deletions: 0,
+                patch: '',
+            }));
+
+            mockPullRequestHandlerService.getChangedFilesMetadata.mockResolvedValue(
+                files,
+            );
+
+            const context = createBaseContext();
+            const result = await (stage as any).executeStage(context);
+
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
         });
 
         it('should handle null returned from getChangedFilesMetadata', async () => {

@@ -1,0 +1,363 @@
+---
+title: "概述"
+description: "Kody 规则是您的团队设置的可自定义指南,用于自动执行代码质量、一致性、安全性和可维护性。"
+---
+
+
+<iframe
+  width="100%"
+  height="400"
+  src="https://www.youtube.com/embed/KrzlUmmJh3s?si=igZuKTjlfT2FwRVm"
+  title="YouTube video player"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  referrerpolicy="strict-origin-when-cross-origin"
+  allowfullscreen
+></iframe>
+
+## Kody Rules 界面中的两种类型
+
+Kody 规则分为两个类别，通过设置中的选项卡界面管理：
+
+<Tabs>
+  <Tab title="审查规则">
+    传统代码审查规则，在专门的代码审查阶段运行。它们分析文件差异和 PR 元数据以强制执行编码标准。
+
+    - 应用于**文件级**或**拉取请求级**
+    - 支持变量、文件引用和 MCP 函数
+    - 在自动代码审查期间触发
+  </Tab>
+
+  <Tab title="记忆">
+    持久的上下文指令，注入到所有提示和对话中。记忆让 Kody 学习并保留你的代码库是如何工作的，从而让未来的审查和建议更贴合上下文。
+
+    - 作为**高优先级上下文**注入到代码审查、跨文件分析和对话中
+    - 通过**与 Kody 对话**或**在 UI 中手动**创建
+    - 范围可限定为**目录**、**代码库**或**组织**级别
+    - 支持 AI 生成记忆的审批工作流
+  </Tab>
+</Tabs>
+
+## 审查规则
+
+### 创建自定义规则
+
+根据团队的确切需求定义规则。审查规则可以应用于两个不同的级别：**[文件级](#file-level-rules)**和**[拉取请求级](#pull-request-level-rules)**。两个级别都支持变量、文件引用和 MCP 函数来构建强大的、上下文感知的规则。
+
+#### 变量、文件引用和 MCP 函数
+
+规则可以通过变量、文件引用和 MCP 函数访问丰富的上下文。以下是可用的内容：
+
+**变量：**
+
+变量表示规则执行期间可用的上下文数据。了解可用的内容有助于您通过将变量与 MCP 函数和文件引用相结合来编写更好的规则。
+
+- **文件级**：
+  - `fileDiff` - 对正在分析的单个文件所做的特定更改
+
+- **PR 级**：
+  - `pr_title` - 拉取请求的标题
+  - `pr_description` - 拉取请求的描述/正文
+  - `pr_total_additions` - 添加的总行数
+  - `pr_total_deletions` - 删除的总行数
+  - `pr_total_files` - 更改的文件总数
+  - `pr_total_lines_changed` - 修改的总行数
+  - `pr_files_diff` - 整个拉取请求中所有更改的完整差异
+  - `pr_tags` - 与拉取请求关联的标签
+  - `pr_author` - 拉取请求的作者
+  - `pr_number` - 拉取请求编号
+
+在规则指令中使用这些变量来访问上下文数据，并将它们与 MCP 函数相结合以获取其他信息或执行动态分析。
+
+**文件引用：**
+
+在规则指令中直接引用文件以比较代码、验证模式、强制一致性并利用现有模板或标准。
+
+- **`@file:path/to/file.ts`** - 引用您正在编辑规则的同一代码库中的文件
+  - 在引用当前代码库中的模板、示例或配置文件时使用
+  - 示例：`@file:src/services/userService.ts`
+
+- **`@repo:org/project`** - 引用另一个代码库中的文件或在代码库上下文外配置规则时
+  - 在跨多个代码库强制一致性或引用共享标准时使用
+  - 示例：`@repo:team/api-standards`
+
+**文件引用的工作原理：**
+
+- 当您保存规则时，Kody 会自动识别文件引用
+- 引用在后台解析——观察编辑器旁边的状态指示器以确认完成
+- 使用准确的 blob 样式路径（例如 `src/utils/helpers.ts`）而不是占位符
+- 文件内容注入规则上下文，允许 Kody 比较、验证或强制模式
+- 在文件级和拉取请求级规则中都有效
+
+**MCP 函数：**
+
+通过规则编辑器中的 `@MCP` 下拉菜单访问 MCP（模型上下文协议）函数以获取其他数据和上下文。您可以使用在工作区的[插件](/how_to_use/zh/code_review/plugins)页面中连接的任何 MCP 工具或服务器。
+
+可用函数包括：
+
+- 代码库操作：列出代码库、获取代码库文件、内容和语言
+- PR 分析：获取拉取请求详细信息、列出提交、分析 PR 文件内容
+- 文件内容检索：获取文件内容和差异
+- 跨文件验证：跨多个文件执行高级分析
+- 自定义集成：您作为插件连接的任何 MCP 服务器（Jira、自定义工具等）
+
+MCP 函数在规则评估期间执行，使规则能够适应当前代码库状态并获取实时数据。
+
+**最佳实践：**
+
+- 使用特定的文件路径而不是通用占位符
+- 引用代表团队标准的稳定文件
+- 在保存规则之前测试文件引用是否存在以避免解析错误
+- 结合变量、文件引用和 MCP 函数进行全面验证
+
+#### 文件级规则
+
+分析单个文件以捕获特定代码文件中的问题。
+
+**可用上下文：**
+
+请参阅上面的[变量、文件引用和 MCP 函数](#variables-file-references--mcp-functions)部分了解详情。此级别可用：`fileDiff` 变量、文件引用（`@file`、`@repo`）和 MCP 函数。
+
+**您可以做什么：**
+
+- 使用 `@file` 或 `@repo` 与参考文件进行比较
+- 使用 MCP 函数获取相关文件或代码库数据
+- 结合变量、文件引用和 MCP 函数来验证模式、检查一致性或强制架构规则
+
+**如何配置：**
+
+- **规则名称**：清楚地定义规则目的
+- **文件路径**：使用 glob 模式将规则限制为特定文件或目录
+- **严重性**：设置为严重、高、中等或低
+- **详细说明**：使用 `fileDiff`，使用 `@file`/`@repo` 引用文件，并调用 MCP 函数以编写具有丰富上下文的强大规则
+
+**配置示例：**
+
+📋 **规则**: "避免在循环终止条件中使用相等运算符（==、!=）。"
+
+📁 **路径**: `src/**/*.ts`
+
+⚠️ **严重性**: 严重
+
+📝 **说明**: "使用相等运算符（== 或 !=）如果不匹配确切值，可能导致无限循环。"
+
+**❌ 错误示例：**
+
+```typescript
+// 如果增量不完全为 1，则存在无限循环的风险
+for (let i = 0; i != 10; i += 2) {
+  console.log(i); // 将打印 0, 2, 4, 6, 8, 10, 12, 14... 永远
+}
+
+// 如果在迭代期间修改数组，则存在风险
+let items = [1, 2, 3, 4, 5];
+for (let i = 0; i != items.length; i++) {
+  if (items[i] === 3) {
+    items.push(6); // 修改长度，可能导致无限循环
+  }
+}
+```
+
+**✅ 良好示例：**
+
+```typescript
+// 安全：循环将始终终止
+for (let i = 0; i < 10; i += 2) {
+  console.log(i); // 将打印 0, 2, 4, 6, 8 并停止
+}
+
+// 即使修改数组也是安全的
+let items = [1, 2, 3, 4, 5];
+for (let i = 0; i < items.length; i++) {
+  if (items[i] === 3) {
+    items.push(6); // 循环仍将安全终止
+  }
+}
+```
+
+#### 拉取请求级规则
+
+分析整个拉取请求以进行跨文件验证和 PR 特定要求。
+
+**可用上下文：**
+
+请参阅上面的[变量、文件引用和 MCP 函数](#variables-file-references--mcp-functions)部分了解详情。此级别可用：PR 变量（`pr_title`、`pr_description`、`pr_files_diff` 等）、文件引用（`@file`、`@repo`）和 MCP 函数。
+
+**您可以做什么：**
+
+- 使用 `pr_title`、`pr_description`、`pr_author` 等变量验证 PR 元数据
+- 使用 `@file` 或 `@repo` 引用配置文件或模板
+- 使用 MCP 函数获取其他上下文（例如，检查相关文件是否存在，根据代码库结构验证）
+- 结合 PR 变量、文件引用和 MCP 函数来创建全面的验证规则
+
+**如何配置：**
+
+创建过程与文件级规则相同，但您必须选择"拉取请求"范围。这种更广泛的上下文使能够分析跨文件依赖关系和整体 PR 质量。
+
+**示例：**
+
+- 每个服务文件必须有相应的测试文件
+- PR 描述必须完整，清楚地说明添加或删除了什么
+- 在控制器中创建新路由时，必须在 routes.json 中注册
+- 使用 `pr_total_lines_changed` 标记超过大小限制的 PR
+- 结合 `pr_files_diff` 和 MCP 函数来验证跨文件依赖关系
+- 引用 `@file:routes.json` 以确保注册新路由
+- 使用 MCP 函数检查修改的服务文件是否存在测试文件
+
+#### 编写强大的规则
+
+结合变量、MCP 函数和文件引用来创建具有丰富上下文的复杂规则。以下是每个级别可用的内容：
+
+**文件级组合：**
+
+- 使用 `fileDiff` 分析文件中的特定更改
+- 使用 `@file:path/to/template.ts` 引用相关文件以与模式进行比较
+- 调用 MCP 函数以获取代码库数据或检查相关文件是否存在
+- **示例**："分析 `fileDiff` 并确保它遵循 `@file:src/utils/example.ts` 中的模式。使用 MCP 验证相关测试文件是否存在。"
+
+**PR 级组合：**
+
+- 使用 PR 变量（`pr_title`、`pr_description`、`pr_files_diff` 等）验证 PR 元数据和大小
+- 使用 `@file:config.json` 或 `@repo:org/shared-config` 引用配置文件以强制一致性
+- 调用 MCP 函数执行跨文件验证、检查代码库结构或获取提交历史
+- **示例**："如果 `pr_files_diff` 包含新路由，验证它们是否在 `@file:routes.json` 中注册。使用 MCP 检查所有修改的服务文件是否存在相应的测试文件。"
+
+**跨代码库验证：**
+
+- 使用 `@repo:org/project` 引用其他代码库中的文件以保持项目之间的一致性
+- 与 MCP 函数结合以根据共享标准或模板进行验证
+- **示例**："确保 API 端点遵循 `@repo:org/api-standards` 中定义的模式。使用 MCP 获取最新的标准文档。"
+
+**动态分析：**
+
+- MCP 函数在规则评估期间执行，使规则能够适应当前代码库状态
+- 获取有关文件、提交或代码库结构的实时数据
+- **示例**："使用 MCP 检查当前代码库结构并确保新文件遵循现有目录模式。"
+
+这种组合使规则不仅理解代码更改，还理解代码库、团队实践和项目要求的更广泛上下文。
+
+### 从规则库导入
+
+立即利用经过验证的最佳实践：
+
+- 导航到 Kodus 仪表板中的发现规则。
+- 按严重性、语言或标签过滤规则。
+- 一键导入和激活规则。
+
+**示例：**
+
+- 安全性："禁止使用不安全的 MD5 哈希。"
+- 可维护性："将 React 组件限制为少于 150 行。"
+
+## 记忆
+
+记忆是持久的上下文指令，Kody 从团队的对话和编码实践中学习。与只在代码审查期间运行的审查规则不同，记忆会被注入到所有提示和对话中，以提供持续的高优先级上下文，并改善未来的建议质量。
+
+### 记忆的工作原理
+
+- **全面注入**：记忆被包含在代码审查分析（跨文件、安全保障、PR 级规则）和对话交互中
+- **高优先级上下文**：AI 将记忆视为高优先级指导，确保团队约定得到一致应用
+- **未来建议更好**：记忆帮助 Kody 停止反复对仓库做出同样的错误假设
+- **智能去重**：创建新记忆时，Kody 使用基于 LLM 的解析机制来决定是创建、跳过（如果重复）还是更新现有记忆
+
+### 创建记忆
+
+有两种创建记忆的方式：
+
+#### 通过对话
+
+创建记忆最自然的方式是通过 PR 评论中与 Kody 的对话。Kody 检测显式和隐式的保存约定意图：
+
+**显式** — 直接要求 Kody 记住：
+
+```
+@kody remember: this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
+```
+
+```
+@kody please remember: this service follows hexagonal architecture and keeps adapters at the edge.
+```
+
+**隐式** — 陈述 Kody 捕获的偏好或约定：
+
+```
+@kody this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
+```
+
+```
+@kody in this service, tests usually live next to the implementation files rather than in a central test folder.
+```
+
+```
+@kody the billing module is mid-migration, so prefer incremental fixes over broad refactors.
+```
+
+<Info>
+  Kody 不会为临时指令（例如"立即修复"）、调试对话、问题、模糊陈述或明确限定于单个任务或 PR 的请求创建记忆。
+</Info>
+
+当记忆被创建或更新时，Kody 会回复确认并提供**直接链接**以在 UI 中查看记忆。
+
+#### 通过 UI
+
+您也可以手动创建记忆：
+
+1. 前往**代码审查设置** → **代码库** → **Kody 规则**
+2. 切换到**记忆**选项卡
+3. 点击**添加记忆**创建新条目
+4. 填写记忆内容和范围
+
+### 记忆范围
+
+每个记忆都有一个范围，决定其适用位置：
+
+| 范围 | 描述 | 示例 |
+|------|------|------|
+| **目录** | 适用于代码库中匹配 glob 模式的文件 | `src/components/ui`、`src/**/*.ts` |
+| **代码库** | 适用于整个代码库 | 代码库中的所有文件 |
+| **组织** | 适用于组织中的所有代码库 | 组织中的所有代码库 |
+
+### LLM 生成记忆的审批
+
+默认情况下，AI 生成的记忆会自动激活。您可以要求在生效前进行手动审批：
+
+1. 前往**代码审查设置** → **代码库** → **Kody 规则** → **记忆**选项卡
+2. 启用 **LLM 生成记忆审批**
+
+启用后：
+- AI 生成的记忆进入**待审状态**，在批准之前不会生效
+- 显示待审记忆数量的通知徽章
+- 点击**待审记忆**以审查、批准、丢弃或转换待审项目
+- 新记忆的创建和对现有记忆的更新都通过审批流程
+
+您也可以在 `kodus-config.yml` 中设置：
+
+```yaml
+llmGeneratedMemoriesRequireApproval: true
+```
+
+### 待审记忆审查
+
+待审记忆模态窗口显示两个类别：
+
+- **新记忆**：等待批准的 AI 生成记忆
+- **记忆更新**：对现有记忆的建议更改
+
+对于每个待审项目，您可以：
+- **应用**：激活记忆或应用更新
+- **丢弃**：拒绝记忆或更新
+- **转换为审查规则**：将记忆转换为标准审查规则
+
+## 下一步
+
+<CardGroup cols={3}>
+  <Card title="同步 IDE 规则" icon="window" href="/how_to_use/zh/code_review/configs/rules_file_detection">
+    自动从 Cursor、Copilot、Claude 和其他 AI 编码工具导入规则。
+  </Card>
+  <Card title="代码库规则" icon="folder" href="/how_to_use/zh/code_review/configs/repository_rules">
+    使用结构化的 markdown 文件直接在代码库中创建规则。
+  </Card>
+  <Card title="AI 生成" icon="sparkles" href="/how_to_use/zh/code_review/learning/kody_rules_generation">
+    让 AI 根据您的代码库模式和过去的审查生成规则。
+  </Card>
+</CardGroup>

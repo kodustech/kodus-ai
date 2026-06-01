@@ -53,7 +53,9 @@ const getTranslationsForLanguage = (
         );
         const dictionaryPath = findDictionaryPath(LanguageValue.ENGLISH);
         if (!dictionaryPath) {
-            throw new Error('Fallback translation file not found for en-US');
+            throw new Error('Fallback translation file not found for en-US', {
+                cause: error,
+            });
         }
 
         return loadJsonFile(dictionaryPath);
@@ -84,6 +86,22 @@ interface ReviewComment {
 interface PullRequestFinishSummaryMarkdown {
     withComments: string;
     withoutComments: string;
+    /**
+     * Shown when the agent review failed before completion (e.g. BYOK key
+     * out of credits). Must include the `{{errorMessage}}` placeholder —
+     * commentManager replaces it with the human-readable reason. Optional
+     * for backward compatibility with older dictionaries; the resolver
+     * falls back to en-US when missing.
+     */
+    withErrors?: string;
+    /**
+     * Short notice appended to the regular success copy when only
+     * auxiliary checks failed (e.g. the Kody Rules agent threw). Signals
+     * to the user *why* auto-approve was skipped despite the message
+     * saying the review completed. Optional; the resolver falls back to
+     * en-US when missing.
+     */
+    partialErrorsNotice?: string;
 }
 
 interface PullRequestSummaryMarkdown {

@@ -1,0 +1,240 @@
+[
+  {
+    "pr_index": 15,
+    "golden_idx": 0,
+    "golden": "In getBaseConditions(), the else if (filterConditions) and final else branches are unreachable. This is because getAuthorizationConditions() always returns a non-null Prisma.Sql object, making authConditions always truthy, which means only the first two if/else if conditions are ever evaluated.",
+    "candidate_idx": 0,
+    "candidate": "Use the pre-computed `teamIds` variable (which includes the organization ID) when fetching `userIdsFromOrg` instead of re-mapping `teamsFromOrg`. const userIdsFromOrg = teamsFromOrg.length > 0 ? await MembershipRepository.findAllByTeamIds({ }).then((members) => members.map((m) => m.userId))"
+  },
+  {
+    "pr_index": 15,
+    "golden_idx": 0,
+    "golden": "In getBaseConditions(), the else if (filterConditions) and final else branches are unreachable. This is because getAuthorizationConditions() always returns a non-null Prisma.Sql object, making authConditions always truthy, which means only the first two if/else if conditions are ever evaluated.",
+    "candidate_idx": 1,
+    "candidate": "Simplify `getBaseConditions` logic to remove unreachable branches, as `authConditions` is always a truthy `Prisma.Sql` object. if (filterConditions) { return Prisma.sql`(${authConditions}) AND (${filterConditions})`; return authConditions;"
+  },
+  {
+    "pr_index": 15,
+    "golden_idx": 0,
+    "golden": "In getBaseConditions(), the else if (filterConditions) and final else branches are unreachable. This is because getAuthorizationConditions() always returns a non-null Prisma.Sql object, making authConditions always truthy, which means only the first two if/else if conditions are ever evaluated.",
+    "candidate_idx": 2,
+    "candidate": "Update the test for invalid options to expect a Zod error during construction, or change the service to use `safeParse` to maintain the previous 'NOTHING' result behavior. it(\"should throw error for invalid options\", () => { expect(() => new InsightsBookingService({ options: null as any,"
+  },
+  {
+    "pr_index": 15,
+    "golden_idx": 0,
+    "golden": "In getBaseConditions(), the else if (filterConditions) and final else branches are unreachable. This is because getAuthorizationConditions() always returns a non-null Prisma.Sql object, making authConditions always truthy, which means only the first two if/else if conditions are ever evaluated.",
+    "candidate_idx": 3,
+    "candidate": "A type mismatch occurs when passing `userIdsFromOrg` to `Prisma.sql` because it is an array of objects `{ userId: number }` rather than numbers. This will cause the raw SQL query to fail with a database error when compared against the `userId` column. Map the result to an array of user IDs before use. if (userIdsFromOrg.length > 0) { const uniqueUserIds = Array.from(new Set(userIdsFromOrg.map((u) "
+  },
+  {
+    "pr_index": 15,
+    "golden_idx": 0,
+    "golden": "In getBaseConditions(), the else if (filterConditions) and final else branches are unreachable. This is because getAuthorizationConditions() always returns a non-null Prisma.Sql object, making authConditions always truthy, which means only the first two if/else if conditions are ever evaluated.",
+    "candidate_idx": 4,
+    "candidate": "buildOrgAuthorizationCondition loads all organization user IDs into application memory to construct an ANY() clause. const conditions: Prisma.Sql[] = [ Prisma.sql`(\"teamId\" IN (SELECT id FROM \"Team\" WHERE \"parentId\" = ${options.orgId} OR id = ${options.orgId})) AND (\"isTeamBooking\" = true)`, Prisma.sql`(\"userId\" IN (SELECT \"userId\" FROM \"Membership\" WHERE \"teamId\" IN (SELECT id FROM \"Team\" WHERE \""
+  },
+  {
+    "pr_index": 15,
+    "golden_idx": 0,
+    "golden": "In getBaseConditions(), the else if (filterConditions) and final else branches are unreachable. This is because getAuthorizationConditions() always returns a non-null Prisma.Sql object, making authConditions always truthy, which means only the first two if/else if conditions are ever evaluated.",
+    "candidate_idx": 5,
+    "candidate": "Manually nesting Prisma.sql fragments via reduce creates deeply nested object structures. return Prisma.sql`(${Prisma.join(conditions.map(c => Prisma.sql`(${c})`), \" AND \")})`;"
+  },
+  {
+    "pr_index": 15,
+    "golden_idx": 1,
+    "golden": "Fetching userIdsFromOrg only when teamsFromOrg.length > 0 can exclude org-level members for orgs without child teams; consider deriving from teamIds (which includes orgId) or removing the guard so org-only orgs still include member user bookings.",
+    "candidate_idx": 0,
+    "candidate": "Use the pre-computed `teamIds` variable (which includes the organization ID) when fetching `userIdsFromOrg` instead of re-mapping `teamsFromOrg`. const userIdsFromOrg = teamsFromOrg.length > 0 ? await MembershipRepository.findAllByTeamIds({ }).then((members) => members.map((m) => m.userId))"
+  },
+  {
+    "pr_index": 15,
+    "golden_idx": 1,
+    "golden": "Fetching userIdsFromOrg only when teamsFromOrg.length > 0 can exclude org-level members for orgs without child teams; consider deriving from teamIds (which includes orgId) or removing the guard so org-only orgs still include member user bookings.",
+    "candidate_idx": 1,
+    "candidate": "Simplify `getBaseConditions` logic to remove unreachable branches, as `authConditions` is always a truthy `Prisma.Sql` object. if (filterConditions) { return Prisma.sql`(${authConditions}) AND (${filterConditions})`; return authConditions;"
+  },
+  {
+    "pr_index": 15,
+    "golden_idx": 1,
+    "golden": "Fetching userIdsFromOrg only when teamsFromOrg.length > 0 can exclude org-level members for orgs without child teams; consider deriving from teamIds (which includes orgId) or removing the guard so org-only orgs still include member user bookings.",
+    "candidate_idx": 2,
+    "candidate": "Update the test for invalid options to expect a Zod error during construction, or change the service to use `safeParse` to maintain the previous 'NOTHING' result behavior. it(\"should throw error for invalid options\", () => { expect(() => new InsightsBookingService({ options: null as any,"
+  },
+  {
+    "pr_index": 15,
+    "golden_idx": 1,
+    "golden": "Fetching userIdsFromOrg only when teamsFromOrg.length > 0 can exclude org-level members for orgs without child teams; consider deriving from teamIds (which includes orgId) or removing the guard so org-only orgs still include member user bookings.",
+    "candidate_idx": 3,
+    "candidate": "A type mismatch occurs when passing `userIdsFromOrg` to `Prisma.sql` because it is an array of objects `{ userId: number }` rather than numbers. This will cause the raw SQL query to fail with a database error when compared against the `userId` column. Map the result to an array of user IDs before use. if (userIdsFromOrg.length > 0) { const uniqueUserIds = Array.from(new Set(userIdsFromOrg.map((u) "
+  },
+  {
+    "pr_index": 15,
+    "golden_idx": 1,
+    "golden": "Fetching userIdsFromOrg only when teamsFromOrg.length > 0 can exclude org-level members for orgs without child teams; consider deriving from teamIds (which includes orgId) or removing the guard so org-only orgs still include member user bookings.",
+    "candidate_idx": 4,
+    "candidate": "buildOrgAuthorizationCondition loads all organization user IDs into application memory to construct an ANY() clause. const conditions: Prisma.Sql[] = [ Prisma.sql`(\"teamId\" IN (SELECT id FROM \"Team\" WHERE \"parentId\" = ${options.orgId} OR id = ${options.orgId})) AND (\"isTeamBooking\" = true)`, Prisma.sql`(\"userId\" IN (SELECT \"userId\" FROM \"Membership\" WHERE \"teamId\" IN (SELECT id FROM \"Team\" WHERE \""
+  },
+  {
+    "pr_index": 15,
+    "golden_idx": 1,
+    "golden": "Fetching userIdsFromOrg only when teamsFromOrg.length > 0 can exclude org-level members for orgs without child teams; consider deriving from teamIds (which includes orgId) or removing the guard so org-only orgs still include member user bookings.",
+    "candidate_idx": 5,
+    "candidate": "Manually nesting Prisma.sql fragments via reduce creates deeply nested object structures. return Prisma.sql`(${Prisma.join(conditions.map(c => Prisma.sql`(${c})`), \" AND \")})`;"
+  },
+  {
+    "pr_index": 16,
+    "golden_idx": 0,
+    "golden": "ConditionalPasskeysEnabled() called without UserModel parameter",
+    "candidate_idx": 0,
+    "candidate": "The 'authenticate' method fails to call 'webauthnAuth.fillContextForm(context)', which is required to enable the Passkey Conditional UI on the password page. This prevents users from using passkeys to satisfy the password requirement during re-authentication or in flows where the user is already identified. public void authenticate(AuthenticationFlowContext context) { if (alreadyAuthenticatedUsing"
+  },
+  {
+    "pr_index": 16,
+    "golden_idx": 0,
+    "golden": "ConditionalPasskeysEnabled() called without UserModel parameter",
+    "candidate_idx": 1,
+    "candidate": "The 'success(String)' implementation in the inner 'Result' class calls 'getAuthenticationSession().setAuthNote()' without a null check. This causes a NullPointerException in client authentication flows (e.g., direct grant or client credentials) where the authentication session can be null. public void success(String credentialType) { if (credentialType != null && getAuthenticationSession() != null"
+  },
+  {
+    "pr_index": 16,
+    "golden_idx": 0,
+    "golden": "ConditionalPasskeysEnabled() called without UserModel parameter",
+    "candidate_idx": 2,
+    "candidate": "WHAT: PasswordForm skips authentication if a passwordless credential was used previously, bypassing the explicit REQUIRED configuration of the authentication flow. WHY: This leads to an authentication factor downgrade; if a flow is configured to require both a Passkey and a Password (e.g., for high-security areas), the password requirement is silently dropped, allowing 1FA access when 2FA was mand"
+  },
+  {
+    "pr_index": 16,
+    "golden_idx": 0,
+    "golden": "ConditionalPasskeysEnabled() called without UserModel parameter",
+    "candidate_idx": 3,
+    "candidate": "WHAT: UsernameForm incorrectly identifies the last authentication credential as a 'password' upon successful username validation. WHY: An attacker can satisfy session conditions or custom authenticators that check for password authentication by only providing a valid username, potentially bypassing MFA or other security steps. HOW: Override the action method in UsernameForm or modify the base clas"
+  },
+  {
+    "pr_index": 16,
+    "golden_idx": 1,
+    "golden": "With isConditionalPasskeysEnabled(UserModel user) requiring user != null, authenticate(...) will not call webauthnAuth.fillContextForm(context) on the initial login page where context.getUser() is still null, so conditional passkey UI will not be set up for first-time passkey login. Consider whether this should also be enabled when no user has been selected yet so ID-less passkey authentication on the initial login form continues to work.",
+    "candidate_idx": 0,
+    "candidate": "The 'authenticate' method fails to call 'webauthnAuth.fillContextForm(context)', which is required to enable the Passkey Conditional UI on the password page. This prevents users from using passkeys to satisfy the password requirement during re-authentication or in flows where the user is already identified. public void authenticate(AuthenticationFlowContext context) { if (alreadyAuthenticatedUsing"
+  },
+  {
+    "pr_index": 16,
+    "golden_idx": 1,
+    "golden": "With isConditionalPasskeysEnabled(UserModel user) requiring user != null, authenticate(...) will not call webauthnAuth.fillContextForm(context) on the initial login page where context.getUser() is still null, so conditional passkey UI will not be set up for first-time passkey login. Consider whether this should also be enabled when no user has been selected yet so ID-less passkey authentication on the initial login form continues to work.",
+    "candidate_idx": 1,
+    "candidate": "The 'success(String)' implementation in the inner 'Result' class calls 'getAuthenticationSession().setAuthNote()' without a null check. This causes a NullPointerException in client authentication flows (e.g., direct grant or client credentials) where the authentication session can be null. public void success(String credentialType) { if (credentialType != null && getAuthenticationSession() != null"
+  },
+  {
+    "pr_index": 16,
+    "golden_idx": 1,
+    "golden": "With isConditionalPasskeysEnabled(UserModel user) requiring user != null, authenticate(...) will not call webauthnAuth.fillContextForm(context) on the initial login page where context.getUser() is still null, so conditional passkey UI will not be set up for first-time passkey login. Consider whether this should also be enabled when no user has been selected yet so ID-less passkey authentication on the initial login form continues to work.",
+    "candidate_idx": 2,
+    "candidate": "WHAT: PasswordForm skips authentication if a passwordless credential was used previously, bypassing the explicit REQUIRED configuration of the authentication flow. WHY: This leads to an authentication factor downgrade; if a flow is configured to require both a Passkey and a Password (e.g., for high-security areas), the password requirement is silently dropped, allowing 1FA access when 2FA was mand"
+  },
+  {
+    "pr_index": 16,
+    "golden_idx": 1,
+    "golden": "With isConditionalPasskeysEnabled(UserModel user) requiring user != null, authenticate(...) will not call webauthnAuth.fillContextForm(context) on the initial login page where context.getUser() is still null, so conditional passkey UI will not be set up for first-time passkey login. Consider whether this should also be enabled when no user has been selected yet so ID-less passkey authentication on the initial login form continues to work.",
+    "candidate_idx": 3,
+    "candidate": "WHAT: UsernameForm incorrectly identifies the last authentication credential as a 'password' upon successful username validation. WHY: An attacker can satisfy session conditions or custom authenticators that check for password authentication by only providing a valid username, potentially bypassing MFA or other security steps. HOW: Override the action method in UsernameForm or modify the base clas"
+  },
+  {
+    "pr_index": 18,
+    "golden_idx": 0,
+    "golden": "Returns wrong provider (default keystore instead of BouncyCastle)",
+    "candidate_idx": 0,
+    "candidate": "WHAT: Potential unhandled NumberFormatException in readInteger() when processing a zero-length byte array. WHY: ASN.1 DER requires INTEGER fields to have at least one content octet; passing an empty array to the BigInteger constructor causes a runtime crash instead of a controlled IOException. HOW: Add a check for length > 0 before calling the BigInteger constructor. int length = readLength(); if "
+  },
+  {
+    "pr_index": 18,
+    "golden_idx": 0,
+    "golden": "Returns wrong provider (default keystore instead of BouncyCastle)",
+    "candidate_idx": 1,
+    "candidate": "WHAT: Broken indefinite-length encoding (BER) support in readSequence() and readNext(). WHY: When readLength() returns -1 for indefinite length, readSequence() skips its content loop and returns an empty list, while readNext() returns a truncated array, leading to incorrect parsing of the ASN.1 structure. HOW: Implement proper lookahead for the end-of-contents marker (00 00) when length is -1, or "
+  },
+  {
+    "pr_index": 18,
+    "golden_idx": 0,
+    "golden": "Returns wrong provider (default keystore instead of BouncyCastle)",
+    "candidate_idx": 2,
+    "candidate": "User-provided signature components are silently truncated in integerToBytes if their length exceeds the expected coordinate length. This allows signatures with invalid large values (e.g., R' = R + n) to be accepted as if they were valid smaller values, potentially leading to signature malleability or bypasses of blacklists or range checks. if (qLength < bytes.length) { int offset = bytes.length - "
+  },
+  {
+    "pr_index": 18,
+    "golden_idx": 0,
+    "golden": "Returns wrong provider (default keystore instead of BouncyCastle)",
+    "candidate_idx": 3,
+    "candidate": "The getBouncyCastleProvider method returns the default JVM provider instead of the BouncyCastle provider. This violates the interface contract and can cause failures in components that rely on BouncyCastle-specific algorithms or features when this provider is active."
+  },
+  {
+    "pr_index": 18,
+    "golden_idx": 0,
+    "golden": "Returns wrong provider (default keystore instead of BouncyCastle)",
+    "candidate_idx": 4,
+    "candidate": "The ASN.1 decoder is overly permissive, ignoring the Class and Constructed/Primitive bits of tags and allowing tag numbers to overflow. While not directly exploitable in the current context, it deviates from DER standards and could lead to parsing inconsistencies in more complex scenarios."
+  },
+  {
+    "pr_index": 18,
+    "golden_idx": 0,
+    "golden": "Returns wrong provider (default keystore instead of BouncyCastle)",
+    "candidate_idx": 5,
+    "candidate": "Reduce redundant object allocations in asn1derToConcatenatedRS by avoiding the creation of new ASN1Decoder and ByteArrayInputStream instances for each sequence component. The current implementation wraps each component's byte array (already in memory) into a new decoder, leading to excessive short-lived objects during signature verification. // Consider refactoring ASN1Decoder to allow reading int"
+  },
+  {
+    "pr_index": 18,
+    "golden_idx": 0,
+    "golden": "Returns wrong provider (default keystore instead of BouncyCastle)",
+    "candidate_idx": 6,
+    "candidate": "WHAT: Dead computation identified in concatenatedRSToASN1DER where two ASN1Encoder instances are created and written to but their results are immediately discarded. WHY: Performs redundant encoding operations that waste CPU and memory without affecting the output. HOW: Remove lines 115 and 116. **Also found in:** - `authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClie"
+  },
+  {
+    "pr_index": 18,
+    "golden_idx": 1,
+    "golden": "Dead code exists where ASN1Encoder instances are created and written to, but their results are immediately discarded. The actual encoding is performed by new ASN1Encoder instances created in the subsequent return statement, rendering the earlier operations useless.",
+    "candidate_idx": 0,
+    "candidate": "WHAT: Potential unhandled NumberFormatException in readInteger() when processing a zero-length byte array. WHY: ASN.1 DER requires INTEGER fields to have at least one content octet; passing an empty array to the BigInteger constructor causes a runtime crash instead of a controlled IOException. HOW: Add a check for length > 0 before calling the BigInteger constructor. int length = readLength(); if "
+  },
+  {
+    "pr_index": 18,
+    "golden_idx": 1,
+    "golden": "Dead code exists where ASN1Encoder instances are created and written to, but their results are immediately discarded. The actual encoding is performed by new ASN1Encoder instances created in the subsequent return statement, rendering the earlier operations useless.",
+    "candidate_idx": 1,
+    "candidate": "WHAT: Broken indefinite-length encoding (BER) support in readSequence() and readNext(). WHY: When readLength() returns -1 for indefinite length, readSequence() skips its content loop and returns an empty list, while readNext() returns a truncated array, leading to incorrect parsing of the ASN.1 structure. HOW: Implement proper lookahead for the end-of-contents marker (00 00) when length is -1, or "
+  },
+  {
+    "pr_index": 18,
+    "golden_idx": 1,
+    "golden": "Dead code exists where ASN1Encoder instances are created and written to, but their results are immediately discarded. The actual encoding is performed by new ASN1Encoder instances created in the subsequent return statement, rendering the earlier operations useless.",
+    "candidate_idx": 2,
+    "candidate": "User-provided signature components are silently truncated in integerToBytes if their length exceeds the expected coordinate length. This allows signatures with invalid large values (e.g., R' = R + n) to be accepted as if they were valid smaller values, potentially leading to signature malleability or bypasses of blacklists or range checks. if (qLength < bytes.length) { int offset = bytes.length - "
+  },
+  {
+    "pr_index": 18,
+    "golden_idx": 1,
+    "golden": "Dead code exists where ASN1Encoder instances are created and written to, but their results are immediately discarded. The actual encoding is performed by new ASN1Encoder instances created in the subsequent return statement, rendering the earlier operations useless.",
+    "candidate_idx": 3,
+    "candidate": "The getBouncyCastleProvider method returns the default JVM provider instead of the BouncyCastle provider. This violates the interface contract and can cause failures in components that rely on BouncyCastle-specific algorithms or features when this provider is active."
+  },
+  {
+    "pr_index": 18,
+    "golden_idx": 1,
+    "golden": "Dead code exists where ASN1Encoder instances are created and written to, but their results are immediately discarded. The actual encoding is performed by new ASN1Encoder instances created in the subsequent return statement, rendering the earlier operations useless.",
+    "candidate_idx": 4,
+    "candidate": "The ASN.1 decoder is overly permissive, ignoring the Class and Constructed/Primitive bits of tags and allowing tag numbers to overflow. While not directly exploitable in the current context, it deviates from DER standards and could lead to parsing inconsistencies in more complex scenarios."
+  },
+  {
+    "pr_index": 18,
+    "golden_idx": 1,
+    "golden": "Dead code exists where ASN1Encoder instances are created and written to, but their results are immediately discarded. The actual encoding is performed by new ASN1Encoder instances created in the subsequent return statement, rendering the earlier operations useless.",
+    "candidate_idx": 5,
+    "candidate": "Reduce redundant object allocations in asn1derToConcatenatedRS by avoiding the creation of new ASN1Decoder and ByteArrayInputStream instances for each sequence component. The current implementation wraps each component's byte array (already in memory) into a new decoder, leading to excessive short-lived objects during signature verification. // Consider refactoring ASN1Decoder to allow reading int"
+  },
+  {
+    "pr_index": 18,
+    "golden_idx": 1,
+    "golden": "Dead code exists where ASN1Encoder instances are created and written to, but their results are immediately discarded. The actual encoding is performed by new ASN1Encoder instances created in the subsequent return statement, rendering the earlier operations useless.",
+    "candidate_idx": 6,
+    "candidate": "WHAT: Dead computation identified in concatenatedRSToASN1DER where two ASN1Encoder instances are created and written to but their results are immediately discarded. WHY: Performs redundant encoding operations that waste CPU and memory without affecting the output. HOW: Remove lines 115 and 116. **Also found in:** - `authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClie"
+  }
+]

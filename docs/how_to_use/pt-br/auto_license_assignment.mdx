@@ -1,0 +1,32 @@
+---
+title: "Atribuição Automática de Licenças"
+---
+
+O recurso de Atribuição Automática de Licenças simplifica o gerenciamento de licenças de desenvolvedores dentro da sua organização. Em vez de atribuir licenças manualmente a cada desenvolvedor, o Kodus pode atribuir automaticamente uma licença a contribuidores ativos.
+
+## Como Funciona
+
+Quando habilitado, o Kodus monitora a atividade de pull requests nos seus repositórios.
+
+-   **Atribuição Automática:** Se um usuário criar mais de um pull request, o Kodus verifica se há vagas de licença disponíveis na sua organização.
+    -   Se uma vaga estiver disponível, o usuário recebe automaticamente uma licença e seus PRs serão revisados.
+    -   Se não houver vagas disponíveis, o Kodus reagirá ao pull request com um emoji de polegar para baixo (👎) no Github ou um emoji de cadeado (🔒) no Gitlab para indicar que a revisão não pôde ser realizada por falta de licenças.
+
+## Usuários Ignorados
+
+Você pode configurar uma lista de **Usuários Ignorados**. Esses usuários serão excluídos do processo de atribuição automática.
+
+-   **Sem Revisões:** Pull requests criados por usuários ignorados não serão revisados pelo Kodus.
+-   **Sem Reações:** O Kodus não reagirá aos PRs deles, mesmo que ultrapassem o limite de PRs. Será como se o Kodus ignorasse o PR completamente.
+
+Isso é útil para bots, contas de serviço ou membros específicos da equipe que não precisam de revisões de código.
+
+## Configuração
+
+Para habilitar e configurar a Atribuição Automática de Licenças:
+
+1. Acesse suas **Configurações de Code Review**.
+2. Navegue até a aba **Assinatura**.
+3. Localize a seção **Atribuição automática de licenças**.
+    - Use o botão de alternância para habilitar ou desabilitar o recurso.
+    - Se habilitado, você pode selecionar usuários para adicionar à lista de **Usuários Ignorados**.

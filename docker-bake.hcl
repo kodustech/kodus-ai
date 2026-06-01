@@ -30,6 +30,14 @@ variable "WEB_TAGS" {
   default = "kodus-ai-web:local"
 }
 
+variable "MCP_MANAGER_TAGS" {
+  default = "kodus-mcp-manager:local"
+}
+
+variable "RABBITMQ_TAGS" {
+  default = "kodus-rabbitmq:local"
+}
+
 target "base" {
   context = "."
   dockerfile = "${DOCKERFILE}"
@@ -59,9 +67,18 @@ target "worker" {
   tags = split(",", WORKER_TAGS)
 }
 
+target "mcp-manager" {
+  inherits = ["base"]
+  target = "mcp-manager"
+  tags = split(",", MCP_MANAGER_TAGS)
+}
+
 target "web" {
-  context = "./apps/web"
-  dockerfile = "../../docker/Dockerfile.web.selfhosted"
+  # Unified Dockerfile for cloud and self-hosted — env values come from
+  # ConfigProvider/useConfig() at runtime now (see
+  # web-runtime-config-migration plan).
+  context = "."
+  dockerfile = "./docker/Dockerfile.web"
   args = {
     RELEASE_VERSION = "${RELEASE_VERSION}"
   }
@@ -70,6 +87,20 @@ target "web" {
   cache-to = ["type=gha,scope=${CACHE_SCOPE},mode=max"]
 }
 
+target "rabbitmq" {
+  # Custom RabbitMQ image bundling the rabbitmq_delayed_message_exchange
+  # plugin that Kodus needs for workflow delayed retries. Published by
+  # .github/workflows/rabbitmq-build-push.yml on its own cadence
+  # (changes to docker/rabbitMQ/** or manual dispatch) — this image
+  # tracks the RabbitMQ + plugin version, not the Kodus release
+  # version, so it's intentionally NOT in the default group below.
+  context = "./docker/rabbitMQ"
+  dockerfile = "Dockerfile"
+  tags = split(",", RABBITMQ_TAGS)
+  cache-from = ["type=gha,scope=${CACHE_SCOPE}-rabbitmq"]
+  cache-to = ["type=gha,scope=${CACHE_SCOPE}-rabbitmq,mode=max"]
+}
+
 group "default" {
-  targets = ["api", "webhooks", "worker", "web"]
+  targets = ["api", "webhooks", "worker", "web", "mcp-manager"]
 }

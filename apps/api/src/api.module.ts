@@ -2,6 +2,10 @@ import { LLMModule } from '@kodus/kodus-common/llm';
 import { AgentsModule } from '@libs/agents/modules/agents.module';
 import { AIEngineModule } from '@libs/ai-engine/modules/ai-engine.module';
 import { AnalyticsModule } from '@libs/analytics/modules/analytics.module';
+import { FeatureGateModule } from '@libs/feature-gate/modules/feature-gate.module';
+import { TelemetryModule } from '@libs/telemetry/modules/telemetry.module';
+import { AnalyticsWarehouseModule } from '@libs/ee/analytics-warehouse';
+import { CockpitModule } from '@libs/cockpit/modules/cockpit.module';
 import { AutomationModule } from '@libs/automation/modules/automation.module';
 import { CliReviewModule } from '@libs/cli-review/cli-review.module';
 import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-review-configuration.module';
@@ -50,7 +54,9 @@ import { AuthController } from './controllers/auth.controller';
 import { CliConfigController } from './controllers/cli/cli-config.controller';
 import { CliCentralizedConfigController } from './controllers/cli/cli-centralized-config.controller';
 import { CliKodyRulesController } from './controllers/cli/cli-kody-rules.controller';
+import { CliAuthController } from './controllers/cli-auth.controller';
 import { CliReviewController } from './controllers/cli/cli-review.controller';
+import { CliReviewsController } from './controllers/cli-reviews.controller';
 import { CodeBaseController } from './controllers/codeBase.controller';
 import { CodeManagementController } from './controllers/codeManagement.controller';
 import { CodeReviewSettingLogController } from './controllers/codeReviewSettingLog.controller';
@@ -64,10 +70,15 @@ import { OrganizationController } from './controllers/organization.controller';
 import { OrganizationParametersController } from './controllers/organizationParameters.controller';
 import { ParametersController } from './controllers/parameters.controller';
 import { PermissionsController } from './controllers/permissions.controller';
+import {
+    CockpitCodeHealthController,
+    CockpitController,
+    CockpitProductivityController,
+    CockpitWeeklyRecapController,
+} from './controllers/cockpit.controller';
 import { PullRequestController } from './controllers/pullRequest.controller';
 import { PullRequestMessagesController } from './controllers/pullRequestMessages.controller';
 import { RuleLikeController } from './controllers/ruleLike.controller';
-import { SegmentController } from './controllers/segment.controller';
 import { SkillsController } from './controllers/skills.controller';
 import { SSOConfigController } from './controllers/ssoConfig.controller';
 import { TeamCliKeyController } from './controllers/team-cli-key.controller';
@@ -76,6 +87,10 @@ import { TeamMembersController } from './controllers/teamMembers.controller';
 import { TokenUsageController } from './controllers/tokenUsage.controller';
 import { UsersController } from './controllers/user.controller';
 import { CronModule } from './cron/cron.module';
+import { CentralizedConfigModule } from '@libs/centralized-config/modules/centralized-config.module';
+import { LangfuseShutdownProvider } from '@libs/core/log/langfuse-shutdown.provider';
+import { NotificationModule } from '@libs/notifications/modules/notification.module';
+import { NotificationController } from './controllers/notification.controller';
 
 @Module({
     imports: [
@@ -112,6 +127,10 @@ import { CronModule } from './cron/cron.module';
         IntegrationConfigModule,
         DryRunModule,
         AnalyticsModule,
+        AnalyticsWarehouseModule.forRoot(),
+        TelemetryModule,
+        FeatureGateModule,
+        CockpitModule,
         CodeReviewSettingsLogModule,
         AutomationModule,
         CodeReviewConfigurationModule,
@@ -126,6 +145,8 @@ import { CronModule } from './cron/cron.module';
         CronModule,
         SSOModule,
         GlobalCacheModule,
+        CentralizedConfigModule,
+        NotificationModule,
     ],
     controllers: [
         CodeManagementController,
@@ -145,20 +166,27 @@ import { CronModule } from './cron/cron.module';
         TeamMembersController,
         AgentController,
         AuthController,
-        SegmentController,
         TokenUsageController,
         PermissionsController,
         IntegrationController,
         IntegrationConfigController,
         PullRequestController,
         UsersController,
+        CliAuthController,
         CliReviewController,
+        CliReviewsController,
         CliConfigController,
         CliCentralizedConfigController,
         CliKodyRulesController,
         SSOConfigController,
         LicenseController,
         MetricsController,
+        CockpitController,
+        CockpitCodeHealthController,
+        CockpitProductivityController,
+        CockpitWeeklyRecapController,
+        NotificationController,
     ],
+    providers: [LangfuseShutdownProvider],
 })
 export class ApiModule {}

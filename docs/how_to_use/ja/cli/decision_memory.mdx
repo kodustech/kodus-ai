@@ -1,0 +1,146 @@
+---
+title: "Decision Memory"
+description: "AIエージェントの決定を構造化ファイルとしてリポジトリにキャプチャして永続化します。"
+tag: 'alpha'
+---
+
+Decision Memory は、AIエージェントが行った変更の**理由**を記憶する Kodus の方法です — 差分だけでなく、推論、制約、検討した代替案も。決定はエージェントのすべてのターンで自動的にキャプチャされ、コードと並行してバージョン管理された構造化マークダウンファイルとして保存されます。
+
+## 存在する理由
+
+コードレビューは差分の問題点を検出します。しかし、なぜ作成者がアプローチ B ではなくアプローチ A を選んだのか、あるいは 42 行目の醜い回避策を強いた制約が何だったかは教えてくれません。AIエージェントにとって、そのコンテキストはセッション間で消えてしまいます — 各実行はゼロから始まります。
+
+Decision Memory はこれを以下の方法で解決します:
+
+- **すべてのターン完了イベントで推論を自動的にキャプチャ**。
+- **リポジトリに保存**することで、コンテキストがセッションではなくコードと一緒に移動。
+- **PR とモジュールでスコープ**することで、ブランチレベルのコンテキストと長期モジュール知識の両方を取得。
+
+## 仕組み
+
+有効にすると、Kodus はAIエージェントのターン完了イベントにフックをインストールします。各ターンで、エージェントの決定は以下にキャプチャされます:
+
+```
+.kody/
+├── pr/by-sha/<head-sha>.md    # PR レベルの決定（コードとともにバージョン管理）
+├── memory/<module-id>.md      # モジュールレベルの決定（長期）
+└── modules.yml                # モジュール設定
+```
+
+- **PR メモリ**はブランチに存在します。現在のヘッド SHA にスコープされています — ブランチが進化するにつれて、各意味のある状態に対して新しいファイルが作成されます。
+- **モジュールメモリ**は長期的です。時間をかけてモジュールごとに決定を蓄積します。
+- **`modules.yml`** は Kodus にパスをモジュールにマッピングする方法を伝えます（例: `src/auth/**` → `auth` モジュール）。
+
+## 対応エージェント
+
+- **Claude Code** — stop/agent-turn-complete の設定フック経由。
+- **Cursor** — ワークスペースルール経由。
+- **Codex** — `~/.codex/config.toml` の `notify` エントリ経由。
+
+## セットアップ
+
+検出されたすべてのエージェントに対して有効化:
+
+```bash
+kodus decisions enable
+```
+
+または特定のエージェントをターゲットに:
+
+```bash
+kodus decisions enable --agents claude,cursor
+kodus decisions enable --agents codex --codex-config ~/.codex/config.toml
+```
+
+既存の設定がある場合、強制的に再インストール:
+
+```bash
+kodus decisions enable --force
+```
+
+設定されているものを確認:
+
+```bash
+kodus decisions status
+```
+
+## ワークフロー
+
+<Steps>
+  <Step title="フックを有効化">
+    ```bash
+    kodus decisions enable
+    ```
+
+    これはエージェント固有の統合ファイルをインストールし、`.kody/` を git に追加します（存在しない場合は `modules.yml` を作成します）。
+  </Step>
+  <Step title="通常通りに作業">
+    あなた（またはエージェント）が作業するとき、各ターン完了イベントは `.kody/pr/by-sha/<sha>.md` に決定をキャプチャします。これらのファイルをコードの変更と一緒にコミットしてください — 推論がバージョン管理に入ります。
+  </Step>
+  <Step title="キャプチャされた決定を確認">
+    ```bash
+    kodus decisions show                    # 現在のブランチの PR メモリ
+    kodus decisions show feat/auth          # 特定のブランチの決定
+    kodus decisions show auth               # 'auth' のモジュール決定
+    ```
+  </Step>
+  <Step title="長期メモリに昇格">
+    PR がマージされたら、その PR レベルの決定をモジュールレベルのメモリに昇格させ、ブランチを超えて永続化させます:
+
+    ```bash
+    kodus decisions promote                               # 現在のブランチ、全マッチモジュール
+    kodus decisions promote --branch feat/auth            # 特定のブランチ
+    kodus decisions promote --branch feat/auth --modules auth,users
+    ```
+  </Step>
+</Steps>
+
+## キャプチャされる内容
+
+各決定ファイルは構造化マークダウンです:
+
+- **サマリー** — エージェントが意図したこと。
+- **コンテキスト** — 制約、以前の決定、参照されたファイル。
+- **検討した代替案** — エージェントが却下したアプローチとその理由。
+- **結果** — 実際に変更されたもの。
+
+正確な形状はエージェントのターンイベントによって異なります; CLI は一貫したフロントマター + ボディ形式に正規化します。
+
+## 無効化
+
+すべてのフックと統合ファイルを削除:
+
+```bash
+kodus decisions disable
+```
+
+これは `.kody/` のデータを削除しません — 履歴はそのまま残ります。クリーンな状態にしたい場合は手動でディレクトリを削除してください。
+
+## CLI が読み取るコンテキストファイル
+
+`.kody/` に加えて、CLI はレビューを実行するときにこれらのファイルからプロジェクトコンテキストを取得します:
+
+| ファイル          | 説明                                               |
+| ----------------- | -------------------------------------------------- |
+| `.kodus.md`       | Kodus 固有の設定とガイドライン                     |
+| `claude.md`       | Claude 固有のガイドライン                          |
+| `.cursor/rules/`  | Cursor IDE ルールディレクトリ                      |
+
+これらは Decision Memory とは直交しています — それらは*継続的な*コンテキストを記述し、Decision Memory は*ターンごとの*推論をキャプチャします。
+
+## 関連
+
+<CardGroup cols={2}>
+  <Card title="AI エージェント" icon="robot" href="ai_agents">
+    Claude Code、Cursor、Codex、Windsurf とのレビュー・修正ループ。
+  </Card>
+  <Card title="コンセプト" icon="book-open" href="concepts">
+    Kody Rules、集中管理設定、差分モード。
+  </Card>
+  <Card title="コマンドリファレンス" icon="book" href="commands#kodus-decisions">
+    完全な `kodus decisions` フラグ一覧。
+  </Card>
+  <Card title="トラブルシューティング" icon="life-ring" href="troubleshooting">
+    決定フックがキャプチャされない場合は専用アコーディオンを参照。
+  </Card>
+</CardGroup>

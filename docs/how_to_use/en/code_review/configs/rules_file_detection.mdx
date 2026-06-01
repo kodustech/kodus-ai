@@ -1,0 +1,77 @@
+---
+title: "Rules File Detection"
+description: "Automatically detect and import your existing rule files from popular AI coding tools to enhance Kody's code review capabilities with your team's established coding standards."
+---
+
+Kodus can automatically sync and import your existing IDE rule files to enhance Kody's code review with your team's established coding standards and preferences.
+
+<Frame caption="Enable Auto-sync rules from repo in your settings">
+  <img src="/images/sync-rules.png" />
+</Frame>
+
+## What is Rules File Detection?
+
+Rules File Detection automatically detects and imports configuration files from popular AI coding tools and assistants in your repository. This ensures Kody understands and respects your existing coding standards without requiring manual setup.
+
+## Supported Rule Files
+
+Kodus automatically detects and imports the following rule file patterns:
+
+### Cursor
+- `.cursorrules` - Main Cursor rules file (legacy)
+- `.cursor/rules/**/*.mdc` - Cursor rules in subdirectories
+
+### GitHub Copilot
+- `.github/copilot-instructions.md` - Copilot instructions
+- `.github/instructions/**/*.instructions.md` - Detailed instruction files
+
+### Claude
+- `CLAUDE.md` - Claude-specific rules
+- `.claude/settings.json` - Claude configuration settings
+
+### Windsurf
+- `.windsurfrules` - Windsurf IDE rules
+
+### Sourcegraph Cody
+- `.sourcegraph/**/*.rule.md` - Cody rule files
+
+### OpenCode
+- `.opencode.json` - OpenCode configuration
+
+### Aider
+- `.aider.conf.yml` - Aider configuration
+- `.aiderignore` - Aider ignore patterns
+
+### Generic/Internal Rules
+- `.rules/**/*` - Generic rules directory
+- `.kody/rules/*` - Kody-specific rules
+- `docs/coding-standards/**/*` - Documentation-based coding standards
+
+## How It Works
+
+### Initial Setup
+1. **Enable Auto-sync**: Toggle the "Auto-sync rules from repo" option in your settings
+2. **First Sync Modal**: A modal will appear asking if you want to sync for the first time
+3. **Repository Scan**: When you confirm, Kodus scans your entire repository for supported rule files
+4. **Rule Generation**: An LLM processes the found files and automatically creates corresponding Kody Rules
+
+### Ongoing Synchronization
+- **Automatic Updates**: Sync happens automatically when a Pull Request is closed
+- **File Changes Detected**: 
+  - **New rule files** → Creates new Kody Rules
+  - **Modified rule files** → Updates existing Kody Rules  
+  - **Deleted rule files** → Removes corresponding Kody Rules
+
+### Manual Sync (Toggle Disabled)
+
+You can sync individual rule files without enabling auto-sync:
+
+1. Add `@kody-sync` anywhere in your rule file
+2. Commit the change
+3. Kody will sync only that specific file
+
+This lets you selectively sync rules without enabling automatic synchronization for all files.
+
+<Warning>
+If you manually edit a Kody Rule that was created from an IDE rule file, your changes will be overwritten the next time the corresponding file is modified and synced.
+</Warning>

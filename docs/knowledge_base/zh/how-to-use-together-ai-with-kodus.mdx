@@ -1,0 +1,173 @@
+---
+title: "Together AI - 开源模型"
+description: "了解如何在 Kodus 中使用 Together AI 的模型"
+icon: "users"
+---
+
+## Together AI 的工作原理
+
+Together AI 让您只需几行代码即可轻松运行领先的开源模型。该平台提供快速推理、兼容 OpenAI 的 API，以及对 Llama 4、DeepSeek 等尖端模型的访问。专为需要可靠、可扩展 AI 基础设施而无需复杂性的开发者而构建。
+
+## 推荐模型
+
+我们推荐具有高上下文窗口和有竞争力定价的优秀编码模型。
+
+<Info>
+  如需最新信息，请访问 [Together AI 的定价页面](https://www.together.ai/pricing)。
+</Info>
+
+| 模型                              | 定价（100万令牌） | 上下文窗口 |
+| ---------------------------------- | ------------------- | -------------- |
+| **Llama 4 Maverick** `推荐` | $0.27/$0.85         | ~128k 令牌   |
+| **DeepSeek-V3**                    | $1.25               | ~128k 令牌   |
+| **Llama 3.1 70B Turbo**            | $0.88               | ~128k 令牌   |
+| **Qwen 2.5 72B**                   | $1.20               | ~128k 令牌   |
+
+## 创建 API 密钥
+
+<Warning>需要 Together AI 账户才能创建 API 密钥。</Warning>
+
+直接访问 [Together AI 控制台](https://api.together.ai)创建新的 API 密钥。
+
+或者，按照以下步骤操作：
+
+1. 在 [api.together.ai](https://api.together.ai) 创建账户或登录（如果您已有账户）
+2. 在主控制面板中，向下滚动到"Manage Account"部分
+3. 在"API Keys"卡片中，点击"Manage Keys"按钮
+4. 点击"Add Key"按钮
+5. 为其命名，例如'Kodus'或任何描述性名称
+6. 复制您的 API 密钥，您就可以开始使用了！
+
+<Info>
+  新账户附带 $1 信用额度，可免费开始使用。
+</Info>
+
+## 如何使用
+
+<Snippet file="deploy-basic-setup-zh.mdx" />
+
+### 在环境文件中配置 Together AI
+
+编辑您的 `.env` 文件并配置核心设置。对于 **LLM 集成**，在固定模式下使用 Together AI：
+
+```env
+# 核心系统设置（使用您的域名更新）
+WEB_HOSTNAME_API="kodus-api.yourdomain.com"
+WEB_PORT_API=443
+NEXTAUTH_URL="https://kodus-web.yourdomain.com"
+
+# 安全密钥（使用上面的 openssl 命令生成）
+WEB_NEXTAUTH_SECRET="your-generated-secret"
+API_CRYPTO_KEY="your-generated-hex-key"
+API_JWT_SECRET="your-generated-secret"
+API_JWT_REFRESH_SECRET="your-generated-secret"
+
+# 数据库配置
+API_PG_DB_PASSWORD="your-secure-db-password"
+API_MG_DB_PASSWORD="your-secure-db-password"
+
+# Together AI 配置（固定模式）
+API_LLM_PROVIDER_MODEL="meta-llama/Meta-Llama-4-Maverick-Instruct"  # 选择您偏好的模型
+API_OPENAI_FORCE_BASE_URL="https://api.together.xyz/v1"             # Together AI API URL
+API_OPEN_AI_API_KEY="your-together-api-key"                         # 您的 Together AI API 密钥
+
+# Git 提供商 Webhook（选择您的提供商）
+API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
+# 或 API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
+# 或 GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
+```
+
+<Note>
+  Webhook URL 必须指向 Webhooks 服务（端口 3332）。您可以使用独立的 webhook 域名，或在反向代理中将 `/.../webhook` 转发到 3332 端口。
+</Note>
+
+<Info>
+  **固定模式非常适合 Together AI**，因为它提供兼容 OpenAI 的 API，具有有竞争力的定价，并可访问尖端的开源模型。
+</Info>
+
+<Snippet file="deploy-installation.mdx" />
+
+### 设置反向代理（用于生产环境）
+
+对于 Webhook 和外部访问，配置 Nginx：
+
+```nginx
+# Web 应用（端口 3000）
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com;
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# API（端口 3001）
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com;
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### 验证 Together AI 集成
+
+除了基本的安装验证外，确认 Together AI 正常工作：
+
+```bash
+# 专门验证 Together AI API 连接
+docker-compose logs api worker | grep -i together
+```
+
+<Tip>
+  有关 SSL 设置、监控和高级配置的详细信息，请参阅我们的[完整部署指南](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm)。
+</Tip>
+
+### 故障排除
+
+<AccordionGroup>
+  <Accordion title="API 密钥问题">
+    - 在 [Together AI 控制台](https://api.together.ai)中验证您的 API 密钥是否正确且处于活动状态
+    - 检查您的 Together AI 账户中是否有足够的信用额度
+    - 确保您的 `.env` 文件中没有多余的空格
+    - 新账户会收到 $1 的免费信用额度
+  </Accordion>
+
+  <Accordion title="模型未找到">
+    - 检查配置中的模型名称拼写是否正确
+    - 验证该模型在 Together AI 当前的模型库中是否可用
+    - 尝试使用我们推荐列表中的其他模型
+    - 查看 [Together AI 模型文档](https://docs.together.ai/docs/serverless-models)
+  </Accordion>
+
+  <Accordion title="连接错误">
+    - 验证您的服务器是否有互联网访问权限以访问 `api.together.xyz`
+    - 检查是否有任何防火墙限制
+    - 查看 API/worker 日志以获取详细的错误消息
+    - 确保您使用的是正确的 API 端点
+  </Accordion>
+
+  <Accordion title="速率限制">
+    - Together AI 提供慷慨的速率限制（LLM 最高可达每分钟 6000 个请求）
+    - 在 Together AI 控制面板中检查您当前的使用情况
+    - 考虑升级到更高层级以获得更高的限制
+    - 监控您的使用模式以优化 API 调用
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,32 @@
+---
+title: "Política de Revisión"
+---
+
+## Propósito
+
+Aclarar cómo interpretar el feedback de Kody y cómo interactúa con las políticas de merge de tu repositorio.
+
+## Sugerencias vs. Bloqueo
+
+- Sugerencias: Por defecto, Kody publica comentarios no bloqueantes para que los evalúes.
+- Solicitar Cambios (opcional): Si está habilitado, Kody puede marcar una revisión como "cambios solicitados" para problemas críticos.
+- Auto-aprobar (opcional): Si está habilitado, Kody aprueba los PRs cuando no se encuentran problemas.
+
+<Note>
+  Habilita los comportamientos de bloqueo solo cuando tu equipo esté de acuerdo con los umbrales y tenga una CI sólida en su lugar.
+</Note>
+
+## Cuándo Habilitar Solicitar Cambios
+
+- Áreas sensibles a la seguridad donde los problemas críticos nunca deben pasar a producción.
+- Puntos calientes de rendimiento donde las regresiones son costosas.
+- Repositorios con estándares de codificación claros y reglas de revisión estables.
+
+## Cuándo Usar Auto-aprobar
+
+- Cambios pequeños y de bajo riesgo (documentación/pruebas).
+- Equipos con alta cobertura de pruebas y CI confiable.
+
+## La Decisión Humana Siempre Importa
+
+Kody acelera el feedback pero no reemplaza el juicio humano. Tu equipo decide qué sugerencias adoptar y cuándo hacer el merge.

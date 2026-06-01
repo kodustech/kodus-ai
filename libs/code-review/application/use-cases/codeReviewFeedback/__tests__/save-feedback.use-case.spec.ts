@@ -1,7 +1,5 @@
 import { SaveCodeReviewFeedbackUseCase } from '../save-feedback.use-case';
-import {
-    createSampleFeedbackEntity,
-} from './fixtures';
+import { createSampleFeedbackEntity } from './fixtures';
 
 jest.mock('@kodus/flow', () => ({
     createLogger: () => ({

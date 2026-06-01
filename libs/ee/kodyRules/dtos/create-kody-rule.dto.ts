@@ -1,6 +1,8 @@
 import {
+    IKodyRuleCentralizedConfig,
     IKodyRuleExternalReference,
     IKodyRuleReferenceSyncError,
+    KodyRuleCentralizedStatus,
     IKodyRulesExample,
     KodyRuleProcessingStatus,
     KodyRuleRequestType,
@@ -79,6 +81,20 @@ export class KodyRuleExternalReferenceDto implements IKodyRuleExternalReference 
     repositoryName?: string;
 }
 
+export class KodyRuleCentralizedConfigDto implements IKodyRuleCentralizedConfig {
+    @IsString()
+    @ApiProperty({ example: 'repo-a/.kody-rules/review/no-debug.yml' })
+    path: string;
+
+    @IsEnum(KodyRuleCentralizedStatus)
+    @ApiProperty({
+        enum: KodyRuleCentralizedStatus,
+        enumName: 'KodyRuleCentralizedStatus',
+        example: KodyRuleCentralizedStatus.PENDING_EDIT,
+    })
+    status: KodyRuleCentralizedStatus;
+}
+
 export class CreateKodyRuleDto {
     @IsOptional()
     @IsString()
@@ -130,6 +146,12 @@ export class CreateKodyRuleDto {
     sourcePath?: string;
 
     @IsOptional()
+    @ValidateNested()
+    @Type(() => KodyRuleCentralizedConfigDto)
+    @ApiPropertyOptional({ type: KodyRuleCentralizedConfigDto })
+    centralizedConfig?: KodyRuleCentralizedConfigDto;
+
+    @IsOptional()
     @IsString()
     @ApiPropertyOptional({ example: 'L10-L24' })
     sourceAnchor?: string;
@@ -138,6 +160,15 @@ export class CreateKodyRuleDto {
     @IsEnum(KodyRuleSeverity)
     @ApiProperty({ enum: KodyRuleSeverity, enumName: 'KodyRuleSeverity' })
     severity: KodyRuleSeverity;
+
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({
+        description:
+            'Team identifier used to resolve team-scoped centralized configuration for global Kody Rules.',
+        example: '2e4f7a61-3c8c-4af5-bf25-2d0cbb19c4d1',
+    })
+    teamId?: string;
 
     @IsOptional()
     @IsString()
@@ -234,4 +265,12 @@ export class CreateKodyRuleDto {
             'User id/email/system identifier that resolved the request',
     })
     resolvedBy?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    @ApiPropertyOptional({
+        description:
+            'True when the source file currently carries an `@kody-sync` marker — the per-file override that keeps the rule in sync even with `ideRulesSyncEnabled=false`. Set by the sync service, recomputed on every sync.',
+    })
+    pinnedSync?: boolean;
 }

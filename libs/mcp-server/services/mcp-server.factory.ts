@@ -52,11 +52,7 @@ export class McpServerFactory {
         );
 
         for (const tool of this.getRegisteredTools()) {
-            server.registerTool(
-                tool.name,
-                tool.config,
-                tool.execute,
-            );
+            server.registerTool(tool.name, tool.config, tool.execute);
         }
 
         const transport = new StreamableHTTPServerTransport({
@@ -102,7 +98,10 @@ export class McpServerFactory {
                     outputSchema: toShape(tool.outputSchema),
                     annotations: tool?.annotations,
                 },
-                execute: async (args: Record<string, unknown>, extra: unknown) =>
+                execute: async (
+                    args: Record<string, unknown>,
+                    extra: unknown,
+                ) =>
                     executeLoggedTool(
                         tool.name,
                         tool.execute as (

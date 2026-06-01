@@ -1,9 +1,15 @@
 import { createLogger } from '@kodus/flow';
+import { CentralizedConfigPrService } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
+import { CentralizedPrMetadata } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
 import {
     Action,
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import {
+    IKodyRule,
+    KodyRulesStatus,
+} from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { Inject } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
@@ -12,6 +18,8 @@ import {
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import { ChangeStatusKodyRulesDTO } from '@libs/kodyRules/dtos/change-status-kody-rules.dto';
+import { CreateOrUpdateKodyRulesUseCase } from './create-or-update.use-case';
+import { DeleteRuleInOrganizationByIdKodyRulesUseCase } from './delete-rule-in-organization-by-id.use-case';
 import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from './find-rules-in-organization-by-filter.use-case';
 
 export class ChangeStatusKodyRulesUseCase {
@@ -19,6 +27,9 @@ export class ChangeStatusKodyRulesUseCase {
     constructor(
         @Inject(KODY_RULES_SERVICE_TOKEN)
         private readonly kodyRulesService: IKodyRulesService,
+        private readonly createOrUpdateKodyRulesUseCase: CreateOrUpdateKodyRulesUseCase,
+        private readonly deleteRuleInOrganizationByIdKodyRulesUseCase: DeleteRuleInOrganizationByIdKodyRulesUseCase,
+        private readonly centralizedConfigPrService: CentralizedConfigPrService,
         private readonly findRulesInOrganizationByRuleFilterKodyRulesUseCase: FindRulesInOrganizationByRuleFilterKodyRulesUseCase,
         private readonly authorizationService: AuthorizationService,
         @Inject(REQUEST)
@@ -31,15 +42,22 @@ export class ChangeStatusKodyRulesUseCase {
         },
     ) {}
 
-    async execute(body: ChangeStatusKodyRulesDTO) {
+    async execute(
+        body: ChangeStatusKodyRulesDTO,
+    ): Promise<Array<Partial<IKodyRule> | IKodyRule> | CentralizedPrMetadata> {
         try {
             if (!this.request.user.organization.uuid) {
                 throw new Error('Organization ID not found');
             }
 
             const { ruleIds, status } = body;
+            const teamId =
+                body.teamId ||
+                (this.request.user as any)?.team?.uuid ||
+                (this.request.user as any)?.teamId;
             const organizationAndTeamData = {
                 organizationId: this.request.user.organization.uuid,
+                teamId,
             };
 
             const rules =
@@ -76,20 +94,69 @@ export class ChangeStatusKodyRulesUseCase {
             });
 
             const updated = [];
+            let centralizedPrResult: CentralizedPrMetadata | null = null;
             const userInfo = {
                 userId: this.request.user?.uuid || 'kody-system',
                 userEmail: this.request.user?.email || 'kody@kodus.io',
             };
 
-            for (const rule of targetRules) {
-                const result = await this.kodyRulesService.createOrUpdate(
-                    organizationAndTeamData,
-                    {
-                        ...rule,
-                        status,
-                    },
-                    userInfo,
+            const shouldUseCentralizedDelete =
+                status === KodyRulesStatus.DELETED &&
+                Boolean(
+                    await this.centralizedConfigPrService.getCentralizedRepositoryIfEnabled(
+                        organizationAndTeamData,
+                    ),
                 );
+
+            for (const rule of targetRules) {
+                let result:
+                    | Partial<IKodyRule>
+                    | IKodyRule
+                    | CentralizedPrMetadata
+                    | boolean
+                    | null = null;
+
+                if (status === KodyRulesStatus.ACTIVE) {
+                    result = await this.createOrUpdateKodyRulesUseCase.execute(
+                        {
+                            ...(rule as any),
+                            status,
+                        },
+                        organizationAndTeamData.organizationId,
+                        userInfo,
+                        true,
+                        teamId,
+                    );
+                } else if (shouldUseCentralizedDelete) {
+                    result =
+                        await this.deleteRuleInOrganizationByIdKodyRulesUseCase.execute(
+                            rule.uuid,
+                            {
+                                source: 'web',
+                                organizationId:
+                                    organizationAndTeamData.organizationId,
+                                teamId,
+                                userId: userInfo.userId,
+                                userEmail: userInfo.userEmail,
+                            },
+                        );
+
+                    if (typeof result === 'boolean') {
+                        // Centralized delete routing should never return direct boolean.
+                        throw new Error(
+                            'Expected centralized PR metadata for delete operation',
+                        );
+                    }
+                } else {
+                    result = await this.kodyRulesService.createOrUpdate(
+                        organizationAndTeamData,
+                        {
+                            ...rule,
+                            status,
+                        },
+                        userInfo,
+                    );
+                }
 
                 if (!result) {
                     throw new Error(
@@ -97,7 +164,15 @@ export class ChangeStatusKodyRulesUseCase {
                     );
                 }
 
-                updated.push(result);
+                if (this.isCentralizedPrMetadata(result)) {
+                    centralizedPrResult = result;
+                } else {
+                    updated.push(result);
+                }
+            }
+
+            if (centralizedPrResult) {
+                return centralizedPrResult;
             }
 
             return updated;
@@ -113,5 +188,16 @@ export class ChangeStatusKodyRulesUseCase {
             });
             throw error;
         }
+    }
+
+    private isCentralizedPrMetadata(
+        value: Partial<IKodyRule> | IKodyRule | CentralizedPrMetadata,
+    ): value is CentralizedPrMetadata {
+        return (
+            typeof value === 'object' &&
+            value !== null &&
+            'mode' in value &&
+            (value as { mode?: string }).mode === 'centralized-pr'
+        );
     }
 }

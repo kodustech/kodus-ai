@@ -1,7 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsString } from 'class-validator';
+import { IsArray, IsOptional, IsString } from 'class-validator';
 
 export class RuleIdsDto {
+    @IsOptional()
+    @IsString()
+    @ApiProperty({
+        type: String,
+        required: false,
+        example: 'team_123',
+    })
+    teamId?: string;
+
     @IsArray()
     @IsString({ each: true })
     @ApiProperty({

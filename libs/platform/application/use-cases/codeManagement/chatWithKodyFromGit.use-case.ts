@@ -1,5 +1,5 @@
 import { createLogger, createThreadId } from '@kodus/flow';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import { BusinessRulesValidationAgentUseCase } from '@libs/agents/application/use-cases/business-rules-validation-agent.use-case';
 import { ConversationAgentUseCase } from '@libs/agents/application/use-cases/conversation-agent.use-case';
@@ -7,6 +7,16 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import {
+    ISandboxLeaseManager,
+    SANDBOX_LEASE_MANAGER_TOKEN,
+    buildPrKey,
+} from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
+import { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
+// Shared with libs/code-review/.../commentAnalysis.service.ts so the
+// read-side filter that drops Kody's own past comments stays in sync
+// with what every provider emitter actually writes.
+import { KODY_IDENTIFIERS } from '@libs/common/utils/kody-identifiers';
 
 import { PlatformResponsePolicyFactory } from './policies/platform-response.policy';
 
@@ -15,14 +25,6 @@ const KODY_COMMANDS = {
     BUSINESS_LOGIC_VALIDATION: '@kody -v business-logic',
     KODY_MENTION: '@kody',
     KODUS_MENTION: '@kodus',
-} as const;
-
-const KODY_IDENTIFIERS = {
-    LOGIN_KEYWORDS: ['kody', 'kodus'],
-    MARKDOWN_IDENTIFIERS: {
-        DEFAULT: 'kody-codereview',
-        BITBUCKET: 'kody|code-review',
-    },
 } as const;
 
 const ACKNOWLEDGMENT_MESSAGES = {
@@ -157,6 +159,9 @@ export class ChatWithKodyFromGitUseCase {
         private readonly codeManagementService: CodeManagementService,
         private readonly conversationAgentUseCase: ConversationAgentUseCase,
         private readonly businessRulesValidationAgentUseCase: BusinessRulesValidationAgentUseCase,
+
+        @Inject(SANDBOX_LEASE_MANAGER_TOKEN)
+        private readonly leaseManager: ISandboxLeaseManager,
     ) {}
 
     async execute(params: WebhookParams): Promise<void> {
@@ -636,17 +641,41 @@ export class ChatWithKodyFromGitUseCase {
                     pullRequestNumber,
                     repository,
                     discussionId:
-                        params.payload?.object_attributes?.discussion_id ?? '',
+                        params.payload?.object_attributes?.discussion_id,
                 },
             });
+
+        // GitLab-only: when discussion_id is missing from the webhook,
+        // getPullRequestReviewComment returns raw discussions (with notes[]).
+        // Flatten to note-shaped objects so find-by-note-id works.
+        const isGitLabWithMissingDiscussionId =
+            params.payload?.object_attributes !== undefined &&
+            !params.payload?.object_attributes?.discussion_id;
+
+        const normalizedComments = isGitLabWithMissingDiscussionId
+            ? allComments?.flatMap((d) => {
+                  const firstNote = d.notes?.[0];
+                  return (d.notes || []).map((note) => ({
+                      ...note,
+                      id: note.id,
+                      discussionId: d.id,
+                      originalCommit: firstNote
+                          ? {
+                                body: firstNote.body,
+                                id: firstNote.id,
+                            }
+                          : undefined,
+                  }));
+              })
+            : allComments;
 
         const commentId = this.getCommentId(params);
         const comment =
             params.platformType !== PlatformType.AZURE_REPOS
-                ? allComments?.find((c) => c.id === commentId)
+                ? normalizedComments?.find((c) => c.id === commentId)
                 : this.getReviewThreadByCommentId(
                       commentId,
-                      allComments,
+                      normalizedComments,
                       params,
                   );
 
@@ -669,12 +698,12 @@ export class ChatWithKodyFromGitUseCase {
 
         const originalKodyComment = this.getOriginalKodyComment(
             comment,
-            allComments,
+            normalizedComments,
             params.platformType,
         );
         const othersReplies = this.getOthersReplies(
             comment,
-            allComments,
+            normalizedComments,
             params.platformType,
         );
         const sender = this.getSender(params);
@@ -701,7 +730,8 @@ export class ChatWithKodyFromGitUseCase {
                     organizationAndTeamData,
                     inReplyToId: comment.id,
                     discussionId:
-                        params.payload?.object_attributes?.discussion_id,
+                        params.payload?.object_attributes?.discussion_id ??
+                        comment.discussionId,
                     threadId: comment.threadId,
                     body: responsePolicy.getAcknowledgmentBody(),
                     repository,
@@ -802,7 +832,8 @@ export class ChatWithKodyFromGitUseCase {
                     organizationAndTeamData,
                     inReplyToId: comment.id,
                     discussionId:
-                        params.payload?.object_attributes?.discussion_id,
+                        params.payload?.object_attributes?.discussion_id ??
+                        comment.discussionId,
                     threadId: comment.threadId,
                     body: response,
                     repository,
@@ -904,17 +935,41 @@ export class ChatWithKodyFromGitUseCase {
                     pullRequestNumber,
                     repository,
                     discussionId:
-                        params.payload?.object_attributes?.discussion_id ?? '',
+                        params.payload?.object_attributes?.discussion_id,
                 },
             });
+
+        // GitLab-only: when discussion_id is missing from the webhook,
+        // getPullRequestReviewComment returns raw discussions (with notes[]).
+        // Flatten to note-shaped objects so find-by-note-id works.
+        const isGitLabWithMissingDiscussionId =
+            params.payload?.object_attributes !== undefined &&
+            !params.payload?.object_attributes?.discussion_id;
+
+        const normalizedComments = isGitLabWithMissingDiscussionId
+            ? allComments?.flatMap((d) => {
+                  const firstNote = d.notes?.[0];
+                  return (d.notes || []).map((note) => ({
+                      ...note,
+                      id: note.id,
+                      discussionId: d.id,
+                      originalCommit: firstNote
+                          ? {
+                                body: firstNote.body,
+                                id: firstNote.id,
+                            }
+                          : undefined,
+                  }));
+              })
+            : allComments;
 
         const commentId = this.getCommentId(params);
         const comment =
             params.platformType !== PlatformType.AZURE_REPOS
-                ? allComments?.find((c) => c.id === commentId)
+                ? normalizedComments?.find((c) => c.id === commentId)
                 : this.getReviewThreadByCommentId(
                       commentId,
-                      allComments,
+                      normalizedComments,
                       params,
                   );
 
@@ -936,7 +991,9 @@ export class ChatWithKodyFromGitUseCase {
             await this.codeManagementService.createResponseToComment({
                 organizationAndTeamData,
                 inReplyToId: comment.id,
-                discussionId: params.payload?.object_attributes?.discussion_id,
+                discussionId:
+                    params.payload?.object_attributes?.discussion_id ??
+                    comment.discussionId,
                 threadId: comment.threadId ?? comment?.in_reply_to_id,
                 body: ACKNOWLEDGMENT_MESSAGES.BUSINESS_LOGIC_INVALID_CONTEXT,
                 repository,
@@ -1557,7 +1614,10 @@ export class ChatWithKodyFromGitUseCase {
             case PlatformType.GITLAB:
                 return allComments.filter(
                     (reply) =>
-                        reply.in_reply_to_id === comment.in_reply_to_id &&
+                        ((reply.in_reply_to_id !== undefined &&
+                            reply.in_reply_to_id ===
+                                comment.in_reply_to_id) ||
+                            reply.discussionId === comment.discussionId) &&
                         !this.isKodyComment(reply, platformType),
                 );
             default:
@@ -1814,12 +1874,120 @@ export class ChatWithKodyFromGitUseCase {
     }): Promise<string> {
         const { prepareContext, organizationAndTeamData, thread } = context;
 
-        return await this.conversationAgentUseCase.execute({
-            prompt: prepareContext.userQuestion,
+        // Acquire a sandbox lease for the duration of the conversation turn.
+        // Same prKey as review → warm-resume reuse when both run on the same PR.
+        // The lease lets the conversation agent invoke native tools (grep, readFile,
+        // listDir, etc.) inside the sandbox so replies can reference real repo
+        // content — not just MCP tools. 5min TTL covers LLM + comment posting.
+        const prKey = buildPrKey(
+            organizationAndTeamData.organizationId,
+            prepareContext.repository?.id ?? 'unknown',
+            prepareContext.pullRequest?.pullRequestNumber ?? 0,
+        );
+
+        // Resolve clone params so the lease manager can cold-create the sandbox
+        // when this is the first acquire for this PR (no review ran yet, or this
+        // PR has no automated review). Without these params the manager falls
+        // back to NullSandbox and the agent loses native tools entirely.
+        // When review acquired first, these params are simply ignored — the
+        // existing sandbox is connected for warm-resume.
+        const cloneParams = await this.buildSandboxCloneParams(
+            prepareContext,
             organizationAndTeamData,
-            prepareContext: prepareContext,
-            thread: thread,
-        });
+        );
+
+        const { sandbox, leaseId } = await this.leaseManager.acquire(
+            prKey,
+            'conversation',
+            5 * 60 * 1000,
+            cloneParams,
+        );
+
+        try {
+            return await this.conversationAgentUseCase.execute({
+                prompt: prepareContext.userQuestion,
+                organizationAndTeamData,
+                prepareContext,
+                thread,
+                sandbox,
+            });
+        } finally {
+            await this.leaseManager.release(leaseId);
+        }
+    }
+
+    private async buildSandboxCloneParams(
+        prepareContext: any,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<CreateSandboxParams | undefined> {
+        const repository = prepareContext.repository;
+        const pr = prepareContext.pullRequest;
+        const platform: PlatformType | undefined =
+            prepareContext.platformType;
+
+        if (!repository || !pr || !platform) {
+            this.logger.warn({
+                message:
+                    'Cannot build sandbox clone params — missing repository/pullRequest/platform',
+                context: ChatWithKodyFromGitUseCase.name,
+                metadata: {
+                    hasRepository: !!repository,
+                    hasPullRequest: !!pr,
+                    platform,
+                },
+            });
+            return undefined;
+        }
+
+        try {
+            // Webhook payloads for `pull_request_review_comment` and
+            // `issue_comment` give us { id, name, owner } but no `fullName`.
+            // GitHub's getCloneParams builds the clone URL from `fullName`,
+            // so we synthesize it here from owner/name when missing.
+            const enrichedRepository =
+                repository.fullName
+                    ? repository
+                    : {
+                          ...repository,
+                          fullName:
+                              repository.owner && repository.name
+                                  ? `${repository.owner}/${repository.name}`
+                                  : repository.name,
+                      };
+
+            const cp = await this.codeManagementService.getCloneParams(
+                {
+                    repository: enrichedRepository,
+                    organizationAndTeamData,
+                },
+                platform,
+            );
+
+            return {
+                cloneUrl: cp.url,
+                authToken: cp.auth?.token || '',
+                authUsername: cp.auth?.username,
+                branch: pr.headRef,
+                baseBranch: pr.baseRef,
+                prNumber: pr.pullRequestNumber,
+                platform,
+                sandboxMetadata: { stage: 'conversation' },
+            };
+        } catch (err) {
+            // Auth lookup or repo metadata fetch failed — log and let the lease
+            // manager fall back to NullSandbox. The agent still answers via
+            // MCP-only tools (memory).
+            this.logger.warn({
+                message:
+                    'Failed to resolve sandbox clone params; conversation will run without native tools',
+                context: ChatWithKodyFromGitUseCase.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    error: err instanceof Error ? err.message : String(err),
+                },
+            });
+            return undefined;
+        }
     }
 
     private getGitUser(params: WebhookParams): {

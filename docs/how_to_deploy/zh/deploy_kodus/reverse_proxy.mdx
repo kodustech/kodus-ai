@@ -1,0 +1,131 @@
+---
+title: "反向代理"
+description: "为 Kodus 配置反向代理。"
+icon: "server"
+tags: ["reverse-proxy", "nginx"]
+---
+
+<Info>
+可选步骤：仅在您不使用任何负载均衡器或代理服务器时需要。
+</Info>
+
+为了使您的 Kodus 实例可以从外部系统访问（代码审查 webhook 和公共访问所必需），您需要使用 Nginx 配置反向代理。
+
+以下是两个子域的 Nginx 配置示例：
+
+```nginx
+# Kodus Web 应用程序的服务器块
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com; # 替换为您实际的 Web 应用域名
+
+    location / {
+        proxy_pass http://localhost:3000; # 指向 Kodus Web 应用容器
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_buffer_size 16k;
+        proxy_buffers 8 16k;
+        proxy_busy_buffers_size 32k;
+    }
+}
+
+# Kodus API 的服务器块
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com; # 替换为您实际的 API 域名
+
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332; # 指向 Kodus Webhooks 服务
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001; # 指向 Kodus API 服务
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+<Note>
+  Webhook 由独立服务处理（端口 3332）。如果您的 webhook URL 使用 API 域名，则必须保留 `location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook` 这段配置。
+</Note>
+
+### 可选：独立的 Webhook 子域名
+
+如果您希望为 webhook 使用独立域名（例如 `kodus-webhooks.yourdomain.com`），可添加一个指向 webhook 服务的 server block：
+
+```nginx
+server {
+    listen 80;
+    server_name kodus-webhooks.yourdomain.com;
+
+    location / {
+        proxy_pass http://localhost:3332; # Webhooks 服务
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+将此配置保存到 `/etc/nginx/sites-available/kodus`（或您选择的名称，例如，如果愿意，可以将 `kodus-web` 和 `kodus-api` 作为单独的文件），并创建符号链接以启用它：
+
+```bash
+sudo ln -s /etc/nginx/sites-available/kodus /etc/nginx/sites-enabled/
+sudo nginx -t  # 测试配置
+sudo systemctl reload nginx  # 应用更改
+```
+
+<Info>
+  **反向代理的重要配置更新：**
+
+  在使用 `kodus-web.yourdomain.com` 和 `kodus-api.yourdomain.com`（或您选择的子域）设置反向代理后，您**必须**确保您的 `.env` 文件正确反映这些公共 URL。具体来说，请验证：
+  - `WEB_HOSTNAME_API`：应设置为**仅公共 API 的主机名**（例如，`kodus-api.yourdomain.com`），不包含任何协议（`http://` 或 `https://`）。
+  - `WEB_PORT_API`：应对应于您的 API 可访问的公共端口（HTTPS 通常为 `443`，HTTP 通常为 `80`）。前端用于调用 API 的方案（http/https）通常将从此端口推断，或在前端逻辑中硬编码为使用 HTTPS。
+  - Webhook URL（例如，`API_GITHUB_CODE_MANAGEMENT_WEBHOOK`）：确保指向 **webhook 服务**。仅当 `/.../webhook` 路径被路由到 `3332` 端口时，才能使用 API 域名；否则请使用独立的 webhook 域名（例如 `https://kodus-webhooks.yourdomain.com/github/webhook`）。
+
+  如果未正确更新这些内容，可能会导致身份验证问题、Web 应用程序无法连接到 API 或 webhook 失效。
+</Info>
+
+### 启用 SSL（推荐）
+
+对于生产部署，我们强烈建议使用 Let's Encrypt 设置 SSL：
+
+```bash
+# 安装 Let's Encrypt 的 Certbot
+sudo apt-get update
+sudo apt-get install certbot python3-certbot-nginx
+
+# 为两个域名获取并安装证书
+sudo certbot --nginx -d kodus-web.yourdomain.com -d kodus-api.yourdomain.com # 替换为您实际的域名
+```
+
+这将自动配置您的 Nginx 设置以使用 HTTPS，并为两个子域重定向 HTTP 流量。
+
+
+

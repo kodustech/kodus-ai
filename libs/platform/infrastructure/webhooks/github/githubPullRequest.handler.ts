@@ -1,7 +1,9 @@
 import { createLogger } from '@kodus/flow';
+import { EnqueueAstGraphUpdateOnMergedUseCase } from '@libs/code-review/application/use-cases/enqueue-ast-graph-update-on-merged.use-case';
 import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
 import {
     hasReviewMarker,
+    isForceReviewCommand,
     isKodyMentionNonReview,
     isReviewCommand,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
@@ -17,9 +19,17 @@ import {
     IWebhookEventParams,
 } from '@libs/platform/domain/platformIntegrations/interfaces/webhook-event-handler.interface';
 import { SavePullRequestUseCase } from '@libs/platformData/application/use-cases/pullRequests/save.use-case';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CodeManagementService } from '../../adapters/services/codeManagement.service';
+import {
+    IOutboxMessageRepository,
+    OUTBOX_MESSAGE_REPOSITORY_TOKEN,
+} from '@libs/core/workflow/domain/contracts/outbox-message.repository.contract';
+import {
+    SANDBOX_INVALIDATE_ROUTING_KEY,
+    SandboxInvalidatePayload,
+} from '@libs/sandbox/domain/events/sandbox-invalidate.event';
 
 /**
  * Handler for GitHub webhook events.
@@ -37,6 +47,10 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
         private readonly eventEmitter: EventEmitter2,
         private readonly enqueueCodeReviewJobUseCase: EnqueueCodeReviewJobUseCase,
         private readonly enqueueImplementationCheckUseCase: EnqueueImplementationCheckUseCase,
+        @Inject(OUTBOX_MESSAGE_REPOSITORY_TOKEN)
+        private readonly outboxRepository: IOutboxMessageRepository,
+        @Optional()
+        private readonly enqueueAstGraphUpdateOnMergedUseCase?: EnqueueAstGraphUpdateOnMergedUseCase,
     ) {}
 
     public canHandle(params: IWebhookEventParams): boolean {
@@ -208,14 +222,104 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                             },
                         });
                     });
+
+                const previousHeadSha = payload?.before;
+                const currentHeadSha =
+                    payload?.after || payload?.pull_request?.head?.sha;
+
+                if (
+                    previousHeadSha &&
+                    currentHeadSha &&
+                    previousHeadSha !== currentHeadSha
+                ) {
+                    try {
+                        const commits =
+                            await this.codeManagement.getCommitsForPullRequestForCodeReview(
+                                {
+                                    organizationAndTeamData:
+                                        context.organizationAndTeamData,
+                                    repository: {
+                                        id: repository.id,
+                                        name: repository.name,
+                                    },
+                                    prNumber:
+                                        payload?.pull_request?.number,
+                                },
+                            );
+
+                        const stillContainsPreviousHead = (
+                            commits ?? []
+                        ).some(
+                            (commit) => commit?.sha === previousHeadSha,
+                        );
+
+                        if (!stillContainsPreviousHead) {
+                            const prKey = `${context.organizationAndTeamData.organizationId}:${repository.id}:${payload?.pull_request?.number}`;
+                            await this.outboxRepository.create({
+                                jobId: undefined,
+                                exchange: 'sandbox.events',
+                                routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
+                                payload: {
+                                    prKey,
+                                    reason: 'force_pushed',
+                                } satisfies SandboxInvalidatePayload,
+                            });
+                        }
+                    } catch (err) {
+                        this.logger.warn({
+                            message: '[SBX-05] Failed to evaluate GitHub force-push heuristic',
+                            context: GitHubPullRequestHandler.name,
+                            error: err instanceof Error ? err : undefined,
+                            metadata: {
+                                repositoryId: repository.id,
+                                pullRequestNumber:
+                                    payload?.pull_request?.number,
+                                previousHeadSha,
+                                currentHeadSha,
+                            },
+                        });
+                    }
+                }
             }
 
             if (payload?.action === 'closed') {
                 this.generateIssuesFromPrClosedUseCase.execute(params);
 
+                // Durable sandbox invalidation via outbox (SBX-05).
+                // Written in the same DB transaction context so it survives worker crashes.
+                const prKey = `${context.organizationAndTeamData.organizationId}:${repository.id}:${payload?.pull_request?.number}`;
+                await this.outboxRepository.create({
+                    jobId: undefined,
+                    exchange: 'sandbox.events',
+                    routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
+                    payload: {
+                        prKey,
+                        reason: 'pr_closed',
+                    } satisfies SandboxInvalidatePayload,
+                }).catch((err) => {
+                    this.logger.warn({
+                        message: '[SBX-05] Failed to write sandbox invalidation outbox message',
+                        context: GitHubPullRequestHandler.name,
+                        error: err instanceof Error ? err : undefined,
+                        metadata: { prKey },
+                    });
+                });
+
+                // GitHub does not expose a first-class force-push flag on synchronize.
+                // A best-effort heuristic now runs in the synchronize path by checking
+                // whether payload.before is still present in the PR commit list.
+
                 // If merged into default branch, trigger Kody Rules sync for main
                 const merged = payload?.pull_request?.merged === true;
                 const baseRef = payload?.pull_request?.base?.ref;
+
+                let changedFiles:
+                    | Array<{
+                          filename: string;
+                          previous_filename?: string;
+                          status: string;
+                      }>
+                    | undefined;
 
                 if (merged && baseRef) {
                     try {
@@ -229,28 +333,42 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                                 },
                             });
                         if (baseRef !== defaultBranch) {
-                            return;
+                            changedFiles = undefined;
+                        } else {
+                            changedFiles =
+                                await this.codeManagement.getFilesByPullRequestId(
+                                    {
+                                        organizationAndTeamData:
+                                            context.organizationAndTeamData,
+                                        repository: {
+                                            id: repository.id,
+                                            name: repository.name,
+                                        },
+                                        prNumber: payload?.pull_request?.number,
+                                    },
+                                );
+
+                            this.enqueueAstGraphUpdateOnMergedUseCase
+                                ?.execute({
+                                    prNumber: payload?.pull_request?.number,
+                                    repoExternalId: repository.id,
+                                    repoName: repository.name,
+                                    platform: PlatformType.GITHUB,
+                                    baseBranch: baseRef,
+                                    newSha:
+                                        payload?.pull_request
+                                            ?.merge_commit_sha,
+                                    organizationAndTeamData:
+                                        context.organizationAndTeamData,
+                                })
+                                .catch((e) => {
+                                    this.logger.warn({
+                                        message: `[AST-GRAPH] Failed to enqueue graph update after PR#${prNumber} merge`,
+                                        context: GitHubPullRequestHandler.name,
+                                        error: e,
+                                    });
+                                });
                         }
-                        // fetch changed files
-                        const changedFiles =
-                            await this.codeManagement.getFilesByPullRequestId({
-                                organizationAndTeamData:
-                                    context.organizationAndTeamData,
-                                repository: {
-                                    id: repository.id,
-                                    name: repository.name,
-                                },
-                                prNumber: payload?.pull_request?.number,
-                            });
-                        this.eventEmitter.emit(
-                            'pull-request.closed',
-                            new PullRequestClosedEvent(
-                                context.organizationAndTeamData,
-                                repository,
-                                payload?.pull_request?.number,
-                                changedFiles || [],
-                            ),
-                        );
                     } catch (e) {
                         this.logger.error({
                             message: 'Failed to sync Kody Rules after PR merge',
@@ -265,6 +383,19 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                             },
                         });
                     }
+                }
+
+                if (context.organizationAndTeamData) {
+                    this.eventEmitter.emit(
+                        'pull-request.closed',
+                        new PullRequestClosedEvent(
+                            context.organizationAndTeamData,
+                            repository,
+                            payload?.pull_request?.number,
+                            changedFiles || [],
+                            merged,
+                        ),
+                    );
                 }
             }
 
@@ -291,7 +422,6 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
     private async handleComment(params: IWebhookEventParams): Promise<void> {
         const { payload, event } = params;
         const prNumber = payload?.object_attributes?.iid;
-        const repositoryName = payload?.repository?.name;
 
         try {
             // Extract comment data
@@ -325,6 +455,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
             }
 
             const isStartCommand = isReviewCommand(comment.body);
+            const isForceCommand = isForceReviewCommand(comment.body);
             const hasMarker = hasReviewMarker(comment.body);
 
             const pullRequest = mappedPlatform.mapPullRequest({ payload });
@@ -435,7 +566,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                         payload: {
                             ...payload,
                             action: 'synchronize',
-                            origin: 'command',
+                            origin: isForceCommand ? 'command-force' : 'command',
                             triggerCommentId: comment?.id,
                             pull_request:
                                 pullRequestData ||

@@ -36,6 +36,6 @@ import { OutboxMessageModel } from '@libs/core/workflow/infrastructure/repositor
         },
         EnqueueWebhookUseCase,
     ],
-    exports: [EnqueueWebhookUseCase],
+    exports: [EnqueueWebhookUseCase, JOB_QUEUE_SERVICE_TOKEN],
 })
 export class WebhookEnqueueModule {}

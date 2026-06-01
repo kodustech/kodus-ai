@@ -1,4 +1,5 @@
 import { Button } from "@components/ui/button";
+import { Card, CardContent, CardHeader } from "@components/ui/card";
 import { FormControl } from "@components/ui/form-control";
 import { Heading } from "@components/ui/heading";
 import { magicModal } from "@components/ui/magic-modal";
@@ -23,37 +24,36 @@ export const MinimumSeverityLevel = () => {
     const form = useFormContext<CodeReviewFormType>();
 
     return (
-        <div className="flex flex-col gap-3">
-            <Controller
-                name="suggestionControl.severityLevelFilter.value"
-                control={form.control}
-                render={({ field, fieldState }) => {
-                    const labels = Object.values(
-                        severityLevelFilterOptions,
-                    ).map((option) => option.label);
-                    const severityLevel =
-                        severityLevelFilterOptions[field.value!] ??
-                        severityLevelFilterOptions.low;
-                    const numberValue = severityLevel?.value;
+        <Card>
+            <CardHeader>
+                <div className="flex flex-col gap-1">
+                    <div className="flex flex-row items-center gap-2">
+                        <Heading variant="h3">Minimum severity level</Heading>
+                        <OverrideIndicatorForm fieldName="suggestionControl.severityLevelFilter" />
+                    </div>
+                    <p className="text-text-secondary text-sm">
+                        Select the minimum severity level for Kody to post code
+                        review suggestions
+                    </p>
+                </div>
+            </CardHeader>
+            <CardContent>
+                <Controller
+                    name="suggestionControl.severityLevelFilter.value"
+                    control={form.control}
+                    render={({ field, fieldState }) => {
+                        const labels = Object.values(
+                            severityLevelFilterOptions,
+                        ).map((option) => option.label);
+                        const severityLevel =
+                            severityLevelFilterOptions[field.value!] ??
+                            severityLevelFilterOptions.low;
+                        const numberValue = severityLevel?.value;
 
-                    return (
-                        <div className="mt-6">
-                            <div className="mb-2 flex flex-row items-center gap-2">
-                                <Heading variant="h2">
-                                    Minimum severity level
-                                </Heading>
-                                <OverrideIndicatorForm
-                                    fieldName="suggestionControl.severityLevelFilter"
-                                    className="mb-2"
-                                />
-                            </div>
-                            <small className="text-text-secondary text-sm">
-                                Select the minimum severity level for Kody to
-                                post code review suggestions
-                            </small>
+                        return (
                             <FormControl.Root>
                                 <FormControl.Input>
-                                    <div className="relative mt-3 w-96">
+                                    <div className="relative w-full max-w-md">
                                         <SliderWithMarkers
                                             id={field.name}
                                             min={0}
@@ -99,10 +99,10 @@ export const MinimumSeverityLevel = () => {
                                     and higher
                                 </FormControl.Helper>
                             </FormControl.Root>
-                        </div>
-                    );
-                }}
-            />
-        </div>
+                        );
+                    }}
+                />
+            </CardContent>
+        </Card>
     );
 };

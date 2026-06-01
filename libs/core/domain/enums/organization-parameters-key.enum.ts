@@ -11,4 +11,5 @@ export enum OrganizationParametersKey {
     CODE_REVIEW_PRESET = 'code_review_preset',
     LICENSE_KEY = 'license_key',
     LICENSE_ASSIGNED_USERS = 'license_assigned_users',
+    FIRST_REVIEW_AT = 'first_review_at',
 }

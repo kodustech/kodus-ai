@@ -1,0 +1,68 @@
+---
+title: "如何在合并前验证业务规则"
+description: "在代码到达生产环境之前捕获拉取请求中缺失的需求、遗忘的边缘情况和逻辑差距。"
+---
+
+代码审查通常关注代码质量 — 安全性、性能、风格。但它们经常遗漏一个问题：**这段代码是否真的做了业务要求的事情？** 业务逻辑验证弥补了这个差距。
+
+## 检查内容
+
+Kodus 将您的 PR 差异与任务需求进行比较，识别：
+
+- **缺失的实现** — 代码中未涵盖的验收标准
+- **部分实现** — 仅部分解决的需求
+- **范围不匹配** — 当 PR 在与任务描述不同的区域工作时
+- **边缘情况** — 任务中提到但未处理的业务场景
+
+## 如何使用
+
+### 自动（默认）
+
+在审查选项中设置 `business_logic: true`（默认启用），当连接了任务管理插件时，Kodus 在每次 PR 审查期间自动验证业务规则。
+
+### 按需
+
+在任何 PR 上使用链接或内联规范评论：
+
+```
+@kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292
+```
+
+```
+@kody -v business-logic
+Orders above $500 must issue cashback credits.
+Discount codes cannot be combined with loyalty rewards.
+Free shipping applies only to domestic orders.
+```
+
+## 支持的任务来源
+
+通过[插件](/how_to_use/en/code_review/plugins)连接以自动获取任务上下文：
+
+| 来源 | 如何引用 |
+|------|----------|
+| **Jira** | 粘贴 Jira 问题 URL |
+| **Linear** | 粘贴 Linear 问题 URL |
+| **Notion** | 粘贴 Notion 页面 URL |
+| **ClickUp** | 粘贴 ClickUp 任务 URL |
+| **Google Docs** | 粘贴文档 URL |
+| **Slack** | 粘贴 Slack 消息永久链接 |
+| **内联** | 直接在 PR 评论中编写需求 |
+
+## 理解输出
+
+每个发现都有严重性：
+
+- **MUST_FIX** — 必需的业务规则缺失或矛盾
+- **SUGGESTION** — 未涵盖的边缘情况或健壮性要点
+- **INFO** — 不阻碍合规性的观察
+
+每个发现都包含建立该需求的**确切引用**，确保没有虚构内容。
+
+## 提示
+
+- 具有明确验收标准的任务获得最全面的验证
+- 修复问题后，重新运行命令以确认合规
+- 如果 PR 范围与任务不匹配，Kody 会标记范围不匹配而不是推测
+
+更多详情，请参阅[业务逻辑验证](/how_to_use/en/code_review/business_logic_validation)。

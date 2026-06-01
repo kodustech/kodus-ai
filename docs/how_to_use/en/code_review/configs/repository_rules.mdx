@@ -1,0 +1,153 @@
+---
+title: "Repository Rules"
+description: "Create custom Kody Rules directly in your repository using markdown files with structured templates."
+---
+
+<Info>
+Repository Rules use the same auto-sync mechanism as IDE rule file detection. Enable "Auto-sync rules from repo" in settings to activate both features. See <a href="/how_to_use/en/code_review/configs/rules_file_detection">Rules File Detection</a> for setup.
+</Info>
+
+## How to Use
+You can create custom Kody Rules directly in your repository by placing structured markdown files in specific directories. This allows you to version control your rules alongside your code and share them across your team.
+
+### Synchronization
+- **Automatic Detection**: Repository rules are automatically detected and synchronized when enabled
+- **Manual Sync**: Add `@kody-sync` to any rule file to sync it individually (works even with auto-sync disabled)
+- **Web Application**: Synchronized rules appear in your Kodus web application dashboard
+- **Real-time Updates**: Changes to rule files are synced when Pull Requests are closed
+
+## File Location
+
+Place your rule files in one of these directories:
+- `.kody/rules/**/*.md`
+- `rules/**/*.md`
+
+## Rule Template
+
+Each rule file must follow this exact template structure:
+
+```markdown
+---
+title: "<rule name>"
+scope: "file"            # "file" or "pull_request"
+path: []                 # list of globs. example: ["**/*.ts", "apps/web/**"]
+severity_min: "high"     # "low", "medium", "high", "critical"
+languages: []            # optional. ex: ["jsts", "go", "php", "ruby", "java", "csharp", "dart", "kotlin", "rust"]
+buckets: []              # optional. ex: ["style-conventions", "error-handling", "security"]
+uuid: ""                 # optional. use for stable rule ID
+enabled: true            # optional
+---
+
+## Instructions
+Describe what to review and how to decide. Be direct and objective.
+- Focus on security, performance and public contract impacts.
+- Give team preferences or patterns when applicable.
+- If it's a PR rule, explain what to consider in the changeset.
+
+## Examples
+
+### Bad example
+\`\`\`lang
+// paste here a short counter-example that violates the rule
+\`\`\`
+
+### Good example  
+\`\`\`lang
+// paste here a short example that follows the rule
+\`\`\`
+```
+## Template Fields
+
+### Required Fields
+
+| Field | Description | Values |
+|-------|-------------|---------|
+| `title` | Rule name displayed in the interface | Any descriptive string |
+| `scope` | Rule analysis scope | `"file"` or `"pull_request"` |
+| `path` | File paths where rule applies | Array of glob patterns |
+| `severity_min` | Minimum severity level | `"low"`, `"medium"`, `"high"`, `"critical"` |
+
+## Example Rules
+
+### File-Level Rule Example
+```markdown
+---
+title: "Avoid console.log in production code"
+scope: "file"
+path: ["src/**/*.ts", "src/**/*.tsx"]
+severity_min: "medium"
+languages: ["jsts"]
+buckets: ["style-conventions"]
+enabled: true
+---
+
+## Instructions
+Check for console.log statements in production TypeScript/JavaScript files.
+- Console logs should not appear in production code
+- Use proper logging libraries instead
+- Allow console.log only in development utilities
+
+## Examples
+
+### Bad example
+\`\`\`typescript
+function processUser(user: User) {
+  console.log('Processing user:', user.id);
+  return user.process();
+}
+\`\`\`
+
+### Good example
+\`\`\`typescript
+import { logger } from './logger';
+
+function processUser(user: User) {
+  logger.info('Processing user:', user.id);
+  return user.process();
+}
+\`\`\`
+```
+
+### Pull Request-Level Rule Example
+```markdown
+---
+title: "New API endpoints must have tests"
+scope: "pull_request"
+path: ["**/*"]
+severity_min: "high"
+buckets: ["testing"]
+enabled: true
+---
+
+## Instructions
+When new API endpoints are added, ensure corresponding tests are included in the PR.
+- Check for new route definitions in controllers
+- Verify test files exist for new endpoints
+- Ensure both positive and negative test cases
+
+## Examples
+
+### Bad example
+Added new endpoint `/api/users/profile` but no test file included in the PR.
+
+### Good example
+Added new endpoint `/api/users/profile` with corresponding test file `tests/api/users/profile.test.ts` that covers success and error cases.
+```
+
+## Setup Requirements
+
+To use Repository Rules, you have two options:
+
+### Option 1: Enable Auto-Sync (Recommended)
+1. **Enable Rules File Detection**: Toggle "Auto-sync rules from repo" in settings
+2. **Create rule files**: Place `.md` files in `.kody/rules/**` or `rules/**` directories
+3. **Automatic sync**: All rule files sync when PRs are closed
+
+### Option 2: Manual Sync (Selective)
+1. **Create rule files**: Place `.md` files in `.kody/rules/**` or `rules/**` directories
+2. **Add sync marker**: Include `@kody-sync` anywhere in the rule file
+3. **Commit changes**: Only marked files will sync (auto-sync toggle stays off)
+
+<Tip>
+Repository Rules use the same synchronization mechanism as [Rules File Detection](/how_to_use/en/code_review/configs/rules_file_detection). Use manual sync (`@kody-sync`) to selectively sync specific rules without enabling automatic synchronization.
+</Tip>

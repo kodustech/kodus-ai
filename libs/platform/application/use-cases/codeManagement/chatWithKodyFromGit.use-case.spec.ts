@@ -50,10 +50,21 @@ describe('ChatWithKodyFromGitUseCase', () => {
             execute: jest.fn().mockResolvedValue(undefined),
         };
 
+        const leaseManager = {
+            acquire: jest.fn().mockResolvedValue({
+                sandbox: { type: 'null', remoteCommands: undefined },
+                leaseId: 'lease-test',
+                wasCreated: true,
+                sandboxId: 'sb-test',
+            }),
+            release: jest.fn().mockResolvedValue(undefined),
+        };
+
         useCase = new ChatWithKodyFromGitUseCase(
             codeManagementService as any,
             conversationAgentUseCase as any,
             businessRulesValidationAgentUseCase as any,
+            leaseManager as any,
         );
     });
 

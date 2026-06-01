@@ -5,7 +5,9 @@
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## Code-Überprüfung abgeschlossen! 🔥\n\nDie Code-Überprüfung wurde basierend auf Ihren aktuellen Konfigurationen erfolgreich abgeschlossen.\n\n",
-        "withoutComments": "# Kody-Überprüfung abgeschlossen\n**Großartige Neuigkeiten!** 🎉\nEs wurden keine Probleme gefunden, die mit Ihren aktuellen Überprüfungskonfigurationen übereinstimmen.\n\nWeiter so! 🚀"
+        "withoutComments": "# Kody-Überprüfung abgeschlossen\n**Großartige Neuigkeiten!** 🎉\nEs wurden keine Probleme gefunden, die mit Ihren aktuellen Überprüfungskonfigurationen übereinstimmen.\n\nWeiter so! 🚀",
+        "withErrors": "## Code-Review konnte nicht abgeschlossen werden ⚠️\n\nDie Prüfung schlug fehl, bevor Vorschläge generiert werden konnten.\n\n**Grund:** {{errorMessage}}\n\nNachdem Sie das Problem behoben haben, kommentieren Sie `@kody review` in diesem PR, um die Prüfung erneut auszuführen.\n\n",
+        "partialErrorsNotice": "\n\n> ⚠️ Hinweis: Einige Schritte der Prüfung konnten in diesem Lauf nicht abgeschlossen werden, daher wurde die automatische Genehmigung (sofern aktiviert) übersprungen. Details finden Sie unter {{dashboardUrl}}. Kommentieren Sie anschließend `@kody review` in diesem PR, um es nach Behebung des Problems erneut zu versuchen.\n"
     },
     "pullRequestSummaryMarkdown": {
         "title": "PR-Zusammenfassung (Kommentar erstellt von [Kody](https://kodus.io) 🤖)",

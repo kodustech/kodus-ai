@@ -20,7 +20,7 @@ import {
     XCircleIcon,
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
-import { pathToApiUrl } from "src/core/utils/helpers";
+import { apiProxyPath } from "src/core/utils/api-proxy";
 
 import { useSubscriptionStatus } from "../_hooks/use-subscription-status";
 
@@ -51,7 +51,7 @@ export const LicenseKeySettings = () => {
         setActivationResult(null);
         try {
             const result = await authorizedFetch<LicenseActivationResult>(
-                pathToApiUrl("/license/activate"),
+                apiProxyPath("/license/activate"),
                 {
                     method: "POST",
                     body: JSON.stringify({ licenseKey: licenseKey.trim() }),

@@ -1,0 +1,210 @@
+---
+title: "Z.AI(GLM Coding Plan)- 基于订阅的推理"
+description: "了解如何将 Z.AI 的 GLM 模型(包括 GLM Coding Plan 订阅)连接到 Kodus。"
+icon: "bolt"
+---
+
+## Z.AI 工作原理
+
+Z.AI(由智谱 AI 开发)提供 GLM 系列模型。它是少数几家为 API 访问提供**统一订阅费**的主要提供商之一:**GLM Coding Plan** 以固定月费捆绑模型使用量,并通过 5 小时和每周的时间窗口(而非按 token 计费)来应用速率限制。
+
+对于更大或波动较大的工作负载,Z.AI 也通过标准开发者 API 对同样的模型提供按 token 付费的访问。
+
+两种方式都暴露 OpenAI 兼容端点,因此 Kodus 通过 `OpenAI Compatible` 提供商(或直接使用 BYOK 中精选的 **GLM 5.1** 卡片)与之对接。
+
+## 方案概览
+
+<Info>
+  价格和配额经常变化。选择套餐前请务必在 [z.ai/subscribe](https://z.ai/subscribe) 和 [docs.z.ai](https://docs.z.ai/devpack/overview) 查看最新数据。
+</Info>
+
+### GLM Coding Plan(订阅)
+
+| 套餐 | 价格(等价月费) | 约等于 API 价值 | 并发 |
+| ---- | -------------------------- | -------------------------------- | ----------- |
+| **Lite** | 约 $18/月(按季度计费) | 约为月费的 15 倍 | 约 1 并发 |
+| **Pro**  | 约 $30/月(按季度计费) | 约为月费的 20 倍 | 约 1 并发 |
+| **Max**  | 约 $80/月(按季度计费) | 约为月费的 30 倍 | 最多 30 并发 |
+
+- 配额按**5 小时**滚动窗口和**每周**窗口重置 — 这是需要规划的上限,而非月度总量。
+- 覆盖模型包括 GLM-5.1、GLM-5-Turbo、GLM-5、GLM-4.5 和 GLM-4.5-Air。
+- 专用端点:`https://api.z.ai/api/coding/paas/v4` — Coding Plan 密钥**仅能在此使用**。
+
+### 按 token 付费的开发者 API
+
+| 模型 | 价格(每 100 万 输入 / 输出 token) | 上下文窗口 |
+| ----- | ---------------------------------- | -------------- |
+| **GLM-5.1** `推荐` | $0.95 / $3.15 | 约 200k tokens |
+| **GLM-5**      | $0.72 / $2.30 | 约 131k tokens |
+| **GLM-4.5**    | $0.60 / $2.20 | 约 128k tokens |
+| **GLM-4.5-Air** | 更低档位,为路由优化 | 约 128k tokens |
+
+标准端点:`https://api.z.ai/api/paas/v4/`(OpenAI 兼容)。
+
+## 创建 API 密钥
+
+<Warning>创建 API 密钥需要 Z.AI 账号。</Warning>
+
+<Tabs>
+  <Tab title="Coding Plan 订阅者">
+    1. 在 [z.ai](https://z.ai) 登录。
+    2. 在 [z.ai/subscribe](https://z.ai/subscribe) 购买 **GLM Coding Plan** 档位。
+    3. 打开订阅的密钥管理页并创建 Coding Plan 密钥。
+    4. 复制密钥 — 之后将无法再次看到。
+
+    <Note>
+      Coding Plan 密钥绑定到 `/api/coding/paas/v4` 端点。发送到标准 `/api/paas/v4/` 端点**会返回 401**。
+    </Note>
+  </Tab>
+
+  <Tab title="开发者 API(按 token 付费)">
+    1. 在 [z.ai](https://z.ai) 登录。
+    2. 打开 [z.ai/manage-apikey/apikey-list](https://z.ai/manage-apikey/apikey-list) 上的 **API Keys** 部分。
+    3. 点击 **Create API Key**,给它一个描述性的名字(例如 `kodus-prod`),并复制密钥。
+
+    <Note>
+      开发者 API 密钥绑定到 `/api/paas/v4/` 端点。
+    </Note>
+  </Tab>
+</Tabs>
+
+## 在 Kodus 中配置 Z.AI
+
+主流程是在 Kodus Cloud 上使用 BYOK — 精选的 **GLM 5.1** 卡片会为您处理端点切换。希望在进程层级固定提供商的自托管用户可以改用环境变量。
+
+### 方式 1 — Kodus Cloud 上的 BYOK(推荐)
+
+<Steps>
+  <Step title="打开 BYOK 并选择 GLM 5.1">
+    访问 [app.kodus.io/organization/byok](https://app.kodus.io/organization/byok),在主模型部分点击 **GLM 5.1** 卡片。
+  </Step>
+
+  <Step title="选择您的方案">
+    卡片会展开一个 **Plan** 选择器。请选择:
+    - **Developer API** — 如果您的密钥来自 [z.ai/manage-apikey](https://z.ai/manage-apikey/apikey-list)
+    - **Coding Plan** — 如果您的密钥来自 [GLM Coding Plan 订阅](https://z.ai/subscribe)
+
+    基础 URL 和"获取密钥"链接会自动更新以匹配您的方案。
+  </Step>
+
+  <Step title="粘贴您的 API 密钥">
+    只需密钥 — 无需其他配置。对于 Coding Plan 用户,Kodus 会在高级设置中预填 `maxConcurrentRequests=1`,匹配 Lite/Pro 档位的限制。如果您使用 Max 档位,请上调到 30。
+  </Step>
+
+  <Step title="测试并保存">
+    点击**测试并保存**。Kodus 会通过一次低成本的元数据调用探测端点,成功后持久化配置。401 表示密钥与所选方案的端点不匹配;404 表示基础 URL 错误。
+  </Step>
+</Steps>
+
+### 调优推理(可选)
+
+精选的 GLM 5.1 卡片预填 **Thinking: Medium**,对于 OpenAI 兼容的提供商会发出 `thinking: { type: "enabled" }`。对大多数工作负载而言够用。两种需要覆盖的情况:
+
+- **强制特定 token 预算** — 在高级设置下将 **Thinking** 切换到 **Custom** 并粘贴:
+
+  ```json
+  {
+    "thinking": { "type": "enabled", "budget_tokens": 20000 }
+  }
+  ```
+
+- **禁用 thinking** — 在小型 PR 上实现最快/最便宜的审查:
+
+  ```json
+  {
+    "thinking": { "type": "disabled" }
+  }
+  ```
+
+<Note>
+  无需命名空间包装 — Kodus 在发送前会在 `openaiCompatible`(当前提供商)下自动包装。详见 [主 BYOK 文档 → 自定义 JSON 覆盖](/how_to_use/zh/byok#custom-json-override)。
+</Note>
+
+### 调优并发
+
+- **Coding Plan Lite / Pro**:保留预填的 `maxConcurrentRequests=1`。更高会返回 `429 Too much concurrency`。
+- **Coding Plan Max**:先上调到 `5`,如果未见 429 可继续提高至 `30`。Max 档位允许最多 30 并发。
+- **开发者 API**:保持为空(无上限)。如果看到速率限制错误,降到 `5`,然后再逐步调高。
+
+<Note>
+  将 GLM 5.1 配置为您的 **Main** 模型,同时保留一个 OpenAI 或 Anthropic 密钥作为 **Fallback**,这样当 Coding Plan 的 5 小时窗口耗尽时审查仍可继续。Kodus 会自动故障转移。
+</Note>
+
+### 方式 2 — 手动配置
+
+如果您需要精选目录中没有的 GLM 变体(例如 GLM-5 或 GLM-4.5),请点击目录底部的**手动配置**并填写:
+
+| 字段 | 值 |
+| --- | --- |
+| **Provider** | `OpenAI Compatible` |
+| **Base URL** | `https://api.z.ai/api/coding/paas/v4`(Coding Plan)<br />`https://api.z.ai/api/paas/v4/`(开发者 API) |
+| **Model** | `glm-5.1`、`glm-5`、`glm-5-turbo`、`glm-4.5`、`glm-4.5-air` |
+| **API Key** | 您的 Z.AI 密钥(与上述基础 URL 匹配) |
+| **Max Concurrent Requests** | Lite/Pro Coding Plan 上为 `1`;Max 最多 `30`;开发者 API 保持为空 |
+
+### 方式 3 — 自托管(环境变量)
+
+如果您以 Fixed Mode 运行 Kodus(单一全局提供商,无按组织 BYOK),在 API + worker 容器的 `.env` 中配置 Z.AI:
+
+```env
+# Z.AI 配置(固定模式)
+API_LLM_PROVIDER_MODEL="glm-5.1"                                  # 您可以访问的任意 GLM 模型
+API_OPENAI_FORCE_BASE_URL="https://api.z.ai/api/coding/paas/v4"   # 按 token 付费使用 /api/paas/v4/
+API_OPEN_AI_API_KEY="your-z-ai-api-key"
+```
+
+<Note>
+  仅在有意禁用 BYOK 的自托管 Kodus 安装中才需要这条路径。如果您的自托管实例启用了 BYOK,请优先使用**方式 1** — 精选卡片会为您处理端点逻辑。
+</Note>
+
+编辑 `.env` 后重启 API 和 worker 容器,然后验证集成:
+
+```bash
+docker-compose logs api worker | grep -iE "z\.ai|glm"
+```
+
+完整的自托管设置(域名、安全密钥、数据库、webhook、反向代理)请参见[通用 VM 部署指南](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm),只需将 LLM 部分替换为上面的配置。
+
+## 在 Coding Plan 和按 token 付费之间选择
+
+- 当您有稳定的审查团队并希望获得固定月度成本时,选择 **Coding Plan**。5 小时和每周配额大致相当于订阅费 15–30 倍的等价 API 开销。
+- 当您的流量波动大、偶尔需要最大上下文窗口,或希望成本随 PR 数量线性增长时,选择**按 token 付费**。
+- **组合使用**:把 Coding Plan 作为主模型,把开发者 API 密钥(或完全不同的另一家提供商)作为备用,以消化超出订阅窗口的突发流量。
+
+## 故障排查
+
+<AccordionGroup>
+  <Accordion title="Test 后 401 — 密钥与端点不匹配">
+    - Coding Plan 密钥仅在 `/api/coding/paas/v4` 上工作。开发者 API 密钥仅在 `/api/paas/v4/` 上工作。
+    - 在精选卡片中,确认 **Plan** 选择器与密钥类型匹配。
+    - 在手动模式下,确认基础 URL 与密钥来源匹配。
+  </Accordion>
+
+  <Accordion title="审查时出现 'Too much concurrency'">
+    - Lite 和 Pro 的 Coding Plan 档位通常仅允许 **1 个并发请求**。Kodus 已为您预填;仅在 Max 上才需上调。
+    - 如果仍撞到 429,在高级设置中降低**最大并发请求数**。
+  </Accordion>
+
+  <Accordion title="Coding Plan 配额耗尽">
+    - 配额按**5 小时滚动窗口**和**每周窗口**执行。触发其一会返回 HTTP 429。
+    - 在 Z.AI 控制台查看剩余配额。
+    - 选项:等待下一个窗口、升级到更高档位,或配置一个开发者 API 密钥作为备用来弥补空缺。
+  </Accordion>
+
+  <Accordion title="模型未找到">
+    - 确认模型 ID 与 Z.AI 目录匹配(`glm-5.1`、`glm-5-turbo`、`glm-5`、`glm-4.5`、`glm-4.5-air`)。
+    - Coding Plan 目前仅覆盖 GLM 系列 — 非 GLM 模型名称会被拒绝。
+  </Accordion>
+
+  <Accordion title="连接错误(超时、DNS)">
+    - 确认您的服务器可以访问 `api.z.ai`。
+    - 查看 API 和 worker 日志获取具体的上游错误。
+    - 如果您所在地区有出站流量限制,请通过基础设施允许的反向代理路由请求。
+  </Accordion>
+</AccordionGroup>
+
+## 相关链接
+
+- [GLM Coding Plan(定价)](https://z.ai/subscribe)
+- [Z.AI 开发者文档](https://docs.z.ai/devpack/overview)
+- [BYOK 概述](/how_to_use/zh/byok)

@@ -1,0 +1,141 @@
+---
+title: "Business Logic Validation"
+description: "Compare your pull request against business rules or specs with @kody -v business-logic."
+---
+
+## Overview
+
+Business Logic Validation lets you confirm that a pull request implements the expected behaviour described in a spec, document, or ticket. Kody analyzes the PR diff, brings in the referenced business context, and flags mismatches before you merge.
+
+<img src="https://kodus.io/wp-content/uploads/2025/10/business-logic.gif" alt="Example of using business logic validation" />
+
+## Prerequisites
+- If you want Kody to **automatically fetch task context** from tools like Jira, Linear, Notion, or ClickUp, the corresponding plugin must be connected in your workspace's [Plugins](/how_to_use/en/code_review/plugins) page.
+- Any link you share (Jira, Slack, Google Docs, etc.) must be reachable through the plugins installed in your workspace.
+- You can always **provide the spec inline** without any plugin — just paste the requirements directly in the PR comment.
+
+## Enabling Business Logic Validation
+
+Business Logic Validation is **enabled by default**. You can control it in two ways:
+
+**Via `kodus-config.yml`:**
+
+```yaml
+reviewOptions:
+  business_logic: true
+```
+
+**Via the web UI:**
+
+Go to **Code Review Settings** → **Repository** → **General** → **Analysis Types** and toggle **Business Logic**.
+
+When enabled, Kody runs business logic validation automatically during every PR review, in addition to the on-demand command.
+
+## Running On-Demand
+
+You can also trigger validation manually at any time:
+
+1. Open the main PR comment box (outside of inline code suggestions).
+2. Mention Kody and add the validation command: `@kody -v business-logic ...`.
+3. Provide the spec content inline or paste a link that Kody can fetch via the available plugins.
+4. Submit the comment and wait for Kody's response in the same thread.
+
+The command only triggers from the main conversation box; replies inside inline suggestions are ignored.
+
+You can re-run the validation at any time — simply post the command again in a new comment. Follow-ups must be a fresh command; replying directly to Kody's message in the Git UI is not supported.
+
+### Examples
+
+- Jira ticket: `@kody -v business-logic https://kodustech.atlassian.net/jira/software/c/projects/KC/boards/2?selectedIssue=KC-1292`
+- Linear issue: `@kody -v business-logic https://linear.app/your-team/issue/TEAM-123`
+- Notion page: `@kody -v business-logic https://www.notion.so/your-workspace/Feature-Spec-abc123`
+- Google Doc: `@kody -v business-logic https://docs.google.com/document/d/1234567890/edit`
+- Slack conversation: `@kody -v business-logic https://kodustech.slack.com/archives/C070E5E97DE/p1727814000000000`
+- Inline spec snippet: `@kody -v business-logic Rule XYZ — orders above $500 must issue cashback credits.`
+
+## What Kody Does
+
+1. **Fetches the PR diff** and pull request metadata.
+2. **Retrieves the task context** — from the linked task management tool (Jira, Linear, etc.) or from inline text you supplied.
+3. **Classifies task context quality** — determines how thorough the analysis can be based on available information.
+4. **Compares implementation against requirements** — checks each acceptance criterion against the PR diff.
+5. **Reports findings** with severity levels and requirement tracing.
+
+If Kody cannot reach the resource or lacks permissions, it will call that out so you can adjust access or provide the information another way.
+
+## Task Context Quality
+
+Kody automatically classifies the quality of the task context before analysis, which affects the depth of validation:
+
+| Quality | Description | Analysis Behavior |
+|---------|-------------|-------------------|
+| **Complete** | Has title, description, and acceptance criteria | Thorough criterion-by-criterion analysis |
+| **Partial** | Has title and description but no acceptance criteria | Best-effort analysis from described behavior |
+| **Minimal** | Has only a title or very short description | Conservative — flags only obvious gaps |
+| **Empty** | No meaningful task context found | Returns a "Need Task Information" response |
+
+## Understanding the Output
+
+### Finding Severities
+
+Each finding includes a severity level:
+
+- **MUST_FIX** — A required business rule is not implemented, is incorrect, or contradicts task requirements
+- **SUGGESTION** — A relevant edge case, robustness, or maintainability point is not covered
+- **INFO** — Useful observation that does not block compliance
+
+### Grounded Findings
+
+Every finding is **traceable to a specific requirement** from the task context. Each finding includes:
+
+- **Requirement** — The exact quote from the task that establishes the requirement
+- **Missing in code** — What is absent or wrong in the PR diff
+- **Suggested action** — A concrete implementation action
+
+Kody does not invent requirements. If a finding cannot be traced back to a specific sentence in the task, it is not reported.
+
+### Scope Mismatch Detection
+
+If the PR diff appears to be working in a different domain than the task itself, Kody detects this as a **scope mismatch** and reports it as the leading finding, rather than producing misleading gap analysis.
+
+### Example Output
+
+```markdown
+## Business Rules Validation
+
+**Task:** KC-1441 - Team-scoped Kody rules
+**Task Link:** https://kodustech.atlassian.net/browse/KC-1441
+**Status:** Issues Found
+**Confidence:** high
+
+### Findings
+
+#### MUST_FIX: No evidence of team-scoped rule resolution in this PR diff
+**Requirement:** "Rules must be resolved by organization and team
+to avoid cross-workspace billing mismatch."
+**Missing in code:** No evidence in this PR diff of adding `teamId`
+to the relevant persistence or lookup path.
+**Suggested action:** Add `teamId` to rule persistence and query filters.
+
+#### SUGGESTION: No evidence of deterministic mixed-license handling
+**Requirement:** "When teams have different subscription states,
+behavior must remain deterministic."
+**Missing in code:** No evidence in this PR diff of logic handling
+mixed subscription states.
+**Suggested action:** Add deterministic fallback and error handling
+scoped to team.
+
+### Requirements Verified
+- AC #1: "Team-scoped reads/writes" — Implemented in `rules.service.ts:42`
+- AC #2: "Multi-workspace billing path" — Implemented in `billing.service.ts:118`
+
+---
+*Analysis performed by Kodus AI Business Rules Validator*
+```
+
+## Tips
+
+- Break large specs into sections and validate them individually to keep feedback focused.
+- When sharing private links, double-check that the required plugin (e.g., Jira, Slack, Google Drive) is installed and authorized for your workspace.
+- After addressing findings, rerun the command to confirm the PR now aligns with the business rules.
+- Provide acceptance criteria in your task for the most thorough analysis — tasks with explicit criteria get criterion-by-criterion validation.

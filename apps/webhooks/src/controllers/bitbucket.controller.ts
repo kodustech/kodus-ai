@@ -22,11 +22,20 @@ export class BitbucketController {
 
         // Filter unsupported events before enqueueing
         const supportedEvents = [
+            // cloud
             'pullrequest:created',
             'pullrequest:updated',
             'pullrequest:fulfilled',
             'pullrequest:rejected',
             'pullrequest:comment_created',
+
+            // data center
+            'pr:opened',
+            'pr:modified',
+            'pr:reviewer:updated',
+            'pr:comment:added',
+            'pr:merged',
+            'pr:declined',
         ];
         if (!supportedEvents.includes(event)) {
             return res
@@ -37,11 +46,16 @@ export class BitbucketController {
         res.status(HttpStatus.OK).send('Webhook received');
 
         setImmediate(() => {
+            const isDataCenterEvent = event.startsWith('pr:');
+
             void this.enqueueWebhookUseCase
                 .execute({
                     platformType: PlatformType.BITBUCKET,
                     event,
-                    payload,
+                    payload: {
+                        ...payload,
+                        isDataCenterEvent,
+                    },
                 })
                 .then(() => {
                     this.logger.log({
@@ -51,6 +65,7 @@ export class BitbucketController {
                             event,
                             installationId: payload?.installation?.id,
                             repository: payload?.repository?.name,
+                            isDataCenterEvent,
                         },
                     });
                 })
@@ -62,6 +77,7 @@ export class BitbucketController {
                         metadata: {
                             event,
                             platformType: PlatformType.BITBUCKET,
+                            isDataCenterEvent,
                         },
                     });
                 });

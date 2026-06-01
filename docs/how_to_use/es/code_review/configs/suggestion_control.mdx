@@ -1,0 +1,51 @@
+---
+title: "Control de Sugerencias"
+description: "Controla cómo Kody proporciona feedback en tus PRs."
+---
+
+## Límite de Sugerencias
+
+### Tipo de Limitación
+
+- Por PR (predeterminado): Máximo de sugerencias en todo el pull request
+- Por Archivo: Máximo de sugerencias por archivo
+
+### Máximo de Sugerencias
+
+Establece cuántas sugerencias puede hacer Kody:
+
+- Mínimo: 6 sugerencias
+- Predeterminado: 10 sugerencias
+- Establece en 0 para ilimitado
+
+Consejo profesional: Comienza con 10 y ajusta según el feedback de tu equipo. Demasiadas sugerencias pueden ser abrumadoras, muy pocas podrían perder problemas importantes.
+
+## Niveles de Severidad
+
+### Severidad Mínima
+
+Elige qué problemas reportará Kody:
+
+- Bajo/Todos: Problemas de estilo, mejoras menores
+- Medio: Mejores prácticas comunes, posibles errores
+- Alto: Problemas significativos, errores definitivos
+- Crítico: Problemas de seguridad, problemas graves
+
+## Agrupación de Sugerencias
+
+### Comentarios Unificados (predeterminado)
+
+<img src="https://app.kodus.io/_next/image?url=%2Fassets%2Fimages%2Ffull_grouping.png&w=1080&q=75" alt="Comentarios Unificados" />
+Combina problemas similares en un solo comentario, mostrando todos los archivos y líneas afectados. Ideal para:
+
+- PRs grandes con problemas repetidos
+- Mantener las discusiones enfocadas
+- Reducir el ruido de notificaciones
+
+### Comentarios Individuales
+
+<img src="https://app.kodus.io/_next/image?url=%2Fassets%2Fimages%2Fminimal_grouping.png&w=1080&q=75" alt="Comentarios Individuales" />
+Comentario separado para cada problema. Mejor cuando:
+
+- Necesitas enlaces directos a cada ubicación
+- El equipo prefiere discusiones enfocadas en líneas específicas

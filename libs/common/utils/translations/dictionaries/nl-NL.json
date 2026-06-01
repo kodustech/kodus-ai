@@ -5,7 +5,9 @@
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## Code Review Voltooid! 🔥\n\nDe code review is succesvol voltooid op basis van je huidige configuraties.\n\n",
-        "withoutComments": "# Kody Review Voltooid\n**Geweldig nieuws!** 🎉\nEr zijn geen problemen gevonden die overeenkomen met je huidige review configuraties.\n\nGa zo door met het uitstekende werk! 🚀"
+        "withoutComments": "# Kody Review Voltooid\n**Geweldig nieuws!** 🎉\nEr zijn geen problemen gevonden die overeenkomen met je huidige review configuraties.\n\nGa zo door met het uitstekende werk! 🚀",
+        "withErrors": "## Code Review Could Not Complete ⚠️\n\nThe review failed before suggestions could be generated.\n\n**Reason:** {{errorMessage}}\n\nAfter fixing the issue, comment `@kody review` on this PR to re-run the review.\n\n",
+        "partialErrorsNotice": "\n\n> ⚠️ Note: some checks couldn't be completed in this run, so auto-approval (when enabled) was skipped. Check the details at {{dashboardUrl}} and then comment `@kody review` on this PR to retry once the issue is resolved.\n"
     },
     "pullRequestSummaryMarkdown": {
         "title": "PR Samenvatting (Commentaar gemaakt door [Kody](https://kodus.io) 🤖)",

@@ -1,0 +1,97 @@
+# SSO E2E overlay for a Kodus self-hosted droplet.
+#
+# Sits on TOP of the kodus-installer stack (which provides postgres,
+# mongo, rabbit, api, web, worker, webhooks, mcp-manager). Joins the
+# same `kodus-backend-services` network so Caddy can reach upstream
+# containers directly via container names.
+#
+# Adds:
+#   * Caddy        — TLS reverse proxy with Let's Encrypt auto-cert
+#                    for api/app/kc.<IP>.sslip.io. Port 80 stays open
+#                    for ACME HTTP-01 challenge.
+#   * Keycloak     — SAML IdP (proxied through Caddy as kc.<IP>.sslip.io).
+#                    Strict hostname check disabled because we don't
+#                    know the public hostname until provision time.
+#
+# Usage on the droplet:
+#   cd /opt/kodus-installer
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f /opt/sso-e2e/compose.yml \
+#     up -d
+#
+# The .env file at /opt/kodus-installer/.env is shared with the base
+# stack; SSO_E2E_BASE / SSO_E2E_KC_ADMIN_PASSWORD are appended there
+# by provision.sh.
+
+services:
+    caddy-sso-e2e:
+        image: caddy:2.10-alpine
+        container_name: caddy-sso-e2e
+        restart: unless-stopped
+        ports:
+            - "80:80"
+            - "443:443"
+        volumes:
+            - /opt/sso-e2e/Caddyfile:/etc/caddy/Caddyfile:ro
+            - caddy-data:/data
+            - caddy-config:/config
+        networks:
+            - kodus-backend-services
+        depends_on:
+            - kc-sso-e2e
+
+    kc-sso-e2e:
+        image: quay.io/keycloak/keycloak:26.5.1
+        container_name: kc-sso-e2e
+        restart: unless-stopped
+        # `start` (production mode) terminates TLS at Caddy — Keycloak
+        # speaks plain HTTP inside the docker network but trusts the
+        # X-Forwarded-Proto header. Flags chosen for KC 26.5:
+        #   * --hostname is the *public* base URL Keycloak emits in
+        #     SAML metadata + admin links. Caddy forwards to here.
+        #   * --hostname-strict=false relaxes the "Host header must
+        #     match --hostname" check; harmless for SAML clients that
+        #     reach Keycloak via the same Caddy proxy.
+        #   * --http-enabled=true permits the plain-HTTP listener Caddy
+        #     proxies to.
+        #   * --proxy-headers=xforwarded reads X-Forwarded-{Proto,Host}
+        #     so issued tokens and redirects use the public https URL.
+        # We deliberately do NOT pass --optimized: that flag requires a
+        # `kc.sh build` step against the same config, which the stock
+        # image hasn't run for our dev-file DB + xforwarded combo. With
+        # plain `start` Keycloak does the implicit build on first boot
+        # (~30s extra) and serves correctly thereafter.
+        command:
+            - start
+            - --hostname=kc.${SSO_E2E_BASE}
+            - --hostname-strict=false
+            - --http-enabled=true
+            - --proxy-headers=xforwarded
+        environment:
+            KC_BOOTSTRAP_ADMIN_USERNAME: admin
+            KC_BOOTSTRAP_ADMIN_PASSWORD: ${SSO_E2E_KC_ADMIN_PASSWORD}
+            # dev-file is an embedded H2 file DB — fast to bootstrap,
+            # zero external services. We DELIBERATELY do not mount a
+            # persistent volume on /opt/keycloak/data — every
+            # `docker compose up -d` (including a plain restart of an
+            # existing droplet) recreates the H2 file fresh, and
+            # bootstrap-keycloak-remote.sh re-imports the realm
+            # from scratch. Persisting the volume was a footgun
+            # observed 2026-05-21: a "warm restart" of the kc-sso-e2e
+            # container loaded a stale realm (with a different client
+            # secret than the freshly-bootstrapped one) and the SAML
+            # round-trip failed on signature mismatch without any
+            # surface error in the bootstrap script.
+            KC_DB: dev-file
+        networks:
+            - kodus-backend-services
+
+volumes:
+    caddy-data:
+    caddy-config:
+
+networks:
+    kodus-backend-services:
+        external: true
+        name: kodus-backend-services

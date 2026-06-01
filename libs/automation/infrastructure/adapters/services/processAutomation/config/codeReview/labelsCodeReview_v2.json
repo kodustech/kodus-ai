@@ -15,11 +15,6 @@
         "description": "Fixing vulnerabilities or improving code security."
     },
     {
-        "type": "cross_file",
-        "name": "Cross File",
-        "description": "Identifies fails between changed files in the PR."
-    },
-    {
         "type": "business_logic",
         "name": "Business Logic",
         "description": "Validates the implementation against business rules, requirements, and acceptance criteria linked in the PR."

@@ -1,0 +1,231 @@
+{
+    "prs": [
+        {
+            "repo": "ai-code-review-benchmark/grafana-codex",
+            "head": "query-splitting-enhancements",
+            "base": "query-splitting-baseline",
+            "title": "Advanced Query Processing Architecture",
+            "baseline": [
+                {
+                    "description": "The runShardSplitQuery function introduces several issues: Template variables are now applied twice in the query pipeline, once within runShardSplitQuery and potentially again downstream, which can lead to incorrect interpolation or performance issues. "
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/grafana-codex",
+            "head": "advanced-sql-analytics",
+            "base": "data-analysis-features",
+            "title": "Advanced SQL Analytics Framework",
+            "baseline": [
+                {
+                    "description": "Retorno incorreto na feature flag"
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/grafana-codex",
+            "head": "unified-storage-enhancements",
+            "base": "performance-optimization-baseline",
+            "title": "Unified Storage Performance Optimizations",
+            "baseline": [
+                {
+                    "description": "logic: Race condition: Multiple goroutines can now build the same index simultaneously, causing duplicate work and potential cache inconsistency"
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/grafana-codex",
+            "head": "asset-loading-optimized",
+            "base": "asset-loading-baseline",
+            "title": "Frontend Asset Optimization",
+            "baseline": [
+                {
+                    "description": "alta double-checked locking — depois de adquirir o write lock, não re-verifica se o cache já foi populado por outra goroutine"
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/grafana-codex",
+            "head": "authz-service-improve-caching-pr",
+            "base": "cache-optimization-baseline",
+            "title": "AuthZService: improve authz caching",
+            "baseline": [
+                {
+                    "description": "cache assimétrico — grants são cacheados e confiados, denials são ignorados e vão pro banco. Então se um grant foi cacheado e depois revogado, o cache continua dando acesso."
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/grafana-codex",
+            "head": "notification-rule-enhancements",
+            "base": "notification-rule-baseline",
+            "title": "Notification Rule Processing Engine",
+            "baseline": [
+                {
+                    "description": "The GrafanaRuleListItem component, rendered within a list, is missing the required key prop that was present on the replaced GrafanaRuleLoader. "
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/grafana-codex",
+            "head": "implement-device-limits",
+            "base": "enhance-anonymous-access",
+            "title": "Anonymous: Add configurable device limit",
+            "baseline": [
+                {
+                    "description": "logic: Race condition: Multiple concurrent requests could pass the device count check simultaneously and create devices beyond the limit. Consider using a database transaction or lock."
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/discourse-cursor",
+            "head": "rest-serializer-enhancement-post",
+            "base": "rest-serializer-enhancement-pre",
+            "title": "FEATURE: Can edit category/host relationships for embedding",
+            "baseline": [
+                {
+                    "location": "db/migrate/20150818190757_create_embeddable_hosts.rb#L8-L16",
+                    "description": "The migration assumes SQL queries for embed_category and uncategorized_category_id site settings will always return a result. It directly accesses [0]['id'] or [0]['value'] without checking if a result exists. If a query returns no rows, this will cause a NoMethodError when attempting to access a key on nil."
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/discourse-cursor",
+            "head": "group-dm-user-addition-post",
+            "base": "group-dm-user-addition-pre",
+            "title": "FIX: proper handling of group memberships",
+            "baseline": [
+                {
+                    "location": "app/assets/javascripts/admin/routes/admin_group_route.js",
+                    "description": "logic: This creates a race condition - findMembers() is async but the controller setup continues immediately. Templates expecting member data may render before it's available."
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/discourse-cursor",
+            "head": "blocked-email-validation-post",
+            "base": "blocked-email-validation-pre",
+            "title": "Add comprehensive email validation for blocked users",
+            "baseline": [
+                {
+                    "location": "app/models/blocked_email.rb#L10-L19",
+                    "description": "The BlockedEmail.should_block? method has unintended side effects, incrementing match_count and updating last_match_at in the database. This violates the principle that query methods should be read-only. As it's called during validation (e.g., by EmailValidator), which can execute multiple times per user action (e.g., form input, failed registration attempts), it leads to inflated and inaccurate match_count statistics."
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/cal.com",
+            "head": "improve-two-factor-authentication-features",
+            "base": "enhance-two-factor-security-foundation",
+            "title": "feat: 2fa backup codes",
+            "baseline": [
+                {
+                    "description": "Backup codes not invalidated after use"
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/cal.com",
+            "head": "oauth-security-enhanced",
+            "base": "oauth-security-base",
+            "title": "OAuth credential sync and app integration enhancements",
+            "baseline": [
+                {
+                    "description": "logic: Direct string comparison is vulnerable to timing attacks - use crypto.timingSafeEqual() for webhook secret validation"
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/cal.com",
+            "head": "sms-retry-enhanced",
+            "base": "sms-retry-base",
+            "title": "SMS workflow reminder retry count tracking",
+            "baseline": [
+                {
+                    "location": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+                    "description": "The OR condition combines deletion of expired reminders with deletion of high retry count reminders. This means reminders with high retry counts but valid scheduled dates will be deleted. Consider using separate delete operations or adding method filtering to the retry count condition."
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/sentry",
+            "head": "performance-enhancement-complete",
+            "base": "master",
+            "title": "Enhanced Pagination Performance for High-Volume Audit Logs",
+            "baseline": [
+                {
+                    "location": "src/sentry/api/endpoints/organization_auditlogs.py",
+                    "description": "logic: OptimizedCursorPaginator doesn't exist in the codebase - this import will cause an ImportError"
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/sentry",
+            "head": "performance-enhancement-complete",
+            "base": "performance-optimization-baseline",
+            "title": "Optimize spans buffer insertion with eviction during insert",
+            "baseline": [
+                {
+                    "location": "src/sentry/api/paginator.py#L876-L882",
+                    "description": "The OptimizedCursorPaginator passes negative start_offset values to Django QuerySet slicing when enable_advanced_features is true and cursor.offset < 0"
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/sentry",
+            "head": "oauth-state-secure",
+            "base": "oauth-state-vulnerable",
+            "title": "GitHub OAuth Security Enhancement",
+            "baseline": [
+                {
+                    "location": "src/sentry/integrations/github/integration.py#L499-L505",
+                    "description": "The code attempts to access integration.metadata[sender][login] without checking for the existence of the sender key."
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/sentry",
+            "head": "replays-delete-stable",
+            "base": "replays-delete-vulnerable",
+            "title": "Replays Self-Serve Bulk Delete System",
+            "baseline": [
+                {
+                    "description": "Breaking changes in error response format"
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/keycloak",
+            "head": "feature-idp-cache-implementation",
+            "base": "feature-idp-cache-baseline",
+            "title": "Add caching support for IdentityProviderStorageProvider.getForLogin operations",
+            "baseline": [
+                {
+                    "description": "logic: using session.identityProviders().getById(id) calls the same provider recursively, which could lead to inconsistent caching behavior"
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/keycloak",
+            "head": "feature-authz-crypto-implementation",
+            "base": "feature-authz-crypto-baseline",
+            "title": "Add AuthzClientCryptoProvider for authorization client cryptographic operations",
+            "baseline": [
+                {
+                    "description": "logic: incorrect provider returned - this returns the default keystore provider instead of BouncyCastle provider, which will break cryptographic operations expecting BC functionality"
+                }
+            ]
+        },
+        {
+            "repo": "ai-code-review-benchmark/keycloak",
+            "head": "feature-authz-crypto-implementation",
+            "base": "feature-authz-crypto-baseline",
+            "title": "Add Client resource type and scopes to authorization schema",
+            "baseline": [
+                {
+                    "description": "The AdminPermissions event listener, responsible for cleaning up permissions upon role, client, or group removal, is incorrectly guarded by the ADMIN_FINE_GRAINED_AUTHZ (V1) feature flag."
+                }
+            ]
+        }
+    ]
+}

@@ -1,4 +1,5 @@
 import { authorizedFetch } from "@services/fetch";
+import type { CentralizedPrResponse } from "@services/parameters/types";
 import { ProgrammingLanguage } from "src/core/enums/programming-language";
 import { axiosAuthorized } from "src/core/utils/axios";
 
@@ -39,43 +40,62 @@ export type ReviewFastIDERulesResponse = {
     errors?: unknown[];
 };
 
+export type KodyRuleMutationResponse = KodyRule | CentralizedPrResponse;
+
 export const createOrUpdateKodyRule = async (
     rule: KodyRule,
     repositoryId?: string,
     directoryId?: string,
-) => {
+    teamId?: string,
+): Promise<KodyRuleMutationResponse> => {
     const response = await axiosAuthorized.post<any>(
         KODY_RULES_PATHS.CREATE_OR_UPDATE,
-        { ...rule, repositoryId, directoryId },
+        { ...rule, repositoryId, directoryId, teamId },
     );
 
-    return response.data as KodyRule;
+    if (response && typeof response === "object" && "data" in response) {
+        return (response as { data?: KodyRuleMutationResponse })
+            .data as KodyRuleMutationResponse;
+    }
+
+    return response as KodyRuleMutationResponse;
 };
 
 export const addKodyRuleToRepositories = async (props: {
     repositoriesIds: string[];
     directoriesIds: Array<{ directoryId: string; repositoryId: string }>;
     rule: KodyRule;
-}) => {
+    teamId?: string;
+}): Promise<KodyRule[] | CentralizedPrResponse> => {
     const response = await axiosAuthorized.post<any>(
         KODY_RULES_PATHS.ADD_LIBRARY_KODY_RULES,
         {
             ...props.rule,
             repositoriesIds: props.repositoriesIds,
             directoriesInfo: props.directoriesIds,
+            teamId: props.teamId,
         },
     );
 
-    return response.data as KodyRule[];
+    return response.data as KodyRule[] | CentralizedPrResponse;
 };
 
-export const deleteKodyRule = async (ruleId: string) => {
+export const deleteKodyRule = async (
+    ruleId: string,
+    teamId?: string,
+): Promise<boolean | CentralizedPrResponse> => {
     const response = await axiosAuthorized.deleted<any>(
         KODY_RULES_PATHS.DELETE_BY_ORGANIZATION_ID_AND_ROLE_UUID,
-        { params: { ruleId } },
+        { params: { ruleId, teamId } },
     );
 
-    return response.data;
+    if (response && typeof response === "object" && "data" in response) {
+        return (response as { data?: boolean | CentralizedPrResponse }).data as
+            | boolean
+            | CentralizedPrResponse;
+    }
+
+    return response as boolean | CentralizedPrResponse;
 };
 
 export const getLibraryKodyRulesWithFeedback = async (params?: {
@@ -83,7 +103,7 @@ export const getLibraryKodyRulesWithFeedback = async (params?: {
     limit?: number;
     buckets?: string[];
     name?: string;
-    severity?: "Low" | "Medium" | "High" | "Critical";
+    severity?: string;
     tags?: string[];
     language?: keyof typeof ProgrammingLanguage;
     plug_and_play?: boolean;
@@ -241,34 +261,43 @@ export const changeStatusKodyRules = async (
         { ruleIds, status },
     );
 
-    return response.data as KodyRule[];
+    return response.data as KodyRule[] | CentralizedPrResponse;
 };
 
-export const applyPendingKodyRules = async (ruleIds: string[]) => {
+export const applyPendingKodyRules = async (
+    teamId: string,
+    ruleIds: string[],
+) => {
     const response = await axiosAuthorized.post<any>(
         KODY_RULES_PATHS.APPLY_PENDING_KODY_RULES,
-        { ruleIds },
+        { teamId, ruleIds },
     );
 
-    return response.data as KodyRule[];
+    return response.data as KodyRule[] | CentralizedPrResponse;
 };
 
-export const discardPendingKodyRules = async (ruleIds: string[]) => {
+export const discardPendingKodyRules = async (
+    teamId: string,
+    ruleIds: string[],
+) => {
     const response = await axiosAuthorized.post<any>(
         KODY_RULES_PATHS.DISCARD_PENDING_KODY_RULES,
-        { ruleIds },
+        { teamId, ruleIds },
     );
 
     return response.data as KodyRule[];
 };
 
-export const convertPendingUpdatesToMemories = async (ruleIds: string[]) => {
+export const convertPendingUpdatesToMemories = async (
+    teamId: string,
+    ruleIds: string[],
+) => {
     const response = await axiosAuthorized.post<any>(
         KODY_RULES_PATHS.CONVERT_PENDING_UPDATES_TO_MEMORIES,
-        { ruleIds },
+        { teamId, ruleIds },
     );
 
-    return response.data as KodyRule[];
+    return response.data as KodyRule[] | CentralizedPrResponse;
 };
 
 export const generateKodyRules = (
@@ -321,4 +350,42 @@ export const getRecommendedKodyRules = async (params?: { limit?: number }) => {
 
     const rules = await authorizedFetch<LibraryRule[]>(url);
     return rules || [];
+};
+
+/** Auto-synced ("imported") rules counted per status for a repository. Used by
+ * the IDE auto-sync toggle-off modal and the orphan-rules banner.
+ *
+ * `pinned` counts ACTIVE+PAUSED rules whose source file carries `@kody-sync`.
+ * The bulk pause/delete actions skip those, so the modal copy uses this to
+ * tell the user "M pinned rules will be preserved" before they pick an
+ * action and get a surprising result. */
+export type ImportedKodyRulesCounts = {
+    active: number;
+    paused: number;
+    deleted: number;
+    pinned: number;
+};
+
+export const getImportedKodyRulesCount = async (params: {
+    repositoryId: string;
+}): Promise<ImportedKodyRulesCounts> => {
+    const url = `${KODY_RULES_PATHS.COUNT_IMPORTED_KODY_RULES}?repositoryId=${encodeURIComponent(params.repositoryId)}`;
+    const result = await authorizedFetch<ImportedKodyRulesCounts>(url);
+    return result ?? { active: 0, paused: 0, deleted: 0, pinned: 0 };
+};
+
+export type ManageImportedKodyRulesAction = "pause" | "resume" | "delete";
+
+export const manageImportedKodyRules = async (params: {
+    repositoryId: string;
+    action: ManageImportedKodyRulesAction;
+}): Promise<{
+    action: ManageImportedKodyRulesAction;
+    counts: ImportedKodyRulesCounts;
+}> => {
+    const response = await axiosAuthorized.post<{
+        action: ManageImportedKodyRulesAction;
+        counts: ImportedKodyRulesCounts;
+    }>(KODY_RULES_PATHS.MANAGE_IMPORTED_KODY_RULES, params);
+    return response;
 };

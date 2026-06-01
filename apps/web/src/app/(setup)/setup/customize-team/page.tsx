@@ -13,12 +13,12 @@ import { KODY_RULES_PATHS } from "@services/kodyRules";
 import { changeStatusKodyRules } from "@services/kodyRules/fetch";
 import { KodyRulesStatus, type KodyRule } from "@services/kodyRules/types";
 import { useSuspenseGetCodeReviewParameter } from "@services/parameters/hooks";
+import { isCentralizedPrResponse } from "@services/parameters/types";
 import { useAuth } from "src/core/providers/auth.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { cn } from "src/core/utils/components";
 import { useFetch } from "src/core/utils/reactQuery";
 import { safeArray } from "src/core/utils/safe-array";
-import { captureSegmentEvent } from "src/core/utils/segment";
 
 import { StepIndicators } from "../_components/step-indicators";
 
@@ -220,29 +220,51 @@ export default function CustomizeTeamPage() {
             const toDelete = pendingIds.filter(
                 (id) => !selectedRules.includes(id),
             );
+            const prUrls = new Set<string>();
 
             if (toActivate.length) {
-                await changeStatusKodyRules(toActivate, KodyRulesStatus.ACTIVE);
+                const activationResult = await changeStatusKodyRules(
+                    toActivate,
+                    KodyRulesStatus.ACTIVE,
+                );
+
+                if (
+                    isCentralizedPrResponse(activationResult) &&
+                    activationResult.prUrl
+                ) {
+                    prUrls.add(activationResult.prUrl);
+                }
             }
 
             if (toDelete.length) {
-                await changeStatusKodyRules(toDelete, KodyRulesStatus.DELETED);
+                const deletionResult = await changeStatusKodyRules(
+                    toDelete,
+                    KodyRulesStatus.DELETED,
+                );
+
+                if (
+                    isCentralizedPrResponse(deletionResult) &&
+                    deletionResult.prUrl
+                ) {
+                    prUrls.add(deletionResult.prUrl);
+                }
             }
 
-            toast({
-                variant: "success",
-                description: "Rules saved for your team.",
-            });
-            captureSegmentEvent({
-                userId: userId!,
-                event: "setup_rules_applied",
-                properties: {
-                    teamId,
-                    selectedRulesCount: toActivate.length,
-                    pendingRulesCount: pendingIds.length,
-                    deletedRulesCount: toDelete.length,
-                },
-            });
+            const hasCentralizedPr = prUrls.size > 0;
+
+            toast(
+                hasCentralizedPr
+                    ? {
+                          variant: "success",
+                          title: "Rules Proposed In PR",
+                          description: `Your changes were queued in centralized config PR: ${Array.from(prUrls)[0]}`,
+                      }
+                    : {
+                          variant: "success",
+                          title: "Rules Saved",
+                          description: "Rules saved for your team.",
+                      },
+            );
             router.push("/setup/choosing-a-pull-request");
         } catch (error) {
             console.error("Error reviewing fast IDE rules", error);
@@ -259,17 +281,6 @@ export default function CustomizeTeamPage() {
     const handleSkip = () => {
         if (isSavingRules) return;
 
-        captureSegmentEvent({
-            userId: userId!,
-            event: "setup_rules_skipped",
-            properties: {
-                teamId,
-                pendingRulesCount: pendingRules.length,
-                selectedRulesCount: selectedRules.length,
-                noRulesAfterSync,
-                isSyncingRules,
-            },
-        });
         router.push("/setup/choosing-a-pull-request");
     };
 

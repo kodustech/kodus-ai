@@ -11,11 +11,13 @@ import {
 } from "@components/ui/dialog";
 import { Link } from "@components/ui/link";
 import { MagicModalContext } from "@components/ui/magic-modal";
+import { useConfig } from "@providers/ConfigProvider";
 import { ClientSideCookieHelpers } from "src/core/utils/cookie";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 export const FinishedTrialModal = () => {
     const router = useRouter();
+    const cfg = useConfig();
     const subscription = useSubscriptionStatus();
 
     if (subscription.status !== "expired") return null;
@@ -41,10 +43,7 @@ export const FinishedTrialModal = () => {
                             You can still Upgrade subscription or{" "}
                             <Link
                                 target="_blank"
-                                href={
-                                    process.env
-                                        .WEB_SUPPORT_TALK_TO_FOUNDER_URL ?? ""
-                                }>
+                                href={cfg.supportTalkToFounderUrl || ""}>
                                 talk with our team
                             </Link>{" "}
                             to ask questions or extend trial.

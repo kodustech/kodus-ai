@@ -1,0 +1,73 @@
+---
+title: "はじめに"
+---
+
+<Steps>
+  <Step title="アカウントを作成">
+    名前、メール、パスワードを入力してサインアップするか、Google、GitHub、GitLab などのソーシャルプロバイダーを使用してください。
+  </Step>
+
+  <Step title="コード管理ツールを設定">
+    <AccordionGroup>
+        <Accordion title="GitHub をセットアップ" icon="github">
+            OAuth またはトークンで GitHub を接続:
+              - **OAuth（推奨）**: 「OAuth 経由」ボタンをクリックします。GitHub の認証ページにリダイレクトされます。
+                - ✅ Kody が PR に専用ボットとして表示される
+                - ✅ より良い監査証跡（人間と AI のレビューの明確な区別）
+                - 組織の `owner` 権限が必要
+                - Kody に分析させたいすべてのリポジトリへのアクセスを許可する（後で調整可能）
+              - **トークン**: レビューはあなたのユーザー名で表示されます。<a href="/how_to_use/ja/code_review/general_config/github_pat">詳細な手順については GitHub トークンセットアップページを参照してください。</a>
+
+            <Note>GitHub Enterprise を使用していますか？接続前にネットワークファイアウォールで Kodus の IP `52.55.217.197` を許可リストに追加してください。</Note>
+        </Accordion>
+
+        <Accordion title="GitLab をセットアップ" icon="gitlab">
+            OAuth またはトークンで GitLab を接続:
+              - **OAuth（推奨）**: 「OAuth 経由」ボタンをクリックすると、GitLab の認証ページにリダイレクトされます。
+                - ✅ Kody が PR に専用ボットとして表示される
+                - Kody に分析させたいすべてのリポジトリへのアクセスを許可する（後で調整可能）
+              - **トークン**: レビューはあなたのユーザー名で表示されます。<a href="/how_to_use/ja/code_review/general_config/gitlab_pat">詳細な手順については GitLab トークンセットアップページを参照してください。</a>
+
+            <Note>セルフホスト型 GitLab インスタンスを使用していますか？接続前にネットワークファイアウォールで Kodus の IP `52.55.217.197` を許可リストに追加してください。</Note>
+        </Accordion>
+              <Accordion title="Bitbucket をセットアップ" icon="bitbucket">
+            OAuth またはトークンで Bitbucket を接続:
+              - **トークン**: <a href="/how_to_use/ja/code_review/general_config/bitbucket_pat">詳細な手順については Bitbucket トークンセットアップページを参照してください。</a>
+
+            <Note>Bitbucket Data Center（セルフホスト）を使用していますか？接続前にネットワークファイアウォールで Kodus の IP `52.55.217.197` を許可リストに追加してください。</Note>
+        </Accordion>
+        <Accordion title="Azure DevOps をセットアップ" icon="microsoft">
+            OAuth またはトークンで Azure DevOps を接続:
+              - **トークン**: <a href="/how_to_use/ja/code_review/general_config/azure_devops_pat">詳細な手順については Azure DevOps トークンセットアップページを参照してください。</a>
+
+            <Note>Azure DevOps Server（セルフホスト）を使用していますか？接続前にネットワークファイアウォールで Kodus の IP `52.55.217.197` を許可リストに追加してください。</Note>
+        </Accordion>
+    </AccordionGroup>
+
+
+  </Step>
+
+<Step title="リポジトリを選択">
+  Kody に自動レビューと実用的なインサイトのためにアクセスさせたいリポジトリを選択します。
+</Step>
+
+<Step title="最初の PR レビューを実行">
+  Kody がレビューするプルリクエスト（PR）を選択します。これにより自動コードレビューの力を実感できます。選択すると、Kody は Git ツール内で直接レビューを実行します。これは最初だけです — その後、Kody はあなたが開いたすべての PR を自動的にレビューします。
+</Step>
+<Step title="Kody の自動レビューを楽しんでください！🔥">
+  あとは Kody がインテリジェントな提案と実用的なインサイトでレビュープロセスを効率化するのを見守るだけです。
+</Step>
+
+</Steps>
+
+## 次のステップ
+
+<CardGroup cols={1}>
+  <Card
+    title="チームルールで Kody を設定"
+    icon="Hand-love"
+    href="code_review/configs/kody_rules"
+  >
+    チームルールで Kody を設定する方法を学びます。
+  </Card>
+</CardGroup>

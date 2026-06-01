@@ -1,0 +1,22 @@
+id: cloud-reflake
+description: |
+    Re-run the two cloud cells that flaked on the 2026-05-21 full matrix
+    (b4hvjc1wv) to confirm they were transient network glitches and not
+    real regressions.
+
+    - license-attribution × cloud × github × trial: "This operation was
+      aborted" (AbortSignal) — likely fetch timeout under cloud load
+    - code-review-basic × cloud × github-app × paid: "fetch failed" —
+      same cell PASSED in the github-app smoke (bezcsxbzd) ~30min earlier
+
+scenarios:
+    - license-attribution
+    - code-review-basic
+
+cells:
+    - target: cloud
+      provider: github
+      license: trial
+    - target: cloud
+      provider: github-app
+      license: paid

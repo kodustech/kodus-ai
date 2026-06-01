@@ -35,6 +35,7 @@ import { WorkflowModule } from '@libs/core/workflow/modules/workflow.module';
 import { IssuesModule } from '@libs/issues/issues.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
+import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
 
 @Module({
     imports: [
@@ -61,6 +62,7 @@ import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
         forwardRef(() => IssuesModule),
         forwardRef(() => McpCoreModule),
         forwardRef(() => CodeReviewConfigurationModule),
+        forwardRef(() => SandboxModule),
     ],
     providers: [
         ...CodeManagementUseCases,

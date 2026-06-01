@@ -1,0 +1,58 @@
+---
+title: "Por qué no se está activando la revisión de código con IA"
+description: "Causas comunes y soluciones cuando Kodus no revisa automáticamente tus pull requests."
+---
+
+Si Kodus no está revisando tus PRs, verifica estas causas comunes:
+
+## 1. La revisión automatizada está desactivada
+
+Verifica que las revisiones automatizadas estén habilitadas:
+- Ve a **Configuración de Revisión de Código** → **General**
+- Comprueba que la **Revisión Automatizada** esté activada
+- O verifica en `kodus-config.yml`:
+
+```yaml
+automatedReviewActive: true
+```
+
+## 2. El webhook no está configurado
+
+Kodus necesita webhooks para saber cuándo se abre o actualiza un PR:
+- Ve a la configuración de webhooks de tu proveedor de Git
+- Verifica que la URL del webhook de Kodus esté registrada y activa
+- Comprueba si hay intentos de entrega fallidos
+
+## 3. El título del PR coincide con una palabra clave ignorada
+
+Si el título del PR contiene una palabra clave ignorada, Kodus omite la revisión:
+
+```yaml
+ignoredTitleKeywords:
+  - "release"
+  - "WIP"
+```
+
+Verifica tu configuración de `ignoredTitleKeywords`.
+
+## 4. La rama base no está siendo monitoreada
+
+Por defecto, Kodus revisa los PRs que apuntan a la rama predeterminada. Si tu PR apunta a una rama diferente, agrégala a `baseBranches`:
+
+```yaml
+baseBranches:
+  - develop
+  - staging
+```
+
+## 5. La cadencia de revisión está configurada como manual
+
+Si la cadencia de revisión está configurada como **Manual**, Kodus solo revisa cuando comentas `@kody start-review`.
+
+## 6. La pausa automática está activa
+
+Si has hecho múltiples pushes rápidamente, la pausa automática puede haber entrado en acción. Espera el período de enfriamiento o comenta `@kody start-review` para activar la revisión manualmente.
+
+## ¿Sigue sin funcionar?
+
+Intenta comentar `@kody start-review` en el PR para activar una revisión manual. Si eso no funciona, consulta la [guía de Solución de Problemas](/how_to_use/es/code_review/troubleshooting).

@@ -36,7 +36,6 @@ import {
 import { createBusinessRulesBlueprint } from './blueprint';
 import {
     buildMcpConnectionFailureFeedback,
-    buildRequiredMcpFeedback,
 } from './required-mcp-feedback';
 import {
     BusinessRulesContext,
@@ -69,6 +68,10 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
     BusinessRulesContext,
     BusinessRulesPrepareContext
 > {
+    /** Returned when no task-management MCP is connected so the pipeline
+     *  stage can silently skip without posting any PR comment. */
+    static readonly NO_TASK_MCP_SENTINEL = '__NO_TASK_MCP__';
+
     private readonly logger = createLogger(
         BusinessRulesValidationAgentProvider.name,
     );
@@ -153,15 +156,12 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
         const { error, userLanguage, context } = params;
 
         if (error instanceof RequiredMcpPreflightError) {
-            const feedback = buildRequiredMcpFeedback({
-                requiredMcps: error.requiredMcps,
-                userLanguage,
-                availableProviders: error.availableProviders,
-            });
-
+            const requiredLabels = (error.requiredMcps ?? [])
+                .map((m: any) => m?.label || m?.category || 'unknown')
+                .join(', ');
+            const availableProviders = error.availableProviders ?? [];
             this.logger.warn({
-                message:
-                    'Business rules validation skipped due to missing required MCP integrations',
+                message: `Business rules validation skipped — required MCP integrations missing: [${requiredLabels || 'unknown'}]. Available providers: [${availableProviders.join(', ') || 'none'}]`,
                 context: BusinessRulesValidationAgentProvider.name,
                 serviceName: BusinessRulesValidationAgentProvider.name,
                 metadata: {
@@ -169,10 +169,11 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
                         context.organizationAndTeamData?.organizationId,
                     teamId: context.organizationAndTeamData?.teamId,
                     requiredMcps: error.requiredMcps,
+                    availableProviders,
                 },
             });
 
-            return feedback;
+            return BusinessRulesValidationAgentProvider.NO_TASK_MCP_SENTINEL;
         }
 
         if (error instanceof McpConnectionUnavailableError) {
@@ -181,15 +182,16 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
                 availableProviders: error.availableProviders,
             });
 
+            const availableProviders = error.availableProviders ?? [];
             this.logger.warn({
-                message:
-                    'Business rules validation skipped due to MCP connection failure during fetcher initialization',
+                message: `Business rules validation skipped due to MCP connection failure during fetcher initialization — available providers: [${availableProviders.join(', ') || 'none'}]`,
                 context: BusinessRulesValidationAgentProvider.name,
                 serviceName: BusinessRulesValidationAgentProvider.name,
                 metadata: {
                     organizationId:
                         context.organizationAndTeamData?.organizationId,
                     teamId: context.organizationAndTeamData?.teamId,
+                    availableProviders,
                     errorMessage:
                         error instanceof Error ? error.message : String(error),
                 },
@@ -531,6 +533,12 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
         };
     }
 
+    /** Metadata markers embedded at the top of the response so the
+     *  pipeline stage can make structured decisions without parsing
+     *  natural-language text. */
+    static readonly WEAK_TASK_CONTEXT_MARKER =
+        '<!-- task_context_status:weak -->';
+
     private async formatValidationResponse(
         result: ValidationResult,
         ctx: BusinessRulesContext,
@@ -551,18 +559,28 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
                     : diagnostic;
             }
 
-            if (limitationMessage) {
-                return this.formatUserFacingMessage(
-                    limitationMessage,
-                    ctx.userLanguage,
-                    'limitation',
-                );
+            const rawMessage = limitationMessage
+                ? await this.formatUserFacingMessage(
+                      limitationMessage,
+                      ctx.userLanguage,
+                      'limitation',
+                  )
+                : await this.formatUserFacingMessage(
+                      result.missingInfo ?? DEFAULT_NEEDS_MORE_INFO_MESSAGE,
+                      ctx.userLanguage,
+                      'limitation',
+                  );
+
+            // Embed a marker so the pipeline stage can detect weak task
+            // context without relying on natural-language matching.
+            if (
+                result.taskContextStatus === 'weak' ||
+                result.taskContextStatus === 'missing'
+            ) {
+                return `${BusinessRulesValidationAgentProvider.WEAK_TASK_CONTEXT_MARKER}\n${rawMessage}`;
             }
-            return this.formatUserFacingMessage(
-                result.missingInfo ?? DEFAULT_NEEDS_MORE_INFO_MESSAGE,
-                ctx.userLanguage,
-                'limitation',
-            );
+
+            return rawMessage;
         }
 
         return result.summary ?? '';

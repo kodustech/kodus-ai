@@ -1,6 +1,4 @@
-import {
-    ActionType,
-} from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
+import { ActionType } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
 import {
     BaseLogParams,
     ChangedDataToExport,

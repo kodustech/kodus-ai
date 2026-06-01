@@ -1,0 +1,18 @@
+id: diag-sh-github
+description: |
+    Isolation diagnostic (NOT a release gate). Runs ONLY the self-hosted
+    github review scenarios, alone — one droplet, no cross-provider
+    concurrency on the shared dev LLM key. Used 2026-05-26 to test whether
+    the self-hosted 0-findings seen in the full parallel run is caused by
+    4 droplets contending for one Gemini key (→ passes here when isolated)
+    or by the droplet/review pipeline itself (→ still fails here).
+
+scenarios:
+    - onboarding-webhook-registration
+    - code-review-basic
+    - command-review
+
+cells:
+    - target: self-hosted
+      provider: github
+      license: license-paid

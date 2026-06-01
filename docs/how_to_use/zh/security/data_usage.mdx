@@ -1,0 +1,44 @@
+---
+title: "AI 模型安全"
+---
+
+## 使用的模型
+
+Kodus 使用以下语言模型进行代码分析:
+
+- **GPT-4o 及其衍生版本** (OpenAI)
+- **Gemini 1.5 Pro 及其衍生版本** (Google)
+- **Claude 3.5 Sonnet 及其衍生版本** (Anthropic)
+
+## 数据处理
+
+您的代码被临时处理,绝不用于训练:
+
+- 数据仅在审查会话期间保留
+- 完成后立即丢弃
+- 绝不用于训练或改进模型
+- 根据提供商协议维护隐私
+
+## 每个模型的使用条款
+
+- **GPT-4o 及其衍生版本**: [GPT-4o 使用条款](https://openai.com/enterprise-privacy/)
+- **Gemini 1.5 Pro 及其衍生版本**: [Gemini 1.5 Pro 使用条款](https://ai.google.dev/gemini-api/terms)
+- **Claude 3.5 Sonnet 及其衍生版本**: [Claude 3.5 Sonnet 使用条款](https://support.anthropic.com/en/articles/7996885-how-do-you-use-personal-data-in-model-training)
+
+## 安全措施
+
+- **加密**:传输和静态数据加密
+- **数据隔离**:模型在处理后不存储或保留数据
+- **受控访问**:仅授权人员的严格访问控制(请参阅[工作区角色](/how_to_use/en/workspace_roles))
+- **定期审计**:定期安全审计以确保合规性
+- **安全更新**:定期补丁和更新
+
+## 自托管遥测
+
+如果您运行 Kodus 自托管,每个实例每天向 `telemetry.kodus.io` 发送一次
+匿名心跳,包含聚合计数器和运行时元数据 — 永远不包含代码、身份信息或
+任何可以追溯到您用户的内容。您可以使用 `yarn telemetry:preview` 检查
+确切的负载,或使用 `KODUS_TELEMETRY_DISABLED=true` 禁用。完整的
+schema、保留策略和源代码链接已在 [匿名遥测](/how_to_deploy/zh/deploy_kodus/telemetry) 中记录。
+
+有问题?联系我们的支持团队或加入 [Discord](https://discord.gg/TFZBRk9fT6)。

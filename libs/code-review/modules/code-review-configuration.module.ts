@@ -12,19 +12,16 @@ import { Module, forwardRef } from '@nestjs/common';
 
 import { ApplyCodeReviewPresetUseCase } from '../application/use-cases/configuration/apply-code-review-preset.use-case';
 import { DeleteRepositoryCodeReviewParameterUseCase } from '../application/use-cases/configuration/delete-repository-code-review-parameter.use-case';
-import { CentralizedConfigDownloadUseCase } from '../application/use-cases/configuration/centralized-config-download.use-case';
 import { GenerateKodusConfigFileUseCase } from '../application/use-cases/configuration/generate-kodus-config-file.use-case';
 import { GetCliRepositorySettingsUseCase } from '../application/use-cases/configuration/get-cli-repository-settings.use-case';
 import { GetCodeReviewParameterUseCase } from '../application/use-cases/configuration/get-code-review-parameter.use-case';
 import { ListCodeReviewAutomationLabelsUseCase } from '../application/use-cases/configuration/list-code-review-automation-labels-use-case';
 import { ListCodeReviewAutomationLabelsWithStatusUseCase } from '../application/use-cases/configuration/list-code-review-automation-labels-with-status.use-case';
-import { CentralizedConfigSyncUseCase } from '../application/use-cases/configuration/centralized-config-sync.use-case';
 import { UpdateCliRepositorySettingsUseCase } from '../application/use-cases/configuration/update-cli-repository-settings.use-case';
 import { UpdateCodeReviewParameterRepositoriesUseCase } from '../application/use-cases/configuration/update-code-review-parameter-repositories-use-case';
 import { UpdateOrCreateCodeReviewParameterUseCase } from '../application/use-cases/configuration/update-or-create-code-review-parameter-use-case';
 import { PreviewPrSummaryUseCase } from '../application/use-cases/summary/preview-pr-summary.use-case'; // Added
-import { CentralizedConfigSyncListener } from '../infrastructure/adapters/listeners/centralized-config-sync.listener';
-import { CentralizedConfigInitUseCase } from '../application/use-cases/configuration/centralized-config-init.use-case';
+import { CentralizedConfigModule } from '@libs/centralized-config/modules/centralized-config.module';
 
 @Module({
     imports: [
@@ -38,6 +35,7 @@ import { CentralizedConfigInitUseCase } from '../application/use-cases/configura
         forwardRef(() => ContextReferenceModule),
         forwardRef(() => PullRequestMessagesModule),
         forwardRef(() => IntegrationConfigModule),
+        forwardRef(() => CentralizedConfigModule),
     ],
     providers: [
         ApplyCodeReviewPresetUseCase,
@@ -51,10 +49,6 @@ import { CentralizedConfigInitUseCase } from '../application/use-cases/configura
         UpdateCliRepositorySettingsUseCase,
         UpdateOrCreateCodeReviewParameterUseCase,
         PreviewPrSummaryUseCase, // Added
-        CentralizedConfigSyncUseCase,
-        CentralizedConfigSyncListener,
-        CentralizedConfigDownloadUseCase,
-        CentralizedConfigInitUseCase,
     ],
     exports: [
         ApplyCodeReviewPresetUseCase,
@@ -68,9 +62,6 @@ import { CentralizedConfigInitUseCase } from '../application/use-cases/configura
         UpdateCliRepositorySettingsUseCase,
         UpdateOrCreateCodeReviewParameterUseCase,
         PreviewPrSummaryUseCase, // Added
-        CentralizedConfigSyncUseCase,
-        CentralizedConfigDownloadUseCase,
-        CentralizedConfigInitUseCase,
     ],
 })
 export class CodeReviewConfigurationModule {}

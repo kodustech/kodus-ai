@@ -1,6 +1,5 @@
 import { UserManagementLogHandler } from '@libs/ee/codeReviewSettingsLog/infrastructure/adapters/services/userManagementLog.handler';
 
-
 import {
     createMockUnifiedLogHandler,
     createBaseParams,

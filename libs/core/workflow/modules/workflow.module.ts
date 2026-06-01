@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { CodeReviewPipelineModule } from '@libs/code-review/pipeline/code-review-pipeline.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
+import { CliReviewModule } from '@libs/cli-review/cli-review.module';
 import { WorkflowCoreModule } from './workflow-core.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 
@@ -34,8 +35,11 @@ import { EnqueueCodeReviewJobUseCase } from '@libs/core/workflow/application/use
 import { ProcessWorkflowJobUseCase } from '@libs/core/workflow/application/use-cases/process-workflow-job.use-case';
 import { GetJobStatusUseCase } from '@libs/core/workflow/application/use-cases/get-job-status.use-case';
 import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
+import { EnqueueAstGraphUpdateOnMergedUseCase } from '@libs/code-review/application/use-cases/enqueue-ast-graph-update-on-merged.use-case';
 import { AutomationModule } from '@libs/automation/modules/automation.module';
 import { ASTEventHandler } from '@libs/core/workflow/infrastructure/ast-event-handler.service';
+import { AstGraphBuildJobProcessor } from '@libs/code-review/workflow/ast-graph-build-job.processor';
+import { AstGraphIncrementalJobProcessor } from '@libs/code-review/workflow/ast-graph-incremental-job.processor';
 import { EcsModule } from '@libs/ee/infrastructure/ecs/ecs.module';
 import { environment } from '@libs/ee/configs/environment';
 import { TASK_PROTECTION_SERVICE_TOKEN } from '../domain/contracts/task-protection.service.contract';
@@ -57,6 +61,7 @@ const sharedProviders = [
     EnqueueCodeReviewJobUseCase,
     GetJobStatusUseCase,
     EnqueueImplementationCheckUseCase,
+    EnqueueAstGraphUpdateOnMergedUseCase,
 ];
 
 const sharedExports = [
@@ -64,6 +69,7 @@ const sharedExports = [
     EnqueueCodeReviewJobUseCase,
     GetJobStatusUseCase,
     EnqueueImplementationCheckUseCase,
+    EnqueueAstGraphUpdateOnMergedUseCase,
 ];
 
 const workerProviders = [
@@ -85,6 +91,8 @@ const workerProviders = [
 
     // Processors
     WebhookProcessingJobProcessorService,
+    AstGraphBuildJobProcessor,
+    AstGraphIncrementalJobProcessor,
 
     // Consumers
     WorkflowJobConsumer,
@@ -115,6 +123,7 @@ export class WorkflowModule {
             forwardRef(() => PermissionValidationModule),
             SharedMongoModule, // Ensure MongoDB is available for worker
             ...(isWorker && useEcs ? [EcsModule] : []),
+            ...(isWorker ? [forwardRef(() => CliReviewModule)] : []),
         ];
 
         const providers: Provider[] = [

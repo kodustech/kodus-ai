@@ -15,25 +15,27 @@ import {
     SidebarMenuItem,
 } from "@components/ui/sidebar";
 import {
+    BellIcon,
     CogIcon,
     GaugeIcon,
     KeyRoundIcon,
     LockKeyholeOpenIcon,
     ShieldIcon,
 } from "lucide-react";
-import { isBYOKSubscriptionPlan } from "src/features/ee/byok/_utils";
+import {
+    isBYOKSubscriptionPlan,
+    isEnterprisePlan,
+} from "src/features/ee/byok/_utils";
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 import { useOrganizationContext } from "src/features/organization/_providers/organization-context";
 
-import { useFeatureFlags } from "../../settings/_components/context";
-
 export const ConfigsSidebar = () => {
-    const { sso, cliKeys } = useFeatureFlags();
     const { organizationName } = useOrganizationContext();
     const pathname = usePathname();
     const { license } = useSubscriptionContext();
     const isTrial = license.subscriptionStatus === "trial";
     const isBYOK = isBYOKSubscriptionPlan(license);
+    const isEnterprise = isEnterprisePlan(license);
 
     const topItems = [
         {
@@ -46,7 +48,7 @@ export const ConfigsSidebar = () => {
             icon: ShieldIcon,
             label: "SSO",
             href: `/organization/sso`,
-            visible: sso ?? false,
+            visible: isEnterprise || isTrial,
         },
         {
             icon: GaugeIcon,
@@ -64,7 +66,13 @@ export const ConfigsSidebar = () => {
             icon: KeyRoundIcon,
             label: "CLI keys",
             href: `/organization/cli-keys`,
-            visible: cliKeys ?? false,
+            visible: true,
+        },
+        {
+            icon: BellIcon,
+            label: "Notifications",
+            href: `/organization/notifications`,
+            visible: true,
         },
     ] satisfies Array<{
         icon: React.ComponentType;

@@ -273,39 +273,31 @@ export const CliKeysPage = ({
         }
     };
 
-    const handleCopyKey = async () => {
+    const handleCopyKey = () => {
         if (!createdKey) return;
 
-        try {
-            await ClipboardHelpers.copyTextToClipboard(createdKey);
-            toast({ variant: "success", title: "CLI key copied" });
-        } catch (error) {
-            toast({
-                variant: "danger",
-                title: "Failed to copy key",
-            });
-            console.error(error);
-        }
+        const copied = ClipboardHelpers.copyTextToClipboard(createdKey);
+        toast(
+            copied
+                ? { variant: "success", title: "CLI key copied" }
+                : { variant: "danger", title: "Failed to copy key" },
+        );
     };
 
     const getInstallCommand = (key: string) =>
         `curl -fsSL https://review-skill.com/install | bash -s -- --team-key ${key}`;
 
-    const handleCopyInstallCommand = async () => {
+    const handleCopyInstallCommand = () => {
         if (!createdKey) return;
 
-        try {
-            await ClipboardHelpers.copyTextToClipboard(
-                getInstallCommand(createdKey),
-            );
-            toast({ variant: "success", title: "Install command copied" });
-        } catch (error) {
-            toast({
-                variant: "danger",
-                title: "Failed to copy command",
-            });
-            console.error(error);
-        }
+        const copied = ClipboardHelpers.copyTextToClipboard(
+            getInstallCommand(createdKey),
+        );
+        toast(
+            copied
+                ? { variant: "success", title: "Install command copied" }
+                : { variant: "danger", title: "Failed to copy command" },
+        );
     };
 
     const formatLastUsed = (value?: string | null) => {

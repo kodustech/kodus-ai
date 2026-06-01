@@ -39,7 +39,10 @@ export function isAllowedMcpOrigin(params: {
 
     const normalizedRequestOrigin = normalizeOrigin(params.requestOrigin);
 
-    if (normalizedRequestOrigin && normalizedOrigin === normalizedRequestOrigin) {
+    if (
+        normalizedRequestOrigin &&
+        normalizedOrigin === normalizedRequestOrigin
+    ) {
         return true;
     }
 

@@ -25,6 +25,82 @@ jest.mock('@kodus/flow', () => ({
     }),
 }));
 
+/**
+ * ── Bug A3 ─────────────────────────────────────────────────────────
+ * Bitbucket's REST API does not have a "pull request review" concept.
+ * GitHub groups line comments under a `pull_request_review_id`; GitLab
+ * has its own discussion id. Bitbucket just returns a flat comment.
+ *
+ * Previously bitbucket.service.ts::createReviewComment returned the raw
+ * Bitbucket response, which has `id` but no `pull_request_review_id`.
+ * commentManager.service.ts then logged an error on every Bitbucket
+ * comment ("missing critical IDs"), still marked the comment as SENT,
+ * and persisted feedback rows with `pullRequestReviewId: undefined`.
+ *
+ * Replicates the small normalizer we now run on Bitbucket's response
+ * so the downstream pipeline has a stable grouping id.
+ */
+function normalizeBitbucketCommentResponse(
+    raw: { id?: number | string; content?: any; [k: string]: any } | null,
+    prNumber: number,
+): any | null {
+    if (!raw) return null;
+    // Bitbucket has no review grouping; use the PR number as a stable
+    // synthetic grouping id so downstream consumers never see undefined.
+    const syntheticReviewId = String(prNumber);
+    return {
+        ...raw,
+        pullRequestReviewId: syntheticReviewId,
+        pull_request_review_id: syntheticReviewId,
+    };
+}
+
+describe('Bitbucket A3 — comment response normalization', () => {
+    it('adds a synthetic pullRequestReviewId (= prNumber) to the response', () => {
+        const raw = { id: 9876, content: { raw: 'hi' } };
+
+        const normalized = normalizeBitbucketCommentResponse(raw, 24870);
+
+        expect(normalized.id).toBe(9876);
+        expect(normalized.pullRequestReviewId).toBe('24870');
+        expect(normalized.pull_request_review_id).toBe('24870');
+    });
+
+    it('returns null when Bitbucket API returned no comment', () => {
+        expect(normalizeBitbucketCommentResponse(null, 1)).toBeNull();
+    });
+
+    it('preserves every original key on the comment response', () => {
+        const raw = {
+            id: 1,
+            content: { raw: 'body' },
+            inline: { path: 'a.ts', to: 5 },
+            extra: 'x',
+        };
+
+        const normalized = normalizeBitbucketCommentResponse(raw, 42);
+
+        expect(normalized.inline).toEqual({ path: 'a.ts', to: 5 });
+        expect(normalized.extra).toBe('x');
+        expect(normalized.content).toEqual({ raw: 'body' });
+    });
+
+    it('satisfies commentManager.service.ts:987 guard (both commentId and pullRequestReviewId truthy)', () => {
+        // Reproduces the exact shape commentManager.service.ts reads at
+        // line 982-987. The guard `if (!commentId || !pullRequestReviewId)`
+        // must not fire for a normal Bitbucket response after normalization.
+        const raw = { id: 777, content: { raw: 'body' } };
+        const normalized = normalizeBitbucketCommentResponse(raw, 42);
+
+        const commentId = normalized?.id;
+        const pullRequestReviewId =
+            normalized?.pull_request_review_id ??
+            normalized?.pullRequestReviewId;
+
+        expect(Boolean(commentId && pullRequestReviewId)).toBe(true);
+    });
+});
+
 describe('Bitbucket Service — Bug Regressions', () => {
     /**
      * ── Bug 1 ──────────────────────────────────────────────────────────

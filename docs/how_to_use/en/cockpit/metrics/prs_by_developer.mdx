@@ -1,0 +1,100 @@
+---
+title: "PRs by Developer"
+description: "Track completed Pull Requests per developer grouped by week"
+---
+
+## What is PRs by Developer
+
+PRs by Developer measures the number of **closed** Pull Requests completed by each team member, grouped by week. This metric focuses on actual results and completed work, giving you insights into individual developer productivity and team workload distribution.
+
+## How We Calculate It
+
+We automatically track every closed Pull Request and group them by developer and week, starting from Monday. This gives you a clear view of who is completing work and when.
+
+**What We Track:**
+- **Closed PRs**: Every PR that has been completed (merged or closed)
+- **Developer Attribution**: Who authored each completed PR
+- **Weekly Aggregation**: Grouped by week starting Monday
+- **Completion Count**: Number of PRs finished per developer per week
+
+**What We Don't Count:**
+- Open or draft PRs
+- PRs without a valid close date
+- Incomplete or abandoned work
+
+**How It's Calculated:**
+```
+Weekly PRs per Developer = COUNT(closed PRs) per developer per week
+```
+
+We group data by week starting Monday to give you consistent weekly insights and identify trends over time.
+
+## Why It Matters
+
+Understanding PR completion by developer helps you:
+
+- **Measure Individual Output**: See who is completing the most work
+- **Identify Productivity Patterns**: Understand weekly rhythms and trends
+- **Balance Workload**: Distribute work more evenly across the team
+- **Track Team Performance**: Monitor overall team velocity and output
+
+### Impact on Team Management
+
+- **Resource Allocation**: Better distribute work based on individual capacity
+- **Performance Recognition**: Acknowledge high performers and their contributions
+- **Bottleneck Identification**: Find where work gets stuck or delayed
+- **Team Planning**: Set realistic expectations for project timelines
+
+### Team Distribution
+- **Balanced**: Work distributed evenly across team members
+- **Concentrated**: Few developers handling most of the work
+- **Fragmented**: Work spread too thinly across many developers
+
+## How to Improve
+
+### Increase Individual Output
+- **Clear Goals**: Set specific, achievable targets for each developer
+- **Skill Development**: Provide training on areas that slow them down
+- **Tool Optimization**: Ensure developers have the right tools and access
+- **Reduced Blockers**: Remove obstacles that prevent work completion
+
+### Improve Team Balance
+- **Work Distribution**: Spread work more evenly across the team
+- **Cross-training**: Help developers work on different areas
+- **Pair Programming**: Encourage collaboration and knowledge sharing
+- **Mentorship**: Senior developers help junior team members
+
+### Optimize Workflow
+- **Clear Processes**: Define how work flows through the team
+- **Automation**: Reduce manual, repetitive tasks
+- **Communication**: Improve team coordination and information sharing
+- **Review Efficiency**: Streamline the code review process
+
+## Key Differences from Developer Activity
+
+| **Aspect** | **Developer Activity** | **PRs by Developer** |
+|-------------|------------------------|---------------------------|
+| **PR Status** | ❌ No filtering | ✅ `status = 'closed'` |
+| **Date Basis** | **Creation** date | **Completion** date |
+| **Aggregation** | By **specific date** | By **week** |
+| **Focus** | Creation activity | Completed results |
+
+## Common Patterns
+
+### High Output Developers
+- **Characteristics**: Consistently complete many PRs per week
+- **Benefits**: Drive team velocity, set performance standards
+- **Risks**: Potential burnout, knowledge silos
+- **Management**: Ensure sustainable pace, share knowledge
+
+### Low Output Developers
+- **Characteristics**: Complete fewer PRs per week
+- **Possible Causes**: Learning curve, complex tasks, external factors
+- **Support**: Provide mentoring, simplify tasks, check for blockers
+- **Goals**: Set incremental improvement targets
+
+## Context Considerations
+- **PR Size**: A developer with fewer but larger PRs may be equally productive
+- **Complexity**: Some work naturally takes longer to complete
+- **Team Role**: Different roles may have different PR patterns
+- **Project Phase**: Output varies during different development phases

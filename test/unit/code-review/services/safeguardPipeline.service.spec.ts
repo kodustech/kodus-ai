@@ -17,7 +17,7 @@ import { DocumentationSearchExaService } from '@/code-review/infrastructure/adap
 import { SafeguardPipelineService } from '@/code-review/infrastructure/adapters/services/safeguardPipeline.service';
 import { ObservabilityService } from '@/core/log/observability.service';
 import { PromptRunnerService } from '@kodus/kodus-common/llm';
-import { ISandboxProvider } from '@libs/code-review/domain/contracts/sandbox.provider';
+import { ISandboxProvider } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { __mockLogger as mockLogger } from '@kodus/flow';
 
 describe('SafeguardPipelineService', () => {
@@ -71,12 +71,13 @@ describe('SafeguardPipelineService', () => {
                     },
                 ],
             });
-            jest.spyOn(service as any, 'verifyWithPromptOnly').mockResolvedValue(
-                {
-                    keep: false,
-                    evidence: 'discarded',
-                },
-            );
+            jest.spyOn(
+                service as any,
+                'verifyWithPromptOnly',
+            ).mockResolvedValue({
+                keep: false,
+                evidence: 'discarded',
+            });
 
             await service.execute({
                 organizationAndTeamData: {
@@ -112,7 +113,7 @@ describe('SafeguardPipelineService', () => {
                         sandboxAvailable: false,
                         safeguardReason: 'no_remote_commands',
                         prNumber: 14282,
-                        hasSandboxCloneParams: false,
+                        hasFreshCloneParams: false,
                         toVerifyCount: 1,
                     }),
                 }),

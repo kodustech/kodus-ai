@@ -1,0 +1,32 @@
+name: Permissions Matrix Check
+
+on:
+    pull_request:
+        paths:
+            - "libs/identity/domain/permissions/policies/role-policies.ts"
+            - "libs/identity/domain/permissions/enums/permissions.enum.ts"
+            - "docs/_snippets/rbac-matrix-generated.mdx"
+            - "scripts/permissions/**"
+            - ".github/workflows/permissions-matrix-check.yml"
+
+permissions:
+    contents: read
+
+jobs:
+    matrix-check:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v6.0.2
+
+            - name: Set up Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "yarn"
+
+            - name: Install dependencies
+              run: yarn install --frozen-lockfile
+
+            - name: Verify docs RBAC matrix is in sync with ROLE_POLICIES
+              run: yarn permissions:matrix:check

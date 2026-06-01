@@ -61,12 +61,42 @@ export const kodyRulesGeneratorSchema = z.object({
     ),
 });
 
+/**
+ * How the LLM decided on `path`. Drives backend confidence checks and
+ * whether post-LLM scoping should kick in.
+ *
+ *   declared           → glob came verbatim from the source MDC frontmatter
+ *                        or an explicit "Path:" line. Backend should not
+ *                        rewrite it.
+ *   content-inferred   → no declared glob; LLM inferred from the rule body
+ *                        (mentions of TS/Python/API/etc).
+ *   location-inferred  → no declared glob; LLM inferred from where the
+ *                        source MDC lives in the repo.
+ *   default-repo-wide  → LLM had no signal and fell back to "**\/*". Most
+ *                        likely target for backend scoping.
+ */
+export type KodyRulesIDEGeneratorPathSource =
+    | 'declared'
+    | 'content-inferred'
+    | 'location-inferred'
+    | 'default-repo-wide';
+
 export const kodyRulesIDEGeneratorSchema = z.object({
     rules: z.array(
         z.object({
             title: z.string(),
             rule: z.string(),
             path: z.string(),
+            // Optional for backward compatibility with prompt versions
+            // that did not request it. New prompt always asks for it.
+            pathSource: z
+                .enum([
+                    'declared',
+                    'content-inferred',
+                    'location-inferred',
+                    'default-repo-wide',
+                ])
+                .optional(),
             sourcePath: z.string(),
             severity: z.enum(['low', 'medium', 'high', 'critical']),
             scope: z.enum(['file', 'pull-request']).optional(),

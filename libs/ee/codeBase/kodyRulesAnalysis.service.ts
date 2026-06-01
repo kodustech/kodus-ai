@@ -24,6 +24,7 @@ import {
     ICodeBaseConfigService,
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { IKodyRulesAnalysisService } from '@libs/code-review/domain/contracts/KodyRulesAnalysisService.contract';
+import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import {
@@ -128,16 +129,15 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
                 }
 
                 const baseUrl = process.env.API_USER_INVITE_BASE_URL || '';
-                let ruleLink: string;
-
-                if (rule.repositoryId === 'global') {
-                    ruleLink = `${baseUrl}/settings/code-review/global/kody-rules/${ruleId}`;
-                } else {
-                    ruleLink = `${baseUrl}/settings/code-review/${rule.repositoryId}/kody-rules/${ruleId}`;
-                }
+                const ruleLink = buildKodyRuleLink(
+                    baseUrl,
+                    ruleId,
+                    rule,
+                    organizationAndTeamData,
+                );
 
                 const escapeMarkdownSyntax = (text: string): string =>
-                    text.replace(/([\[\]\\`*_{}()#+\-.!])/g, '\\$1');
+                    text.replace(/([[\\`*_{}()#+\-.!\]])/g, '\\$1');
                 const markdownLink = `[${escapeMarkdownSyntax(rule.title)}](${ruleLink})`;
 
                 // Check if ID is between single backticks `id`
@@ -321,6 +321,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
                     spanName,
                     runName,
                     attrs: spanAttrs,
+                    byokConfig,
                     exec: async (callbacks) => {
                         return await promptRunner
                             .builder()
@@ -428,7 +429,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
 
         for (const [ruleId, dependencies] of dependenciesByRule.entries()) {
             const ruleAugmentations: Record<string, unknown> = {};
-            for (const dep of dependencies) {
+            for (const _dep of dependencies) {
                 for (const fileName in augmentationsByFile) {
                     const fileAugmentations = augmentationsByFile[fileName];
                     for (const pathKey in fileAugmentations) {
@@ -607,11 +608,14 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
             file: { name: fileContext?.file?.filename },
         };
 
+        const byokConfigRef = context?.codeReviewConfig?.byokConfig;
+
         try {
             const { result } = await this.observabilityService.runLLMInSpan({
                 spanName,
                 runName,
                 attrs: spanAttrs,
+                byokConfig: byokConfigRef,
                 exec: async (callbacks) => {
                     const classifier = this.getClassifier(
                         promptRunner,
@@ -948,7 +952,11 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
         }
 
         const updatedSuggestions = suggestions.codeSuggestions.map(
-            (suggestion: CodeSuggestion & { brokenKodyRulesIds: string[] }) => {
+            (
+                suggestion: Partial<CodeSuggestion> & {
+                    brokenKodyRulesIds?: string[];
+                },
+            ) => {
                 if (!suggestion.brokenKodyRulesIds?.length) {
                     return suggestion;
                 }
@@ -1211,8 +1219,8 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
         prNumber: number,
         response: string,
         fileContext: FileChangeContext,
-        provider: LLMModelProvider,
-        extendedContext: KodyRulesExtendedContext,
+        _provider: LLMModelProvider,
+        _extendedContext: KodyRulesExtendedContext,
     ): AIAnalysisResult | null {
         // Tipo específico para a resposta do UPDATE
         interface KodyRulesUpdateResponse {

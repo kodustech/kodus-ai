@@ -1,0 +1,92 @@
+# Cross-repo sync — opens a PR in kodus-installer with the regenerated
+# .env.example whenever it drifts from kodus-ai/.env.schema.
+#
+# Triggered on release tag (same cadence as Docker images). docs/ used
+# to be a sister repo too — it now lives inside kodus-ai, so the schema
+# generates the snippet directly into the monorepo and no cross-repo PR
+# is needed for docs.
+name: env-sync-release
+
+# kodus-ai side is only checked out (read). Cross-repo writes go through
+# CROSS_REPO_PAT, not the default GITHUB_TOKEN — so the local token can
+# stay minimal (CodeQL alert: actions/missing-workflow-permissions).
+permissions:
+    contents: read
+
+on:
+    push:
+        # Self-hosted releases ship as `selfhosted-X.Y.Z` (see
+        # selfhosted-build-push.yml). The legacy `v*` pattern only ever
+        # matched `v0.0.1`, so the cross-repo sync never fired and
+        # kodus-installer/.env.example drifted hundreds of lines.
+        #
+        # Heads up: this `push: tags` trigger does NOT fire when the tag
+        # is created by GITHUB_TOKEN inside another workflow run (Actions
+        # cascade-prevention). `selfhosted-build-push.yml` therefore
+        # invokes this workflow explicitly via `workflow_call` — same
+        # pattern as cli-release / changelog-publish.
+        tags:
+            - 'selfhosted-*'
+    workflow_call:
+        inputs:
+            tag:
+                description: "Self-hosted release tag this sync is associated with (e.g. selfhosted-2.1.13). Used in the PR body."
+                required: false
+                type: string
+    workflow_dispatch: # allow manual re-run if a PR was closed without merge
+
+jobs:
+    sync-installer:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout kodus-ai
+              uses: actions/checkout@v4
+              with:
+                  path: kodus-ai
+                  # When invoked via workflow_call from selfhosted-build-push
+                  # (running in `main`), github.ref would be `main` and we'd
+                  # sync the wrong commit. Honour the explicit `tag` input
+                  # so we always check out the actual release tag.
+                  ref: ${{ inputs.tag || github.ref }}
+
+            - name: Checkout kodus-installer
+              uses: actions/checkout@v4
+              with:
+                  repository: kodustech/kodus-installer
+                  path: kodus-installer
+                  token: ${{ secrets.CROSS_REPO_PAT }}
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: yarn
+                  cache-dependency-path: kodus-ai/yarn.lock
+
+            - name: Install deps
+              working-directory: kodus-ai
+              run: yarn install --frozen-lockfile
+
+            - name: Regenerate installer artifacts from schema
+              working-directory: kodus-ai
+              run: |
+                  npx ts-node scripts/env/generate.ts \
+                      --apply \
+                      --installer \
+                      --installer-out=../kodus-installer/.env.example \
+                      --installer-schema-vars-out=../kodus-installer/scripts/schema-vars.sh
+
+            - name: Open PR in kodus-installer (if drifted)
+              working-directory: kodus-installer
+              env:
+                  GH_TOKEN: ${{ secrets.CROSS_REPO_PAT }}
+                  # Prefer the explicit tag input (from workflow_call) over
+                  # github.ref_name. Without this, a workflow_call from main
+                  # produces TAG=main → branch env-sync/main, force-pushed
+                  # every release (losing per-release history).
+                  TAG: ${{ inputs.tag || github.ref_name }}
+                  SHA: ${{ github.sha }}
+              run: |
+                  ../kodus-ai/scripts/env/open-sync-pr.sh \
+                      kodus-installer \
+                      .env.example \
+                      scripts/schema-vars.sh

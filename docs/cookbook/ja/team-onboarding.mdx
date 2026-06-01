@@ -1,0 +1,139 @@
+---
+title: "新しいチームのオンボーディング"
+description: "新しいチームにKodusをセットアップするためのステップバイステップガイド — リポジトリの接続から最初の規約の教育まで。"
+icon: "users-gear"
+---
+
+## 概要
+
+新しいチームをKodusで稼働させるのに約30分かかります。このガイドでは完全なセットアップを順を追って説明し、チームが最初のPRから価値を得られるようにします。
+
+## ステップ1 — ワークスペースを作成して設定する
+
+1. [kodus.io](https://kodus.io) でサインアップするか、セルフホスティングインスタンスにアクセスする
+2. チームの新しいワークスペースを作成する
+3. Gitプロバイダーを接続する（GitHub、GitLab、Bitbucket、またはAzure DevOps）
+4. 監視するリポジトリを選択する
+
+## ステップ2 — レビューのベースラインを設定する
+
+カスタマイズする前に適切なデフォルトから始めます：
+
+```yaml
+# kodus-config.yml — 各リポジトリのルートに配置する
+reviewOptions:
+  security: true
+  code_style: true
+  kody_rules: true
+  refactoring: true
+  error_handling: true
+  maintainability: true
+  potential_issues: true
+  performance_and_optimization: true
+  business_logic: true
+
+suggestionControl:
+  groupingMode: full
+  limitationType: pr
+  maxSuggestions: 9
+  severityLevelFilter: medium
+
+automatedReviewActive: true
+```
+
+これにより、適切な提案制限を持つ自動レビューが得られます。1週間後、フィードバックに基づいて調整してください。
+
+## ステップ3 — IDEツールから既存のルールをインポートする
+
+チームがすでにCursor、Copilot、またはClaudeのルールを使用している場合：
+
+1. **コードレビュー設定** → **Kodyルール** に移動する
+2. Kodusは `.cursorrules`、`.github/copilot-instructions.md`、および `.claude` ファイルを検出する
+3. コードレビューに意味があるものをインポートする
+
+これにより、ルールをゼロから書き直す必要がなくなります。
+
+## ステップ4 — トップ5の規約を教える
+
+1日目にすべてをエンコードしようとしないでください。チームが最もよく議論する5つの規約から始めます：
+
+```
+@kody remember: 変数にはcamelCaseを、型にはPascalCaseを使用する。
+```
+
+```
+@kody remember: すべてのAPIレスポンスは標準エンベロープ形式
+{ data, error, meta } を使用する。
+```
+
+```
+@kody remember: 継承よりもコンポジションを優先する。
+インターフェースと依存性注入を使用する。
+```
+
+```
+@kody remember: すべてのパブリック関数は
+@paramと@returnsの説明を含むJSDocが必要。
+```
+
+```
+@kody remember: データベースクエリはリポジトリ層のみを通じて行う。
+サービスやコントローラーからの直接DBアクセスは禁止。
+```
+
+これらはすべてのレビューに即座に適用されるMemoriesになります。
+
+## ステップ5 — 2〜3の重要なルールを作成する
+
+決して起きてはならないことのためのルールを追加します：
+
+```
+Name: 本番コードにconsole.logは禁止
+Scope: File
+Paths: src/**/*.ts
+Severity: High
+Instructions: fileDiffでconsole.log、console.warn、またはconsole.errorに
+フラグを立てる。代わりにプロジェクトロガーを使用する。
+テストファイル（*.spec.ts、*.test.ts）は除外する。
+```
+
+```
+Name: ハードコードされたAPIURLは禁止
+Scope: File
+Paths: src/**/*.ts
+Severity: Critical
+Instructions: fileDiffでAPIエンドポイントのように見える
+ハードコードされたURL（http://またはhttps://）にフラグを立てる。
+URLは環境変数または設定ファイルから取得する必要がある。
+```
+
+## ステップ6 — タスク管理を接続する（オプションだが推奨）
+
+**設定** → **Plugins** でJira、Linear、Notion、またはClickUpを接続して、ビジネスロジック検証を有効にします。これにより、KodusがPRがタスクの説明どおりに実装されているかどうかを確認できます。
+
+## ステップ7 — パイロットPRを実行する
+
+テストPRを開いて確認します：
+
+- [ ] KodusのコメントがPRに表示される
+- [ ] 提案が適切で正しい重要度になっている
+- [ ] カスタムルールが発火すべき時に発火する
+- [ ] Memoriesがレビューコンテキストに反映されている
+
+## ステップ8 — 1週間後にフィードバックを収集する
+
+1週間のレビュー後、チームに確認します：
+
+- 提案が多すぎますか？ → `severityLevelFilter` を上げるか `maxSuggestions` を下げる
+- ルールがうるさすぎますか？ → ファイルパスを絞り込むか除外を追加する
+- 重要なパターンが見つかっていませんか？ → 新しいルールまたはMemoriesを追加する
+- 自動生成ルールが欲しいですか？ → **Kodyルールを生成** をクリックして、レビュー履歴から提案を取得する
+
+## ヒント
+
+- 初日からルールで過負荷にしない — 小さく始めて成長させる
+- 正式なルールとして定める前に、チームが会話を通じてKodyを自然に教えられるようにする
+- 最初の数回のPRには `@kody start-review` を使用して、チームがKodusの動作を確認できるようにする
+- Kodyが学ぶことをレビューしたい場合は、LLMが生成したメモリの承認を有効にする
+
+完全なセットアップガイドについては、[クイックスタート](/how_to_use/ja/quickstart) を参照してください。

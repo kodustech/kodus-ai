@@ -1,8 +1,17 @@
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
-import { IsArray, IsEnum, IsString } from 'class-validator';
+import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class ChangeStatusKodyRulesDTO {
+    @IsOptional()
+    @IsString()
+    @ApiProperty({
+        type: String,
+        required: false,
+        example: 'team_123',
+    })
+    teamId?: string;
+
     @IsArray()
     @IsString({ each: true })
     @ApiProperty({

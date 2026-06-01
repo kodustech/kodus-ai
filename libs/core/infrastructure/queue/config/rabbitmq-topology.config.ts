@@ -73,5 +73,14 @@ export const RABBITMQ_TOPOLOGY_CONFIG = {
                 },
             },
         },
+
+        // =================================================================
+        // NOTIFICATIONS DOMAIN EXCHANGES
+        // =================================================================
+        {
+            name: 'notification.exchange',
+            type: 'topic',
+            durable: true,
+        },
     ],
 };

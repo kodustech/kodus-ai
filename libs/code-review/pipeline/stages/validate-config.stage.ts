@@ -85,7 +85,20 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 );
 
             context = this.updateContext(context, (draft) => {
-                draft.codeReviewConfig.byokConfig = byokConfig?.configValue;
+                const resolved = byokConfig?.configValue;
+                draft.codeReviewConfig.byokConfig = resolved;
+
+                // The merged code review config can override which BYOK *main*
+                // model runs the review (directory -> repository -> BYOK
+                // settings). An empty/absent value means "inherit", so the
+                // BYOK-settings main model is left in place.
+                const overrideModel = draft.codeReviewConfig.byokModel?.trim();
+                if (resolved?.main && overrideModel) {
+                    draft.codeReviewConfig.byokConfig = {
+                        ...resolved,
+                        main: { ...resolved.main, model: overrideModel },
+                    };
+                }
             });
 
             const cadenceResult = await this.evaluateReviewCadence(context);
@@ -183,8 +196,8 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         const cadenceType =
             config?.reviewCadence?.type || ReviewCadenceType.AUTOMATIC;
 
-        // Se é comando manual, sempre processa
-        if (context.origin === 'command') {
+        // Se é comando manual (regular ou --force), sempre processa
+        if (context.origin?.startsWith('command')) {
             const currentStatus = await this.getCurrentPRStatus(context);
 
             const automaticReviewStatus: AutomaticReviewStatus = {
@@ -472,7 +485,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         organizationAndTeamData: OrganizationAndTeamData,
         apiBaseBranch?: string,
     ): IStageValidationResult {
-        if (origin === 'command') {
+        if (origin?.startsWith('command')) {
             return { canProceed: true };
         }
 

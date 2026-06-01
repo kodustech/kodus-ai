@@ -110,6 +110,104 @@ export interface IWebhookBitbucketPullRequestEvent {
     pullrequest: IWebhookBitbucketPullRequest;
     repository: IWebhookBitbucketRepository;
     comment?: IWebhookBitbucketComment;
+    isDataCenterEvent: false; // Custom property to indicate if this is a Data Center event
+}
+
+interface IWebhookBitbucketDataCenterProject {
+    key: string;
+    id: number;
+    name: string;
+    public: boolean;
+    type: string;
+}
+
+interface IWebhookBitbucketDataCenterRepository {
+    slug: string;
+    id: number;
+    name: string;
+    scmId: string;
+    state: string;
+    statusMessage: string;
+    forkable: boolean;
+    project: IWebhookBitbucketDataCenterProject;
+}
+
+interface IWebhookBitbucketDataCenterActor {
+    name: string;
+    emailAddress: string;
+    id: number;
+    displayName: string;
+    active: boolean;
+    slug: string;
+    type: string;
+}
+
+interface IWebhookBitbucketDataCenterPullRequest {
+    id: number;
+    version: number;
+    title: string;
+    description: string;
+    state: WebhookBitbucketPullRequestState;
+    open: boolean;
+    closed: boolean;
+    draft: boolean;
+    createdDate: string;
+    updatedDate: string;
+    fromRef: {
+        id: string;
+        displayId: string;
+        latestCommit: string;
+        repository: IWebhookBitbucketDataCenterRepository;
+    };
+    toRef: {
+        id: string;
+        displayId: string;
+        latestCommit: string;
+        repository: IWebhookBitbucketDataCenterRepository;
+    };
+    locked: boolean;
+    author: {
+        user: IWebhookBitbucketDataCenterActor;
+        role: string;
+        approved: boolean;
+        status: string;
+    };
+    reviewers: Array<{
+        user: IWebhookBitbucketDataCenterActor;
+        role: string;
+        approved: boolean;
+        status: string;
+    }>;
+    participants: Array<{
+        user: IWebhookBitbucketDataCenterActor;
+        role: string;
+        approved: boolean;
+        status: string;
+    }>;
+}
+
+interface IWebhookBitbucketDataCenterComment {
+    properties: {
+        repositoryId: number;
+    };
+    id: number;
+    version: number;
+    text: string;
+    author: IWebhookBitbucketDataCenterActor;
+    createdDate: string;
+    updatedDate: string;
+    comments: IWebhookBitbucketDataCenterComment[];
+    tasks: any[];
+}
+
+export interface IWebhookBitbucketDataCenterPullRequestEvent {
+    eventKey: string;
+    date: string;
+    actor: IWebhookBitbucketDataCenterActor;
+    pullrequest: IWebhookBitbucketDataCenterPullRequest;
+    comment?: IWebhookBitbucketDataCenterComment;
+    commentParentId?: number;
+    isDataCenterEvent: true; // Custom property to indicate Data Center event
 }
 
 /**

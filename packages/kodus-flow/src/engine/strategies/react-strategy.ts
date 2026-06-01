@@ -1201,6 +1201,16 @@ export class ReActStrategy extends BaseExecutionStrategy {
     }
 
     private parseLLMResponse(content: string, iteration: number): AgentThought {
+        // Try native tool calling format first (e.g. Kimi K2.5, DeepSeek)
+        // These models respond with <|tool_calls_section_begin|> markers
+        const nativeToolCallResult = this.tryParseNativeToolCalls(
+            content,
+            iteration,
+        );
+        if (nativeToolCallResult) {
+            return nativeToolCallResult;
+        }
+
         const parseResult = EnhancedJSONParser.parse(content);
 
         if (!parseResult || typeof parseResult !== 'object') {
@@ -1318,6 +1328,109 @@ export class ReActStrategy extends BaseExecutionStrategy {
         return {
             type: 'final_answer',
             content: 'Unable to determine action type from LLM response',
+        };
+    }
+
+    /**
+     * Try to parse native tool calling format from models like Kimi K2.5, DeepSeek, etc.
+     * These models respond with markers like:
+     *   <|tool_calls_section_begin|>
+     *   <|tool_call_begin|> functions.toolName:0 <|tool_call_argument_begin|> {"key":"value"} <|tool_call_end|>
+     *   <|tool_calls_section_end|>
+     *
+     * Also handles text before the markers as reasoning.
+     * Returns null if the content doesn't match this format.
+     */
+    private tryParseNativeToolCalls(
+        content: string,
+        iteration: number,
+    ): AgentThought | null {
+        if (
+            !content.includes('<|tool_call') &&
+            !content.includes('<|function_call')
+        ) {
+            return null;
+        }
+
+        this.logger.debug({
+            message: 'Detected native tool calling format, attempting parse',
+            context: this.constructor.name,
+            metadata: { iteration },
+        });
+
+        // Extract reasoning (text before the tool calls section)
+        const sectionStart = content.indexOf('<|tool_call');
+        const reasoning =
+            sectionStart > 0
+                ? content.substring(0, sectionStart).trim()
+                : `Native tool call at iteration ${iteration}`;
+
+        // Parse tool calls
+        // Pattern: functions.TOOL_NAME:INDEX <|tool_call_argument_begin|> {JSON} <|tool_call_end|>
+        // Use <|tool_call_end|> as the JSON boundary (more reliable than matching braces)
+        const toolCallPattern =
+            /functions\.(\w+):\d+\s*<\|tool_call_argument_begin\|>\s*([\s\S]*?)\s*<\|tool_call_end\|>/g;
+        let matches = [...content.matchAll(toolCallPattern)];
+
+        if (matches.length === 0) {
+            // Try alternative pattern without "functions." prefix
+            const altPattern =
+                /<\|tool_call_begin\|>\s*(\w+)(?::\d+)?\s*<\|tool_call_argument_begin\|>\s*([\s\S]*?)\s*<\|tool_call_end\|>/g;
+            matches = [...content.matchAll(altPattern)];
+
+            if (matches.length === 0) {
+                this.logger.warn({
+                    message:
+                        'Detected native tool call markers but failed to extract tool calls',
+                    context: this.constructor.name,
+                    metadata: {
+                        iteration,
+                        contentPreview: content.substring(0, 300),
+                    },
+                });
+                return null;
+            }
+        }
+
+        // Use the first tool call (ReAct processes one action at a time)
+        const firstMatch = matches[0]!;
+        const toolName = firstMatch[1] ?? 'unknown';
+        const argsJson = firstMatch[2] ?? '{}';
+        let input: Record<string, unknown> = {};
+        try {
+            input = JSON.parse(argsJson);
+        } catch {
+            this.logger.warn({
+                message: `Failed to parse tool call arguments: ${argsJson}`,
+                context: this.constructor.name,
+            });
+        }
+
+        this.logger.log({
+            message: `Parsed native tool call: ${toolName}`,
+            context: this.constructor.name,
+            metadata: {
+                iteration,
+                toolName,
+                inputKeys: Object.keys(input),
+                totalToolCalls: matches.length,
+                parseMethod: 'native-tool-calls',
+            },
+        });
+
+        return {
+            reasoning: reasoning || `Calling ${toolName}`,
+            confidence: 0.8,
+            action: {
+                type: 'tool_call',
+                toolName,
+                input,
+            },
+            metadata: {
+                iteration,
+                timestamp: Date.now(),
+                parseMethod: 'native-tool-calls',
+            },
         };
     }
 

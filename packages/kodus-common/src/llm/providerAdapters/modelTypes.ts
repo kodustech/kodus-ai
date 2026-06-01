@@ -8,6 +8,10 @@ export type ReasoningConfig =
     | {
           type: 'budget';
           options: { min: number; max?: number; default: number };
+      }
+    | {
+          type: 'adaptive';
+          options: Array<'low' | 'medium' | 'high'>;
       };
 
 export interface ModelCapabilities {

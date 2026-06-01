@@ -16,7 +16,10 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
     let integrationService: { findOne: jest.Mock };
     let factory: PlatformIntegrationFactory;
     let mockPlatformService: jest.Mocked<
-        Pick<ICodeManagementService, 'countReactions' | 'getPullRequestReviewComment'>
+        Pick<
+            ICodeManagementService,
+            'countReactions' | 'getPullRequestReviewComment'
+        >
     >;
 
     const orgAndTeam = {
@@ -30,17 +33,18 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
 
         mockPlatformService = {
             countReactions: jest.fn().mockResolvedValue([
-                { reactions: { thumbsUp: 1, thumbsDown: 0 }, comment: { id: 10 }, pullRequest: { id: 'pr-1', number: 1 } },
+                {
+                    reactions: { thumbsUp: 1, thumbsDown: 0 },
+                    comment: { id: 10 },
+                    pullRequest: { id: 'pr-1', number: 1 },
+                },
             ]),
-            getPullRequestReviewComment: jest.fn().mockResolvedValue([
-                { id: 10, body: 'comment' },
-            ]),
+            getPullRequestReviewComment: jest
+                .fn()
+                .mockResolvedValue([{ id: 10, body: 'comment' }]),
         };
 
-        service = new CodeManagementService(
-            integrationService as any,
-            factory,
-        );
+        service = new CodeManagementService(integrationService as any, factory);
     });
 
     describe('countReactions', () => {
@@ -62,7 +66,9 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
             const result = await service.countReactions(params);
 
             expect(integrationService.findOne).toHaveBeenCalled();
-            expect(mockPlatformService.countReactions).toHaveBeenCalledWith(params);
+            expect(mockPlatformService.countReactions).toHaveBeenCalledWith(
+                params,
+            );
             expect(result).toHaveLength(1);
         });
 
@@ -105,7 +111,9 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
                 await service.countReactions(params, platform);
 
                 expect(integrationService.findOne).not.toHaveBeenCalled();
-                expect(mockPlatformService.countReactions).toHaveBeenCalledWith(params);
+                expect(mockPlatformService.countReactions).toHaveBeenCalledWith(
+                    params,
+                );
             },
         );
 
@@ -148,7 +156,9 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
             const result = await service.getPullRequestReviewComment(params);
 
             expect(integrationService.findOne).toHaveBeenCalled();
-            expect(mockPlatformService.getPullRequestReviewComment).toHaveBeenCalledWith(params);
+            expect(
+                mockPlatformService.getPullRequestReviewComment,
+            ).toHaveBeenCalledWith(params);
             expect(result).toHaveLength(1);
         });
 
@@ -184,7 +194,10 @@ describe('CodeManagementService – countReactions & getPullRequestReviewComment
                 },
             };
 
-            await service.getPullRequestReviewComment(params, PlatformType.GITHUB);
+            await service.getPullRequestReviewComment(
+                params,
+                PlatformType.GITHUB,
+            );
 
             expect(integrationService.findOne).not.toHaveBeenCalled();
         });

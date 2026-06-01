@@ -1,0 +1,48 @@
+---
+title: "シングルサインオン"
+description: "Kodus への安全で効率的なアクセスのためにシングルサインオン（SSO）を有効にします。"
+---
+
+## 概要
+
+シングルサインオン（SSO）を使用すると、単一のアイデンティティプロバイダーを通じて Kodus へのアクセスを管理し、認証を効率化してセキュリティを強化できます。
+
+## はじめに
+
+<Steps>
+    <Step title="SSO 設定にアクセス">
+        [app.kodus.io/organization/sso](https://app.kodus.io/organization/sso) の組織設定に移動します
+    </Step>
+
+    <Step title="IdP の設定を入力">
+        Issuer ID、URL、署名証明書などの IdP の設定を入力します。これらは手動で入力するか、IdP のメタデータ URL またはメタデータ XML ファイルを提供することで入力できます。
+
+        <Info>
+            これらの値は通常、IdP のドキュメントまたは管理コンソールで確認できます。
+        </Info>
+    </Step>
+
+    <Step title="IdP で Kodus を SP として設定">
+        エンティティ ID（デフォルトは `kodus-orchestrator`）と SSO 設定ページで確認できる組織のコールバック URL を提供することで、IdP で Kodus を SP として設定します。
+
+        名前 ID フォーマットがメールに設定されていることを確認してください。
+
+        <Warning>
+            IdP の SP 設定で署名証明書を無効にしてください。
+        </Warning>
+    </Step>
+
+    <Step title="SSO を有効にしてテスト">
+        Kodus で SSO を有効にし、ログアウトして再度ログインすることで設定をテストします。IdP に関連付けられたメールドメインでログインしようとすると、SSO 経由でログインするオプションが表示されます。
+    </Step>
+
+</Steps>
+
+## オプション設定
+
+### 属性マッピング
+
+IdP から Kodus ユーザーへの以下の属性をマッピングして、ユーザーエクスペリエンスを向上させることができます。
+
+-   名（First Name）、`firstName` にマッピング
+-   姓（Last Name）、`lastName` にマッピング

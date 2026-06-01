@@ -1,0 +1,177 @@
+[
+  {
+    "pr_index": 0, "pr_title": "Enhanced Pagination (sentry #122)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": 2, "match": true, "reasoning": "Golden: negative slicing. Candidate 2: negative offset causes Django AssertionError. Same bug."},
+      {"golden_idx": 1, "candidate_idx": 0, "match": true, "reasoning": "Golden: member is None for API key auth. Candidate 0: organization_context.member null check. Same bug."},
+      {"golden_idx": 2, "candidate_idx": 1, "match": true, "reasoning": "Golden: math.floor/ceil on datetime. Candidate 1: math.floor/ceil on datetime object. Same bug."}
+    ],
+    "tp": 3, "fp": 1, "fn": 0, "golden_total": 3, "candidates_total": 4
+  },
+  {
+    "pr_index": 1, "pr_title": "Enhanced Pagination (sentry #123)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": 4, "match": true, "reasoning": "Golden: negative slicing. Candidate 4: negative offset causes AssertionError on QuerySet. Same bug."},
+      {"golden_idx": 1, "candidate_idx": 2, "match": true, "reasoning": "Golden: member is None. Candidate 2: organization_context.member accessed without None check. Same bug."},
+      {"golden_idx": 2, "candidate_idx": 5, "match": true, "reasoning": "Golden: math.floor/ceil on datetime. Candidate 5: math.floor/ceil TypeError on datetime. Same bug."}
+    ],
+    "tp": 3, "fp": 3, "fn": 0, "golden_total": 3, "candidates_total": 6
+  },
+  {
+    "pr_index": 2, "pr_title": "Upsampling race condition (sentry #124)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": -1, "match": false, "reasoning": "Golden: sample_rate=0.0 is falsy. No candidate mentions this specific falsiness issue."},
+      {"golden_idx": 1, "candidate_idx": 6, "match": true, "reasoning": "Golden: hash() non-deterministic. Candidate 6: hash() randomization makes cache inconsistent. Same bug."},
+      {"golden_idx": 2, "candidate_idx": 2, "match": true, "reasoning": "Golden: outer dataset vs scoped_dataset. Candidate 2: uses dataset from outer scope instead of scoped_dataset. Same bug."}
+    ],
+    "tp": 2, "fp": 5, "fn": 1, "golden_total": 3, "candidates_total": 7
+  },
+  {
+    "pr_index": 3, "pr_title": "GitHub OAuth (sentry #125)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": -1, "match": false, "reasoning": "Golden: null ref if github_authenticated_user missing. No candidate describes this exact state being absent."},
+      {"golden_idx": 1, "candidate_idx": 0, "match": true, "reasoning": "Golden: pipeline.signature is static. Candidate 0: predictable pipeline.signature. Same bug."},
+      {"golden_idx": 2, "candidate_idx": -1, "match": false, "reasoning": "Golden: metadata[sender][login] KeyError. No candidate mentions sender key missing in metadata dict."}
+    ],
+    "tp": 1, "fp": 2, "fn": 2, "golden_total": 3, "candidates_total": 3
+  },
+  {
+    "pr_index": 4, "pr_title": "Device limits (grafana #109)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": -1, "match": false, "reasoning": "Golden: race condition in count check. Candidates mention cache bypass and DoS but none explicitly describe TOCTOU race on concurrent count check."},
+      {"golden_idx": 1, "candidate_idx": 2, "match": true, "reasoning": "Golden: auth fails when limit reached. Candidate 2: anonymous auth fails when limit reached, DoS. Same bug."},
+      {"golden_idx": 2, "candidate_idx": -1, "match": false, "reasoning": "Golden: dbSession.Exec won't compile. No candidate mentions the Exec signature type mismatch."},
+      {"golden_idx": 3, "candidate_idx": -1, "match": false, "reasoning": "Golden: ErrDeviceLimitReached misleading when no rows updated. No candidate matches."},
+      {"golden_idx": 4, "candidate_idx": -1, "match": false, "reasoning": "Golden: time window inconsistency. No candidate matches."}
+    ],
+    "tp": 1, "fp": 4, "fn": 4, "golden_total": 5, "candidates_total": 5
+  },
+  {
+    "pr_index": 5, "pr_title": "AuthZ caching (grafana #110)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": 4, "match": true, "reasoning": "Golden: asymmetric cache trust - grants trusted, denials re-checked. Candidate 4: Check does redundant DB query when cache denial present. Same asymmetry."},
+      {"golden_idx": 1, "candidate_idx": -1, "match": false, "reasoning": "Golden: test comment says allow but map stores false. No candidate describes this test inconsistency."}
+    ],
+    "tp": 1, "fp": 4, "fn": 1, "golden_total": 2, "candidates_total": 5
+  },
+  {
+    "pr_index": 6, "pr_title": "Middleware rename (grafana #111)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": -1, "match": false, "reasoning": "Golden: ContextualLoggerMiddleware panics on nil request. No candidate mentions nil request panic."},
+      {"golden_idx": 1, "candidate_idx": 1, "match": true, "reasoning": "Golden: traceID no longer logged. Candidate 1: middleware uses static logger instead of FromContext, missing contextual attributes. Close semantic match — loss of traceID is a consequence."}
+    ],
+    "tp": 1, "fp": 3, "fn": 1, "golden_total": 2, "candidates_total": 4
+  },
+  {
+    "pr_index": 7, "pr_title": "Query splitting (grafana #112)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": -1, "match": false, "reasoning": "Golden: applyTemplateVariables called with unused param. Candidates mention duplicate filters and injection but not the specific unused parameter."}
+    ],
+    "tp": 0, "fp": 2, "fn": 1, "golden_total": 1, "candidates_total": 2
+  },
+  {
+    "pr_index": 8, "pr_title": "Large image processing (discourse #109)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": 4, "match": true, "reasoning": "Golden: downsize defined twice, second overrides first. Candidate 4: redefining downsize breaks callers with ArgumentError. Same bug."},
+      {"golden_idx": 1, "candidate_idx": 5, "match": true, "reasoning": "Golden: hardcoded 10MB ignores SiteSettings. Candidate 5: hardcoded limit bypasses SiteSettings. Same bug."},
+      {"golden_idx": 2, "candidate_idx": 1, "match": true, "reasoning": "Golden: 80% fails for animated GIFs with gifsicle. Candidate 1: gifsicle expects WxH not percentage. Same bug."}
+    ],
+    "tp": 3, "fp": 4, "fn": 0, "golden_total": 3, "candidates_total": 7
+  },
+  {
+    "pr_index": 9, "pr_title": "Topic unsubscribe (discourse #110)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": 4, "match": true, "reasoning": "Golden: nil pointer if no TopicUser. Candidate 4: null pointer dereference when TopicUser returns nil. Same bug."},
+      {"golden_idx": 1, "candidate_idx": -1, "match": false, "reasoning": "Golden: typo stopNotificiationsText. No candidate mentions this typo."}
+    ],
+    "tp": 1, "fp": 4, "fn": 1, "golden_total": 2, "candidates_total": 5
+  },
+  {
+    "pr_index": 10, "pr_title": "Blocked email (discourse #111)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": 5, "match": true, "reasoning": "Golden: should_block has side effects (updates stats). Candidate 5: BlockedEmail.should_block? does DB update in validation. Same bug."},
+      {"golden_idx": 1, "candidate_idx": 3, "match": true, "reasoning": "Golden: regex matches suffixes not full domains. Candidate 3: unanchored regex allows whitelist bypasses. Same bug."}
+    ],
+    "tp": 2, "fp": 4, "fn": 0, "golden_total": 2, "candidates_total": 6
+  },
+  {
+    "pr_index": 11, "pr_title": "Embed URL handling (discourse #112)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": 7, "match": true, "reasoning": "Golden: SSRF via open(url). Candidate 7: SSRF via open(url) without validation. Same bug."},
+      {"golden_idx": 1, "candidate_idx": 11, "match": true, "reasoning": "Golden: indexOf origin bypass. Candidate 11: loose origin validation using indexOf. Same bug."},
+      {"golden_idx": 2, "candidate_idx": -1, "match": false, "reasoning": "Golden: postMessage targetOrigin wrong (full URL not origin). No candidate specifically mentions this."},
+      {"golden_idx": 3, "candidate_idx": -1, "match": false, "reasoning": "Golden: X-Frame-Options ALLOWALL. No candidate mentions this."},
+      {"golden_idx": 4, "candidate_idx": 5, "match": true, "reasoning": "Golden: NoMethodError if contents nil + XSS via unescaped url. Candidate 5: XSS via unescaped url in TopicEmbed.import. Same XSS bug."},
+      {"golden_idx": 5, "candidate_idx": 0, "match": true, "reasoning": "Golden: ERB end if syntax error. Candidate 0: end if syntax error in ERB. Same bug."}
+    ],
+    "tp": 4, "fp": 8, "fn": 2, "golden_total": 6, "candidates_total": 12
+  },
+  {
+    "pr_index": 12, "pr_title": "Async appStore (cal.com #123)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": -1, "match": false, "reasoning": "Golden: add try-catch around await for import failures. No candidate specifically suggests this."},
+      {"golden_idx": 1, "candidate_idx": 2, "match": true, "reasoning": "Golden: forEach with async not awaited. Candidate 2: forEach async not caught, use for-of. Same bug."}
+    ],
+    "tp": 1, "fp": 3, "fn": 1, "golden_total": 2, "candidates_total": 4
+  },
+  {
+    "pr_index": 13, "pr_title": "2FA backup codes (cal.com #124)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": -1, "match": false, "reasoning": "Golden: inconsistent naming TwoFactor vs BackupCode.tsx. No candidate mentions naming."},
+      {"golden_idx": 1, "candidate_idx": -1, "match": false, "reasoning": "Golden: error says 'backup code login' on disable endpoint. No candidate mentions this."},
+      {"golden_idx": 2, "candidate_idx": -1, "match": false, "reasoning": "Golden: case-sensitive indexOf for backup codes. No candidate mentions case sensitivity."},
+      {"golden_idx": 3, "candidate_idx": 2, "match": true, "reasoning": "Golden: concurrent login can reuse backup code. Candidate 2: concurrent requests, codes not marked used. Same bug."}
+    ],
+    "tp": 1, "fp": 3, "fn": 3, "golden_total": 4, "candidates_total": 4
+  },
+  {
+    "pr_index": 14, "pr_title": "Collective multiple host (cal.com #125)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": 6, "match": true, "reasoning": "Golden: null ref if destinationCalendar null/empty. Candidate 6: null pointer when destinationCalendar null/empty. Same bug."},
+      {"golden_idx": 1, "candidate_idx": -1, "match": false, "reasoning": "Golden: redundant optional chaining. No candidate mentions this."},
+      {"golden_idx": 2, "candidate_idx": 7, "match": true, "reasoning": "Golden: externalCalendarId self-referential search. Candidate 7: broken fallback with self-referential check. Same bug."},
+      {"golden_idx": 3, "candidate_idx": 8, "match": true, "reasoning": "Golden: inverted billing logic. Candidate 8: inverted IS_TEAM_BILLING_ENABLED logic. Same bug."},
+      {"golden_idx": 4, "candidate_idx": 0, "match": true, "reasoning": "Golden: Calendar interface createEvent signature break. Candidate 0: createEvent signature causes type errors in implementations. Same bug."}
+    ],
+    "tp": 4, "fp": 5, "fn": 1, "golden_total": 5, "candidates_total": 9
+  },
+  {
+    "pr_index": 15, "pr_title": "InsightsBooking Prisma (cal.com #126)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": 1, "match": true, "reasoning": "Golden: unreachable branches in getBaseConditions. Candidate 1: remove unreachable branches, authConditions always truthy. Same bug."},
+      {"golden_idx": 1, "candidate_idx": 0, "match": true, "reasoning": "Golden: userIdsFromOrg guard excludes org-only members. Candidate 0: use teamIds instead of teamsFromOrg to include org members. Same bug."}
+    ],
+    "tp": 2, "fp": 4, "fn": 0, "golden_total": 2, "candidates_total": 6
+  },
+  {
+    "pr_index": 16, "pr_title": "Passkey re-auth (keycloak #109)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": -1, "match": false, "reasoning": "Golden: ConditionalPasskeysEnabled called without UserModel param. No candidate mentions this specific API misuse."},
+      {"golden_idx": 1, "candidate_idx": 0, "match": true, "reasoning": "Golden: fillContextForm not called when user is null. Candidate 0: authenticate fails to call fillContextForm. Same bug."}
+    ],
+    "tp": 1, "fp": 3, "fn": 1, "golden_total": 2, "candidates_total": 4
+  },
+  {
+    "pr_index": 17, "pr_title": "IDP cache (keycloak #110)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": -1, "match": false, "reasoning": "Golden: recursive caching using session instead of delegate. 0 candidates — nothing posted."},
+      {"golden_idx": 1, "candidate_idx": -1, "match": false, "reasoning": "Golden: cleanup alias reference wrong. 0 candidates — nothing posted."}
+    ],
+    "tp": 0, "fp": 0, "fn": 2, "golden_total": 2, "candidates_total": 0
+  },
+  {
+    "pr_index": 18, "pr_title": "AuthzClientCrypto (keycloak #111)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": 3, "match": true, "reasoning": "Golden: returns wrong provider (default instead of BouncyCastle). Candidate 3: getBouncyCastleProvider returns default JVM provider. Same bug."},
+      {"golden_idx": 1, "candidate_idx": 6, "match": true, "reasoning": "Golden: dead code — ASN1Encoder written but discarded. Candidate 6: dead ASN1Encoder code immediately discarded. Same bug."}
+    ],
+    "tp": 2, "fp": 5, "fn": 0, "golden_total": 2, "candidates_total": 7
+  },
+  {
+    "pr_index": 19, "pr_title": "Rolling updates (keycloak #112)",
+    "matches": [
+      {"golden_idx": 0, "candidate_idx": -1, "match": false, "reasoning": "Golden: picocli.exit() calls System.exit(). 0 candidates — nothing posted."}
+    ],
+    "tp": 0, "fp": 0, "fn": 1, "golden_total": 1, "candidates_total": 0
+  }
+]

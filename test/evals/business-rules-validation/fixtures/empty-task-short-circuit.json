@@ -8,7 +8,7 @@
   },
   "expectedTrajectory": [
     { "step": "classifyTaskContext", "output": { "taskQuality": "EMPTY" } },
-    { "step": "validateContext", "passed": false }
+    { "step": "validateTaskContext", "passed": false }
   ],
   "expectedOutcome": {
     "needsMoreInfo": true,

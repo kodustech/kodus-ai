@@ -1,0 +1,44 @@
+---
+title: "我可以使用自己的 LLM 提供商进行代码审查吗"
+description: "带上自己的 API 密钥,选择首选的 LLM 提供商用于 Kodus AI 代码审查。"
+---
+
+可以。Kodus 在所有套餐中都支持自带密钥(BYOK),让您使用首选的 LLM 提供商。您直接向提供商付费 — Kodus 从不对 token 加价,也不会以明文形式看到您的密钥。
+
+## 工作原理
+
+1. 打开**设置 → BYOK**([app.kodus.io/organization/byok](https://app.kodus.io/organization/byok))
+2. 从精选目录中选择一个**推荐模型**,或点击**手动配置**接入任意其他提供商/端点
+3. 粘贴您的 API 密钥并点击**测试并保存** — Kodus 会在持久化前通过一次低成本的元数据调用验证密钥
+
+## 精选推荐模型
+
+一键可用的卡片,附带预调整的默认值(温度、最大 token 数、推理级别):
+
+- Claude Sonnet 4.6 / Opus 4.7(Anthropic)
+- Gemini 3.1 Pro 自定义工具(Google)
+- GPT-5.4(OpenAI)
+- Kimi K2.6 Coding(Moonshot AI — 开发者 API 或 Kimi Code Plan)
+- GLM 5.1(Z.ai — 开发者 API 或 Coding Plan)
+
+对于列表之外的模型,**手动配置**向导会指引您接入任意 OpenAI、Anthropic、Google、OpenRouter、Novita 或 OpenAI 兼容端点。
+
+## 为什么使用自己的提供商
+
+- **数据控制** — 请求直接发送到您的提供商
+- **成本管理** — 使用您现有的计费关系,无加价
+- **模型选择** — 选择最适合您代码库的模型
+- **合规性** — 满足 AI 工具使用的内部要求
+- **故障转移韧性** — 配置主 + 备用,在提供商中断期间保持审查运行
+
+## 自托管 LLM 提供商
+
+如果您自托管 Kodus,可以将 BYOK 指向自托管或聚合器端点,例如:
+
+- Novita、Groq、Together AI、Fireworks AI
+- Chutes、Synthetic
+- 您自己的 Ollama / vLLM / TGI 实例(通过 `OpenAI Compatible` 提供商)
+
+设置指南请参见 [Cookbook](/cookbook/zh/novita) 和知识库中各提供商的专门文档。
+
+完整的 BYOK 流程(目录、手动向导、方案选择器、高级调优)请参见[自带密钥](/how_to_use/zh/byok)。

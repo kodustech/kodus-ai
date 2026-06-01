@@ -1,0 +1,131 @@
+---
+title: "故障排查"
+description: "Kodus CLI 常见错误、退出码和调试方法。"
+---
+
+排查问题时先运行：
+
+```bash
+kodus status
+kodus auth status
+kodus review --verbose    # 或在任意命令上加 --verbose
+```
+
+`kodus status` 显示统一的状态（认证模式、组织、仓库、钩子、版本）。`--verbose` 会打印解析出的 API URL 以及单次请求的详细信息。
+
+## 常见错误
+
+<AccordionGroup>
+  <Accordion title="command not found: kodus">
+    CLI 不在 `PATH` 中。使用包管理器的全局标志重新安装，或使用 `npx @kodus/cli <command>` 一次性运行。
+
+    - `npm install -g @kodus/cli`
+    - `yarn global add @kodus/cli`
+    - `pnpm add -g @kodus/cli`
+    - `bun add -g @kodus/cli`
+
+    如果通过技能安装器安装，重新运行 `curl -fsSL https://review-skill.com/install | bash` 以修复 PATH。
+  </Accordion>
+
+  <Accordion title="AUTH_REQUIRED 或 401 Unauthorized">
+    - 运行 `kodus auth status` 查看当前模式。
+    - 若使用团队密钥，在 <a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a> 核对密钥是否仍有效。
+    - 若使用个人登录，再次运行 `kodus auth login` — 刷新令牌可能已过期。
+    - 对于 CI，确认流水线运行环境中设置了 `KODUS_TOKEN`（或 `KODUS_TEAM_KEY`）。
+    - 若为自托管，确认 `KODUS_API_URL` 指向正确实例。
+  </Accordion>
+
+  <Accordion title="NOT_IN_GIT_REPO">
+    `kodus review` 需要 git 工作目录。`cd` 进入仓库或使用 `git init` 初始化。对于 `kodus config repo` 命令，您可以显式传入 `owner/repo` 而非 `.`。
+  </Accordion>
+
+  <Accordion title="审查耗时过长或看似挂起">
+    大型分支（数百文件、数千行）可能需要几分钟。默认请求超时为 60 分钟 — 使用 verbose 模式可以看到进度。
+
+    - 使用 `--verbose` 确认请求正在进行。
+    - 对于非常大的 diff，优先使用 `--branch <base>` 或 `--commit <sha>` 而非工作目录模式：这使后端可以克隆相应提交，而不必接收内联文件内容。
+    - 如需可使用 `KODUS_REQUEST_TIMEOUT_MIN=90 kodus review` 覆盖超时。
+    - 切实可行时，将工作拆分为更小的分支。
+  </Accordion>
+
+  <Accordion title="部分文件被跳过">
+    审查遵循 `kodus config repo` 中配置的 `ignore-files` 模式。使用以下命令查看：
+
+    ```bash
+    kodus config repo show
+    ```
+
+    可新增或移除模式：
+
+    ```bash
+    kodus config repo add-ignore-file . "**/*.generated.ts"
+    kodus config repo remove-ignore-file . "**/*.generated.ts"
+    ```
+
+    二进制文件、图片和锁文件默认会被跳过。
+  </Accordion>
+
+  <Accordion title="达到限额 / 试用已用尽">
+    试用模式每日 5 次审查。运行 `kodus auth login` 登录，或通过 `kodus auth team-key --key kodus_xxxxx` 配置团队密钥以提升限额。`kodus auth status` 会显示当前使用情况。
+  </Accordion>
+
+  <Accordion title="API 返回无效响应（期望 JSON，得到 HTML）">
+    您的 `KODUS_API_URL` 命中了反向代理或 Cloudflare Access 页面，而非 API 本身。请检查：
+
+    - URL 路径（不要有多余的 `/api`、`/v1` 等）。
+    - 如适用，Cloudflare Access 凭据（`CF_ACCESS_CLIENT_ID`、`CF_ACCESS_CLIENT_SECRET`）。
+    - 代理是否完整转发 `Authorization` 和 `CF-Access-*` 请求头。
+  </Accordion>
+
+  <Accordion title="API URL 必须使用 HTTPS">
+    除 `localhost` 和 `127.0.0.1` 外，CLI 拒绝非 HTTPS 的 API URL。请为自托管实例配置有效的 TLS 证书，或本地开发时使用 `http://localhost:<port>`。
+  </Accordion>
+
+  <Accordion title="Pre-push 钩子没有运行">
+    - 确认安装：`kodus hook status`。
+    - 确保 `.git/hooks/pre-push` 可执行。
+    - 其他钩子管理器（Husky、Lefthook、pre-commit）可能覆盖 `.git/hooks/pre-push`。要么级联它们，要么使用 `kodus hook install --force` 重装。
+    - 跳过单次推送：`KODUS_SKIP_HOOK=1 git push`。
+  </Accordion>
+
+  <Accordion title="决策（记忆）钩子没有捕获">
+    - 运行 `kodus decisions status` 查看已接入的代理。
+    - 重新运行 `kodus decisions enable --force` 以重装集成文件。
+    - 对于 Codex，确保 `~/.codex/config.toml` 包含 `notify = ["kodus", "decisions", "capture", ...]` 一行，或传入 `--codex-config <path>`。
+    - 确认代理确实会触发 turn-complete 事件（部分旧版 Claude Code 配置不会）。
+  </Accordion>
+
+  <Accordion title="达到设备数上限">
+    自托管实例可按组织强制设备数上限。请联系管理员提高上限或在仪表板中移除旧设备。
+  </Accordion>
+</AccordionGroup>
+
+## 退出码
+
+可在脚本和 CI 流水线中使用。
+
+| 退出码 | 含义 |
+|------|------|
+| `0` | 成功。未发现问题，或问题严重级别低于 `--fail-on`。 |
+| `1` | 发现问题，达到或超过 `--fail-on` 指定的严重级别。 |
+| `2` | CLI 使用错误（参数非法或缺失）。 |
+| `3` | 认证或授权失败。 |
+| `4` | 网络或 API 错误（超时、5xx、响应无效）。 |
+| `5` | 不在 git 仓库中，或没有可审查的变更。 |
+
+<Tip>
+  在 CI 中，可将 `--fail-on error` 与 `--format json` 和 `--output review.json` 搭配使用，将结构化结果作为流水线产物输出，同时不影响退出码逻辑。
+</Tip>
+
+## 调试技巧
+
+- **在任意命令上加 `--verbose`** 会打印解析出的 API URL、请求 ID 和耗时。
+- **`kodus schema`** 输出机器可读的命令 schema — 代理报告找不到标志时很有用。
+- **`--agent`** 强制输出为确定性、机器可读格式；脚本中常与 `--format json` 搭配。
+- **`KODUS_VERBOSE=true`** 在同一会话的多条命令间保持 verbose 模式。
+
+## 寻求帮助
+
+- 报告 Bug：[github.com/kodustech/cli/issues](https://github.com/kodustech/cli/issues)
+- 功能请求、配置问题：联系您的 Kodus 客户经理，或发送邮件至 `support@kodus.io`。
+- 自托管部署：提交 Issue 时附上 `kodus status --verbose` 输出。

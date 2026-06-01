@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
@@ -26,6 +28,7 @@ import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { BadgeDollarSignIcon, CheckIcon, ExternalLinkIcon } from "lucide-react";
 import { useAuth } from "src/core/providers/auth.provider";
+import { useConfig } from "@providers/ConfigProvider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import type { AwaitedReturnType } from "src/core/types";
 import { cn } from "src/core/utils/components";
@@ -308,6 +311,7 @@ const TeamsPlan = ({ plan }: { plan: Plan }) => {
 
 const EnterprisePlan = ({ plan }: { plan: Plan }) => {
     const { email } = useAuth();
+    const cfg = useConfig();
 
     return (
         <Card className="flex-1">
@@ -337,7 +341,7 @@ const EnterprisePlan = ({ plan }: { plan: Plan }) => {
                 <Link
                     target="_blank"
                     href={addSearchParamsToUrl(
-                        process.env.WEB_SUPPORT_TALK_TO_FOUNDER_URL ?? "",
+                        cfg.supportTalkToFounderUrl || "",
                         {
                             email,
                             notes: "I want to know more about Enterprise plan.",

@@ -1,0 +1,55 @@
+# TLS reverse proxy for the SSO E2E test, so the browser actually
+# stores the production-mode `secure: true` cookie that the API emits.
+# Without TLS the cookie is silently dropped on receive — the
+# Set-Cookie header is correct, but you can't observe it via DevTools
+# or document.cookie. With this proxy in place, the full handoff
+# (callback → cookie write → /sso-callback reads → tokens persisted)
+# completes exactly as it would in a real deployment.
+#
+# Domains:
+#   app.kodus.lvh.me  ─►  TLS termination ─►  http://kodus-web:3000
+#   api.kodus.lvh.me  ─►  TLS termination ─►  http://kodus-api:3001
+#
+# Listens on :443 only — :80 is left untouched so the HTTP-port
+# topology in docker-compose.yml still works for sanity-checks.
+{
+    auto_https off
+    admin off
+}
+
+# Two shapes share the same Caddy + the same upstream containers; only
+# the public hostname changes. Lets the browser test exercise the
+# cookie-domain algorithm in two distinct topologies without rebuilding
+# the stack:
+#
+#   .kodus.lvh.me        → 3 labels common  (analog of SaaS .kodus.io)
+#   .web.scorpion.lvh.me → 4 labels common  (analog of Dmitry .web.scorpion.co)
+
+(proxy_web) {
+    reverse_proxy kodus-web:3000 {
+        header_up Host {host}
+        header_up X-Forwarded-Proto https
+        header_up X-Forwarded-Host {host}
+    }
+}
+
+(proxy_api) {
+    reverse_proxy kodus-api:3001 {
+        # Preserve the public host so `req.get('host')` in
+        # auth.controller.ts (and therefore the cookie domain
+        # derivation) sees the public host, not `kodus-api:3001`.
+        header_up Host {host}
+        header_up X-Forwarded-Proto https
+        header_up X-Forwarded-Host {host}
+    }
+}
+
+app.kodus.lvh.me:443, app.web.scorpion.lvh.me:443 {
+    tls /tls/kodus.lvh.me.crt /tls/kodus.lvh.me.key
+    import proxy_web
+}
+
+api.kodus.lvh.me:443, api.web.scorpion.lvh.me:443 {
+    tls /tls/kodus.lvh.me.crt /tls/kodus.lvh.me.key
+    import proxy_api
+}

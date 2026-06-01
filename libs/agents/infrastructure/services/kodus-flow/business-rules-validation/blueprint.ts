@@ -9,6 +9,8 @@ import {
 import { asRecord } from '@libs/agents/skills/runtime/value-utils';
 import { BlueprintStep } from '@libs/shared/blueprint/blueprint.types';
 
+
+
 import { BusinessRulesContext } from './types';
 import {
     buildBusinessLogicEligibility,
@@ -46,6 +48,10 @@ const hasTaskContextSchema = z.looseObject({
 const taskQualitySchema = z.enum(['EMPTY', 'MINIMAL', 'PARTIAL', 'COMPLETE']);
 
 const hasTaskQualitySchema = z.looseObject({
+    taskQuality: taskQualitySchema,
+});
+
+const validateTaskContextInputSchema = z.looseObject({
     taskQuality: taskQualitySchema,
 });
 
@@ -179,6 +185,113 @@ export function createBusinessRulesBlueprint(
         },
         {
             type: 'deterministic',
+            name: 'fetchTaskContextFromMcp',
+            contract: {
+                input: taskContextInputSchema,
+                output: hasTaskContextSchema,
+            },
+            fn: async (ctx): Promise<BusinessRulesContext> => {
+                const fallbackTaskContext = resolveTaskContext(ctx);
+                if (fallbackTaskContext.trim().length > 0) {
+                    return {
+                        ...ctx,
+                        taskContext: fallbackTaskContext,
+                    };
+                }
+
+                const fetched = await tooling.fetchTaskContext(ctx);
+                const taskContext =
+                    fetched.value &&
+                    (fetched.value.title || fetched.value.description)
+                        ? formatNormalizedTaskContext(fetched.value)
+                        : fallbackTaskContext;
+
+                return {
+                    ...ctx,
+                    taskContext,
+                    taskContextNormalized: fetched.value,
+                    capabilityExecutionTrace: appendCapabilityTraces(
+                        ctx,
+                        fetched.traces,
+                    ),
+                };
+            },
+        },
+        {
+            type: 'deterministic',
+            name: 'classifyTaskContext',
+            contract: {
+                input: hasTaskContextSchema,
+                output: hasTaskQualitySchema.and(analysisEligibilitySchema),
+            },
+            fn: async (ctx): Promise<BusinessRulesContext> => {
+                const taskQuality = classifyTaskQualityFromSources({
+                    taskContext: ctx.taskContext,
+                    taskContextNormalized: ctx.taskContextNormalized,
+                });
+                const eligibility = buildBusinessLogicEligibility({
+                    taskQuality,
+                    taskContext: ctx.taskContext,
+                    taskContextNormalized: ctx.taskContextNormalized,
+                    prDiff: ctx.prDiff,
+                });
+
+                return {
+                    ...ctx,
+                    taskQuality,
+                    analysisEligibility: eligibility,
+                };
+            },
+        },
+        {
+            type: 'gate',
+            name: 'validateTaskContext',
+            contract: {
+                input: validateTaskContextInputSchema,
+                output: gateOutputSchema,
+            },
+            condition: (ctx) => {
+                const eligibility =
+                    ctx.analysisEligibility ??
+                    buildBusinessLogicEligibility({
+                        taskQuality: ctx.taskQuality,
+                        taskContext: ctx.taskContext,
+                        taskContextNormalized: ctx.taskContextNormalized,
+                        prDiff: ctx.prDiff,
+                    });
+                return eligibility.taskContextStatus === 'usable';
+            },
+            onFail: (ctx): BusinessRulesContext => {
+                const analysisEligibility =
+                    ctx.analysisEligibility ??
+                    buildBusinessLogicEligibility({
+                        taskQuality: ctx.taskQuality,
+                        taskContext: ctx.taskContext,
+                        taskContextNormalized: ctx.taskContextNormalized,
+                        prDiff: ctx.prDiff,
+                    });
+                const missingInfo = getTaskContextMissingInfoMessage(
+                    ctx.taskQuality,
+                );
+                return {
+                    ...ctx,
+                    analysisEligibility,
+                    validationResult: {
+                        needsMoreInfo: true,
+                        mode: 'limitation_response',
+                        reason: analysisEligibility.reason,
+                        taskContextStatus:
+                            analysisEligibility.taskContextStatus,
+                        prDiffStatus: analysisEligibility.prDiffStatus,
+                        confidence: 'low',
+                        missingInfo,
+                        summary: missingInfo,
+                    },
+                };
+            },
+        },
+        {
+            type: 'deterministic',
             name: 'fetchPullRequestDiff',
             contract: {
                 input: taskContextInputSchema,
@@ -225,66 +338,8 @@ export function createBusinessRulesBlueprint(
             },
         },
         {
-            type: 'deterministic',
-            name: 'fetchTaskContextFromMcp',
-            contract: {
-                input: taskContextInputSchema,
-                output: hasTaskContextSchema,
-            },
-            fn: async (ctx): Promise<BusinessRulesContext> => {
-                const fallbackTaskContext = resolveTaskContext(ctx);
-                if (fallbackTaskContext.trim().length > 0) {
-                    return {
-                        ...ctx,
-                        taskContext: fallbackTaskContext,
-                    };
-                }
-
-                const fetched = await tooling.fetchTaskContext(ctx);
-                const taskContext =
-                    fetched.value &&
-                    (fetched.value.title || fetched.value.description)
-                        ? formatNormalizedTaskContext(fetched.value)
-                        : fallbackTaskContext;
-
-                return {
-                    ...ctx,
-                    taskContext,
-                    taskContextNormalized: fetched.value,
-                    capabilityExecutionTrace: appendCapabilityTraces(
-                        ctx,
-                        fetched.traces,
-                    ),
-                };
-            },
-        },
-        {
-            type: 'deterministic',
-            name: 'classifyTaskContext',
-            contract: {
-                input: hasTaskContextSchema,
-                output: hasTaskQualitySchema.and(analysisEligibilitySchema),
-            },
-            fn: async (ctx): Promise<BusinessRulesContext> => {
-                const taskQuality = classifyTaskQualityFromSources({
-                    taskContext: ctx.taskContext,
-                    taskContextNormalized: ctx.taskContextNormalized,
-                });
-                return {
-                    ...ctx,
-                    taskQuality,
-                    analysisEligibility: buildBusinessLogicEligibility({
-                        taskQuality,
-                        taskContext: ctx.taskContext,
-                        taskContextNormalized: ctx.taskContextNormalized,
-                        prDiff: ctx.prDiff,
-                    }),
-                };
-            },
-        },
-        {
             type: 'gate',
-            name: 'validateContext',
+            name: 'validatePullRequestDiff',
             contract: {
                 input: validateContextInputSchema,
                 output: gateOutputSchema,
@@ -308,10 +363,7 @@ export function createBusinessRulesBlueprint(
                         taskContextNormalized: ctx.taskContextNormalized,
                         prDiff: ctx.prDiff,
                     });
-                const missingInfo =
-                    analysisEligibility.reason === 'pr_diff_missing'
-                        ? getPullRequestDiffMissingInfoMessage()
-                        : getTaskContextMissingInfoMessage(ctx.taskQuality);
+                const missingInfo = getPullRequestDiffMissingInfoMessage();
                 return {
                     ...ctx,
                     analysisEligibility,

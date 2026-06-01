@@ -1,0 +1,584 @@
+---
+title: "BYOK - Bring Your Own Key"
+description: "最大限の柔軟性とコスト管理のために独自のAPIキーを設定します。すべての Kodus プランでご利用いただけます。"
+---
+
+BYOK（Bring Your Own Key）は、**すべてのプランで Kodus が LLM を使用するデフォルトの方法**です — Community、Teams、Enterprise を問わず。自分のプロバイダーアカウントを接続し、任意のモデルを選択し、使用した分だけ支払い、プロバイダーのダッシュボードでコストを直接監視できます。Kodus はトークンに上乗せ料金を請求せず、APIキーを平文で見ることも決してありません。
+
+<Card
+  title="プランとの対応関係"
+  icon="scale-balanced"
+  href="/how_to_use/ja/pricing#byok-is-the-default-across-all-plans"
+>
+  BYOK は Community では無料、Teams では（トークン費用に加えてアクティブ開発者1人あたり月10ドル）で利用可能、Enterprise では2つのオプションのうちの1つです（もう1つは Kodus が管理する APIキー）。
+</Card>
+
+## はじめに
+
+BYOK 画面には2つのパスがあります：キュレートされたカタログから**推奨モデル**を選ぶ（最速のパス、90%のケース）、または**任意のプロバイダーを手動で設定**する（カスタムエンドポイントやキュレートされていないモデル向けの脱出ハッチ）。
+
+<Steps>
+  <Step title="BYOK 設定を開く">
+    [app.kodus.io/organization/byok](https://app.kodus.io/organization/byok) にアクセスします。
+  </Step>
+
+  <Step title="推奨モデルを選択">
+    **メインモデル**セクションには、コードレビュー向けにベンチマーク済みのキュレートされたモデルのグリッドが表示されます。いずれかのカードをクリックして接続を開始します。
+  </Step>
+
+  <Step title="APIキーを貼り付けてテスト">
+    各カードはインラインで展開し、単一の入力欄（APIキーのみ）を表示します。**Test** をクリックしてプロバイダーをプローブするか、**Test & save** をクリックしてテストを実行し、成功時に設定を保存します。
+  </Step>
+
+  <Step title="フォールバックを追加（推奨）">
+    メインモデルが設定されると、**フォールバックモデル**セクションが表示されます。メインプロバイダーがレート制限に達したりダウンしたりした場合、Kodus は自動的にフォールバックします。
+  </Step>
+</Steps>
+
+<Info>
+  **保存前にテストする。** **Test** ボタンは、プロバイダーに対して安価なメタデータ呼び出しでプローブします（LLM 推論は実行されません）。無効なキー、誤ったベース URL、ネットワークの問題を、最初のコードレビューが壊れる前に検出します。
+</Info>
+
+## 推奨モデル
+
+これら6つのモデルはコードレビュー向けにキュレートされています。すべて `/organization/byok` のカタログに表示され、適切なデフォルト値（temperature、最大出力トークン、reasoning effort は `medium`）で事前チューニングされています。
+
+<CardGroup cols={2}>
+  <Card title="Claude Sonnet 4.6" icon="crown">
+    **品質とコストの最良のバランス**
+
+    Anthropic の最新 Sonnet。適応的な拡張思考、強力なクロスファイル分析、200K コンテキストウィンドウ。
+
+    - **プロバイダー:** Anthropic
+    - **モデル ID:** `claude-sonnet-4-6`
+    - **キー:** [console.anthropic.com](https://console.anthropic.com/settings/keys)
+  </Card>
+
+  <Card title="Claude Opus 4.7" icon="star">
+    **フラッグシップ品質**
+
+    最も難しいレビュー向けの最上位 Anthropic モデル。1M コンテキスト、プレミアム価格。
+
+    - **プロバイダー:** Anthropic
+    - **モデル ID:** `claude-opus-4-7`
+    - **キー:** [console.anthropic.com](https://console.anthropic.com/settings/keys)
+  </Card>
+
+  <Card title="Gemini 3.1 Pro (custom tools)" icon="brain">
+    **最大のコンテキスト**
+
+    カスタムツールをサポートする Google のフラッグシップ。1M コンテキストウィンドウ — 大規模な PR やモノレポで最強。
+
+    - **プロバイダー:** Google Gemini
+    - **モデル ID:** `gemini-3.1-pro-preview-customtools`
+    - **キー:** [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+  </Card>
+
+  <Card title="GPT-5.4" icon="sparkles">
+    **高速で一貫性がある**
+
+    OpenAI の最新フラッグシップ。信頼性の高い低レイテンシ、幅広い知識、400K コンテキスト。
+
+    - **プロバイダー:** OpenAI
+    - **モデル ID:** `gpt-5.4`
+    - **キー:** [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+  </Card>
+
+  <Card title="Kimi K2.6 Coding" icon="moon">
+    **コーディング特化、安価**
+
+    Moonshot AI のコーディングチューニング済みモデル。2つのプラン：Developer API（ペイパートークン）または Kimi Code Plan（専用エンドポイント付きサブスクリプション）。
+
+    - **プロバイダー:** OpenAI-compatible (Moonshot AI)
+    - **モデル ID:** `kimi-k2.6`
+    - **キー:** [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) または [kimi.com/code](https://www.kimi.com/code)
+  </Card>
+
+  <Card title="GLM 5.1" icon="bolt">
+    **最良のサブスクリプション価値**
+
+    Z.ai の最新モデル。2つのプラン：Developer API（ペイパートークン）または GLM Coding Plan（定額サブスクリプション）。
+
+    - **プロバイダー:** OpenAI-compatible (Z.ai)
+    - **モデル ID:** `glm-5.1`
+    - **キー:** [z.ai console](https://z.ai/manage-apikey/apikey-list) または [z.ai/subscribe](https://z.ai/subscribe)
+  </Card>
+</CardGroup>
+
+<Info>
+  **デフォルトの推奨:** 最良の全体的なコードレビュー体験には **Claude Sonnet 4.6** から始めましょう。コストが優先事項の場合、**GLM 5.1 on the Coding Plan** または **Kimi K2.6 on the Kimi Code Plan** が定額サブスクリプションで月額の支出を抑えられます。
+</Info>
+
+## プランセレクター（GLM 5.1 と Kimi K2.6）
+
+Z.ai と Moonshot はどちらも、ペイパートークンの Developer API とは **異なるエンドポイント** のサブスクリプションプランを提供しています。これらのモデルのキュレートされたカードには **Plan** セレクターが表示され、キーを貼り付ける前に正しいエンドポイントを選択できます。
+
+<Tabs>
+  <Tab title="GLM 5.1 (Z.ai)">
+    | プラン | エンドポイント | キーの取得元 | 最適な用途 |
+    | --- | --- | --- | --- |
+    | **Developer API** | `https://api.z.ai/api/paas/v4/` | [z.ai/manage-apikey](https://z.ai/manage-apikey/apikey-list) | バースト的なワークロード、ペイパートークン |
+    | **Coding Plan** | `https://api.z.ai/api/coding/paas/v4` | [z.ai/subscribe](https://z.ai/subscribe) | 予測可能なチーム使用量、定額月額料金 |
+
+    <Warning>
+      GLM Coding Plan のキーは `/api/coding/paas/v4` でのみ動作します。Lite および Pro ティアはしばしば **1 concurrent リクエスト** に制限されています — このプランを選択すると Kodus は `maxConcurrentRequests=1` を事前入力します。Max ティア（最大 30）の場合は Advanced settings で増やしてください。
+    </Warning>
+  </Tab>
+
+  <Tab title="Kimi K2.6 (Moonshot AI)">
+    | プラン | エンドポイント | キーの取得元 | 最適な用途 |
+    | --- | --- | --- | --- |
+    | **Developer API** | `https://api.moonshot.ai/v1` | [platform.moonshot.ai](https://platform.moonshot.ai/console/api-keys) | ペイパートークン、同時実行数はリチャージティアとスケール |
+    | **Kimi Code Plan** | `https://api.kimi.com/coding/v1` | [kimi.com/code](https://www.kimi.com/code) | 専用コーディングエンドポイント付きサブスクリプション |
+
+    <Info>
+      Kimi Code Plan は 30 concurrent リクエストの上限が文書化されています。このプランを選択すると Kodus は `maxConcurrentRequests=30` を事前入力します。
+    </Info>
+  </Tab>
+</Tabs>
+
+## 手動で設定する
+
+欲しいモデルがキュレートされたリストにない場合（カスタムエンドポイント、セルフホスト LLM、またはベンチマークしていないプロバイダー）、カタログ下部の **Configure manually** をクリックします。これにより `/organization/byok/manual?slot=main` が開き、ステップバイステップのウィザードが表示されます：
+
+<Steps>
+  <Step title="プロバイダーを選択">
+    OpenAI、Anthropic、Google Gemini、OpenRouter、Novita、または **OpenAI Compatible**（任意の OpenAI フォーマットのエンドポイント向け）から選択します。
+  </Step>
+
+  <Step title="ベース URL を入力（必要な場合）">
+    OpenAI 互換プロバイダーは明示的なベース URL が必要です。このフィールドは該当のプロバイダーを選択した場合にのみ表示されます。
+  </Step>
+
+  <Step title="モデル ID を選択または入力">
+    Kodus がプロバイダーからモデルをリスト化できる場合、ドロップダウンが表示されます。そうでない場合（例：セルフホスト、またはプラットフォームキーが未設定）、正確なモデル ID を手動で入力します。
+  </Step>
+
+  <Step title="APIキーを貼り付ける">
+    キーフィールドはプロバイダーとモデルが設定された後に表示されます。
+  </Step>
+
+  <Step title="Advanced settings を調整（任意）">
+    Temperature、最大トークン、reasoning effort、最大同時リクエスト数 — すべて任意です。デフォルト値はほとんどのプロバイダーで適切です。
+  </Step>
+
+  <Step title="テストして保存">
+    **Test & save** をクリックして接続プローブを実行し、成功時に保存します。
+  </Step>
+</Steps>
+
+<Tip>
+  同じ手動ルートはフォールバックにも使えます — `?slot=fallback` で遷移するか、メインが保存された後に **Add fallback** リンクを使用します。
+</Tip>
+
+## 対応プロバイダー
+
+<Tabs>
+  <Tab title="OpenAI">
+    **おすすめの用途:** 最新の GPT モデルと信頼性の高いパフォーマンス。
+
+    **APIキーの取得方法:**
+    1. [OpenAI API Keys](https://platform.openai.com/api-keys) にアクセス
+    2. Kodus 用の新しいキーを作成
+    3. 請求情報を追加
+  </Tab>
+
+  <Tab title="Google Gemini">
+    **おすすめの用途:** 大規模コンテキストレビュー（1M トークン）と競争力のある価格設定。
+
+    **APIキーの取得方法:**
+    1. [Google AI Studio](https://aistudio.google.com/app/apikey) に移動
+    2. 新しいキーを作成
+    3. Google Cloud Console で請求を有効化
+  </Tab>
+
+  <Tab title="Anthropic Claude">
+    **おすすめの用途:** 微妙な分析と適応的な拡張思考。
+
+    **APIキーの取得方法:**
+    1. [Anthropic Console](https://console.anthropic.com/) にアクセス
+    2. アカウントを作成しキーを生成
+    3. クレジットを追加
+  </Tab>
+
+  <Tab title="Novita AI">
+    **おすすめの用途:** 競争力のある価格のオープンソースモデル。
+
+    **APIキーの取得方法:**
+    1. [Novita AI](https://novita.ai/) でサインアップ
+    2. API 設定に移動
+    3. キーを生成
+
+    <Card title="Novita セットアップガイド" icon="rocket" href="/cookbook/ja/novita">
+      スクリーンショット付きの詳細なセットアップ手順。
+    </Card>
+  </Tab>
+
+  <Tab title="OpenRouter">
+    **おすすめの用途:** 多くのモデルにわたる1つの請求関係。
+
+    **APIキーの取得方法:**
+    1. [OpenRouter](https://openrouter.ai/) でアカウントを作成
+    2. クレジットを追加
+    3. 設定でキーを生成
+
+    <Warning>
+      OpenRouter はデフォルトで各リクエストを異なる上流プロバイダーにルーティングするため、呼び出しごとに品質やレイテンシのドリフトが発生する可能性があります。動作を安定させるには、Advanced settings → OpenRouter routing で**特定の上流プロバイダーを固定（ピン留め）**してください。[OpenRouter プロバイダーの固定](#openrouter-プロバイダーの固定) を参照してください。
+    </Warning>
+  </Tab>
+
+  <Tab title="OpenAI Compatible">
+    **おすすめの用途:** 特化プロバイダー（Moonshot、Z.ai、Fireworks、Together、Groq、DeepSeek）またはセルフホストエンドポイント。
+
+    **設定方法:**
+    1. 手動ウィザードで、プロバイダーとして **OpenAI Compatible** を選択します。
+    2. ベース URL を入力します（例：`https://api.moonshot.ai/v1`、`https://api.z.ai/api/paas/v4/`、`https://api.fireworks.ai/inference/v1`）。
+    3. キーとモデル ID を提供します。
+
+    <CardGroup cols={2}>
+      <Card title="Z.ai (GLM) ガイド" href="/knowledge_base/ja/how-to-use-z-ai-with-kodus" icon="bolt">
+        Coding Plan の詳細を含む完全な Z.ai セットアップ。
+      </Card>
+      <Card title="Moonshot (Kimi) ガイド" href="/knowledge_base/ja/how-to-use-moonshot-with-kodus" icon="moon">
+        Kimi K2.6 + Kimi Code Plan のセットアップ。
+      </Card>
+      <Card title="Fireworks AI" href="/knowledge_base/ja/how-to-use-fireworks-with-kodus" icon="fire">
+        Fireworks 固有のセットアップ。
+      </Card>
+      <Card title="Together AI" href="/knowledge_base/ja/how-to-use-together-ai-with-kodus" icon="handshake">
+        Together AI のセットアップ。
+      </Card>
+    </CardGroup>
+  </Tab>
+</Tabs>
+
+## Reasoning / 拡張思考
+
+6つの推奨モデルはすべて reasoning をサポートしています。BYOK フォームでは、**Advanced settings** の下に **Thinking** トグル（Off / Low / Medium / High / Custom）が表示され、すべての推奨モデルに **Medium** が事前入力されています。
+
+### プリセットレベル
+
+Low / Medium / High を選択すると、Kodus はそのレベルを各プロバイダーのネイティブフォーマットに自動的に変換します：
+
+| プロバイダー | "medium" のマッピング |
+| --- | --- |
+| **Anthropic** (Claude Sonnet 4.6 / Opus 4.7) | `thinking: { type: "adaptive" }` + `outputConfig: { effort: "medium" }` |
+| **Google** (Gemini 3.1 Pro) | `thinkingConfig: { thinkingLevel: "medium" }` |
+| **OpenAI** (GPT-5.4) | `reasoningEffort: "medium"` |
+| **OpenRouter** | `reasoning: { effort: "medium" }` |
+| **OpenAI-compatible** (Kimi K2.6 / GLM 5.1) | `thinking: { type: "enabled" }` — バイナリの on/off、レベルは無視 |
+
+<Note>
+  Kimi と GLM は現在、reasoning を単一の on/off フラグとして公開しています。Low、Medium、High のいずれを選んでも同じペイロード（thinking 有効）を生成します。それらの API がレベル粒度を追加した場合、Kodus はそれを転送するようになります。
+</Note>
+
+### カスタム JSON オーバーライド
+
+Thinking トグルで **Custom** を選択すると JSON テキストエリアが表示されます。プロバイダーオプションを直接貼り付けてください — **Kodus がアクティブなプロバイダーの名前空間の下に自動でラップします**。Vercel AI SDK のルーティングルールを知る必要はありません。
+
+以下の場合に使用します：
+
+- Claude に特定の `budgetTokens` 値が必要な場合（プリセットの effort マッピングの代わり）
+- OpenAI 互換プロバイダーでモデルごとに thinking を有効/無効にしたい場合
+- reasoning 以外のフィールドが必要な場合 — **キャッシュ、サービスティア、safety settings、`user` タグなど**。オーバーライドは `providerOptions` にマージされるため、アダプターの任意のフィールドがそのまま通過します
+- Kodus がまだラップしていない新しいフィールドがプロバイダーに追加された場合
+
+#### 例（名前空間不要 — そのまま貼り付け）
+
+<Tabs>
+  <Tab title="Anthropic">
+    Claude の thinking 予算を正確に 20,000 トークンにオーバーライド：
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budgetTokens": 20000 }
+    }
+    ```
+
+    プロンプトキャッシュを有効化（reasoning 以外の例）：
+
+    ```json
+    {
+      "cacheControl": { "type": "ephemeral" }
+    }
+    ```
+  </Tab>
+
+  <Tab title="Google Gemini">
+    明示的な thinking 予算（Gemini 2.5）またはレベル（Gemini 3+）：
+
+    ```json
+    {
+      "thinkingConfig": { "thinkingBudget": 16000 }
+    }
+    ```
+
+    safety settings を調整：
+
+    ```json
+    {
+      "safetySettings": [
+        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE" }
+      ]
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI">
+    OpenAI 固有のフィールドを伴う reasoning：
+
+    ```json
+    {
+      "reasoningEffort": "high",
+      "serviceTier": "flex",
+      "store": false,
+      "user": "kodus-review"
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenRouter">
+    reasoning を強制しつつ特定の上流を無視：
+
+    ```json
+    {
+      "reasoning": { "effort": "high" },
+      "ignore": ["deepinfra"]
+    }
+    ```
+  </Tab>
+
+  <Tab title="OpenAI-compatible (Kimi、GLM など)">
+    予算ヒント付きで thinking を有効化：
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budget_tokens": 25000 }
+    }
+    ```
+
+    thinking を明示的に無効化：
+
+    ```json
+    {
+      "thinking": { "type": "disabled" }
+    }
+    ```
+
+    <Warning>
+      上流プロバイダーが認識しないフィールド（例：それを無視するサーバー上の `budget_tokens`）はサイレントに破棄されます。プロバイダーのドキュメントを確認して受け入れるものを確認してください。
+    </Warning>
+  </Tab>
+</Tabs>
+
+#### 名前空間を手動で指定する（上級者向け）
+
+JSON にすでに既知の名前空間キー（`anthropic`、`google`、`openai`、`openrouter`、`openaiCompatible`）がトップレベルに含まれている場合、Kodus はそれをそのまま残します。複数のプロバイダー名前空間を混在させたい場合や、明示的に記述したい場合に便利です：
+
+```json
+{
+  "openrouter": {
+    "reasoning": { "effort": "high" },
+    "provider": { "order": ["moonshot"], "allow_fallbacks": false }
+  }
+}
+```
+
+内部的に、Kodus は以下の名前空間マッピングを使用しています：
+
+| BYOK プロバイダー | 名前空間キー |
+| --- | --- |
+| `anthropic` | `anthropic` |
+| `google_gemini` / `google_vertex` | `google` |
+| `openai` | `openai` |
+| `open_router` | `openrouter` |
+| `openai_compatible` / `novita` | `openaiCompatible` |
+
+#### 注意点
+
+- **有効な JSON のみ。** カンマの欠落や末尾のカンマはパースを壊し、Kodus はオーバーライドを無視します。
+- **優先順位:** JSON オーバーライドは effort プリセットの名前空間ブロックを**完全に置き換えます** — `anthropic.thinking` をオーバーライドしつつ `anthropic.outputConfig` を忘れると、そのフィールドは送信されません。OpenRouter routing（Pin providers / Allow fallbacks）は唯一の例外で、`openrouter` の下でオーバーライドとディープマージされます。
+- **未知のプロバイダー = ラップなし。** BYOK プロバイダーが上記の名前空間テーブルにない場合、Kodus は JSON をそのまま通過させます。稀なケース — Kodus が認識しないプロバイダーを設定した場合にのみ該当します。
+
+## OpenRouter プロバイダーの固定
+
+OpenRouter はルーターです — モデル（例：`moonshotai/kimi-k2.5`）をリクエストすると、複数の上流プロバイダー（Moonshot 直接、Together、Groq、Fireworks、Novita…）のいずれかに呼び出しを転送します。呼び出しごとに異なるバックエンドに着地する可能性があります。便利ではありますが、サイレントな変動を招きます：
+
+- **品質ドリフト** — 上流は異なる精度（FP8、INT4、full）で動作し、同じプロンプトに対して微妙に異なる出力を返します
+- **ツール呼び出しの不整合** — 一部のバックエンドは関数呼び出しを同じ方法でサポートせず、不正な tool use を引き起こします
+- **Reasoning フォーマットの変動** — ある上流は `reasoning_effort` を尊重し、別の上流は `thinking.enabled` のみ、また別の上流は両方を無視します
+- **レイテンシの揺れ** — ルーティングが変わると p50 が 800ms から 4s に跳ね上がることがあります
+- **レート制限の意外な発生** — 明示的に選んでいないバックエンドでクォータにヒットします
+
+### 固定する方法
+
+BYOK プロバイダーが **OpenRouter** の場合、Advanced settings パネルに2つのフィールドを持つ **OpenRouter routing** セクションが表示されます：
+
+- **Pin providers (in order)** — 上流名のカンマ区切りリスト（例：`moonshot, together`）。OpenRouter は順番に試し、最初に利用可能なものを使用します。
+- **Allow fallbacks** — オフの場合、固定されたプロバイダーのいずれも利用できないとリクエストはハードフェイルします。オン（デフォルト）の場合、OpenRouter はそのモデルを提供する他の任意の上流にフォールバックできます。
+
+<Tip>
+  **安定した**構成のためには、単一のプロバイダーを固定し、フォールバックをオフにします（`Pin: moonshot`、`Allow fallbacks: off`）。リクエストは常に同じ上流に到達するか、明示的に失敗します — サイレントな品質変動はありません。トレードオフは、その1つの上流がダウンした場合に回復力がゼロになることです。障害を吸収するために、異なる BYOK フォールバック（例：Anthropic）と組み合わせてください。
+</Tip>
+
+<Warning>
+  上流名は OpenRouter のカタログと一致している必要があります。プロバイダータグを [openrouter.ai/docs/features/provider-routing](https://openrouter.ai/docs/features/provider-routing) で確認してください — 一般的な値には `moonshot`、`together`、`groq`、`fireworks`、`novita` が含まれます。
+</Warning>
+
+内部的に、Kodus は Vercel AI SDK 呼び出しに次のように出力します：
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot", "together"],
+      "allow_fallbacks": false
+    }
+  }
+}
+```
+
+### 上級者向け：生の JSON オーバーライド
+
+`order` と `allow_fallbacks` 以外のフィールド（例：`ignore`、`data_collection`、`require_parameters`）が必要な場合は、Advanced settings で **Thinking** を **Custom** に切り替え、完全なルーティングペイロードを貼り付けます — 任意の reasoning 設定と並んで `providerOptions` にマージされます：
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot"],
+      "allow_fallbacks": false,
+      "ignore": ["deepinfra"],
+      "data_collection": "deny"
+    },
+    "reasoning": { "effort": "medium" }
+  }
+}
+```
+
+## 同時実行数とレート制限
+
+`maxConcurrentRequests` フィールド（**Advanced settings** の下）は、Kodus がプロバイダーに並行して送信するインフライトリクエストの数を制限します。ほとんどの場合、デフォルトで問題ありません — ただし、厳密な同時実行上限があるサブスクリプションプランでは明示的に設定する必要があります。
+
+### Kodus が事前入力するデフォルト
+
+| プロバイダー / プラン | 事前入力値 | 理由 |
+| --- | --- | --- |
+| **GLM Coding Plan (Lite/Pro)** | `1` | サブスクリプションは1つのインフライトリクエストのみ許可。それ以上は 429 をトリガー。 |
+| **GLM Coding Plan (Max)** | `1`（手動で増やす） | Max は最大 30 を許可しますが、安全値をデフォルトにしています。Advanced settings で上げてください。 |
+| **Kimi Code Plan** | `30` | Moonshot のコーディングエンドポイントで文書化された上限。 |
+| **GLM Developer API** | _(空)_ | 制限はキーごとにスケール；適切なグローバルデフォルトはありません。 |
+| **Kimi Developer API** | _(空)_ | リチャージティアとスケール（Tier 1 ≈ 50、Tier 5 ≈ 1000）。 |
+| **Anthropic / OpenAI / Google / OpenRouter** | _(空)_ | プロバイダーは独自の TPM/RPM を適用；Kodus は制限しません。 |
+
+### チューニングのタイミング
+
+<CardGroup cols={2}>
+  <Card title="上げる" icon="arrow-up">
+    - Moonshot/OpenRouter で高ティアのリチャージがあり、大きな PR でより高いスループットが欲しい
+    - GLM Coding Plan を **Max** に上げ、30-concurrent の予算をフル活用したい
+    - マルチファイル PR でレビューがシリアル化されていると感じ、429 が発生していない
+  </Card>
+  <Card title="下げる" icon="arrow-down">
+    - レビューログに `429` や `Too much concurrency` エラーが見られる
+    - プロバイダーがダッシュボードでレート制限について警告している
+    - より多くの PR にわたって Coding Plan のウィンドウ（5時間/週次）を節約したい
+  </Card>
+</CardGroup>
+
+<Tip>
+  **同時実行数 vs. RPM vs. TPM。** `maxConcurrentRequests` は並行するインフライトリクエストのみを制限します。多くのプロバイダーは、別の **RPM**（1分あたりのリクエスト数）や **TPM**（1分あたりのトークン数）制限も適用します。同時実行数は問題ないのに RPM/TPM にヒットしている場合、通常の対処法はティアをアップグレードするか、時間をかけて負荷を分散することです — `maxConcurrentRequests` を変更することではありません。
+</Tip>
+
+<Note>
+  **フォールバックとの相互作用。** メインが 429 にヒットし、Kodus がフォールバックモデルにフェイルオーバーするとき、フォールバック自身の `maxConcurrentRequests` が適用されます。異なるプロバイダーに寛大なフォールバックを設定することは、メインがタイトなサブスクリプション上にある場合にバーストを吸収する良い方法です。
+</Note>
+
+## ベストプラクティス
+
+### セキュリティ
+
+<CardGroup cols={2}>
+  <Card title="専用キー" icon="shield-check">
+    Kodus 用の別の APIキーを作成します。使用状況の監査とキーのローテーションが容易になります。
+  </Card>
+  <Card title="定期的なローテーション" icon="arrows-rotate">
+    定期的にキーをローテーションし、BYOK 設定で更新します。
+  </Card>
+  <Card title="使用状況の監視" icon="chart-bar">
+    異常なパターンがないか、プロバイダーのダッシュボードを確認します。
+  </Card>
+  <Card title="安全な保管" icon="lock">
+    キーをリポジトリにコミットしないでください。Kodus は保存時および転送時に暗号化して保存します。
+  </Card>
+</CardGroup>
+
+### フォールバック戦略
+
+- メインとフォールバックには**異なるプロバイダー**を使用します（例：Anthropic メイン、Google フォールバック）。プロバイダー固有の障害から保護します。
+- 厳しい同時実行制限のあるサブスクリプション（GLM Coding Plan Lite/Pro、Kimi Code Plan）は単独の構成としては適していません — バースト的な PR が枯渇しないよう、ペイパートークンのフォールバックとペアにします。
+
+## トラブルシューティング
+
+<AccordionGroup>
+  <Accordion title="Test クリック時の 'Invalid API key'">
+    - 余分なスペース、引用符、末尾の改行なしでキーをコピーします。
+    - 請求が有効になっており、アカウントにクレジットがあることを確認します。
+    - GLM Coding Plan / Kimi Code Plan のキーについては、カードで一致する **Plan** を選択したことを確認してください — サブスクリプションキーは Developer API エンドポイントでは動作せず、その逆も同様です。
+  </Accordion>
+
+  <Accordion title="Test クリック時の 'Endpoint not found'">
+    - ベース URL がプロバイダーと正確に一致していることを確認します（末尾のスラッシュが一部で重要です）。
+    - OpenAI 互換プロバイダーの場合、models エンドポイントは通常 `{baseURL}/models` です。
+  </Accordion>
+
+  <Accordion title="レビュー時にモデルが見つからない（キーテストは合格）">
+    - **Test** ボタンはキー/エンドポイントを検証しますが、特定のモデル ID は検証しません。存在しないモデルを入力した場合（タイプミス）、最初の実際のレビューが失敗します。
+    - 保存前にプロバイダーのカタログに対してモデル ID をクロスチェックしてください。
+  </Accordion>
+
+  <Accordion title="'Rate limited' または 'Too much concurrency'">
+    - Advanced settings で **Max concurrent requests** を下げます。
+    - GLM Coding Plan Lite/Pro では **1 concurrent** を維持します。より高いスループットが必要な場合は Max（30 concurrent）にアップグレードしてください。
+    - Kimi Code Plan では文書化された上限は **30 concurrent** です。
+  </Accordion>
+
+  <Accordion title="セルフホスト環境変数が表示されない">
+    - Kodus が `.env`（セルフホスト Fixed Mode）で設定されている場合、BYOK 画面はアクティブなプロバイダー/モデルを表示する青い情報バナーを表示します — セキュリティのためキーは決して表示されません。
+    - `.env` の上に BYOK 設定を保存すると、オーバーライド前に確認ダイアログが表示されます。
+  </Accordion>
+
+  <Accordion title="予想外の高コスト">
+    - Reasoning はトークンを追加します。コストが急増している場合、**Thinking** を Medium から Low に下げるか、メインに安価なモデルに切り替えてください。
+    - プロバイダーのダッシュボードでモデルごとの内訳を確認します。
+    - プロバイダーレベルで月次上限を設定します。
+  </Accordion>
+</AccordionGroup>
+
+## よくある質問
+
+<AccordionGroup>
+  <Accordion title="いつでもプロバイダーを切り替えられますか？">
+    はい。変更は次のレビューに有効になります — 再デプロイは不要です。
+  </Accordion>
+
+  <Accordion title="APIキーのクレジットがなくなった場合はどうなりますか？">
+    フォールバックが設定されている場合、レビューは自動的にフォールバックモデルに切り替わります。フォールバックがない場合、レビューは失敗してエラーを返します。常にフォールバックを設定してください。
+  </Accordion>
+
+  <Accordion title="プライマリ/フォールバックシステムはどのように機能しますか？">
+    メインはデフォルトで各レビューを処理します。失敗した場合（レート制限、5xx、タイムアウト）、Kodus はフォールバックで一度再試行します。実際にレビューを処理したプロバイダーに対してのみ支払います。
+  </Accordion>
+
+  <Accordion title="メインとフォールバックに同じプロバイダーを使用すべきですか？">
+    いいえ。異なるプロバイダーはプロバイダー固有の障害から保護します。一般的なペアリング：Anthropic メイン + Google フォールバック、またはスパイクカバレッジ用に GLM Coding Plan メイン + Anthropic フォールバック。
+  </Accordion>
+
+  <Accordion title="APIキーは安全に保管されますか？">
+    はい。キーは保存時および転送時に暗号化され、平文でログに記録されることはありません。BYOK ステータスエンドポイントは生のキーを返しません。
+  </Accordion>
+
+  <Accordion title="セルフホスト LLM（例：Ollama、vLLM）を使用できますか？">
+    はい — 手動ウィザードの **OpenAI Compatible** プロバイダーを介して使用できます。エンドポイントのベース URL、公開しているモデル ID、およびプレースホルダーの APIキーを入力します（ほとんどのセルフホストランタイムはキーヘッダーを無視しますが、依然として必要です）。
+  </Accordion>
+</AccordionGroup>

@@ -156,10 +156,10 @@ describe('GithubController', () => {
     });
 
     describe('unsupported events - should NOT enqueue', () => {
-        it('should ignore push event', async () => {
+        it('should ignore fork event', async () => {
             mockRequest = {
-                headers: { 'x-github-event': 'push' },
-                body: { ref: 'refs/heads/main' },
+                headers: { 'x-github-event': 'fork' },
+                body: { forkee: {} },
             };
 
             controller.handleWebhook(

@@ -1,3 +1,3 @@
-import { GenericLoading } from "@components/ui/generic-loading";
+import { KodyRulesPageSkeleton } from "./_components/page-skeleton";
 
-export default GenericLoading;
+export default KodyRulesPageSkeleton;

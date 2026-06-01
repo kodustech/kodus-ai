@@ -28,11 +28,11 @@ export class PullRequestMessagesRepository implements IPullRequestMessagesReposi
     async update(
         pullRequestMessages: IPullRequestMessages,
     ): Promise<PullRequestMessagesEntity> {
-        const updated = await this.pullRequestMessagesModel.findByIdAndUpdate(
-            pullRequestMessages.uuid,
-            pullRequestMessages,
-            { new: true },
-        );
+        const updated = await this.pullRequestMessagesModel
+            .findByIdAndUpdate(pullRequestMessages.uuid, pullRequestMessages, {
+                new: true,
+            })
+            .lean();
         return mapSimpleModelToEntity(updated, PullRequestMessagesEntity);
     }
 
@@ -66,21 +66,30 @@ export class PullRequestMessagesRepository implements IPullRequestMessagesReposi
     async find(
         filter?: Partial<IPullRequestMessages>,
     ): Promise<PullRequestMessagesEntity[]> {
-        const docs = await this.pullRequestMessagesModel.find(filter).exec();
+        const docs = await this.pullRequestMessagesModel
+            .find(filter)
+            .lean()
+            .exec();
         return mapSimpleModelsToEntities(docs, PullRequestMessagesEntity);
     }
 
     async findOne(
         filter?: Partial<IPullRequestMessages>,
     ): Promise<PullRequestMessagesEntity | null> {
-        const doc = await this.pullRequestMessagesModel.findOne(filter).exec();
+        const doc = await this.pullRequestMessagesModel
+            .findOne(filter)
+            .lean()
+            .exec();
         return doc
             ? mapSimpleModelToEntity(doc, PullRequestMessagesEntity)
             : null;
     }
 
     async findById(uuid: string): Promise<PullRequestMessagesEntity | null> {
-        const doc = await this.pullRequestMessagesModel.findById(uuid).exec();
+        const doc = await this.pullRequestMessagesModel
+            .findById(uuid)
+            .lean()
+            .exec();
         return doc
             ? mapSimpleModelToEntity(doc, PullRequestMessagesEntity)
             : null;

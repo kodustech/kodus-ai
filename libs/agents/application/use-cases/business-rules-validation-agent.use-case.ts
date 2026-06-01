@@ -28,6 +28,7 @@ export class BusinessRulesValidationAgentUseCase implements IUseCase {
             );
             throw new Error(
                 `Falha ao processar validação de regras de negócio: ${error.message}`,
+                { cause: error },
             );
         }
     }

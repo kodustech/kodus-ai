@@ -17,3 +17,8 @@ export {
     type BackoffOptions,
     type BackoffResult,
 } from './exponential-backoff';
+
+export {
+    retryWithBackoff,
+    type RetryWithBackoffOptions,
+} from './retry-with-backoff';

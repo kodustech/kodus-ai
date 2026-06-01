@@ -18,6 +18,8 @@ import { CheckIfPRCanBeApprovedCronProvider } from './CheckIfPRCanBeApproved.cro
 import { ClassifyOrphanedSessionsCronProvider } from './classifyOrphanedSessions.cron';
 import { CodeReviewFeedbackCronProvider } from './codeReviewFeedback.cron';
 import { KodyLearningCronProvider } from './kodyLearning.cron';
+import { SSOTestSessionCleanupCronProvider } from './ssoTestSessionCleanup.cron';
+import { SSOModule } from '@libs/ee/sso/sso.module';
 
 @Module({
     imports: [
@@ -34,12 +36,14 @@ import { KodyLearningCronProvider } from './kodyLearning.cron';
         IntegrationModule,
         IntegrationConfigModule,
         forwardRef(() => CliReviewModule),
+        forwardRef(() => SSOModule),
     ],
     providers: [
         CheckIfPRCanBeApprovedCronProvider,
         ClassifyOrphanedSessionsCronProvider,
         CodeReviewFeedbackCronProvider,
         KodyLearningCronProvider,
+        SSOTestSessionCleanupCronProvider,
         DistributedLockService,
     ],
 })

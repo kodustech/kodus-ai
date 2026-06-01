@@ -14,6 +14,10 @@ export interface BaseUsageContract {
     output: number;
     total: number;
     outputReasoning: number;
+    /** Input tokens served from provider prompt cache. Subset of `input`. */
+    cacheRead?: number;
+    /** Input tokens that created cache entries on this call (Anthropic). */
+    cacheWrite?: number;
     model: string;
 }
 
@@ -44,6 +48,8 @@ export interface TokenUsageBreakdown {
     outputTokens: number;
     reasoningTokens: number;
     totalTokens: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
 }
 
 export interface CostEstimateContract {

@@ -10,6 +10,7 @@ import {
 } from '@libs/identity/domain/user/contracts/user.service.contract';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { AcceptUserInvitationDto } from '@libs/identity/dtos/accept-user-invitation.dto';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
 export class AcceptUserInvitationUseCase implements IUseCase {
@@ -20,6 +21,7 @@ export class AcceptUserInvitationUseCase implements IUseCase {
         private readonly cryptoService: CryptoService,
 
         private readonly createProfileUseCase: CreateProfileUseCase,
+        private readonly telemetry: TelemetryService,
     ) {}
     public async execute(user: AcceptUserInvitationDto): Promise<any> {
         const userUpdated = await this.usersService.update(
@@ -44,6 +46,15 @@ export class AcceptUserInvitationUseCase implements IUseCase {
             name: user.name,
             phone: user?.phone,
         });
+
+        if (userUpdated.email) {
+            void this.telemetry.userInvitationAccepted({
+                userId: user.uuid,
+                email: userUpdated.email,
+                name: user.name,
+                organizationId: userUpdated.organization?.uuid,
+            });
+        }
 
         return userUpdated;
     }

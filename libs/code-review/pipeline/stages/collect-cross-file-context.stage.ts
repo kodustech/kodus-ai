@@ -5,46 +5,11 @@ import {
     COLLECT_CROSS_FILE_CONTEXTS_SERVICE_TOKEN,
     CollectCrossFileContextsService,
 } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
-import {
-    ISandboxProvider,
-    SANDBOX_PROVIDER_TOKEN,
-} from '@libs/code-review/domain/contracts/sandbox.provider';
+import { GraphContextService } from '@libs/code-review/infrastructure/adapters/services/graph/graph-context.service';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
-import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import { PlatformType } from '@libs/core/domain/enums';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { CliReviewPipelineContext } from '@libs/cli-review/pipeline/context/cli-review-pipeline.context';
-
-/**
- * Parse a git remote URL (HTTPS or SSH) into owner/repo parts.
- * Supports:
- *  - https://github.com/owner/repo.git
- *  - git@github.com:owner/repo.git
- */
-export function parseGitRemoteUrl(
-    url: string,
-): { fullName: string; name: string } | null {
-    // HTTPS format: https://github.com/owner/repo.git
-    const httpsMatch = url.match(
-        /https?:\/\/[^/]+\/([^/]+\/[^/]+?)(?:\.git)?$/,
-    );
-    if (httpsMatch) {
-        const fullName = httpsMatch[1];
-        const name = fullName.split('/')[1];
-        return { fullName, name };
-    }
-
-    // SSH format: git@github.com:owner/repo.git
-    const sshMatch = url.match(/[^@]+@[^:]+:([^/]+\/[^/]+?)(?:\.git)?$/);
-    if (sshMatch) {
-        const fullName = sshMatch[1];
-        const name = fullName.split('/')[1];
-        return { fullName, name };
-    }
-
-    return null;
-}
 
 @Injectable()
 export class CollectCrossFileContextStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -57,9 +22,7 @@ export class CollectCrossFileContextStage extends BasePipelineStage<CodeReviewPi
     constructor(
         @Inject(COLLECT_CROSS_FILE_CONTEXTS_SERVICE_TOKEN)
         private readonly collectCrossFileContextsService: CollectCrossFileContextsService,
-        @Inject(SANDBOX_PROVIDER_TOKEN)
-        private readonly sandboxProvider: ISandboxProvider,
-        private readonly codeManagementService: CodeManagementService,
+        private readonly graphContext: GraphContextService,
     ) {
         super();
     }
@@ -75,10 +38,13 @@ export class CollectCrossFileContextStage extends BasePipelineStage<CodeReviewPi
             ? `branch ${cliContext?.gitContext?.branch ?? 'unknown'}`
             : `PR#${context?.pullRequest?.number}`;
 
-        // Guard: skip in fast mode (fast = speed over depth)
-        if (cliContext?.isFastMode) {
+        // Guard: skip in fast mode — the agent will rely on its own
+        // readFile/grep tools for any cross-file exploration it needs,
+        // and cross-file context collection can take 15-30s which defeats
+        // the "fast" promise.
+        if (context.codeReviewConfig?.reviewMode === 'fast') {
             this.logger.log({
-                message: `Skipping cross-file context collection: fast mode`,
+                message: `Skipping cross-file context collection: fast review mode for ${label}`,
                 context: this.stageName,
                 metadata: {
                     sandboxDecision: 'skipped',
@@ -88,16 +54,16 @@ export class CollectCrossFileContextStage extends BasePipelineStage<CodeReviewPi
             return context;
         }
 
-        // Guard: skip if crossFileDependenciesAnalysis is disabled
-        if (context.codeReviewConfig?.crossFileDependenciesAnalysis === false) {
+        // Guard: skip in trial mode — there's no sandbox to explore and
+        // the agent runs in self-contained mode using only the inlined
+        // file contents sent by the CLI.
+        if (cliContext?.isTrialMode) {
             this.logger.log({
-                message: `Skipping cross-file context collection: crossFileDependenciesAnalysis is disabled for ${label}`,
+                message: `Skipping cross-file context collection: trial mode for ${label}`,
                 context: this.stageName,
                 metadata: {
                     sandboxDecision: 'skipped',
-                    sandboxSkipReason: 'disabled',
-                    organizationAndTeamData: context?.organizationAndTeamData,
-                    prNumber: context?.pullRequest?.number,
+                    sandboxSkipReason: 'trial_mode',
                 },
             });
             return context;
@@ -118,14 +84,17 @@ export class CollectCrossFileContextStage extends BasePipelineStage<CodeReviewPi
             return context;
         }
 
-        // Guard: skip if sandbox is not available
-        if (!this.sandboxProvider.isAvailable()) {
+        // Guard: skip if no sandbox available in context. The lease-managed
+        // sandbox is owned by CreateSandboxStage which runs earlier in the
+        // pipeline; this stage just consumes it.
+        const sandbox = context.sandboxHandle;
+        if (!sandbox) {
             this.logger.log({
-                message: `Skipping cross-file context collection: no sandbox provider configured for ${label}`,
+                message: `Skipping cross-file context collection: no sandbox in context for ${label}`,
                 context: this.stageName,
                 metadata: {
                     sandboxDecision: 'skipped',
-                    sandboxSkipReason: 'no_provider',
+                    sandboxSkipReason: 'no_sandbox',
                     organizationAndTeamData: context?.organizationAndTeamData,
                     prNumber: context?.pullRequest?.number,
                 },
@@ -146,58 +115,14 @@ export class CollectCrossFileContextStage extends BasePipelineStage<CodeReviewPi
             return context;
         }
 
-        let cleanup: (() => Promise<void>) | undefined;
-
         try {
-            const cloneInfo = await this.resolveCloneParams(
-                context,
-                cliContext,
-            );
-            if (!cloneInfo) {
-                this.logger.warn({
-                    message: `[DEBUG] resolveCloneParams returned null for ${label}`,
-                    context: this.stageName,
-                    metadata: {
-                        sandboxDecision: 'skipped',
-                        sandboxSkipReason: 'no_clone_params',
-                        prNumber: context?.pullRequest?.number,
-                    },
-                });
-                return context;
-            }
-
             this.logger.log({
-                message: `[DEBUG] Clone params resolved for ${label}: url=${cloneInfo.url} platform=${cloneInfo.platform} branch=${cloneInfo.branch} prNumber=${cloneInfo.prNumber} hasToken=${!!cloneInfo.authToken}`,
+                message: `[DEBUG] Reusing lease-managed sandbox for ${label} (type=${sandbox.type}, sandboxId=${sandbox.sandboxId})`,
                 context: this.stageName,
                 metadata: {
-                    cloneUrl: cloneInfo.url,
-                    platform: cloneInfo.platform,
-                    branch: cloneInfo.branch,
-                    prNumber: cloneInfo.prNumber,
-                    hasAuthToken: !!cloneInfo.authToken,
-                    tokenLength: cloneInfo.authToken?.length ?? 0,
-                    sandboxProviderType: this.sandboxProvider.constructor.name,
-                },
-            });
-
-            // Create sandbox and clone repo
-            const sandbox = await this.sandboxProvider.createSandboxWithRepo({
-                cloneUrl: cloneInfo.url,
-                authToken: cloneInfo.authToken,
-                authUsername: cloneInfo.authUsername,
-                branch: cloneInfo.branch,
-                prNumber: cloneInfo.prNumber,
-                platform: cloneInfo.platform,
-            });
-
-            cleanup = sandbox.cleanup;
-
-            this.logger.log({
-                message: `[DEBUG] Sandbox created successfully for ${label}, starting collectContexts`,
-                context: this.stageName,
-                metadata: {
-                    sandboxDecision: 'created',
-                    sandboxSkipReason: null,
+                    sandboxDecision: 'reused',
+                    sandboxType: sandbox.type,
+                    sandboxId: sandbox.sandboxId,
                     prNumber: context?.pullRequest?.number,
                 },
             });
@@ -228,25 +153,47 @@ export class CollectCrossFileContextStage extends BasePipelineStage<CodeReviewPi
                 },
             });
 
+            // Generate graph JSON for content formatting (non-blocking)
+            let graphJson: { nodes: any[]; edges: any[] } | null = null;
+            if (sandbox && context.changedFiles?.length) {
+                try {
+                    graphJson = await this.graphContext.parseAndGetGraphJson(
+                        sandbox,
+                        context.changedFiles,
+                    );
+                    this.logger.log({
+                        message: `[CROSS-FILE] Graph JSON for ${label}: ${graphJson ? `${graphJson.nodes.length} nodes, ${graphJson.edges.length} edges` : 'null (no nodes parsed)'}`,
+                        context: this.stageName,
+                        metadata: { hasGraph: !!graphJson, nodeCount: graphJson?.nodes?.length ?? 0, edgeCount: graphJson?.edges?.length ?? 0 },
+                    });
+                } catch (err) {
+                    this.logger.warn({
+                        message: `[CROSS-FILE] Graph JSON generation failed for ${label}, continuing without it`,
+                        context: this.stageName,
+                        error: err,
+                    });
+                }
+            } else {
+                this.logger.log({
+                    message: `[CROSS-FILE] Skipping graph JSON: sandbox=${!!sandbox.run}, changedFiles=${context.changedFiles?.length ?? 0}`,
+                    context: this.stageName,
+                });
+            }
+
+            this.logger.log({
+                message: `[CROSS-FILE] Storing sandbox for ${label}: type=${sandbox.type}, hasBaseBranch=${!!sandbox.baseBranch}, hasGraphJson=${!!graphJson}`,
+                context: this.stageName,
+            });
+
             return this.updateContext(context, (draft) => {
                 draft.crossFileContexts = result;
-                // Keep sandbox alive for safeguard agent verification
-                draft.sandboxHandle = {
-                    remoteCommands: sandbox.remoteCommands,
-                    cleanup: sandbox.cleanup,
-                };
-                // Save clone params so safeguard can renew sandbox if it expires
-                draft.sandboxCloneParams = {
-                    cloneUrl: cloneInfo.url,
-                    authToken: cloneInfo.authToken,
-                    authUsername: cloneInfo.authUsername,
-                    branch: cloneInfo.branch,
-                    prNumber: cloneInfo.prNumber,
-                    platform: cloneInfo.platform,
-                };
+                if (graphJson) {
+                    draft.callGraphJson = graphJson;
+                }
             });
         } catch (error) {
-            // Non-fatal: log error and return context unchanged
+            // Non-fatal: log error and return context unchanged. Sandbox
+            // lifecycle is owned by SandboxLeaseManager — no cleanup here.
             this.logger.error({
                 message: `Failed to collect cross-file context for ${label}, continuing without it`,
                 context: this.stageName,
@@ -256,18 +203,6 @@ export class CollectCrossFileContextStage extends BasePipelineStage<CodeReviewPi
                     prNumber: context?.pullRequest?.number,
                 },
             });
-            // Cleanup sandbox on error since we won't store it in context
-            if (cleanup) {
-                try {
-                    await cleanup();
-                } catch (cleanupErr) {
-                    this.logger.warn({
-                        message: `Sandbox cleanup failed after cross-file context error`,
-                        context: this.stageName,
-                        error: cleanupErr,
-                    });
-                }
-            }
             return context;
         }
     }
@@ -277,106 +212,4 @@ export class CollectCrossFileContextStage extends BasePipelineStage<CodeReviewPi
      * - PR mode: uses codeManagementService.getCloneParams() as before
      * - CLI mode: parses git remote URL and tries to get auth from platform integration
      */
-    private async resolveCloneParams(
-        context: CodeReviewPipelineContext,
-        cliContext?: CliReviewPipelineContext,
-    ): Promise<{
-        url: string;
-        authToken: string;
-        authUsername?: string;
-        branch: string;
-        prNumber?: number;
-        platform: PlatformType;
-    } | null> {
-        if (context.origin !== 'cli') {
-            // PR mode: use platform integration directly
-            const cloneParams = await this.codeManagementService.getCloneParams(
-                {
-                    repository: context.repository,
-                    organizationAndTeamData: context.organizationAndTeamData,
-                },
-                context.platformType,
-            );
-
-            return {
-                url: cloneParams.url,
-                authToken: cloneParams.auth?.token || '',
-                authUsername: cloneParams.auth?.username,
-                branch: context.branch,
-                prNumber: context.pullRequest.number,
-                platform: context.platformType,
-            };
-        }
-
-        // CLI mode: resolve from gitContext
-        const gitContext = cliContext?.gitContext;
-        if (!gitContext?.remote) return null;
-
-        const parsed = parseGitRemoteUrl(gitContext.remote);
-        if (!parsed) {
-            this.logger.warn({
-                message: `Could not parse git remote URL: ${gitContext.remote}`,
-                context: this.stageName,
-            });
-            return null;
-        }
-
-        const platform = gitContext.inferredPlatform || PlatformType.GITHUB;
-        const branch = gitContext.branch || 'main';
-
-        // Try to get clone params (HTTPS URL + auth token) from team's platform integration
-        let authToken = '';
-        let authUsername: string | undefined;
-        let cloneUrl = gitContext.remote;
-        try {
-            const cloneParams = await this.codeManagementService.getCloneParams(
-                {
-                    repository: {
-                        id: '0',
-                        defaultBranch: branch,
-                        fullName: parsed.fullName,
-                        name: parsed.name,
-                    },
-                    organizationAndTeamData: context.organizationAndTeamData,
-                },
-                platform,
-            );
-            authToken = cloneParams.auth?.token || '';
-            authUsername = cloneParams.auth?.username;
-            // Use the HTTPS URL from the platform service (E2B sandbox requires HTTPS for token auth)
-            if (cloneParams.url) {
-                cloneUrl = cloneParams.url;
-            }
-        } catch (error) {
-            // Fallback: no auth (works for public repos)
-            this.logger.warn({
-                message: `Could not get auth token for CLI cross-file context, trying without auth`,
-                context: this.stageName,
-                error,
-            });
-        }
-
-        // Ensure we always use HTTPS (E2B sandbox uses http.extraHeader which only works over HTTPS)
-        if (cloneUrl.startsWith('git@')) {
-            const sshMatch = cloneUrl.match(/git@([^:]+):(.+?)(?:\.git)?$/);
-            if (sshMatch) {
-                cloneUrl = `https://${sshMatch[1]}/${sshMatch[2]}`;
-            } else {
-                this.logger.warn({
-                    message: `Could not parse SSH-like git remote URL: ${cloneUrl}`,
-                    context: this.stageName,
-                });
-                return null;
-            }
-        }
-
-        return {
-            url: cloneUrl,
-            authToken,
-            authUsername,
-            branch,
-            prNumber: undefined,
-            platform,
-        };
-    }
 }

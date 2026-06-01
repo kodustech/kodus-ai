@@ -570,6 +570,7 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
             'category',
             'organizationId',
             'filePath',
+            'status',
         ];
         exactMatchFields.forEach((field) => {
             if (filters[field]) {
@@ -719,6 +720,10 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
     ): CodeSuggestion[] {
         if (!issuesConfigValue) {
             return allSuggestions;
+        }
+
+        if (typeof issuesConfigValue === 'boolean') {
+            return issuesConfigValue ? allSuggestions : [];
         }
 
         const { severityFilters, sourceFilters } = issuesConfigValue;

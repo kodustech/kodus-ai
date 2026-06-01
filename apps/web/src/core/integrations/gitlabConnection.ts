@@ -1,11 +1,9 @@
 import { IIntegrationConnector } from "./IIntegrationConnector";
-
-const oauthURL = process.env.WEB_GITLAB_OAUTH_URL || "";
-const scopes = process.env.WEB_GITLAB_SCOPES || "";
-const clientId = process.env.GLOBAL_GITLAB_CLIENT_ID;
-const redirectURI = process.env.GLOBAL_GITLAB_REDIRECT_URL;
+import type { PublicConfig } from "@config/publicConfig";
 
 export class GitlabConnection implements IIntegrationConnector {
+    constructor(private readonly cfg: PublicConfig) {}
+
     async connect(
         hasConnection: boolean,
         routerConfig: any,
@@ -15,8 +13,20 @@ export class GitlabConnection implements IIntegrationConnector {
             routerConfig.push(
                 routerPath || `${routerConfig.pathname}/gitlab/configuration`,
             );
-        } else {
-            window.location.href = `${oauthURL}?client_id=${clientId}&redirect_uri=${redirectURI}&response_type=code&scope=${encodeURIComponent(scopes)}&state=${Math.random().toString(36).substring(7)}`;
+            return;
         }
+        const {
+            gitlabOauthUrl,
+            gitlabClientId,
+            gitlabRedirectUrl,
+            gitlabScopes,
+        } = this.cfg;
+        const state = Math.random().toString(36).substring(7);
+        window.location.href =
+            `${gitlabOauthUrl}?client_id=${gitlabClientId}` +
+            `&redirect_uri=${gitlabRedirectUrl}` +
+            `&response_type=code` +
+            `&scope=${encodeURIComponent(gitlabScopes)}` +
+            `&state=${state}`;
     }
 }

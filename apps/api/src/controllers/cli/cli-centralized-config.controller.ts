@@ -18,7 +18,6 @@ import {
     ApiTags,
 } from '@nestjs/swagger';
 import { Response } from 'express';
-import archiver from 'archiver';
 import { finished } from 'stream/promises';
 
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
@@ -40,9 +39,9 @@ import {
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
-import { CentralizedConfigInitUseCase } from '@libs/code-review/application/use-cases/configuration/centralized-config-init.use-case';
-import { CentralizedConfigSyncUseCase } from '@libs/code-review/application/use-cases/configuration/centralized-config-sync.use-case';
-import { CentralizedConfigDownloadUseCase } from '@libs/code-review/application/use-cases/configuration/centralized-config-download.use-case';
+import { CentralizedConfigInitUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-init.use-case';
+import { CentralizedConfigSyncUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-sync.use-case';
+import { CentralizedConfigDownloadUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-download.use-case';
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 
 import { ApiStandardResponses } from '../../docs/api-standard-responses.decorator';
@@ -292,6 +291,7 @@ export class CliCentralizedConfigController {
             {
                 enabled: false,
                 repository: null,
+                activePullRequest: null,
             },
             context,
         );
@@ -344,6 +344,7 @@ export class CliCentralizedConfigController {
                 'attachment; filename=centralized-config.zip',
         });
 
+        const { default: archiver } = await import('archiver');
         const archive = archiver('zip', { zlib: { level: 9 } });
         archive.on('error', (err) => {
             response.destroy(err);

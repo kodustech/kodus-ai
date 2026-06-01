@@ -85,6 +85,7 @@ export class ReferenceDetectorService {
                 fallback: false,
                 context: params.context || 'unknown',
             },
+            byokConfig: params.byokConfig,
             exec: async (callbacks) => {
                 const isRuleMode = params.detectionMode === 'rule';
                 const systemPrompt = isRuleMode

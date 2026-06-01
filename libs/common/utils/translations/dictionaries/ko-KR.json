@@ -5,7 +5,9 @@
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## 코드 리뷰 완료! 🔥\n\n현재 설정을 기반으로 코드 리뷰가 성공적으로 완료되었습니다.\n\n",
-        "withoutComments": "# Kody 리뷰 완료\n**좋은 소식입니다!** 🎉\n현재 리뷰 설정에 맞는 문제가 발견되지 않았습니다.\n\n훌륭한 작업을 계속하세요! 🚀"
+        "withoutComments": "# Kody 리뷰 완료\n**좋은 소식입니다!** 🎉\n현재 리뷰 설정에 맞는 문제가 발견되지 않았습니다.\n\n훌륭한 작업을 계속하세요! 🚀",
+        "withErrors": "## 코드 리뷰를 완료하지 못했습니다 ⚠️\n\n제안을 생성하기 전에 리뷰가 실패했습니다.\n\n**이유:** {{errorMessage}}\n\n문제를 해결한 후 이 PR에 `@kody review`를 입력하여 리뷰를 다시 실행하세요.\n\n",
+        "partialErrorsNotice": "\n\n> ⚠️ 참고: 이번 실행에서 일부 단계가 완료되지 않아 자동 승인(활성화된 경우)이 건너뛰어졌습니다. 자세한 내용은 {{dashboardUrl}}에서 확인하고, 문제가 해결된 후 이 PR에 `@kody review`를 댓글로 남겨 다시 시도하세요.\n"
     },
     "pullRequestSummaryMarkdown": {
         "title": "PR 요약 (댓글 작성자: [Kody](https://kodus.io) 🤖)",

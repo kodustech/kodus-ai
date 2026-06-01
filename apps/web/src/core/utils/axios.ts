@@ -41,6 +41,14 @@ export const axiosApi = {
         axiosClient.delete<T>(url, {
             ...params,
         }),
+    put: <T>(
+        url: string,
+        data: any,
+        params?: AxiosRequestConfig<any>,
+    ): Promise<AxiosResponse<any, any>> =>
+        axiosClient.put<T>(url, data, {
+            ...params,
+        }),
 };
 
 const fetcher = async <T>(url: string, params?: AxiosRequestConfig<any>) => {
@@ -110,9 +118,28 @@ const deleted = async <T>(
     return axiosApi.delete<T>(url, axiosParams).then((res) => res.data);
 };
 
+const put = async <T>(
+    url: string,
+    data: any,
+    params?: AxiosRequestConfig<any>,
+): Promise<T> => {
+    const headers = {
+        Authorization: "Bearer " + (await getJWTToken()),
+    };
+
+    const axiosParams = {
+        ...params,
+        headers,
+        withCredentials: true,
+    };
+
+    return axiosApi.put<T>(url, data, axiosParams).then((res) => res.data);
+};
+
 export const axiosAuthorized = {
     post,
     fetcher,
     deleted,
     patch,
+    put,
 };

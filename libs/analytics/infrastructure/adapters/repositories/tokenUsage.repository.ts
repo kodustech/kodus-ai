@@ -12,7 +12,6 @@ import {
 } from '@libs/analytics/domain/token-usage/types/tokenUsage.types';
 
 import { ObservabilityTelemetryModel } from './schemas/observabilityTelemetry.model';
-import { CodeAstAnalysisService } from '@libs/ee/kodyAST/codeASTAnalysis.service';
 import { LLMAnalysisService } from '@libs/code-review/infrastructure/adapters/services/llmAnalysis.service';
 
 @Injectable()
@@ -63,6 +62,36 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                     {
                         $getField: {
                             field: 'gen_ai.usage.reasoning_tokens',
+                            input: '$attributes',
+                        },
+                    },
+                    0,
+                ],
+            },
+        },
+        // Cache read: input tokens served from provider cache (Gemini/OpenAI
+        // implicit, Anthropic ephemeral reads). Billed at 10-50% of regular.
+        cacheRead: {
+            $sum: {
+                $ifNull: [
+                    {
+                        $getField: {
+                            field: 'gen_ai.usage.cache_read_input_tokens',
+                            input: '$attributes',
+                        },
+                    },
+                    0,
+                ],
+            },
+        },
+        // Cache write: input tokens that populated a cache entry on this
+        // call (only Anthropic charges a write premium; 0 for others).
+        cacheWrite: {
+            $sum: {
+                $ifNull: [
+                    {
+                        $getField: {
+                            field: 'gen_ai.usage.cache_creation_input_tokens',
                             input: '$attributes',
                         },
                     },
@@ -132,8 +161,7 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                                           .validateImplementedSuggestions.name,
                                       LLMAnalysisService.prototype
                                           .generateCodeSuggestions.name,
-                                      CodeAstAnalysisService.prototype
-                                          .analyzeASTWithAI.name,
+                                      'analyzeASTWithAI',
                                   ], // These runs will never be called with BYOK
                               ],
                           },

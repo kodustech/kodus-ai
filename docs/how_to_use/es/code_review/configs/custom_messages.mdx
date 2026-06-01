@@ -1,0 +1,96 @@
+---
+title: "Mensajes Personalizados"
+description: "Configura mensajes de inicio y fin de revisión personalizados para Kody"
+---
+
+## Descripción General
+
+Personaliza los mensajes que Kody envía al comienzo y al final de las revisiones de código. Esta función te permite adaptar el estilo de comunicación y agregar contexto o instrucciones específicas para tu equipo.
+
+## Comportamiento Predeterminado
+
+Cuando no has personalizado ningún mensaje, Kody funciona de la siguiente manera:
+
+1. **Mensaje Inicial**: Kody envía un mensaje estándar de inicio de revisión
+2. **Sugerencias**: Kody proporciona todas las sugerencias de revisión de código
+3. **Mensaje Final**: Kody actualiza el mensaje inicial con un resumen de la revisión
+
+## Comportamiento con Mensajes Personalizados
+
+Una vez que editas el mensaje de inicio o de fin de revisión por primera vez, el comportamiento de Kody cambia a:
+
+1. **Mensaje Inicial**: Kody envía tu mensaje de inicio de revisión personalizado
+2. **Sugerencias**: Kody proporciona todas las sugerencias de revisión de código
+3. **Mensaje Final**: Kody envía tu mensaje de fin de revisión personalizado (sin actualizar el mensaje inicial)
+
+Esto crea una línea de tiempo completa: **Mensaje Inicial → Sugerencias → Mensaje Final**
+
+## Opciones de Configuración de Mensajes
+
+### Comportamiento del Mensaje
+
+Usa el menú desplegable **Comportamiento del mensaje** para decidir cuándo Kody debe publicar tus mensajes
+de inicio y fin personalizados:
+
+- **Importante:** Los mensajes solo se envían cuando realmente se ejecuta una revisión.  
+  Si tu cadencia de revisión es **Manual**, los mensajes se publican solo cuando alguien ejecuta `@kody start-review`.
+
+- **En cada push**: Kody publica el mensaje de inicio cuando se abre el pull request y
+  repite el par inicio/fin después de cada nuevo push **que active una revisión**.
+  Esto ocurre automáticamente solo cuando la cadencia es **Automática** o **Auto-pausa**.
+- **Solo al abrir**: Kody envía los mensajes de inicio y fin solo una vez, justo
+  después de la primera ejecución de revisión. Si la cadencia es **Manual**, la primera ejecución de revisión es
+  cuando llamas a `@kody start-review`. Los pushes futuros solo agregan sugerencias de revisión
+  más la reacción habitual para que los autores sepan que la revisión volvió a ejecutarse.
+- **Desactivado**: Los mensajes personalizados están deshabilitados. Kody aún ejecuta la revisión y publica
+  sugerencias, pero no se envían mensajes de inicio ni de fin.
+
+Cuando el comportamiento es `En cada push` o `Solo al abrir`, Kody usa las
+plantillas que hayas completado. Si solo personalizas el mensaje de inicio, solo ese
+mensaje se envía; lo mismo aplica para el mensaje de fin. Esto mantiene la línea de tiempo familiar de
+**Mensaje Inicial → Sugerencias → Mensaje Final** siempre que el comportamiento permita
+publicar mensajes.
+
+**Ejemplo (cadencia Manual)**  
+PR abierto → sin mensaje aún  
+`@kody start-review` → mensaje de inicio → sugerencias → mensaje de fin
+
+## Contexto Dinámico
+
+Puedes enriquecer tus mensajes personalizados con contexto dinámico usando el botón **Agregar Contexto**. Esto te permite incluir:
+
+### changedFiles
+
+Un resumen de los archivos modificados, mostrando adiciones y eliminaciones por archivo. Proporciona un desglose detallado de lo que se modificó en el pull request.
+
+### changedSummary
+
+Un resumen exhaustivo de todos los cambios en el pull request, ofreciendo una visión general del alcance completo de las modificaciones.
+
+### reviewOptions
+
+Un reflejo de la configuración de revisión del equipo, mostrando qué tipos de análisis están habilitados o deshabilitados para la revisión.
+
+### reviewCadence
+
+Proporciona la política exacta de revisiones de seguimiento para que los autores sepan qué sucede después
+de la primera revisión automatizada:
+
+- **Automática**: Kody revisa cada push tan pronto como llega.
+- **Auto-pausa**: Kody revisa los pushes automáticamente, pero si detecta una
+  "ráfaga de pushes" (por ejemplo, 3 pushes en 15 minutos, según tus
+  umbrales) pausa las revisiones de seguimiento hasta que las reanudes. El contexto de cadencia
+  incluye los límites de pushes y tiempo para que el equipo sepa cuándo puede
+  activarse la pausa.
+- **Manual**: Kody espera a que alguien ejecute `@kody start-review` antes de hacer
+  otra revisión.
+
+<Info>
+  Estas variables de contexto se completarán automáticamente con los datos reales
+  de tu pull request cuando Kody envíe el mensaje.
+</Info>
+
+<Note>
+  Siempre puedes volver al comportamiento predeterminado deshabilitando ambos mensajes
+  personalizados o limpiando el contenido del mensaje.
+</Note>{" "}

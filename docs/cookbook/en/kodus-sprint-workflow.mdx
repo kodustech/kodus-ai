@@ -1,0 +1,125 @@
+---
+title: "Kodus + sprint workflow"
+description: "Integrate business logic validation into your sprint cycle so every PR is validated against task requirements before merge."
+icon: "arrows-spin"
+---
+
+## The gap in most sprint workflows
+
+Teams track requirements in Jira, Linear, or Notion. Developers implement them in PRs. But nobody systematically checks whether the PR actually covers all the acceptance criteria — until QA finds gaps in staging.
+
+This cookbook closes that loop by validating PRs against task requirements automatically.
+
+## The workflow
+
+```
+Task created (Jira/Linear/Notion)
+    ↓
+Developer implements → Opens PR
+    ↓
+Kodus automatically:
+  1. Fetches task context from the linked tool
+  2. Compares PR diff against acceptance criteria
+  3. Reports missing/partial implementations
+    ↓
+Developer addresses findings → Re-validates
+    ↓
+Merge with confidence
+```
+
+## Step 1 — Connect your task management tool
+
+Go to **Settings** → **Plugins** and connect your tool:
+
+- **Jira** — for teams using Atlassian
+- **Linear** — for teams using Linear
+- **Notion** — for teams using Notion as a task tracker
+- **ClickUp** — for teams using ClickUp
+
+Once connected, Kodus can automatically fetch task context during reviews.
+
+## Step 2 — Enable business logic validation
+
+It's enabled by default, but verify:
+
+```yaml
+reviewOptions:
+  business_logic: true
+```
+
+## Step 3 — Write good acceptance criteria
+
+The quality of validation depends entirely on the quality of your task descriptions. Kodus classifies task context as:
+
+| Quality | What it means | What to do |
+|---------|--------------|------------|
+| **Complete** | Title + description + acceptance criteria | Best results — criterion-by-criterion validation |
+| **Partial** | Title + description, no criteria | Decent results — behavior-based analysis |
+| **Minimal** | Just a title | Poor results — only obvious gaps flagged |
+
+**Template for Jira/Linear tasks:**
+
+```
+## Description
+Brief context about what needs to change and why.
+
+## Acceptance Criteria
+1. Users with role "admin" can delete any comment
+2. Users can only edit their own comments within 24 hours
+3. Deleted comments show "[removed]" placeholder
+4. Audit log records who deleted what and when
+5. API returns 403 for unauthorized delete attempts
+```
+
+## Step 4 — Use on-demand validation during development
+
+Before marking a PR as ready, developers can self-check:
+
+```
+@kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292
+```
+
+This catches gaps early, before the reviewer even looks at the PR.
+
+## Step 5 — Teach sprint conventions as Memories
+
+```
+@kody remember: every PR must be linked to a Jira ticket.
+PRs without a linked ticket should be flagged.
+```
+
+```
+@kody remember: acceptance criteria marked as "out of scope"
+in the ticket should not be flagged as missing.
+```
+
+## Step 6 — Create a PR requirement rule
+
+```
+Name: PR must reference a task
+Scope: Pull Request
+Severity: Medium
+Instructions:
+  Check pr_description and pr_title for a task reference
+  (e.g., KC-1234, TEAM-456, or a URL to Jira/Linear/Notion).
+  If no task reference is found, flag it and ask the developer
+  to link the relevant task for business logic validation.
+```
+
+## The result
+
+After setup, every PR in your sprint gets:
+
+1. **Code quality review** — security, performance, style (standard Kodus)
+2. **Business logic validation** — are all acceptance criteria implemented?
+3. **Scope mismatch detection** — is this PR even working on the right task?
+
+QA finds fewer gaps, sprint demos go smoother, and "I thought that was done" becomes rare.
+
+## Tips
+
+- Encourage the team to write numbered acceptance criteria — they get the best validation
+- Use on-demand validation during development, not just at review time
+- If a PR intentionally doesn't cover all criteria (phased delivery), note it in the PR description so Kody can account for it
+
+For details, see [Business Logic Validation](/how_to_use/en/code_review/business_logic_validation).

@@ -1,0 +1,43 @@
+---
+title: "Como verificar código contra especificações no Google Docs"
+description: "Valide a implementação do seu pull request contra especificações escritas no Google Docs."
+---
+
+Especificações de produto e requisitos frequentemente ficam no Google Docs. O Kodus pode buscar o conteúdo do documento e compará-lo com o diff do seu PR para verificar se a implementação corresponde à especificação.
+
+## Como funciona
+
+1. **Conecte o plugin do Google Docs** na página de [Plugins](/how_to_use/pt-br/code_review/plugins) do seu workspace
+2. Certifique-se de que o documento está acessível para a conta conectada
+3. Comente no seu PR:
+
+```
+@kody -v business-logic https://docs.google.com/document/d/1abc123/edit
+```
+
+4. O Kody busca o documento, extrai os requisitos e os compara com o diff do PR
+
+## O que você recebe
+
+O Kody produz um relatório de validação estruturado:
+
+- **Achados** com severidade: MUST_FIX, SUGGESTION ou INFO
+- **Rastreamento de requisitos** — cada achado cita texto do Google Doc
+- **Requisitos Verificados** — o que foi implementado corretamente
+
+## Dicas
+
+- Mantenha as especificações estruturadas com seções claras e requisitos numerados para melhores resultados
+- Você também pode colar o conteúdo da especificação inline:
+
+```
+@kody -v business-logic
+## Requisitos
+1. Usuários com papel "admin" podem excluir qualquer comentário
+2. Usuários podem editar apenas seus próprios comentários em até 24 horas
+3. Comentários excluídos exibem o marcador "[removido]"
+```
+
+- Divida documentos grandes em seções e valide-as individualmente para um feedback mais focado
+
+Para detalhes, consulte [Validação de Lógica de Negócio](/how_to_use/pt-br/code_review/business_logic_validation).

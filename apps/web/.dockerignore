@@ -1,9 +1,34 @@
-node_modules/
-npm-debug.log
-*.log
-*.test.js
-*.md
-.DS_Store
+# Dependencies & build output
+node_modules
+.next
+.turbo
+.swc
+.vercel
+*.tsbuildinfo
+
+# Tooling state
 .git
 .gitignore
-.next
+.vscode
+.idea
+.cursor
+
+# Tests, coverage, docs — not needed in the image
+coverage
+test
+tests
+*.test.js
+*.test.ts
+*.test.tsx
+*.md
+
+# Logs and scratch
+*.log
+npm-debug.log
+.DS_Store
+
+**/.env
+**/.env.*
+!**/.env.example
+!.env
+!.env.production

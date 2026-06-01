@@ -1,0 +1,41 @@
+---
+title: "PR Size"
+description: "Measure the average size of your Pull Requests"
+---
+
+## What is PR Size
+
+PR Size measures the average number of changes (lines added, modified, or deleted) in your Pull Requests. This metric helps you understand how your team breaks down work and can indicate potential bottlenecks in the development process.
+
+## How We Calculate It
+
+We automatically measure the size of every Pull Request by counting the total lines of code that were added, modified, or deleted.
+
+**What We Track:**
+- Total lines changed in each PR
+- Additions, modifications, and deletions
+- The average size across all your PRs
+
+**How It's Calculated:**
+```
+PR Size = (Total Lines Added + Modified + Deleted) ÷ (Number of PRs)
+```
+
+For example, if you have 3 PRs with 50, 100, and 150 lines changed, your average PR size is 100 lines.
+
+## Why It Matters
+
+PR Size is a critical metric that impacts multiple aspects of your development process:
+
+- **Review Quality**: Smaller PRs are easier to review thoroughly
+- **Deployment Speed**: Smaller changes can be deployed more frequently
+- **Risk Management**: Large changes increase the risk of introducing bugs
+- **Team Collaboration**: Smaller PRs enable faster feedback and iteration
+
+## How to Improve
+
+- Use feature flags for incremental rollout
+- Break user stories into smaller, focused tasks
+- Set clear PR size limits (200-400 lines recommended)
+- Build vertical slices instead of technical layers
+- Refactor regularly to maintain modularity

@@ -10,20 +10,29 @@ import {
 import { magicModal } from "@components/ui/magic-modal";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { EllipsisIcon, TrashIcon } from "lucide-react";
+import { useSuspenseGetCodeReviewParameter } from "@services/parameters/hooks";
+import { EllipsisIcon, FolderPenIcon, TrashIcon } from "lucide-react";
+import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
 import type { CodeReviewRepositoryConfig } from "../../code-review/_types";
+import { AddRepoModal } from "../copy-settings-modal";
 import { DeleteRepoConfigModal } from "./delete-config-modal";
 
 export const SidebarRepositoryOrDirectoryDropdown = (props: {
     repository: Pick<CodeReviewRepositoryConfig, "id" | "name" | "isSelected">;
     directory?: Pick<
         NonNullable<CodeReviewRepositoryConfig["directories"]>[number],
-        "id" | "name" | "path"
+        "id" | "name" | "folders"
     >;
 }) => {
+    const { teamId } = useSelectedTeamId();
+    const { configValue } = useSuspenseGetCodeReviewParameter(teamId);
     const canDelete = usePermission(
         Action.Delete,
+        ResourceType.CodeReviewSettings,
+    );
+    const canUpdate = usePermission(
+        Action.Update,
         ResourceType.CodeReviewSettings,
     );
 
@@ -36,6 +45,32 @@ export const SidebarRepositoryOrDirectoryDropdown = (props: {
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="end" sideOffset={-6}>
+                {props.directory && (
+                    <DropdownMenuItem
+                        className="text-[13px] leading-none"
+                        leftIcon={<FolderPenIcon className="size-4!" />}
+                        disabled={!canUpdate}
+                        onClick={() => {
+                            magicModal.show(() => (
+                                <AddRepoModal
+                                    repositories={
+                                        configValue?.repositories ?? []
+                                    }
+                                    editGroup={{
+                                        repositoryId: props.repository.id,
+                                        directoryId: props.directory!.id,
+                                        initialPaths:
+                                            props.directory!.folders?.map(
+                                                (f) => f.path,
+                                            ) ?? [],
+                                    }}
+                                />
+                            ));
+                        }}>
+                        Edit directories
+                    </DropdownMenuItem>
+                )}
+
                 <DropdownMenuItem
                     className="text-danger text-[13px] leading-none"
                     leftIcon={<TrashIcon className="size-4!" />}

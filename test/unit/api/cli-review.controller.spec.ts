@@ -9,9 +9,13 @@ import {
 
 import { CliReviewController } from '@/core/infrastructure/http/controllers/cli/cli-review.controller';
 import { ExecuteCliReviewUseCase } from '@libs/cli-review/application/use-cases/execute-cli-review.use-case';
+import { EnqueueCliReviewUseCase } from '@libs/cli-review/application/use-cases/enqueue-cli-review.use-case';
+import { GetCliReviewJobStatusUseCase } from '@libs/cli-review/application/use-cases/get-cli-review-job-status.use-case';
+import { WaitForCliReviewJobUseCase } from '@libs/cli-review/application/use-cases/wait-for-cli-review-job.use-case';
+import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { SubmitCliSessionCaptureUseCase } from '@libs/cli-review/application/use-cases/submit-cli-session-capture.use-case';
-import { AuthenticatedRateLimiterService } from '@libs/cli-review/infrastructure/services/authenticated-rate-limiter.service';
-import { TrialRateLimiterService } from '@libs/cli-review/infrastructure/services/trial-rate-limiter.service';
+import { AUTHENTICATED_RATE_LIMITER_SERVICE_TOKEN } from '@libs/cli-review/domain/contracts/authenticated-rate-limiter.service.contract';
+import { TRIAL_RATE_LIMITER_SERVICE_TOKEN } from '@libs/cli-review/domain/contracts/trial-rate-limiter.service.contract';
 import { TEAM_CLI_KEY_SERVICE_TOKEN } from '@libs/organization/domain/team-cli-key/contracts/team-cli-key.service.contract';
 import { TEAM_SERVICE_TOKEN } from '@libs/organization/domain/team/contracts/team.service.contract';
 import { AUTH_SERVICE_TOKEN } from '@libs/identity/domain/auth/contracts/auth.service.contracts';
@@ -134,6 +138,25 @@ const mockTrialRateLimiter = {
 const mockExecuteCliReview = {
     execute: jest.fn().mockResolvedValue({ suggestions: [] }),
 };
+const mockEnqueueCliReview = {
+    execute: jest
+        .fn()
+        .mockResolvedValue({ jobId: 'job-1', correlationId: 'corr-1' }),
+};
+// Job-status / wait-for-job logic was extracted out of the controller and
+// into dedicated use cases; tests mock those directly instead of poking
+// the underlying queue service.
+const mockGetCliReviewJobStatus = {
+    execute: jest.fn().mockResolvedValue({
+        jobId: 'job-1',
+        status: JobStatus.COMPLETED,
+        result: { suggestions: [] },
+        createdAt: new Date(),
+    }),
+};
+const mockWaitForCliReviewJob = {
+    execute: jest.fn().mockResolvedValue({ suggestions: [] }),
+};
 const mockSubmitCliSessionCapture = {
     execute: jest.fn().mockResolvedValue({ id: 'cap_abc123', accepted: true }),
 };
@@ -163,6 +186,18 @@ describe('CliReviewController', () => {
                     useValue: mockExecuteCliReview,
                 },
                 {
+                    provide: EnqueueCliReviewUseCase,
+                    useValue: mockEnqueueCliReview,
+                },
+                {
+                    provide: GetCliReviewJobStatusUseCase,
+                    useValue: mockGetCliReviewJobStatus,
+                },
+                {
+                    provide: WaitForCliReviewJobUseCase,
+                    useValue: mockWaitForCliReviewJob,
+                },
+                {
                     provide: SubmitCliSessionCaptureUseCase,
                     useValue: mockSubmitCliSessionCapture,
                 },
@@ -175,11 +210,11 @@ describe('CliReviewController', () => {
                     useValue: mockTriggerBusinessValidation,
                 },
                 {
-                    provide: AuthenticatedRateLimiterService,
+                    provide: AUTHENTICATED_RATE_LIMITER_SERVICE_TOKEN,
                     useValue: mockRateLimiter,
                 },
                 {
-                    provide: TrialRateLimiterService,
+                    provide: TRIAL_RATE_LIMITER_SERVICE_TOKEN,
                     useValue: mockTrialRateLimiter,
                 },
                 {
@@ -243,7 +278,7 @@ describe('CliReviewController', () => {
                 expect(
                     mockTeamService.findFirstCreatedTeam,
                 ).not.toHaveBeenCalled();
-                expect(mockExecuteCliReview.execute).toHaveBeenCalledWith(
+                expect(mockEnqueueCliReview.execute).toHaveBeenCalledWith(
                     expect.objectContaining({
                         organizationAndTeamData: {
                             organizationId: ORG_ID,
@@ -273,7 +308,7 @@ describe('CliReviewController', () => {
                 expect(
                     mockTeamService.findFirstCreatedTeam,
                 ).toHaveBeenCalledWith(ORG_ID);
-                expect(mockExecuteCliReview.execute).toHaveBeenCalledWith(
+                expect(mockEnqueueCliReview.execute).toHaveBeenCalledWith(
                     expect.objectContaining({
                         organizationAndTeamData: {
                             organizationId: ORG_ID,
@@ -299,7 +334,7 @@ describe('CliReviewController', () => {
                 expect(
                     mockTeamService.findFirstCreatedTeam,
                 ).toHaveBeenCalledWith(ORG_ID);
-                expect(mockExecuteCliReview.execute).toHaveBeenCalled();
+                expect(mockEnqueueCliReview.execute).toHaveBeenCalled();
             });
         });
 
@@ -427,7 +462,7 @@ describe('CliReviewController', () => {
                 TEAM_KEY,
             );
             expect(mockJwtService.verify).not.toHaveBeenCalled();
-            expect(mockExecuteCliReview.execute).toHaveBeenCalledWith(
+            expect(mockEnqueueCliReview.execute).toHaveBeenCalledWith(
                 expect.objectContaining({
                     organizationAndTeamData: {
                         organizationId: ORG_ID,
@@ -451,7 +486,7 @@ describe('CliReviewController', () => {
             expect(mockTeamCliKeyService.validateKey).toHaveBeenCalledWith(
                 TEAM_KEY,
             );
-            expect(mockExecuteCliReview.execute).toHaveBeenCalled();
+            expect(mockEnqueueCliReview.execute).toHaveBeenCalled();
         });
 
         it('throws 401 when team key is invalid/revoked', async () => {
@@ -1142,6 +1177,7 @@ describe('CliReviewController', () => {
                 DEVICE_ID,
                 undefined,
                 'Kodus-CLI/1.0',
+                undefined, // asyncHeader
                 res,
             );
 
@@ -1174,6 +1210,7 @@ describe('CliReviewController', () => {
                 DEVICE_ID,
                 DEVICE_TOKEN,
                 'Kodus-CLI/1.0',
+                undefined, // asyncHeader
                 res,
             );
 
@@ -1195,6 +1232,7 @@ describe('CliReviewController', () => {
                 DEVICE_ID,
                 'wrong-token',
                 'Kodus-CLI/1.0',
+                undefined, // asyncHeader
                 res,
             );
 
@@ -1268,6 +1306,7 @@ describe('CliReviewController', () => {
                 DEVICE_ID,
                 undefined,
                 'Kodus-CLI/1.0',
+                undefined, // asyncHeader
                 res,
             );
 
@@ -1312,7 +1351,7 @@ describe('CliReviewController', () => {
 
             const result = await controller.review(body, TEAM_KEY);
 
-            expect(mockExecuteCliReview.execute).toHaveBeenCalled();
+            expect(mockEnqueueCliReview.execute).toHaveBeenCalled();
             expect(result).toEqual({ suggestions: [] });
         });
 
@@ -1351,7 +1390,7 @@ describe('CliReviewController', () => {
 
             const result = await controller.review(body, TEAM_KEY);
 
-            expect(mockExecuteCliReview.execute).toHaveBeenCalled();
+            expect(mockEnqueueCliReview.execute).toHaveBeenCalled();
             expect(result).toEqual({ suggestions: [] });
         });
 
@@ -1366,7 +1405,7 @@ describe('CliReviewController', () => {
 
             const result = await controller.review(MINIMAL_BODY, TEAM_KEY);
 
-            expect(mockExecuteCliReview.execute).toHaveBeenCalled();
+            expect(mockEnqueueCliReview.execute).toHaveBeenCalled();
             expect(result).toEqual({ suggestions: [] });
         });
     });

@@ -159,12 +159,12 @@ describe('ImplementationVerificationProcessor', () => {
 
             it('should throw error when workflow type is invalid', async () => {
                 const invalidJob = createMockJob({
-                    workflowType: WorkflowType.AUTOMATION_EXECUTION,
+                    workflowType: 'AUTOMATION_EXECUTION' as any,
                 });
                 mockJobRepository.findOne.mockResolvedValue(invalidJob);
 
                 await expect(processor.process('job-123')).rejects.toThrow(
-                    `Invalid workflow type ${WorkflowType.AUTOMATION_EXECUTION}`,
+                    `Invalid workflow type ${'AUTOMATION_EXECUTION' as any}`,
                 );
             });
         });

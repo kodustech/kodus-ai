@@ -35,20 +35,20 @@ class GitHubResponsePolicy implements IPlatformResponsePolicy {
 
 class GitLabResponsePolicy implements IPlatformResponsePolicy {
     requiresAcknowledgment(): boolean {
-        return true;
-    }
-
-    usesReaction(): boolean {
         return false;
     }
 
-    getAcknowledgmentBody(): string {
-        return `${ACKNOWLEDGMENT_MESSAGES.DEFAULT}${ACKNOWLEDGMENT_MESSAGES.MARKDOWN_SUFFIX}`.trim();
+    usesReaction(): boolean {
+        return true;
     }
 
     getAcknowledgmentReaction(): GitHubReaction {
+        return GitHubReaction.ROCKET;
+    }
+
+    getAcknowledgmentBody(): string {
         throw new Error(
-            'GitLabResponsePolicy does not use reactions. Use acknowledgment body instead.',
+            'GitLabResponsePolicy does not use acknowledgment body. Use reactions instead.',
         );
     }
 }
@@ -93,6 +93,26 @@ class AzureReposResponsePolicy implements IPlatformResponsePolicy {
     }
 }
 
+class ForgejoResponsePolicy implements IPlatformResponsePolicy {
+    requiresAcknowledgment(): boolean {
+        return false;
+    }
+
+    usesReaction(): boolean {
+        return true;
+    }
+
+    getAcknowledgmentReaction(): GitHubReaction {
+        return GitHubReaction.ROCKET;
+    }
+
+    getAcknowledgmentBody(): string {
+        throw new Error(
+            'ForgejoResponsePolicy does not use acknowledgment body. Use reactions instead.',
+        );
+    }
+}
+
 export class PlatformResponsePolicyFactory {
     static create(platformType: PlatformType): IPlatformResponsePolicy {
         switch (platformType) {
@@ -104,6 +124,8 @@ export class PlatformResponsePolicyFactory {
                 return new BitbucketResponsePolicy();
             case PlatformType.AZURE_REPOS:
                 return new AzureReposResponsePolicy();
+            case PlatformType.FORGEJO:
+                return new ForgejoResponsePolicy();
             default:
                 return new GitLabResponsePolicy();
         }

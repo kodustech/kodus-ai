@@ -1,0 +1,170 @@
+---
+title: "Sandbox & AST Graph"
+description: "Como o Kodus parseia seu repo (kodus-graph), onde isso roda (modos de sandbox), e quando escolher cada modo."
+icon: "box"
+---
+
+Pra revisar um PR com o contexto certo, o Kodus parseia o repositório
+inteiro num **AST graph** (nós + arestas) e usa ele pra buscar contexto
+cross-file, validar sugestões e alimentar o agente. O parser roda dentro
+de um **sandbox** pra poder fazer `git clone`, instalar dependências, e
+executar o CLI isolado do processo da API.
+
+Esta página explica os modos de sandbox disponíveis, o que é o AST
+graph, e como o cache mantém reviews por PR rápidos.
+
+## Como o AST graph funciona
+
+O Kodus usa o [`@kodus/kodus-graph`](https://www.npmjs.com/package/@kodus/kodus-graph),
+um CLI que percorre um repositório e emite um JSON graph (funções,
+classes, arquivos, imports, calls). O CLI já vem **pré-instalado na
+imagem do worker** (`kodus-ai-worker`) — no modo `local`, não tem setup
+extra.
+
+Ciclo de vida:
+
+1. **Quando você seleciona um repositório** (no setup, ou ao adicionar
+   um repo depois na UI) — o Kodus enfileira um job `AstGraphBuild` que
+   roda `kodus-graph parse --all` no branch default, persiste no
+   Postgres (tabelas `ast_graph_*`), e marca o repo como indexado.
+   Isso roda em background — você não precisa esperar terminar pra
+   abrir PRs.
+2. **Quando um PR é mergeado no branch default** — handlers de webhook
+   enfileiram um rebuild incremental que re-parseia apenas os arquivos
+   alterados e mescla os deltas no graph cacheado. O cache continua
+   fresco sem precisar de rebuild completo.
+3. **Em toda review de PR** — o Kodus carrega o graph cacheado,
+   parseia apenas os arquivos tocados pelo PR, e alimenta o agente com
+   um subgraph focado. Esse é o caminho quente; nunca re-parseia o repo
+   todo.
+
+O cache é o que torna review de repos grandes viável: o build completo
+roda uma vez no onboarding do repo, todo PR depois disso lê do Postgres.
+
+## Modos de sandbox
+
+O sandbox é selecionado por `SANDBOX_PROVIDER` no `.env`:
+
+| Modo | O que faz | Trade-off |
+|---|---|---|
+| **`local`** _(default do installer)_ | Roda o `kodus-graph` dentro do próprio container `worker`. Bun + CLI já vêm pré-instalados. | Sem dependência externa. Worker precisa de mais RAM em repos grandes. |
+| **`e2b`** | Sobe um sandbox remoto [E2B](https://e2b.dev) por job. Requer `API_E2B_KEY`. | Isolamento forte, escala pra repos enormes. **Serviço terceiro pago.** |
+| **`auto`** | Usa `e2b` quando `API_E2B_KEY` está setada, senão cai em sem-sandbox. | Útil em rollouts faseados, ex.: migrando de `none` pra `e2b`. |
+| **`none`** | Sem sandbox. Desliga AST graph e contexto cross-file. | Reviews ficam menos ricos (sem call-graph context, sem análise cross-file). |
+
+### Escolhendo um modo
+
+- **Tá começando, quer que "funcione e pronto"** → `local`. É o default
+  do installer e não precisa de conta externa.
+- **Repos enormes (milhões de LOC) ou quer isolamento forte** → `e2b`.
+  Cadastre em [e2b.dev](https://e2b.dev), seta `API_E2B_KEY`, troca
+  `SANDBOX_PROVIDER=e2b`.
+- **Você não quer que sandbox nenhum rode** → `none`. O agente de review
+  roda sem contexto cross-file; sugestões ainda funcionam mas ficam
+  menos informadas.
+
+## Migrando uma instalação self-hosted existente
+
+Se você atualizou de uma versão anterior ao AST graph, seus
+**repositórios já selecionados** ainda não têm graph — o build dispara
+automaticamente só em **novas** seleções. Pra indexar os antigos, rode o
+script de backfill que vem no installer:
+
+```bash
+# No diretório do kodus-installer, com a stack rodando:
+./scripts/backfill-ast-graph.sh
+```
+
+Ele percorre todos os teams da instância e enfileira um job
+`AstGraphBuild` pra cada repo selecionado cujo `astGraphStatus` seja
+`NULL`, `PENDING` ou `FAILED`. Os builds rodam em background — você pode
+continuar usando o Kodus enquanto terminam.
+
+O script é **idempotente**: re-execuções pulam repos que já estão
+`READY`, nunca re-enfileiram jobs `BUILDING`, e você pode parar e
+retomar livremente.
+
+Flags comuns:
+
+```bash
+./scripts/backfill-ast-graph.sh --org <id>          # restringe a uma org
+./scripts/backfill-ast-graph.sh --org <id> --team <id>  # um team só
+./scripts/backfill-ast-graph.sh --force             # rebuild também repos READY
+./scripts/backfill-ast-graph.sh --limit 50          # limite de jobs por team (default: 10)
+./scripts/backfill-ast-graph.sh --dry-run           # lista teams, não enfileira nada
+```
+
+Acompanhe o progresso pelos logs do worker:
+
+```bash
+docker compose logs -f worker | grep -i ast-graph
+```
+
+## Configuração
+
+```bash
+# Default pra self-hosted — roda no container worker.
+SANDBOX_PROVIDER=local
+
+# Ou use E2B (pago) pra isolamento mais forte.
+SANDBOX_PROVIDER=e2b
+API_E2B_KEY=sua-api-key-do-e2b
+```
+
+Cadastre no E2B em [e2b.dev](https://e2b.dev), gere uma API key no
+dashboard, coloca no `.env` e reinicia a stack.
+
+## O que roda onde
+
+```mermaid
+flowchart LR
+    pr[PR webhook] --> worker[worker]
+    worker -->|modo local| sandbox_local[CLI kodus-graph<br/>dentro do container worker]
+    worker -.->|modo e2b| sandbox_e2b[Sandbox remoto E2B<br/>kodus-graph roda lá]
+    sandbox_local --> graph[(Postgres • ast_graph_*)]
+    sandbox_e2b --> graph
+    graph --> agent[agente de code review]
+```
+
+## Dimensionamento de recursos
+
+O sandbox `local` roda `git clone` e `kodus-graph parse` dentro do
+container `worker`, então RAM do worker importa:
+
+- **Repos pequenos a médios (< 100k LOC)** — host com 8GB padrão dá conta.
+- **Repos grandes (100k–1M LOC)** — dê 4–8GB de RAM extra ao container
+  worker; considere 16GB total no host.
+- **Monorepos enormes (> 1M LOC)** — troque pra `e2b` pra parsing fora
+  do host.
+
+A pegada no Postgres escala com quantidade de repos e profundidade do
+histórico — planeje ~10–50MB por repo indexado como ordem de grandeza.
+
+## Troubleshooting
+
+**Reviews não estão incluindo contexto cross-file (modo `local`):**
+
+Veja os logs do worker pra erros de install ou parse do `kodus-graph`:
+
+```bash
+docker compose logs -f worker | grep -i kodus-graph
+```
+
+Se o passo de install falhar, confirme que o container worker tem acesso
+à internet (precisa baixar bun + o CLI no primeiro boot, caso a imagem
+tenha sido buildada sem eles).
+
+**Jobs `e2b` travam ou não iniciam:**
+
+Verifique se `API_E2B_KEY` está setada e válida:
+
+```bash
+docker compose exec worker printenv API_E2B_KEY
+```
+
+O dashboard do E2B mostra sessões ativas e uso de quota.
+
+**Você quer desligar AST completamente (testes, debug):**
+
+Defina `SANDBOX_PROVIDER=none` e reinicie o worker. Reviews vão pular o
+estágio do graph e rodar com a visão crua do diff pelo LLM.

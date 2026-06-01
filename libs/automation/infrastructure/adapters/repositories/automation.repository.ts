@@ -10,6 +10,7 @@ import {
     UpdateQueryBuilder,
 } from 'typeorm';
 
+import { createLogger } from '@kodus/flow';
 import { IAutomationRepository } from '@libs/automation/domain/automation/contracts/automation.repository';
 import { AutomationEntity } from '@libs/automation/domain/automation/entities/automation.entity';
 import { IAutomation } from '@libs/automation/domain/automation/interfaces/automation.interface';
@@ -22,6 +23,8 @@ import { AutomationModel } from './schemas/automation.model';
 
 @Injectable()
 export class AutomationRepository implements IAutomationRepository {
+    private readonly logger = createLogger(AutomationRepository.name);
+
     constructor(
         @InjectRepository(AutomationModel)
         private readonly automationRepository: Repository<AutomationModel>,
@@ -162,7 +165,13 @@ export class AutomationRepository implements IAutomationRepository {
 
             return mapSimpleModelsToEntities(automationModel, AutomationEntity);
         } catch (error) {
-            console.log(error);
+            this.logger.error({
+                message: 'Failed to find automations',
+                context: AutomationRepository.name,
+                error,
+                metadata: { filter },
+            });
+            return [];
         }
     }
 }

@@ -14,6 +14,7 @@ import { Spinner } from "@components/ui/spinner";
 import { joinOrganization } from "@services/users/fetch";
 import { ArrowRight } from "lucide-react";
 import { useAuth } from "src/core/providers/auth.provider";
+import { useConfig } from "@providers/ConfigProvider";
 import type { AwaitedReturnType } from "src/core/types";
 import { getOrganizationsByDomain } from "src/lib/auth/fetchers";
 
@@ -21,6 +22,7 @@ import { StepIndicators } from "../_components/step-indicators";
 import { useGoToStep } from "../_hooks/use-goto-step";
 
 export default function ChooseWorkspacePage() {
+    const cfg = useConfig();
     useGoToStep();
 
     const router = useRouter();
@@ -80,7 +82,7 @@ export default function ChooseWorkspacePage() {
 
             await refreshAccessTokens();
 
-            router.push("/");
+            window.location.href = "/";
         } catch (error) {
             console.error("Failed to update user:", error);
         } finally {
@@ -165,7 +167,7 @@ export default function ChooseWorkspacePage() {
                     If you don't see your organization,{" "}
                     <Link
                         target="_blank"
-                        href={process.env.WEB_SUPPORT_DISCORD_INVITE_URL ?? ""}>
+                        href={cfg.supportDiscordInviteUrl || ""}>
                         contact support
                     </Link>
                     .

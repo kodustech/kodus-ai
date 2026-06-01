@@ -1,0 +1,169 @@
+---
+title: "Groq Cloud - 超快推理"
+description: "了解如何在 Kodus 中使用 Groq 的模型"
+icon: "bolt"
+---
+
+## Groq 的工作原理
+
+Groq Cloud 提供快速的 LLM 推理和兼容 OpenAI 的 API。专为速度和简洁性而构建，Groq 为流行模型（如 Llama、Deepseek 等）提供超快速推理。该平台设计简单易集成且易于扩展，非常适合生产应用。
+
+## 推荐模型
+
+我们推荐具有高上下文窗口和快速推理的优秀编码模型。
+
+<Info>
+  如需最新信息，请访问 [Groq 的模型页面](https://console.groq.com/docs/models)。
+</Info>
+
+| 模型                              | 上下文窗口 | 速度     |
+| ---------------------------------- | -------------- | --------- |
+| **Llama 3.3 70B Versatile** `推荐` | ~128k 令牌   | 超快速 |
+| **Deepseek R1 Distill Llama 70B** | ~128k 令牌   | 超快速 |
+| **Llama 3.1 70B Versatile**       | ~128k 令牌   | 超快速 |
+
+
+## 创建 API 密钥
+
+<Warning>需要 Groq Cloud 账户才能创建 API 密钥。</Warning>
+
+直接访问 [Groq 的 API 密钥页面](https://console.groq.com/keys)创建新的 API 密钥。
+
+或者，按照以下步骤操作：
+
+1. 访问 [Groq 控制台](https://console.groq.com)
+2. 登录或创建您的账户
+3. 在顶部导航中导航到"API Keys"
+4. 点击"Create API Key"按钮
+5. 为其命名，例如'Kodus'或任何描述性名称
+6. 复制 API 密钥并将其保存在安全的地方
+
+<Info>
+  在 Groq 中，只有团队所有者或具有开发者角色的用户可以创建或管理 API 密钥。
+</Info>
+
+## 如何使用
+
+<Snippet file="deploy-basic-setup-zh.mdx" />
+
+### 在环境文件中配置 Groq
+
+编辑您的 `.env` 文件并配置核心设置。对于 **LLM 集成**，在固定模式下使用 Groq：
+
+```env
+# 核心系统设置（使用您的域名更新）
+WEB_HOSTNAME_API="kodus-api.yourdomain.com"
+WEB_PORT_API=443
+NEXTAUTH_URL="https://kodus-web.yourdomain.com"
+
+# 安全密钥（使用上面的 openssl 命令生成）
+WEB_NEXTAUTH_SECRET="your-generated-secret"
+API_CRYPTO_KEY="your-generated-hex-key"
+API_JWT_SECRET="your-generated-secret"
+API_JWT_REFRESH_SECRET="your-generated-secret"
+
+# 数据库配置
+API_PG_DB_PASSWORD="your-secure-db-password"
+API_MG_DB_PASSWORD="your-secure-db-password"
+
+# Groq 配置（固定模式）
+API_LLM_PROVIDER_MODEL="llama-3.3-70b-versatile"             # 选择您偏好的模型
+API_OPENAI_FORCE_BASE_URL="https://api.groq.com/openai/v1"   # Groq API URL
+API_OPEN_AI_API_KEY="your-groq-api-key"                      # 您的 Groq API 密钥
+
+# Git 提供商 Webhook（选择您的提供商）
+API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
+# 或 API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
+# 或 GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
+```
+
+<Note>
+  Webhook URL 必须指向 Webhooks 服务（端口 3332）。您可以使用独立的 webhook 域名，或在反向代理中将 `/.../webhook` 转发到 3332 端口。
+</Note>
+
+<Info>
+  **固定模式非常适合 Groq**，因为它提供兼容 OpenAI 的 API 和超快速推理。这为您提供了最佳性能和简单配置。
+</Info>
+
+<Snippet file="deploy-installation.mdx" />
+
+### 设置反向代理（用于生产环境）
+
+对于 Webhook 和外部访问，配置 Nginx：
+
+```nginx
+# Web 应用（端口 3000）
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com;
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# API（端口 3001）
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com;
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### 验证 Groq 集成
+
+除了基本的安装验证外，确认 Groq 正常工作：
+
+```bash
+# 专门验证 Groq API 连接
+docker-compose logs api worker | grep -i groq
+```
+
+<Tip>
+  有关 SSL 设置、监控和高级配置的详细信息，请参阅我们的[完整部署指南](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm)。
+</Tip>
+
+### 故障排除
+
+<AccordionGroup>
+  <Accordion title="API 密钥问题">
+    - 在 [Groq 控制台](https://console.groq.com/keys)中验证您的 API 密钥是否正确且处于活动状态
+    - 检查您的 Groq 账户中是否有足够的信用额度或配额
+    - 确保您的 `.env` 文件中没有多余的空格
+  </Accordion>
+
+  <Accordion title="模型未找到">
+    - 检查配置中的模型名称拼写是否正确
+    - 验证该模型在 Groq 当前的模型列表中是否可用
+    - 尝试使用我们推荐列表中的其他模型
+  </Accordion>
+
+  <Accordion title="连接错误">
+    - 验证您的服务器是否有互联网访问权限以访问 `api.groq.com`
+    - 检查是否有任何防火墙限制
+    - 查看 API/worker 日志以获取详细的错误消息
+  </Accordion>
+
+  <Accordion title="速率限制">
+    - Groq 根据您的计划有速率限制
+    - 查看 [Groq 速率限制文档](https://console.groq.com/docs/rate-limits)
+    - 考虑升级您的计划以获得更高的限制
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,43 @@
+---
+title: "PR Cycle Time"
+description: "Measure the time from first commit to production deployment"
+---
+
+## What is PR Cycle Time
+
+PR Cycle Time measures the total time from when a developer first commits code until that code is successfully merged into the default branch. This metric represents the end-to-end delivery speed of your development process.
+
+## How We Calculate It
+
+We automatically track the time between your first commit and when that code gets merged into the default branch (main/master). Since merges to main typically represent when code is ready for production, this gives us a good measure of your development cycle time.
+
+**What We Track:**
+- Time from first commit to PR merge
+- The complete development cycle
+- How long code takes to be integrated
+
+**What We Don't Count:**
+- Time spent planning or designing (before first commit)
+- Time after merge (deployment, user adoption, etc.)
+- Failed or abandoned changes
+
+**How It's Calculated:**
+```
+PR Cycle Time = (PR Merge Time) - (First Commit Time)
+```
+
+We use the 75th percentile (P75) to show you the typical cycle time, filtering out unusually long outliers that could skew your understanding of normal performance.
+
+## Why It Matters
+
+PR Cycle Time is a critical metric that measures your team's ability to complete development work efficiently. High cycle times may indicate large batch sizes, lengthy review processes, or bottlenecks in the development workflow.
+
+
+## How to Improve
+
+- Break large changes into smaller PRs (200-400 lines)
+- Set clear review expectations and guidelines
+- Use automated checks to catch issues pre-review
+- Distribute review workload across the team
+- Get early feedback during development
+- Use consistent branching strategy

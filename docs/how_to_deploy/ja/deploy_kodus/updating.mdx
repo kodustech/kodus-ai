@@ -1,0 +1,35 @@
+---
+title: "アップデート"
+description: "Kodusのインストールをアップデートする。"
+icon: "arrow-up"
+---
+
+<Note>
+  匿名のセルフホストテレメトリを含むバージョンはデフォルトで有効になっており、
+  集計されたカウンタのみを `telemetry.kodus.io` に1日1回ハートビートとして
+  送信します — コード、名前、識別子は一切含まれません。`yarn telemetry:preview`
+  で送信される内容を確認したり、`KODUS_TELEMETRY_DISABLED=true` を設定して
+  オプトアウトできます。完全なスキーマとポリシーは
+  [匿名テレメトリ](/how_to_deploy/ja/deploy_kodus/telemetry) を参照してください。
+</Note>
+
+Kodusのインストールを最新バージョンにアップデートするには：
+
+```bash
+# Kodusのインストールディレクトリに移動
+cd kodus-installer
+
+# リポジトリから最新の変更を取得
+git pull
+
+# 1.xからアップグレードする場合は、.envを新しい2.0の変数で更新してください
+# （RabbitMQ、MCP Manager、Webhooks）
+
+# インストーラーを再実行してイメージを取得し、サービスを起動してマイグレーションを実行
+./scripts/install.sh
+
+# オプション：診断を実行
+./scripts/doctor.sh
+```
+
+

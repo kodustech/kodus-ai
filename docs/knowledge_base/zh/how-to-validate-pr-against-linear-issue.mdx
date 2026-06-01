@@ -1,0 +1,40 @@
+---
+title: "如何根据 Linear 问题验证拉取请求"
+description: "通过 AI 驱动的业务逻辑验证确保您的拉取请求实现了 Linear 问题描述的内容。"
+---
+
+Linear 问题通常包含详细的需求、验收标准和范围定义。Kodus 可以将您的 PR 与 Linear 问题进行比较，在合并前发现差距。
+
+## 工作原理
+
+1. **连接 Linear 插件** — 在工作区的[插件](/how_to_use/en/code_review/plugins)页面中连接
+2. 在 PR 中评论：
+
+```
+@kody -v business-logic https://linear.app/your-team/issue/TEAM-123
+```
+
+3. Kody 获取 Linear 问题上下文，读取 PR 差异并生成差距分析
+
+## 您获得什么
+
+- **发现**及严重性：MUST_FIX、SUGGESTION 或 INFO
+- **需求追溯** — 每个发现引用 Linear 问题中的确切文本
+- **范围不匹配检测** — 如果 PR 在与问题不同的领域工作
+- **已验证需求** — 正确实现的内容
+
+## 自动验证
+
+当 `business_logic: true` 启用（默认）时，如果插件已连接，Kodus 在每次 PR 审查期间自动从 Linear 检索任务上下文。
+
+## 提示
+
+- 在 Linear 问题中编写明确的验收标准以获得最全面的验证
+- 如果您不想链接问题，也可以内联粘贴需求：
+
+```
+@kody -v business-logic Orders above $500 must issue cashback credits.
+Discount codes cannot be combined with loyalty rewards.
+```
+
+更多详情，请参阅[业务逻辑验证](/how_to_use/en/code_review/business_logic_validation)。

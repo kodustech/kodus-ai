@@ -9,6 +9,7 @@ import { environment } from '@libs/ee/configs/environment';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import {
     IKodyRule,
+    KodyRuleCentralizedStatus,
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
@@ -112,6 +113,13 @@ export class KodyRulesValidationService {
 
         for (const rule of rules) {
             if (rule.status !== KodyRulesStatus.ACTIVE) {
+                continue;
+            }
+
+            if (
+                rule.centralizedConfig?.status ===
+                KodyRuleCentralizedStatus.PENDING_ADD
+            ) {
                 continue;
             }
 
@@ -336,6 +344,27 @@ export class KodyRulesValidationService {
 
             // If the rule is not inheritable, it doesn't match.
             if (!inheritable) {
+                return false;
+            }
+
+            // Cross-directory leak guard. The historical default for a
+            // rule's `inheritance.include` is `[]`, which the matcher
+            // below reads as "inherit everywhere" — and so a rule
+            // scoped to one directory would silently apply in every
+            // sibling directory of the same repo (reported by
+            // quintoandar/backend-services on rule b207a89c).
+            //
+            // A directory-scoped rule (`rule.directoryId` set) must NOT
+            // leak into a different directory unless that directory is
+            // explicitly in `include`. Repo-level and global rules
+            // (`rule.directoryId` undefined) keep their original
+            // semantics and continue to match across all contexts.
+            if (
+                directoryId &&
+                rule.directoryId &&
+                rule.directoryId !== directoryId &&
+                !include.includes(directoryId)
+            ) {
                 return false;
             }
 

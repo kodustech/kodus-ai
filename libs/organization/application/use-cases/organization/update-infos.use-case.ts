@@ -6,7 +6,7 @@ import {
 } from '@libs/organization/domain/organization/contracts/organization.service.contract';
 import { Inject } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
-import posthogClient from '@libs/common/utils/posthog';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 export class UpdateInfoOrganizationAndPhoneUseCase implements IUseCase {
     constructor(
@@ -19,6 +19,8 @@ export class UpdateInfoOrganizationAndPhoneUseCase implements IUseCase {
         private readonly request: Request & {
             user: { organization: { uuid: string }; uuid: string };
         },
+
+        private readonly telemetry: TelemetryService,
     ) {}
 
     public async execute(payload: any): Promise<boolean> {
@@ -38,7 +40,13 @@ export class UpdateInfoOrganizationAndPhoneUseCase implements IUseCase {
                 });
             }
 
-            posthogClient.organizationIdentify(organization);
+            if (organization?.uuid) {
+                void this.telemetry.organizationUpdated({
+                    organizationId: organization.uuid,
+                    name: organization.name,
+                    tenantName: organization.tenantName,
+                });
+            }
 
             return true;
         } catch {

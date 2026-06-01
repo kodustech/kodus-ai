@@ -1,0 +1,118 @@
+---
+title: GitHub Appの作成
+icon: github
+---
+
+KodyをGitHub Appで実行する場合は、アプリを作成する必要があります。このアプリにより、Kodyはリポジトリとやり取りし、プルリクエストを管理し、Webhookを受信できるようになります。
+
+<Note>プラットフォームユーザーが「GitHubでサインイン」できるようにしたい場合は、それは別のOAuthアプリのプロセスであり、GitHub Appの権限とは干渉しません。このガイドは機能的なインテグレーションに焦点を当てています。<a href="/how_to_deploy/ja/platforms/github/github_oauth">GitHub OAuthアプリ</a>を参照してください。</Note>
+
+## 前提条件
+
+アプリケーションのドメインを準備してください：
+
+- **WEB_DOMAIN**: フロントエンドのURL（例：`https://app.yourdomain.com`または`http://localhost:3000`）
+- **API_DOMAIN**: バックエンド/APIのURL（例：`https://api.yourdomain.com`、またはモノレポ/プロキシセットアップの場合は`http://localhost:3000`）
+- **WEBHOOK_DOMAIN**（オプション）: Webhook用のパブリックドメイン（例：`https://kodus-webhooks.yourdomain.com`）。APIドメインで`/.../webhook`をルーティングする場合は`API_DOMAIN`を使用できます。
+
+## ステップ1：GitHub Appの作成
+
+1. GitHubで**Settings** > **Developer Settings** > **GitHub Apps**に移動
+2. **New GitHub App**をクリック
+3. 基本情報（名前、ホームページURL）をお好みに合わせて入力
+
+<img src="https://success.skyhighsecurity.com/@api/deki/files/66490/Click_newGithubApp.png?revision=1" alt="New GitHub AppボタンをハイライトしたGitHub Appsの設定ページ" />
+
+## ステップ2：コールバックURLとセットアップURLの設定
+
+<img src="https://kodus.io/wp-content/uploads/2026/01/githuapp-urls.gif" alt="GitHub App Webhook" />
+
+このステップはインストールとリダイレクトが正しく機能するために重要です。以下のフィールドに、`WEB_DOMAIN`を実際のURLに置き換えて入力してください：
+
+- **Callback URL**:
+  ```
+  WEB_DOMAIN/api/auth/callback/github
+  ```
+  このURLは認可フローを完了するために使用されます。
+
+- **Setup URL**:
+  ```
+  WEB_DOMAIN/setup/github
+  ```
+
+- オプション**Redirect on update**を有効にする
+  これにより、アプリのインストール後にユーザーがKodusにリダイレクトされてセットアップを完了できるようになります。
+
+## ステップ3：Webhookの設定
+
+WebhookはKodusにプルリクエストのイベントを通知します。
+
+<Note>
+  WebhooksはWebhooksサービス（ポート3332）が処理します。ここでAPIドメインを使用する場合は、リバースプロキシが`/github/webhook`をWebhooksサービスにルーティングすることを確認してください。そうでない場合は専用のWebhooksドメインを使用してください。
+</Note>
+
+- **Webhook URL**:
+  ```
+  WEBHOOK_DOMAIN/github/webhook
+  ```
+
+- **Active**オプションがチェックされていることを確認
+
+## ステップ4：認証情報の収集と.envへの追加
+
+<img src="https://kodus.io/wp-content/uploads/2026/01/gthubapp-env.gif" alt="GitHub App Webhook" />
+
+GitHubが生成した認証情報を取得し、Kodusの環境変数に追加する必要があります。
+
+### App ID
+
+アプリの「About」ページの上部で**App ID**をコピーします。
+
+`.env`に追加：
+```
+API_GITHUB_APP_ID=your_app_id_here
+```
+
+### クライアントシークレット
+
+**Client secrets**セクションに移動し、**Generate a new client secret**をクリックします。
+
+生成された値をコピーします。
+
+`.env`に追加：
+```
+API_GITHUB_CLIENT_SECRET=your_client_secret_here
+```
+
+### 秘密鍵
+
+ページ下部までスクロールして、**Generate a private key**をクリックします。
+
+これにより`.pem`ファイルがダウンロードされます。テキストエディタでこのファイルを開き、内容全体をコピーします。
+
+`.env`に追加：
+```
+API_GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY----- ..."
+```
+
+### インストールURL
+
+GitHub Appを開いて**Install App**をクリックします。ブラウザのアドレスバーからURL（`https://github.com/apps/<app-slug>/installations/new`のような形式）をコピーします。
+
+`.env`に追加：
+```
+WEB_GITHUB_INSTALL_URL="https://github.com/apps/your-app/installations/new"
+```
+
+## 環境変数の概要
+
+最終的に、設定ファイルには以下が含まれている必要があります：
+
+```bash
+API_GITHUB_APP_ID=123456
+API_GITHUB_CLIENT_SECRET=example_secret_123
+API_GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY----- ..."
+WEB_GITHUB_INSTALL_URL="https://github.com/apps/your-app/installations/new"
+```
+
+GitHubで**Save Changes**をクリックし、Kodusアプリケーションを再起動して変更を適用してください。

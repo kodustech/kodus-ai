@@ -1,0 +1,132 @@
+name: Changelog Publish
+
+# Triggered ONLY on `selfhosted-X.Y.Z` tags. Cloud usually ships the
+# same features a few days earlier (continuous deploy) but the
+# self-hosted release is the "last mile" — by then every audience has
+# the feature in their hands. Publishing once per self-hosted tag avoids
+# the duplication you'd get from publishing on both cloud and
+# self-hosted trains for the same promotion.
+#
+# The catalog (`release/features.yaml`) can be edited at any time
+# without publishing. Entries land in the public changelog only when
+# the next `selfhosted-X.Y.Z` tag is cut.
+#
+# A tag like `selfhosted-2.0.20` diffs against the previous
+# `selfhosted-X.Y.Z` tag — every promotion (alpha→beta or beta→GA)
+# inside that diff becomes a single dated changelog entry posted to
+# the existing self-hosted Discord channel.
+
+on:
+    push:
+        tags:
+            - "selfhosted-*"
+    workflow_call:
+        inputs:
+            tag:
+                description: "Release tag to publish a changelog entry for."
+                required: true
+                type: string
+    # Manual entry point — handy for smoke-testing the LLM + Discord
+    # pipeline against an existing tag without cutting a new release.
+    workflow_dispatch:
+        inputs:
+            tag:
+                description: "Release tag (e.g. selfhosted-2.1.11) to re-publish."
+                required: true
+                type: string
+
+permissions:
+    contents: write
+
+concurrency:
+    # `github.ref` is the caller workflow's ref when invoked via
+    # workflow_call (e.g. `refs/heads/main`), so include the tag input
+    # to keep concurrent self-hosted releases from queueing on the
+    # same key.
+    group: changelog-publish-${{ inputs.tag || github.ref }}
+    cancel-in-progress: false
+
+jobs:
+    validate:
+        runs-on: ubuntu-latest
+        outputs:
+            should_publish: ${{ steps.gate.outputs.should_publish }}
+            tag: ${{ steps.gate.outputs.tag }}
+        steps:
+            - name: Validate tag format (strict semver only)
+              id: gate
+              env:
+                  TAG_NAME: ${{ inputs.tag || github.ref_name }}
+              run: |
+                  # Only publish for `selfhosted-X.Y.Z` (no test/rc/preview
+                  # suffixes). Lets you push tags like
+                  # `selfhosted-test-1.0.0` for workflow debugging without
+                  # posting to the real Discord channel.
+                  echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
+                  if [[ "$TAG_NAME" =~ ^selfhosted-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                      echo "Tag $TAG_NAME accepted — publishing."
+                      echo "should_publish=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "::notice::Tag $TAG_NAME is not a strict release (selfhosted-X.Y.Z). Skipping."
+                      echo "should_publish=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+    publish:
+        needs: validate
+        if: needs.validate.outputs.should_publish == 'true'
+        runs-on: ubuntu-latest
+        environment: production
+        steps:
+            - name: Checkout (full history for tag-range diff)
+              uses: actions/checkout@v6.0.2
+              with:
+                  ref: ${{ needs.validate.outputs.tag }}
+                  fetch-depth: 0
+                  fetch-tags: true
+                  # `Commit changelog entry` later pushes to main, which
+                  # is protected by a ruleset that requires PRs. The
+                  # default GITHUB_TOKEN cannot bypass it; use the PAT
+                  # whose owner is an OrganizationAdmin bypass actor.
+                  token: ${{ secrets.RELEASE_BOT_TOKEN }}
+
+            - name: Set up Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "yarn"
+
+            - name: Install dependencies
+              run: yarn install --frozen-lockfile
+
+            - name: Verify snapshot is in sync
+              run: yarn feature-gate:snapshot:check
+
+            - name: Draft and publish promotions for this release
+              env:
+                  # `gh pr list` reads GH_TOKEN. GITHUB_TOKEN is auto-
+                  # injected by Actions and has read access to PRs in
+                  # the same repo.
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+                  GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3-flash-preview' }}
+                  DISCORD_WEBHOOK_SELFHOSTED: ${{ secrets.DISCORD_WEBHOOK_SELFHOSTED }}
+                  RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+              run: |
+                  yarn ts-node scripts/feature-gate/publish-changelog.ts \
+                      --tag "$RELEASE_TAG"
+
+            - name: Commit changelog entry (if any)
+              env:
+                  RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+              run: |
+                  if [ -n "$(git status --porcelain docs/changelog 2>/dev/null)" ]; then
+                      git config user.name "kodus-changelog-bot"
+                      git config user.email "actions@kodus.io"
+                      git add docs/changelog
+                      git commit -m "docs(changelog): publish ${RELEASE_TAG}"
+                      # Push to main only when triggered from a tag on main.
+                      # Tags on release branches won't auto-commit; that's intentional.
+                      git push origin HEAD:main || echo "Skipped push (tag not on main)"
+                  else
+                      echo "No new changelog entry to commit."
+                  fi

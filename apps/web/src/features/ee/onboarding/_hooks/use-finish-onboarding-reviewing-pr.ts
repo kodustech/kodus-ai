@@ -3,7 +3,6 @@ import { finishOnboarding } from "@services/codeManagement/fetch";
 import { useSuspenseGetBYOK } from "@services/organizationParameters/hooks";
 import { waitFor } from "src/core/utils/helpers";
 import { revalidateServerSideTag } from "src/core/utils/revalidate-server-side";
-import { captureSegmentEvent } from "src/core/utils/segment";
 import { isSelfHosted } from "src/core/utils/self-hosted";
 
 import { startTeamTrial } from "../../subscription/_services/billing/fetch";
@@ -49,18 +48,22 @@ export const useFinishOnboardingReviewingPR = ({
             });
             await revalidateServerSideTag("team-dependent");
 
-            captureSegmentEvent({
-                userId: userId!,
-                event: "first_review",
-                properties: { teamId },
-            });
-
             if (!isSelfHosted) {
-                await startTeamTrial({
-                    teamId,
-                    organizationId,
-                    byok: choseBYOK,
-                });
+                // Trial creation is best-effort — backend onboarding is
+                // already committed at this point. A billing hiccup must
+                // not strand the user on the onboarding screen.
+                try {
+                    await startTeamTrial({
+                        teamId,
+                        organizationId,
+                        byok: choseBYOK,
+                    });
+                } catch (trialError) {
+                    console.error(
+                        "startTeamTrial failed (non-fatal, continuing):",
+                        trialError,
+                    );
+                }
             }
 
             onSuccess();

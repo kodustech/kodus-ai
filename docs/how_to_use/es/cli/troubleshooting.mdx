@@ -1,0 +1,131 @@
+---
+title: "Solución de Problemas"
+description: "Errores comunes del CLI de Kodus, códigos de salida y cómo depurarlos."
+---
+
+Comienza cualquier investigación con:
+
+```bash
+kodus status
+kodus auth status
+kodus review --verbose    # o cualquier comando con --verbose
+```
+
+`kodus status` muestra el estado consolidado (modo de autenticación, organización, repositorio, hook, versión). `--verbose` imprime la URL de la API resuelta y los detalles por solicitud.
+
+## Errores Comunes
+
+<AccordionGroup>
+  <Accordion title="Comando no encontrado: kodus">
+    El CLI no está en tu `PATH`. Reinstálalo con el flag global de tu gestor de paquetes, o usa `npx @kodus/cli <command>` para ejecuciones puntuales.
+
+    - `npm install -g @kodus/cli`
+    - `yarn global add @kodus/cli`
+    - `pnpm add -g @kodus/cli`
+    - `bun add -g @kodus/cli`
+
+    Si instalaste mediante el instalador de skills, vuelve a ejecutar `curl -fsSL https://review-skill.com/install | bash` para corregir las entradas del PATH.
+  </Accordion>
+
+  <Accordion title="AUTH_REQUIRED o 401 Unauthorized">
+    - Ejecuta `kodus auth status` para ver el modo actual.
+    - Si usas una clave de equipo, verifica que siga activa en <a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>.
+    - Si usas inicio de sesión personal, intenta `kodus auth login` de nuevo: el token de actualización puede haber expirado.
+    - Para CI, confirma que `KODUS_TOKEN` (o `KODUS_TEAM_KEY`) esté configurado en el entorno donde se ejecuta el pipeline.
+    - Si es auto-alojado, confirma que `KODUS_API_URL` apunte a la instancia correcta.
+  </Accordion>
+
+  <Accordion title="NOT_IN_GIT_REPO">
+    `kodus review` requiere un directorio de trabajo git. Cambia a un repositorio con `cd` o inicializa uno con `git init`. Para los comandos `kodus config repo`, puedes pasar `owner/repo` explícitamente en lugar de `.`.
+  </Accordion>
+
+  <Accordion title="La revisión tarda mucho tiempo o parece colgada">
+    Las ramas grandes (cientos de archivos, miles de líneas) pueden tardar varios minutos. El tiempo de espera predeterminado de la solicitud es de 60 minutos: deberías ver el progreso en el modo detallado.
+
+    - Usa `--verbose` para confirmar que la solicitud está en vuelo.
+    - Para diffs muy grandes, prefiere `--branch <base>` o `--commit <sha>` sobre el modo árbol de trabajo: estos permiten que el backend clone el mismo commit en lugar de recibir el contenido de los archivos incluido.
+    - Anula el tiempo de espera con `KODUS_REQUEST_TIMEOUT_MIN=90 kodus review` si es necesario.
+    - Divide el trabajo en ramas más pequeñas cuando sea práctico.
+  </Accordion>
+
+  <Accordion title="Los archivos se están omitiendo de la revisión">
+    La revisión respeta los patrones `ignore-files` configurados en `kodus config repo`. Lista la configuración actual con:
+
+    ```bash
+    kodus config repo show
+    ```
+
+    Puedes agregar o eliminar patrones:
+
+    ```bash
+    kodus config repo add-ignore-file . "**/*.generated.ts"
+    kodus config repo remove-ignore-file . "**/*.generated.ts"
+    ```
+
+    Los archivos binarios, imágenes y archivos de bloqueo se omiten de forma predeterminada.
+  </Accordion>
+
+  <Accordion title="Límite de velocidad alcanzado / Prueba agotada">
+    El modo de prueba permite 5 revisiones por día. Inicia sesión con `kodus auth login` o configura una clave de equipo mediante `kodus auth team-key --key kodus_xxxxx` para aumentar los límites. `kodus auth status` muestra tu uso actual.
+  </Accordion>
+
+  <Accordion title="La API devolvió una respuesta inválida (se esperaba JSON, se obtuvo HTML)">
+    Tu `KODUS_API_URL` está llegando a un proxy inverso o página de Cloudflare Access en lugar de la API. Comprueba:
+
+    - La ruta de la URL (sin `/api`, `/v1`, etc. adicionales).
+    - Las credenciales de Cloudflare Access (`CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`) si corresponde.
+    - Que el proxy reenvíe los encabezados `Authorization` y `CF-Access-*` intactos.
+  </Accordion>
+
+  <Accordion title="Se requiere HTTPS para la URL de la API">
+    El CLI rechaza las URLs de API no-HTTPS para todo excepto `localhost` y `127.0.0.1`. Provisiona un certificado TLS válido para tu instancia auto-alojada, o usa `http://localhost:<port>` para el desarrollo local.
+  </Accordion>
+
+  <Accordion title="El hook pre-push no se está ejecutando">
+    - Confirma la instalación: `kodus hook status`.
+    - Asegúrate de que `.git/hooks/pre-push` sea ejecutable.
+    - Otros gestores de hooks (Husky, Lefthook, pre-commit) pueden sobrescribir `.git/hooks/pre-push`. Encadénalos o reinstala con `kodus hook install --force`.
+    - Omite el hook para un solo envío: `KODUS_SKIP_HOOK=1 git push`.
+  </Accordion>
+
+  <Accordion title="Los hooks de decisiones (memory) no están capturando">
+    - Ejecuta `kodus decisions status` para ver qué agentes están configurados.
+    - Vuelve a ejecutar `kodus decisions enable --force` para reinstalar los archivos de integración.
+    - Para Codex, asegúrate de que `~/.codex/config.toml` contenga la línea `notify = ["kodus", "decisions", "capture", ...]`, o pasa `--codex-config <path>`.
+    - Verifica que el agente emita realmente eventos de turno completado (algunas configuraciones antiguas de Claude Code no lo hacen).
+  </Accordion>
+
+  <Accordion title="Límite de dispositivos alcanzado">
+    Las instancias auto-alojadas pueden aplicar límites de dispositivos por organización. Pide a tu administrador que aumente el límite o elimine dispositivos no utilizados del panel.
+  </Accordion>
+</AccordionGroup>
+
+## Códigos de Salida
+
+Úsalos en scripts y pipelines de CI.
+
+| Código | Significado                                                                |
+| ------ | -------------------------------------------------------------------------- |
+| `0`    | Éxito. No se encontraron problemas, o se encontraron pero están por debajo de `--fail-on`. |
+| `1`    | Se encontraron problemas en o por encima de la severidad `--fail-on`.      |
+| `2`    | Error de uso del CLI (flag inválido, argumento faltante).                  |
+| `3`    | Falla de autenticación o autorización.                                     |
+| `4`    | Error de red o de la API (tiempo de espera, 5xx, respuesta inválida).      |
+| `5`    | No se está en un repositorio git, o no hay cambios para revisar.           |
+
+<Tip>
+  Para CI, combina `--fail-on error` con `--format json` y `--output review.json` para exponer resultados estructurados como artefactos del pipeline sin afectar la lógica del código de salida.
+</Tip>
+
+## Consejos de Depuración
+
+- **`--verbose` en cualquier comando** imprime la URL de la API resuelta, los IDs de solicitud y los tiempos.
+- **`kodus schema`** muestra el esquema de comandos legible por máquina: útil cuando tu agente reporta un flag faltante.
+- **`--agent`** aplica salida determinista y legible por máquina; combínalo con `--format json` cuando hagas scripting.
+- **`KODUS_VERBOSE=true`** mantiene el modo detallado en múltiples comandos durante una sesión.
+
+## Obtener Ayuda
+
+- Reportar errores: [github.com/kodustech/cli/issues](https://github.com/kodustech/cli/issues)
+- Solicitudes de funciones, preguntas de configuración: tu gestor de cuenta de Kodus, o `support@kodus.io`.
+- Para implementaciones auto-alojadas, incluye la salida de `kodus status --verbose` al reportar un problema.

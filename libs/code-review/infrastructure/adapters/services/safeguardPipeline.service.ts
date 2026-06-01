@@ -14,7 +14,7 @@ import {
     ISandboxProvider,
     SANDBOX_PROVIDER_TOKEN,
     SandboxInstance,
-} from '@libs/code-review/domain/contracts/sandbox.provider';
+} from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
     CrossFileContextSnippet,
     RemoteCommands,
@@ -62,7 +62,7 @@ interface SafeguardPipelineParams {
     memories?: Array<Partial<{ title?: string; rule?: string }>>;
     externalReferences?: unknown[];
     externalReferenceErrors?: unknown[] | string;
-    sandboxCloneParams?: CreateSandboxParams;
+    getFreshCloneParams?: () => Promise<CreateSandboxParams>;
     documentationContext?: DocumentationContextItem[];
 }
 
@@ -198,7 +198,7 @@ export class SafeguardPipelineService {
                         prNumber,
                         filePath: file?.filename,
                         toVerifyCount: toVerify.length,
-                        hasSandboxCloneParams: !!params.sandboxCloneParams,
+                        hasFreshCloneParams: !!params.getFreshCloneParams,
                     },
                 });
 
@@ -220,27 +220,29 @@ export class SafeguardPipelineService {
                 let renewedCleanup: (() => Promise<void>) | undefined;
 
                 const canRenew = !!(
-                    params.sandboxCloneParams && this.sandboxProvider
+                    params.getFreshCloneParams && this.sandboxProvider
                 );
                 this.logger.log({
-                    message: `[SAFEGUARD] PR#${prNumber} ${fileLabel} — Agent verification starting: ${toVerify.length} suggestions to verify, sandbox renewal ${canRenew ? 'available' : 'NOT available'}${!params.sandboxCloneParams ? ' (no sandboxCloneParams)' : ''}${!this.sandboxProvider ? ' (no sandboxProvider)' : ''}`,
+                    message: `[SAFEGUARD] PR#${prNumber} ${fileLabel} — Agent verification starting: ${toVerify.length} suggestions to verify, sandbox renewal ${canRenew ? 'available' : 'NOT available'}${!params.getFreshCloneParams ? ' (no getFreshCloneParams)' : ''}${!this.sandboxProvider ? ' (no sandboxProvider)' : ''}`,
                     context: SafeguardPipelineService.name,
                 });
 
                 // Closure to attempt sandbox renewal; returns true on success
                 const tryRenewSandbox = async (): Promise<boolean> => {
-                    if (!params.sandboxCloneParams || !this.sandboxProvider) {
+                    if (!params.getFreshCloneParams || !this.sandboxProvider) {
                         this.logger.warn({
-                            message: `[SAFEGUARD] PR#${prNumber} ${fileLabel} — Cannot renew sandbox: ${!params.sandboxCloneParams ? 'sandboxCloneParams is missing' : 'sandboxProvider is missing'}`,
+                            message: `[SAFEGUARD] PR#${prNumber} ${fileLabel} — Cannot renew sandbox: ${!params.getFreshCloneParams ? 'getFreshCloneParams is missing' : 'sandboxProvider is missing'}`,
                             context: SafeguardPipelineService.name,
                         });
                         return false;
                     }
                     let newSandbox: SandboxInstance | undefined;
                     try {
+                        const freshCloneParams =
+                            await params.getFreshCloneParams();
                         newSandbox =
                             await this.sandboxProvider.createSandboxWithRepo(
-                                params.sandboxCloneParams,
+                                freshCloneParams,
                             );
                         currentRemoteCommands = newSandbox.remoteCommands;
                         if (renewedCleanup)
@@ -292,6 +294,7 @@ export class SafeguardPipelineService {
                             prNumber,
                             params.memories,
                             params.documentationContext,
+                            byokConfig,
                         );
 
                         if (
@@ -338,6 +341,8 @@ export class SafeguardPipelineService {
                                 organizationAndTeamData,
                                 prNumber,
                                 params.memories,
+                                undefined,
+                                byokConfig,
                             );
                         } catch (retryError) {
                             this.logger.warn({
@@ -400,7 +405,7 @@ export class SafeguardPipelineService {
                         prNumber,
                         filePath: file?.filename,
                         toVerifyCount: toVerify.length,
-                        hasSandboxCloneParams: !!params.sandboxCloneParams,
+                        hasFreshCloneParams: !!params.getFreshCloneParams,
                     },
                 });
 
@@ -494,6 +499,7 @@ export class SafeguardPipelineService {
             languageResultPrompt,
             reviewMode,
             crossFileSnippets,
+            byokConfig,
         } = params;
 
         const runName = 'safeguardFeatureExtraction';
@@ -549,6 +555,7 @@ export class SafeguardPipelineService {
             spanName,
             runName,
             attrs: spanAttrs,
+            byokConfig,
             exec: async (callbacks) => {
                 return await promptRunner
                     .builder()
@@ -659,6 +666,7 @@ Evidence field in ${params.languageResultPrompt}.`;
                 sandboxAvailable: false,
                 sandboxReason: 'no_remote_commands',
             },
+            byokConfig: params.byokConfig,
             exec: async (callbacks) => {
                 return await promptRunner
                     .builder()
@@ -714,6 +722,7 @@ Evidence field in ${params.languageResultPrompt}.`;
         prNumber: number,
         memories?: Array<Partial<{ title?: string; rule?: string }>>,
         documentationContext?: DocumentationContextItem[],
+        byokConfig?: BYOKConfig,
     ): Promise<{
         verified: boolean;
         action: string;
@@ -770,6 +779,7 @@ Evidence field in ${params.languageResultPrompt}.`;
                     sandboxAvailable: true,
                     sandboxReason: 'remote_commands_available',
                 },
+                byokConfig,
                 exec: async (callbacks) => {
                     let builder = promptRunner
                         .builder()
@@ -932,14 +942,18 @@ Evidence field in ${params.languageResultPrompt}.`;
         // Try direct parse
         try {
             return JSON.parse(text);
-        } catch {}
+        } catch {
+            // intentional fallback
+        }
 
         // Extract from markdown code blocks
         const codeBlock = text.match(/```(?:json)?\s*([\s\S]*?)```/);
         if (codeBlock) {
             try {
                 return JSON.parse(codeBlock[1].trim());
-            } catch {}
+            } catch {
+                // intentional fallback
+            }
         }
 
         // Extract outermost JSON object
@@ -981,7 +995,9 @@ Evidence field in ${params.languageResultPrompt}.`;
 
         try {
             return JSON.parse(json);
-        } catch {}
+        } catch {
+            // intentional fallback
+        }
 
         // Clean trailing commas and try again
         const cleaned = json
@@ -990,7 +1006,9 @@ Evidence field in ${params.languageResultPrompt}.`;
 
         try {
             return JSON.parse(cleaned);
-        } catch {}
+        } catch {
+            // intentional fallback
+        }
 
         return null;
     }

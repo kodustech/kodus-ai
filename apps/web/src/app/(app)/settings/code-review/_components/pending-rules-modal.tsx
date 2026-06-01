@@ -20,14 +20,21 @@ import {
 import { Label } from "@components/ui/label";
 import { magicModal } from "@components/ui/magic-modal";
 import { Markdown } from "@components/ui/markdown";
+import { toast } from "@components/ui/toaster/use-toast";
+import { KODY_RULES_PATHS } from "@services/kodyRules";
 import {
     applyPendingKodyRules,
     discardPendingKodyRules,
 } from "@services/kodyRules/fetch";
 import { KodyRule } from "@services/kodyRules/types";
+import { isCentralizedPrResponse } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { pluralize } from "src/core/utils/string";
+
+import { getCentralizedPrToastPayload } from "../_utils/centralized-pr-feedback";
 
 const entityDescription = {
     rules: "Kody analyzed your past reviews and generated these rules:",
@@ -42,6 +49,7 @@ export const PendingKodyRulesModal = ({
     entityLabel?: "rules" | "memories";
 }) => {
     const [selectedRuleIds, setSelectedRuleIds] = useState<string[]>([]);
+    const { teamId } = useSelectedTeamId();
     const canEdit = usePermission(
         Action.Update,
         ResourceType.CodeReviewSettings,
@@ -50,7 +58,16 @@ export const PendingKodyRulesModal = ({
     const applyPendingItems = async (ids: string[], hide: boolean = true) => {
         magicModal.lock();
         try {
-            await applyPendingKodyRules(ids);
+            const response = await applyPendingKodyRules(teamId, ids);
+
+            if (isCentralizedPrResponse(response)) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        response,
+                        `Proposed ${entityLabel} import through centralized pull request.`,
+                    ),
+                );
+            }
         } catch (error) {
             console.error("Error applying pending items:", error);
         } finally {
@@ -61,7 +78,7 @@ export const PendingKodyRulesModal = ({
     const discardPendingItems = async (ids: string[], hide: boolean = true) => {
         magicModal.lock();
         try {
-            await discardPendingKodyRules(ids);
+            await discardPendingKodyRules(teamId, ids);
         } catch (error) {
             console.error("Error discarding pending items:", error);
         } finally {

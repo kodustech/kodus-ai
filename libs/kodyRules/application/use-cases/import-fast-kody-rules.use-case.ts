@@ -9,6 +9,7 @@ import {
     KodyRulesScope,
     KodyRulesStatus,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { validateAndScopeIdeRulePath } from '@libs/common/utils/kody-rules/file-patterns';
 import { createLogger } from '@kodus/flow';
 
 @Injectable()
@@ -42,10 +43,38 @@ export class ImportFastKodyRulesUseCase {
 
         for (const rule of dto.rules || []) {
             try {
+                // Even though the payload is supposed to be pre-normalised
+                // by the client, run it through the same validator the
+                // sync flow uses so the persisted shape stays consistent
+                // (no IDE-marker leaks, no path === sourcePath rows, no
+                // empty paths).
+                const validated = rule.sourcePath
+                    ? validateAndScopeIdeRulePath({
+                          llmPath: rule.path,
+                          sourceFilePath: rule.sourcePath,
+                          pathSource: (rule as any)?.pathSource,
+                      })
+                    : { path: rule.path || '**/*', reason: 'accepted-as-is' as const };
+                if (validated.reason !== 'accepted-as-is') {
+                    this.logger.log({
+                        message: `[kody-rules-import-fast] path validation: ${validated.reason}`,
+                        context: ImportFastKodyRulesUseCase.name,
+                        metadata: {
+                            sourceFilePath: rule.sourcePath,
+                            originalLlmPath: (validated as any)
+                                .originalLlmPath,
+                            finalPath: validated.path,
+                            pathSource:
+                                (rule as any)?.pathSource ?? 'unspecified',
+                            repositoryId: rule.repositoryId,
+                        },
+                    });
+                }
+
                 const payload = {
                     title: rule.title,
                     rule: rule.rule,
-                    path: rule.path,
+                    path: validated.path,
                     sourcePath: rule.sourcePath,
                     severity:
                         (rule.severity as KodyRuleSeverity) ||

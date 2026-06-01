@@ -1,7 +1,9 @@
 import { createLogger } from '@kodus/flow';
+import { EnqueueAstGraphUpdateOnMergedUseCase } from '@libs/code-review/application/use-cases/enqueue-ast-graph-update-on-merged.use-case';
 import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
 import {
     hasReviewMarker,
+    isForceReviewCommand,
     isKodyMentionNonReview,
     isReviewCommand,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
@@ -22,8 +24,16 @@ import {
     WebhookForgejoHookIssueAction,
 } from '@libs/platform/domain/platformIntegrations/types/webhooks/webhooks-forgejo.type';
 import { SavePullRequestUseCase } from '@libs/platformData/application/use-cases/pullRequests/save.use-case';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import {
+    IOutboxMessageRepository,
+    OUTBOX_MESSAGE_REPOSITORY_TOKEN,
+} from '@libs/core/workflow/domain/contracts/outbox-message.repository.contract';
+import {
+    SANDBOX_INVALIDATE_ROUTING_KEY,
+    SandboxInvalidatePayload,
+} from '@libs/sandbox/domain/events/sandbox-invalidate.event';
 import { CodeManagementService } from '../../adapters/services/codeManagement.service';
 
 /**
@@ -43,6 +53,10 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
         private readonly eventEmitter: EventEmitter2,
         private readonly enqueueCodeReviewJobUseCase: EnqueueCodeReviewJobUseCase,
         private readonly enqueueImplementationCheckUseCase: EnqueueImplementationCheckUseCase,
+        @Inject(OUTBOX_MESSAGE_REPOSITORY_TOKEN)
+        private readonly outboxRepository: IOutboxMessageRepository,
+        @Optional()
+        private readonly enqueueAstGraphUpdateOnMergedUseCase?: EnqueueAstGraphUpdateOnMergedUseCase,
     ) {}
 
     public canHandle(params: IWebhookEventParams): boolean {
@@ -213,9 +227,39 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
             if (payload?.action === WebhookForgejoHookIssueAction.CLOSED) {
                 this.generateIssuesFromPrClosedUseCase.execute(params);
 
+                // Durable sandbox invalidation via outbox (SBX-05).
+                // Written in the same DB transaction context so it survives worker crashes.
+                const prKey = `${context.organizationAndTeamData.organizationId}:${repository.id}:${payload?.pull_request?.number}`;
+                this.outboxRepository.create({
+                    jobId: undefined,
+                    exchange: 'sandbox.events',
+                    routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
+                    payload: {
+                        prKey,
+                        reason: 'pr_closed',
+                    } satisfies SandboxInvalidatePayload,
+                }).catch((err) => {
+                    this.logger.warn({
+                        message: '[SBX-05] Failed to write sandbox invalidation outbox message',
+                        context: ForgejoPullRequestHandler.name,
+                        error: err instanceof Error ? err : undefined,
+                        metadata: { prKey },
+                    });
+                });
+
+                // TODO(SBX-05): force-push not surfaced by this platform's webhook payload — add when available.
+
                 // If merged into default branch, trigger Kody Rules sync for main
                 const merged = payload?.pull_request?.merged === true;
                 const baseRef = payload?.pull_request?.base?.ref;
+
+                let changedFiles:
+                    | Array<{
+                          filename: string;
+                          previous_filename?: string;
+                          status: string;
+                      }>
+                    | undefined;
 
                 if (merged && baseRef) {
                     try {
@@ -229,28 +273,42 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                                 },
                             });
                         if (baseRef !== defaultBranch) {
-                            return;
+                            changedFiles = undefined;
+                        } else {
+                            changedFiles =
+                                await this.codeManagement.getFilesByPullRequestId(
+                                    {
+                                        organizationAndTeamData:
+                                            context.organizationAndTeamData,
+                                        repository: {
+                                            id: repository.id,
+                                            name: repository.name,
+                                        },
+                                        prNumber: payload?.pull_request?.number,
+                                    },
+                                );
+
+                            this.enqueueAstGraphUpdateOnMergedUseCase
+                                ?.execute({
+                                    prNumber: payload?.pull_request?.number,
+                                    repoExternalId: repository.id,
+                                    repoName: repository.name,
+                                    platform: PlatformType.FORGEJO,
+                                    baseBranch: baseRef,
+                                    newSha:
+                                        payload?.pull_request
+                                            ?.merge_commit_sha,
+                                    organizationAndTeamData:
+                                        context.organizationAndTeamData,
+                                })
+                                .catch((e) => {
+                                    this.logger.warn({
+                                        message: `[AST-GRAPH] Failed to enqueue graph update after PR merge`,
+                                        context: ForgejoPullRequestHandler.name,
+                                        error: e,
+                                    });
+                                });
                         }
-                        // fetch changed files
-                        const changedFiles =
-                            await this.codeManagement.getFilesByPullRequestId({
-                                organizationAndTeamData:
-                                    context.organizationAndTeamData,
-                                repository: {
-                                    id: repository.id,
-                                    name: repository.name,
-                                },
-                                prNumber: payload?.pull_request?.number,
-                            });
-                        this.eventEmitter.emit(
-                            'pull-request.closed',
-                            new PullRequestClosedEvent(
-                                context.organizationAndTeamData,
-                                repository,
-                                payload?.pull_request?.number,
-                                changedFiles || [],
-                            ),
-                        );
                     } catch (e) {
                         this.logger.error({
                             message: 'Failed to sync Kody Rules after PR merge',
@@ -265,6 +323,19 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                             },
                         });
                     }
+                }
+
+                if (context.organizationAndTeamData) {
+                    this.eventEmitter.emit(
+                        'pull-request.closed',
+                        new PullRequestClosedEvent(
+                            context.organizationAndTeamData,
+                            repository,
+                            payload?.pull_request?.number,
+                            changedFiles || [],
+                            merged,
+                        ),
+                    );
                 }
             }
 
@@ -295,7 +366,6 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
         const { payload, event } = params;
 
         const prNumber = payload?.pull_request?.id;
-        const repositoryName = payload?.repository?.name;
 
         try {
             // Extract comment data
@@ -333,6 +403,7 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
             }
 
             const isStartCommand = isReviewCommand(comment.body);
+            const isForceCommand = isForceReviewCommand(comment.body);
             const hasMarker = hasReviewMarker(comment.body);
 
             const pullRequest = mappedPlatform.mapPullRequest({ payload });
@@ -440,7 +511,7 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                         payload: {
                             ...payload,
                             action: 'synchronize',
-                            origin: 'command',
+                            origin: isForceCommand ? 'command-force' : 'command',
                             triggerCommentId: comment?.id,
                             pull_request:
                                 pullRequestData ||

@@ -7,21 +7,8 @@ import { Injectable } from '@nestjs/common';
 import { ConsumeMessage } from 'amqplib';
 
 import { SaveCodeReviewFeedbackUseCase } from '@libs/code-review/application/use-cases/codeReviewFeedback/save-feedback.use-case';
-import { RabbitMQErrorHandler } from '@libs/core/infrastructure/queue/rabbitmq-error.handler';
+import { createRabbitMQErrorHandlerWithFallback } from '@libs/core/infrastructure/queue/rabbitmq-error.handler';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-
-const createErrorHandlerWithFallback = (dlqRoutingKey: string) => {
-    return (channel: any, msg: ConsumeMessage, _err: any) => {
-        if (RabbitMQErrorHandler.instance) {
-            return RabbitMQErrorHandler.instance.handle(channel, msg, _err, {
-                dlqRoutingKey,
-            });
-        }
-        if (msg) {
-            channel.ack(msg);
-        }
-    };
-};
 
 @Injectable()
 export class CodeReviewFeedbackConsumer {
@@ -41,7 +28,7 @@ export class CodeReviewFeedbackConsumer {
         queue: 'codeReviewFeedback.syncCodeReviewReactions.queue',
         allowNonJsonMessages: true,
         errorBehavior: MessageHandlerErrorBehavior.ACK,
-        errorHandler: createErrorHandlerWithFallback(
+        errorHandler: createRabbitMQErrorHandlerWithFallback(
             'codeReviewFeedback.syncCodeReviewReactions',
         ),
         queueOptions: {

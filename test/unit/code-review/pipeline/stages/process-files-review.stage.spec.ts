@@ -4,9 +4,8 @@ import { SUGGESTION_SERVICE_TOKEN } from '@/code-review/domain/contracts/Suggest
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { FILE_REVIEW_CONTEXT_PREPARATION_TOKEN } from '@/core/domain/interfaces/file-review-context-preparation.interface';
 import { KODY_FINE_TUNING_CONTEXT_PREPARATION_TOKEN } from '@/core/domain/interfaces/kody-fine-tuning-context-preparation.interface';
-import { KODY_AST_ANALYZE_CONTEXT_PREPARATION_TOKEN } from '@/core/domain/interfaces/kody-ast-analyze-context-preparation.interface';
 import { CodeAnalysisOrchestrator } from '@/ee/codeBase/codeAnalysisOrchestrator.service';
-import { ASTContentFormatterService } from '@/code-review/infrastructure/adapters/services/astContentFormatter.service';
+import { GraphContentFormatter } from '@/code-review/infrastructure/adapters/services/graphContentFormatter.service';
 import { PriorityStatus } from '@/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { DeliveryStatus } from '@/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import {
@@ -15,8 +14,6 @@ import {
     CodeSuggestion,
     FileChange,
 } from '@/core/infrastructure/config/types/general/codeReview.type';
-import { FileContentFlag } from '@/ee/kodyAST/interfaces/code-ast-analysis.interface';
-
 jest.mock('@kodus/flow', () => ({
     createLogger: () => ({
         log: jest.fn(),
@@ -53,17 +50,13 @@ describe('ProcessFilesReview', () => {
         prepareKodyFineTuningContext: jest.fn(),
     };
 
-    const mockKodyAstAnalyzeContextPreparation = {
-        prepareKodyASTAnalyzeContext: jest.fn(),
-    };
-
     const mockCodeAnalysisOrchestrator = {
         executeStandardAnalysis: jest.fn(),
         executeKodyRulesAnalysis: jest.fn(),
     };
 
     const mockAstContentFormatter = {
-        fetchFormattedContent: jest.fn(),
+        formatContent: jest.fn().mockResolvedValue(new Map()),
     };
 
     const mockOrganizationAndTeamData = {
@@ -92,15 +85,11 @@ describe('ProcessFilesReview', () => {
                     useValue: mockKodyFineTuningContextPreparation,
                 },
                 {
-                    provide: KODY_AST_ANALYZE_CONTEXT_PREPARATION_TOKEN,
-                    useValue: mockKodyAstAnalyzeContextPreparation,
-                },
-                {
                     provide: CodeAnalysisOrchestrator,
                     useValue: mockCodeAnalysisOrchestrator,
                 },
                 {
-                    provide: ASTContentFormatterService,
+                    provide: GraphContentFormatter,
                     useValue: mockAstContentFormatter,
                 },
             ],
@@ -144,7 +133,6 @@ describe('ProcessFilesReview', () => {
                     hasRelevantContent: true,
                 },
                 validCrossFileSuggestions: overrides.crossFileSuggestions || [],
-                tasks: { astAnalysis: { taskId: 'task-1' } },
             } as any;
         }
 
@@ -210,13 +198,6 @@ describe('ProcessFilesReview', () => {
 
             // kodyRules: no suggestions
             mockCodeAnalysisOrchestrator.executeKodyRulesAnalysis.mockResolvedValue(
-                {
-                    codeSuggestions: [],
-                },
-            );
-
-            // kodyAST: no suggestions
-            mockKodyAstAnalyzeContextPreparation.prepareKodyASTAnalyzeContext.mockResolvedValue(
                 {
                     codeSuggestions: [],
                 },
@@ -460,7 +441,6 @@ describe('ProcessFilesReview', () => {
                 },
                 platformType: 'github',
                 codeReviewConfig: { reviewOptions: {} } as any,
-                tasks: { astAnalysis: { taskId: 'task-1' } },
             } as any;
         }
 
@@ -471,11 +451,11 @@ describe('ProcessFilesReview', () => {
                     'src/app.ts',
                     {
                         content: 'AST formatted content',
-                        flag: FileContentFlag.DIFF,
+                        flag: 'DIFF',
                     },
                 ],
             ]);
-            mockAstContentFormatter.fetchFormattedContent.mockResolvedValue(
+            mockAstContentFormatter.formatContent.mockResolvedValue(
                 astResultMap,
             );
 
@@ -495,12 +475,6 @@ describe('ProcessFilesReview', () => {
                                     '@@ -1,3 +1,3 @@\n-old\n+new',
                                 hasRelevantContent: !!f.astFormattedContent,
                             },
-                            tasks: {
-                                astAnalysis: {
-                                    taskId: 'task-1',
-                                    status: 3,
-                                },
-                            },
                         },
                     });
                 },
@@ -527,14 +501,9 @@ describe('ProcessFilesReview', () => {
             mockCodeAnalysisOrchestrator.executeKodyRulesAnalysis.mockResolvedValue(
                 { codeSuggestions: [] },
             );
-            mockKodyAstAnalyzeContextPreparation.prepareKodyASTAnalyzeContext.mockResolvedValue(
-                { codeSuggestions: [] },
-            );
-
             const context = createBatchContext();
-            const tasks = { astAnalysis: { taskId: 'task-1' } };
 
-            await (stage as any).processSingleBatch([file], context, 0, tasks);
+            await (stage as any).processSingleBatch([file], context, 0);
 
             // prepareFileContext should have received the file WITH astFormattedContent
             expect(capturedFile).not.toBeNull();
@@ -545,7 +514,7 @@ describe('ProcessFilesReview', () => {
 
         it('should NOT attach AST content when AST returns empty map (fallback)', async () => {
             const file = createFile('src/app.ts');
-            mockAstContentFormatter.fetchFormattedContent.mockResolvedValue(
+            mockAstContentFormatter.formatContent.mockResolvedValue(
                 new Map(),
             );
 
@@ -563,12 +532,6 @@ describe('ProcessFilesReview', () => {
                                     '@@ -1,3 +1,3 @@\n-old\n+new',
                                 hasRelevantContent: false,
                             },
-                            tasks: {
-                                astAnalysis: {
-                                    taskId: 'task-1',
-                                    status: 3,
-                                },
-                            },
                         },
                     });
                 },
@@ -595,14 +558,9 @@ describe('ProcessFilesReview', () => {
             mockCodeAnalysisOrchestrator.executeKodyRulesAnalysis.mockResolvedValue(
                 { codeSuggestions: [] },
             );
-            mockKodyAstAnalyzeContextPreparation.prepareKodyASTAnalyzeContext.mockResolvedValue(
-                { codeSuggestions: [] },
-            );
-
             const context = createBatchContext();
-            const tasks = { astAnalysis: { taskId: 'task-1' } };
 
-            await (stage as any).processSingleBatch([file], context, 0, tasks);
+            await (stage as any).processSingleBatch([file], context, 0);
 
             // File should NOT have astFormattedContent
             expect(capturedFile).not.toBeNull();
@@ -616,14 +574,14 @@ describe('ProcessFilesReview', () => {
             const astResultMap = new Map([
                 [
                     'src/a.ts',
-                    { content: 'formatted a', flag: FileContentFlag.DIFF },
+                    { content: 'formatted a', flag: 'DIFF' },
                 ],
                 [
                     'src/b.ts',
-                    { content: 'formatted b', flag: FileContentFlag.FULL },
+                    { content: 'formatted b', flag: 'FULL' },
                 ],
             ]);
-            mockAstContentFormatter.fetchFormattedContent.mockResolvedValue(
+            mockAstContentFormatter.formatContent.mockResolvedValue(
                 astResultMap,
             );
 
@@ -640,12 +598,6 @@ describe('ProcessFilesReview', () => {
                                     '@@ -1,3 +1,3 @@\n-old\n+new',
                                 hasRelevantContent: !!f.astFormattedContent,
                             },
-                            tasks: {
-                                astAnalysis: {
-                                    taskId: 'task-1',
-                                    status: 3,
-                                },
-                            },
                         },
                     });
                 },
@@ -672,15 +624,10 @@ describe('ProcessFilesReview', () => {
             mockCodeAnalysisOrchestrator.executeKodyRulesAnalysis.mockResolvedValue(
                 { codeSuggestions: [] },
             );
-            mockKodyAstAnalyzeContextPreparation.prepareKodyASTAnalyzeContext.mockResolvedValue(
-                { codeSuggestions: [] },
-            );
-
             const batch = [file1, file2];
             const context = createBatchContext();
-            const tasks = { astAnalysis: { taskId: 'task-1' } };
 
-            await (stage as any).processSingleBatch(batch, context, 0, tasks);
+            await (stage as any).processSingleBatch(batch, context, 0);
 
             // After processSingleBatch, astFormattedContent must be deleted from all files
             expect(file1.astFormattedContent).toBeUndefined();

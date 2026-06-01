@@ -1,0 +1,78 @@
+---
+title: "Detalhamento do Lead Time"
+description: "Divida seu ciclo de desenvolvimento nas fases de codificação, coleta e revisão"
+---
+
+## O que é Detalhamento do Lead Time
+
+O Detalhamento do Lead Time fornece uma visão detalhada do seu processo de desenvolvimento, dividindo o tempo total do ciclo em três fases principais: tempo de codificação, tempo de coleta e tempo de revisão. Isso ajuda a identificar exatamente onde ocorrem os gargalos no seu fluxo de trabalho.
+
+## Como Calculamos
+
+Rastreamos automaticamente o tempo gasto em cada fase do seu processo de desenvolvimento, desde o primeiro commit até o merge do PR.
+
+**O que rastreamos:**
+- **Tempo de Codificação**: Tempo de desenvolvimento ativo (do primeiro ao último commit)
+- **Tempo de Coleta**: Tempo entre o último commit e a criação do PR
+- **Tempo de Revisão**: Tempo da criação do PR até o merge
+
+**O que não contamos:**
+- Tempo antes do primeiro commit (planejamento, design)
+- Tempo após o merge (deploy, etc.)
+- PRs com falha ou abandonados
+
+**Como é calculado:**
+```
+Tempo de Codificação = (Hora do Último Commit) - (Hora do Primeiro Commit)
+Tempo de Coleta = (Hora de Abertura do PR) - (Hora do Último Commit)  
+Tempo de Revisão = (Hora de Fechamento do PR) - (Hora de Abertura do PR)
+```
+
+Usamos o 75º percentil (P75) para cada fase para filtrar outliers e mostrar o desempenho típico.
+
+## Por que é Importante
+
+Entender onde o tempo é gasto ajuda a otimizar a parte certa do seu processo:
+
+- **Tempo de Codificação**: Mostra a eficiência do desenvolvimento
+- **Tempo de Coleta**: Revela gargalos no fluxo de trabalho
+- **Tempo de Revisão**: Indica a eficácia do processo de revisão
+
+## Como Melhorar
+
+### Reduzir o Tempo de Codificação
+- **Requisitos Claros**: Certifique-se de que os desenvolvedores entendam o que construir
+- **Funcionalidades Menores**: Divida grandes mudanças em partes gerenciáveis
+- **Programação em Par**: Colabore para resolver problemas complexos mais rapidamente
+- **Reutilização de Código**: Aproveite padrões e componentes existentes
+
+### Reduzir o Tempo de Coleta
+- **Criação Imediata de PR**: Crie PRs logo após finalizar o código
+- **Automação de Fluxo de Trabalho**: Use ferramentas para agilizar a criação de PR
+- **Definição Clara de Pronto**: Saiba exatamente quando o código está pronto
+- **Reduza a Troca de Contexto**: Concentre-se em completar uma tarefa de cada vez
+
+### Reduzir o Tempo de Revisão
+- **Diretrizes de Revisão**: Defina expectativas claras para os revisores
+- **Verificações Automatizadas**: Use ferramentas para detectar problemas antes da revisão
+- **Rotação de Revisão**: Distribua a carga de revisão por toda a equipe
+- **Respostas Rápidas**: Responda prontamente aos comentários de revisão
+
+## Gargalos Comuns
+
+### Tempo de Codificação
+- **Requisitos Pouco Claros**: Os desenvolvedores não sabem o que construir
+- **Funcionalidades Complexas**: Mudanças muito grandes ou complexas
+- **Dívida Técnica**: Trabalhar em torno de problemas de código existentes
+- **Dependências**: Aguardar outros componentes ou serviços
+
+### Tempo de Coleta
+- **Ineficiência de Fluxo de Trabalho**: Etapas manuais que atrasam o processo
+- **Troca de Contexto**: Mover entre múltiplas tarefas
+- **Falta de Automação**: Criação e configuração manual de PR
+
+### Tempo de Revisão
+- **PRs Grandes**: Mudanças muito grandes para revisar rapidamente
+- **Disponibilidade de Revisores**: Pessoas insuficientes disponíveis para revisar
+- **Mudanças Pouco Claras**: PRs difíceis de entender
+- **Backlog de Revisão**: PRs demais aguardando revisão

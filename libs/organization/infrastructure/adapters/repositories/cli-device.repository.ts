@@ -35,7 +35,7 @@ export class CliDeviceDatabaseRepository implements ICliDeviceRepository {
                 ? mapSimpleModelToEntity(model, CliDeviceEntity)
                 : undefined;
         } catch (error) {
-            throw new Error('Error finding CLI device');
+            throw new Error('Error finding CLI device', { cause: error });
         }
     }
 
@@ -45,7 +45,7 @@ export class CliDeviceDatabaseRepository implements ICliDeviceRepository {
                 where: { organization: { uuid: organizationId } },
             });
         } catch (error) {
-            throw new Error('Error counting CLI devices');
+            throw new Error('Error counting CLI devices', { cause: error });
         }
     }
 
@@ -67,7 +67,7 @@ export class CliDeviceDatabaseRepository implements ICliDeviceRepository {
             const saved = await this.cliDeviceRepository.save(model);
             return mapSimpleModelToEntity(saved, CliDeviceEntity);
         } catch (error) {
-            throw new Error('Error creating CLI device');
+            throw new Error('Error creating CLI device', { cause: error });
         }
     }
 
@@ -79,7 +79,9 @@ export class CliDeviceDatabaseRepository implements ICliDeviceRepository {
             }
             await this.cliDeviceRepository.update({ uuid }, updateData);
         } catch (error) {
-            throw new Error('Error updating CLI device lastSeen');
+            throw new Error('Error updating CLI device lastSeen', {
+                cause: error,
+            });
         }
     }
 
@@ -98,7 +100,9 @@ export class CliDeviceDatabaseRepository implements ICliDeviceRepository {
             }
             await this.cliDeviceRepository.update({ uuid }, updateData);
         } catch (error) {
-            throw new Error('Error updating CLI device token');
+            throw new Error('Error updating CLI device token', {
+                cause: error,
+            });
         }
     }
 }

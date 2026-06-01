@@ -1,0 +1,40 @@
+### Run the Installation Script
+
+<Tip>
+  Looking for more control? Check out our [docker-compose
+  file](https://github.com/kodustech/kodus-installer/blob/main/docker-compose.yml)
+  for manual deployment options.
+</Tip>
+
+Set the proper permissions for the installation script:
+
+```bash
+chmod +x scripts/install.sh
+```
+
+Run the script:
+
+```bash
+./scripts/install.sh
+```
+
+### What the Installer Does
+
+Our installer automates several important steps:
+
+- Verifies Docker installation
+- Creates networks for Kodus services
+- Clones repositories and configures environment files
+- Runs docker-compose to start all services
+- Executes database migrations
+- Seeds initial data
+
+🎉 **Success!** When complete, the Kodus Web App and backend services (API, worker, webhooks, MCP manager) should be running on your machine.
+
+You can verify your installation by visiting `http://localhost:3000` - you should see the Kodus Web Application interface.
+
+<Warning>
+  Code Review features will not work yet unless you complete the reverse proxy
+  setup. Without this configuration, external Git providers cannot send webhooks
+  to your instance.
+</Warning> 

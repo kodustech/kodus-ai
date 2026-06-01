@@ -1,0 +1,82 @@
+---
+title: "Instalar plugins MCP personalizados"
+description: "Instrucciones paso a paso para conectar cualquier plugin personalizado de Model Context Protocol a Kodus."
+icon: "plug"
+---
+
+## Por qué son importantes los plugins personalizados
+
+Los plugins MCP personalizados permiten a tu equipo conectar a Kody con sistemas internos: bases de conocimiento, paneles de incidencias, motores de políticas, entre otros. Una vez instalados, cada interacción de Kody puede llamar a esas herramientas con datos en tiempo real, de modo que los revisores dejan de copiar capturas de pantalla o fragmentos desactualizados en los pull requests.
+
+Esta guía muestra el flujo recomendado para cualquier plugin personalizado, ya sea un endpoint de solo lectura sencillo (como el MCP de Kodus Docs) o un pipeline más avanzado con autenticación.
+
+<Callout icon="globe">
+  Kodus admite **únicamente servidores MCP remotos**, lo que significa que el plugin debe ser accesible desde la infraestructura de Kodus.
+</Callout>
+
+---
+
+## Prepara la información de tu plugin
+
+Reúne estos datos antes de abrir el catálogo de Plugins:
+
+| Campo | Por qué importa |
+| ----- | --------------- |
+| **URL pública** | Endpoint donde está alojado el manifiesto MCP (p. ej., `https://acme-internal-tools.com/mcp`). |
+| **Protocolo** | Tipo de implementación MCP (HTTP o SSE). |
+| **Alojamiento** | Debe ser un servidor remoto accesible desde Kodus (sin localhost ni endpoints MCP de escritorio). |
+| **Autenticación** | Si el plugin requiere claves de API, OAuth, o está abierto a las IPs de tu workspace. |
+| **Descripción / Logo** | Ayuda a otros ingenieros a entender qué hace el plugin al navegar por el catálogo. |
+
+¿Buscas servidores MCP remotos para probar?
+
+- [Smithery.ai](https://smithery.ai/) ofrece servicios MCP desplegables junto con un lanzador fácil que puedes apuntar a tu propia infraestructura.
+- [Awesome Remote MCP Servers](https://github.com/sylviangth/awesome-remote-mcp-servers) lista endpoints mantenidos por la comunidad que abarcan búsqueda de documentación, escáneres de seguridad y bots de flujo de trabajo.
+
+## Instala el plugin en Kodus
+
+<iframe src="https://www.youtube.com/embed/rtBxGnb9nIs?si=z2538VqglaqBOpio" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen width="100%" height="500px"></iframe>
+
+1. Ve a **Configuración de Code Review → Plugins** (beta) dentro de tu workspace de Kodus.
+2. Haz clic en **Agregar Plugin**.
+3. Completa el formulario:
+
+   ```text
+   Plugin Name: Etiqueta descriptiva (p. ej., "Security Runbooks MCP")
+   Description: Qué datos/acciones expone
+   Logo URL: Opcional, pero útil para identificación
+   URL: https://your-domain.com/mcp
+   Protocol: HTTP o SSE
+   Authorization / Headers: Añade si tu host MCP los requiere (p. ej., clave de API, OAuth, etc.) (opcional)
+   ```
+
+4. Haz clic en **Crear Plugin**. Una vez que aparezca en la lista, estará disponible de inmediato para todo el workspace.
+
+<Warning>
+  Los plugins personalizados se ejecutan con los mismos permisos que el workspace. Solo instala endpoints en los que tu organización confíe y que pueda monitorear.
+</Warning>
+
+## Verifica la conexión
+
+1. Abre cualquier pull request donde Kody esté habilitado.
+2. Menciona `@kody` e incluye una pregunta que obligue al plugin a responder.
+
+   ```
+   @kody ¿puedes obtener la lista de verificación de despliegue desde nuestro MCP y confirmar si se requieren feature flags?
+   ```
+
+3. En el panel lateral, revisa la sección **Plugins**. Deberías ver una llamada a tu nuevo plugin. Si falla, expande el error para inspeccionar el código de estado o el mensaje de validación.
+
+<Info>
+  El MCP de Kodus Docs (`https://docs.kodus.io/mcp`) es una prueba de verificación rápida: puedes instalarlo primero para asegurarte de que tu workspace puede alcanzar hosts externos.
+</Info>
+
+---
+
+## Lista de verificación rápida
+
+- [ ] El manifiesto del plugin está alojado y es accesible.
+- [ ] El modelo de autenticación (si existe) está documentado y probado.
+- [ ] El plugin está instalado mediante **Agregar Plugin Personalizado** con la URL y los encabezados correctos.
+- [ ] Un PR de prueba confirmó que Kody puede llamar al plugin.
+- [ ] Los responsables saben cómo monitorear y actualizar la integración.

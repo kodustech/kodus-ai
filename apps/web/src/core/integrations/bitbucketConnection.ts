@@ -1,8 +1,9 @@
 import { IIntegrationConnector } from "./IIntegrationConnector";
-
-const bitbucket = process.env.WEB_BITBUCKET_INSTALL_URL || "";
+import type { PublicConfig } from "@config/publicConfig";
 
 export class BitbucketConnection implements IIntegrationConnector {
+    constructor(private readonly cfg: PublicConfig) {}
+
     async connect(
         hasConnection: boolean,
         routerConfig: any,
@@ -13,8 +14,8 @@ export class BitbucketConnection implements IIntegrationConnector {
                 routerPath ||
                     `${routerConfig.pathname}/bitbucket/configuration`,
             );
-        } else {
-            window.location.href = bitbucket;
+            return;
         }
+        window.location.href = this.cfg.bitbucketInstallUrl || "";
     }
 }

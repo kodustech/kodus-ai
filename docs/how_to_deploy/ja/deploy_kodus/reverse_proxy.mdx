@@ -1,0 +1,128 @@
+---
+title: "リバースプロキシ"
+description: "Kodus用のリバースプロキシを設定する。"
+icon: "server" 
+tags: ["reverse-proxy", "nginx"]
+---
+
+<Info>
+オプションのステップ：ロードバランサーやプロキシサーバーを使用しない場合のみ必要です。
+</Info>
+
+Kodusインスタンスを外部システムからアクセス可能にするには（コードレビューのWebhookとパブリックアクセスに必要）、Nginxでリバースプロキシを設定する必要があります。
+
+2つのサブドメイン用のNginx設定サンプルを以下に示します：
+
+```nginx
+# Kodus Webアプリケーション用のサーバーブロック
+server {
+    listen 80;
+    server_name kodus-web.yourdomain.com; # 実際のWebアプリドメインに置き換えてください
+
+    location / {
+        proxy_pass http://localhost:3000; # Kodus WebアプリコンテナへのURL
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_buffer_size 16k;
+        proxy_buffers 8 16k;
+        proxy_busy_buffers_size 32k;
+    }
+}
+
+# Kodus API用のサーバーブロック
+server {
+    listen 80;
+    server_name kodus-api.yourdomain.com; # 実際のAPIドメインに置き換えてください
+
+    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
+        proxy_pass http://localhost:3332; # Kodus WebhooksサービスへのURL
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location / {
+        proxy_pass http://localhost:3001; # Kodus APIサービスへのURL
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+<Note>
+  WebhooksはWebhooksサービス（ポート3332）が処理します。WebhookのURLにAPIドメインを使用する場合は、`location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook`ブロックが必要です。
+</Note>
+
+### オプション：専用WebhooksサブドメインR
+
+Webhooks専用のドメイン（例：`kodus-webhooks.yourdomain.com`）を使用する場合は、Webhooksサービスを指すサーバーブロックを追加します：
+
+```nginx
+server {
+    listen 80;
+    server_name kodus-webhooks.yourdomain.com;
+
+    location / {
+        proxy_pass http://localhost:3332; # Webhooksサービス
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+この設定を`/etc/nginx/sites-available/kodus`（または任意の名前、例えば`kodus-web`と`kodus-api`を別ファイルとして使用）に保存し、有効化するためのシンボリックリンクを作成します：
+
+```bash
+sudo ln -s /etc/nginx/sites-available/kodus /etc/nginx/sites-enabled/
+sudo nginx -t  # 設定をテスト
+sudo systemctl reload nginx  # 変更を適用
+```
+
+<Info>
+  **リバースプロキシの重要な設定更新：**
+
+  `kodus-web.yourdomain.com`と`kodus-api.yourdomain.com`（または選択したサブドメイン）でリバースプロキシを設定した後、`.env`ファイルがこれらのパブリックURLを正しく反映していることを**必ず**確認してください。具体的には以下を確認してください：
+  - `WEB_HOSTNAME_API`：プロトコル（`http://`または`https://`）なしで、パブリックAPIの**ホスト名のみ**に設定する必要があります（例：`kodus-api.yourdomain.com`）。
+  - `WEB_PORT_API`：APIがアクセス可能なパブリックポートに対応する必要があります（通常はHTTPSの場合`443`、HTTPの場合`80`）。フロントエンドがAPIを呼び出すために使用するスキーム（http/https）は、このポートから推論されるか、フロントエンドのロジックでHTTPSを使用するようにハードコードされることが多いです。
+  - WebhookのURL（例：`API_GITHUB_CODE_MANAGEMENT_WEBHOOK`）：これらが**Webhooksサービス**に解決されることを確認してください。`/.../webhook`がポート`3332`にルーティングされる場合のみAPIドメインを使用できます。または専用のWebhooksドメイン（例：`https://kodus-webhooks.yourdomain.com/github/webhook`）を使用してください。
+
+  これらを正しく更新しないと、認証の問題、WebアプリケーションがAPIに接続できない、またはWebhookが正常に機能しない可能性があります。
+</Info>
+
+### SSLの有効化（推奨）
+
+本番環境のデプロイメントでは、Let's EncryptによるSSLのセットアップを強く推奨します：
+
+```bash
+# Let's Encrypt用のCertbotをインストール
+sudo apt-get update
+sudo apt-get install certbot python3-certbot-nginx
+
+# 両方のドメインの証明書を取得してインストール
+sudo certbot --nginx -d kodus-web.yourdomain.com -d kodus-api.yourdomain.com # 実際のドメインに置き換えてください
+```
+
+これにより、Nginxの設定が自動的にHTTPSを使用するように設定され、両方のサブドメインのHTTPトラフィックがリダイレクトされます。

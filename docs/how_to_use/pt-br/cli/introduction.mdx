@@ -1,0 +1,88 @@
+---
+title: "Kodus CLI"
+description: "Revisão de código com IA, validação de negócio e fluxos de trabalho com agentes — direto do seu terminal."
+---
+
+O Kodus CLI revisa suas alterações de código diretamente do terminal — detectando bugs, problemas de segurança e violações de estilo antes que cheguem a um pull request. É o mesmo mecanismo do Kodus que funciona nos seus PRs, mas apontado para sua árvore de trabalho, diff staged, branch ou commit.
+
+## Para quem é
+
+- **Desenvolvedores solo** executando uma verificação pré-commit antes de fazer push.
+- **Equipes** que desejam um conjunto de regras de revisão compartilhado em todos os clones, IDEs e jobs de CI — sem que cada desenvolvedor precise fazer login.
+- **Agentes de programação de IA** (Claude Code, Cursor, Codex, Windsurf) executando loops de revisão e correção com saída estruturada.
+- **Pipelines CI/CD** que falham builds em problemas acima de um limite de severidade.
+
+## Como parece
+
+Executar `kodus review` em uma alteração da árvore de trabalho produz um relatório estruturado: arquivos afetados, problemas agrupados por severidade, correções sugeridas que você pode visualizar e aplicar, e um código de saída seguro para scripts.
+
+<img src="/images/kodus_cli_review.jpg" alt="AI code review in your CLI"/>
+
+No modo `--prompt-only`, a mesma revisão se torna texto compacto e estruturado otimizado para um agente de IA analisar e agir.
+
+## O que você pode fazer
+
+<CardGroup cols={2}>
+  <Card title="Revisão Interativa" icon="terminal">
+    Navegue pelos arquivos, visualize correções e aplique-as uma a uma pelo seu terminal.
+  </Card>
+  <Card title="Correção Automática" icon="wand-magic-sparkles">
+    Aplique todos os problemas corrigíveis de uma vez com `--fix`.
+  </Card>
+  <Card title="Integração com Agente de IA" icon="robot">
+    Alimente a saída de `--prompt-only` no Claude Code, Cursor ou Windsurf para loops autônomos de revisão e correção.
+  </Card>
+  <Card title="Hook Pre-Push" icon="shield-check">
+    Bloqueie pushes em problemas acima de um limite de severidade com `kodus hook install`.
+  </Card>
+  <Card title="Sugestões de PR" icon="code-pull-request">
+    Busque as sugestões do Kody em um pull request aberto sem sair do terminal.
+  </Card>
+  <Card title="Validação de Negócio" icon="clipboard-check">
+    Valide que um diff local satisfaz os critérios de aceitação de uma tarefa antes de fazer merge.
+  </Card>
+  <Card title="Kody Rules" icon="scale-balanced">
+    Crie, atualize e revise regras de equipe que a IA aplica durante cada revisão.
+  </Card>
+  <Card title="Decision Memory" icon="brain">
+    Persista decisões de agentes de IA como arquivos estruturados versionados junto ao seu código.
+  </Card>
+</CardGroup>
+
+## Limites
+
+|                           | Trial (Sem Conta) | Autenticado              |
+| ------------------------- | ----------------- | ------------------------ |
+| Revisões por dia          | 5                 | Baseado no seu plano     |
+| Arquivos por revisão      | 10                | 100                      |
+| Linhas por arquivo        | 500               | —                        |
+| Tamanho máximo de diff por arquivo | 500 KB   | 500 KB                   |
+| Conteúdo máximo por arquivo | 2 MB            | 2 MB                     |
+
+Os limites de trial são redefinidos diariamente. Execute `kodus auth status` para verificar seu uso atual.
+
+## CLI vs Kodus Web
+
+O CLI e o painel web do Kodus compartilham o mesmo mecanismo de revisão, regras e configurações de repositório. Use o CLI quando quiser revisões **antes de o PR existir** — em uma branch local, um diff staged ou dentro de um loop de agente. Use o painel web para revisões de PR, métricas e configuração em nível de equipe.
+
+As alterações feitas via `kodus config repo` e `kodus rules` se aplicam a ambas as superfícies.
+
+## Próximos Passos
+
+<CardGroup cols={2}>
+  <Card title="Primeiros Passos" icon="rocket" href="getting_started">
+    Instale, autentique-se e execute sua primeira revisão.
+  </Card>
+  <Card title="Referência de Comandos" icon="book" href="commands">
+    Todos os comandos, flags e opções.
+  </Card>
+  <Card title="Agentes de IA" icon="robot" href="ai_agents">
+    Configure loops autônomos de revisão e correção com agentes de programação.
+  </Card>
+  <Card title="Self-Hosted" icon="server" href="self_hosted">
+    Conecte o CLI à sua própria instância do Kodus.
+  </Card>
+  <Card title="Solução de Problemas" icon="life-ring" href="troubleshooting">
+    Erros comuns, códigos de saída e como depurar.
+  </Card>
+</CardGroup>

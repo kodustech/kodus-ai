@@ -1,7 +1,29 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { createLogger } from '@kodus/flow';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { with429Retry } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { IPullRequests } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+
+// Sleep between historical-PR fetches. With sequential per-PR calls +
+// per-call 429 retry, a tight loop over 30+ PRs on a fresh onboarding
+// still trips bitbucket's per-endpoint burst limit (16-60 req/min on
+// /pullrequests/N/diffstat + /pullrequests/N/commits). 2000ms keeps
+// the pair of calls per PR at ~0.5 req/sec on each endpoint, well
+// inside even bitbucket's most aggressive burst windows. Total
+// backfill of MAX_BACKFILL_PRS_PER_REPO at this rate stays under
+// ~40s — acceptable for a detached setImmediate background job that
+// nobody is waiting on.
+const PER_PR_DELAY_MS = 2000;
+
+// Cap the per-repository historical backfill. The dashboard view we
+// hydrate from these saved PRs is meaningful with the last 10
+// merges/closes; we don't need 2 months of history at onboarding. This
+// cap is the difference between a backfill that fits inside any
+// provider's burst budget and one that 429s halfway through and leaves
+// the dashboard with a ragged tail. Operators can rerun a fuller
+// backfill later via the explicit API once the burst window has
+// refilled.
+const MAX_BACKFILL_PRS_PER_REPO = 10;
 import {
     IPullRequestsRepository,
     PULL_REQUESTS_REPOSITORY_TOKEN,
@@ -113,7 +135,7 @@ export class BackfillHistoricalPRsUseCase {
             },
         });
 
-        const pullRequests =
+        const allPullRequests =
             await this.codeManagementService.getPullRequestsByRepository({
                 organizationAndTeamData,
                 repository: {
@@ -126,7 +148,7 @@ export class BackfillHistoricalPRsUseCase {
                 },
             });
 
-        if (!pullRequests || pullRequests.length === 0) {
+        if (!allPullRequests || allPullRequests.length === 0) {
             this.logger.log({
                 message: `No PRs found for repository ${repository.name}`,
                 context: BackfillHistoricalPRsUseCase.name,
@@ -138,8 +160,18 @@ export class BackfillHistoricalPRsUseCase {
             return;
         }
 
+        // Cap historical backfill so we don't burn the entire bb/github
+        // burst budget on a single onboarding. The dashboard view we
+        // hydrate from these saved PRs is useful with the most recent
+        // N, not every PR from the last 2 months. Operators can run a
+        // fuller backfill later from the dedicated endpoint.
+        const pullRequests = allPullRequests.slice(
+            0,
+            MAX_BACKFILL_PRS_PER_REPO,
+        );
+
         this.logger.log({
-            message: `Found ${pullRequests.length} PRs for repository ${repository.name}`,
+            message: `Found ${allPullRequests.length} PRs for repository ${repository.name}; backfilling first ${pullRequests.length}`,
             context: BackfillHistoricalPRsUseCase.name,
             metadata: {
                 repositoryId: repository.id,
@@ -173,26 +205,60 @@ export class BackfillHistoricalPRsUseCase {
                 let commits = [];
 
                 try {
-                    const [files, prCommits] = await Promise.all([
-                        this.codeManagementService.getFilesByPullRequestId({
-                            organizationAndTeamData,
-                            repository: {
-                                id: repository.id,
-                                name: repository.name,
-                            },
-                            prNumber: pr.number,
-                        }),
-                        this.codeManagementService.getCommitsForPullRequestForCodeReview(
-                            {
-                                organizationAndTeamData,
-                                repository: {
-                                    id: repository.id,
-                                    name: repository.name,
+                    // Sequential + per-call 429 retry. The old Promise.all
+                    // of two parallel calls per PR is what tipped bitbucket
+                    // Atlassian Edge into x-envoy-ratelimited=true during
+                    // the 2026-05-23 matrix run on kodustech/tiny-url
+                    // (38+ historical PRs) — finishOnboarding 500'd before
+                    // the user-visible response could land. Going serial
+                    // halves the peak in-flight count; with429Retry on
+                    // each call honours Retry-After so a transient burst
+                    // doesn't doom the whole backfill.
+                    // Backfill runs detached — there's no human waiting
+                    // on a tight latency budget — so be generous on
+                    // patience. 6 attempts × max 60s delay = up to ~2min
+                    // of waiting on a single call, which lets us ride
+                    // out even bitbucket's longest observed burst-window
+                    // cooldown (the Atlassian Edge x-envoy-ratelimited
+                    // window we saw on 2026-05-23 cleared in ~14min on
+                    // some endpoints, but per-endpoint short windows
+                    // typically refill in 30-90s).
+                    const retryOpts = {
+                        maxAttempts: 6,
+                        baseDelayMs: 2_000,
+                        maxDelayMs: 60_000,
+                    };
+                    const files = await with429Retry(
+                        () =>
+                            this.codeManagementService.getFilesByPullRequestId(
+                                {
+                                    organizationAndTeamData,
+                                    repository: {
+                                        id: repository.id,
+                                        name: repository.name,
+                                    },
+                                    prNumber: pr.number,
                                 },
-                                prNumber: pr.number,
-                            },
-                        ),
-                    ]);
+                            ),
+                        { ...retryOpts, label: `backfill:getFiles PR#${pr.number}` },
+                    );
+                    const prCommits = await with429Retry(
+                        () =>
+                            this.codeManagementService.getCommitsForPullRequestForCodeReview(
+                                {
+                                    organizationAndTeamData,
+                                    repository: {
+                                        id: repository.id,
+                                        name: repository.name,
+                                    },
+                                    prNumber: pr.number,
+                                },
+                            ),
+                        {
+                            ...retryOpts,
+                            label: `backfill:getCommits PR#${pr.number}`,
+                        },
+                    );
 
                     if (files && files.length > 0) {
                         fileStats = {
@@ -266,6 +332,15 @@ export class BackfillHistoricalPRsUseCase {
                         prNumber: pr.number,
                     },
                 });
+            }
+
+            // Pace the loop so we don't pin the provider's per-endpoint
+            // burst budget. See PER_PR_DELAY_MS comment at the top of
+            // the file for the rationale.
+            if (PER_PR_DELAY_MS > 0) {
+                await new Promise((resolve) =>
+                    setTimeout(resolve, PER_PR_DELAY_MS),
+                );
             }
         }
 

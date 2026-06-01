@@ -1,0 +1,90 @@
+---
+title: "Azure DevOps PAT Token"
+---
+
+## Introduction to the PAT
+
+To enable Kody to perform automatic Code Reviews, you need to generate a Personal Access Token (PAT) in Azure DevOps. This token allows Kody to securely access your repositories and conduct code analysis in a controlled way.
+
+## Generating the PAT (Personal Access Token)
+
+You can access the PAT settings directly using this link: [Azure DevOps PATs](https://dev.azure.com/).
+
+Follow these steps to set up the token correctly:
+
+1. **Access Azure DevOps and go to your security settings:**
+
+   - Go to [Azure DevOps](https://dev.azure.com/) and sign in.
+   - Click on your profile picture in the top-right corner.
+   - Select **"Security"** from the dropdown.
+
+2. **Create a new PAT:**
+
+   - Under the **Personal Access Tokens** section, click on **"New Token"**.
+
+3. **Set up the new token with the following specifications:**
+
+   - **Name:** Choose an easily identifiable name, such as `kody_code_review`.
+   - **Organization:** Select your target organization.
+   - **Expiration:** Choose an appropriate expiration time (e.g., 90 or 180 days).
+   - **Scopes:** Select the following permissions:
+
+     - **Analytics:** Read
+     - **Code:** Read & Write
+     - **Graph:** Read
+     - **Identities and Groups:** Read
+     - **Project and Team:** Read
+     - **User Profile:** Read
+
+4. **Click Create.**
+
+Copy the generated token and store it securely, as you’ll need it to configure Kody.
+
+<Note>
+  Write access to Code is required for Kody to post comments and manage pull request feedback.
+</Note>
+
+## Adding the Token to Kody
+
+After generating the token, paste it into the Kody automation setup screen. The configuration modal will open automatically when you attempt to enable the automation.
+
+## Troubleshooting: Kody isn't reviewing PRs in Azure DevOps
+
+If Kody is connected but **nothing happens on new pull requests** — no reactions, no comments, no PRs appearing in the Kodus dashboard — the cause is almost always one of three issues, in order of how often we see them.
+
+### 1. Check the PAT scopes
+
+Open the PAT in Azure DevOps and confirm every scope listed under [Generating the PAT](#set-up-the-new-token-with-the-following-specifications) is enabled. The one most often missed is **Code: Read & Write** — without **Write**, Kody can read your repositories but cannot post review comments, so the reviews "run silently".
+
+If the PAT was created before a scope was added, Azure DevOps won't retroactively add it. Create a new PAT with the full scope list and update it in the Kody automation setup.
+
+### 2. Check the user's project permissions
+
+A PAT inherits the permissions of the Azure DevOps user who created it. If that user does not have access to the target project, repository, or PR workflow, even a correctly-scoped PAT will be silently rejected by Azure.
+
+Verify the PAT owner can, from the web UI:
+
+- Open the repository and view pull requests.
+- Post a comment on a pull request.
+- See the PR's threads and reactions.
+
+If any of the above fails for the user, Kody won't be able to do it either. Grant the user **Contribute** and **Contribute to pull requests** on the repository before retrying.
+
+### 3. As a last resort: add the user to Project Collection Administrators
+
+Some Azure DevOps organizations enforce stricter org-level policies that block even correctly-permissioned users from posting PR comments via a PAT. If steps 1 and 2 look correct but Kody still doesn't post anything, add the PAT owner to the **Project Collection Administrators** group:
+
+1. Open **Organization Settings** → **Permissions** (left sidebar).
+2. Click the **Project Collection Administrators** group.
+3. Open the **Members** tab → click **Add**.
+4. Add the user that generated the Kodus PAT.
+
+<Warning>
+  **Project Collection Administrators is a high-privilege group** — it grants administrative control over the entire Azure DevOps organization. Use this as a diagnostic to confirm the issue is permission-related, and once confirmed, work with your Azure DevOps admin to grant only the specific permissions the PAT owner needs (usually Contribute + Contribute to pull requests on the relevant projects) rather than leaving them as PCA.
+</Warning>
+
+Once the permission is in place, Kody should start reacting and posting reviews on the next PR event. No restart is needed.
+
+### Still stuck?
+
+If none of the above resolves the issue, the problem is usually on the webhook side rather than the PAT. See [Creating a Webhook](/how_to_deploy/en/platforms/azure_devops/azdevops_webhook) — particularly the troubleshooting section, which covers the `?token=` signed-URL requirement that only Azure Repos has.

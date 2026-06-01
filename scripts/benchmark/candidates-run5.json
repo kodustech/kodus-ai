@@ -1,0 +1,569 @@
+[
+  {
+    "pr_title": "Enhanced Pagination Performance for High-Volume Audit Logs",
+    "pr_url": "https://github.com/Wellington01/sentry-greptile/pull/142",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "User-controlled cursor offsets are passed to Django QuerySet slicing without validation for negative values, which causes a ValueError and a 500 Internal Server Error. An attacker can cause a Denial of Service by providing a crafted cursor string (e.g., '0:-1:1') to any endpoint using these paginators, as the new logic explicitly bypasses non-negative checks for previous-page cursors and advanced pagination. Always use `max(0, offset)` when slicing QuerySets to ensure boundary safety in the unde",
+        "file": "src/sentry/api/paginator.py",
+        "line": 184
+      },
+      {
+        "comment": "Potential NameError identified as organization_context is used but appears undefined in the get method scope. If this variable is missing, the endpoint will crash when attempting to evaluate permissions for optimized pagination, impacting reliability for superusers and high-access members. enable_advanced = request.user.is_superuser or organization.member.has_global_access",
+        "file": "src/sentry/api/endpoints/organization_auditlogs.py",
+        "line": 71
+      },
+      {
+        "comment": "OptimizedCursorPaginator incorrectly handles datetime objects, leading to TypeErrors and database query failures during pagination. The implementation calls math.floor on datetime objects and fails to deserialize integer timestamps back into datetime objects, which results in 500 errors when administrators access the audit logs with optimized pagination enabled. Mirror the datetime serialization and deserialization logic from DateTimePaginator to support high-volume audit log access patterns saf",
+        "file": "src/sentry/api/paginator.py",
+        "line": 843
+      },
+      {
+        "comment": "Django QuerySets do not support negative slicing and will raise an AssertionError or ValueError. The logic attempting to use negative offsets for 'efficient bidirectional pagination' will cause the application to crash rather than optimize performance, as SQL and the ORM layer cannot translate negative offsets into valid queries. start_offset = max(0, offset) if not cursor.is_prev else offset stop = start_offset + limit + extra results = list(queryset[start_offset:stop])",
+        "file": "src/sentry/api/paginator.py",
+        "line": 882
+      }
+    ]
+  },
+  {
+    "pr_title": "Enhanced Pagination Performance for High-Volume Audit Logs",
+    "pr_url": "https://github.com/Wellington01/sentry-greptile/pull/143",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "A typo in build_queryset assigns the new ordering to an undefined attribute order_b instead of order_by. This causes the queryset to retain its original ordering when paging backwards, leading to incorrect results. queryset.query.order_by = tuple(new_order_by)",
+        "file": "src/sentry/api/paginator.py",
+        "line": 176
+      },
+      {
+        "comment": "TypeError will occur in OptimizedCursorPaginator.get_item_key when used with a DateTimeField (as in OrganizationAuditLogEndpoint). math.floor() cannot be called on datetime objects; the value must first be converted to a numeric timestamp like in DateTimePaginator. def get_item_key(self, item, for_prev=False): value = getattr(item, self.key) if isinstance(value, datetime): value = float(value.strftime(\"%s.%f\"))",
+        "file": "src/sentry/api/paginator.py",
+        "line": 840
+      },
+      {
+        "comment": "WHAT: `OptimizedCursorPaginator` explicitly enables negative offset slicing on a Django QuerySet. WHY: Leads to an immediate application crash (500 error) because the Django ORM does not support negative indices in QuerySet slicing, contrary to the code comments. HOW: Remove the special handling for negative offsets and enforce a minimum offset of 0. **Also found in:** - `src/sentry/api/paginator.py:877-882` start_offset = max(0, offset) if not cursor.is_prev else offset # Ensure we never pass n",
+        "file": "src/sentry/api/paginator.py",
+        "line": 883
+      },
+      {
+        "comment": "WHAT: User-controlled `cursor.offset` is passed as a negative index to a Django QuerySet slice without validation. WHY: Allows an attacker to trigger a denial-of-service (500 error) by providing a crafted cursor with a negative offset, as Django QuerySets do not support negative indexing. HOW: Ensure `start_offset` is always non-negative by applying `max(0, offset)` regardless of the `is_prev` state or `enable_advanced_features` setting. start_offset = max(0, offset) stop = start_offset + limit ",
+        "file": "src/sentry/api/paginator.py",
+        "line": 184
+      },
+      {
+        "comment": "WHAT: Redis WRONGTYPE errors will cause catastrophic span processing failures during deployment. WHY: The code switches from Redis Sets (SADD) to Sorted Sets (ZADD) for span buffers but lacks a migration strategy, causing all operations on existing active traces to fail with WRONGTYPE errors. HOW: Use a different key prefix for Sorted Sets or implement a check/deletion of existing Set keys before performing ZADD/ZCARD operations. **Also found in:** - `src/sentry/scripts/spans/add-buffer.lua:47-5",
+        "file": "src/sentry/spans/buffer.py",
+        "line": 199
+      }
+    ]
+  },
+  {
+    "pr_title": "feat(upsampling) - Support upsampled error count with performance optimizations",
+    "pr_url": "https://github.com/Wellington01/sentry-greptile/pull/144",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "`_is_error_focused_query` uses a simple substring check on the raw user-controlled query parameter to determine upsampling eligibility. An attacker can manipulate this by adding `event.type:error` as a comment or within a message search to trigger or bypass upsampling logic, leading to incorrect data representation. # Use parsed filter values from snuba_params to check for event.type:error reliably",
+        "file": "src/sentry/api/helpers/error_upsampling.py",
+        "line": 97
+      },
+      {
+        "comment": "WHAT: `_are_all_projects_error_upsampled` performs an $O(N cdot M)$ check using linear search over the `allowlist` for each project ID. WHY: In cross-project queries involving many projects, this loop becomes a CPU bottleneck if the global allowlist is large, potentially adding tens of milliseconds of latency to every check. HOW: Convert the `allowlist` to a set before iterating over `project_ids` to reduce the check to $O(N + M)$ complexity. allowlist = options.get(\"issues.client_error_sampling",
+        "file": "src/sentry/api/helpers/error_upsampling.py",
+        "line": 56
+      },
+      {
+        "comment": "Non-deterministic cache key generation using `hash()` causes cache misses across processes and makes `invalidate_upsampling_cache` fail to clear the correct entries from background workers. Use a deterministic string representation of the project IDs, such as `','.join(map(str, sorted(project_ids)))`, to ensure consistency across the distributed system. cache_key = f\"error_upsampling_eligible:{organization.id}:{','.join(map(str, sorted(snuba_params.project_ids)))}\"",
+        "file": "src/sentry/api/helpers/error_upsampling.py",
+        "line": 27
+      },
+      {
+        "comment": "Removing `ifNull` from `upsampled_count` will cause queries to throw runtime exceptions (e.g., `toInt64(NULL)`) when encountering historical data without `sample_weight` and produce incorrect results by treating those events as 0 instead of 1. Restore the `ifNull(sample_weight, 1)` guard within the `sum` aggregation to handle non-upsampled events correctly and prevent Snuba query failures. **Also found in:** - `src/sentry/search/events/datasets/discover.py:1048-1048` [Function(\"sum\", [Function(\"",
+        "file": "src/sentry/search/events/datasets/discover.py",
+        "line": 1050
+      }
+    ]
+  },
+  {
+    "pr_title": "GitHub OAuth Security Enhancement",
+    "pr_url": "https://github.com/Wellington01/sentry-greptile/pull/145",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "WHAT: The OAuth `state` parameter is predictable because it is set to `pipeline.signature`. WHY: `pipeline.signature` is a constant hash of the pipeline's view classes, which is identical for every user installing the GitHub integration, rendering the CSRF protection for the OAuth flow ineffective. HOW: Generate a unique, cryptographically secure random token, store it in the pipeline session (`pipeline.bind_state`), and use that value as the `state` parameter. state = pipeline.fetch_state(\"oaut",
+        "file": "src/sentry/integrations/github/integration.py",
+        "line": 402
+      },
+      {
+        "comment": "WHAT: `KeyError` occurs when accessing `integration.metadata[\"sender\"][\"login\"]` if the `sender` key is missing. WHY: Existing `Integration` records created before this PR (or created through flows other than the installation webhook) will not have the `sender` key in their metadata, causing a crash during the setup flow for those users. HOW: Use `integration.metadata.get(\"sender\", {}).get(\"login\")` and handle the case where it returns `None` gracefully. authenticated_user = pipeline.fetch_state",
+        "file": "src/sentry/integrations/github/integration.py",
+        "line": 505
+      },
+      {
+        "comment": "WHAT: `get_user_info` can raise an unhandled exception that results in a 500 error. WHY: The function calls `resp.raise_for_status()`, which throws for invalid tokens or network failures, and there is no `try/except` block in the caller to handle these common failure modes. HOW: Wrap the call to `get_user_info` in a `try/except` block and return the `error` response if an exception is caught. authenticated_user_info = get_user_info(payload[\"access_token\"]) except Exception: return error(request,",
+        "file": "src/sentry/integrations/github/integration.py",
+        "line": 434
+      },
+      {
+        "comment": "WHAT: `Integration.objects.get(external_id=installation_id)` lacks a provider filter. WHY: If multiple integrations from different providers share the same numeric `external_id`, this call will raise `MultipleObjectsReturned` or potentially fetch the wrong integration type. HOW: Add `provider=self.key` (or `provider=\"github\"`) to the query to ensure only GitHub integrations are targeted. integration=Integration.objects.get(provider=self.key, external_id=installation_id)",
+        "file": "src/sentry/integrations/github/integration.py",
+        "line": 479
+      },
+      {
+        "comment": "WHAT: The `redirect_uri` parameter is appended to the GitHub authorization URL without being URL-encoded. WHY: Slashes and other special characters in the URI can break the query string parsing on GitHub's end, potentially leading to redirection failures. HOW: Use `urllib.parse.quote` or a similar function to encode the `redirect_uri` before adding it to the URL string. from urllib.parse import urlencode params = {\"client_id\": github_client_id, \"state\": state, \"redirect_uri\": redirect_uri} retur",
+        "file": "src/sentry/integrations/github/integration.py",
+        "line": 409
+      },
+      {
+        "comment": "WHAT: Integration record is fetched twice using unindexed queries by `external_id` alone. WHY: Triggers redundant database round-trips and potentially forces a full table scan on `sentry_integration` because the leading column of the `(provider, external_id)` index is missing. HOW: Fetch the integration once using both `provider` and `external_id`, store it in a variable, and reuse it for both the `OrganizationIntegration` existence check and the status/metadata validation. integration = Integra",
+        "file": "src/sentry/integrations/github/integration.py",
+        "line": 475
+      }
+    ]
+  },
+  {
+    "pr_title": "Anonymous: Add configurable device limit",
+    "pr_url": "https://github.com/Wellington01/grafana-greptile/pull/129",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The `updateDevice` function uses '?' placeholders which are incompatible with PostgreSQL. Use the database-specific placeholder syntax ($1, $2, etc.) by implementing a switch statement on the database type, similar to the one used in `CreateOrUpdateDevice`. var query string switch s.sqlStore.GetDBType() { case migrator.Postgres: query = `UPDATE anon_device SET client_ip = $1, user_agent = $2, updated_at = $3 WHERE device_id = $4 AND updated_at BETWEEN $5 AND $6`",
+        "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "line": 78
+      },
+      {
+        "comment": "Returning the error from `tagDeviceUI` without clearing the local cache allows bypassing the device limit. Since `tagDeviceUI` populates the cache before calling the database, a failed request (e.g., limit reached) will be cached as a success for subsequent requests from the same device ID. // Ensure tagDeviceUI only populates the local cache after the database call in CreateOrUpdateDevice succeeds.",
+        "file": "pkg/services/anonymous/anonimpl/impl.go",
+        "line": 148
+      },
+      {
+        "comment": "WHAT: The `localCache` used to throttle device tagging has no defined size limit. WHY: An attacker can cause the server to run out of memory (OOM) by sending a large number of requests with unique `X-Grafana-Device-Id` headers, as each unique ID creates a new entry in the cache. HOW: Use a cache implementation with a fixed maximum size (e.g., an LRU cache) to bound memory usage. // Ensure the localcache implementation used has a MaxSize or equivalent limit. localCache: localcache.New(29*time.Min",
+        "file": "pkg/services/anonymous/anonimpl/impl.go",
+        "line": 42
+      },
+      {
+        "comment": "WHAT: The device limit enforcement can be weaponized by an attacker to block all new anonymous users. WHY: By filling the `anon_device` table with unique attacker-controlled IDs up to the `device_limit`, the system will reject all subsequent authentication attempts from legitimate new users whose IDs are not already in the database. HOW: Consider evicting the oldest or least recently used devices when the limit is reached instead of failing the authentication of new sessions. // Instead of retur",
+        "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "line": 117
+      },
+      {
+        "comment": "WHAT: `CountDevices` is called on every `CreateOrUpdateDevice` when a limit is configured. WHY: Triggers a `SELECT COUNT(*)` index scan for every new device or cache refresh, which can cause significant database load on high-traffic instances. HOW: Cache the device count in memory for a short duration (e.g., 1-5 minutes) to avoid redundant and expensive count queries. // The device count should be cached at the service or store layer to avoid executing a COUNT(*) query on every uncached request.",
+        "file": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "line": 118
+      },
+      {
+        "comment": "WHAT: `TagDevice` is called synchronously in the authentication hot path. WHY: Every anonymous request (uncached) now blocks on a database operation, increasing latency and reducing throughput compared to the previous asynchronous implementation. HOW: Only call `TagDevice` synchronously if `AnonymousDeviceLimit > 0` is configured; otherwise, keep the operation in a background goroutine. if a.cfg.AnonymousDeviceLimit > 0 { if err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDe",
+        "file": "pkg/services/anonymous/anonimpl/client.go",
+        "line": 50
+      }
+    ]
+  },
+  {
+    "pr_title": "AuthZService: improve authz caching",
+    "pr_url": "https://github.com/Wellington01/grafana-greptile/pull/130",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "WHAT: User-controlled input in cache keys is joined without escaping, leading to key collisions. WHY: Allows an attacker or a malicious user to cause authorization bypasses (privilege escalation) or Denial of Service by poisoning the cache for other users or resources. HOW: Use a unique delimiter that is not allowed in UIDs or actions (e.g., a null byte '\\x00'), or use a structured format like JSON/Protobuf and hash the result to generate a collision-resistant key. func userPermDenialCacheKey(na",
+        "file": "pkg/services/authz/rbac/cache.go",
+        "line": 32
+      },
+      {
+        "comment": "WHAT: Service.Check unnecessarily falls back to getIdentityPermissions (database hit) when the permission cache returns a result that does not grant access. WHY: Triggers O(N) database queries for N unique denied resource checks even when the user's overall permissions for that action are already cached, defeating the purpose of the action-level cache and forcing the introduction of the redundant resource-level permDenialCache. HOW: Restructure Service.Check to trust the cached permissions from ",
+        "file": "pkg/services/authz/rbac/service.go",
+        "line": 123
+      }
+    ]
+  },
+  {
+    "pr_title": "Plugins: Chore: Renamed instrumentation middleware to metrics middleware",
+    "pr_url": "https://github.com/Wellington01/grafana-greptile/pull/131",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "MetricsMiddleware identifies as a shared singleton that mutates its 'next' field on every request, creating a critical race condition. Since the middleware chain is rebuilt per-request in the decorator, concurrent calls will overwrite 'imw.next', potentially routing requests to the wrong plugin client. The factory closure must return a new MetricsMiddleware instance that captures the 'next' client locally instead of modifying a shared struct. func NewMetricsMiddleware(promRegisterer prometheus.R",
+        "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+        "line": 82
+      },
+      {
+        "comment": "WHAT: MetricsMiddleware records the same request duration into two redundant histograms (milliseconds and seconds). WHY: This doubles the CPU cost of metric observation and doubles the storage footprint in Prometheus for identical data on every plugin request. HOW: Remove either `plugin_request_duration_milliseconds` or `plugin_request_duration_seconds` to consolidate on a single unit (typically seconds for Prometheus). m.pluginRequestDurationSeconds.WithLabelValues(target, pluginCtx.PluginID, e",
+        "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+        "line": 141
+      },
+      {
+        "comment": "WHAT: `MetricsMiddleware` performs redundant plugin registry lookups by calling `pluginTarget` multiple times per request. WHY: Each call triggers a registry lookup which adds unnecessary overhead to the hot path of every plugin request (e.g., QueryData calls it twice). HOW: Fetch the `target` value once at the beginning of the middleware methods and pass it to the instrumentation helpers. target, err := m.pluginTarget(ctx, req.PluginContext.PluginID) // Pass target to instrumentation methods...",
+        "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+        "line": 147
+      },
+      {
+        "comment": "WHAT: `MetricsMiddleware` calls `WithLabelValues` multiple times with identical label sets (target, pluginId, endpoint, status). WHY: Each call triggers expensive label hashing and map lookups within the Prometheus client library on the request hot path. HOW: Cache the metric handles using `GetMetricWithLabelValues` once per request or use a partially applied observer. labels := []string{target, pluginCtx.PluginID, endpoint, status} m.pluginRequestCounter.WithLabelValues(labels...).Inc() m.plugi",
+        "file": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware.go",
+        "line": 141
+      }
+    ]
+  },
+  {
+    "pr_title": "Advanced Query Processing Architecture",
+    "pr_url": "https://github.com/Wellington01/grafana-greptile/pull/132",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "WHAT: Redundant call to `applyTemplateVariables` inside the query splitting loop. WHY: `datasource.runQuery` (via `DataSourceWithBackend.query`) re-interpolates every target for every split chunk, resulting in O(N) redundant string parsing and ad-hoc filter injection operations that can block the UI thread for wide time ranges. HOW: Reuse the pre-interpolated `queries` by bypassing the automatic interpolation in `super.query` for sub-requests, or implement a caching/flagging mechanism to skip `a",
+        "file": "public/app/plugins/datasource/loki/querySplitting.ts",
+        "line": 299
+      }
+    ]
+  },
+  {
+    "pr_title": "FEATURE: automatically downsize large images",
+    "pr_url": "https://github.com/Wellington01/discourse-greptile/pull/129",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "The `tempfile.size` property is stale after the file is replaced on disk by downsizing, causing the loop to execute 5 times redundantly and the upload to be recorded with incorrect size metadata. while attempt > 0 && File.size(tempfile.path) > SiteSetting.max_image_size_kb.kilobytes OptimizedImage.downsize(tempfile.path, tempfile.path, \"80%\", allow_animation: SiteSetting.allow_animated_thumbnails) upload = Upload.create_for(current_user.id, File.new(tempfile.path), filename, File.size(tempfile.p",
+        "file": "app/controllers/uploads_controller.rb",
+        "line": 72
+      },
+      {
+        "comment": "Hardcoding `maxSizeKB` to 10MB bypasses site settings, potentially blocking legitimate large uploads for sites that have configured higher limits. var maxSizeKB = Math.max(Discourse.SiteSettings.max_image_size_kb, 10 * 1024); if (fileSizeKB > maxSizeKB) {",
+        "file": "app/assets/javascripts/discourse/lib/utilities.js",
+        "line": 183
+      },
+      {
+        "comment": "WHAT: Command injection vulnerability in `convert_with` due to unsafe shell execution using backticks and `instructions.join(\" \")`. WHY: Allows an attacker to execute arbitrary shell commands if any part of the `instructions` array (such as the new `dimensions` parameter) contains shell metacharacters, and causes failures for paths with spaces. HOW: Use `Open3.capture2e` or `system` with an array of arguments to execute the command without a shell. Open3.capture2e(*instructions)",
+        "file": "app/models/optimized_image.rb",
+        "line": 161
+      },
+      {
+        "comment": "WHAT: SSRF vulnerability and security configuration bypass via hardcoded 10MB limit in `FileHelper.download`. WHY: Allows an attacker to trigger internal network requests and download files up to 10MB, bypassing the administrator's `max_image_size_kb` setting and increasing the impact of data exfiltration. HOW: Validate the URL host against an allowlist and use `SiteSetting.max_image_size_kb` for the download limit. tempfile = FileHelper.download(url, SiteSetting.max_image_size_kb.kilobytes, \"di",
+        "file": "app/controllers/uploads_controller.rb",
+        "line": 55
+      },
+      {
+        "comment": "WHAT: Redundant ImageOptim calls inside an iterative downsizing loop. WHY: Triggers up to 5 full optimization cycles (running multiple heavy tools like jpegoptim/optipng) per upload, causing extreme CPU load and unnecessary latency. HOW: Call the downsizing operation with an option to skip optimization, and perform a single optimization pass only after the loop completes. while attempt > 0 && tempfile.size > SiteSetting.max_image_size_kb.kilobytes # Assume downsize is updated to support a skip_o",
+        "file": "app/controllers/uploads_controller.rb",
+        "line": 70
+      },
+      {
+        "comment": "WHAT: Synchronous image processing blocks the web worker thread. WHY: Performing up to 5 ImageMagick shell-outs and ImageOptim passes on 10MB images inside a controller action blocks the Puma/Unicorn worker for 10+ seconds, leading to rapid pool exhaustion and denial of service. HOW: Ensure all image downsizing and optimization logic is executed in a background job or within the deferred block already present in the controller.",
+        "file": "app/controllers/uploads_controller.rb",
+        "line": 70
+      },
+      {
+        "comment": "WHAT: Redundant initialization of ImageOptim on every call. WHY: Initializing ImageOptim via .new probes the system for binaries on every call, adding significant overhead to every resize and thumbnail generation operation. HOW: Use a memoized instance or a class-level singleton for ImageOptim. (@image_optim ||= ImageOptim.new).optimize_image!(to)",
+        "file": "app/models/optimized_image.rb",
+        "line": 162
+      },
+      {
+        "comment": "Duplicate definition of `self.downsize` causes the 4-argument version to shadow the 5-argument version, which will cause an `ArgumentError` in existing callers like `resize_emoji.rb`. def self.downsize(from, to, width_or_dimensions, height_or_opts = nil, opts = {}) if width_or_dimensions.is_a?(String) && width_or_dimensions.include?('%') dimensions = width_or_dimensions options = height_or_opts || {}",
+        "file": "app/models/optimized_image.rb",
+        "line": 151
+      }
+    ]
+  },
+  {
+    "pr_title": "FEATURE: per-topic unsubscribe option in emails",
+    "pr_url": "https://github.com/Wellington01/discourse-greptile/pull/130",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "tu will be nil if the user has not previously interacted with the topic, causing a NoMethodError at runtime when attempting to access tu.notification_level. tu = TopicUser.get(params[:topic_id], current_user) level = tu.try(:notification_level) || TopicUser.notification_levels[:regular] if level > TopicUser.notification_levels[:regular]",
+        "file": "app/controllers/topics_controller.rb",
+        "line": 107
+      },
+      {
+        "comment": "Topic#unsubscribe_url returns a relative URL which, when used in email notifications, results in broken links for recipients. def unsubscribe_url \"#{Discourse.base_url}#{url}/unsubscribe\"",
+        "file": "app/models/topic.rb",
+        "line": 721
+      },
+      {
+        "comment": "Updating notification_level via direct assignment and save! bypasses MessageBus publication and metadata updates (like notifications_changed_at) handled by TopicUser.change. new_level = if level > TopicUser.notification_levels[:regular] TopicUser.notification_levels[:regular] TopicUser.notification_levels[:muted] TopicUser.change(current_user.id, params[:topic_id], notification_level: new_level)",
+        "file": "app/controllers/topics_controller.rb",
+        "line": 113
+      },
+      {
+        "comment": "Triple curly braces render unescaped user-controlled topic titles from stopNotificiationsText. Allows execution of arbitrary JavaScript in the victim's session if a topic title contains malicious scripts. 3 +    {{i18n \"topic.unsubscribe.stop_notifications\" title=model.fancyTitle}}",
+        "file": "app/assets/javascripts/discourse/templates/topic/unsubscribe.hbs",
+        "line": 3
+      },
+      {
+        "comment": "The unsubscribe action modifies database state via a GET request and explicitly skips CSRF protection. Allows an attacker to silently change a user's notification settings for a topic through a crafted link or cross-site request. # Require a POST/PUT request or validate a secure unique token in the GET URL",
+        "file": "app/controllers/topics_controller.rb",
+        "line": 98
+      },
+      {
+        "comment": "WHAT: The unsubscribe action instantiates a full TopicView and calls perform_show_response. WHY: This triggers heavy database queries for a chunk of posts and associated metadata and serializes a large payload (O(N) with post count) for an operation that only requires basic topic details. HOW: Replace TopicView.new with a lightweight Topic lookup and return a minimal response containing only the necessary fields for the confirmation page.",
+        "file": "app/controllers/topics_controller.rb",
+        "line": 98
+      },
+      {
+        "comment": "WHAT: The model hook calls PostStream.loadTopicView which fetches the full topic JSON. WHY: This wastes bandwidth and server resources by downloading posts and metadata that are never rendered on the unsubscribe page. HOW: Use a specialized lightweight endpoint or rely on preloaded topic data if available to avoid a redundant full-topic AJAX request.",
+        "file": "app/assets/javascripts/discourse/routes/topic-unsubscribe.js.es6",
+        "line": 10
+      },
+      {
+        "comment": "WHAT: PrettyText.cook is called for the unsubscribe link for every individual email generated. WHY: During bulk notification delivery (e.g., thousands of watchers), this repeatedly invokes the expensive Markdown engine for a link that is identical for all recipients of the same topic. HOW: Pre-cook the link once per topic notification batch and pass the resulting HTML into the builder.",
+        "file": "lib/email/message_builder.rb",
+        "line": 68
+      }
+    ]
+  },
+  {
+    "pr_title": "Add comprehensive email validation for blocked users",
+    "pr_url": "https://github.com/Wellington01/discourse-greptile/pull/131",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "WHAT: The increment of match_count is non-atomic, creating a race condition. WHY: Concurrent registration attempts with the same blocked email can lead to lost updates in the match count statistics. HOW: Use atomic updates such as record.class.where(id: record.id).update_all([\"match_count = match_count + 1, last_match_at = ?\", Time.zone.now]). record.class.where(id: record.id).update_all([\"match_count = match_count + 1, last_match_at = ?\", Time.zone.now])",
+        "file": "app/models/blocked_email.rb",
+        "line": 16
+      },
+      {
+        "comment": "WHAT: The rejectedEmails collection accumulates emails without checking for existing entries. WHY: Repeated failed attempts with the same email result in duplicate entries in the array, leading to unnecessary memory consumption over the lifecycle of the controller. HOW: Use addObject instead of pushObject to ensure uniqueness if using Ember's Enumerable API, or verify the email is not already present before pushing. createAccountController.get('rejectedEmails').addObject(result.values.email);",
+        "file": "app/assets/javascripts/discourse/controllers/create_account_controller.js",
+        "line": 275
+      },
+      {
+        "comment": "WHAT: The `BlockedEmail.should_block?` method performs a case-sensitive search in the database. WHY: An attacker can bypass the blocked email list by using a mixed-case version of a blocked email address (e.g., `Spammer@example.com` instead of `spammer@example.com`), as PostgreSQL and SQLite are case-sensitive by default. HOW: Normalize the input email to lowercase before querying and ensure the email is stored lowercase in the database, or use a case-insensitive query like `where('LOWER(email) ",
+        "file": "app/models/blocked_email.rb",
+        "line": 12
+      },
+      {
+        "comment": "WHAT: EmailValidator re-compiles restriction regular expressions on every validation call via Regexp.new. WHY: Regex compilation is an expensive operation that adds unnecessary overhead to the registration hot path, especially as the list of domains grows. HOW: Cache the compiled Regexp object or pre-compute it only when SiteSetting.email_domains_whitelist/blacklist changes. # Ideally cache this in a class variable or memoize based on setting value @regexp_cache ||= {} regexp = @regexp_cache[set",
+        "file": "lib/validators/email_validator.rb",
+        "line": 22
+      },
+      {
+        "comment": "WHAT: The regex in email_in_restriction_setting? lacks a tail anchor (\\z), allowing partial domain matches like 'gmail.com.co' for a 'gmail.com' restriction. WHY: This causes incorrect validation results by blocking or whitelisting domains that merely share a prefix with restricted ones, potentially allowing whitelist bypasses or causing false positives in blacklists. HOW: Append \\z to the regex pattern: regexp = Regexp.new(\"(@#{domains})\\\\z\", true). **Also found in:** - `lib/validators/email_va",
+        "file": "lib/validators/email_validator.rb",
+        "line": 21
+      },
+      {
+        "comment": "WHAT: A side-effecting database write (record.save) occurs inside the validator call chain via BlockedEmail.should_block?. WHY: This violates the idempotency of validations; match_count and last_match_at will be updated multiple times if valid? is called repeatedly (e.g., during complex object lifecycles, UI-triggered AJAX validations, or model inspections), leading to corrupted statistics. HOW: Move the statistics update out of the validation logic into a dedicated service layer or the controll",
+        "file": "app/models/blocked_email.rb",
+        "line": 17
+      }
+    ]
+  },
+  {
+    "pr_title": "Enhance embed URL handling and validation system",
+    "pr_url": "https://github.com/Wellington01/discourse-greptile/pull/132",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "WHAT: syntax error in the template closing tag at line 6. WHY: causes the embed page to crash with a SyntaxError when attempting to render. HOW: remove the trailing 'if' from the end tag.",
+        "file": "app/views/embed/best.html.erb",
+        "line": 6
+      },
+      {
+        "comment": "WHAT: potential NoMethodError when accessing i.content on a feed item. WHY: if a feed item is missing content (e.g., RSS without a description), calling .scrub on a nil value will crash the job. HOW: add a presence check for i.content before processing. content = i.content ? CGI.unescapeHTML(i.content.scrub) : ''",
+        "file": "app/jobs/scheduled/poll_feed.rb",
+        "line": 35
+      },
+      {
+        "comment": "WHAT: content SHA1 is updated even if the post revision fails or is skipped. WHY: leads to an inconsistent state where the system believes the content is synced to the latest version despite the post still containing old data, preventing future sync attempts. HOW: only update content_sha1 if revise! returns true. if revisor.revise!(user, absolutize_urls(url, contents), skip_validations: true, bypass_rate_limiter: true) embed.update_column(:content_sha1, content_sha1)",
+        "file": "app/models/topic_embed.rb",
+        "line": 37
+      },
+      {
+        "comment": "WHAT: missing 'open-uri' requirement for the import_remote method. WHY: causes a failure when calling open(url) for HTTP URIs in processes where PollFeed hasn't been loaded yet. HOW: add require 'open-uri' at the top of the file or within the method. def self.import_remote(user, url, opts=nil) require 'ruby-readability' require 'open-uri' opts = opts || {}",
+        "file": "app/models/topic_embed.rb",
+        "line": 48
+      },
+      {
+        "comment": "WHAT: protocol-relative URLs (starting with //) are incorrectly transformed in absolutize_urls. WHY: stripping all leading slashes and prepending the source host turns //example.com/path into http://source.com/example.com/path, breaking external links and assets. HOW: ensure the transformation only applies to paths starting with a single slash. if href.present? && href.start_with?('/') && !href.start_with?('//') a['href'] = \"#{prefix}#{href}\"",
+        "file": "app/models/topic_embed.rb",
+        "line": 66
+      },
+      {
+        "comment": "WHAT: User-controlled content is returned directly without sanitization when cook_method is set to :raw_html. WHY: This allows an attacker to perform stored XSS by providing malicious HTML in an RSS feed or via a remote URL that is then rendered using 'raw' in the view. HOW: Use a whitelist-based sanitizer (like the Sanitize gem) on the content before returning it, even when using the raw_html method. return Sanitize.fragment(raw, Discourse::HtmlSanitizer.whitelist) if cook_method == Post.cook_m",
+        "file": "app/models/post.rb",
+        "line": 133
+      },
+      {
+        "comment": "WHAT: Untrusted URLs are passed to Kernel#open, which is vulnerable to SSRF and potential command injection. WHY: An attacker can provide a URL that points to internal resources or, in older Ruby versions, executes arbitrary commands if the string starts with a pipe character. HOW: Use a dedicated HTTP client library (like Net::HTTP or Faraday) that allows for strict host validation and protocol restriction. doc = Readability::Document.new(Net::HTTP.get(URI(url)),",
+        "file": "app/models/topic_embed.rb",
+        "line": 48
+      },
+      {
+        "comment": "WHAT: The postMessage origin check uses indexOf instead of strict equality. WHY: An attacker can bypass the origin check using a domain that is a substring of the discourseUrl (e.g., 'https://dis' matching 'https://discourse.com'). HOW: Use strict equality (===) to compare e.origin with the expected Discourse origin. if (e.origin !== new URL(discourseUrl).origin) { return; }",
+        "file": "app/assets/javascripts/embed.js",
+        "line": 17
+      },
+      {
+        "comment": "WHAT: External RSS feed content is imported and rendered as raw HTML without any sanitization. WHY: If the polled feed is compromised or attacker-controlled, it can inject malicious scripts directly into the Discourse topic and the embedding page. HOW: Apply HTML sanitization to the RSS content before calling TopicEmbed.import or within the import process. content = Sanitize.fragment(CGI.unescapeHTML(i.content.scrub), Discourse::HtmlSanitizer.whitelist) TopicEmbed.import(user, url, i.title, cont",
+        "file": "app/jobs/scheduled/poll_feed.rb",
+        "line": 36
+      },
+      {
+        "comment": "WHAT: TopicRetriever executes Jobs::PollFeed synchronously for every missing topic. WHY: Triggers a full RSS feed download and processing on every individual retrieval request, causing redundant O(N^2) work and excessive network load when multiple new topics from the same feed are accessed simultaneously. HOW: Enqueue PollFeed asynchronously via Jobs.enqueue and implement a global throttle to ensure the feed is not polled more than once per minute across all requests. if SiteSetting.feed_polling",
+        "file": "lib/topic_retriever.rb",
+        "line": 43
+      },
+      {
+        "comment": "WHAT: PollFeed performs an N+1 database query by calling TopicEmbed.import in a loop. WHY: Executes a separate database query for every item in the RSS feed, which increases latency and database load linearly with feed size. HOW: Collect all URLs from the RSS items first and pre-fetch existing TopicEmbed records in a single bulk query (e.g., TopicEmbed.where(embed_url: urls).to_a) before entering the processing loop.",
+        "file": "app/jobs/scheduled/poll_feed.rb",
+        "line": 37
+      },
+      {
+        "comment": "WHAT: Network requests in TopicEmbed.import_remote and PollFeed use open(url).read without timeouts. WHY: Sidekiq worker threads can be blocked indefinitely if the remote server is slow or malicious (tarpit), leading to worker exhaustion and system-wide background job delays. HOW: Use a network client with explicit connection and read timeouts (e.g., Net::HTTP with open_timeout and read_timeout).",
+        "file": "app/models/topic_embed.rb",
+        "line": 48
+      }
+    ]
+  },
+  {
+    "pr_title": "Async import of the appStore packages",
+    "pr_url": "https://github.com/Wellington01/cal.com-greptile/pull/143",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "WHAT: `appStore` object triggers all dynamic imports eagerly on module load. WHY: Every member of the object is assigned the result of `import()`, causing 30+ concurrent network requests regardless of which app is actually needed, which defeats the purpose of lazy loading and increases network overhead. HOW: Wrap the imports in functions (e.g., `applecalendar: () => import('./applecalendar')`) or use getters to make them lazy. const appStore = { applecalendar: () => import(\"./applecalendar\"), ca",
+        "file": "packages/app-store/index.ts",
+        "line": 1
+      },
+      {
+        "comment": "WHAT: `getVideoAdapters` awaits dynamic imports sequentially in a `for...of` loop. WHY: Triggers N sequential waits (one per credential) during the critical availability check path (`getBusyVideoTimes`), significantly increasing latency for users with multiple video integrations. HOW: Use `Promise.all` with `.map()` to parallelize the app imports. const adapters = await Promise.all(withCredentials.map(async (cred) => { const appName = cred.type.split(\"_\").join(\"\"); const app = await appStore[app",
+        "file": "packages/core/videoClient.ts",
+        "line": 33
+      },
+      {
+        "comment": "WHAT: Sequential await of `getCalendar` inside a loop for booking deletions. WHY: Introduced a regression from parallel to sequential execution, where each calendar event deletion must wait for the previous one's import and initialization to finish. HOW: Collect all promises and await them using `Promise.all` after the loop or use `.map()`. const calendarDeletes = calendarCredentials.map(async (credential) => { const calendar = await getCalendar(credential); return calendar?.deleteEvent(uid, evt",
+        "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+        "line": 483
+      }
+    ]
+  },
+  {
+    "pr_title": "feat: 2fa backup codes",
+    "pr_url": "https://github.com/Wellington01/cal.com-greptile/pull/144",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "fix: handle collective multiple host on destinationCalendar",
+    "pr_url": "https://github.com/Wellington01/cal.com-greptile/pull/145",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "A potential null/undefined dereference occurs when accessing `mainHostDestinationCalendar.integration` because the array destructuring can result in `undefined` if `evt.destinationCalendar` is null or empty. This will cause the event creation process to crash when no destination calendar is configured or available. const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []; if (evt.location === MeetLocationType && mainHostDestinationCalendar?.integration !== \"google_calendar\") {",
+        "file": "packages/core/EventManager.ts",
+        "line": 120
+      },
+      {
+        "comment": "The `createEvent` method incorrectly uses `find` to pick the first calendar matching the `credentialId` from the entire `calEventRaw.destinationCalendar` array, which fails if a user has multiple calendars on the same account. Furthermore, `LarkCalendarService` and `Office365CalendarService` always pick the first entry (`[0]`), causing redundant events in the first calendar and none in the others during the `EventManager` loop. // The Calendar interface and createEvent implementation should be u",
+        "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+        "line": 155
+      },
+      {
+        "comment": "The recurring event deletion logic only iterates over the organizer's credentials (`bookingToDelete.user.credentials`), failing to delete the event series from other hosts' calendars in a collective booking. Additionally, the inner loop only targets the first calendar reference for each booking in the series, leaving events in secondary calendars orphaned.",
+        "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+        "line": 451
+      },
+      {
+        "comment": "The logic for assigning the organization slug was inverted, causing the slug to be set immediately when `IS_TEAM_BILLING_ENABLED` is true, which likely bypasses payment-gated slug assignment. This reverses the previous behavior where the slug was only set if team billing was disabled. 151:              ...(!IS_TEAM_BILLING_ENABLED ? { slug } : {}),",
+        "file": "packages/trpc/server/routers/viewer/organizations/create.handler.ts",
+        "line": 154
+      },
+      {
+        "comment": "WHAT: Flawed initialization of destinationCalendar to null instead of an empty array. WHY: The subsequent optional push operation will fail to add team members' calendars if the organizer does not have a destination calendar set, breaking collective scheduling. HOW: Initialize the destinationCalendar property to an empty array if no default is found.",
+        "file": "packages/features/bookings/lib/handleNewBooking.ts",
+        "line": 1067
+      },
+      {
+        "comment": "WHAT: Sequential external API calls to delete recurring events are nested inside a loop over host references, leading to redundant operations. WHY: Every host reference triggers a loop over all organizer credentials and all future occurrences, resulting in O(N_hosts * N_credentials * N_bookings) sequential API calls; since the credential is not scoped, the same occurrences are repeatedly deleted for the same credentials. HOW: Filter the updatedBookings references by the current host's credential",
+        "file": "packages/features/bookings/lib/handleCancelBooking.ts",
+        "line": 444
+      },
+      {
+        "comment": "The fallback logic in `updateEvent` and `deleteEvent` uses a falsy `externalCalendarId` in the `find` predicate, which will never correctly resolve a specific calendar from the `destinationCalendar` array. It should instead fall back to the first available calendar in the array if no specific ID is provided. **Also found in:** - `packages/app-store/googlecalendar/lib/CalendarService.ts:256-256` 256:         : event.destinationCalendar?.[0]?.externalId;",
+        "file": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+        "line": 256
+      },
+      {
+        "comment": "WHAT: credential fetching inside loops in createAllCalendarEvents and updateCalendarEvents triggers N+1 database queries. WHY: For collective bookings with multiple hosts, this performs sequential prisma.credential.findUnique calls for every host not in the current user's credentials, increasing latency by O(N) relative to host count. HOW: Collect all missing credentialIds before the loops and perform a single prisma.credential.findMany query to batch-fetch them. **Also found in:** - `packages/f",
+        "file": "packages/core/EventManager.ts",
+        "line": 355
+      }
+    ]
+  },
+  {
+    "pr_title": "feat: convert InsightsBookingService to use Prisma.sql raw queries",
+    "pr_url": "https://github.com/Wellington01/cal.com-greptile/pull/146",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "WHAT: `userIdsFromOrg` is an array of objects that is passed to `new Set` and the SQL query without mapping to primitive IDs first. WHY: This fails to de-duplicate users across teams (increasing query payload and DB work) and passes an array of objects to the database, which will cause a type mismatch or inefficient serialization when compared against the numeric `userId` column. HOW: Map the result to an array of user IDs using `userIdsFromOrg.map(u => u.userId)` before de-duplication. if (user",
+        "file": "packages/lib/server/service/insightsBooking.ts",
+        "line": 169
+      }
+    ]
+  },
+  {
+    "pr_title": "Fixing Re-authentication with passkeys",
+    "pr_url": "https://github.com/Wellington01/keycloak-greptile/pull/129",
+    "tool": "kodus",
+    "issues": []
+  },
+  {
+    "pr_title": "Add caching support for IdentityProviderStorageProvider.getForLogin operations",
+    "pr_url": "https://github.com/Wellington01/keycloak-greptile/pull/130",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Calling `idp.getConfig().get(...)` will throw a `NullPointerException` if the IDP configuration map is null. Although most providers initialize this map, the model contract does not guarantee it and it should be guarded. Boolean.parseBoolean(idp.getConfig() != null ? idp.getConfig().get(OrganizationModel.BROKER_PUBLIC) : null)",
+        "file": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+        "line": 254
+      },
+      {
+        "comment": "WHAT: Inconsistent enforcement of identity provider enabled status across different layers of the application. WHY: By only 're-checking' `isEnabled()` in the UI bean, the system remains vulnerable to authentication attempts against disabled organizations' IDPs through other callers of `getForLogin` or direct alias-based access that rely on the same potentially stale cache. HOW: Enforce the effective enabled status (including organization-level status) within the `IdentityProviderStorageProvider",
+        "file": "services/src/main/java/org/keycloak/organization/forms/login/freemarker/model/OrganizationAwareIdentityProviderBean.java",
+        "line": 80
+      },
+      {
+        "comment": "WHAT: `idp.getConfig()` access inside `getLoginPredicate` triggers N+1 database queries when filtering identity providers. WHY: Each `IdentityProviderModel` in the stream will execute a separate query to load its configuration map from the database, leading to O(N) queries during login page rendering. HOW: Ensure the storage provider implementation join-fetches the configuration or move the 'public' flag to a top-level field in the identity provider entity to avoid map lookups during filtering.",
+        "file": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+        "line": 254
+      },
+      {
+        "comment": "WHAT: Redundant `idp.isEnabled()` check on every item in the identity provider stream. WHY: The `getForLogin` method is already defined to return only providers suitable for login; re-checking this in the caller adds redundant method calls and logic to the stream processing in a hot path. HOW: Remove the explicit `idp.isEnabled()` check if the underlying `getForLogin` implementation already guarantees that returned providers are filtered by the login predicate. .filter(idp -> !Objects.equals(exi",
+        "file": "services/src/main/java/org/keycloak/organization/forms/login/freemarker/model/OrganizationAwareIdentityProviderBean.java",
+        "line": 80
+      },
+      {
+        "comment": "The global filter in `getLoginPredicate` incorrectly excludes private organization-linked IDPs even when searching specifically for that organization's IDPs. This causes `getForLogin(ALL, organizationId)` to omit private IDPs that should be available in the organization-specific login flow. The `BROKER_PUBLIC` check should only be applied when no `organizationId` is provided in the search context, or the predicate should be updated to accept the target organization ID. // Move this logic to a co",
+        "file": "server-spi/src/main/java/org/keycloak/models/IdentityProviderStorageProvider.java",
+        "line": 254
+      }
+    ]
+  },
+  {
+    "pr_title": "Add AuthzClientCryptoProvider for authorization client cryptographic operations",
+    "pr_url": "https://github.com/Wellington01/keycloak-greptile/pull/131",
+    "tool": "kodus",
+    "issues": [
+      {
+        "comment": "Redundant allocations and dead code identified in `concatenatedRSToASN1DER`. The function creates five `ASN1Encoder` instances and two dead objects (lines 113-114) per signature conversion, increasing GC pressure in a hot path. Refactor to remove unused allocations and simplify the sequence construction. return ASN1Encoder.create() ASN1Encoder.create().write(rBigInteger), ASN1Encoder.create().write(sBigInteger))",
+        "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/AuthzClientCryptoProvider.java",
+        "line": 121
+      },
+      {
+        "comment": "Inefficient array copying in `ASN1Encoder.concatenate`. Calling `toByteArray()` on each object creates a redundant copy of the internal buffer before writing it to the destination stream. Implement a `writeTo(OutputStream)` method to write internal buffers directly without extra allocations. byte[] concatenate(ASN1Encoder... objects) throws IOException { ByteArrayOutputStream tmp = new ByteArrayOutputStream(); for (ASN1Encoder object : objects) { object.writeTo(tmp);",
+        "file": "authz/client/src/main/java/org/keycloak/authorization/client/util/crypto/ASN1Encoder.java",
+        "line": 99
+      },
+      {
+        "comment": "Unguarded logging loop in `detectProvider`. The code performs string construction and iterates over all providers even when debug logging is disabled, wasting cycles during initialization. Wrap the block in an `if (logger.isDebugEnabled())` guard. if (foundProviders.size() > 1 && logger.isDebugEnabled()) { StringBuilder builder = new StringBuilder(\"Ignored crypto providers: \"); for (int i = 1 ; i < foundProviders.size() ; i++) { builder.append(foundProviders.get(i).getClass().getName()).append(\"",
+        "file": "common/src/main/java/org/keycloak/common/crypto/CryptoIntegration.java",
+        "line": 70
+      }
+    ]
+  },
+  {
+    "pr_title": "Add rolling-updates feature flag and compatibility framework",
+    "pr_url": "https://github.com/Wellington01/keycloak-greptile/pull/132",
+    "tool": "kodus",
+    "issues": []
+  }
+]

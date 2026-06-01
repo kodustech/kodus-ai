@@ -1,0 +1,48 @@
+id: repaired-cells
+description: |
+    Focused validation matrix for cells that failed in the 2026-05-23
+    self-hosted full-no-sso run, after applying:
+      - per-seat-license-toggle teardown (clears install-wide license to
+        invalid → self-hosted CE mode, so the next cell isn't blocked)
+      - kody-rules ruleInstruction reframed as a mechanical static check
+        so the LLM doesn't excuse fixture markers as "intentional"
+
+    Exercises:
+      - github × license-paid:  per-seat (runs B1 teardown) +
+        kody-rules (B2 wording test)
+      - gitlab × license-paid:  code-review-basic FIRST (proves B1
+        teardown left the next cell unblocked)
+      - bitbucket × license-paid: onboarding-webhook + code-review-basic
+        (proves B4 throttle transient has cleared)
+      - github × license-free: license-attribution (B3, proves the
+        trial-ended notice fires)
+
+    Runs against the alive `matrix` self-hosted droplet via
+    --auto-provision --reuse. Total budget ~25 min. Bitbucket cell
+    intentionally last so any bb-throttle backoff doesn't affect the
+    B1-validating gitlab cell.
+
+# Order matters: per-seat is last per cell in case its teardown
+# affects the next scenario's tenant. gitlab cell runs code-review-basic
+# first so the per-seat teardown from the github cell is what's under
+# test — not gitlab's own per-seat.
+scenarios:
+    - code-review-basic
+    - onboarding-webhook-registration
+    - kody-rules-create-and-apply
+    - license-attribution
+    - per-seat-license-toggle
+
+cells:
+    - target: self-hosted
+      provider: github
+      license: license-paid
+    - target: self-hosted
+      provider: gitlab
+      license: license-paid
+    - target: self-hosted
+      provider: bitbucket
+      license: license-paid
+    - target: self-hosted
+      provider: github
+      license: license-free

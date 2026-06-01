@@ -28,32 +28,32 @@ describe('MCPManagerService', () => {
         );
 
         const axiosGet = jest.fn().mockResolvedValue({
-                items: [
-                    {
-                        id: 'connection-1',
-                        organizationId: 'org-123',
-                        integrationId: KODUS_MCP_INTEGRATION_ID,
-                        provider: 'kodus',
-                        status: 'ACTIVE',
-                        appName: 'kodus-code-management',
-                        mcpUrl: 'https://api.kodus.io/mcp',
-                        allowedTools: ['KODUS_LIST_REPOSITORIES'],
-                        metadata: {
-                            connection: {
-                                id: 'connection-1',
-                                mcpUrl: 'https://api.kodus.io/mcp',
-                                status: 'ACTIVE',
-                                appName: 'kodus-code-management',
-                                authUrl: '',
-                                allowedTools: ['KODUS_LIST_REPOSITORIES'],
-                            },
+            items: [
+                {
+                    id: 'connection-1',
+                    organizationId: 'org-123',
+                    integrationId: KODUS_MCP_INTEGRATION_ID,
+                    provider: 'kodus',
+                    status: 'ACTIVE',
+                    appName: 'kodus-code-management',
+                    mcpUrl: 'https://api.kodus.io/mcp',
+                    allowedTools: ['KODUS_LIST_REPOSITORIES'],
+                    metadata: {
+                        connection: {
+                            id: 'connection-1',
+                            mcpUrl: 'https://api.kodus.io/mcp',
+                            status: 'ACTIVE',
+                            appName: 'kodus-code-management',
+                            authUrl: '',
+                            allowedTools: ['KODUS_LIST_REPOSITORIES'],
                         },
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        deletedAt: null,
                     },
-                ],
-            });
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    deletedAt: null,
+                },
+            ],
+        });
 
         (service as any).axiosMCPManagerService = {
             get: axiosGet,
@@ -64,7 +64,9 @@ describe('MCPManagerService', () => {
             true,
         );
 
-        expect(permissionValidationService.shouldLimitResources).toHaveBeenCalled();
+        expect(
+            permissionValidationService.shouldLimitResources,
+        ).toHaveBeenCalled();
         expect(jwtService.sign).toHaveBeenCalled();
         expect(axiosGet).toHaveBeenCalledWith(
             'mcp/connections',

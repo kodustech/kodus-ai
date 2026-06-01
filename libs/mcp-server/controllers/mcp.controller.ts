@@ -63,10 +63,7 @@ export class McpController {
             },
         },
     })
-    async handleClientRequest(
-        @Body() body: any,
-        @Res() res: Response,
-    ) {
+    async handleClientRequest(@Body() body: any, @Res() res: Response) {
         return handleStatelessMcpPost({
             body,
             res,

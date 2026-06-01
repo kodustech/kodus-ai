@@ -23,10 +23,23 @@ describe('CreateRepositoriesUseCase', () => {
             {} as any,
             { execute: jest.fn().mockResolvedValue([]) } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
-            codeManagementService as any,
             { execute: jest.fn() } as any,
+            codeManagementService as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            {
+                findOrCreate: jest
+                    .fn()
+                    .mockResolvedValue({
+                        uuid: 'r1',
+                        astGraphStatus: 'pending',
+                        defaultBranch: 'main',
+                        fullName: 'kodus/alpha',
+                        platform: 'github',
+                    }),
+            } as any,
             {} as any,
+            { repositoryConnected: jest.fn() } as any,
         );
 
         await useCase.execute({
@@ -84,10 +97,13 @@ describe('CreateRepositoriesUseCase', () => {
             {} as any,
             { execute: jest.fn().mockResolvedValue([]) } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
-            codeManagementService as any,
             { execute: jest.fn() } as any,
+            codeManagementService as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            { findOrCreate: jest.fn() } as any,
             undefined as any,
+            { repositoryConnected: jest.fn() } as any,
         );
 
         await expect(
@@ -115,12 +131,15 @@ describe('CreateRepositoriesUseCase', () => {
             {} as any,
             { execute: jest.fn().mockResolvedValue([]) } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            { execute: jest.fn() } as any,
             {
                 createOrUpdateIntegrationConfig: jest.fn(),
             } as any,
-            { execute: jest.fn() } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            { findOrCreate: jest.fn() } as any,
             undefined as any,
+            { repositoryConnected: jest.fn() } as any,
         );
 
         await expect(

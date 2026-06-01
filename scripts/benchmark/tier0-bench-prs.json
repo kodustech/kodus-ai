@@ -1,0 +1,138 @@
+{
+  "description": "Tier-0 model benchmark subset: 1 PR per repo (5), diverse size/complexity. Fixed set \u2014 must stay identical across runs.",
+  "prs": [
+    {
+      "repo": "ai-code-review-benchmark/grafana-codex",
+      "head": "asset-loading-optimized",
+      "base": "asset-loading-baseline",
+      "title": "Frontend Asset Optimization",
+      "source_url": "https://github.com/grafana/grafana/pull/90939",
+      "golden_comments": [
+        {
+          "comment": "The GetWebAssets function implements an incomplete double-checked locking pattern for caching web assets. The function first checks if the cache is populated using a read lock (RLock), and if the cache is empty, it acquires a write lock to populate it. However, it fails to re-check whether the cache was populated by another goroutine while waiting to acquire the write lock.",
+          "severity": "Medium"
+        },
+        {
+          "comment": "In addition to the missing double-check, the function has a critical flaw in its error handling: it unconditionally assigns the fetch result to the cache (line 69: entryPointAssetsCache = result) regardless of whether the fetch succeeded or failed. When an error occurs during asset fetching, result is nil, and this nil value overwrites any previously valid cache entry.",
+          "severity": "High"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/sentry",
+      "head": "span-flusher-multiprocess",
+      "base": "span-flusher-stable",
+      "title": "Span Buffer Multiprocess Enhancement with Health Monitoring",
+      "source_url": "https://github.com/getsentry/sentry/pull/93824",
+      "golden_comments": [
+        {
+          "comment": "Inconsistent metric tagging with 'shard' and 'shards'",
+          "severity": "Medium"
+        },
+        {
+          "comment": "Fixed sleep in tests can be flaky; wait on condition instead",
+          "severity": "Low"
+        },
+        {
+          "comment": "Because flusher processes are created via multiprocessing.get_context('spawn').Process, they are instances of multiprocessing.context.SpawnProcess, which on POSIX is not a subclass of multiprocessing.Process, so this isinstance check will always be false and hung processes won't be killed here.",
+          "severity": "High"
+        },
+        {
+          "comment": "Sleep in test_consumer.py won\u2019t actually wait because time.sleep was monkeypatched above; consider restoring sleep or using a different sync to ensure the flusher has time to process.",
+          "severity": "Medium"
+        },
+        {
+          "comment": "Breaking out of the loop when the deadline has elapsed can skip terminating remaining flusher processes, potentially leaving them running after shutdown; consider ensuring termination is attempted even if the deadline is exceeded.",
+          "severity": "Medium"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/cal.com",
+      "head": "oauth-security-enhanced",
+      "base": "oauth-security-base",
+      "title": "OAuth credential sync and app integration enhancements",
+      "source_url": "https://github.com/calcom/cal.com/pull/11059",
+      "golden_comments": [
+        {
+          "comment": "The parseRefreshTokenResponse function incorrectly sets refresh_token to the hardcoded string 'refresh_token' when it's missing from the OAuth refresh token response. This invalidates the token, breaking subsequent token refreshes and causing authentication failures.",
+          "severity": "High"
+        },
+        {
+          "comment": "Invalid Zod schema syntax. Computed property keys like [z.string().toString()] are not valid in Zod object schemas and will cause runtime errors. ",
+          "severity": "High"
+        },
+        {
+          "comment": "parseRefreshTokenResponse returns a Zod safeParse result ({ success, data, error }), not the credential key object. Persisting that as key stores the wrapper instead of the token payload; we should store the parsed data or use schema parse.",
+          "severity": "High"
+        },
+        {
+          "comment": "When APP_CREDENTIAL_SHARING_ENABLED and CALCOM_CREDENTIAL_SYNC_ENDPOINT are set, the refreshFunction helper returns the fetch Response, but several callers (for example GoogleCalendarService.refreshAccessToken expecting res.data, and HubspotCalendarService.refreshAccessToken expecting a HubspotToken) assume it returns the integration-specific token object. That mismatch will cause runtime errors in the sync-enabled path unless the return type or those call sites are adjusted.",
+          "severity": "High"
+        },
+        {
+          "comment": "When the sync endpoint path is used, res is a fetch Response and has no .data; res?.data will be undefined and token.access_token will throw at runtime. This relies on a consistent return shape from refreshOAuthTokens, which isn\u2019t guaranteed currently.",
+          "severity": "High"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/discourse-cursor",
+      "head": "embed-url-handling-post",
+      "base": "embed-url-handling-pre",
+      "title": "Enhance embed URL handling and validation system",
+      "source_url": "https://github.com/discourse/discourse/commit/4f8aed295a29954023b2849c060ef4fb299d1b5d",
+      "golden_comments": [
+        {
+          "comment": "SSRF vulnerability using open(url) without validation",
+          "severity": "Critical"
+        },
+        {
+          "comment": "The current origin validation using indexOf is insufficient and can be bypassed. An attacker could use a malicious domain like evil-discourseUrl.com to pass this check.",
+          "severity": "Medium"
+        },
+        {
+          "comment": "postMessage targetOrigin should be the origin (scheme+host+port), not the full referrer URL; using the full URL will cause the message to be dropped and prevent resizing.",
+          "severity": "Medium"
+        },
+        {
+          "comment": "The code sets X-Frame-Options: ALLOWALL which completely disables clickjacking protection. The referer validation can be bypassed (referer headers are easily spoofed), and the fallback to empty string for nil referer masks validation failures.",
+          "severity": "Medium"
+        },
+        {
+          "comment": "The TopicEmbed.import method is susceptible to a NoMethodError if the contents parameter is nil when attempting to append a string, and an XSS vulnerability due to unescaped url interpolation in the generated HTML.",
+          "severity": "Medium"
+        },
+        {
+          "comment": "The ERB block closes with end if, which is invalid Ruby/ERB and will raise at render; it should just be end to close the if block.",
+          "severity": "Medium"
+        }
+      ]
+    },
+    {
+      "repo": "ai-code-review-benchmark/keycloak",
+      "head": "feature-html-sanitizer-implementation",
+      "base": "feature-html-sanitizer-baseline",
+      "title": "Add HTML sanitizer for translated message resources",
+      "source_url": "https://github.com/keycloak/keycloak/pull/37429",
+      "golden_comments": [
+        {
+          "comment": "The translation is in Italian instead of Lithuanian. This should be translated to Lithuanian to match the file's locale (messages_lt.properties).",
+          "severity": "Medium"
+        },
+        {
+          "comment": "The totpStep1 value uses Traditional Chinese terms in the Simplified Chinese file (zh_CN), which is likely incorrect for this locale. Please verify the locale\u2011appropriate translation.",
+          "severity": "Medium"
+        },
+        {
+          "comment": "The anchor sanitization logic has a potential issue where it consumes English matcher groups without proper validation. If the translated text has more anchor tags than the English text, this could lead to incorrect validation results.",
+          "severity": "Low"
+        },
+        {
+          "comment": "The method name 'santizeAnchors' should be 'sanitizeAnchors' (missing 'i').",
+          "severity": "Low"
+        }
+      ]
+    }
+  ]
+}

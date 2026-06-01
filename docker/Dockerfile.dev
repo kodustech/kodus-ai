@@ -1,7 +1,15 @@
+# syntax=docker/dockerfile:1.7
+# Enables --mount=type=cache. Requires BuildKit (default in Docker 23+).
+
 ARG API_CLOUD_MODE=false
 ARG RELEASE_VERSION=local
+ARG BUN_VERSION=1.2.12
 
-FROM docker.io/library/node:22.22.0-slim
+# Dedicated stage for the bun binary — Docker Hub is more reliable than
+# GitHub releases for build-time downloads (prevents flaky 504s during CI).
+FROM docker.io/oven/bun:${BUN_VERSION}-debian AS bun-source
+
+FROM docker.io/library/node:22.22.2-slim
 
 ARG API_CLOUD_MODE
 ARG RELEASE_VERSION
@@ -16,11 +24,18 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN corepack disable \
  && npm i -g yarn@1.22.22
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates python3 make g++ procps git ripgrep \
-    && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+      ca-certificates python3 make g++ procps git ripgrep
 
-RUN npm i -g yalc chokidar-cli nodemon
+# Copy the bun binary from the official image and install kodus-graph globally.
+COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun
+RUN bun install -g @kodus/kodus-graph
+
+RUN npm i -g yalc nodemon @ast-grep/cli
 
 COPY package.json yarn.lock ./
 COPY nest-cli.json tsconfig*.json ./
@@ -28,12 +43,34 @@ COPY nest-cli.json tsconfig*.json ./
 COPY packages/kodus-common ./packages/kodus-common
 COPY packages/kodus-flow ./packages/kodus-flow
 
-# Build local packages first
-RUN cd packages/kodus-common && yarn install && yarn prepack
-RUN cd packages/kodus-flow && yarn install && yarn build
+# Build local packages first. Shared yarn cache mount survives across
+# rebuilds so dependency changes don't trigger a full re-download.
+#
+# `sharing=shared` (vs the historical `sharing=locked`) lets the parallel
+# service builds (api/worker/webhooks/worker-analytics/mcp-manager) all
+# read the cache concurrently — observed `yarn install` ballooning past
+# 30min during cold-cache rebuilds purely from lock waits when the mount
+# was `sharing=locked`.
+#
+# Yarn 1's cache is content-addressable and writes via atomic rename, so
+# concurrent extracts of the same tarball across services are safe in
+# practice. A previous attempt to use `--mutex file:/yarn-cache/.yarn-mutex`
+# made the failure mode worse: with 5 services × 3 install steps all
+# contending for one file lock, holders routinely exceeded
+# proper-lockfile's ~30s stale threshold and crashed peers with
+# ECOMPROMISED.
+RUN --mount=type=cache,target=/yarn-cache,sharing=shared \
+    cd packages/kodus-common \
+  && YARN_CACHE_FOLDER=/yarn-cache yarn install \
+  && YARN_CACHE_FOLDER=/yarn-cache yarn prepack
+RUN --mount=type=cache,target=/yarn-cache,sharing=shared \
+    cd packages/kodus-flow \
+  && YARN_CACHE_FOLDER=/yarn-cache yarn install \
+  && YARN_CACHE_FOLDER=/yarn-cache yarn build
 
 # Install dependencies and link local packages
-RUN yarn install --frozen-lockfile
+RUN --mount=type=cache,target=/yarn-cache,sharing=shared \
+    YARN_CACHE_FOLDER=/yarn-cache yarn install --frozen-lockfile
 RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
 RUN rm -rf node_modules/@kodus/flow && cp -r packages/kodus-flow node_modules/@kodus/flow
 

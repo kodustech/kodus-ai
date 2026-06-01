@@ -1,6 +1,10 @@
 "use client";
 
 import { createContext, useContext } from "react";
+import type {
+    LLMConfigStatus,
+    LLMProviderModel,
+} from "@services/organizationParameters/fetch";
 import { PlatformConfigValue } from "@services/parameters/types";
 import { CustomMessageConfig } from "@services/pull-request-messages/types";
 import { FEATURE_FLAGS } from "src/core/config/feature-flags";
@@ -138,6 +142,33 @@ export const FeatureFlagsProvider = (
     <FeatureFlagsContext.Provider value={props.featureFlags}>
         {props.children}
     </FeatureFlagsContext.Provider>
+);
+
+/**
+ * Data the BYOK model selector needs — the LLM config status (BYOK / env /
+ * none) and the provider's model catalog. Both are server-fetched in the
+ * settings layout and provided here so the selector renders fully with the
+ * rest of the page: no client round-trip, no loading skeleton.
+ */
+export type CodeReviewModelData = {
+    llmConfigStatus: LLMConfigStatus | null;
+    byokModels: LLMProviderModel[];
+};
+
+const CodeReviewModelDataContext = createContext<CodeReviewModelData>({
+    llmConfigStatus: null,
+    byokModels: [],
+});
+
+export const useCodeReviewModelData = () =>
+    useContext(CodeReviewModelDataContext);
+
+export const CodeReviewModelDataProvider = (
+    props: React.PropsWithChildren & { value: CodeReviewModelData },
+) => (
+    <CodeReviewModelDataContext.Provider value={props.value}>
+        {props.children}
+    </CodeReviewModelDataContext.Provider>
 );
 
 export { resolveCodeReviewConfigForScope };

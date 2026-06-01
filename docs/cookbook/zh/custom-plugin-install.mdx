@@ -1,0 +1,82 @@
+---
+title: "安装自定义 MCP 插件"
+description: "将任何自定义模型上下文协议插件连接到 Kodus 的分步说明。"
+icon: "plug"
+---
+
+## 为什么自定义插件很重要
+
+自定义 MCP 插件让您的团队基于内部系统——知识库、事件仪表板、策略引擎等等。安装后,每次 Kody 交互都可以使用实时数据调用这些工具,因此审查者不再需要将截图或过时的片段复制到拉取请求中。
+
+本指南展示了我们为任何自定义插件推荐的主观流程,无论是简单的只读端点(如 Kodus Docs MCP)还是具有身份验证的更高级管道。
+
+<Callout icon="globe">
+  Kodus **仅支持远程 MCP 服务器**——这意味着插件必须可从 Kodus 的基础设施访问。
+</Callout>
+
+---
+
+## 准备您的插件信息
+
+在打开插件目录之前收集这些详细信息:
+
+| 字段 | 为什么重要 |
+| ----- | -------------- |
+| **公共 URL** | 托管 MCP 清单的端点(例如 `https://acme-internal-tools.com/mcp`)。 |
+| **协议** | MCP 实现类型(HTTP 或 SSE)。 |
+| **托管** | 必须是可从 Kodus 访问的远程服务器(无 localhost 或桌面 MCP 端点)。 |
+| **身份验证** | 插件是否需要 API 密钥、OAuth 或对您的工作区 IP 开放。 |
+| **描述/标志** | 帮助其他工程师在浏览目录时了解插件的作用。 |
+
+寻找要尝试的远程 MCP 服务器?
+
+- [Smithery.ai](https://smithery.ai/) 策划可部署的 MCP 服务,以及一个您可以指向自己基础设施的简单启动器。
+- [Awesome Remote MCP Servers](https://github.com/sylviangth/awesome-remote-mcp-servers) 列出了跨文档搜索、安全扫描器和工作流机器人的社区维护端点。
+
+## 在 Kodus 中安装插件
+
+<iframe src="https://www.youtube.com/embed/rtBxGnb9nIs?si=z2538VqglaqBOpio" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen width="100%" height="500px"></iframe>
+
+1. 转到 Kodus 工作区内的**代码审查设置 → 插件**(测试版)。
+2. 点击**添加插件**。
+3. 填写表单:
+
+   ```text
+   插件名称:描述性标签(例如,"安全运行手册 MCP")
+   描述:它公开的数据/操作
+   标志 URL:可选,但有助于识别
+   URL: https://your-domain.com/mcp
+   协议: HTTP 或 SSE
+   授权/标头:如果您的 MCP 主机需要它们(例如 API 密钥、OAuth 等)(可选)
+   ```
+
+4. 点击**创建插件**。一旦它出现在列表中,整个工作区就可以立即使用它。
+
+<Warning>
+  自定义插件以与工作区相同的权限运行。仅安装您的组织信任和监控的端点。
+</Warning>
+
+## 验证连接
+
+1. 打开启用了 Kody 的任何拉取请求。
+2. 提及 `@kody` 并包含一个强制插件响应的问题。
+
+   ```
+   @kody 您能从我们的 MCP 获取部署检查清单并确认是否需要功能标志吗?
+   ```
+
+3. 在抽屉中,检查**插件**部分。您应该看到对新插件的调用。如果失败,展开错误以检查状态代码或验证消息。
+
+<Info>
+  Kodus Docs MCP (`https://docs.kodus.io/mcp`) 是一个快速的健全性测试——您可以先安装它以确保您的工作区可以访问外部主机。
+</Info>
+
+---
+
+## 快速检查清单
+
+- [ ] 插件清单已托管且可访问。
+- [ ] 身份验证模型(如果有)已记录和测试。
+- [ ] 通过**添加自定义插件**使用正确的 URL + 标头安装插件。
+- [ ] 示例 PR 证明 Kody 可以调用插件。
+- [ ] 所有者知道如何监控和更新集成。

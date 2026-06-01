@@ -1,0 +1,276 @@
+---
+title: "集中式配置"
+description: "将所有代码审查配置和 Kody 规则作为代码保存在单个代码库中。合并后自动同步;通过 UI 或 CLI 控制发布。"
+---
+
+集中式配置让您将所有代码审查设置和所有 Kody 规则保存在**一个代码库**中,而不是在 Web UI 中按代码库分别编辑。每次更改都通过该代码库上的拉取请求进行,为您的审查配置提供版本历史、评审和回滚能力。
+
+适用场景:
+
+- 跨多个代码库管理审查行为的单一真实来源。
+- 配置即代码:历史记录、PR 评审、回滚、CI 校验。
+- 在整个组织中保持一致的 Kody 规则(审查规则和记忆)。
+- 基于 CLI 或 CI 的配置变更。
+
+## 工作原理
+
+1. 选择一个代码库作为集中式配置源。
+2. 在 UI 中启用集中式配置并指向该代码库。
+3. 选择**初始同步方式**:
+   - `pr` — Kodus 使用您当前的有效设置和规则打开初始化 PR。
+   - `manual` — Kodus 生成文件;您的团队下载并自行打开 PR。
+4. 首次合并后,集中式代码库上后续的每次合并都会自动将变更传播到 Kodus。
+
+集中式代码库通过其文件夹结构镜像 Kodus 的作用域层级(全局 → 代码库 → 目录)。
+
+## 代码库结构
+
+集中式代码库使用文件夹路径将文件映射到各个作用域。结构同时覆盖审查设置(`kodus-config.yml`)和 Kody 规则(`.kody-rules/`)。
+
+<Note>
+代码库名称任意 — 选择适合您组织的即可。下方示例使用 `kodus-config` 作为约定。
+</Note>
+
+```
+kodus-config/
+├── kodus-config.yml                      ← 全局设置
+├── .kody-rules/
+│   ├── review/                           ← 全局审查规则
+│   │   └── require-tests-for-endpoints.yml
+│   └── memories/                         ← 全局记忆
+│       └── logging-convention.yml
+│
+├── backend-api/                          ← 匹配一个 Kodus 代码库
+│   ├── kodus-config.yml                  ← 代码库级覆盖
+│   ├── .kody-rules/
+│   │   ├── review/
+│   │   │   └── no-raw-sql.yml
+│   │   └── memories/
+│   │       └── auth-module-layout.yml
+│   │
+│   └── src/auth/                         ← 匹配代码库子目录
+│       ├── kodus-config.yml              ← 目录级覆盖
+│       └── .kody-rules/
+│           ├── review/
+│           └── memories/
+│
+└── frontend-web/
+    └── kodus-config.yml
+```
+
+规则:
+
+- 集中式代码库**根目录**下的 `kodus-config.yml` 适用于全局。
+- 顶层文件夹的名称若与某个 Kodus 代码库匹配(如 `backend-api/`),则该文件夹下的文件作用于该代码库。
+- 代码库文件夹内的嵌套路径(如 `backend-api/src/auth/`)作用于该目录,遵循与 Web UI 相同的继承模型。
+- `.kody-rules/review/` 下的规则成为**审查规则**;`.kody-rules/memories/` 下的规则成为**记忆**。
+
+任何没有对应作用域的文件在同步时会被忽略。
+
+## 配置文件
+
+每个 `kodus-config.yml` 使用与按代码库的 `kodus-config.yml` 相同的结构,详见[通用设置](/how_to_use/zh/code_review/configs/general)。字段作用于该文件所在文件夹的层级,并遵循通常的继承规则(参见[配置继承与覆盖](/how_to_use/zh/code_review/configs/inheritance_overrides))。
+
+最小示例:
+
+```yaml
+version: '1.2'
+reviewOptions:
+  security: true
+  kody_rules: true
+  error_handling: true
+suggestionControl:
+  groupingMode: full
+  limitationType: pr
+  maxSuggestions: 9
+  severityLevelFilter: medium
+ignorePaths:
+  - yarn.lock
+  - package-lock.json
+automatedReviewActive: true
+```
+
+## Kody 规则文件
+
+每条规则是一个 YAML 文件,位于 `.kody-rules/review/`(标准规则)或 `.kody-rules/memories/`(记忆)下。文件名任意 — Kodus 通过 `title` 字段和规则存储的规范文件路径来识别规则。
+
+审查规则示例(`.kody-rules/review/require-tests-for-endpoints.yml`):
+
+```yaml
+title: Require tests for new endpoints
+rule: |
+  Every new HTTP endpoint handler must include at least one integration test
+  that exercises the happy path and one common failure mode.
+severity: high
+scope: pull_request
+path: apps/api/**
+examples:
+  - snippet: |
+      // endpoint added with matching *.spec.ts
+    isCorrect: true
+  - snippet: |
+      // endpoint added with no test file touched in the PR
+    isCorrect: false
+inheritance:
+  inheritable: true
+  exclude: []
+  include: []
+```
+
+完整字段参考请见 [Kody 规则概述](/how_to_use/zh/code_review/configs/kody_rules),`inheritance.inheritable`、`exclude` 和 `include` 的行为请见[规则继承](/how_to_use/zh/code_review/configs/rules_inheritance)。
+
+## UI 工作流
+
+从**设置 → 代码审查 → 通用**:
+
+1. 打开**集中式配置**。
+2. 启用集中式配置。
+3. 选择源代码库。
+4. 选择**初始同步方式**:
+   - 自动(立即创建 PR)
+   - 手动(稍后同步)
+5. 保存并确认状态。
+
+## 启用后的 Web UI 行为
+
+启用集中式配置后,配置的真实来源是集中式代码库。Web UI 会相应反映:
+
+- **代码库、目录和全局的代码审查设置**在 Web UI 中变为只读。通过在集中式代码库上打开 PR 进行编辑。
+- **Kody 规则和 PR 消息**在 Web UI 中仍可编辑。保存编辑并不直接修改规则 — Kodus 会在集中式代码库上打开一个包含建议变更的拉取请求。PR 合并后,变更生效。
+
+这保证了"所有变更都经过评审并版本化",同时保留了规则和消息的可视化编辑体验。
+
+### UI 中的规则与仓库中的规则共存
+
+启用集中式配置**不会**清除之前在 Web UI 中创建的规则,也**不会**阻止通过 UI 创建新规则。两种来源向同一份有效规则池供给:
+
+- 从集中式代码库导入的规则以 `SYNCED` 状态持久化。
+- 直接在 Web UI 中创建的规则与它们共存,并保持有效。
+- 审查时,Kodus 从数据库加载 **所有有效规则**,无论其来源。仅存在于 UI 中的规则与仅存在于仓库中的规则被完全同等地应用。
+- 状态为 `PENDING_ADD` 的规则(通过 UI/CLI 编辑已打开但尚未合并的 PR)会 **排除** 在审查之外,直到 PR 被合并且状态转为 `SYNCED`。
+
+实际情况:如果您手动搭建集中式代码库,而其中缺少一条您已在 UI 中创建的规则,那条规则仍会继续生效 — 只是没有在仓库中进行版本管理。要将其纳入版本管理,请在 UI 中编辑它一次(这会打开一个 PR),或使用 `init` 让 Kodus 将每条现有规则打包进初始化 PR。
+
+## 同步状态
+
+每个来自集中式配置的规则通过状态跟踪其生命周期:
+
+| 状态 | 含义 |
+|---|---|
+| `SYNCED` | Kodus 中的规则与集中式代码库中的文件一致。 |
+| `PENDING_ADD` | 通过 UI/CLI 新建了规则并打开了 PR;默认分支上尚无该文件。 |
+| `PENDING_EDIT` | 通过 UI/CLI 提出了编辑并打开了 PR;现有文件尚未更新。 |
+| `PENDING_DELETE` | 通过 UI/CLI 提出了删除并打开了 PR;文件仍存在于默认分支。 |
+
+对应 PR 合并后,`PENDING_*` 状态会回到 `SYNCED`。
+
+## 同步方式
+
+<Tabs>
+  <Tab title="PR(默认)">
+    Kodus 使用您当前的有效设置和规则自动打开初始化拉取请求。
+  </Tab>
+  <Tab title="手动">
+    Kodus 生成文件但不打开 PR。使用下载包导出文件,然后由您自行打开并合并 PR。
+  </Tab>
+</Tabs>
+
+## 下载配置包
+
+您可以下载一个 ZIP 包,其中包含反映当前设置和规则的 `kodus-config.yml` 文件和 `.kody-rules/` 目录结构。
+
+适用场景:
+
+- 审计已生成的配置。
+- 与其他团队共享设置产物。
+- 发布前保留本地备份。
+- 在 `manual` 模式下初始化集中式代码库。
+
+## 禁用集中式配置
+
+禁用集中式配置会清除所选的源代码库,所有代码库恢复到标准的非集中式行为(通过 Web UI 编辑设置,可选的按代码库 `kodus-config.yml`)。
+
+已同步进来的规则和设置保留在 Kodus 中 — 禁用时不会被删除。
+
+## CLI
+
+使用以下命令在终端工作流和 CI 脚本中管理集中式配置。
+
+### 前置条件
+
+- 团队密钥认证。
+- Kodus 中至少选择了一个代码库。
+
+使用以下命令认证:
+
+```bash
+kodus auth team-key --key <your-key>
+```
+
+### 查看状态
+
+```bash
+kodus config centralized status
+```
+
+### 初始化集中式配置
+
+```bash
+kodus config centralized init [owner/repo] --sync-option <pr|manual>
+```
+
+说明:
+
+- `--sync-option` 默认为 `pr`。
+- 在交互式终端中省略代码库时,CLI 会提示选择。
+- 非交互式环境下必须提供代码库。
+
+示例:
+
+```bash
+kodus config centralized init kodustech/kodus-config --sync-option pr
+kodus config centralized init kodustech/kodus-config --sync-option manual
+```
+
+### 运行同步
+
+```bash
+kodus config centralized sync
+```
+
+### 禁用集中式配置
+
+```bash
+kodus config centralized disable
+```
+
+### 下载配置 ZIP
+
+```bash
+kodus config centralized download --out ./centralized-config.zip
+```
+
+说明:
+
+- `--out` 是必需的。
+- 输出是包含生成的配置文件和 `.kody-rules/` 目录结构的 ZIP 包。
+
+### JSON 输出
+
+所有集中式命令都支持通过 `--json` 输出结构化结果。
+
+```bash
+kodus config centralized status --json
+kodus config centralized init kodustech/kodus-config --sync-option pr --json
+kodus config centralized sync --json
+kodus config centralized disable --json
+kodus config centralized download --out ./centralized-config.zip --json
+```
+
+## 相关文档
+
+- [通用设置](/how_to_use/zh/code_review/configs/general)
+- [配置继承与覆盖](/how_to_use/zh/code_review/configs/inheritance_overrides)
+- [Kody 规则概述](/how_to_use/zh/code_review/configs/kody_rules)
+- [规则继承](/how_to_use/zh/code_review/configs/rules_inheritance)
+- [CLI 命令参考](/how_to_use/zh/cli/commands)

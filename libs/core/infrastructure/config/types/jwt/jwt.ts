@@ -5,6 +5,7 @@ export type JWT = {
     expiresIn: StringValue;
     refreshSecret: string;
     refreshExpiresIn: StringValue;
+    helpdeskPrivateKey?: string;
 };
 
 export type TokenResponse = {

@@ -1,0 +1,147 @@
+---
+title: "Synthetic — 开源编程模型的统一订阅"
+description: "了解如何将 Synthetic.new 基于订阅的 API(覆盖 Kimi、DeepSeek、Qwen Coder、GLM 等)连接到 Kodus。"
+icon: "infinity"
+---
+
+## Synthetic 工作原理
+
+Synthetic 是一个订阅式服务,在专用基础设施上运行开源编程 LLM,并通过 **OpenAI 兼容**(以及 Anthropic 兼容)API 提供服务。您支付的不是按 token 计费,而是**统一月费**,获得覆盖平台上所有模型的充裕速率配额。
+
+它被定位为 Claude $20/月和 $200/月套餐的直接替代方案,面向大量编程的开发者:相同的价位、数倍的速率限制,以及对开源模型的自由选择。
+
+Kodus 通过 OpenAI 兼容端点连接 Synthetic,无需任何适配器更改 — 仅需 BYOK 凭证。
+
+## 方案概览
+
+<Info>
+  价格和速率限制会变化。选择套餐前请先在 [synthetic.new/pricing](https://synthetic.new/pricing) 确认。
+</Info>
+
+### 订阅(代码审查推荐)
+
+| 方案 | 价格 | 速率限制 |
+| ---- | ----- | ---------- |
+| **月付** | 约 $30/月($1/天) | 每 5 小时窗口约 500 条消息 |
+| **企业 / 按量计费** | 联系 Synthetic | 提供按 token 付费方式 |
+
+- 所有标准模型都在订阅范围内 — 通过修改 `model` 字段任意切换。
+- 速率限制按**5 小时滚动窗口**执行,不是按月 — 规划并发时要装得下这个窗口。
+- Synthetic 不在您的 prompt/completion 上训练,并在 14 天内删除 API 数据。
+
+### 推荐模型
+
+Synthetic 使用 HuggingFace 前缀格式(`hf:org/model`)暴露模型。代码审查的几个强力选择:
+
+| 模型 ID | 说明 |
+| -------- | ----- |
+| `hf:zai-org/GLM-4.6` | GLM 系列;通用审查的均衡选择。 |
+| `hf:moonshotai/Kimi-K2-Instruct` | 长上下文 Kimi K2 — 大型 PR 上表现出色。 |
+| `hf:Qwen/Qwen3-Coder-480B-A35B-Instruct` | 强大的专业编码模型。 |
+| `hf:deepseek-ai/DeepSeek-V3.1` | DeepSeek V3.1;出色的 Agent / 编码行为。 |
+
+完整目录见 [dev.synthetic.new/docs/openai/models](https://dev.synthetic.new/docs/openai/models)。
+
+## 创建 API 密钥
+
+<Warning>使用 API 需要 Synthetic 账号和有效订阅。</Warning>
+
+1. 访问 [synthetic.new](https://synthetic.new) 注册或登录。
+2. 在 [synthetic.new/pricing](https://synthetic.new/pricing) 订阅套餐。
+3. 打开开发者控制台并创建 API 密钥。立即复制 — 稍后您将看不到完整密钥。
+
+## 在 Kodus 中配置 Synthetic
+
+主流程是在 Kodus Cloud 上使用 BYOK。自托管安装可以选用环境变量作为次要方式。
+
+### 方式 1 — Kodus Cloud 上的 BYOK(推荐)
+
+1. 在 Kodus Web UI 中打开**设置 → BYOK**([app.kodus.io/organization/byok](https://app.kodus.io/organization/byok))。
+2. Synthetic 不在精选目录中 — 请点击模型列表底部的**手动配置**。如果要配置备用模型而非主模型,请在 URL 中使用 `?slot=fallback`。
+3. 填写向导:
+
+   | 字段 | 值 |
+   | --- | --- |
+   | **Provider** | `OpenAI Compatible` |
+   | **Base URL** | `https://api.synthetic.new/openai/v1` |
+   | **Model** | 例如 `hf:zai-org/GLM-4.6`(使用 `hf:` 前缀和完整的 HuggingFace 路径) |
+   | **API Key** | 您的 Synthetic API 密钥 |
+   | **Max Concurrent Requests** | 从 `3–5` 起步,以适应大型 PR 的 5 小时预算(在高级设置下) |
+
+4. 点击**测试并保存**。Kodus 会探测端点,成功后持久化配置。401 表示密钥错误;404 通常表示基础 URL 或模型路径错误。
+
+<Tip>
+  500 消息/5 小时的预算是按订阅算的,不是按 PR。对于持续高频审查的团队,将 `Max Concurrent Requests` 保持在足够低的值,避免单个大型多文件 PR 吃完窗口,或在多个订阅间分流工作。
+</Tip>
+
+<Note>
+  将 Synthetic 配置为 **Main**,同时保留一个 OpenAI 或 Anthropic 密钥作为 **Fallback** — 5 小时窗口满了之后,Kodus 会自动故障转移,审查继续流动。
+</Note>
+
+### 方式 2 — 自托管(环境变量)
+
+如果您以 Fixed Mode 运行 Kodus(单一全局提供商,无按组织 BYOK),在 API + worker 容器的 `.env` 中配置 Synthetic:
+
+```env
+# Synthetic 配置(固定模式)
+API_LLM_PROVIDER_MODEL="hf:zai-org/GLM-4.6"                    # 目录中的任意模型 ID
+API_OPENAI_FORCE_BASE_URL="https://api.synthetic.new/openai/v1"
+API_OPEN_AI_API_KEY="your-synthetic-api-key"
+```
+
+<Note>
+  仅在有意禁用 BYOK 的自托管 Kodus 安装中才需要这条路径。如果您的自托管实例启用了 BYOK,请优先使用**方式 1** — 基于 UI 的流程与 Cloud 上相同。
+</Note>
+
+编辑 `.env` 后重启 API 和 worker 容器,然后验证:
+
+```bash
+docker-compose logs api worker | grep -iE "synthetic|api\.synthetic"
+```
+
+完整的自托管设置(域名、安全密钥、数据库、webhook、反向代理)请参见[通用 VM 部署指南](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm),只需将 LLM 部分替换为上面的配置。
+
+## 何时选择 Synthetic
+
+- **您的主力模型是开源模型**(Kimi、DeepSeek、Qwen Coder、GLM),希望统一月费,而不是在多个提供商间周旋 token 开销。
+- **您在比较 Claude Max($200/月)的审查吞吐量** — Synthetic 以 $30/月在同等能力的编程模型上提供数倍的速率预算。
+- **您重视数据态势** — Synthetic 明确不训练用户数据,API 数据 14 天内删除。
+
+如果流量波动大,选择按 token 付费(Moonshot、Fireworks、Together、Groq)。如果您特别想要 GLM 系列加分层承诺,选择 Z.AI GLM Coding Plan。
+
+## 故障排查
+
+<AccordionGroup>
+  <Accordion title="5 小时窗口内 429 请求过多">
+    - 订阅预算是按**5 小时滚动窗口**,不是按小时或按月。在 Synthetic 仪表板查看最近发送了多少请求。
+    - 等待窗口滚动,或在 BYOK 中降低 `Max Concurrent Requests`,或升级 / 叠加套餐。
+    - 配置 `Fallback` BYOK 提供商,让速率受限时审查仍能继续。
+  </Accordion>
+
+  <Accordion title="401 / 身份验证错误">
+    - 在 Synthetic 仪表板确认密钥仍然有效且订阅未过期。
+    - 确保 `.env` 值中没有尾随空格或引号。
+  </Accordion>
+
+  <Accordion title="模型未找到">
+    - Synthetic 使用 `hf:org/model` 格式。省略 `hf:` 前缀或大小写不对会返回 404。
+    - 在 [dev.synthetic.new/docs/openai/models](https://dev.synthetic.new/docs/openai/models) 上核对。
+  </Accordion>
+
+  <Accordion title="首次调用冷启动长">
+    - 部分较大模型在一段时间不活动后的首次使用可能冷启动。
+    - 如果首次调用延迟阻塞 Kodus 健康检查,在打开 PR 之前通过一个小型测试请求预热模型。
+  </Accordion>
+
+  <Accordion title="连接错误">
+    - 确认您的服务器可以访问 `api.synthetic.new`。
+    - 查看 API 和 worker 日志获取具体的上游错误。
+  </Accordion>
+</AccordionGroup>
+
+## 相关链接
+
+- [Synthetic 定价](https://synthetic.new/pricing)
+- [Synthetic API 文档](https://dev.synthetic.new/docs/api/getting-started)
+- [Synthetic 模型目录](https://dev.synthetic.new/docs/openai/models)
+- [BYOK 概述](/how_to_use/zh/byok)
