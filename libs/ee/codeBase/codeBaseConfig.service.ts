@@ -15,7 +15,7 @@ import {
     CodeReviewConfigWithoutLLMProvider,
     FileChange,
     KodusConfigFile,
-    KodyFineTuningConfig,
+    KodyFineTuningEnabled,
     ReviewModeConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
@@ -748,7 +748,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
     async getKodyFineTuningConfigParameter(
         organizationAndTeamData: OrganizationAndTeamData,
         repositoryId?: string,
-    ): Promise<KodyFineTuningConfig> {
+    ): Promise<KodyFineTuningEnabled> {
         const kodyFineTuningConfig =
             await this.organizationParametersService.findByKey(
                 OrganizationParametersKey.KODY_FINE_TUNING_CONFIG,
@@ -761,7 +761,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 : true;
 
         if (!orgEnabled) {
-            return { enabled: false };
+            return { value: false };
         }
 
         if (repositoryId) {
@@ -781,14 +781,14 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                     undefined
                 ) {
                     return {
-                        enabled:
+                        value:
                             repoConfig.configs.kodyFineTuningEnabled.value,
                     };
                 }
             }
         }
 
-        return { enabled: true };
+        return { value: true };
     }
 
     private async getGlobalIgnorePaths(
