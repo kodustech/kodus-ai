@@ -777,12 +777,12 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 );
 
                 if (
-                    repoConfig?.configs?.kodyFineTuningConfig?.enabled !==
+                    repoConfig?.configs?.kodyFineTuningEnabled !==
                     undefined
                 ) {
                     return {
                         enabled:
-                            repoConfig.configs.kodyFineTuningConfig.enabled,
+                            repoConfig.configs.kodyFineTuningEnabled.value,
                     };
                 }
             }

@@ -244,10 +244,9 @@ export const SelectRepositories = (props: {
                                                     repo.id ===
                                                     currentValue,
                                             )!;
-                                            selectedRepo.kodyFineTuningEnabled = true;
                                             onChangeSelectedRepositories([
                                                 ...selectedRepositories,
-                                                selectedRepo,
+                                                { ...selectedRepo, kodyFineTuningEnabled: true },
                                             ]);
                                         }}>
                                         <span className="flex flex-col items-start gap-1 text-left">

@@ -19,6 +19,7 @@ import {
     Reaction,
 } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
+import { CODE_BASE_CONFIG_SERVICE_TOKEN, ICodeBaseConfigService } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
 import { getLabelShield } from '@libs/common/utils/codeManagement/labels';
 import { getSeverityLevelShield } from '@libs/common/utils/codeManagement/severityLevel';
@@ -162,6 +163,8 @@ export class GithubService
 
         @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
         private readonly integrationConfigService: IIntegrationConfigService,
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
         private readonly cacheService: CacheService,
         private readonly configService: ConfigService,
         private readonly mcpManagerService?: MCPManagerService,
@@ -3424,6 +3427,7 @@ ${copyPrompt}
         translations: any,
         suggestionCopyPrompt: boolean,
         isCommittableSuggestion?: boolean,
+        fineTuningEnabled?: boolean,
     ) {
         const improvedCode = isCommittableSuggestion
             ? lineComment?.suggestion?.validatedData?.code
@@ -3474,6 +3478,12 @@ This is an experimental feature that generates committable changes. Review the d
 `
             : '';
 
+        const enableFeedback = fineTuningEnabled ?? true;
+        const feedbackFooter = enableFeedback
+            ? this.formatSub(translations.feedback) +
+              '<!-- kody-codereview -->&#8203;\n&#8203;'
+            : '';
+
         return [
             badges,
             suggestionContent,
@@ -3482,8 +3492,7 @@ This is an experimental feature that generates committable changes. Review the d
             experimentalWarning,
             copyPrompt,
             this.formatSub(translations.talkToKody),
-            this.formatSub(translations.feedback) +
-            '<!-- kody-codereview -->&#8203;\n&#8203;',
+            feedbackFooter,
         ]
             .join('\n')
             .trim();
@@ -3527,12 +3536,19 @@ This is an experimental feature that generates committable changes. Review the d
             ? validatedData.lineEnd
             : lineComment.line;
 
+        const fineTuningConfig =
+            await this.codeBaseConfigService.getKodyFineTuningConfigParameter(
+                organizationAndTeamData,
+                repository.id,
+            );
+
         const bodyFormatted = this.formatBodyForGitHub(
             lineComment,
             repository,
             translations,
             suggestionCopyPrompt,
             isCommittableSuggestion,
+            fineTuningConfig.value,
         );
 
         try {
@@ -6814,7 +6830,7 @@ This is an experimental feature that generates committable changes. Review the d
 
     formatReviewCommentBody(params: {
         suggestion: any;
-        repository: { name: string; language: string };
+        repository: { name: string; id: string; language: string };
         includeHeader?: boolean;
         includeFooter?: boolean;
         language?: string;
@@ -6869,9 +6885,17 @@ This is an experimental feature that generates committable changes. Review the d
             );
 
             commentBody += this.formatSub(translations.talkToKody) + '\n';
-            commentBody +=
-                this.formatSub(translations.feedback) +
-                '<!-- kody-codereview -->&#8203;\n&#8203;';
+
+            const fineTuningConfig =
+                await this.codeBaseConfigService.getKodyFineTuningConfigParameter(
+                    params.organizationAndTeamData,
+                    params.repository.id,
+                );
+            if (fineTuningConfig.enabled) {
+                commentBody +=
+                    this.formatSub(translations.feedback) +
+                    '<!-- kody-codereview -->&#8203;\n&#8203;';
+            }
         }
 
         return Promise.resolve(commentBody.trim());

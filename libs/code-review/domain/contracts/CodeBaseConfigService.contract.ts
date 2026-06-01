@@ -3,7 +3,7 @@ import {
     CodeReviewConfigWithoutLLMProvider,
     FileChange,
     KodusConfigFile,
-    KodyFineTuningConfig,
+    KodyFineTuningEnabled,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
@@ -55,7 +55,7 @@ export interface ICodeBaseConfigService {
     getKodyFineTuningConfigParameter(
         organizationAndTeamData: OrganizationAndTeamData,
         repositoryId?: string,
-    ): Promise<KodyFineTuningConfig>;
+    ): Promise<KodyFineTuningEnabled>;
 
     getE2BIpAddress(): Promise<string | null>;
 }

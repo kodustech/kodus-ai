@@ -89,7 +89,7 @@ export type AnalysisContext<TPullRequest = any> = {
     baseDir?: string;
     correlationId?: string;
     reviewModeResponse?: ReviewModeResponse;
-    kodyFineTuningConfig?: KodyFineTuningConfig;
+    kodyFineTuningConfig?: KodyFineTuningEnabled;
     fileChangeContext?: FileChangeContext;
     clusterizedSuggestions?: IClusterizedSuggestion[];
     validCrossFileSuggestions?: CodeSuggestion[];
@@ -325,7 +325,7 @@ export type CodeReviewConfig = {
     llmGeneratedMemoriesRequireApproval?: boolean;
     reviewModeConfig?: ReviewModeConfig;
     ideRulesSyncEnabled?: boolean;
-    kodyFineTuningConfig?: KodyFineTuningConfig;
+    kodyFineTuningEnabled?: KodyFineTuningEnabled;
     configLevel?: ConfigLevel;
     directoryId?: string;
     directoryPath?: string;
@@ -407,8 +407,8 @@ export type KodusConfigFile = DeepPartial<
     >;
 };
 
-export type KodyFineTuningConfig = {
-    enabled?: boolean;
+export type KodyFineTuningEnabled = {
+    value?: boolean;
 };
 
 export type ReviewCadence = {
