@@ -54,7 +54,7 @@ export class GetReactionsUseCase implements IUseCase {
                     pr.repository.id,
                 );
 
-            if (fineTuningConfig.enabled) {
+            if (fineTuningConfig.value) {
                 filteredPRs.push(pr);
             } else {
                 this.logger.debug({

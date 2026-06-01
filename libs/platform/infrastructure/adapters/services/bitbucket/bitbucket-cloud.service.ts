@@ -2137,7 +2137,7 @@ export class BitbucketCloudService implements Omit<
                     repository.id,
                 );
 
-            const fineTuningEnabled = fineTuningConfig.enabled;
+            const fineTuningEnabled = fineTuningConfig.value;
             const bodyFormatted = this.formatBodyForBitbucket(
                 lineComment,
                 repository,

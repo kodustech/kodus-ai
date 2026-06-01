@@ -1455,7 +1455,7 @@ export class AzureReposService implements Omit<
                     organizationAndTeamData,
                     repository.id,
                 );
-            const fineTuningEnabled = fineTuningConfig.enabled;
+            const fineTuningEnabled = fineTuningConfig.value;
 
             const bodyFormatted = this.formatBodyForAzure(
                 lineComment,
@@ -4420,7 +4420,7 @@ ${copyPrompt}
                     organizationAndTeamData,
                     repository.id,
                 );
-            if (fineTuningConfig.enabled) {
+            if (fineTuningConfig.value) {
                 commentBody += this.formatSub(translations.feedback) + '\n\n';
 
                 const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;

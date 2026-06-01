@@ -2717,7 +2717,7 @@ export class ForgejoService implements Omit<
                     params.organizationAndTeamData,
                     params.repository.id,
                 );
-            const fineTuningEnabled = fineTuningConfig.enabled;
+            const fineTuningEnabled = fineTuningConfig.value;
 
             const bodyFormatted = this.formatBodyForForgejo(
                 lineComment,
@@ -2886,7 +2886,7 @@ export class ForgejoService implements Omit<
                 params.organizationAndTeamData,
                 params.repository.id,
             );
-        const fineTuningEnabled = fineTuningConfig.enabled;
+        const fineTuningEnabled = fineTuningConfig.value;
 
         return this.formatBodyForForgejo(
             { suggestion: params.suggestion, body: params.suggestion },

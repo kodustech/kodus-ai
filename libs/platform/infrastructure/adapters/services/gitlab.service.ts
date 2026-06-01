@@ -2105,7 +2105,7 @@ export class GitlabService implements Omit<
                     organizationAndTeamData,
                     repository.id,
                 );
-            const fineTuningEnabled = fineTuningConfig.enabled;
+            const fineTuningEnabled = fineTuningConfig.value;
 
             const bodyFormatted = this.formatBodyForGitLab(
                 lineComment,
@@ -4199,7 +4199,7 @@ export class GitlabService implements Omit<
                     organizationAndTeamData,
                     repository.id,
                 );
-            if (fineTuningConfig.enabled) {
+            if (fineTuningConfig.value) {
                 commentBody += this.formatSub(translations.feedback);
             }
         }
