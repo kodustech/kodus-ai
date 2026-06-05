@@ -23,6 +23,10 @@ import {
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { AzureReposRequestHelper } from '@libs/platform/infrastructure/adapters/services/azureRepos/azure-repos-request-helper';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 
 jest.mock('@kodus/flow', () => ({
     createLogger: () => ({
@@ -84,6 +88,14 @@ describe('AzureReposService.createResponseToComment', () => {
                 {
                     provide: MCPManagerService,
                     useValue: { getManager: jest.fn() },
+                },
+                {
+                    provide: CODE_BASE_CONFIG_SERVICE_TOKEN,
+                    useValue: {
+                        getKodyFineTuningConfigParameter: jest
+                            .fn()
+                            .mockResolvedValue({ value: true }),
+                    } as Partial<ICodeBaseConfigService>,
                 },
             ],
         }).compile();

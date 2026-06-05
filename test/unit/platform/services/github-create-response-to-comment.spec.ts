@@ -15,6 +15,10 @@ import {
     IIntegrationConfigService,
 } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import {
+    AUTH_INTEGRATION_SERVICE_TOKEN,
+    IAuthIntegrationService,
+} from '@libs/integrations/domain/authIntegrations/contracts/auth-integration.service.contracts';
+import {
     IIntegrationService,
     INTEGRATION_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
@@ -86,7 +90,7 @@ describe('GithubService.createResponseToComment', () => {
                     useValue: {
                         getKodyFineTuningConfigParameter: jest
                             .fn()
-                            .mockResolvedValue({ enabled: true }),
+                            .mockResolvedValue({ value: true }),
                     } as Partial<ICodeBaseConfigService>,
                 },
                 {

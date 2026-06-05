@@ -21,6 +21,10 @@ import {
     IIntegrationService,
     INTEGRATION_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 
 jest.mock('@kodus/flow', () => ({
     createLogger: () => ({
@@ -72,6 +76,14 @@ describe('ForgejoService.createResponseToComment', () => {
                     useValue: {
                         findOne: jest.fn(),
                     } as Partial<IAuthIntegrationService>,
+                },
+                {
+                    provide: CODE_BASE_CONFIG_SERVICE_TOKEN,
+                    useValue: {
+                        getKodyFineTuningConfigParameter: jest
+                            .fn()
+                            .mockResolvedValue({ value: true }),
+                    } as Partial<ICodeBaseConfigService>,
                 },
             ],
         }).compile();

@@ -23,6 +23,10 @@ import {
     INTEGRATION_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 
 jest.mock('@kodus/flow', () => ({
     createLogger: () => ({
@@ -98,6 +102,14 @@ describe('BitbucketService.createResponseToComment', () => {
                 {
                     provide: MCPManagerService,
                     useValue: { getManager: jest.fn() },
+                },
+                {
+                    provide: CODE_BASE_CONFIG_SERVICE_TOKEN,
+                    useValue: {
+                        getKodyFineTuningConfigParameter: jest
+                            .fn()
+                            .mockResolvedValue({ value: true }),
+                    } as Partial<ICodeBaseConfigService>,
                 },
             ],
         }).compile();

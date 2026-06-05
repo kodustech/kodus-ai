@@ -56,7 +56,7 @@ describe('GithubService — cache behavior', () => {
         const codeBaseConfigService = {
             getKodyFineTuningConfigParameter: jest
                 .fn()
-                .mockResolvedValue({ enabled: true }),
+                .mockResolvedValue({ value: true }),
         };
         const configService = { get: jest.fn() } as unknown as ConfigService;
 
