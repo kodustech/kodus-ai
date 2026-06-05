@@ -84,6 +84,7 @@ function makeService(): {
         {} as any, // integrationService
         {} as any, // authIntegrationService
         {} as any, // integrationConfigService
+        {} as any, // codeBaseConfigService
         cache,
         {} as any, // configService
     );

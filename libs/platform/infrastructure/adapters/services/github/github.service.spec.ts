@@ -50,6 +50,7 @@ describe('GithubService', () => {
             integrationService as any,
             authIntegrationService as any,
             integrationConfigService as any,
+            {} as any, // codeBaseConfigService
             cacheService as any,
             configService,
         );

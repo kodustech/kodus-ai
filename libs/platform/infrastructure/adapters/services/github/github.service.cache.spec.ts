@@ -53,12 +53,18 @@ describe('GithubService — cache behavior', () => {
         const integrationConfigService = {
             createOrUpdateConfig: jest.fn(),
         };
+        const codeBaseConfigService = {
+            getKodyFineTuningConfigParameter: jest
+                .fn()
+                .mockResolvedValue({ enabled: true }),
+        };
         const configService = { get: jest.fn() } as unknown as ConfigService;
 
         const service = new GithubService(
             integrationService as any,
             authIntegrationService as any,
             integrationConfigService as any,
+            codeBaseConfigService as any,
             cacheService as any,
             configService,
         );
