@@ -84,21 +84,18 @@ jobs:
         environment: ci
         permissions:
             contents: read
-            # `gh variable set` below uses GITHUB_TOKEN — variables fall
-            # under the Actions permission scope.
-            actions: write
         steps:
-            # Variable FIRST, ruleset second — and with DIFFERENT tokens.
-            # RELEASE_BOT_TOKEN can PUT rulesets (admin) but has NO Actions
-            # variables access: on the first scheduled run (2026-06-05) the
-            # old single step activated the ruleset and THEN 403'd on
-            # `gh variable set`, killing the whole release at job 1 with the
-            # ruleset left active and unfreeze-main skipped. GITHUB_TOKEN
-            # with `actions: write` handles the variable; the admin token
-            # only touches the ruleset.
+            # Variable FIRST, ruleset second. Both steps use
+            # RELEASE_BOT_TOKEN, which carries BOTH "Administration" (the
+            # ruleset PUT) and "Variables: read/write". Do NOT swap the
+            # variable step to GITHUB_TOKEN: the Actions variables API is
+            # not reachable by the workflow token at all — `actions: write`
+            # still 403s with "Resource not accessible by integration"
+            # (verified live on run 27013019883, 2026-06-05). Only a PAT
+            # (classic `repo` scope or fine-grained with Variables) works.
             - name: Signal freeze to release-freeze-check.yml
               env:
-                  GH_TOKEN: ${{ github.token }}
+                  GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
                   REPO: ${{ github.repository }}
               run: |
                   set -euo pipefail
@@ -658,10 +655,6 @@ jobs:
         environment: ci
         permissions:
             contents: read
-            # `gh variable set` below uses GITHUB_TOKEN — variables fall
-            # under the Actions permission scope (RELEASE_BOT_TOKEN has no
-            # variables access; see freeze-main).
-            actions: write
         steps:
             - name: Deactivate release-freeze ruleset
               env:
@@ -678,7 +671,9 @@ jobs:
 
             - name: Clear freeze signal for release-freeze-check.yml
               env:
-                  GH_TOKEN: ${{ github.token }}
+                  # RELEASE_BOT_TOKEN, NOT github.token — the workflow token
+                  # cannot reach the Actions variables API (see freeze-main).
+                  GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
                   REPO: ${{ github.repository }}
               run: |
                   set -euo pipefail
