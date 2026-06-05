@@ -5,6 +5,10 @@ import { AzureReposRequestHelper } from '@libs/platform/infrastructure/services/
 import { INTEGRATION_SERVICE_TOKEN } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import { INTEGRATION_CONFIG_SERVICE_TOKEN } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { AUTH_INTEGRATION_SERVICE_TOKEN } from '@libs/integrations/domain/authIntegrations/contracts/auth-integration.service.contracts';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 
 jest.mock('@kodus/flow', () => ({
     createLogger: () => ({
@@ -99,6 +103,14 @@ describe('AzureReposService.getChangedFilesSinceLastCommit - merge commit filter
                 },
                 { provide: ConfigService, useValue: mockConfigService },
                 { provide: MCPManagerService, useValue: {} },
+                {
+                    provide: CODE_BASE_CONFIG_SERVICE_TOKEN,
+                    useValue: {
+                        getKodyFineTuningConfigParameter: jest
+                            .fn()
+                            .mockResolvedValue({ value: true }),
+                    } as Partial<ICodeBaseConfigService>,
+                },
             ],
         }).compile();
 

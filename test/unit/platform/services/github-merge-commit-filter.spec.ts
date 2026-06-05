@@ -14,6 +14,10 @@ import {
 } from '@libs/integrations/domain/authIntegrations/contracts/auth-integration.service.contracts';
 import { CacheService } from '@libs/core/cache/cache.service';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 
 // Mock external dependencies
 jest.mock('@kodus/flow', () => ({
@@ -93,6 +97,14 @@ describe('GitHub getChangedFilesSinceLastCommit - integration tests for merge co
                     useValue: {
                         getManager: jest.fn(),
                     },
+                },
+                {
+                    provide: CODE_BASE_CONFIG_SERVICE_TOKEN,
+                    useValue: {
+                        getKodyFineTuningConfigParameter: jest
+                            .fn()
+                            .mockResolvedValue({ value: true }),
+                    } as Partial<ICodeBaseConfigService>,
                 },
             ],
         }).compile();

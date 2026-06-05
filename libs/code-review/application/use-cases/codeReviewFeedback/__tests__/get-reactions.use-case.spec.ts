@@ -24,6 +24,9 @@ describe('GetReactionsUseCase', () => {
     let pullRequestService: {
         findPullRequestsWithDeliveredSuggestions: jest.Mock;
     };
+    let codeBaseConfigService: {
+        getKodyFineTuningConfigParameter: jest.Mock;
+    };
 
     const orgAndTeam = createSampleOrganizationAndTeamData();
 
@@ -37,10 +40,16 @@ describe('GetReactionsUseCase', () => {
                 .fn()
                 .mockResolvedValue([]),
         };
+        codeBaseConfigService = {
+            getKodyFineTuningConfigParameter: jest
+                .fn()
+                .mockResolvedValue({ value: true }),
+        };
 
         useCase = new GetReactionsUseCase(
             codeManagementService as any,
             pullRequestService as any,
+            codeBaseConfigService as any,
         );
     });
 
