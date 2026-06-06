@@ -134,7 +134,6 @@ async function isPostgresReachable(): Promise<boolean> {
 
             dataSource = makeDataSource(8);
             await dataSource.initialize();
-            await dataSource.synchronize();
 
             const repo = new ParametersRepository(
                 dataSource.getRepository(ParametersModel),
