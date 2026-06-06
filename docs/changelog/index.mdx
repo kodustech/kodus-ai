@@ -1,0 +1,104 @@
+---
+title: "Changelog"
+description: "Latest Kodus updates and improvements."
+---
+
+export const ChangelogRelease = () => (
+  <>
+    <a id="kodus-changelog-rss-action" className="kodus-changelog-rss" href="/changelog.xml" aria-label="RSS feed">
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <path d="M4 5.5a14.5 14.5 0 0 1 14.5 14.5" />
+        <path d="M4 10.5a9.5 9.5 0 0 1 9.5 9.5" />
+        <circle cx="5" cy="19" r="1" />
+      </svg>
+    </a>
+
+    <article className="kodus-changelog-release">
+      <aside className="kodus-changelog-meta">
+        <time className="kodus-changelog-date" dateTime="2026-06-08">June 8, 2026</time>
+      </aside>
+
+    <div className="kodus-changelog-content">
+      <section className="kodus-changelog-section">
+        <h2 className="kodus-changelog-section-label">What's new</h2>
+
+        <div className="kodus-changelog-item">
+          <h3 className="kodus-changelog-title">Moonshot Kimi support for BYOK</h3>
+
+          <p className="kodus-changelog-copy">We added support for Moonshot as a provider, compatible with the Anthropic API.</p>
+
+          <p className="kodus-changelog-copy">You can now use the Kimi Coding Plan model in BYOK setups. To configure it, set the <code className="kodus-changelog-code">API_MOONSHOT_API_KEY</code> key and select the model in the organization preferences.</p>
+
+          <p className="kodus-changelog-copy">See the <a className="kodus-changelog-link" href="https://docs.kodus.io/knowledge_base/en/how-to-use-moonshot-with-kodus">Moonshot (Kimi)</a> documentation for more setup details.</p>
+        </div>
+
+        <div className="kodus-changelog-item">
+          <h3 className="kodus-changelog-title">Monthly token usage control</h3>
+
+          <p className="kodus-changelog-copy">Organizations can now set monthly token consumption limits per model.</p>
+
+          <p className="kodus-changelog-copy">Usage is shown in real time in the interface, with a progress bar. When usage reaches 80% of the limit, the team receives an email alert. If the limit is reached, additional reviews can be blocked automatically.</p>
+
+          <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+            <source src="/videos/token-usage.mp4" type="video/mp4" />
+          </video>
+
+          <p className="kodus-changelog-copy">See the <a className="kodus-changelog-link" href="https://docs.kodus.io/how_to_use/en/spend-limit">Monthly Spend Limit</a> documentation for more setup details.</p>
+        </div>
+      </section>
+
+      <section className="kodus-changelog-section">
+        <h2 className="kodus-changelog-section-label">Improvements</h2>
+
+        <div className="kodus-changelog-item">
+          <h3 className="kodus-changelog-title">More resilient review agent</h3>
+
+          <p className="kodus-changelog-copy">The review engine now handles empty or malformed LLM responses better.</p>
+
+          <p className="kodus-changelog-copy">This reduces loops in edge cases and helps ensure valid suggestions continue to be delivered even when the provider returns an unexpected response.</p>
+        </div>
+
+        <div className="kodus-changelog-item">
+          <h3 className="kodus-changelog-title">Telemetry for self-hosted environments</h3>
+
+          <p className="kodus-changelog-copy">On-premise installations now automatically report health metrics, such as heartbeat, and usage data.</p>
+
+          <p className="kodus-changelog-copy">The goal is to make diagnosis and support easier without exposing sensitive customer data.</p>
+        </div>
+
+        <div className="kodus-changelog-item">
+          <h3 className="kodus-changelog-title">Faster Kody Rules</h3>
+
+          <p className="kodus-changelog-copy">We improved the loading and synchronization of custom rules.</p>
+
+          <p className="kodus-changelog-copy">We also fixed the count of orphaned rules and made partial updates safer against race conditions.</p>
+        </div>
+
+        <div className="kodus-changelog-item">
+          <h3 className="kodus-changelog-title">GitLab compatibility improvements</h3>
+
+          <ul className="kodus-changelog-list">
+            <li>Support for GitLab 13.x in comment webhooks</li>
+            <li>Diff fallback for versions earlier than 15.7</li>
+            <li>Fixes for discussion threads and replies scoped by discussionId</li>
+            <li>Self-hosted development environment documentation</li>
+          </ul>
+        </div>
+      </section>
+
+      <section className="kodus-changelog-section">
+        <h2 className="kodus-changelog-section-label">Fixes</h2>
+
+        <ul className="kodus-changelog-list">
+          <li>GitHub: suspended users no longer appear in the member list for license assignment.</li>
+          <li>Update Connection: integration reauthentication now correctly clears the previous configuration.</li>
+          <li>Integration reset: Kody Rules linked to the repo/directory are now removed automatically.</li>
+          <li>Release Freeze: eligibility notifications only appear when the freeze is active.</li>
+        </ul>
+      </section>
+    </div>
+    </article>
+  </>
+);
+
+<ChangelogRelease />

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Kodus Changelog</title>
+        <link>https://docs.kodus.io/changelog</link>
+        <description>Latest Kodus updates and improvements.</description>
+        <language>en</language>
+        <lastBuildDate>Mon, 08 Jun 2026 00:00:00 GMT</lastBuildDate>
+        <atom:link href="https://docs.kodus.io/changelog.xml" rel="self" type="application/rss+xml" />
+        <item>
+            <title>June 8, 2026 - Kodus updates</title>
+            <link>https://docs.kodus.io/changelog</link>
+            <guid isPermaLink="false">kodus-changelog-2026-06-08</guid>
+            <pubDate>Mon, 08 Jun 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[
+                <h2>What's new</h2>
+                <h3>Moonshot Kimi support for BYOK</h3>
+                <p>We added support for Moonshot as a provider, compatible with the Anthropic API.</p>
+                <p>You can now use the Kimi Coding Plan model in BYOK setups. To configure it, set the API_MOONSHOT_API_KEY key and select the model in the organization preferences.</p>
+                <p>See the Moonshot (Kimi) documentation for more setup details: https://docs.kodus.io/knowledge_base/en/how-to-use-moonshot-with-kodus</p>
+
+                <h3>Monthly token usage control</h3>
+                <p>Organizations can now set monthly token consumption limits per model.</p>
+                <p>Usage is shown in real time in the interface, with a progress bar. When usage reaches 80% of the limit, the team receives an email alert. If the limit is reached, additional reviews can be blocked automatically.</p>
+                <p>Video: https://kodus.io/wp-content/uploads/2026/06/token-usage.mov</p>
+                <p>See the Monthly Spend Limit documentation for more setup details: https://docs.kodus.io/how_to_use/en/spend-limit</p>
+
+                <h2>Improvements</h2>
+                <h3>More resilient review agent</h3>
+                <p>The review engine now handles empty or malformed LLM responses better. This reduces loops in edge cases and helps ensure valid suggestions continue to be delivered even when the provider returns an unexpected response.</p>
+
+                <h3>Telemetry for self-hosted environments</h3>
+                <p>On-premise installations now automatically report health metrics, such as heartbeat, and usage data. The goal is to make diagnosis and support easier without exposing sensitive customer data.</p>
+
+                <h3>Faster Kody Rules</h3>
+                <p>We improved the loading and synchronization of custom rules. We also fixed the count of orphaned rules and made partial updates safer against race conditions.</p>
+
+                <h3>GitLab compatibility improvements</h3>
+                <ul>
+                    <li>Support for GitLab 13.x in comment webhooks</li>
+                    <li>Diff fallback for versions earlier than 15.7</li>
+                    <li>Fixes for discussion threads and replies scoped by discussionId</li>
+                    <li>Self-hosted development environment documentation</li>
+                </ul>
+
+                <h2>Fixes</h2>
+                <ul>
+                    <li>GitHub: suspended users no longer appear in the member list for license assignment.</li>
+                    <li>Update Connection: integration reauthentication now correctly clears the previous configuration.</li>
+                    <li>Integration reset: Kody Rules linked to the repo/directory are now removed automatically.</li>
+                    <li>Release Freeze: eligibility notifications only appear when the freeze is active.</li>
+                </ul>
+            ]]></description>
+        </item>
+    </channel>
+</rss>

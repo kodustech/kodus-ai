@@ -1,0 +1,207 @@
+#content-area:has(.kodus-changelog-release) #header .eyebrow {
+    display: none;
+}
+
+body:has(.kodus-changelog-release) div.ml-4.flex.text-sm.leading-6.whitespace-nowrap.min-w-0.space-x-3.overflow-hidden {
+    display: none;
+}
+
+body:has(.kodus-changelog-release) header a[href*="changelog"] {
+    position: relative;
+    color: #faf8f6 !important;
+}
+
+body:has(.kodus-changelog-release) header a[href*="changelog"] *,
+body:has(.kodus-changelog-release) header a[href*="changelog"] svg {
+    color: #faf8f6 !important;
+    stroke: currentColor;
+}
+
+body:has(.kodus-changelog-release) header a[href*="changelog"]::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 2px;
+    background: #f8b76d;
+}
+
+body:has(.kodus-changelog-release) header a[href*="changelog"]:hover,
+header a[href*="changelog"]:hover {
+    color: #f8b76d !important;
+}
+
+body:has(.kodus-changelog-release) header a[href*="changelog"]:hover *,
+body:has(.kodus-changelog-release) header a[href*="changelog"]:hover svg,
+header a[href*="changelog"]:hover *,
+header a[href*="changelog"]:hover svg {
+    color: #f8b76d !important;
+    stroke: currentColor;
+}
+
+.kodus-changelog-release {
+    display: grid;
+    grid-template-columns: minmax(8rem, 10rem) minmax(0, 1fr);
+    column-gap: 2.5rem;
+    align-items: start;
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid rgba(248, 183, 109, 0.18);
+}
+
+.kodus-changelog-meta {
+    position: sticky;
+    top: 8.5rem;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.65rem;
+}
+
+.kodus-changelog-date {
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    line-height: inherit;
+}
+
+.kodus-changelog-rss {
+    position: absolute;
+    top: -3.55rem;
+    right: 0;
+    display: inline-flex;
+    width: 2.6rem;
+    height: 2.6rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 0.75rem;
+    color: #e6e4e1;
+    background: rgba(16, 16, 25, 0.55);
+    text-decoration: none !important;
+    flex: 0 0 auto;
+    box-shadow: none !important;
+    outline: none;
+}
+
+.kodus-changelog-rss:hover,
+.kodus-changelog-rss:focus,
+.kodus-changelog-rss:focus-visible,
+.kodus-changelog-rss:active {
+    border-color: rgba(255, 255, 255, 0.18) !important;
+    color: #e6e4e1;
+    text-decoration: none !important;
+    box-shadow: none !important;
+    outline: none;
+}
+
+.kodus-changelog-rss svg {
+    width: 1.2rem;
+    height: 1.2rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.kodus-changelog-content {
+    min-width: 0;
+}
+
+.kodus-changelog-section + .kodus-changelog-section {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid rgba(248, 183, 109, 0.16);
+}
+
+.kodus-changelog-section-label {
+    display: block;
+    margin: 0 0 2rem;
+    color: #f8b76d;
+    font: inherit;
+    font-size: 1em;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: inherit;
+    text-transform: none;
+}
+
+.kodus-changelog-item + .kodus-changelog-item {
+    margin-top: 2.5rem;
+}
+
+.kodus-changelog-title {
+    margin: 0;
+    color: #ffffff;
+    font: inherit;
+    font-size: 1.25em;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.35;
+}
+
+.kodus-changelog-copy {
+    display: block;
+    margin: 0.85rem 0 0;
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
+}
+
+.kodus-changelog-link {
+    color: #f8b76d;
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-color: rgba(248, 183, 109, 0.7);
+    text-underline-offset: 0.2em;
+}
+
+.kodus-changelog-code {
+    border-radius: 0.35rem;
+    background: rgba(248, 183, 109, 0.14);
+    color: #f8b76d;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.9em;
+}
+
+.kodus-changelog-video {
+    display: block;
+    width: 100%;
+    margin: 1.25rem 0 0;
+    border: 1px solid rgba(248, 183, 109, 0.22);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.kodus-changelog-list {
+    margin: 0.85rem 0 0;
+    padding-left: 1.25rem;
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
+}
+
+.kodus-changelog-list li + li {
+    margin-top: 0.5rem;
+}
+
+@container columns-container (max-width: 42rem) {
+    .kodus-changelog-release {
+        grid-template-columns: 6.5rem minmax(0, 1fr);
+        column-gap: 1.25rem;
+    }
+
+    .kodus-changelog-rss {
+        top: -3.55rem;
+        right: 0;
+    }
+}
+
+@media (prefers-color-scheme: light) {
+    .kodus-changelog-title {
+        color: #111827;
+    }
+}
