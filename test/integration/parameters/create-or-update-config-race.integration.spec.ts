@@ -70,6 +70,7 @@ function makeDataSource(poolMax = 8): DataSource {
         database: PG_DB,
         logging: false,
         synchronize: false,
+        migrationsTransactionMode: 'each',
         migrations: [
             join(
                 __dirname,
