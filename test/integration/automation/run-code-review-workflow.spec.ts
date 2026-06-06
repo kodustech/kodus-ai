@@ -20,6 +20,10 @@ import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service
 import { LLM_ANALYSIS_SERVICE_TOKEN } from '@libs/code-review/infrastructure/adapters/services/llmAnalysis.service';
 import { KODY_RULES_ANALYSIS_SERVICE_TOKEN } from '@libs/ee/codeBase/kodyRulesAnalysis.service';
 import { WebhookContextService } from '@libs/platform/application/services/webhook-context.service';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 
 // --- MOCK DEFINITIONS ---
 // Definindo localmente para evitar problemas de importação circular ou paths não resolvidos
@@ -168,7 +172,26 @@ describe('Code Review Workflow Logic Integrity (No AST)', () => {
                     provide: KODY_RULES_ANALYSIS_SERVICE_TOKEN,
                     useValue: mockKodyRulesAnalysisService,
                 },
-                { provide: WebhookContextService, useValue: {} },
+                {
+                    provide: WebhookContextService,
+                    useValue: {
+                        getContext: jest.fn().mockResolvedValue({
+                            organizationAndTeamData: {
+                                organizationId: 'org-123',
+                                teamId: 'team-456',
+                            },
+                            teamAutomationId: 'team-auto-uuid',
+                        }),
+                    },
+                },
+                {
+                    provide: CODE_BASE_CONFIG_SERVICE_TOKEN,
+                    useValue: {
+                        getKodyFineTuningConfigParameter: jest
+                            .fn()
+                            .mockResolvedValue({ value: true }),
+                    } as Partial<ICodeBaseConfigService>,
+                },
             ],
         }).compile();
 
