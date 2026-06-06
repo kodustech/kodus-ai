@@ -30,6 +30,7 @@
  */
 require('dotenv').config();
 
+import { join } from 'path';
 import { DataSource } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -69,12 +70,12 @@ function makeDataSource(poolMax = 8): DataSource {
         database: PG_DB,
         logging: false,
         synchronize: false,
-        // Register every model the production app uses. Registering only the
-        // three we directly touch (Parameters/Team/Organization) breaks
-        // TypeORM's inverse-property resolution: Team has @OneToMany to
-        // TeamAutomationModel, IntegrationModel, etc., and Organization has
-        // its own fan-out. Missing any of them aborts initialize() with
-        // "Entity metadata for X#y was not found".
+        migrations: [
+            join(
+                __dirname,
+                '../../../libs/core/infrastructure/database/typeorm/migrations/*{.ts,.js}',
+            ),
+        ],
         entities: ENTITIES,
         extra: {
             max: poolMax,
@@ -134,6 +135,7 @@ async function isPostgresReachable(): Promise<boolean> {
 
             dataSource = makeDataSource(8);
             await dataSource.initialize();
+            await dataSource.runMigrations();
 
             const repo = new ParametersRepository(
                 dataSource.getRepository(ParametersModel),
