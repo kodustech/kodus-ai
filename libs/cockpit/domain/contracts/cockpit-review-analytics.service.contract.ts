@@ -56,6 +56,13 @@ export interface ICockpitReviewAnalyticsService {
         q: CockpitRangeQuery,
     ): Promise<ReviewOperationalMetricsWeeklyRow[]>;
     getKodyRulesUsage(q: CockpitRangeQuery): Promise<KodyRuleUsageRow[]>;
+    /**
+     * Map of `repositoryId` → `repo_full_name` for the org, from the
+     * warehouse. Lets the rule-health table label scope ("which repo")
+     * without a second round-trip — Kody rules only carry the external
+     * `repositoryId`, not the name.
+     */
+    getRepositoryNames(organizationId: string): Promise<Map<string, string>>;
     searchSuggestions(
         q: SuggestionsExplorerQuery,
     ): Promise<SuggestionsExplorerResult>;

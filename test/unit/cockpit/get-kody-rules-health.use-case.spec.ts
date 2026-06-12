@@ -55,9 +55,14 @@ describe('GetKodyRulesHealthUseCase', () => {
         endDate: '2026-06-01',
     };
 
-    const mkUseCase = (usageRows: unknown[], rulesDoc: unknown) => {
+    const mkUseCase = (
+        usageRows: unknown[],
+        rulesDoc: unknown,
+        repoNames: Map<string, string> = new Map(),
+    ) => {
         const reviewAnalytics = {
             getKodyRulesUsage: jest.fn().mockResolvedValue(usageRows),
+            getRepositoryNames: jest.fn().mockResolvedValue(repoNames),
         };
         const kodyRulesService = {
             findByOrganizationId: jest.fn().mockResolvedValue(rulesDoc),
@@ -150,5 +155,56 @@ describe('GetKodyRulesHealthUseCase', () => {
     it('handles orgs without a kodyRules doc', async () => {
         const useCase = mkUseCase([], null);
         await expect(useCase.execute(baseQuery)).resolves.toEqual([]);
+    });
+
+    it('labels scope: global sentinel → null, repo → resolved name, folder → path', async () => {
+        const useCase = mkUseCase(
+            [],
+            {
+                rules: [
+                    {
+                        uuid: 'g',
+                        title: 'Global rule',
+                        repositoryId: 'global',
+                        status: KodyRulesStatus.ACTIVE,
+                    },
+                    {
+                        uuid: 'r',
+                        title: 'Repo rule',
+                        repositoryId: '670345891',
+                        status: KodyRulesStatus.ACTIVE,
+                    },
+                    {
+                        uuid: 'f',
+                        title: 'Folder rule',
+                        repositoryId: '670345891',
+                        path: 'src/auth',
+                        status: KodyRulesStatus.ACTIVE,
+                    },
+                ],
+            },
+            new Map([['670345891', 'kodustech/kodus-ai']]),
+        );
+
+        const rows = await useCase.execute(baseQuery);
+        const byId = Object.fromEntries(rows.map((r) => [r.ruleId, r]));
+
+        // global sentinel collapses to null → frontend reads it as "Global"
+        expect(byId.g).toMatchObject({
+            repositoryId: null,
+            repositoryName: null,
+            directoryPath: null,
+        });
+        // repo-scoped: id kept, name resolved from the warehouse map
+        expect(byId.r).toMatchObject({
+            repositoryId: '670345891',
+            repositoryName: 'kodustech/kodus-ai',
+            directoryPath: null,
+        });
+        // folder-scoped: path surfaced
+        expect(byId.f).toMatchObject({
+            repositoryName: 'kodustech/kodus-ai',
+            directoryPath: 'src/auth',
+        });
     });
 });

@@ -21,6 +21,26 @@ export const stateMeta: Record<
     low_data: { label: "Low data", className: "bg-info/15 text-info" },
 };
 
+/** Derives the rule's scope label from its repo/folder fields. */
+function ruleScope(row: KodyRuleHealthRow): {
+    kind: "Global" | "Repo" | "Folder";
+    detail: string | null;
+} {
+    if (row.directoryPath) {
+        return { kind: "Folder", detail: row.directoryPath };
+    }
+    if (row.repositoryId) {
+        return { kind: "Repo", detail: row.repositoryName ?? row.repositoryId };
+    }
+    return { kind: "Global", detail: null };
+}
+
+const scopeClass: Record<ReturnType<typeof ruleScope>["kind"], string> = {
+    Global: "bg-card-lv3 text-text-secondary",
+    Repo: "bg-info/15 text-info",
+    Folder: "bg-warning/15 text-warning",
+};
+
 export const rulesColumns: ColumnDef<KodyRuleHealthRow>[] = [
     {
         accessorKey: "title",
@@ -32,6 +52,34 @@ export const rulesColumns: ColumnDef<KodyRuleHealthRow>[] = [
                 {row.original.title}
             </span>
         ),
+    },
+    {
+        id: "scope",
+        accessorFn: (r) => ruleScope(r).kind,
+        header: ({ column }) => (
+            <DataTableColumnHeader column={column} title="Scope" />
+        ),
+        cell: ({ row }) => {
+            const { kind, detail } = ruleScope(row.original);
+            return (
+                <span className="flex items-center gap-1.5 text-xs whitespace-nowrap">
+                    <span
+                        className={cn(
+                            "rounded-full px-2 py-0.5 text-[11px] font-bold",
+                            scopeClass[kind],
+                        )}>
+                        {kind}
+                    </span>
+                    {detail && (
+                        <span
+                            className="text-text-tertiary max-w-[180px] truncate font-mono"
+                            title={detail}>
+                            {detail}
+                        </span>
+                    )}
+                </span>
+            );
+        },
     },
     {
         accessorKey: "triggers",

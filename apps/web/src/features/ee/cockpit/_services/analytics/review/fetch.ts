@@ -70,6 +70,8 @@ export type KodyRuleHealthRow = {
     title: string;
     severity: string | null;
     repositoryId: string | null;
+    repositoryName: string | null;
+    directoryPath: string | null;
     state: KodyRuleHealthState;
     triggers: number;
     implemented: number;

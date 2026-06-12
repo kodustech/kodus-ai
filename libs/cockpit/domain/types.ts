@@ -266,7 +266,12 @@ export interface ReviewOperationalMetrics {
 export interface KodyRuleHealthRow extends KodyRuleUsageRow {
     title: string;
     severity: string | null;
+    /** External repo id the rule is scoped to; null → org-wide (global). */
     repositoryId: string | null;
+    /** Resolved `repo_full_name` for `repositoryId`, when known. */
+    repositoryName: string | null;
+    /** Folder/path the rule is scoped to; null/'' → not folder-scoped. */
+    directoryPath: string | null;
     /**
      * `noisy` (negative feedback) only becomes computable in phase 3 when
      * `suggestion_feedback` lands in the warehouse.

@@ -86,9 +86,10 @@ export class GetKodyRulesHealthUseCase {
     ) {}
 
     async execute(q: CockpitRangeQuery): Promise<KodyRuleHealthRow[]> {
-        const [usageRows, rulesDoc] = await Promise.all([
+        const [usageRows, rulesDoc, repoNames] = await Promise.all([
             this.reviewAnalytics.getKodyRulesUsage(q),
             this.kodyRulesService.findByOrganizationId(q.organizationId),
+            this.reviewAnalytics.getRepositoryNames(q.organizationId),
         ]);
 
         const usageByRule = new Map(usageRows.map((u) => [u.ruleId, u]));
@@ -105,11 +106,21 @@ export class GetKodyRulesHealthUseCase {
             const { state, usage } = computeRuleState(
                 usageByRule.get(rule.uuid),
             );
+            // `'global'` is the org-wide sentinel (not a repo named "global");
+            // normalize it — and empty strings — to null so consumers read
+            // "no repository → global scope".
+            const rawRepoId = rule.repositoryId ?? null;
+            const repositoryId =
+                rawRepoId && rawRepoId !== 'global' ? rawRepoId : null;
             return {
                 ruleId: rule.uuid,
                 title: rule.title,
                 severity: rule.severity ?? null,
-                repositoryId: rule.repositoryId ?? null,
+                repositoryId,
+                repositoryName: repositoryId
+                    ? (repoNames.get(repositoryId) ?? null)
+                    : null,
+                directoryPath: rule.path ? rule.path : null,
                 state,
                 ...usage,
             };

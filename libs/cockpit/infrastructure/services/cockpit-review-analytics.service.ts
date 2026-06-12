@@ -775,6 +775,21 @@ export class CockpitReviewAnalyticsService
         }));
     }
 
+    async getRepositoryNames(
+        organizationId: string,
+    ): Promise<Map<string, string>> {
+        const rows = (await this.ds.query(
+            `SELECT DISTINCT pr."repositoryId" AS id, pr."repo_full_name" AS name
+               FROM "analytics"."pull_requests_opt" pr
+              WHERE pr."organizationId" = $1
+                AND pr."repositoryId" IS NOT NULL
+                AND pr."repo_full_name" IS NOT NULL`,
+            [organizationId],
+        )) as Array<{ id: string; name: string }>;
+
+        return new Map(rows.map((r) => [r.id, r.name]));
+    }
+
     async searchSuggestions(
         q: SuggestionsExplorerQuery,
     ): Promise<SuggestionsExplorerResult> {
