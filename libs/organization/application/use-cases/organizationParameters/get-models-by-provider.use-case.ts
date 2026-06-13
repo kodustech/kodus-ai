@@ -95,8 +95,7 @@ export class GetModelsByProviderUseCase {
             case BYOKProvider.OPENAI_COMPATIBLE:
                 return this.getOpenAICompatibleModels(
                     process.env.API_OPEN_AI_API_KEY,
-                    process.env.API_OPENAI_FORCE_BASE_URL ||
-                        'https://api.openai.com',
+                    process.env.API_OPENAI_FORCE_BASE_URL || 'https://api.openai.com/v1',
                 );
 
             case BYOKProvider.AMAZON_BEDROCK:
@@ -377,8 +376,8 @@ export class GetModelsByProviderUseCase {
 
         try {
             const modelsUrl = baseUrl.endsWith('/')
-                ? `${baseUrl}v1/models`
-                : `${baseUrl}/v1/models`;
+                ? `${baseUrl}models`
+                : `${baseUrl}/models`;
 
             const response = await axios.get<OpenAIResponse>(modelsUrl, {
                 headers: {

@@ -119,7 +119,7 @@ export class LLMProviderService {
                     ...options,
                     model: envMode,
                     temperature: effectiveTemperature,
-                    baseURL: process.env.API_OPENAI_FORCE_BASE_URL,
+                    baseURL: process.env.API_OPENAI_FORCE_BASE_URL || 'https://api.openai.com/v1',
                     apiKey: process.env.API_OPEN_AI_API_KEY,
                 });
 

@@ -287,7 +287,7 @@ export function byokToVercelModel(
             const isGemini = GEMINI_MODEL_PATTERN.test(envMode);
             const isClaude = CLAUDE_MODEL_PATTERN.test(envMode);
             const openaiKey = process.env.API_OPEN_AI_API_KEY;
-            const openaiBaseURL = process.env.API_OPENAI_FORCE_BASE_URL;
+            const openaiBaseURL = process.env.API_OPENAI_FORCE_BASE_URL || 'https://api.openai.com/v1';
             const vertexKey = process.env.API_VERTEX_AI_API_KEY;
             const googleAiStudioKey =
                 process.env.API_GOOGLE_AI_API_KEY ||
@@ -353,7 +353,7 @@ export function byokToVercelModel(
                     // "Invalid URL" on the first request. Default to
                     // api.openai.com to match the legacy v2 getChatGPT
                     // behavior when no custom endpoint is configured.
-                    baseURL: openaiBaseURL || 'https://api.openai.com/v1',
+                    baseURL: openaiBaseURL,
                     supportsStructuredOutputs:
                         options.structuredOutputs === true,
                 })(envMode);
@@ -502,7 +502,7 @@ export function getModelName(
     if (envMode !== 'auto') {
         const isGemini = GEMINI_MODEL_PATTERN.test(envMode);
         const isClaude = CLAUDE_MODEL_PATTERN.test(envMode);
-        const openaiBaseURL = process.env.API_OPENAI_FORCE_BASE_URL;
+        const openaiBaseURL = process.env.API_OPENAI_FORCE_BASE_URL || 'https://api.openai.com/v1';
         const viaProxy = isProxyBaseURL(openaiBaseURL);
         const googleAiStudioKey =
             process.env.API_GOOGLE_AI_API_KEY ||
@@ -557,7 +557,7 @@ export function getInternalModel(
         const isGemini = GEMINI_MODEL_PATTERN.test(envMode);
         const isClaude = CLAUDE_MODEL_PATTERN.test(envMode);
         const openaiKey = process.env.API_OPEN_AI_API_KEY;
-        const openaiBaseURL = process.env.API_OPENAI_FORCE_BASE_URL;
+        const openaiBaseURL = process.env.API_OPENAI_FORCE_BASE_URL || 'https://api.openai.com/v1';
         const vertexKey = process.env.API_VERTEX_AI_API_KEY;
         const googleAiStudioKey =
             process.env.API_GOOGLE_AI_API_KEY ||
@@ -599,7 +599,7 @@ export function getInternalModel(
             return createOpenAICompatible({
                 name: 'self-hosted',
                 apiKey: openaiKey,
-                baseURL: openaiBaseURL || 'https://api.openai.com/v1',
+                baseURL: openaiBaseURL,
                 supportsStructuredOutputs: options.structuredOutputs === true,
             })(envMode);
         }

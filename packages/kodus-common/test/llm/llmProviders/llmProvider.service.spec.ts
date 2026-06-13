@@ -208,7 +208,7 @@ describe('LLMProviderService', () => {
     describe('Self-hosted mode', () => {
         beforeEach(() => {
             process.env.API_LLM_PROVIDER_MODEL = 'custom-model';
-            process.env.API_OPENAI_FORCE_BASE_URL = 'http://localhost:8080';
+            process.env.API_OPENAI_FORCE_BASE_URL = 'http://localhost:8080/v1';
         });
 
         afterEach(() => {

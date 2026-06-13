@@ -73,7 +73,7 @@ export function describeEnvLLMConfig(
     }
 
     const openaiKey = env.API_OPEN_AI_API_KEY;
-    const openaiBaseURL = env.API_OPENAI_FORCE_BASE_URL;
+    const openaiBaseURL = env.API_OPENAI_FORCE_BASE_URL || 'https://api.openai.com/v1';
     const vertexKey = env.API_VERTEX_AI_API_KEY;
     const googleAiStudioKey =
         env.API_GOOGLE_AI_API_KEY || env.GOOGLE_GENERATIVE_AI_API_KEY;
@@ -127,7 +127,7 @@ export function describeEnvLLMConfig(
             configured: true,
             model: envMode,
             providerId: 'anthropic',
-            baseUrl: openaiBaseURL || undefined,
+            baseUrl: openaiBaseURL,
         });
     }
 
@@ -136,7 +136,7 @@ export function describeEnvLLMConfig(
             configured: true,
             model: envMode,
             providerId: 'openai_compatible',
-            baseUrl: openaiBaseURL || 'https://api.openai.com/v1',
+            baseUrl: openaiBaseURL,
         });
     }
 
