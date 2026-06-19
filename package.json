@@ -356,7 +356,7 @@
         "mongoose": "^9.6.2",
         "mongoose-paginate": "^5.0.3",
         "nanoid": "^5.1.11",
-        "nodemailer": "^8.0.7",
+        "nodemailer": "^9.0.1",
         "octokit": "^5.0.5",
         "openai": "^6.38.0",
         "p-limit": "^7.3.0",
