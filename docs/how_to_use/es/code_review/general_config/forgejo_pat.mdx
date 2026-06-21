@@ -1,0 +1,52 @@
+---
+title: "Token de Acceso de Forgejo"
+---
+
+<Note>
+  El soporte para Forgejo es mantenido por la comunidad.
+</Note>
+
+## Introducción
+
+Para habilitar a Kody a realizar revisiones de código automáticas en Forgejo, necesitas generar un **Token de Acceso**. Este token permite que Kody acceda a tus repositorios, pull requests, webhooks, issues, etc., con los permisos específicos listados a continuación.
+
+---
+
+## Generando el Token de Acceso en Forgejo
+
+1. Accede a tu instancia de Forgejo y haz clic en el ícono de avatar en la esquina superior derecha
+2. Selecciona **Settings**
+3. Navega a **Applications**
+4. En **Generate New Token**, asígnale un nombre (por ejemplo `kodus_code_review`)
+5. Selecciona los permisos requeridos (ver abajo)
+6. Haz clic en **Generate Token**
+7. **Copia** el token inmediatamente y guárdalo de forma segura — no podrás verlo nuevamente después de cerrar la página
+
+---
+
+## Permisos Requeridos para Kody
+
+El token debe incluir **todos** los siguientes permisos para funcionar correctamente con Kody:
+
+| Categoría | Nivel | Propósito |
+|-----------|-------|-----------|
+| `repository` | **Leer y Escribir** | Acceder al código, ramas, archivos, crear comentarios en PRs y gestionar webhooks |
+| `issue` | **Leer y Escribir** | Ver y modificar issues, labels y milestones |
+| `notification` | **Leer** | Ver notificaciones |
+| `user` | **Leer** | Leer información básica del usuario |
+
+> ⚠️ Concede solo estos permisos necesarios; evita otorgar más de lo necesario para reducir riesgos de seguridad.
+
+---
+
+## Agregando el Token a Kody
+
+Pega el token generado en la **pantalla de configuración de integración de Kody** al habilitar la integración con Forgejo.
+
+---
+
+## Notas Importantes
+
+- El token se **muestra solo una vez** después de la creación. Guárdalo de forma segura.
+- Si el token se ve comprometido, revócalo inmediatamente y crea uno nuevo.
+- Audita periódicamente los tokens y sus permisos para confirmar que aún son necesarios.

@@ -9,6 +9,7 @@ import {
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { getMappedPlatform } from '@libs/common/utils/webhooks';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
 import { EnqueueCodeReviewJobUseCase } from '@libs/core/workflow/application/use-cases/enqueue-code-review-job.use-case';
 import { GenerateIssuesFromPrClosedUseCase } from '@libs/issues/application/use-cases/generate-issues-from-pr-closed.use-case';
@@ -19,6 +20,7 @@ import {
     IWebhookEventParams,
 } from '@libs/platform/domain/platformIntegrations/interfaces/webhook-event-handler.interface';
 import {
+    IWebhookForgejoPushEvent,
     WebhookForgejoCommentAction,
     WebhookForgejoEvent,
     WebhookForgejoHookIssueAction,
@@ -38,7 +40,7 @@ import { CodeManagementService } from '../../adapters/services/codeManagement.se
 
 /**
  * Handler for Forgejo/Gitea webhook events.
- * Processes both pull request and comment events.
+ * Processes pull request, comment, and push events.
  */
 @Injectable()
 export class ForgejoPullRequestHandler implements IWebhookEventHandler {
@@ -68,6 +70,7 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
             WebhookForgejoEvent.PULL_REQUEST,
             WebhookForgejoEvent.ISSUE_COMMENT,
             WebhookForgejoEvent.PULL_REQUEST_REVIEW_COMMENT,
+            WebhookForgejoEvent.PUSH,
         ];
 
         if (!supportedEvents.includes(params.event)) {
@@ -94,6 +97,9 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
         switch (event) {
             case WebhookForgejoEvent.PULL_REQUEST:
                 await this.handlePullRequest(params);
+                break;
+            case WebhookForgejoEvent.PUSH:
+                await this.handlePush(params);
                 break;
             case WebhookForgejoEvent.ISSUE_COMMENT:
             case WebhookForgejoEvent.PULL_REQUEST_REVIEW_COMMENT:
@@ -222,6 +228,10 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                             },
                         });
                     });
+
+                // Forgejo `synchronized` pull_request webhooks do not include
+                // the previous head SHA. Force-push invalidation runs from the
+                // branch `push` event, which provides both `before` and `after`.
             }
 
             if (payload?.action === WebhookForgejoHookIssueAction.CLOSED) {
@@ -230,24 +240,25 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                 // Durable sandbox invalidation via outbox (SBX-05).
                 // Written in the same DB transaction context so it survives worker crashes.
                 const prKey = `${context.organizationAndTeamData.organizationId}:${repository.id}:${payload?.pull_request?.number}`;
-                this.outboxRepository.create({
-                    jobId: undefined,
-                    exchange: 'sandbox.events',
-                    routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
-                    payload: {
-                        prKey,
-                        reason: 'pr_closed',
-                    } satisfies SandboxInvalidatePayload,
-                }).catch((err) => {
-                    this.logger.warn({
-                        message: '[SBX-05] Failed to write sandbox invalidation outbox message',
-                        context: ForgejoPullRequestHandler.name,
-                        error: err instanceof Error ? err : undefined,
-                        metadata: { prKey },
+                this.outboxRepository
+                    .create({
+                        jobId: undefined,
+                        exchange: 'sandbox.events',
+                        routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
+                        payload: {
+                            prKey,
+                            reason: 'pr_closed',
+                        } satisfies SandboxInvalidatePayload,
+                    })
+                    .catch((err) => {
+                        this.logger.warn({
+                            message:
+                                '[SBX-05] Failed to write sandbox invalidation outbox message',
+                            context: ForgejoPullRequestHandler.name,
+                            error: err instanceof Error ? err : undefined,
+                            metadata: { prKey },
+                        });
                     });
-                });
-
-                // TODO(SBX-05): force-push not surfaced by this platform's webhook payload — add when available.
 
                 // If merged into default branch, trigger Kody Rules sync for main
                 const merged = payload?.pull_request?.merged === true;
@@ -295,9 +306,8 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                                     repoName: repository.name,
                                     platform: PlatformType.FORGEJO,
                                     baseBranch: baseRef,
-                                    newSha:
-                                        payload?.pull_request
-                                            ?.merge_commit_sha,
+                                    newSha: payload?.pull_request
+                                        ?.merge_commit_sha,
                                     organizationAndTeamData:
                                         context.organizationAndTeamData,
                                 })
@@ -354,6 +364,117 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
             });
             throw error;
         }
+    }
+    private async handlePush(params: IWebhookEventParams): Promise<void> {
+        // Forgejo push webhooks are the only event carrying both previous and
+        // current branch heads, so use them to map the branch back to open PRs
+        // and detect force-pushes.
+        const payload = params.payload as IWebhookForgejoPushEvent;
+
+        const repository = {
+            id: String(payload?.repository?.id || ''),
+            name:
+                payload?.repository?.full_name ||
+                payload?.repository?.name ||
+                '',
+        };
+        const branchName = this.normalizeBranchName(payload?.ref);
+
+        if (
+            !repository.id ||
+            !repository.name ||
+            !branchName ||
+            !payload?.before ||
+            !payload?.after ||
+            payload.before === '0000000000000000000000000000000000000000' ||
+            payload.after === '0000000000000000000000000000000000000000' ||
+            payload.before === payload.after
+        ) {
+            return;
+        }
+
+        const context = await this.webhookContextService.getContext(
+            PlatformType.FORGEJO,
+            repository.id,
+        );
+        if (!context?.organizationAndTeamData) {
+            return;
+        }
+
+        const openPullRequests = await this.codeManagement.getPullRequests(
+            {
+                organizationAndTeamData: context.organizationAndTeamData,
+                repository,
+                filters: {
+                    state: PullRequestState.OPENED,
+                    branch: branchName,
+                },
+            },
+            PlatformType.FORGEJO,
+        );
+
+        for (const pullRequest of openPullRequests ?? []) {
+            if (!pullRequest?.number) {
+                continue;
+            }
+
+            const currentHeadSha = pullRequest.head?.sha;
+            if (currentHeadSha && currentHeadSha !== payload.after) {
+                continue;
+            }
+
+            try {
+                const commits =
+                    await this.codeManagement.getCommitsForPullRequestForCodeReview(
+                        {
+                            organizationAndTeamData:
+                                context.organizationAndTeamData,
+                            repository,
+                            prNumber: pullRequest.number,
+                        },
+                        PlatformType.FORGEJO,
+                    );
+
+                const stillContainsPreviousHead = (commits ?? []).some(
+                    (commit) => commit?.sha === payload.before,
+                );
+                if (stillContainsPreviousHead) {
+                    continue;
+                }
+
+                const prKey = `${context.organizationAndTeamData.organizationId}:${repository.id}:${pullRequest.number}`;
+                await this.outboxRepository.create({
+                    jobId: undefined,
+                    exchange: 'sandbox.events',
+                    routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
+                    payload: {
+                        prKey,
+                        reason: 'force_pushed',
+                    } satisfies SandboxInvalidatePayload,
+                });
+            } catch (error) {
+                this.logger.warn({
+                    message:
+                        '[SBX-05] Failed to evaluate Forgejo push invalidation',
+                    context: ForgejoPullRequestHandler.name,
+                    error: error instanceof Error ? error : undefined,
+                    metadata: {
+                        repositoryId: repository.id,
+                        pullRequestNumber: pullRequest.number,
+                        previousHeadSha: payload.before,
+                        currentHeadSha: payload.after,
+                    },
+                });
+            }
+        }
+    }
+
+    private normalizeBranchName(ref: string | undefined): string {
+        if (!ref?.startsWith('refs/heads/')) {
+            return '';
+        }
+
+        return ref.slice('refs/heads/'.length);
     }
 
     /**
@@ -511,7 +632,9 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                         payload: {
                             ...payload,
                             action: 'synchronize',
-                            origin: isForceCommand ? 'command-force' : 'command',
+                            origin: isForceCommand
+                                ? 'command-force'
+                                : 'command',
                             triggerCommentId: comment?.id,
                             pull_request:
                                 pullRequestData ||

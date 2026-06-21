@@ -75,11 +75,11 @@ export const codeReviewBasic: Scenario = {
         // `trial-managed-review` (real managed-LLM review on a throwaway repo).
         license: ["paid", "license-paid"],
     },
-    // Scenario budget must comfortably exceed the inner pollForReview
-    // budget (1500s) + onboarding + open-PR overhead. 1800s gives a
-    // ~5min cushion so the outer kill never fires before the inner
+    // Scenario budget must comfortably exceed phase A (600s) + the inner
+    // pollForReview budget (1500s) + onboarding + open-PR overhead. 2700s
+    // keeps a ~5min cushion so the outer kill never fires before the inner
     // timeout has a chance to surface a meaningful assertion message.
-    timeoutSec: 1800,
+    timeoutSec: 2700,
     async run(ctx: RunContext) {
         ctx.assert(
             ctx.tenant,
@@ -115,10 +115,17 @@ export const codeReviewBasic: Scenario = {
         });
 
         try {
-            // Two-phase wait. Phase A fails fast (~60s) if the pipeline
-            // never woke up — separates the "worker dequeued the PR
-            // and Kody posted a heartbeat" signal from the "LLM found
-            // the deliberate bugs" signal. The morning of 2026-05-21
+            // Two-phase wait. Phase A waits for the pipeline to wake up —
+            // separates the "worker dequeued the PR and Kody posted a
+            // heartbeat" signal from the "LLM found the deliberate bugs"
+            // signal. Budget is deliberately generous (600s): under matrix
+            // load the GitHub bot's rate-limit gate defers the review job
+            // by minutes (it republishes-with-delay until the API bucket
+            // resets), so a tight ~60s budget false-flagged "never started"
+            // when the review was merely queued behind a rate-limit reset
+            // (matrix run 2026-06-12, PR #96: review ran ~5min late, past
+            // the old 60s budget, so the cell failed both attempts even
+            // though the pipeline was healthy). The morning of 2026-05-21
             // a run sat in silence for 25 min while the test runner
             // assumed nothing happened — in reality the LLM had
             // completed review in 2.6s and decided the clean fixture
@@ -134,7 +141,7 @@ export const codeReviewBasic: Scenario = {
             if (ctx.provider.waitForPipelineStart) {
                 const started = await ctx.provider.waitForPipelineStart(
                     { number: pr.number },
-                    { sinceIso, timeoutSec: 60 },
+                    { sinceIso, timeoutSec: 600 },
                 );
                 pipelineStartedAt = started.startedAt;
             }

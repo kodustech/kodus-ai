@@ -1,0 +1,27 @@
+id: sh-analytics
+description: |
+    Self-hosted Cockpit/analytics topology — the Enterprise analytics worker
+    end-to-end. Brings up the optional `worker-analytics` service (role=analytics)
+    that the default installer omits, and verifies the whole pipeline:
+      1. /cockpit/validate 200 (warehouse migrated + tier eligible)
+      2. /cockpit page renders (not gated behind the vestigial WEB_ANALYTICS_SECRET)
+      3. the ingestion CRON runs on its own (a successful analytics.ingestion_runs
+         row appears) — proving the service keeps the warehouse fresh without a
+         manual backfill.
+
+    REQUIRES, when provisioning via provisioning/self-hosted/vm.sh:
+      ANALYTICS_WORKER=1            → vm.sh enables COMPOSE_PROFILES=analytics +
+                                      a fast ANALYTICS_INGESTION_CRON (*/2).
+      ANALYTICS_WORKER_EXPECTED=1   → cockpit-analytics runs its layer-3 cron
+                                      assertion (otherwise layer 3 is skipped).
+    The api+worker images under test MUST include the tsconfig.migrations fix
+    (analytics warehouse migrations shipped to dist) or the warehouse never
+    migrates on boot and validate 500s. License must be Enterprise-tier.
+
+scenarios:
+    - cockpit-analytics
+
+cells:
+    - target: self-hosted
+      provider: github
+      license: license-paid

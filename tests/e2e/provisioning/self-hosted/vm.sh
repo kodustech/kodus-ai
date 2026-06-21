@@ -371,6 +371,20 @@ env_set API_MG_DB_PASSWORD "\$(openssl rand -hex 16)"
 env_set API_DATABASE_DISABLE_SSL "true"
 env_set API_PG_DB_SSL "false"
 env_set WORKER_ROLE "code-review"
+# Analytics worker (Cockpit). When ANALYTICS_WORKER=1 is passed to vm.sh,
+# enable the \`analytics\` compose profile so the installer's worker-analytics
+# service (role=analytics) comes up alongside the code-review worker, and point
+# the ingestion cron at a fast schedule so the cockpit-analytics scenario can
+# observe an automatic ingestion run within its poll window. The \`:+\` guard is
+# expanded LOCALLY (unquoted REMOTE heredoc), so COMPOSE_PROFILES is empty when
+# the flag is off → community topology unchanged. We deliberately do NOT set
+# ANALYTICS_PG_DB_HOST (leave it unset → loader cascades to API_PG_DB_*; an
+# empty value would be a footgun pre-loader-fix). Classifier disabled: the test
+# droplet has no LLM key for PR-type classification.
+env_set COMPOSE_PROFILES "${ANALYTICS_WORKER:+analytics}"
+env_set ANALYTICS_PG_DB_SCHEMA "analytics"
+env_set ANALYTICS_INGESTION_CRON "${ANALYTICS_INGESTION_CRON:-*/2 * * * *}"
+env_set ANALYTICS_CLASSIFIER_DISABLED "true"
 # The notifications module hard-requires this (ConfigService.getOrThrow).
 # Set a dummy so the app boots — emails won't actually send.
 env_set RESEND_API_KEY "${RESEND_API_KEY:-disabled-for-dev}"

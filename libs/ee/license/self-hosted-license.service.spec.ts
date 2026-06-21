@@ -46,3 +46,27 @@ describe('SelfHostedLicenseService.getLicenseKey', () => {
         expect(await getKey(makeService())).toBeNull();
     });
 });
+
+/**
+ * Self-hosted has no Kodus-funded managed trial credits, so credit
+ * consumption must always allow — the licensed seat model gates reviews
+ * instead. Returning allowed:false here would block self-hosted reviews.
+ */
+describe('SelfHostedLicenseService.consumeTrialReviewCredit', () => {
+    const orgTeam = { organizationId: 'org-1', teamId: 'team-1' } as any;
+    const makeService = () =>
+        new SelfHostedLicenseService({ findByKey: jest.fn() } as any);
+
+    it('always allows on self-hosted', async () => {
+        const result = await makeService().consumeTrialReviewCredit(orgTeam);
+        expect(result).toEqual({ allowed: true, reason: 'SELF_HOSTED' });
+    });
+
+    it('allows regardless of the usageKey', async () => {
+        const result = await makeService().consumeTrialReviewCredit(
+            orgTeam,
+            'repo-1:7',
+        );
+        expect(result.allowed).toBe(true);
+    });
+});

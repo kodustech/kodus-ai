@@ -326,6 +326,20 @@ export interface IWebhookForgejoPayloadCommitVerification {
     payload: string;
 }
 
+// @see https://codeberg.org/forgejo/forgejo/src/branch/forgejo/modules/structs/hook.go#L311
+export interface IWebhookForgejoPushEvent {
+    ref: string;
+    before: string;
+    after: string;
+    compare_url: string;
+    commits: IWebhookForgejoCommit[];
+    total_commits: number;
+    head_commit: IWebhookForgejoCommit | null;
+    repository: IWebhookForgejoRepository;
+    pusher: IWebhookForgejoCommitUser;
+    sender: IWebhookForgejoUser;
+}
+
 // @see https://codeberg.org/forgejo/forgejo/src/branch/forgejo/modules/structs/hook.go#L359
 export interface IWebhookForgejoPullRequestEvent {
     action: WebhookForgejoHookIssueAction;

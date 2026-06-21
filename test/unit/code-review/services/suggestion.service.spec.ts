@@ -1750,6 +1750,49 @@ __new hunk__
                 }),
             );
         });
+
+        it('should skip markReviewCommentAsResolved for Forgejo comments without thread ids', async () => {
+            const mockPr = {
+                number: 42,
+                files: [
+                    {
+                        suggestions: [
+                            {
+                                comment: { id: 200 },
+                                implementationStatus:
+                                    ImplementationStatus.IMPLEMENTED,
+                                deliveryStatus: DeliveryStatus.SENT,
+                            },
+                        ],
+                    },
+                ],
+            };
+
+            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
+                mockPr,
+            );
+
+            mockCodeManagementService.getPullRequestReviewComments.mockResolvedValue(
+                [
+                    {
+                        id: 200,
+                        body: 'suggestion 2',
+                        isResolved: false,
+                    },
+                ],
+            );
+
+            await service.resolveImplementedSuggestionsOnPlatform({
+                organizationAndTeamData: mockOrganizationAndTeamData as any,
+                repository: { id: 'repo-1', name: 'test-repo' },
+                prNumber: 42,
+                platformType: PlatformType.FORGEJO,
+            });
+
+            expect(
+                mockCodeManagementService.markReviewCommentAsResolved,
+            ).not.toHaveBeenCalled();
+        });
     });
 
     describe('filterActiveReviewSuggestions', () => {

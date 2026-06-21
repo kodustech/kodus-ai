@@ -72,7 +72,8 @@ export const codeReviewVertexByok: Scenario = {
         provider: ["github"],
         license: ["paid", "license-paid"],
     },
-    timeoutSec: 1800,
+    // Phase A (600s) + pollForReview (1500s) + onboarding/PR overhead.
+    timeoutSec: 2700,
     async run(ctx: RunContext) {
         ctx.assert(
             ctx.tenant,
@@ -126,9 +127,11 @@ export const codeReviewVertexByok: Scenario = {
         try {
             let pipelineStartedAt: string | undefined;
             if (ctx.provider.waitForPipelineStart) {
+                // Generous start budget: the GitHub rate-limit gate can defer
+                // the review job by minutes under load (see code-review-basic).
                 const started = await ctx.provider.waitForPipelineStart(
                     { number: pr.number },
-                    { sinceIso, timeoutSec: 60 },
+                    { sinceIso, timeoutSec: 600 },
                 );
                 pipelineStartedAt = started.startedAt;
             }

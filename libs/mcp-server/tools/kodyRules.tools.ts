@@ -472,6 +472,13 @@ export class KodyRulesTools {
                         },
                     };
 
+                    const createGroupFolderName =
+                        await this.centralizedConfigPrService.resolveDirectoryGroupFolderName(
+                            params.organizationAndTeamData,
+                            params.kodyRule.repositoryId,
+                            params.kodyRule.directoryId,
+                        );
+
                     const centralizedPr =
                         await this.centralizedConfigPrService.createMutationPullRequestIfEnabled(
                             buildKodyRuleCentralizedMutationRequest({
@@ -480,7 +487,8 @@ export class KodyRulesTools {
                                 organizationAndTeamData:
                                     params.organizationAndTeamData,
                                 repositoryId: params.kodyRule.repositoryId,
-                                directoryId: params.kodyRule.directoryId,
+                                groupFolderName:
+                                    createGroupFolderName ?? undefined,
                                 ruleContent: params.kodyRule,
                                 ruleType: KodyRulesType.STANDARD,
                                 operation: 'create',
@@ -739,6 +747,13 @@ export class KodyRulesTools {
                             KodyRulesStatus.PENDING,
                     } as CreateKodyRuleDto;
 
+                    const updateGroupFolderName =
+                        await this.centralizedConfigPrService.resolveDirectoryGroupFolderName(
+                            organizationAndTeamData,
+                            mergedRule.repositoryId,
+                            mergedRule.directoryId,
+                        );
+
                     const centralizedPr =
                         await this.centralizedConfigPrService.createMutationPullRequestIfEnabled(
                             buildKodyRuleCentralizedMutationRequest({
@@ -746,7 +761,8 @@ export class KodyRulesTools {
                                     this.centralizedConfigPrService,
                                 organizationAndTeamData,
                                 repositoryId: mergedRule.repositoryId,
-                                directoryId: mergedRule.directoryId,
+                                groupFolderName:
+                                    updateGroupFolderName ?? undefined,
                                 ruleContent: mergedRule,
                                 ruleType: KodyRulesType.STANDARD,
                                 operation: 'update',

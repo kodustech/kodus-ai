@@ -206,6 +206,16 @@ jobs:
                   API_LLM_PROVIDER_MODEL: gpt-5.4-mini
 
                   TARGET_FILTER_PROVIDER: ${{ matrix.cell.provider }}
+
+                  # Cockpit analytics: bring up the worker-analytics service
+                  # (COMPOSE_PROFILES=analytics, via vm.sh) and let the
+                  # cockpit-analytics scenario assert the cron-driven ingestion
+                  # (layer 3). Only on github cells — cockpit-analytics is
+                  # github-only (appliesTo), so other providers would just run
+                  # an idle analytics worker. Requires the worker-analytics
+                  # service in the kodus-installer compose (shipped together).
+                  ANALYTICS_WORKER: ${{ matrix.cell.provider == 'github' && '1' || '' }}
+                  ANALYTICS_WORKER_EXPECTED: ${{ matrix.cell.provider == 'github' && '1' || '' }}
               run: |
                   # Build a single-cell matrix YAML that mirrors the SOURCE
                   # matrix (fast.yml / full.yml) instead of hardcoding a

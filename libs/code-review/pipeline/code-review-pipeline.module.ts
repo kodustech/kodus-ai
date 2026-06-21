@@ -48,6 +48,8 @@ import { OrganizationParametersModule } from '@libs/organization/modules/organiz
 import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { GithubChecksService } from '@libs/platform/infrastructure/adapters/services/github/github-checks.service';
 import { GithubModule } from '@libs/platform/modules/github.module';
+import { ForgejoChecksService } from '@libs/platform/infrastructure/adapters/services/forgejo/forgejo-checks.service';
+import { ForgejoModule } from '@libs/platform/modules/forgejo.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { SandboxSyntaxValidator } from '../infrastructure/adapters/services/sandboxSyntaxValidator.service';
 import { GraphContentFormatter } from '../infrastructure/adapters/services/graphContentFormatter.service';
@@ -98,6 +100,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         forwardRef(() => KodyFineTuningContextModule),
         forwardRef(() => AutomationModule),
         forwardRef(() => GithubModule),
+        forwardRef(() => ForgejoModule),
         forwardRef(() => PermissionValidationModule),
         forwardRef(() => LicenseModule),
         AstGraphModule,
@@ -175,6 +178,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
 
         // For GitHub Checks
         GithubChecksService,
+        ForgejoChecksService,
         NullChecksAdapter,
         ChecksAdapterFactory,
         {

@@ -63,8 +63,9 @@ export const trialManagedReview: Scenario = {
         provider: ["github"],
         license: ["trial"],
     },
-    // Onboarding (~3-5 min incl. kody-rules generation) + 900s review poll.
-    timeoutSec: 1800,
+    // Onboarding (~3-5 min incl. kody-rules generation) + 600s pipeline-start
+    // budget + 900s review poll.
+    timeoutSec: 2400,
     async run(ctx: RunContext) {
         const target = ctx.target as TargetContext;
         const baseRepo =
@@ -143,9 +144,12 @@ export const trialManagedReview: Scenario = {
                 // Distinguishes "webhook/org-routing broke" from "pipeline
                 // ran but produced nothing".
                 if (provider.waitForPipelineStart) {
+                    // Generous start budget: the GitHub rate-limit gate can
+                    // defer the review job by minutes under matrix load (see
+                    // code-review-basic).
                     await provider.waitForPipelineStart(
                         { number: pr.number },
-                        { sinceIso, timeoutSec: 120 },
+                        { sinceIso, timeoutSec: 600 },
                     );
                 }
 

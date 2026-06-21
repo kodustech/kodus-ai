@@ -11,6 +11,7 @@ import {
 import { DeleteByRepositoryOrDirectoryPullRequestMessagesUseCase } from '@libs/code-review/application/use-cases/pullRequestMessages/delete-by-repository-or-directory.use-case';
 import { buildKodyRuleCentralizedFilePath } from '@libs/centralized-config/utils/kody-rules-centralized-pr.builder';
 import { buildKodusConfigCentralizedMutationRequest } from '@libs/centralized-config/utils/kodus-config-centralized-pr.builder';
+import { buildGroupFolderName } from '@libs/centralized-config/utils/path-encoder';
 import { ParametersKey } from '@libs/core/domain/enums';
 import { CodeReviewParameter } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 import { ActionType } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
@@ -101,17 +102,34 @@ export class DeleteRepositoryCodeReviewParameterUseCase {
                 throw new Error('Code review config not found');
             }
 
+            // Structural change (removing a scope) is symmetric with the
+            // selection-only add-directory flow: we mutate the DB right away
+            // so the UI reflects the removal, and the centralized PR is a
+            // best-effort side effect to clean up the repo. Waiting for the
+            // PR merge would force the user into "delete → close PR → resync"
+            // every time, which doesn't match how add works.
+            let centralizedPr: CentralizedPrMetadata | null = null;
             if (body.actor?.source !== 'sync') {
-                const centralizedPr =
-                    await this.createCentralizedDeleteMutationIfEnabled({
-                        organizationAndTeamData,
-                        codeReviewConfig: codeReviewConfigParam.configValue,
-                        repositoryId,
-                        directoryId,
+                try {
+                    centralizedPr =
+                        await this.createCentralizedDeleteMutationIfEnabled({
+                            organizationAndTeamData,
+                            codeReviewConfig:
+                                codeReviewConfigParam.configValue,
+                            repositoryId,
+                            directoryId,
+                        });
+                } catch (error) {
+                    this.logger.warn({
+                        message:
+                            'Failed to open centralized PR for scope removal; continuing with DB removal',
+                        context:
+                            DeleteRepositoryCodeReviewParameterUseCase.name,
+                        error: this.normalizeError(error),
+                        metadata: {
+                            body,
+                        },
                     });
-
-                if (centralizedPr) {
-                    return centralizedPr;
                 }
             }
 
@@ -148,7 +166,10 @@ export class DeleteRepositoryCodeReviewParameterUseCase {
                 throw new Error('RepositoryId is required');
             }
 
-            return result;
+            // If a centralized PR was opened, surface its metadata to the
+            // caller so the UI can link to it; otherwise return the raw DB
+            // mutation result.
+            return centralizedPr ?? result;
         } catch (error) {
             this.logger.error({
                 message: 'Could not delete code review configuration',
@@ -213,7 +234,6 @@ export class DeleteRepositoryCodeReviewParameterUseCase {
             directoryPath: isDirectoryGroup
                 ? undefined
                 : directory?.folders?.[0]?.path,
-            directoryId: isDirectoryGroup ? directory?.id : undefined,
             folders: isDirectoryGroup ? directory?.folders : undefined,
             configFileContent: null,
             title: `Remove Kodus config for ${repository.name}${directory ? ` (${directory.name ?? directory.folders?.[0]?.path ?? ''})` : ''}`,
@@ -236,9 +256,12 @@ export class DeleteRepositoryCodeReviewParameterUseCase {
                             ? baseRequest.files
                             : baseRequest.files({ repositoryFolder });
 
+                        const groupFolderNamesByDirId =
+                            this.buildGroupFolderNameMap(repository);
                         const ruleFileDeletes = this.getRuleDeleteFileChanges(
                             rulesForScope,
                             repositoryFolder,
+                            groupFolderNamesByDirId,
                         );
 
                         return [...configFileDeletes, ...ruleFileDeletes];
@@ -295,6 +318,7 @@ export class DeleteRepositoryCodeReviewParameterUseCase {
     private getRuleDeleteFileChanges(
         rulesForScope: Partial<IKodyRule>[],
         repositoryFolder: string,
+        groupFolderNamesByDirId: Map<string, string>,
     ): Array<{ path: string; operation: 'delete' }> {
         const rulePaths = new Set<string>();
 
@@ -309,7 +333,9 @@ export class DeleteRepositoryCodeReviewParameterUseCase {
                 rulesDirectory:
                     rule.type === KodyRulesType.MEMORY ? 'memories' : 'review',
                 ruleContent: rule,
-                directoryId: rule.directoryId,
+                groupFolderName: rule.directoryId
+                    ? groupFolderNamesByDirId.get(String(rule.directoryId))
+                    : undefined,
             });
 
             rulePaths.add(centralizedPath);
@@ -319,6 +345,26 @@ export class DeleteRepositoryCodeReviewParameterUseCase {
             path,
             operation: 'delete' as const,
         }));
+    }
+
+    private buildGroupFolderNameMap(
+        repository: { directories?: Array<{ id?: string; folders?: Array<{ path: string }> }> },
+    ): Map<string, string> {
+        const map = new Map<string, string>();
+        for (const dir of repository.directories ?? []) {
+            if (!dir?.id || !dir.folders || dir.folders.length === 0) {
+                continue;
+            }
+            try {
+                map.set(
+                    String(dir.id),
+                    buildGroupFolderName(dir.folders.map((f) => f.path)),
+                );
+            } catch {
+                // Skip groups with invalid path sets — they cannot be reached on disk.
+            }
+        }
+        return map;
     }
 
     private hasMeaningfulConfigValues(
@@ -445,12 +491,6 @@ export class DeleteRepositoryCodeReviewParameterUseCase {
             const repo = draft.repositories[repositoryIndex];
             repo.directories.splice(directoryIndex, 1);
 
-            if (
-                repo.directories.length === 0 &&
-                (!repo.configs || Object.keys(repo.configs).length === 0)
-            ) {
-                repo.isSelected = false;
-            }
         });
 
         const updated = await this.createOrUpdateParametersUseCase.execute(

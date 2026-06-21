@@ -3,40 +3,32 @@
 import { differenceInDays } from "date-fns";
 
 import { useSubscriptionContext } from "../_providers/subscription-context";
-import type { PlanType } from "../_services/billing/types";
+import type {
+    OrganizationLicense,
+    OrganizationLicenseTrial,
+    PlanType,
+    TrialReviewCredits,
+    TrialUnlock,
+} from "../_services/billing/types";
 
-type SubscriptionContextLicense =
-    | {
-          valid: false;
-          subscriptionStatus: "payment_failed" | "canceled" | "expired";
-          numberOfLicenses: number;
-          planType?: PlanType;
-          stripeCustomerId?: string | null;
-      }
-    | {
-          valid: true;
-          subscriptionStatus: "trial";
-          trialEnd: string;
-      }
-    | {
-          valid: true;
-          subscriptionStatus: "active";
-          numberOfLicenses: number;
-          planType: PlanType;
-      };
+type SubscriptionContextLicense = OrganizationLicense;
 
 type TrialSubscriptionStatus = {
-    status: "trial-active" | "trial-expiring";
+    status: "trial-active" | "trial-expiring" | "trial-exhausted";
     valid: true;
     trialEnd: string;
     trialDaysLeft: number;
+    byok?: boolean;
+    trialReviewCredits?: TrialReviewCredits;
+    trialCreditTier?: OrganizationLicenseTrial["trialCreditTier"];
+    trialUnlocks?: TrialUnlock[];
 };
 
 type InvalidSubscriptionStatus = {
     valid: false;
     numberOfLicenses: number;
     usersWithAssignedLicense: { git_id: string }[];
-    status: "payment-failed" | "canceled" | "expired";
+    status: "payment-failed" | "canceled" | "expired" | "inactive";
     planType?: PlanType;
     stripeCustomerId?: string | null;
 };
@@ -79,6 +71,27 @@ type SubscriptionStatus =
     | SelfHostedSubscriptionStatus
     | LicensedSelfHostedSubscriptionStatus
     | FreeSubscriptionStatus;
+
+const getTrialReviewCredits = (
+    license: OrganizationLicenseTrial,
+): TrialReviewCredits | undefined => {
+    const hasCreditData =
+        typeof license.trialReviewCreditsTotal === "number" ||
+        typeof license.trialReviewCreditsUsed === "number" ||
+        typeof license.trialReviewCreditsRemaining === "number" ||
+        Boolean(license.trialCreditTier);
+
+    if (!hasCreditData) {
+        return undefined;
+    }
+
+    return {
+        total: license.trialReviewCreditsTotal,
+        used: license.trialReviewCreditsUsed,
+        remaining: license.trialReviewCreditsRemaining,
+        tier: license.trialCreditTier,
+    };
+};
 
 export const useSubscriptionStatus = (): SubscriptionStatus => {
     const subscription = useSubscriptionContext();
@@ -141,38 +154,59 @@ export const useSubscriptionStatus = (): SubscriptionStatus => {
         // Trial
         if (license.subscriptionStatus === "trial") {
             const daysLeft = differenceInDays(license.trialEnd, new Date());
+            const trialReviewCredits = getTrialReviewCredits(license);
+            const trialBase = {
+                valid: true as const,
+                trialEnd: license.trialEnd,
+                trialDaysLeft: daysLeft,
+                byok: license.byok,
+                trialReviewCredits,
+                trialCreditTier: license.trialCreditTier,
+                trialUnlocks: license.trialUnlocks,
+            };
+
+            if (license.byok !== true && trialReviewCredits?.remaining === 0) {
+                return {
+                    ...trialBase,
+                    status: "trial-exhausted",
+                };
+            }
 
             if (
                 // If the trial is not expired, but expiring in 3 days or less
                 differenceInDays(new Date(), license.trialEnd) >= -3
             ) {
                 return {
-                    valid: true,
-                    trialEnd: license.trialEnd,
-                    trialDaysLeft: daysLeft,
+                    ...trialBase,
                     status: "trial-expiring",
                 };
             }
 
             return {
-                valid: true,
-                trialEnd: license.trialEnd,
-                trialDaysLeft: daysLeft,
+                ...trialBase,
                 status: "trial-active",
             };
         }
     }
 
-    // Caso inválido
+    if (!license.valid) {
+        return {
+            valid: false,
+            numberOfLicenses: license.numberOfLicenses || 0,
+            status:
+                license.subscriptionStatus === "payment_failed"
+                    ? "payment-failed"
+                    : license.subscriptionStatus,
+            usersWithAssignedLicense: subscription.usersWithAssignedLicense,
+            planType: license.planType,
+            stripeCustomerId: license.stripeCustomerId,
+        };
+    }
+
     return {
         valid: false,
-        numberOfLicenses: (license as any).numberOfLicenses || 0,
-        status:
-            license.subscriptionStatus === "payment_failed"
-                ? "payment-failed"
-                : license.subscriptionStatus,
+        numberOfLicenses: 0,
+        status: "inactive",
         usersWithAssignedLicense: subscription.usersWithAssignedLicense,
-        planType: (license as any).planType,
-        stripeCustomerId: (license as any).stripeCustomerId,
     };
 };

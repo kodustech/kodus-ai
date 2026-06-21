@@ -143,25 +143,19 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
             buildDirectoryGroupConfigPath: jest
                 .fn()
                 .mockImplementation(
-                    (repositoryFolder: string, directoryId: string) =>
-                        `${repositoryFolder}/.kody-directory-groups/${directoryId}/kodus-config.yml`,
-                ),
-            buildDirectoryGroupFoldersPath: jest
-                .fn()
-                .mockImplementation(
-                    (repositoryFolder: string, directoryId: string) =>
-                        `${repositoryFolder}/.kody-directory-groups/${directoryId}/folders.yml`,
+                    (repositoryFolder: string, groupFolderName: string) =>
+                        `${repositoryFolder}/${groupFolderName}/kodus-config.yml`,
                 ),
             buildDirectoryGroupRulesPath: jest
                 .fn()
                 .mockImplementation(
                     (
                         repositoryFolder: string,
-                        directoryId: string,
+                        groupFolderName: string,
                         rulesDirectory: string,
                         fileName: string,
                     ) =>
-                        `${repositoryFolder}/.kody-directory-groups/${directoryId}/.kody-rules/${rulesDirectory}/${fileName}`,
+                        `${repositoryFolder}/${groupFolderName}/.kody-rules/${rulesDirectory}/${fileName}`,
                 ),
             sanitizeFileName: jest.fn().mockReturnValue('fallback-rule'),
         };
@@ -279,16 +273,20 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
         expect(files).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
-                    path: 'repo-1-name/.kody-directory-groups/dir-1/kodus-config.yml',
+                    path: 'repo-1-name/src%2Fapi/kodus-config.yml',
                     operation: 'delete',
                 }),
                 expect.objectContaining({
-                    path: 'repo-1-name/.kody-directory-groups/dir-1/folders.yml',
+                    path: 'repo-1-name/src%2Fapi/.kody-rules/review/fallback-rule.yml',
                     operation: 'delete',
                 }),
+            ]),
+        );
+
+        expect(files).not.toEqual(
+            expect.arrayContaining([
                 expect.objectContaining({
-                    path: 'repo-1-name/.kody-directory-groups/dir-1/.kody-rules/review/fallback-rule.yml',
-                    operation: 'delete',
+                    path: expect.stringContaining('folders.yml'),
                 }),
             ]),
         );

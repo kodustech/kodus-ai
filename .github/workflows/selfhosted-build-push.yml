@@ -322,6 +322,11 @@ jobs:
                   RC_VERSION: ${{ needs.plan-release.outputs.rc_version }}
                   RELEASE_VERSION_FINAL: ${{ needs.plan-release.outputs.release_version }}
                   OWNER: ${{ github.repository_owner }}
+                  # Durable build cache in GHCR (no 10GB GHA eviction). Read
+                  # by bake's CACHE_TYPE/CACHE_REF variables (see docker-bake.hcl).
+                  # Multi-arch tag — this job builds amd64+arm64.
+                  CACHE_TYPE: registry
+                  CACHE_REF: ghcr.io/${{ github.repository_owner }}/kodus-ai-buildcache:selfhosted
                   API_TAGS: ghcr.io/${{ github.repository_owner }}/kodus-ai-api:${{ needs.plan-release.outputs.rc_version }}
                   WEBHOOKS_TAGS: ghcr.io/${{ github.repository_owner }}/kodus-ai-webhook:${{ needs.plan-release.outputs.rc_version }}
                   WORKER_TAGS: ghcr.io/${{ github.repository_owner }}/kodus-ai-worker:${{ needs.plan-release.outputs.rc_version }}
@@ -332,8 +337,6 @@ jobs:
                   docker buildx bake -f docker-bake.hcl \
                     --set base.args.RELEASE_VERSION=${RELEASE_VERSION_FINAL} \
                     --set base.args.API_CLOUD_MODE=false \
-                    --set base.cache-from=type=gha \
-                    --set base.cache-to=type=gha,mode=max \
                     --set *.platform=linux/amd64,linux/arm64 \
                     --push
 

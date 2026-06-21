@@ -22,7 +22,10 @@ function loadConfig(): void {
     for (const line of text.split("\n")) {
         const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)=(.*)$/);
         if (m && process.env[m[1]] === undefined) {
-            const v = m[2].replace(/^["']|["']$/g, "");
+            // Strip a trailing inline comment (" # ...") + surrounding quotes +
+            // trailing whitespace — config lines like `KEY=sk-... # note` would
+            // otherwise carry the comment into the value and 401 the judge.
+            const v = m[2].replace(/\s+#.*$/, "").trim().replace(/^["']|["']$/g, "");
             if (!v.startsWith("op://")) process.env[m[1]] = v;
         }
     }
@@ -64,6 +67,13 @@ interface PRResult {
 async function judgeCall(apiKey: string, prompt: string): Promise<string> {
     let lastErr: unknown;
     for (let attempt = 0; attempt < 6; attempt++) {
+        // Hard per-call timeout. Without it a hung socket (ESTABLISHED but no
+        // bytes — the Anthropic API occasionally stalls a request) blocks fetch
+        // FOREVER: the retry below never fires because nothing throws, and the
+        // whole scorecard wedges at 0% CPU. AbortController turns that stall into
+        // a throw so the retry/backoff actually engages.
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 90_000);
         try {
             const resp = await fetch("https://api.anthropic.com/v1/messages", {
                 method: "POST",
@@ -77,6 +87,7 @@ async function judgeCall(apiKey: string, prompt: string): Promise<string> {
                     max_tokens: 256,
                     messages: [{ role: "user", content: prompt }],
                 }),
+                signal: ctrl.signal,
             });
             if (resp.ok) {
                 const data = (await resp.json()) as {
@@ -97,6 +108,8 @@ async function judgeCall(apiKey: string, prompt: string): Promise<string> {
             // the whole scorecard on one blip (a ~600-call run will hit some).
             lastErr = e;
             if (/HTTP (401|400)/.test((e as Error).message)) throw e;
+        } finally {
+            clearTimeout(timer);
         }
         await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
     }
@@ -139,7 +152,11 @@ async function main() {
     const apiKey =
         process.env.ANTHROPIC_API_KEY || process.env.BYOK_ANTHROPIC_API_KEY;
     if (!apiKey) throw new Error("ANTHROPIC_API_KEY (judge) not set");
-    const resultsPath = join(process.cwd(), "benchmark", "results.json");
+    // Default to run.ts's results.json; the farm overrides per-run (via
+    // SCORECARD_RESULTS) so parallel slots judge their own file without
+    // clobbering a shared one.
+    const resultsPath =
+        process.env.SCORECARD_RESULTS ?? join(process.cwd(), "benchmark", "results.json");
     const { results } = JSON.parse(readFileSync(resultsPath, "utf8")) as {
         results: PRResult[];
     };
@@ -217,7 +234,7 @@ async function main() {
                 s.f1.toFixed(2),
         );
     }
-    const out = join(process.cwd(), "benchmark", "scorecard.json");
+    const out = process.env.SCORECARD_OUT ?? join(process.cwd(), "benchmark", "scorecard.json");
     writeFileSync(out, JSON.stringify({ scoredAt: new Date().toISOString(), scores }, null, 2));
     console.log(`\n→ ${out}`);
 }

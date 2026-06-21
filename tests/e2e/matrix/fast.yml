@@ -37,10 +37,14 @@ scenarios:
     # the review scenarios.
     #   * trial-entitlement-gate: API-level, fails in seconds with a precise
     #     billing-level message (validate-org-license = valid + 'trial').
+    #   * trial-credits-consume: API-level credit accounting — consume
+    #     decrements, repeated usageKey is idempotent, exhaustion blocks. Fast,
+    #     no LLM; localizes credit/idempotency bugs in the gate↔billing path.
     #   * trial-managed-review: the REAL thing — throwaway repo (exclusive
     #     webhook route) + PR + managed-LLM review. The only cell exercising
     #     Kodus-managed keys; every other review cell is BYOK.
     - trial-entitlement-gate
+    - trial-credits-consume
     - trial-managed-review
     # Per-seat gate: appliesTo restricts to self-hosted × github × license-paid
     # (one cell). Skipped automatically when SH_LICENSE_KEY_PATH (default

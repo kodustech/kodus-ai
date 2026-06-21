@@ -1,0 +1,50 @@
+---
+title: "Forgejo Access Token"
+---
+
+<Note>
+  Forgejo support is maintained by the community.
+</Note>
+
+## Introduction
+
+To enable Kody to perform automatic code reviews on Forgejo, you need to generate an **Access Token**. This token allows Kody to access your repositories, pull requests, webhooks, issues, etc., with the specific permissions listed below.
+
+---
+
+## Generating the Access Token in Forgejo
+
+1. Go to your Forgejo instance and click the avatar icon in the top right corner
+2. Select **Settings**
+3. Navigate to **Applications**
+4. Under **Generate New Token**, give it a name (e.g. `kodus_code_review`)
+5. Select the required permissions (see below)
+6. Click **Generate Token**
+7. **Copy** the token immediately and store it securely — you won't be able to see it again after closing the page
+
+---
+
+## Required Permissions for Kody
+
+The token must include **all** of the following permissions for full functionality with Kody:
+
+| Category | Level | Purpose |
+|----------|-------|---------|
+| `repository` | **Read & Write** | Access code, branches, files, create PR comments, manage webhooks |
+| `issue` | **Read & Write** | View and modify issues, labels, and milestones |
+| `notification` | **Read** | View notifications |
+| `user` | **Read** | Read basic user information |
+
+---
+
+## Adding the Token to Kody
+
+Paste the generated token into the **Kody integration settings screen** when enabling the Forgejo integration.
+
+---
+
+## Important Notes
+
+- The token is **shown only once** after creation. Save it securely.
+- If the token is compromised, revoke it immediately and create a new one.
+- Periodically audit tokens and their permissions to confirm they are still needed.

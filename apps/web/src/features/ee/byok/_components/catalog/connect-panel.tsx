@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Alert, AlertDescription } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
 import { Card, CardContent, CardHeader } from "@components/ui/card";
@@ -32,28 +32,51 @@ import { ByokAdvancedSettings } from "../_modals/edit-key/_components/advanced-s
 import type { EditKeyForm } from "../_modals/edit-key/_types";
 import { CuratedModelCard, PROVIDER_LABELS } from "./model-card";
 
-const connectSchema = z.object({
-    provider: z.string().min(1),
-    model: z.string().min(1),
-    apiKey: z.string().trim().min(1, "API key is required"),
-    baseURL: z.url().nullable().optional(),
-    temperature: z.number().min(0).max(2).nullable().optional(),
-    maxInputTokens: z.number().int().min(0).nullable().optional(),
-    maxConcurrentRequests: z.number().int().min(0).nullable().optional(),
-    maxOutputTokens: z.number().int().min(0).nullable().optional(),
-    reasoningEffort: z
-        .enum(["none", "low", "medium", "high", "custom"])
-        .nullable()
-        .optional(),
-    reasoningConfigOverride: z.string().nullable().optional(),
-    openrouterProviderOrder: z.array(z.string()).nullable().optional(),
-    openrouterAllowFallbacks: z.boolean().nullable().optional(),
-});
+const buildConnectSchema = (hasExistingKey: boolean) =>
+    z
+        .object({
+            provider: z.string().min(1),
+            model: z.string().min(1),
+            apiKey: z.string().trim().default(""),
+            baseURL: z.url().nullable().optional(),
+            temperature: z.number().min(0).max(2).nullable().optional(),
+            maxInputTokens: z.number().int().min(0).nullable().optional(),
+            maxConcurrentRequests: z
+                .number()
+                .int()
+                .min(0)
+                .nullable()
+                .optional(),
+            maxOutputTokens: z.number().int().min(0).nullable().optional(),
+            reasoningEffort: z
+                .enum(["none", "low", "medium", "high", "custom"])
+                .nullable()
+                .optional(),
+            reasoningConfigOverride: z.string().nullable().optional(),
+            openrouterProviderOrder: z.array(z.string()).nullable().optional(),
+            openrouterAllowFallbacks: z.boolean().nullable().optional(),
+        })
+        .superRefine((data, ctx) => {
+            if (!hasExistingKey && !data.apiKey.trim()) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["apiKey"],
+                    message: "API key is required",
+                });
+            }
+        });
 
 const resolveInitialVariant = (
     model: CuratedModel,
+    existingBaseURL?: string,
 ): ModelVariant | undefined => {
     if (!model.variants?.length) return undefined;
+    if (existingBaseURL) {
+        const byUrl = model.variants.find(
+            (v) => v.baseURL === existingBaseURL,
+        );
+        if (byUrl) return byUrl;
+    }
     const byDefault = model.defaultVariantId
         ? model.variants.find((v) => v.id === model.defaultVariantId)
         : undefined;
@@ -62,11 +85,13 @@ const resolveInitialVariant = (
 
 export function CuratedConnectPanel({
     model,
+    existingConfig,
     existingKey,
     onBack,
     onSave,
 }: {
     model: CuratedModel;
+    existingConfig?: BYOKConfig;
     existingKey?: string;
     onBack: () => void;
     onSave: (_: BYOKConfig) => Promise<void>;
@@ -79,26 +104,51 @@ export function CuratedConnectPanel({
     >({ status: "idle" });
     const [isSaving, setIsSaving] = useState(false);
     const [variant, setVariant] = useState<ModelVariant | undefined>(() =>
-        resolveInitialVariant(model),
+        resolveInitialVariant(model, existingConfig?.baseURL),
     );
 
-    const initialBaseURL = variant?.baseURL ?? model.defaults.baseURL ?? null;
-    const initialMaxConcurrent = variant?.maxConcurrentRequests ?? null;
+    const initialBaseURL =
+        existingConfig?.baseURL ??
+        variant?.baseURL ??
+        model.defaults.baseURL ??
+        null;
+    const initialMaxConcurrent =
+        existingConfig?.maxConcurrentRequests ??
+        variant?.maxConcurrentRequests ??
+        null;
+
+    const hasExistingKey = !!existingKey;
+    const connectSchema = useMemo(
+        () => buildConnectSchema(hasExistingKey),
+        [hasExistingKey],
+    );
 
     const form = useForm<EditKeyForm>({
         mode: "onChange",
-        resolver: zodResolver(connectSchema),
+        resolver: zodResolver(connectSchema) as any,
         defaultValues: {
             provider: variant?.provider ?? model.provider,
             model: model.id,
             apiKey: "",
             baseURL: initialBaseURL,
-            temperature: model.defaults.temperature,
-            maxOutputTokens: model.defaults.maxOutputTokens,
-            maxInputTokens: null,
+            temperature:
+                existingConfig?.temperature ?? model.defaults.temperature,
+            maxOutputTokens:
+                existingConfig?.maxOutputTokens ??
+                model.defaults.maxOutputTokens,
+            maxInputTokens: existingConfig?.maxInputTokens ?? null,
             maxConcurrentRequests: initialMaxConcurrent,
-            reasoningEffort: model.defaults.reasoningEffort ?? null,
-            reasoningConfigOverride: null,
+            reasoningEffort: existingConfig?.reasoningConfigOverride
+                ? "custom"
+                : existingConfig?.reasoningEffort ??
+                  model.defaults.reasoningEffort ??
+                  null,
+            reasoningConfigOverride:
+                existingConfig?.reasoningConfigOverride ?? null,
+            openrouterProviderOrder:
+                existingConfig?.openrouterProviderOrder ?? null,
+            openrouterAllowFallbacks:
+                existingConfig?.openrouterAllowFallbacks ?? null,
         },
     });
 
@@ -171,6 +221,12 @@ export function CuratedConnectPanel({
         if (!valid) return null;
 
         const data = form.getValues();
+
+        if (existingKey && !data.apiKey?.trim()) {
+            setTestState({ status: "idle" });
+            return { ok: true, code: "ok", latencyMs: 0 };
+        }
+
         setTestState({ status: "testing" });
 
         try {
@@ -253,8 +309,8 @@ export function CuratedConnectPanel({
                             <AlertDescription className="text-pretty">
                                 A key for <strong>{providerLabel}</strong> is
                                 already stored. Paste a new one to replace it
-                                — or leave blank to keep the current key and
-                                just switch models.
+                                — or leave blank to keep the current key while
+                                you switch models or tweak advanced settings.
                             </AlertDescription>
                         </Alert>
                     )}
@@ -342,11 +398,18 @@ export function CuratedConnectPanel({
                             variant="primary"
                             leftIcon={<SaveIcon />}
                             loading={testing || isSaving}
-                            disabled={!isValid || !apiKey?.trim()}
+                            disabled={
+                                !isValid ||
+                                (!apiKey?.trim() && !existingKey)
+                            }
                             onClick={() => {
                                 void handleTestAndSave();
                             }}>
-                            Test &amp; save
+                            {existingKey && !apiKey?.trim() ? (
+                                "Save"
+                            ) : (
+                                <>Test &amp; save</>
+                            )}
                         </Button>
                     </div>
                 </CardContent>

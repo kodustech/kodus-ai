@@ -7,15 +7,17 @@ import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import type { TeamMembersResponse } from "@services/setup/types";
 import { ArrowUpCircle } from "lucide-react";
-import { pluralize } from "src/core/utils/string";
 
+import { TrialCreditsSummary } from "../../_components/trial-credits-summary";
 import { useSubscriptionStatus } from "../../_hooks/use-subscription-status";
 
 export const Trial = ({
     members,
+    codeHostMembersCount,
     forceShow = false,
 }: {
     members: TeamMembersResponse["members"];
+    codeHostMembersCount?: number;
     forceShow?: boolean;
 }) => {
     const organizationAdminsCount = members.length;
@@ -27,7 +29,8 @@ export const Trial = ({
     if (!forceShow) {
         if (
             subscriptionStatus.status !== "trial-active" &&
-            subscriptionStatus.status !== "trial-expiring"
+            subscriptionStatus.status !== "trial-expiring" &&
+            subscriptionStatus.status !== "trial-exhausted"
         ) {
             return null;
         }
@@ -35,46 +38,53 @@ export const Trial = ({
 
     const isTrial =
         subscriptionStatus.status === "trial-active" ||
-        subscriptionStatus.status === "trial-expiring";
+        subscriptionStatus.status === "trial-expiring" ||
+        subscriptionStatus.status === "trial-exhausted";
 
     return (
         <Card className="w-full">
-            <CardHeader className="flex flex-row justify-between gap-2">
-                <div className="flex flex-col gap-2">
-                    {isTrial &&
-                        subscriptionStatus.trialDaysLeft !== undefined && (
-                            <p className="text-text-secondary text-sm">
-                                {subscriptionStatus.trialDaysLeft} days free
-                                trial
-                            </p>
-                        )}
-                    <CardTitle className="text-2xl">PRO plan</CardTitle>
-
-                    <div className="mt-4 flex gap-6">
-                        {/* <p className="text-sm text-text-secondary">
-                            <strong>5</strong> of <strong>7</strong> licenses
-                            assigned
-                        </p> */}
-
-                        <p className="text-text-secondary text-sm">
-                            <strong>{organizationAdminsCount}</strong> workspace{" "}
-                            {pluralize(organizationAdminsCount, {
-                                singular: "member",
-                                plural: "members",
-                            })}
-                        </p>
+            <CardHeader className="flex flex-col gap-6">
+                <div className="flex flex-row justify-between gap-4">
+                    <div className="flex flex-col gap-2">
+                        {isTrial &&
+                            subscriptionStatus.trialDaysLeft !== undefined && (
+                                <p className="text-text-secondary text-sm">
+                                    {subscriptionStatus.trialDaysLeft} days left
+                                    in Team trial
+                                </p>
+                            )}
+                        <CardTitle className="text-2xl">Team trial</CardTitle>
                     </div>
+
+                    <Button
+                        size="lg"
+                        variant="primary"
+                        className="h-fit"
+                        disabled={!canEdit}
+                        leftIcon={<ArrowUpCircle />}
+                        onClick={() => router.push("/choose-plan")}>
+                        Upgrade
+                    </Button>
                 </div>
 
-                <Button
-                    size="lg"
-                    variant="primary"
-                    className="h-fit"
-                    disabled={!canEdit}
-                    leftIcon={<ArrowUpCircle />}
-                    onClick={() => router.push("/choose-plan")}>
-                    Upgrade
-                </Button>
+                {isTrial && (
+                    <TrialCreditsSummary
+                        credits={subscriptionStatus.trialReviewCredits}
+                        trialCreditTier={subscriptionStatus.trialCreditTier}
+                        trialUnlocks={subscriptionStatus.trialUnlocks}
+                        byok={subscriptionStatus.byok}
+                        daysLeft={subscriptionStatus.trialDaysLeft}
+                        workspaceMembersCount={organizationAdminsCount}
+                        codeHostMembersCount={codeHostMembersCount}
+                    />
+                )}
+
+                {!isTrial && (
+                    <p className="text-text-secondary text-sm">
+                        Your Team trial has ended. Upgrade to keep PR reviews
+                        running.
+                    </p>
+                )}
             </CardHeader>
         </Card>
     );

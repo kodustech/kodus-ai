@@ -92,7 +92,15 @@ RUN sed -e "s/__CLOUD_MODE__/${API_CLOUD_MODE}/g" \
         -e "/declare const/d" \
         libs/ee/configs/environment/environment.template.ts > libs/ee/configs/environment/environment.ts
 
-RUN pnpm run build:apps && pnpm run build:migrations
+# Persist webpack's incremental filesystem cache (node_modules/.cache/webpack,
+# the default when cache.type='filesystem' with no cacheDirectory — see
+# webpack.config.js) across builds via a BuildKit cache mount. Without this the
+# `COPY . .` above invalidates the layer on every source change and webpack
+# recompiles all 6 apps from scratch (~3min). With it, only the changed modules
+# rebuild → seconds. sharing=locked because build:apps runs the 6 nest builds in
+# parallel against one shared cache dir.
+RUN --mount=type=cache,target=/usr/src/app/node_modules/.cache,sharing=locked \
+    pnpm run build:apps && pnpm run build:migrations
 
 # Install production dependencies only
 FROM base AS prod-deps
@@ -150,12 +158,14 @@ ENV NODE_ENV=production
 # Redeclare ARGs to make them available in this stage
 ARG API_CLOUD_MODE=false
 ARG RELEASE_VERSION=local
+ARG KODUS_GRAPH_VERSION=0.2.19
 
 # Set ENVs for runtime
 ENV API_CLOUD_MODE=${API_CLOUD_MODE}
 ENV API_DEVELOPMENT_MODE=false
 ENV RELEASE_VERSION=${RELEASE_VERSION}
 ENV SENTRY_RELEASE=${RELEASE_VERSION}
+ENV PATH="/home/node/.bun/bin:${PATH}"
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -164,9 +174,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   && apt-get install -y --no-install-recommends \
     ca-certificates procps git ripgrep
 
-# Copy the bun binary from the official image and install kodus-graph with it.
+# Copy the bun binary from the official image.
 COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun
-RUN bun install -g @kodus/kodus-graph
 
 COPY --chown=1000:1000 --from=prod-deps /usr/src/app/node_modules ./node_modules
 COPY --chown=1000:1000 --from=build /usr/src/app/dist ./dist
@@ -187,6 +196,14 @@ COPY --chmod=0755 docker/prod-entrypoint-mcp-manager.sh /usr/local/bin/prod-entr
 # ownership fix for the non-root USER 1000 below — not a write path.
 RUN chown 1000:1000 /usr/src/app
 
+USER 1000
+
+# Install kodus-graph for the runtime user so self-hosted worker images can
+# find it through $HOME/.bun/bin after dropping root privileges.
+RUN bun install -g @kodus/kodus-graph@${KODUS_GRAPH_VERSION}
+USER root
+RUN printf '%s\n' '#!/bin/sh' 'exec /home/node/.bun/bin/kodus-graph "$@"' > /usr/local/bin/kodus-graph \
+  && chmod 0755 /usr/local/bin/kodus-graph
 USER 1000
 
 ENTRYPOINT ["/usr/local/bin/prod-entrypoint"]

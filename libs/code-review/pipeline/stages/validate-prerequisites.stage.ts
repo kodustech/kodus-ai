@@ -56,9 +56,16 @@ import { CodeReviewPipelineContext } from '../context/code-review-pipeline.conte
 
 const SKIPPED_NO_LICENSE_RATE_LIMIT_TTL_SECONDS = 24 * 60 * 60; // 24h
 
+type NoActiveSubscriptionType =
+    | 'user'
+    | 'general'
+    | 'byok_required'
+    | 'trial_credits_exhausted'
+    | 'no_error';
+
 const ERROR_TO_MESSAGE_TYPE: Record<
     ValidationErrorType,
-    'user' | 'general' | 'byok_required' | 'no_error'
+    NoActiveSubscriptionType
 > = {
     [ValidationErrorType.INVALID_LICENSE]: 'general',
     [ValidationErrorType.USER_NOT_LICENSED]: 'user',
@@ -203,6 +210,13 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 organizationAndTeamData,
                 userGitId,
                 ValidatePrerequisitesStage.name,
+                {
+                    consumeTrialReviewCredit: true,
+                    trialReviewCreditUsageKey:
+                        context.repository?.id && pullRequest?.number
+                            ? `${context.repository.id}:${pullRequest.number}`
+                            : undefined,
+                },
             );
 
         if (
@@ -219,12 +233,21 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                     draft.codeReviewConfig.byokConfig =
                         validationResult.byokConfig;
                 }
+                if (validationResult.subscriptionStatus) {
+                    if (!draft.pipelineMetadata) {
+                        draft.pipelineMetadata = {};
+                    }
+                    draft.pipelineMetadata.subscriptionStatus =
+                        validationResult.subscriptionStatus;
+                }
             });
         }
 
         // If validation failed due to USER_NOT_LICENSED, try auto-assign FIRST
         // (before checking autoReviewEnabled, because auto-assign should work regardless)
-        if (validationResult.errorType === ValidationErrorType.USER_NOT_LICENSED) {
+        if (
+            validationResult.errorType === ValidationErrorType.USER_NOT_LICENSED
+        ) {
             const failureHandled = await this.handleValidationFailure(
                 context,
                 validationResult,
@@ -394,9 +417,21 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 });
             }
         } else {
-            const noActiveSubscriptionType = validationResult.errorType
-                ? ERROR_TO_MESSAGE_TYPE[validationResult.errorType]
-                : 'general';
+            let noActiveSubscriptionType: NoActiveSubscriptionType =
+                validationResult.errorType
+                    ? ERROR_TO_MESSAGE_TYPE[validationResult.errorType]
+                    : 'general';
+
+            // Running out of Kodus-paid trial reviews is a plan limit, but the
+            // trial itself (features/time) is still active — and BYOK keeps
+            // reviews running for free. Steer there instead of "trial ended".
+            if (
+                validationResult.errorType ===
+                    ValidationErrorType.PLAN_LIMIT_EXCEEDED &&
+                validationResult.subscriptionStatus === 'trial'
+            ) {
+                noActiveSubscriptionType = 'trial_credits_exhausted';
+            }
 
             if (showStatusFeedback) {
                 await this.createNoActiveSubscriptionComment({
@@ -641,11 +676,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string };
         prNumber: number;
-        noActiveSubscriptionType:
-            | 'user'
-            | 'general'
-            | 'byok_required'
-            | 'no_error';
+        noActiveSubscriptionType: NoActiveSubscriptionType;
     }) {
         if (params.noActiveSubscriptionType === 'no_error') {
             return;
@@ -657,6 +688,10 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             message = await this.noActiveSubscriptionForUser();
         } else if (params.noActiveSubscriptionType === 'byok_required') {
             message = await this.noBYOKConfiguredMessage();
+        } else if (
+            params.noActiveSubscriptionType === 'trial_credits_exhausted'
+        ) {
+            message = await this.trialCreditsExhaustedMessage();
         }
 
         await this.codeManagementService.createIssueComment({
@@ -682,6 +717,19 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             '## Your trial has ended! 😢\n\n' +
             'To keep getting reviews, activate your plan [here](https://app.kodus.io/settings/subscription).\n\n' +
             'Got questions about plans or want to see if we can extend your trial? Talk to our founders [here](https://cal.com/gabrielmalinosqui/30min).😎\n\n' +
+            '<!-- kody-codereview -->'
+        );
+    }
+
+    private async trialCreditsExhaustedMessage(): Promise<string> {
+        return (
+            "## You've used all your free Kodus-paid PR reviews 🎁\n\n" +
+            'Your trial is still active — this just means the PR reviews we ' +
+            'cover during the trial are used up.\n\n' +
+            '**[Connect your own AI key](https://app.kodus.io/organization/byok)** ' +
+            'to keep Kody reviewing — unlimited reviews, on any plan (Free included).\n\n' +
+            'Want more trial reviews to finish evaluating before adding a key? ' +
+            '[Talk to our founders](https://cal.com/gabrielmalinosqui/30min). 😎\n\n' +
             '<!-- kody-codereview -->'
         );
     }
@@ -880,7 +928,8 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             this.logger.error({
                 message:
                     'Failed to emit review.skipped_no_license notification',
-                error: error instanceof Error ? error : new Error(String(error)),
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
                 context: this.stageName,
             });
         }

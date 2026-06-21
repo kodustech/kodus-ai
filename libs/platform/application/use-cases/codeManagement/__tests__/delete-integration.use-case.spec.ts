@@ -22,6 +22,7 @@ jest.mock('@kodus/flow', () => ({
 import { DeleteIntegrationUseCase } from '../delete-integration.use-case';
 import {
     MOCK_AUTH_INTEGRATION_UUID,
+    MOCK_INSTALLATION_CONFIG_UUID,
     MOCK_INTEGRATION_CONFIG_UUID,
     MOCK_INTEGRATION_UUID,
     MOCK_ORG_ID,
@@ -29,6 +30,7 @@ import {
     createMockAuthIntegrationService,
     createMockCodeManagementService,
     createMockEventEmitter,
+    createMockInstallationConfigEntity,
     createMockIntegrationConfigEntity,
     createMockIntegrationConfigService,
     createMockIntegrationEntity,
@@ -92,9 +94,9 @@ describe('DeleteIntegrationUseCase', () => {
     function setupIntegration(platform: string, authMode: string) {
         const integration = createMockIntegrationEntity(platform, authMode);
         mockIntegrationService.findOne.mockResolvedValue(integration);
-        mockIntegrationConfigService.findOne.mockResolvedValue(
+        mockIntegrationConfigService.find.mockResolvedValue([
             createMockIntegrationConfigEntity(),
-        );
+        ]);
         return integration;
     }
 
@@ -385,7 +387,7 @@ describe('DeleteIntegrationUseCase', () => {
 
         it('should proceed when no integration config exists', async () => {
             setupIntegration('github', 'oauth');
-            mockIntegrationConfigService.findOne.mockResolvedValue(null);
+            mockIntegrationConfigService.find.mockResolvedValue([]);
 
             await useCase.execute(executeParams);
 
@@ -394,6 +396,28 @@ describe('DeleteIntegrationUseCase', () => {
             assertAuthIntegrationDeleted();
             assertCentralizedConfigDisabled();
             expect(mockIntegrationConfigService.delete).not.toHaveBeenCalled();
+        });
+
+        it('should delete ALL configs tied to the integration, not only repositories', async () => {
+            setupIntegration('github', 'oauth');
+            mockIntegrationConfigService.find.mockResolvedValue([
+                createMockIntegrationConfigEntity(),
+                createMockInstallationConfigEntity(),
+            ]);
+
+            await useCase.execute(executeParams);
+
+            expect(mockIntegrationConfigService.find).toHaveBeenCalledWith({
+                integration: { uuid: MOCK_INTEGRATION_UUID },
+            });
+            expect(mockIntegrationConfigService.delete).toHaveBeenCalledWith(
+                MOCK_INTEGRATION_CONFIG_UUID,
+            );
+            expect(mockIntegrationConfigService.delete).toHaveBeenCalledWith(
+                MOCK_INSTALLATION_CONFIG_UUID,
+            );
+            assertIntegrationDeleted();
+            assertAuthIntegrationDeleted();
         });
     });
 });

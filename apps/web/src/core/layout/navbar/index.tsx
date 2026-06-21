@@ -192,7 +192,7 @@ export const NavMenu = () => {
                                             href={href}
                                             active={isActive(href, matcher)}
                                             className={cn(
-                                                "text-text-tertiary relative flex h-full flex-row items-center gap-2 border-b-2 border-transparent px-4 text-sm transition",
+                                                "text-text-tertiary relative flex h-full flex-row items-center gap-2 border-b-2 border-transparent px-3 text-xs whitespace-nowrap transition",
                                                 "hover:text-white focus-visible:text-white",
                                                 "data-active:font-semibold data-active:text-white",
                                                 "data-active:border-primary-light",

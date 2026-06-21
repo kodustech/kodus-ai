@@ -13,13 +13,14 @@ export interface IConfigFileMeta {
     centralizedDirectoryPath?: string;
     repositoryId?: string;
     directoryPath?: string;
-    directoryId?: string;
+    directoryPaths?: string[];
 }
 
 export interface IKodyRuleFileMeta {
     centralizedDirectoryPath: string; // Path in centralized repo, e.g., "org-a/.kody-rules/memories"
     repositoryId?: string; // Target repository ID or undefined for global
-    directoryPath?: string; // Target directory path or undefined for repo-level
+    directoryPath?: string; // Target directory path (canonical: first folder of the group) or undefined for repo-level
+    directoryPaths?: string[]; // All folder paths of the directory group when the rule lives inside one
     ruleType: KodyRulesType; // MEMORY or STANDARD based on subdirectory
     ruleFilePath: string; // Full path in centralized repo, e.g., "org-a/.kody-rules/memories/logging.yml"
     path: string; // Canonical centralized source path for DB tracking, e.g., "org-a/.kody-rules/memories/logging.yml"

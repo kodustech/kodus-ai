@@ -82,6 +82,13 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
             }
 
             if (existingRule && actor?.source !== 'sync') {
+                const groupFolderName =
+                    await this.centralizedConfigPrService.resolveDirectoryGroupFolderName(
+                        { organizationId, teamId },
+                        existingRule.repositoryId,
+                        existingRule.directoryId,
+                    );
+
                 const pr =
                     await this.centralizedConfigPrService.createMutationPullRequestIfEnabled(
                         buildKodyRuleCentralizedMutationRequest({
@@ -92,6 +99,7 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
                                 teamId,
                             },
                             repositoryId: existingRule.repositoryId,
+                            groupFolderName: groupFolderName ?? undefined,
                             ruleContent: existingRule,
                             ruleType:
                                 (existingRule.type as KodyRulesType) ||
@@ -120,10 +128,10 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
 
                     const centralizedPath =
                         existingRule.centralizedConfig?.path ||
-                        (existingRule.directoryId
+                        (groupFolderName
                             ? this.centralizedConfigPrService.buildDirectoryGroupRulesPath(
                                   repositoryFolder,
-                                  existingRule.directoryId,
+                                  groupFolderName,
                                   rulesDirectory,
                                   fileName,
                               )

@@ -28,7 +28,10 @@ const SPEC = resolve(PLAYWRIGHT_DIR, "rbac-ui-render.mjs");
 
 // Routes whose RENDER we prove in the browser, with a DOM marker that the
 // screen actually painted (`null` = only assert allow-side is not /forbidden —
-// cockpit's body is data-dependent charts with no stable heading).
+// cockpit's body is data-dependent charts with no stable heading). `notMarker`
+// asserts a substring is ABSENT on the allow side — for /cockpit it catches the
+// "Analytics Not Available" card the vestigial WEB_ANALYTICS_SECRET gate used to
+// render (a 200 page, so the not-/forbidden check alone passed right through it).
 //
 // The allow/deny verdict per role is NOT defined here: it comes from the
 // committed route manifest (permissions.route-manifest.json), itself derived
@@ -37,11 +40,15 @@ const SPEC = resolve(PLAYWRIGHT_DIR, "rbac-ui-render.mjs");
 // /user-logs is deliberately absent: the page is feature-gated (EE
 // activity-logs) and redirects to /settings when off, so its render is
 // environment-dependent, not role-dependent.
-const RENDER_ROUTES: Array<{ path: string; marker: string | null }> = [
+const RENDER_ROUTES: Array<{
+    path: string;
+    marker: string | null;
+    notMarker?: string;
+}> = [
     { path: "/token-usage", marker: "token usage" },
     { path: "/pull-requests", marker: "pull requests" },
     { path: "/settings/git", marker: "git settings" },
-    { path: "/cockpit", marker: null },
+    { path: "/cockpit", marker: null, notMarker: "analytics not available" },
 ];
 
 const MANIFEST_PATH = join(
@@ -69,14 +76,14 @@ function buildRouteChecks() {
         readFileSync(MANIFEST_PATH, "utf8"),
     ) as ManifestEntry[];
     const byRoute = new Map(manifest.map((m) => [m.route, m]));
-    return RENDER_ROUTES.map(({ path, marker }) => {
+    return RENDER_ROUTES.map(({ path, marker, notMarker }) => {
         const entry = byRoute.get(path);
         if (!entry) {
             throw new Error(
                 `route ${path} not found in permissions.route-manifest.json — regenerate with UPDATE_ROUTE_MANIFEST=1`,
             );
         }
-        return { path, marker, expected: entry.expected };
+        return { path, marker, notMarker, expected: entry.expected };
     });
 }
 

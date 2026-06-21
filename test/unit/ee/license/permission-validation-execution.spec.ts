@@ -41,14 +41,22 @@ function createMockLicenseService(overrides: any = {}) {
         }),
         getAllUsersWithLicense: jest.fn().mockResolvedValue([]),
         assignLicense: jest.fn().mockResolvedValue(true),
+        consumeTrialReviewCredit: jest.fn().mockResolvedValue({
+            allowed: true,
+            trialReviewCreditsTotal: 5,
+            trialReviewCreditsUsed: 1,
+            trialReviewCreditsRemaining: 4,
+            trialCreditTier: 'base',
+            trialUnlocks: [],
+        }),
     };
 }
 
 function createMockOrgParamsService(byok: any = null) {
     return {
-        findByKey: jest.fn().mockResolvedValue(
-            byok ? { configValue: byok } : null,
-        ),
+        findByKey: jest
+            .fn()
+            .mockResolvedValue(byok ? { configValue: byok } : null),
     };
 }
 
@@ -95,12 +103,197 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
 
     it('should allow trial without BYOK and without user check', async () => {
         const service = createService(
-            createMockLicenseService({ subscriptionStatus: 'trial', planType: 'trial' }),
+            createMockLicenseService({
+                subscriptionStatus: 'trial',
+                planType: 'trial',
+            }),
             createMockOrgParamsService(),
         );
 
         const result = await service.validateExecutionPermissions(orgData);
         expect(result.allowed).toBe(true);
+    });
+
+    it('should NOT consume or gate a legacy trial that has no credit data (old behavior)', async () => {
+        const licenseService = createMockLicenseService({
+            subscriptionStatus: 'trial',
+            planType: 'trial',
+            // No trialReviewCredits* fields → legacy trial, pre-credit model.
+        });
+        const service = createService(
+            licenseService,
+            createMockOrgParamsService(),
+        );
+
+        const result = await service.validateExecutionPermissions(
+            orgData,
+            undefined,
+            'ValidatePrerequisitesStage',
+            {
+                consumeTrialReviewCredit: true,
+                trialReviewCreditUsageKey: 'repo-1:123',
+            },
+        );
+
+        expect(result.allowed).toBe(true);
+        expect(
+            licenseService.consumeTrialReviewCredit,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('should consume one managed trial credit when requested by review execution', async () => {
+        const licenseService = createMockLicenseService({
+            subscriptionStatus: 'trial',
+            planType: 'trial',
+            trialReviewCreditsTotal: 5,
+            trialReviewCreditsUsed: 0,
+            trialReviewCreditsRemaining: 5,
+        });
+        const service = createService(
+            licenseService,
+            createMockOrgParamsService(),
+        );
+
+        const result = await service.validateExecutionPermissions(
+            orgData,
+            undefined,
+            'ValidatePrerequisitesStage',
+            {
+                consumeTrialReviewCredit: true,
+                trialReviewCreditUsageKey: 'repo-1:123',
+            },
+        );
+
+        expect(result.allowed).toBe(true);
+        expect(licenseService.consumeTrialReviewCredit).toHaveBeenCalledWith(
+            orgData,
+            'repo-1:123',
+        );
+        expect(result.metadata?.trialReviewCreditsRemaining).toBe(4);
+    });
+
+    it('should deny trial review when billing cannot consume a trial credit', async () => {
+        const licenseService = createMockLicenseService({
+            subscriptionStatus: 'trial',
+            planType: 'trial',
+            trialReviewCreditsTotal: 5,
+            trialReviewCreditsUsed: 5,
+            trialReviewCreditsRemaining: 1,
+        });
+        licenseService.consumeTrialReviewCredit.mockResolvedValue({
+            allowed: false,
+            reason: 'TRIAL_REVIEW_CREDITS_EXHAUSTED',
+            trialReviewCreditsTotal: 5,
+            trialReviewCreditsUsed: 5,
+            trialReviewCreditsRemaining: 0,
+        });
+        const service = createService(
+            licenseService,
+            createMockOrgParamsService(),
+        );
+
+        const result = await service.validateExecutionPermissions(
+            orgData,
+            undefined,
+            'ValidatePrerequisitesStage',
+            {
+                consumeTrialReviewCredit: true,
+                trialReviewCreditUsageKey: 'repo-1:123',
+            },
+        );
+
+        expect(result.allowed).toBe(false);
+        expect(result.errorType).toBe(ValidationErrorType.PLAN_LIMIT_EXCEEDED);
+    });
+
+    it('should deny managed trial when review credits are exhausted', async () => {
+        const service = createService(
+            createMockLicenseService({
+                subscriptionStatus: 'trial',
+                planType: 'trial',
+                trialReviewCreditsTotal: 5,
+                trialReviewCreditsUsed: 5,
+                trialReviewCreditsRemaining: 0,
+            }),
+            createMockOrgParamsService(),
+        );
+
+        const result = await service.validateExecutionPermissions(orgData);
+        expect(result.allowed).toBe(false);
+        expect(result.errorType).toBe(ValidationErrorType.PLAN_LIMIT_EXCEEDED);
+    });
+
+    it('should allow BYOK trial even when managed review credits are exhausted', async () => {
+        const service = createService(
+            createMockLicenseService({
+                subscriptionStatus: 'trial',
+                planType: 'trial',
+                trialReviewCreditsTotal: 5,
+                trialReviewCreditsUsed: 5,
+                trialReviewCreditsRemaining: 0,
+            }),
+            createMockOrgParamsService(byokConfig),
+        );
+
+        const result = await service.validateExecutionPermissions(orgData);
+        expect(result.allowed).toBe(true);
+        expect(result.byokConfig).toEqual(byokConfig);
+    });
+
+    it('should NOT consume a trial credit when BYOK is configured (key, not credits)', async () => {
+        const licenseService = createMockLicenseService({
+            subscriptionStatus: 'trial',
+            planType: 'trial',
+            trialReviewCreditsTotal: 5,
+            trialReviewCreditsUsed: 0,
+            trialReviewCreditsRemaining: 5,
+        });
+        const service = createService(
+            licenseService,
+            createMockOrgParamsService(byokConfig),
+        );
+
+        const result = await service.validateExecutionPermissions(
+            orgData,
+            undefined,
+            'ValidatePrerequisitesStage',
+            { consumeTrialReviewCredit: true, trialReviewCreditUsageKey: 'r:1' },
+        );
+
+        expect(result.allowed).toBe(true);
+        expect(result.byokConfig).toEqual(byokConfig);
+        expect(
+            licenseService.consumeTrialReviewCredit,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('does NOT block an exhausted trial when the BYOK lookup fails (fail open)', async () => {
+        // A user who burned their 5 credits and then connected BYOK must not
+        // be gated by a flaky BYOK-config read. When getBYOKConfig throws we
+        // can't rule out a key, so we neither block nor consume.
+        const licenseService = createMockLicenseService({
+            subscriptionStatus: 'trial',
+            planType: 'trial',
+            trialReviewCreditsTotal: 5,
+            trialReviewCreditsUsed: 5,
+            trialReviewCreditsRemaining: 0,
+        });
+        const flakyOrgParams = {
+            findByKey: jest.fn().mockRejectedValue(new Error('flaky DB')),
+        };
+        const service = createService(licenseService, flakyOrgParams);
+
+        const result = await service.validateExecutionPermissions(
+            orgData,
+            undefined,
+            'ValidatePrerequisitesStage',
+            { consumeTrialReviewCredit: true, trialReviewCreditUsageKey: 'r:1' },
+        );
+
+        expect(result.allowed).toBe(true);
+        expect(
+            licenseService.consumeTrialReviewCredit,
+        ).not.toHaveBeenCalled();
     });
 
     // ─── free_byok ──────────────────────────────────────────────────
@@ -112,7 +305,10 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
                 createMockOrgParamsService(byokConfig),
             );
 
-            const result = await service.validateExecutionPermissions(orgData, 'user-123');
+            const result = await service.validateExecutionPermissions(
+                orgData,
+                'user-123',
+            );
             expect(result.allowed).toBe(true);
         });
 
@@ -142,7 +338,9 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
 
     describe('teams_byok plan', () => {
         it('should allow with BYOK configured and user licensed', async () => {
-            const licenseService = createMockLicenseService({ planType: 'teams_byok' });
+            const licenseService = createMockLicenseService({
+                planType: 'teams_byok',
+            });
             licenseService.getAllUsersWithLicense.mockResolvedValue([
                 { git_id: 'user-123' },
             ]);
@@ -151,12 +349,17 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
                 createMockOrgParamsService(byokConfig),
             );
 
-            const result = await service.validateExecutionPermissions(orgData, 'user-123');
+            const result = await service.validateExecutionPermissions(
+                orgData,
+                'user-123',
+            );
             expect(result.allowed).toBe(true);
         });
 
         it('should deny when user is NOT licensed', async () => {
-            const licenseService = createMockLicenseService({ planType: 'teams_byok' });
+            const licenseService = createMockLicenseService({
+                planType: 'teams_byok',
+            });
             licenseService.getAllUsersWithLicense.mockResolvedValue([
                 { git_id: 'other-user' },
             ]);
@@ -165,9 +368,14 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
                 createMockOrgParamsService(byokConfig),
             );
 
-            const result = await service.validateExecutionPermissions(orgData, 'user-123');
+            const result = await service.validateExecutionPermissions(
+                orgData,
+                'user-123',
+            );
             expect(result.allowed).toBe(false);
-            expect(result.errorType).toBe(ValidationErrorType.USER_NOT_LICENSED);
+            expect(result.errorType).toBe(
+                ValidationErrorType.USER_NOT_LICENSED,
+            );
         });
 
         it('should deny when no userGitId provided', async () => {
@@ -188,22 +396,32 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
                 createMockOrgParamsService(),
             );
 
-            const result = await service.validateExecutionPermissions(orgData, 'user-123');
+            const result = await service.validateExecutionPermissions(
+                orgData,
+                'user-123',
+            );
             expect(result.allowed).toBe(false);
             expect(result.errorType).toBe(ValidationErrorType.BYOK_REQUIRED);
         });
 
         it('should deny when no licensed users exist at all', async () => {
-            const licenseService = createMockLicenseService({ planType: 'teams_byok' });
+            const licenseService = createMockLicenseService({
+                planType: 'teams_byok',
+            });
             licenseService.getAllUsersWithLicense.mockResolvedValue([]);
             const service = createService(
                 licenseService,
                 createMockOrgParamsService(byokConfig),
             );
 
-            const result = await service.validateExecutionPermissions(orgData, 'user-123');
+            const result = await service.validateExecutionPermissions(
+                orgData,
+                'user-123',
+            );
             expect(result.allowed).toBe(false);
-            expect(result.errorType).toBe(ValidationErrorType.USER_NOT_LICENSED);
+            expect(result.errorType).toBe(
+                ValidationErrorType.USER_NOT_LICENSED,
+            );
             expect(result.metadata?.availableUsers).toBe(0);
         });
     });
@@ -212,7 +430,9 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
 
     describe('teams_managed plan', () => {
         it('should allow when user is licensed', async () => {
-            const licenseService = createMockLicenseService({ planType: 'teams_managed' });
+            const licenseService = createMockLicenseService({
+                planType: 'teams_managed',
+            });
             licenseService.getAllUsersWithLicense.mockResolvedValue([
                 { git_id: 'user-123' },
             ]);
@@ -221,21 +441,31 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
                 createMockOrgParamsService(),
             );
 
-            const result = await service.validateExecutionPermissions(orgData, 'user-123');
+            const result = await service.validateExecutionPermissions(
+                orgData,
+                'user-123',
+            );
             expect(result.allowed).toBe(true);
         });
 
         it('should deny when user is NOT licensed', async () => {
-            const licenseService = createMockLicenseService({ planType: 'teams_managed' });
+            const licenseService = createMockLicenseService({
+                planType: 'teams_managed',
+            });
             licenseService.getAllUsersWithLicense.mockResolvedValue([]);
             const service = createService(
                 licenseService,
                 createMockOrgParamsService(),
             );
 
-            const result = await service.validateExecutionPermissions(orgData, 'user-123');
+            const result = await service.validateExecutionPermissions(
+                orgData,
+                'user-123',
+            );
             expect(result.allowed).toBe(false);
-            expect(result.errorType).toBe(ValidationErrorType.USER_NOT_LICENSED);
+            expect(result.errorType).toBe(
+                ValidationErrorType.USER_NOT_LICENSED,
+            );
         });
 
         it('should deny when no userGitId provided', async () => {
@@ -280,7 +510,10 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
                 createMockOrgParamsService(),
             );
 
-            const result = await service.validateExecutionPermissions(orgData, 'user-123');
+            const result = await service.validateExecutionPermissions(
+                orgData,
+                'user-123',
+            );
             expect(result.allowed).toBe(true);
         });
 
@@ -294,9 +527,14 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
                 createMockOrgParamsService(),
             );
 
-            const result = await service.validateExecutionPermissions(orgData, 'user-123');
+            const result = await service.validateExecutionPermissions(
+                orgData,
+                'user-123',
+            );
             expect(result.allowed).toBe(false);
-            expect(result.errorType).toBe(ValidationErrorType.USER_NOT_LICENSED);
+            expect(result.errorType).toBe(
+                ValidationErrorType.USER_NOT_LICENSED,
+            );
         });
 
         it('should allow with valid license and no userGitId', async () => {
@@ -316,13 +554,20 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
 
     describe('error handling', () => {
         it('should return BYOK_REQUIRED on BYOK_NOT_CONFIGURED exception', async () => {
-            const licenseService = createMockLicenseService({ planType: 'teams_byok' });
+            const licenseService = createMockLicenseService({
+                planType: 'teams_byok',
+            });
             const orgParamsService = createMockOrgParamsService();
-            orgParamsService.findByKey.mockRejectedValue(new Error('BYOK_NOT_CONFIGURED'));
+            orgParamsService.findByKey.mockRejectedValue(
+                new Error('BYOK_NOT_CONFIGURED'),
+            );
 
             const service = createService(licenseService, orgParamsService);
 
-            const result = await service.validateExecutionPermissions(orgData, 'user-123');
+            const result = await service.validateExecutionPermissions(
+                orgData,
+                'user-123',
+            );
             expect(result.allowed).toBe(false);
             expect(result.errorType).toBe(ValidationErrorType.BYOK_REQUIRED);
         });
@@ -337,7 +582,10 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
                 createMockOrgParamsService(),
             );
 
-            const result = await service.validateExecutionPermissions(orgData, 'user-123');
+            const result = await service.validateExecutionPermissions(
+                orgData,
+                'user-123',
+            );
             expect(result.allowed).toBe(false);
             expect(result.errorType).toBe(ValidationErrorType.INVALID_LICENSE);
         });

@@ -35,6 +35,7 @@ describe('KodyRulesTools.createKodyRule', () => {
             createMutationPullRequestIfEnabled: jest
                 .fn()
                 .mockResolvedValue({ mode: 'direct' }),
+            resolveDirectoryGroupFolderName: jest.fn().mockResolvedValue(null),
         } as unknown as jest.Mocked<CentralizedConfigPrService>;
 
         mockDeleteRuleUseCase =
@@ -187,6 +188,7 @@ describe('KodyRulesTools.updateKodyRule', () => {
             createMutationPullRequestIfEnabled: jest
                 .fn()
                 .mockResolvedValue({ mode: 'direct' }),
+            resolveDirectoryGroupFolderName: jest.fn().mockResolvedValue(null),
         } as unknown as jest.Mocked<CentralizedConfigPrService>;
 
         mockDeleteRuleUseCase =

@@ -11,10 +11,10 @@ import { Label } from "@components/ui/label";
 import { Link } from "@components/ui/link";
 import { Page } from "@components/ui/page";
 import { Spinner } from "@components/ui/spinner";
+import { useConfig } from "@providers/ConfigProvider";
 import { joinOrganization } from "@services/users/fetch";
 import { ArrowRight } from "lucide-react";
 import { useAuth } from "src/core/providers/auth.provider";
-import { useConfig } from "@providers/ConfigProvider";
 import type { AwaitedReturnType } from "src/core/types";
 import { getOrganizationsByDomain } from "src/lib/auth/fetchers";
 
@@ -177,7 +177,7 @@ export default function ChooseWorkspacePage() {
     );
 
     return (
-        <Page.Root className="mx-auto flex max-h-screen flex-row overflow-hidden p-6">
+        <Page.Root className="mx-auto flex min-h-full w-full flex-row p-6">
             <div className="bg-card-lv1 flex flex-10 flex-col justify-center gap-10 rounded-3xl p-12">
                 <div className="flex-1 overflow-hidden rounded-3xl">
                     <video

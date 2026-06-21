@@ -18,6 +18,7 @@ import { NumberInput } from "@components/ui/number-input";
 import { Switch } from "@components/ui/switch";
 import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
+import { useConfig } from "@providers/ConfigProvider";
 import {
     BadgeDollarSignIcon,
     BookOpenIcon,
@@ -38,7 +39,6 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "src/core/providers/auth.provider";
-import { useConfig } from "@providers/ConfigProvider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { CurrencyHelpers } from "src/core/utils/currency";
 import { addSearchParamsToUrl } from "src/core/utils/url";
@@ -66,14 +66,16 @@ export function ChoosePlanPageClient({
         <div className="flex flex-col gap-6">
             {tokenProjectionSlot}
 
+            {/* Anchor message: the #1 thing people get wrong about pricing —
+                reviews are unlimited on every plan because they run on the
+                user's own key. Plans only change features. */}
+            <AllPlansInclude />
+
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 {plans.free && <FreePlan plan={plans.free} />}
                 {plans.teams_byok && <TeamsPlan plan={plans.teams_byok} />}
                 {plans.enterprise && <EnterprisePlan plan={plans.enterprise} />}
             </div>
-
-            {/* All plans include */}
-            <AllPlansInclude />
         </div>
     );
 }
@@ -114,36 +116,33 @@ function getFeatureIcon(feature: string): LucideIcon {
 }
 
 function AllPlansInclude() {
+    const items = [
+        { icon: GitPullRequestIcon, label: "Unlimited PR reviews" },
+        { icon: UsersIcon, label: "Unlimited users" },
+        { icon: KeyIcon, label: "Runs on your own AI key" },
+    ];
+
     return (
-        <div className="bg-card-lv1 flex items-center gap-6 rounded-lg px-5 py-4">
-            <p className="text-text-secondary text-sm font-medium">
-                All plans include
+        <div className="bg-card-lv1 border-card-lv3 flex flex-col gap-3 rounded-lg border px-5 py-4 md:flex-row md:items-center md:justify-between md:gap-6">
+            <p className="text-text-primary text-sm font-semibold text-balance">
+                Reviews are unlimited on every plan — they run on your own AI
+                key.{" "}
+                <span className="text-text-secondary font-normal">
+                    Plans differ by features, not by how many PRs Kody can
+                    review.
+                </span>
             </p>
-            <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                    <div className="bg-success/20 flex size-6 items-center justify-center rounded-full">
-                        <GitPullRequestIcon className="text-success size-3.5" />
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                {items.map(({ icon: Icon, label }) => (
+                    <div key={label} className="flex items-center gap-2">
+                        <div className="bg-success/20 flex size-6 items-center justify-center rounded-full">
+                            <Icon className="text-success size-3.5" />
+                        </div>
+                        <span className="text-text-primary text-sm whitespace-nowrap">
+                            {label}
+                        </span>
                     </div>
-                    <span className="text-text-primary text-sm">
-                        Unlimited PRs
-                    </span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="bg-success/20 flex size-6 items-center justify-center rounded-full">
-                        <UsersIcon className="text-success size-3.5" />
-                    </div>
-                    <span className="text-text-primary text-sm">
-                        Unlimited users
-                    </span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="bg-success/20 flex size-6 items-center justify-center rounded-full">
-                        <KeyIcon className="text-success size-3.5" />
-                    </div>
-                    <span className="text-text-primary text-sm">
-                        Your own API key
-                    </span>
-                </div>
+                ))}
             </div>
         </div>
     );
@@ -357,7 +356,7 @@ function TeamsPlan({ plan }: { plan: Plan }) {
             <CardContent className="flex flex-none flex-col gap-4 pt-0 pb-5">
                 <FormControl.Root>
                     <FormControl.Label htmlFor="teams-quantity">
-                        Quantity of licenses
+                        Developer licenses
                     </FormControl.Label>
 
                     <FormControl.Input>
@@ -371,6 +370,12 @@ function TeamsPlan({ plan }: { plan: Plan }) {
                             <NumberInput.Increment />
                         </NumberInput.Root>
                     </FormControl.Input>
+
+                    <p className="text-text-tertiary text-xs">
+                        One license per developer whose PRs Kody reviews.
+                        Workspace members (reviewers, viewers, admins) are
+                        unlimited and free.
+                    </p>
                 </FormControl.Root>
 
                 <Button

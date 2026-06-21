@@ -38,7 +38,7 @@ export class ConversationAgentProvider extends BaseAgentProvider {
         llmProvider: LLMModelProvider.GEMINI_2_5_PRO,
         temperature: 0,
         maxTokens: 20000,
-        maxReasoningTokens: 800,
+        maxReasoningTokens: 1024,
         stop: undefined as string[] | undefined,
     };
 

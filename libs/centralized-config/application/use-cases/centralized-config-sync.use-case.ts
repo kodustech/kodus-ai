@@ -200,7 +200,22 @@ export class CentralizedConfigSyncUseCase {
         const buildScopeKey = (scope: {
             repositoryId?: string;
             directoryPath?: string;
-        }) => `${scope.repositoryId ?? 'global'}::${scope.directoryPath ?? ''}`;
+            directoryPaths?: string[];
+        }) => {
+            const repoKey = scope.repositoryId ?? 'global';
+            // Directory-group scopes are identified by their full path set
+            // (sorted to be order-invariant) — using `directoryPath` alone
+            // collapses every group into the same bucket as the repo-level
+            // config because discovery now leaves `directoryPath` empty for
+            // groups.
+            if (
+                scope.directoryPaths &&
+                scope.directoryPaths.length > 0
+            ) {
+                return `${repoKey}::group::${[...scope.directoryPaths].sort().join('|')}`;
+            }
+            return `${repoKey}::${scope.directoryPath ?? ''}`;
+        };
 
         const mergedByScope = new Map<string, IConfigFileMeta>();
 
@@ -212,6 +227,7 @@ export class CentralizedConfigSyncUseCase {
             const ruleScope: IConfigFileMeta = {
                 repositoryId: ruleFile.repositoryId,
                 directoryPath: ruleFile.directoryPath,
+                directoryPaths: ruleFile.directoryPaths,
                 centralizedDirectoryPath: ruleFile.centralizedDirectoryPath,
             };
 

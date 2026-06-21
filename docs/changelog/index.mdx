@@ -1,17 +1,123 @@
 ---
 title: "Changelog"
 description: "Latest Kodus updates and improvements."
+rss: true
 ---
 
-<a id="kodus-changelog-rss-action" className="kodus-changelog-rss" href="/changelog.xml" aria-label="RSS feed">
-    <svg aria-hidden="true" viewBox="0 0 24 24">
-        <path d="M4 5.5a14.5 14.5 0 0 1 14.5 14.5" />
-        <path d="M4 10.5a9.5 9.5 0 0 1 9.5 9.5" />
-        <path d="M5 19h.01" />
-    </svg>
-</a>
-
 <div className="kodus-changelog-shell">
+    <div className="kodus-changelog-filter-sidebar">
+        <div className="kodus-changelog-filter-panel" aria-label="Changelog filters">
+            <p className="kodus-changelog-filter-heading">Filters</p>
+            <div className="kodus-changelog-filter-options">
+                <label className="kodus-changelog-filter-button">
+                    <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-security" />
+                    <span>Security</span>
+                </label>
+                <label className="kodus-changelog-filter-button">
+                    <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-cockpit" />
+                    <span>Cockpit</span>
+                </label>
+                <label className="kodus-changelog-filter-button">
+                    <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-byok" />
+                    <span>BYOK</span>
+                </label>
+                <label className="kodus-changelog-filter-button">
+                    <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-ai-engine" />
+                    <span>AI Engine</span>
+                </label>
+                <label className="kodus-changelog-filter-button">
+                    <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-self-hosted" />
+                    <span>Self-hosted</span>
+                </label>
+                <label className="kodus-changelog-filter-button">
+                    <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-git-provider" />
+                    <span>GIT Provider</span>
+                </label>
+                <label className="kodus-changelog-filter-button">
+                    <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-notifications" />
+                    <span>Notifications</span>
+                </label>
+                <label className="kodus-changelog-filter-button">
+                    <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-kody-rules" />
+                    <span>Kody Rules</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div className="kodus-changelog-release">
+        <div className="kodus-changelog-meta">
+            <span className="kodus-changelog-date">June 15, 2026</span>
+        </div>
+
+        <div className="kodus-changelog-content">
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">What's new</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-cockpit">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Operational metrics in Cockpit</div>
+                    <p className="kodus-changelog-copy">Track the health of your review pipeline in real time. Throughput, queue, and processing time metrics are now available in Cockpit.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="/videos/cockpit.mp4" type="video/mp4" />
+                    </video>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Redesigned Kodus Review tab</div>
+                    <p className="kodus-changelog-copy">The review tab has been redesigned with a cleaner interface and more direct actions. You can now analyze and act on suggestions without leaving the PR screen.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="/videos/kody-review-tab.mp4" type="video/mp4" />
+                    </video>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Improvements</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-self-hosted">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Backend on pnpm</div>
+                    <p className="kodus-changelog-copy">We migrated the backend from Yarn 1 to pnpm. This makes builds faster, improves lockfile consistency, and reduces cache issues across environments.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-byok">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Token usage screen</div>
+                    <p className="kodus-changelog-copy">The token usage screen has been redesigned to make consumption by organization and period easier to understand. It is now simpler to track usage and see how tokens are being consumed over time.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="/videos/token-usage-redesign.mp4" type="video/mp4" />
+                    </video>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Bug fixes</div>
+
+                <div className="kodus-changelog-fix-list">
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-self-hosted">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Self-hosted analytics:</strong> we fixed the analytics integration for self-hosted deployments. Usage metrics now appear correctly in the dashboard.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Issue cache:</strong> the issue count in the sidebar could sometimes become outdated. The cache is now invalidated correctly after changes.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">GitHub rate limit:</strong> we fixed a rate limit issue in cloud E2E tests. We now use round-robin across multiple bot accounts to better distribute requests.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-notifications">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Notification routing:</strong> we fixed the behavior of targeted notifications when combined with audience settings. Notifications now reach the right people without duplicates.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Centralized config sync:</strong> we fixed issues in the centralized sync of Kody Rules configurations across repositories. Sync now correctly handles multiple scopes, stale configurations, and merge-triggered updates.</p>
+                    </div>
+                </div>
+            </div>
+
+            <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
+        </div>
+    </div>
+
     <div className="kodus-changelog-release">
         <div className="kodus-changelog-meta">
             <span className="kodus-changelog-date">June 8, 2026</span>
@@ -95,35 +201,107 @@ description: "Latest Kodus updates and improvements."
 
             <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
         </div>
-
-        <div className="kodus-changelog-filter-sidebar">
-            <div className="kodus-changelog-filter-panel" aria-label="Changelog filters">
-                <p className="kodus-changelog-filter-heading">Filters</p>
-                <div className="kodus-changelog-filter-options">
-                    <label className="kodus-changelog-filter-button">
-                        <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-security" />
-                        <span>Security</span>
-                    </label>
-                    <label className="kodus-changelog-filter-button">
-                        <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-byok" />
-                        <span>BYOK</span>
-                    </label>
-                    <label className="kodus-changelog-filter-button">
-                        <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-ai-engine" />
-                        <span>AI Engine</span>
-                    </label>
-                    <label className="kodus-changelog-filter-button">
-                        <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-self-hosted" />
-                        <span>Self-hosted</span>
-                    </label>
-                    <label className="kodus-changelog-filter-button">
-                        <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-git-provider" />
-                        <span>Git Provider</span>
-                    </label>
-                </div>
-            </div>
-        </div>
     </div>
+</div>
+
+<div className="kodus-changelog-rss-source" aria-hidden="true">
+    <Update label="June 15, 2026 - Operational metrics in Cockpit" tags={["Cockpit"]}>
+        Track the health of your review pipeline in real time. Throughput, queue, and processing time metrics are now available in Cockpit.
+
+        Video: https://kodus.io/wp-content/uploads/2026/06/cockpit.mp4
+    </Update>
+
+    <Update label="June 15, 2026 - Redesigned Kodus Review tab" tags={["AI Engine"]}>
+        The review tab has been redesigned with a cleaner interface and more direct actions. You can now analyze and act on suggestions without leaving the PR screen.
+
+        Video: https://kodus.io/wp-content/uploads/2026/06/kody-review-tab.mp4
+    </Update>
+
+    <Update label="June 15, 2026 - Backend on pnpm" tags={["Self-hosted"]}>
+        We migrated the backend from Yarn 1 to pnpm. This makes builds faster, improves lockfile consistency, and reduces cache issues across environments.
+    </Update>
+
+    <Update label="June 15, 2026 - Token usage screen" tags={["BYOK"]}>
+        The token usage screen has been redesigned to make consumption by organization and period easier to understand. It is now simpler to track usage and see how tokens are being consumed over time.
+
+        Video: https://kodus.io/wp-content/uploads/2026/06/token_usage.mp4
+    </Update>
+
+    <Update label="June 15, 2026 - Self-hosted analytics" tags={["Self-hosted"]}>
+        We fixed the analytics integration for self-hosted deployments. Usage metrics now appear correctly in the dashboard.
+    </Update>
+
+    <Update label="June 15, 2026 - Issue cache" tags={["AI Engine"]}>
+        The issue count in the sidebar could sometimes become outdated. The cache is now invalidated correctly after changes.
+    </Update>
+
+    <Update label="June 15, 2026 - GitHub rate limit" tags={["GIT Provider"]}>
+        We fixed a rate limit issue in cloud E2E tests. We now use round-robin across multiple bot accounts to better distribute requests.
+    </Update>
+
+    <Update label="June 15, 2026 - Notification routing" tags={["Notifications"]}>
+        We fixed the behavior of targeted notifications when combined with audience settings. Notifications now reach the right people without duplicates.
+    </Update>
+
+    <Update label="June 15, 2026 - Centralized config sync" tags={["Kody Rules"]}>
+        We fixed issues in the centralized sync of Kody Rules configurations across repositories. Sync now correctly handles multiple scopes, stale configurations, and merge-triggered updates.
+    </Update>
+
+    <Update label="June 8, 2026 - Moonshot Kimi support for BYOK" tags={["AI Engine", "BYOK"]}>
+        We added support for Moonshot as a provider, compatible with the Anthropic API.
+
+        You can now use the Kimi Coding Plan model in BYOK setups. To configure it, set the API_MOONSHOT_API_KEY key and select the model in the organization preferences.
+
+        See the Moonshot Kimi documentation for more setup details: https://docs.kodus.io/knowledge_base/en/how-to-use-moonshot-with-kodus
+    </Update>
+
+    <Update label="June 8, 2026 - Monthly token usage control" tags={["BYOK"]}>
+        Organizations can now set monthly token consumption limits per model.
+
+        Usage is shown in real time in the interface, with a progress bar. When usage reaches 80% of the limit, the team receives an email alert. If the limit is reached, additional reviews can be blocked automatically.
+
+        Video: https://kodus.io/wp-content/uploads/2026/06/token-usage.mov
+
+        See the Monthly Spend Limit documentation for more setup details: https://docs.kodus.io/how_to_use/en/spend-limit
+    </Update>
+
+    <Update label="June 8, 2026 - More resilient review agent" tags={["AI Engine"]}>
+        The review engine now handles empty or malformed LLM responses better. This reduces loops in edge cases and helps ensure valid suggestions continue to be delivered even when the provider returns an unexpected response.
+    </Update>
+
+    <Update label="June 8, 2026 - Telemetry for self-hosted environments" tags={["Self-hosted"]}>
+        On-premise installations now automatically report health metrics, such as heartbeat, and usage data. The goal is to make diagnosis and support easier without exposing sensitive customer data.
+    </Update>
+
+    <Update label="June 8, 2026 - Faster Kody Rules" tags={["AI Engine"]}>
+        We improved the loading and synchronization of custom rules. We also fixed the count of orphaned rules and made partial updates safer against race conditions.
+    </Update>
+
+    <Update label="June 8, 2026 - GitLab compatibility improvements" tags={["GIT Provider"]}>
+        Support for GitLab 13.x in comment webhooks.
+
+        Diff fallback for versions earlier than 15.7.
+
+        Fixes for discussion threads and replies scoped by discussionId.
+
+        Self-hosted development environment documentation.
+    </Update>
+
+    <Update label="June 8, 2026 - GitHub member list fix" tags={["GIT Provider", "Security"]}>
+        Suspended users no longer appear in the member list for license assignment.
+    </Update>
+
+    <Update label="June 8, 2026 - Update Connection fix" tags={["GIT Provider"]}>
+        Integration reauthentication now correctly clears the previous configuration.
+    </Update>
+
+    <Update label="June 8, 2026 - Integration reset fix" tags={["AI Engine"]}>
+        Kody Rules linked to the repo or directory are now removed automatically.
+    </Update>
+
+    <Update label="June 8, 2026 - Release Freeze fix">
+        Eligibility notifications only appear when the freeze is active.
+    </Update>
 </div>
 
 <script>
@@ -132,6 +310,7 @@ description: "Latest Kodus updates and improvements."
     const filterSelector = ".kodus-changelog-filter-control";
     const itemSelector = ".kodus-changelog-filterable";
     const sectionSelector = ".kodus-changelog-section";
+    const releaseSelector = ".kodus-changelog-release";
 
     const applyChangelogFilters = () => {
         const root = document.querySelector(".kodus-changelog-shell");
@@ -158,6 +337,11 @@ description: "Latest Kodus updates and improvements."
         root.querySelectorAll(sectionSelector).forEach((section) => {
             const hasVisibleItems = Array.from(section.querySelectorAll(itemSelector)).some((item) => !item.hidden);
             section.hidden = isFiltered && !hasVisibleItems;
+        });
+
+        root.querySelectorAll(releaseSelector).forEach((release) => {
+            const hasVisibleItems = Array.from(release.querySelectorAll(itemSelector)).some((item) => !item.hidden);
+            release.hidden = isFiltered && !hasVisibleItems;
         });
     };
 

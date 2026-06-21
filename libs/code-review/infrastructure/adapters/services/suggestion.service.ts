@@ -2175,7 +2175,13 @@ export class SuggestionService implements ISuggestionService {
                         const commentId =
                             platformType === PlatformType.BITBUCKET
                                 ? foundComment.id
-                                : foundComment.threadId;
+                                : platformType === PlatformType.FORGEJO
+                                  ? null
+                                  : foundComment.threadId;
+
+                        if (commentId == null) {
+                            return null;
+                        }
 
                         return this.codeManagementService.markReviewCommentAsResolved(
                             {

@@ -403,7 +403,66 @@ describe('ValidatePrerequisitesStage', () => {
             const result = await stage.execute(context);
 
             // statusInfo not changed from in_progress
-            expect(result.statusInfo?.status).not.toBe(AutomationStatus.SKIPPED);
+            expect(result.statusInfo?.status).not.toBe(
+                AutomationStatus.SKIPPED,
+            );
+        });
+    });
+
+    describe('trial review credit consumption', () => {
+        it('asks to consume a managed trial credit keyed by repo:pr', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            await stage.execute(context);
+
+            expect(
+                mockPermissionValidationService.validateExecutionPermissions,
+            ).toHaveBeenCalledWith(
+                context.organizationAndTeamData,
+                'user-1',
+                ValidatePrerequisitesStage.name,
+                {
+                    consumeTrialReviewCredit: true,
+                    trialReviewCreditUsageKey: 'repo-1:42',
+                },
+            );
+        });
+
+        it('posts a BYOK-focused comment (not "trial ended") when trial credits run out', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
+                    subscriptionStatus: 'trial',
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            await stage.execute(context);
+
+            const body =
+                mockCodeManagementService.createIssueComment.mock.calls[0][0]
+                    .body;
+            expect(body).toContain('Kodus-paid PR reviews');
+            expect(body).toContain('/organization/byok');
+            expect(body).not.toContain('trial has ended');
         });
     });
 });

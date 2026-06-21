@@ -88,6 +88,11 @@ export default async function Layout({ children }: React.PropsWithChildren) {
     const isBYOK = organizationLicense
         ? isBYOKSubscriptionPlan(organizationLicense)
         : false;
+    // A configured BYOK key lives in the API, not in billing — so the trial
+    // license's `byok` flag stays false even after the user connects a key.
+    // Surface it from the LLM config so the trial UI (badge/banner/card)
+    // reflects "unlimited with your key".
+    const hasByokKey = Boolean(llmConfigStatus?.byok?.configured);
     const isTrial = organizationLicense?.subscriptionStatus === "trial";
     const isEnterprise = organizationLicense
         ? isEnterprisePlan(organizationLicense)
@@ -119,11 +124,19 @@ export default async function Layout({ children }: React.PropsWithChildren) {
             featureFlags={featureFlags}>
             <SubscriptionProvider
                 license={
-                    organizationLicense ?? {
-                        valid: false,
-                        subscriptionStatus: "inactive",
-                        numberOfLicenses: 0,
-                    }
+                    organizationLicense
+                        ? ({
+                              ...organizationLicense,
+                              byok:
+                                  hasByokKey ||
+                                  (organizationLicense as { byok?: boolean })
+                                      .byok,
+                          } as typeof organizationLicense)
+                        : {
+                              valid: false,
+                              subscriptionStatus: "inactive",
+                              numberOfLicenses: 0,
+                          }
                 }
                 usersWithAssignedLicense={usersWithAssignedLicense}>
                 <NavMenu />

@@ -64,18 +64,18 @@ For local setup, see [Local Quickstart](https://docs.kodus.io/how_to_deploy/en/l
 | --- | --- | --- | --- |
 | Price | Free | $10/dev monthly or $8/dev annual (+ tokens/dev) | Custom |
 | Hosting | Self-hosted **or** hosted by Kodus | Hosted by Kodus | Self-hosted **or** hosted by Kodus  |
-| Bring Your Own Key (BYOK) | ✅ | ✅ | ❌ |
+| Bring Your Own Key (BYOK) | ✅ | ✅ | ✅ |
 | PR usage | Unlimited PRs using your own API key | Unlimited PRs using your own API key | Unlimited PRs using Kodus AI Tokens API key |
 | Users | Unlimited | Unlimited | Unlimited |
 | Kody Rules | Up to 10 | Unlimited | Unlimited |
 | Active plugins | Up to 3 | Unlimited | Unlimited |
-| Kody Learnings and Memory | ✅ | Not listed on card | Not listed on card |
-| Quality Radar issues | Unlimited | Not listed on card | Not listed on card |
+| Kody Learnings and Memory | ✅ | ✅ | ✅ |
+| Quality Radar issues | Unlimited | Unlimited | Unlimited |
 | Priority queue for Kody Agents | ❌ | ✅ | ✅ |
 | Engineering Metrics / Cockpit | ❌ | ✅ | ✅ |
 | SSO | ❌ | ❌ | ✅ |
 | RBAC + audit logs + analytics | ❌ | ❌ | ✅ |
-| Compliance | ❌ | ❌ | SOC 2 in progress |
+| Compliance | ❌ | ❌ | SOC 2 |
 | Support | Discord Community Support | Discord Community + Email Support | Private Discord + Email + up to 5h/month dedicated onboarding/support |
 
 [View full comparison →](https://kodus.io/pricing)

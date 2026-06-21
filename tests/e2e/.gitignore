@@ -10,3 +10,6 @@ playwright/failure.png
 playwright/failure.html
 playwright/ui-smoke-*.png
 playwright/ui-smoke-*.html
+
+# benchmark farm run artifacts (local outputs)
+benchmark/results-farm-*.json

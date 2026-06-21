@@ -82,7 +82,7 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
         llmProvider: LLMModelProvider.GEMINI_2_5_PRO,
         temperature: 0,
         maxTokens: 20000,
-        maxReasoningTokens: 1000,
+        maxReasoningTokens: 1024,
         stop: undefined as string[] | undefined,
     };
 
@@ -620,7 +620,7 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
                 ],
                 temperature: 0,
                 maxTokens: 1200,
-                maxReasoningTokens: 200,
+                maxReasoningTokens: 1024,
                 stop: undefined,
             });
 

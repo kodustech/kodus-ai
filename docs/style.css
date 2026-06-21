@@ -68,6 +68,10 @@ header a[href*="changelog"]:hover svg {
     border-top: 1px solid rgba(248, 183, 109, 0.18);
 }
 
+.kodus-changelog-release[hidden] {
+    display: none !important;
+}
+
 .kodus-changelog-meta {
     position: sticky;
     top: 8.5rem;
@@ -85,44 +89,8 @@ header a[href*="changelog"]:hover svg {
     line-height: inherit;
 }
 
-.kodus-changelog-rss {
-    position: absolute;
-    top: -3.55rem;
-    right: 0;
-    display: inline-flex;
-    width: 2.6rem;
-    height: 2.6rem;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    border-radius: 0.75rem;
-    color: #e6e4e1;
-    background: rgba(16, 16, 25, 0.55);
-    text-decoration: none !important;
-    flex: 0 0 auto;
-    box-shadow: none !important;
-    outline: none;
-}
-
-.kodus-changelog-rss:hover,
-.kodus-changelog-rss:focus,
-.kodus-changelog-rss:focus-visible,
-.kodus-changelog-rss:active {
-    border-color: rgba(255, 255, 255, 0.18) !important;
-    color: #e6e4e1;
-    text-decoration: none !important;
-    box-shadow: none !important;
-    outline: none;
-}
-
-.kodus-changelog-rss svg {
-    width: 1.2rem;
-    height: 1.2rem;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+.kodus-changelog-rss-source {
+    display: none;
 }
 
 .kodus-changelog-content {
@@ -234,17 +202,38 @@ header a[href*="changelog"]:hover svg {
     display: none;
 }
 
+.kodus-changelog-shell:has(.kodus-changelog-filter-control:checked) .kodus-changelog-release {
+    display: none;
+}
+
 .kodus-changelog-shell:has(#kodus-filter-security:checked) .filter-security,
+.kodus-changelog-shell:has(#kodus-filter-cockpit:checked) .filter-cockpit,
 .kodus-changelog-shell:has(#kodus-filter-byok:checked) .filter-byok,
 .kodus-changelog-shell:has(#kodus-filter-ai-engine:checked) .filter-ai-engine,
 .kodus-changelog-shell:has(#kodus-filter-self-hosted:checked) .filter-self-hosted,
 .kodus-changelog-shell:has(#kodus-filter-git-provider:checked) .filter-git-provider,
+.kodus-changelog-shell:has(#kodus-filter-notifications:checked) .filter-notifications,
+.kodus-changelog-shell:has(#kodus-filter-kody-rules:checked) .filter-kody-rules,
 .kodus-changelog-shell:has(#kodus-filter-security:checked) .kodus-changelog-section:has(.filter-security),
+.kodus-changelog-shell:has(#kodus-filter-cockpit:checked) .kodus-changelog-section:has(.filter-cockpit),
 .kodus-changelog-shell:has(#kodus-filter-byok:checked) .kodus-changelog-section:has(.filter-byok),
 .kodus-changelog-shell:has(#kodus-filter-ai-engine:checked) .kodus-changelog-section:has(.filter-ai-engine),
 .kodus-changelog-shell:has(#kodus-filter-self-hosted:checked) .kodus-changelog-section:has(.filter-self-hosted),
-.kodus-changelog-shell:has(#kodus-filter-git-provider:checked) .kodus-changelog-section:has(.filter-git-provider) {
+.kodus-changelog-shell:has(#kodus-filter-git-provider:checked) .kodus-changelog-section:has(.filter-git-provider),
+.kodus-changelog-shell:has(#kodus-filter-notifications:checked) .kodus-changelog-section:has(.filter-notifications),
+.kodus-changelog-shell:has(#kodus-filter-kody-rules:checked) .kodus-changelog-section:has(.filter-kody-rules) {
     display: block;
+}
+
+.kodus-changelog-shell:has(#kodus-filter-security:checked) .kodus-changelog-release:has(.filter-security),
+.kodus-changelog-shell:has(#kodus-filter-cockpit:checked) .kodus-changelog-release:has(.filter-cockpit),
+.kodus-changelog-shell:has(#kodus-filter-byok:checked) .kodus-changelog-release:has(.filter-byok),
+.kodus-changelog-shell:has(#kodus-filter-ai-engine:checked) .kodus-changelog-release:has(.filter-ai-engine),
+.kodus-changelog-shell:has(#kodus-filter-self-hosted:checked) .kodus-changelog-release:has(.filter-self-hosted),
+.kodus-changelog-shell:has(#kodus-filter-git-provider:checked) .kodus-changelog-release:has(.filter-git-provider),
+.kodus-changelog-shell:has(#kodus-filter-notifications:checked) .kodus-changelog-release:has(.filter-notifications),
+.kodus-changelog-shell:has(#kodus-filter-kody-rules:checked) .kodus-changelog-release:has(.filter-kody-rules) {
+    display: grid;
 }
 
 .kodus-changelog-empty {
@@ -390,10 +379,6 @@ header a[href*="changelog"]:hover svg {
         grid-row: 2;
     }
 
-    .kodus-changelog-rss {
-        top: -3.55rem;
-        right: 0;
-    }
 }
 
 @media (prefers-color-scheme: light) {

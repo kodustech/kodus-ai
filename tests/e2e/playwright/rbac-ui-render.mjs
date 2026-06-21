@@ -157,7 +157,7 @@ for (const { role, email } of ROLES) {
 
         // ---- 2) Route render: open each route, assert render vs /forbidden ----
         for (const entry of ROUTE_CHECKS) {
-            const { path, marker } = entry;
+            const { path, marker, notMarker } = entry;
             const want = isAllowed(entry, role);
             await page.goto(`${WEB}${path}`, { waitUntil: "domcontentloaded", timeout: 30_000 });
             await page.waitForTimeout(1500);
@@ -169,9 +169,15 @@ for (const { role, email } of ROLES) {
             if (want) {
                 const onForbidden = /\/forbidden\b/.test(url);
                 const renderedTitle = marker ? bodyText.includes(marker) : true;
-                if (onForbidden || !renderedTitle) {
+                // notMarker asserts a substring is ABSENT (e.g. /cockpit must
+                // not render the "Analytics Not Available" card for an allowed
+                // role — that's a 200 page, so onForbidden/marker miss it).
+                const badMarker = notMarker ? bodyText.includes(notMarker) : false;
+                if (onForbidden || !renderedTitle || badMarker) {
                     failures.push(
-                        `${role}: ${path} should RENDER (got url=${url}, hasMarker=${renderedTitle})`,
+                        `${role}: ${path} should RENDER (got url=${url}, hasMarker=${renderedTitle}` +
+                            (notMarker ? `, sawNotMarker="${notMarker}"=${badMarker}` : "") +
+                            `)`,
                     );
                 } else {
                     log(`OK  ${role} ${path} rendered${marker ? " (marker visible)" : ""}`);

@@ -6,6 +6,7 @@ import * as yaml from 'js-yaml';
 import { GenerateKodusConfigFileUseCase } from '@libs/code-review/application/use-cases/configuration/generate-kodus-config-file.use-case';
 import { GetCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/get-code-review-parameter.use-case';
 import { CentralizedConfigPrService } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
+import { buildGroupFolderName } from '@libs/centralized-config/utils/path-encoder';
 import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/find-rules-in-organization-by-filter.use-case';
 import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/create-or-update.use-case';
 import {
@@ -181,9 +182,17 @@ export class CentralizedConfigDownloadUseCase {
                                 return null;
                             }
 
-                            const groupBasePath = `${repoFolderName}/.kody-directory-groups/${dir.id}`;
+                            let groupFolderName: string;
+                            try {
+                                groupFolderName = buildGroupFolderName(
+                                    dir.folders.map((f) => f.path),
+                                );
+                            } catch {
+                                return null;
+                            }
+
+                            const groupBasePath = `${repoFolderName}/${groupFolderName}`;
                             const configEntryName = `${groupBasePath}/kodus-config.yml`;
-                            const foldersEntryName = `${groupBasePath}/folders.yml`;
 
                             const customMessages = customMessagesByScope.get(
                                 this.getCustomMessagesScopeKeyDirectory(
@@ -199,16 +208,7 @@ export class CentralizedConfigDownloadUseCase {
                                     customMessages,
                                 );
 
-                            const foldersEntry: FileEntry = {
-                                path: foldersEntryName,
-                                content: yaml.dump({
-                                    folders: dir.folders.map((f) => ({
-                                        path: f.path,
-                                    })),
-                                }),
-                            };
-
-                            return [configEntry, foldersEntry];
+                            return configEntry ? [configEntry] : null;
                         } catch (error) {
                             this.logger.error({
                                 message:
@@ -327,11 +327,16 @@ export class CentralizedConfigDownloadUseCase {
 
         const repositoryMapping = new Map<
             string,
-            { repoFolderName: string; directoriesById: Map<string, string> }
+            {
+                repoFolderName: string;
+                directoriesById: Map<string, string>;
+                groupFolderNamesById: Map<string, string>;
+            }
         >();
 
         for (const repo of codeReview?.configValue?.repositories ?? []) {
             const directoriesById = new Map<string, string>();
+            const groupFolderNamesById = new Map<string, string>();
 
             for (const dir of repo.directories ?? []) {
                 directoriesById.set(
@@ -340,21 +345,40 @@ export class CentralizedConfigDownloadUseCase {
                         dir.folders?.[0]?.path ?? (dir as any).path,
                     ),
                 );
+
+                if (dir.folders && dir.folders.length > 0) {
+                    try {
+                        groupFolderNamesById.set(
+                            String(dir.id),
+                            buildGroupFolderName(
+                                dir.folders.map((f) => f.path),
+                            ),
+                        );
+                    } catch {
+                        // Skip directories with invalid path sets — they cannot
+                        // be reached on disk and shouldn't host rule entries.
+                    }
+                }
             }
 
             repositoryMapping.set(String(repo.id), {
                 repoFolderName: repo.name || repo.id,
                 directoriesById,
+                groupFolderNamesById,
             });
         }
 
-        const rules =
+        const fetchedRules =
             (await this.findRulesInOrganizationByRuleFilterKodyRulesUseCase.execute(
                 organizationId,
                 options.markRulesAsPendingWithSourcePath
                     ? {}
                     : { status: KodyRulesStatus.ACTIVE },
             )) as IKodyRule[];
+
+        const rules = fetchedRules.filter(
+            (rule) => rule.status !== KodyRulesStatus.DELETED,
+        );
 
         if (rules.length === 0) {
             this.logger.log({
@@ -372,7 +396,9 @@ export class CentralizedConfigDownloadUseCase {
                 rule,
                 repositoryMapping,
             );
-            const entryPath = this.getUniquePath(baseEntryPath, entryPaths);
+            const entryPath = baseEntryPath
+                ? this.getUniquePath(baseEntryPath, entryPaths)
+                : null;
 
             if (!entryPath) {
                 this.logger.warn({
@@ -856,9 +882,13 @@ export class CentralizedConfigDownloadUseCase {
         rule: IKodyRule,
         repositoryMapping: Map<
             string,
-            { repoFolderName: string; directoriesById: Map<string, string> }
+            {
+                repoFolderName: string;
+                directoriesById: Map<string, string>;
+                groupFolderNamesById: Map<string, string>;
+            }
         >,
-    ): string {
+    ): string | null {
         const rulesDirectory =
             rule.type === KodyRulesType.MEMORY ? 'memories' : 'review';
         const fileName = this.getRuleFileName(rule);
@@ -871,9 +901,15 @@ export class CentralizedConfigDownloadUseCase {
         const repoFolderName = repoScope?.repoFolderName || rule.repositoryId;
 
         if (rule.directoryId) {
+            const groupFolderName = repoScope?.groupFolderNamesById.get(
+                String(rule.directoryId),
+            );
+            if (!groupFolderName) {
+                return null;
+            }
             return this.centralizedConfigPrService.buildDirectoryGroupRulesPath(
                 repoFolderName,
-                String(rule.directoryId),
+                groupFolderName,
                 rulesDirectory,
                 fileName,
             );

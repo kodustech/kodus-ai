@@ -758,7 +758,7 @@ describe('CentralizedConfigService', () => {
                     type: 'file' as const,
                 },
                 {
-                    path: 'org-a/services/api/.kody-rules/review/api.yml',
+                    path: 'org-a/services%2Fapi/.kody-rules/review/api.yml',
                     type: 'file' as const,
                 },
             ];
@@ -783,6 +783,7 @@ describe('CentralizedConfigService', () => {
                         centralizedDirectoryPath: '.kody-rules/memories',
                         repositoryId: undefined,
                         directoryPath: undefined,
+                        directoryPaths: undefined,
                         ruleType: 'memory' as any,
                         ruleFilePath: '.kody-rules/memories/logging.yml',
                         path: '.kody-rules/memories/logging.yml',
@@ -791,6 +792,7 @@ describe('CentralizedConfigService', () => {
                         centralizedDirectoryPath: '.kody-rules/review',
                         repositoryId: undefined,
                         directoryPath: undefined,
+                        directoryPaths: undefined,
                         ruleType: 'standard' as any,
                         ruleFilePath: '.kody-rules/review/security.yml',
                         path: '.kody-rules/review/security.yml',
@@ -799,19 +801,21 @@ describe('CentralizedConfigService', () => {
                         centralizedDirectoryPath: 'org-a/.kody-rules/memories',
                         repositoryId: 'org-a-id',
                         directoryPath: undefined,
+                        directoryPaths: undefined,
                         ruleType: 'memory' as any,
                         ruleFilePath: 'org-a/.kody-rules/memories/auth.yml',
                         path: 'org-a/.kody-rules/memories/auth.yml',
                     },
                     {
                         centralizedDirectoryPath:
-                            'org-a/services/api/.kody-rules/review',
+                            'org-a/services%2Fapi/.kody-rules/review',
                         repositoryId: 'org-a-id',
                         directoryPath: '/services/api',
+                        directoryPaths: ['/services/api'],
                         ruleType: 'standard' as any,
                         ruleFilePath:
-                            'org-a/services/api/.kody-rules/review/api.yml',
-                        path: 'org-a/services/api/.kody-rules/review/api.yml',
+                            'org-a/services%2Fapi/.kody-rules/review/api.yml',
+                        path: 'org-a/services%2Fapi/.kody-rules/review/api.yml',
                     },
                 ]),
             );

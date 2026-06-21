@@ -36,6 +36,7 @@ export class ForgejoController {
             WebhookForgejoEvent.PULL_REQUEST,
             WebhookForgejoEvent.ISSUE_COMMENT,
             WebhookForgejoEvent.PULL_REQUEST_REVIEW_COMMENT,
+            WebhookForgejoEvent.PUSH,
         ];
 
         if (!supportedEvents.includes(event)) {

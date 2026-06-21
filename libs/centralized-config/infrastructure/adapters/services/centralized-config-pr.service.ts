@@ -25,9 +25,14 @@ import {
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import {
+    CodeReviewParameter,
+    RepositoryCodeReviewConfig,
+} from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
+import {
     CentralizedConfigActivePullRequest,
     CentralizedConfigParameter,
 } from '@libs/organization/domain/parameters/types/configValue.type';
+import { buildGroupFolderName } from '@libs/centralized-config/utils/path-encoder';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { PullRequestFileChange } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
@@ -406,37 +411,64 @@ export class CentralizedConfigPrService {
 
     buildDirectoryGroupConfigPath(
         repositoryFolder: string,
-        directoryId: string,
+        groupFolderName: string,
     ): string {
         if (repositoryFolder === 'global') {
-            return `.kody-directory-groups/${directoryId}/kodus-config.yml`;
+            return `${groupFolderName}/kodus-config.yml`;
         }
 
-        return `${repositoryFolder}/.kody-directory-groups/${directoryId}/kodus-config.yml`;
-    }
-
-    buildDirectoryGroupFoldersPath(
-        repositoryFolder: string,
-        directoryId: string,
-    ): string {
-        if (repositoryFolder === 'global') {
-            return `.kody-directory-groups/${directoryId}/folders.yml`;
-        }
-
-        return `${repositoryFolder}/.kody-directory-groups/${directoryId}/folders.yml`;
+        return `${repositoryFolder}/${groupFolderName}/kodus-config.yml`;
     }
 
     buildDirectoryGroupRulesPath(
         repositoryFolder: string,
-        directoryId: string,
+        groupFolderName: string,
         rulesDirectory: string,
         fileName: string,
     ): string {
         if (repositoryFolder === 'global') {
-            return `.kody-directory-groups/${directoryId}/.kody-rules/${rulesDirectory}/${fileName}`;
+            return `${groupFolderName}/.kody-rules/${rulesDirectory}/${fileName}`;
         }
 
-        return `${repositoryFolder}/.kody-directory-groups/${directoryId}/.kody-rules/${rulesDirectory}/${fileName}`;
+        return `${repositoryFolder}/${groupFolderName}/.kody-rules/${rulesDirectory}/${fileName}`;
+    }
+
+    async resolveDirectoryGroupFolderName(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId: string | undefined,
+        directoryId: string | undefined,
+    ): Promise<string | null> {
+        if (!repositoryId || !directoryId) {
+            return null;
+        }
+
+        const parameter = await this.parametersService.findByKey(
+            ParametersKey.CODE_REVIEW_CONFIG,
+            organizationAndTeamData,
+        );
+        const configValue = parameter?.configValue as
+            | CodeReviewParameter
+            | undefined;
+        const repository = (configValue?.repositories ?? []).find(
+            (repo: RepositoryCodeReviewConfig) =>
+                String(repo.id) === String(repositoryId),
+        );
+        const directory = (repository?.directories ?? []).find(
+            (dir) => String(dir.id) === String(directoryId),
+        );
+        const paths = (directory?.folders ?? [])
+            .map((f) => f.path)
+            .filter((path): path is string => typeof path === 'string');
+
+        if (paths.length === 0) {
+            return null;
+        }
+
+        try {
+            return buildGroupFolderName(paths);
+        } catch {
+            return null;
+        }
     }
 
     sanitizeFileName(name?: string, fallback = 'item', maxLength = 30): string {

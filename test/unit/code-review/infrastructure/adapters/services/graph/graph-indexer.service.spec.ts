@@ -2,7 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { GraphIndexerService } from '@libs/code-review/infrastructure/adapters/services/graph/graph-indexer.service';
 import { KodusGraphCli } from '@libs/code-review/infrastructure/adapters/services/graph/kodus-graph-cli';
 import { AstGraphRepository } from '@libs/code-review/infrastructure/adapters/repositories/astGraph.repository';
-import { IRepositoryService, REPOSITORY_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/RepositoryService.contract';
+import {
+    IRepositoryService,
+    REPOSITORY_SERVICE_TOKEN,
+} from '@libs/code-review/domain/contracts/RepositoryService.contract';
 import { AstGraphStatus } from '@libs/code-review/infrastructure/adapters/repositories/schemas/repository.model';
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
@@ -104,7 +107,10 @@ describe('GraphIndexerService', () => {
                 GraphIndexerService,
                 KodusGraphCli,
                 { provide: AstGraphRepository, useValue: mockAstGraphRepo },
-                { provide: REPOSITORY_SERVICE_TOKEN, useValue: mockRepositoryRepo },
+                {
+                    provide: REPOSITORY_SERVICE_TOKEN,
+                    useValue: mockRepositoryRepo,
+                },
             ],
         }).compile();
 
@@ -130,6 +136,36 @@ describe('GraphIndexerService', () => {
             expect(installIdx).toBeGreaterThanOrEqual(0);
             expect(parseIdx).toBeGreaterThan(installIdx);
             expect(runCmd(mockSandbox, installIdx)).toContain('kodus-graph');
+        });
+
+        it('should find preinstalled kodus-graph through the Bun global bin path', async () => {
+            mockSandbox.run
+                .mockResolvedValueOnce({
+                    stdout: '/home/node/.bun/bin/kodus-graph\n0.2.19',
+                    stderr: '',
+                    exitCode: 0,
+                })
+                .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+
+            await service.fullBuild({
+                repositoryId: REPO_ID,
+                sandbox: mockSandbox,
+                headSha: HEAD_SHA,
+            });
+
+            const checkCmd = runCmd(mockSandbox, 0);
+            expect(checkCmd).toContain('export PATH="$HOME/.bun/bin:$PATH"');
+            expect(checkCmd).toContain('which kodus-graph');
+            expect(
+                mockSandbox.run.mock.calls.some((call) =>
+                    (call[0] as string).includes('bun install'),
+                ),
+            ).toBe(false);
+            expect(
+                findRunIndex(mockSandbox, (cmd) =>
+                    cmd.includes('kodus-graph parse --all'),
+                ),
+            ).toBeGreaterThan(0);
         });
 
         it('should call sandbox.readFile() to read graph JSON', async () => {
@@ -234,9 +270,10 @@ describe('GraphIndexerService', () => {
                 }),
             ).rejects.toThrow('kodus-graph parse --all failed');
 
-            expect(
-                mockRepositoryRepo.updateGraphStatus,
-            ).toHaveBeenCalledWith(REPO_ID, AstGraphStatus.FAILED);
+            expect(mockRepositoryRepo.updateGraphStatus).toHaveBeenCalledWith(
+                REPO_ID,
+                AstGraphStatus.FAILED,
+            );
         });
 
         it('should mark status as FAILED on empty graph (0 nodes)', async () => {
@@ -249,9 +286,10 @@ describe('GraphIndexerService', () => {
                 headSha: HEAD_SHA,
             });
 
-            expect(
-                mockRepositoryRepo.updateGraphStatus,
-            ).toHaveBeenCalledWith(REPO_ID, AstGraphStatus.FAILED);
+            expect(mockRepositoryRepo.updateGraphStatus).toHaveBeenCalledWith(
+                REPO_ID,
+                AstGraphStatus.FAILED,
+            );
 
             expect(mockAstGraphRepo.fullRebuild).not.toHaveBeenCalled();
         });
@@ -274,15 +312,14 @@ describe('GraphIndexerService', () => {
                 }),
             ).rejects.toThrow('kodus-graph install failed');
 
-            expect(
-                mockRepositoryRepo.updateGraphStatus,
-            ).toHaveBeenCalledWith(REPO_ID, AstGraphStatus.FAILED);
+            expect(mockRepositoryRepo.updateGraphStatus).toHaveBeenCalledWith(
+                REPO_ID,
+                AstGraphStatus.FAILED,
+            );
         });
 
         it('should mark status as FAILED on readFile error', async () => {
-            mockSandbox.readFile.mockRejectedValue(
-                new Error('File not found'),
-            );
+            mockSandbox.readFile.mockRejectedValue(new Error('File not found'));
 
             await expect(
                 service.fullBuild({
@@ -292,9 +329,10 @@ describe('GraphIndexerService', () => {
                 }),
             ).rejects.toThrow('Failed to read graph file from sandbox');
 
-            expect(
-                mockRepositoryRepo.updateGraphStatus,
-            ).toHaveBeenCalledWith(REPO_ID, AstGraphStatus.FAILED);
+            expect(mockRepositoryRepo.updateGraphStatus).toHaveBeenCalledWith(
+                REPO_ID,
+                AstGraphStatus.FAILED,
+            );
         });
     });
 
@@ -344,9 +382,7 @@ describe('GraphIndexerService', () => {
                 newSha,
             });
 
-            expect(
-                mockRepositoryRepo.updateGraphStatus,
-            ).toHaveBeenCalledWith(
+            expect(mockRepositoryRepo.updateGraphStatus).toHaveBeenCalledWith(
                 REPO_ID,
                 AstGraphStatus.READY,
                 expect.objectContaining({

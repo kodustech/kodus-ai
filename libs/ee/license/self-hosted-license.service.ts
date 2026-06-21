@@ -10,6 +10,7 @@ import {
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 
 import {
+    ConsumeTrialReviewCreditResult,
     ILicenseService,
     OrganizationLicenseValidationResult,
     SelfHostedLicensePayload,
@@ -199,6 +200,16 @@ export class SelfHostedLicenseService implements ILicenseService {
             });
             return false;
         }
+    }
+
+    async consumeTrialReviewCredit(
+        _organizationAndTeamData: OrganizationAndTeamData,
+        _usageKey?: string,
+    ): Promise<ConsumeTrialReviewCreditResult> {
+        return {
+            allowed: true,
+            reason: 'SELF_HOSTED',
+        };
     }
 
     private async getAssignedUsers(

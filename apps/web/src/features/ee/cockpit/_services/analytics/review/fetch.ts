@@ -71,7 +71,8 @@ export type KodyRuleHealthRow = {
     severity: string | null;
     repositoryId: string | null;
     repositoryName: string | null;
-    directoryPath: string | null;
+    directoryId: string | null;
+    directoryFolders: string[] | null;
     state: KodyRuleHealthState;
     triggers: number;
     implemented: number;

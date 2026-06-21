@@ -40,6 +40,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
         createMutationPullRequestIfEnabled: jest.Mock;
         getCentralizedRepositoryIfEnabled: jest.Mock;
         resolveRepositoryFolderName: jest.Mock;
+        resolveDirectoryGroupFolderName: jest.Mock;
         buildCentralizedPath: jest.Mock;
         sanitizeFileName: jest.Mock;
     };
@@ -55,6 +56,9 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
             createMutationPullRequestIfEnabled: jest.fn(),
             getCentralizedRepositoryIfEnabled: jest.fn(),
             resolveRepositoryFolderName: jest.fn(),
+            resolveDirectoryGroupFolderName: jest
+                .fn()
+                .mockResolvedValue(null),
             buildCentralizedPath: jest.fn(),
             sanitizeFileName: jest.fn(),
         };

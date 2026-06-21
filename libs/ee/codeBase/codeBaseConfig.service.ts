@@ -709,9 +709,13 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         const configFileName = 'kodus-config.yml';
         let fullPath = configFileName;
 
-        if (directoryId) {
-            fullPath = `.kody-directory-groups/${directoryId}/${configFileName}`;
-        } else if (directoryPath) {
+        // Directory groups override config through the centralized config
+        // repo only — there is no managed-repo override file at a group level.
+        if (directoryId && !directoryPath) {
+            return null;
+        }
+
+        if (directoryPath) {
             const normalizedPath = directoryPath.endsWith('/')
                 ? directoryPath
                 : `${directoryPath}/`;

@@ -9,6 +9,7 @@ import {
 import { getTeamParametersNoCache } from "@services/parameters/fetch";
 import { ParametersConfigKey } from "@services/parameters/types";
 import { getTeams } from "@services/teams/fetch";
+import { Team } from "@services/teams/types";
 import { auth } from "src/core/config/auth";
 import { SupportDropdown } from "src/core/layout/navbar/_components/support";
 import { AllTeamsProvider } from "src/core/providers/all-teams-context";
@@ -20,7 +21,6 @@ import { OrganizationProvider } from "src/features/organization/_providers/organ
 import { SetupGithubStars } from "./_components/setup-github-stars";
 import { SetupUserNav } from "./_components/setup-user-nav";
 import { SetupProgressSaver } from "./setup/_components/setup-step-tracker";
-import { Team } from "@services/teams/types";
 
 export default async function Layout(props: React.PropsWithChildren) {
     const [teams, organizationId, organizationName, session] =
@@ -39,8 +39,9 @@ export default async function Layout(props: React.PropsWithChildren) {
         redirect("/confirm-email");
     }
 
-    const candidateTeamId =
-        teams?.find((t: Team) => t.status === TEAM_STATUS.ACTIVE)?.uuid;
+    const candidateTeamId = teams?.find(
+        (t: Team) => t.status === TEAM_STATUS.ACTIVE,
+    )?.uuid;
     if (candidateTeamId) {
         const platformConfigs = await getTeamParametersNoCache<{
             configValue: { finishOnboard?: boolean };
@@ -75,7 +76,13 @@ export default async function Layout(props: React.PropsWithChildren) {
                                     <SetupUserNav />
                                 </div>
                             </div>
-                            <div className="pt-16">{props.children}</div>
+                            {/* Single scroll container for every setup page:
+                                exactly the viewport area below the fixed 4rem
+                                topbar, so any page taller than the screen gets
+                                a scrollbar instead of clipping its CTA. */}
+                            <div className="mt-16 h-[calc(100dvh-4rem)] overflow-y-auto">
+                                {props.children}
+                            </div>
                         </div>
                         <MagicModalPortal />
                     </SelectedTeamProvider>

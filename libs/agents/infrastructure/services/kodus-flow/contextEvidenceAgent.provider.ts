@@ -52,7 +52,7 @@ export class ContextEvidenceAgentProvider extends BaseAgentProvider {
         llmProvider: LLMModelProvider.GEMINI_2_5_PRO,
         temperature: 0,
         maxTokens: 60000,
-        maxReasoningTokens: 1000,
+        maxReasoningTokens: 1024,
         stop: undefined as string[] | undefined,
     };
 

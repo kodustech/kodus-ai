@@ -270,8 +270,17 @@ export interface KodyRuleHealthRow extends KodyRuleUsageRow {
     repositoryId: string | null;
     /** Resolved `repo_full_name` for `repositoryId`, when known. */
     repositoryName: string | null;
-    /** Folder/path the rule is scoped to; null/'' → not folder-scoped. */
-    directoryPath: string | null;
+    /**
+     * Directory id the rule is scoped to; null → not folder-scoped. This —
+     * not `rule.path` (a file glob every rule carries) — is what makes a rule
+     * folder-scoped.
+     */
+    directoryId: string | null;
+    /**
+     * Folder path(s) the directory groups, resolved from the code-review
+     * config. A directory can span multiple folders; null when unresolved.
+     */
+    directoryFolders: string[] | null;
     /**
      * `noisy` (negative feedback) only becomes computable in phase 3 when
      * `suggestion_feedback` lands in the warehouse.

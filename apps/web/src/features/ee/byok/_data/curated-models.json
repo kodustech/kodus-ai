@@ -120,6 +120,28 @@
             "docsUrl": "https://docs.kodus.io/knowledge_base/en/how-to-use-moonshot-with-kodus"
         },
         {
+            "id": "kimi-k2.7-code",
+            "displayName": "Kimi K2.7 Code",
+            "provider": "openai_compatible",
+            "providerDisplayName": "Moonshot AI",
+            "tier": "recommended",
+            "benchmarkScore": 86,
+            "description": "Moonshot's newest coding model (K2.7) with long thinking / deep reasoning. Developer API. (benchmarkScore is a placeholder pending a real run.)",
+            "speed": "medium",
+            "contextWindow": "256K",
+            "costTier": "$",
+            "strengths": [],
+            "weaknesses": [],
+            "apiKeyUrl": "https://platform.moonshot.ai/console/api-keys",
+            "defaults": {
+                "temperature": 1,
+                "maxOutputTokens": 16384,
+                "baseURL": "https://api.moonshot.ai/v1",
+                "reasoningEffort": "medium"
+            },
+            "docsUrl": "https://docs.kodus.io/knowledge_base/en/how-to-use-moonshot-with-kodus"
+        },
+        {
             "id": "glm-5.1",
             "displayName": "GLM 5.1",
             "provider": "openai_compatible",
@@ -247,7 +269,7 @@
             "id": "gemini-3-flash-preview",
             "displayName": "Gemini 3 Flash",
             "provider": "google_gemini",
-            "tier": "budget",
+            "tier": "recommended",
             "benchmarkScore": 83.9,
             "description": "Largest context window at lowest cost.",
             "speed": "medium",

@@ -38,6 +38,7 @@ import {
     AlertTriangle,
     FolderX,
     HatGlasses,
+    InfoIcon,
     KeyRound,
     PowerIcon,
     Sparkles,
@@ -48,6 +49,10 @@ import { IntegrationCategory } from "src/core/types";
 import { generateQueryKey } from "src/core/utils/reactQuery";
 import { safeArray } from "src/core/utils/safe-array";
 import { pluralize } from "src/core/utils/string";
+import {
+    TRIAL_DAYS,
+    TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED,
+} from "src/features/ee/subscription/_constants/trial";
 
 import { StepIndicators } from "../_components/step-indicators";
 
@@ -194,7 +199,9 @@ export default function App() {
                         ),
                     }),
                     queryClient.invalidateQueries({
-                        queryKey: [CODE_MANAGEMENT_API_PATHS.GET_REPOSITORIES_ORG],
+                        queryKey: [
+                            CODE_MANAGEMENT_API_PATHS.GET_REPOSITORIES_ORG,
+                        ],
                     }),
                 ]);
 
@@ -233,7 +240,7 @@ export default function App() {
     });
 
     return (
-        <Page.Root className="mx-auto flex h-full min-h-[calc(100vh-4rem)] w-full flex-row overflow-hidden p-6">
+        <Page.Root className="mx-auto flex min-h-full w-full flex-row p-6">
             <div className="bg-card-lv1 flex flex-10 flex-col justify-center gap-10 rounded-3xl p-12">
                 <div className="text-text-secondary flex flex-1 flex-col justify-center gap-8 text-[15px]">
                     <div className="flex flex-col gap-4">
@@ -335,6 +342,28 @@ export default function App() {
                             </div>
 
                             <div className="flex flex-col gap-4">
+                                <Alert variant="info">
+                                    <InfoIcon />
+                                    <AlertTitle>
+                                        Your first{" "}
+                                        {TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED}{" "}
+                                        PR reviews are on us
+                                    </AlertTitle>
+                                    <AlertDescription>
+                                        <p>
+                                            During your {TRIAL_DAYS}-day trial
+                                            we cover your first{" "}
+                                            {
+                                                TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED
+                                            }{" "}
+                                            PR reviews — no AI key needed. After
+                                            that, connect your AI key for
+                                            unlimited reviews (free, on any
+                                            plan).
+                                        </p>
+                                    </AlertDescription>
+                                </Alert>
+
                                 <FormControl.Root>
                                     <FormControl.Label htmlFor="select-repositories">
                                         Select repositories

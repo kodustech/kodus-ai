@@ -3,7 +3,15 @@ import { getOrganizationId } from "@services/organizations/fetch";
 import { pathToApiUrl } from "src/core/utils/helpers";
 import { isSelfHosted } from "src/core/utils/self-hosted";
 
-import type { OrganizationLicense, Plan, PlanType } from "./types";
+import type {
+    OrganizationLicense,
+    Plan,
+    PlanType,
+    TrialExtensionRequest,
+    TrialExtensionRequestResult,
+    TrialUnlock,
+    TrialUnlockSignals,
+} from "./types";
 import { billingFetch } from "./utils";
 
 type OrganizationMember = {
@@ -51,6 +59,12 @@ export const startTeamTrial = async (params: {
         stripeSubscriptionId: null;
         totalLicenses: number;
         assignedLicenses: number;
+        byok?: boolean;
+        trialReviewCreditsTotal?: number;
+        trialReviewCreditsUsed?: number;
+        trialReviewCreditsRemaining?: number;
+        trialCreditTier?: string;
+        trialUnlocks?: Array<TrialUnlock>;
         createdAt: Date;
         updatedAt: Date;
     }>(`trial`, {
@@ -196,6 +210,57 @@ export const validateOrganizationLicense = async (params: {
         method: "GET",
         params: { organizationId, teamId: params.teamId },
     });
+};
+
+export const recalculateTrialUnlocks = async (params: {
+    teamId: string;
+    signals: TrialUnlockSignals;
+}): Promise<OrganizationLicense | undefined> => {
+    if (isSelfHosted) {
+        return undefined;
+    }
+
+    const organizationId = await getOrganizationId();
+    return billingFetch<OrganizationLicense>(`trial-unlocks/recalculate`, {
+        method: "POST",
+        body: JSON.stringify({
+            organizationId,
+            teamId: params.teamId,
+            signals: params.signals,
+        }),
+    });
+};
+
+export const requestTrialExtension = async (params: {
+    teamId: string;
+    request: TrialExtensionRequest;
+}): Promise<TrialExtensionRequestResult> => {
+    // Goes through the API, which owns the Discord webhook secret and resolves
+    // the org + requesting user server-side from the JWT.
+    try {
+        const data = await authorizedFetch<TrialExtensionRequestResult>(
+            pathToApiUrl("/license/trial-extension-request"),
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    teamId: params.teamId,
+                    teamSize: params.request.teamSize,
+                    message: params.request.message,
+                }),
+            },
+        );
+
+        if (!data?.success) {
+            return {
+                success: false,
+                message: data?.message ?? "Request failed",
+            };
+        }
+
+        return data;
+    } catch {
+        return { success: false, message: "Request failed" };
+    }
 };
 
 export const migrateToFree = async (params: {

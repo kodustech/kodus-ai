@@ -126,8 +126,7 @@ jobs:
                   DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
                   RELEASE_TAG: ${{ needs.validate.outputs.tag }}
               run: |
-                  pnpm run ts-node scripts/feature-gate/publish-changelog.ts \
-                      --tag "$RELEASE_TAG"
+                  pnpm run feature-gate:changelog -- --tag "$RELEASE_TAG"
 
             - name: Commit changelog entry (if any)
               env:

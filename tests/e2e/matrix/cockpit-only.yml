@@ -1,0 +1,17 @@
+id: cockpit-only
+description: |
+    Focused single-cell matrix for the cockpit-analytics red→green of the
+    vestigial WEB_ANALYTICS_SECRET gate. Self-hosted × github × license-paid
+    (the customer case; the SH e2e license is Enterprise → cockpit-eligible).
+    Used with provisioning/self-hosted/vm.sh TEST_KEEP_RUNNING=1 so the same
+    droplet serves the RED baseline (published image, empty secret → "Analytics
+    Not Available") and the GREEN run (web image rebuilt with the gate removed).
+    cockpit-analytics opens no PRs, so no webhook delivery is required.
+
+scenarios:
+    - cockpit-analytics
+
+cells:
+    - target: self-hosted
+      provider: github
+      license: license-paid

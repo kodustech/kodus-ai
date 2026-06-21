@@ -85,6 +85,21 @@ import {
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
 import { KodyRulesValidationService } from './kody-rules-validation.service';
 import { buildKodyRuleAppLink } from '../utils/build-rule-link';
+import {
+    IParametersService,
+    PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import { ParametersKey } from '@libs/core/domain/enums';
+import {
+    CodeReviewParameter,
+    ICodeRepository,
+    RepositoryCodeReviewConfig,
+} from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
+import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
+import {
+    IIntegrationConfigService,
+    INTEGRATION_CONFIG_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 
 @Injectable()
 export class KodyRulesService implements IKodyRulesService {
@@ -370,6 +385,11 @@ export class KodyRulesService implements IKodyRulesService {
                 ruleTitle: newRule.title,
             });
 
+            await this.ensureRepositoryCodeReviewConfig(
+                organizationAndTeamData,
+                newRule,
+            );
+
             return newKodyRules.rules[0];
         }
 
@@ -439,6 +459,11 @@ export class KodyRulesService implements IKodyRulesService {
                 newRule: newRule,
                 ruleTitle: newRule.title,
             });
+
+            await this.ensureRepositoryCodeReviewConfig(
+                organizationAndTeamData,
+                newRule,
+            );
 
             return updatedKodyRules.rules.find(
                 (rule) => rule.uuid === newRule.uuid,
@@ -511,6 +536,104 @@ export class KodyRulesService implements IKodyRulesService {
         return updatedKodyRules.rules.find(
             (rule) => rule.uuid === kodyRule.uuid,
         );
+    }
+
+    private async ensureRepositoryCodeReviewConfig(
+        organizationAndTeamData: OrganizationAndTeamData,
+        rule: Partial<IKodyRule>,
+    ): Promise<void> {
+        if (
+            rule.origin === KodyRulesOrigin.USER ||
+            !rule.repositoryId ||
+            rule.repositoryId === 'global'
+        ) {
+            return;
+        }
+
+        let parametersService: IParametersService;
+        let integrationConfigService: IIntegrationConfigService;
+        try {
+            parametersService = this.moduleRef.get(PARAMETERS_SERVICE_TOKEN, {
+                strict: false,
+            });
+            integrationConfigService = this.moduleRef.get(
+                INTEGRATION_CONFIG_SERVICE_TOKEN,
+                { strict: false },
+            );
+        } catch {
+            return;
+        }
+
+        try {
+            const codeReviewConfig =
+                await parametersService.findByKey(
+                    ParametersKey.CODE_REVIEW_CONFIG,
+                    organizationAndTeamData,
+                );
+
+            if (!codeReviewConfig?.configValue) {
+                return;
+            }
+
+            const configValue =
+                codeReviewConfig.configValue as CodeReviewParameter;
+            const repositories = configValue.repositories || [];
+
+            if (repositories.some((r) => r.id === rule.repositoryId)) {
+                return;
+            }
+
+            let repositoryName = rule.repositoryId;
+            try {
+                const repos =
+                    await integrationConfigService.findIntegrationConfigFormatted<
+                        ICodeRepository[]
+                    >(
+                        IntegrationConfigKey.REPOSITORIES,
+                        organizationAndTeamData,
+                    );
+
+                const matched = repos?.find(
+                    (r) => r.id === rule.repositoryId,
+                );
+                if (matched?.name) {
+                    repositoryName = matched.name;
+                }
+            } catch {
+                // fallback: use repositoryId as name
+            }
+
+            const newRepo: RepositoryCodeReviewConfig = {
+                id: rule.repositoryId,
+                name: repositoryName,
+                isSelected: true,
+                configs: {},
+            };
+
+            const updatedConfigValue: CodeReviewParameter = {
+                ...configValue,
+                repositories: [...repositories, newRepo],
+            };
+
+            await parametersService.createOrUpdateConfig(
+                ParametersKey.CODE_REVIEW_CONFIG,
+                updatedConfigValue,
+                organizationAndTeamData,
+            );
+        } catch (error) {
+            this.logger.error({
+                message:
+                    'Failed to auto-create repository config for auto-generated rule',
+                context: KodyRulesService.name,
+                error,
+                metadata: {
+                    repositoryId: rule.repositoryId,
+                    ruleId: rule.uuid,
+                    ruleOrigin: rule.origin,
+                    organizationAndTeamData,
+                },
+            });
+        }
     }
 
     async updateRuleReferences(
@@ -1410,12 +1533,18 @@ Analyze the suggestions and recommend the most relevant rules.`;
         };
 
         const ccp = await this.resolveCentralizedConfigPrService();
+        const memoryGroupFolderName =
+            await ccp.resolveDirectoryGroupFolderName(
+                organizationAndTeamData,
+                payload.repositoryId,
+                payload.directoryId,
+            );
         const centralizedPr = await ccp.createMutationPullRequestIfEnabled(
             buildKodyRuleCentralizedMutationRequest({
                 centralizedConfigPrService: ccp,
                 organizationAndTeamData,
                 repositoryId: payload.repositoryId,
-                directoryId: payload.directoryId,
+                groupFolderName: memoryGroupFolderName ?? undefined,
                 ruleContent: payload,
                 ruleType: KodyRulesType.MEMORY,
                 operation,

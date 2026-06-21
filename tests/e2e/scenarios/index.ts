@@ -1,5 +1,6 @@
 import type { Scenario } from '../lib/types.js';
 import centralizedConfigSync from './centralized-config-sync.js';
+import cockpitAnalytics from './cockpit-analytics.js';
 import codeReviewBasic from './code-review-basic.js';
 import codeReviewVertexByok from './code-review-vertex-byok.js';
 import conversationVertexByok from './conversation-vertex-byok.js';
@@ -15,6 +16,7 @@ import rbacUiRender from './rbac-ui-render.js';
 import ssoCookieDomain from './sso-cookie-domain.js';
 import ssoMultiUser from './sso-multi-user.js';
 import stripeBilling from './stripe-billing.js';
+import trialCreditsConsume from './trial-credits-consume.js';
 import trialEntitlementGate from './trial-entitlement-gate.js';
 import trialManagedReview from './trial-managed-review.js';
 import upgradeNMinusOneToN from './upgrade.js';
@@ -26,6 +28,7 @@ export const allScenarios: Record<string, Scenario> = {
     [conversationVertexByok.id]: conversationVertexByok,
     [centralizedConfigSync.id]: centralizedConfigSync,
     [commandReview.id]: commandReview,
+    [cockpitAnalytics.id]: cockpitAnalytics,
     [kodyRulesCreateAndApply.id]: kodyRulesCreateAndApply,
     [licenseAttribution.id]: licenseAttribution,
     [perSeatLicenseToggle.id]: perSeatLicenseToggle,
@@ -36,6 +39,7 @@ export const allScenarios: Record<string, Scenario> = {
     [ssoCookieDomain.id]: ssoCookieDomain,
     [ssoMultiUser.id]: ssoMultiUser,
     [stripeBilling.id]: stripeBilling,
+    [trialCreditsConsume.id]: trialCreditsConsume,
     [trialEntitlementGate.id]: trialEntitlementGate,
     [trialManagedReview.id]: trialManagedReview,
     [upgradeNMinusOneToN.id]: upgradeNMinusOneToN,
@@ -55,6 +59,7 @@ export function resolveScenarios(ids: string[]): Scenario[] {
 
 export {
     centralizedConfigSync,
+    cockpitAnalytics,
     codeReviewBasic,
     codeReviewVertexByok,
     conversationVertexByok,
@@ -70,6 +75,7 @@ export {
     ssoCookieDomain,
     ssoMultiUser,
     stripeBilling,
+    trialCreditsConsume,
     trialEntitlementGate,
     trialManagedReview,
     upgradeNMinusOneToN,

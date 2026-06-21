@@ -1,0 +1,34 @@
+---
+title: Creando un Webhook
+icon: webhook
+---
+
+<Note>
+  El soporte para Forgejo es mantenido por la comunidad.
+</Note>
+
+Kodus normalmente crea el webhook automáticamente. Si eso no ocurrió, sigue estos pasos para configurarlo manualmente:
+
+<Note>
+  Las URLs de webhook deben alcanzar el servicio de Webhooks (puerto 3332). Usar el dominio de la API solo funciona si tu proxy inverso enruta las rutas `/.../webhook` al servicio de webhooks.
+</Note>
+
+1. Navega a tu repositorio en Forgejo
+2. Haz clic en **Settings** en la barra lateral derecha
+3. Selecciona **Webhooks**
+4. Haz clic en **Add Webhook** → **Forgejo**
+5. Configura tu webhook:
+
+   - **Target URL**: Ingresa la URL donde deseas recibir las notificaciones, la URL que configuraste en `GLOBAL_FORGEJO_CODE_MANAGEMENT_WEBHOOK` en tu archivo `.env`
+   - **HTTP Method**: POST
+   - **POST Content Type**: `application/json`
+   - **Trigger On**: Selecciona estos eventos:
+        - Push events
+        - Pull Request events
+        - Issues events
+        - Issue Comment events
+   - **Active**: Marca
+
+6. Haz clic en **Add Webhook**
+
+¡Listo! Has configurado exitosamente un webhook para revisiones de código en tu repositorio de Forgejo.

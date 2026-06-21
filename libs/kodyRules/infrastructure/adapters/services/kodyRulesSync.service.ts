@@ -351,8 +351,26 @@ export class KodyRulesSyncService {
                 repository.id,
             );
 
+            // Fetch PR details once — shared across all code paths below.
+            const prDetails =
+                await this.codeManagementService.getPullRequestByNumber({
+                    organizationAndTeamData,
+                    repository: { id: repository.id, name: repository.name },
+                    prNumber: pullRequestNumber,
+                });
+
+            const { head, base } = this.extractRefsFromPullRequest(prDetails);
+            const pullRequestParam: any = {
+                number: pullRequestNumber,
+                head: head ? { ref: head } : undefined,
+                base: base ? { ref: base } : undefined,
+            };
+
             // If the sync is disabled, we need to force sync the files that have @kody-sync
             const forceSyncFiles: string[] = [];
+            // Cache decoded file content from the @kody-sync scan so the
+            // main loop below doesn't re-fetch the same files.
+            const contentCache = new Map<string, string>();
             if (!syncEnabled) {
                 // First, we need to check which files can be rule files
                 const directoryPatterns = await this.getDirectoryPatterns(
@@ -369,25 +387,6 @@ export class KodyRulesSyncService {
                         isRuleFile(f.previous_filename),
                 );
 
-                // Get the PR details once
-                const prDetails =
-                    await this.codeManagementService.getPullRequestByNumber({
-                        organizationAndTeamData,
-                        repository: {
-                            id: repository.id,
-                            name: repository.name,
-                        },
-                        prNumber: pullRequestNumber,
-                    });
-
-                const { head, base } =
-                    this.extractRefsFromPullRequest(prDetails);
-                const pullRequestParam: any = {
-                    number: pullRequestNumber,
-                    head: head ? { ref: head } : undefined,
-                    base: base ? { ref: base } : undefined,
-                };
-
                 // Now we need to check which files have @kody-sync in the content
                 for (const f of ruleChanges) {
                     if (f.status === 'removed') continue;
@@ -402,18 +401,23 @@ export class KodyRulesSyncService {
                         pullRequest: pullRequestParam,
                     });
 
-                    if (content && this.shouldForceSync(content)) {
-                        forceSyncFiles.push(f.filename);
-                        this.logger.log({
-                            message:
-                                'File marked for force sync with @kody-sync',
-                            context: KodyRulesSyncService.name,
-                            metadata: {
-                                filename: f.filename,
-                                repositoryId: repository.id,
-                                organizationAndTeamData,
-                            },
-                        });
+                    if (content) {
+                        // Cache for reuse in the main loop below.
+                        contentCache.set(f.filename, content);
+
+                        if (this.shouldForceSync(content)) {
+                            forceSyncFiles.push(f.filename);
+                            this.logger.log({
+                                message:
+                                    'File marked for force sync with @kody-sync',
+                                context: KodyRulesSyncService.name,
+                                metadata: {
+                                    filename: f.filename,
+                                    repositoryId: repository.id,
+                                    organizationAndTeamData,
+                                },
+                            });
+                        }
                     }
                 }
 
@@ -476,20 +480,6 @@ export class KodyRulesSyncService {
                 });
             }
 
-            const prDetails =
-                await this.codeManagementService.getPullRequestByNumber({
-                    organizationAndTeamData,
-                    repository: { id: repository.id, name: repository.name },
-                    prNumber: pullRequestNumber,
-                });
-
-            const { head, base } = this.extractRefsFromPullRequest(prDetails);
-            const pullRequestParam: any = {
-                number: pullRequestNumber,
-                head: head ? { ref: head } : undefined,
-                base: base ? { ref: base } : undefined,
-            };
-
             const directoryPatterns = await this.getDirectoryPatterns(
                 organizationAndTeamData,
                 repository.id,
@@ -531,87 +521,94 @@ export class KodyRulesSyncService {
                         ? f.previous_filename
                         : f.filename;
 
-                const contentResp =
-                    await this.codeManagementService.getRepositoryContentFile({
-                        organizationAndTeamData,
-                        repository: {
-                            id: repository.id,
-                            name: repository.name,
-                        },
-                        file: { filename: f.filename },
-                        pullRequest: pullRequestParam,
-                    });
-                // Fallbacks if the source branch was deleted on merge (e.g., GitLab):
-                // 1) Try with base as head
-                // 2) Try with default branch as head
-                let effectiveContent = contentResp;
-                if (!effectiveContent?.data?.content) {
-                    const baseRef = pullRequestParam.base?.ref;
-                    if (baseRef) {
-                        try {
-                            const baseAsHead =
-                                await this.codeManagementService.getRepositoryContentFile(
-                                    {
-                                        organizationAndTeamData,
-                                        repository: {
-                                            id: repository.id,
-                                            name: repository.name,
+                // Reuse cached content from the @kody-sync scan when
+                // available to avoid a duplicate API call for the same
+                // file (the scan already fetched it moments ago).
+                let decoded: string | null = contentCache.get(f.filename) ?? null;
+
+                if (!decoded) {
+                    const contentResp =
+                        await this.codeManagementService.getRepositoryContentFile({
+                            organizationAndTeamData,
+                            repository: {
+                                id: repository.id,
+                                name: repository.name,
+                            },
+                            file: { filename: f.filename },
+                            pullRequest: pullRequestParam,
+                        });
+                    // Fallbacks if the source branch was deleted on merge (e.g., GitLab):
+                    // 1) Try with base as head
+                    // 2) Try with default branch as head
+                    let effectiveContent = contentResp;
+                    if (!effectiveContent?.data?.content) {
+                        const baseRef = pullRequestParam.base?.ref;
+                        if (baseRef) {
+                            try {
+                                const baseAsHead =
+                                    await this.codeManagementService.getRepositoryContentFile(
+                                        {
+                                            organizationAndTeamData,
+                                            repository: {
+                                                id: repository.id,
+                                                name: repository.name,
+                                            },
+                                            file: { filename: f.filename },
+                                            pullRequest: { head: { ref: baseRef } },
                                         },
-                                        file: { filename: f.filename },
-                                        pullRequest: { head: { ref: baseRef } },
+                                    );
+                                if (baseAsHead?.data?.content) {
+                                    effectiveContent = baseAsHead;
+                                }
+                            } catch {
+                                // Ignore error
+                            }
+                        }
+                    }
+                    if (!effectiveContent?.data?.content) {
+                        try {
+                            const defaultBranch =
+                                await this.codeManagementService.getDefaultBranch({
+                                    organizationAndTeamData,
+                                    repository: {
+                                        id: repository.id,
+                                        name: repository.name,
                                     },
-                                );
-                            if (baseAsHead?.data?.content) {
-                                effectiveContent = baseAsHead;
+                                });
+                            if (defaultBranch) {
+                                const defAsHead =
+                                    await this.codeManagementService.getRepositoryContentFile(
+                                        {
+                                            organizationAndTeamData,
+                                            repository: {
+                                                id: repository.id,
+                                                name: repository.name,
+                                            },
+                                            file: { filename: f.filename },
+                                            pullRequest: {
+                                                head: { ref: defaultBranch },
+                                            },
+                                        },
+                                    );
+                                if (defAsHead?.data?.content) {
+                                    effectiveContent = defAsHead;
+                                }
                             }
                         } catch {
                             // Ignore error
                         }
                     }
-                }
-                if (!effectiveContent?.data?.content) {
-                    try {
-                        const defaultBranch =
-                            await this.codeManagementService.getDefaultBranch({
-                                organizationAndTeamData,
-                                repository: {
-                                    id: repository.id,
-                                    name: repository.name,
-                                },
-                            });
-                        if (defaultBranch) {
-                            const defAsHead =
-                                await this.codeManagementService.getRepositoryContentFile(
-                                    {
-                                        organizationAndTeamData,
-                                        repository: {
-                                            id: repository.id,
-                                            name: repository.name,
-                                        },
-                                        file: { filename: f.filename },
-                                        pullRequest: {
-                                            head: { ref: defaultBranch },
-                                        },
-                                    },
-                                );
-                            if (defAsHead?.data?.content) {
-                                effectiveContent = defAsHead;
-                            }
-                        }
-                    } catch {
-                        // Ignore error
+
+                    const rawContent = effectiveContent?.data?.content;
+                    if (!rawContent) {
+                        continue;
                     }
-                }
 
-                const rawContent = effectiveContent?.data?.content;
-                if (!rawContent) {
-                    continue;
+                    decoded =
+                        effectiveContent?.data?.encoding === 'base64'
+                            ? Buffer.from(rawContent, 'base64').toString('utf-8')
+                            : rawContent;
                 }
-
-                const decoded =
-                    contentResp?.data?.encoding === 'base64'
-                        ? Buffer.from(rawContent, 'base64').toString('utf-8')
-                        : rawContent;
 
                 //Verify if the file should be ignored due to the @kody-ignore marker
                 if (this.shouldIgnoreFile(decoded)) {

@@ -1,6 +1,11 @@
 "use client";
 
 import { DataTableColumnHeader } from "@components/ui/data-table";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@components/ui/tooltip";
 import type { ColumnDef } from "@tanstack/react-table";
 import { cn } from "src/core/utils/components";
 
@@ -21,18 +26,33 @@ export const stateMeta: Record<
     low_data: { label: "Low data", className: "bg-info/15 text-info" },
 };
 
-/** Derives the rule's scope label from its repo/folder fields. */
+/**
+ * Derives the rule's scope label from its repo/folder fields. For folder
+ * scope, a directory can group several folders — surface the first as the
+ * primary detail, the count of the rest as `extra`, and the full list as
+ * `title` (tooltip), mirroring the code-review sidebar.
+ */
 function ruleScope(row: KodyRuleHealthRow): {
     kind: "Global" | "Repo" | "Folder";
     detail: string | null;
+    extra: number;
+    items: string[];
 } {
-    if (row.directoryPath) {
-        return { kind: "Folder", detail: row.directoryPath };
+    if (row.directoryId) {
+        const folders = row.directoryFolders ?? [];
+        const detail = folders[0] ?? row.directoryId;
+        return {
+            kind: "Folder",
+            detail,
+            extra: folders.length > 1 ? folders.length - 1 : 0,
+            items: folders.length ? folders : [detail],
+        };
     }
     if (row.repositoryId) {
-        return { kind: "Repo", detail: row.repositoryName ?? row.repositoryId };
+        const detail = row.repositoryName ?? row.repositoryId;
+        return { kind: "Repo", detail, extra: 0, items: [detail] };
     }
-    return { kind: "Global", detail: null };
+    return { kind: "Global", detail: null, extra: 0, items: [] };
 }
 
 const scopeClass: Record<ReturnType<typeof ruleScope>["kind"], string> = {
@@ -60,7 +80,7 @@ export const rulesColumns: ColumnDef<KodyRuleHealthRow>[] = [
             <DataTableColumnHeader column={column} title="Scope" />
         ),
         cell: ({ row }) => {
-            const { kind, detail } = ruleScope(row.original);
+            const { kind, detail, extra, items } = ruleScope(row.original);
             return (
                 <span className="flex items-center gap-1.5 text-xs whitespace-nowrap">
                     <span
@@ -71,11 +91,29 @@ export const rulesColumns: ColumnDef<KodyRuleHealthRow>[] = [
                         {kind}
                     </span>
                     {detail && (
-                        <span
-                            className="text-text-tertiary max-w-[180px] truncate font-mono"
-                            title={detail}>
-                            {detail}
-                        </span>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="text-text-tertiary flex min-w-0 cursor-default items-center gap-1 font-mono">
+                                    <span className="max-w-[180px] truncate">
+                                        {detail}
+                                    </span>
+                                    {extra > 0 && (
+                                        <span className="text-text-tertiary/70 shrink-0">
+                                            +{extra}
+                                        </span>
+                                    )}
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" className="text-xs">
+                                <ul className="list-none space-y-0.5">
+                                    {items.map((p) => (
+                                        <li key={p} className="font-mono">
+                                            {p}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </TooltipContent>
+                        </Tooltip>
                     )}
                 </span>
             );

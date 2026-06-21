@@ -41,6 +41,7 @@ describe('DeleteRuleInOrganizationByIdKodyRulesUseCase', () => {
         centralizedConfigPrServiceMock = {
             createMutationPullRequestIfEnabled: jest.fn(),
             resolveRepositoryFolderName: jest.fn().mockResolvedValue('global'),
+            resolveDirectoryGroupFolderName: jest.fn().mockResolvedValue(null),
             buildCentralizedPath: jest
                 .fn()
                 .mockImplementation(({ repositoryFolder, relativePath }) =>
@@ -181,6 +182,7 @@ describe('DeleteRuleInOrganizationByIdKodyRulesUseCase — repo scope', () => {
 
     const centralizedConfigPrServiceMock = {
         createMutationPullRequestIfEnabled: jest.fn(),
+        resolveDirectoryGroupFolderName: jest.fn().mockResolvedValue(null),
     };
 
     // repo_admin assigned ONLY to repo-a.

@@ -82,6 +82,50 @@ export interface OrgLicense {
     valid?: boolean;
     subscriptionStatus?: string;
     planType?: string;
+    byok?: boolean;
+    trialReviewCreditsTotal?: number;
+    trialReviewCreditsUsed?: number;
+    trialReviewCreditsRemaining?: number;
+    trialCreditTier?: string;
+}
+
+export interface ConsumeCreditResult {
+    allowed: boolean;
+    reason?: string;
+    alreadyConsumed?: boolean;
+    trialReviewCreditsTotal?: number;
+    trialReviewCreditsUsed?: number;
+    trialReviewCreditsRemaining?: number;
+}
+
+/** Calls the billing consume endpoint exactly as the review pipeline does
+ *  (LicenseService.consumeTrialReviewCredit). Billing answers 200 when
+ *  allowed and 402 (allowed:false) when denied; both carry the credit body,
+ *  and `http` does not throw on non-2xx, so we return the body either way. */
+export async function consumeTrialReviewCredit(
+    ctx: RunContext,
+    session: KodusSession,
+    usageKey?: string,
+): Promise<ConsumeCreditResult> {
+    const target = ctx.target as TargetContext;
+    const resp = await http<ConsumeCreditResult>(
+        `${target.webBaseUrl}/api/proxy/billing/trial-review-credit/consume`,
+        {
+            method: "POST",
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+            body: {
+                organizationId: session.organizationId,
+                teamId: session.teamId,
+                usageKey,
+            },
+            timeoutMs: 30_000,
+        },
+    );
+    ctx.assert(
+        resp.status === 200 || resp.status === 402,
+        `consume returned unexpected HTTP ${resp.status}: ${resp.raw.slice(0, 250)}`,
+    );
+    return resp.body ?? { allowed: false };
 }
 
 /** GET the org license exactly the way the backend's entitlement gate does

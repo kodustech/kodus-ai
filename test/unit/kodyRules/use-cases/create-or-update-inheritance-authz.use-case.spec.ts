@@ -58,6 +58,7 @@ describe('CreateOrUpdateKodyRulesUseCase — inheritance toggle authz', () => {
         createMutationPullRequestIfEnabled: jest.fn(),
         getCentralizedRepositoryIfEnabled: jest.fn().mockResolvedValue(null),
         resolveRepositoryFolderName: jest.fn(),
+        resolveDirectoryGroupFolderName: jest.fn().mockResolvedValue(null),
         buildCentralizedPath: jest.fn(),
         sanitizeFileName: jest.fn(),
     };

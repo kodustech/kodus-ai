@@ -284,6 +284,28 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
                   )
                 : undefined;
 
+        let directoryFolders:
+            | Array<{ id?: string; name?: string; path: string }>
+            | undefined;
+        if (
+            pullRequestMessages.configLevel === ConfigLevel.DIRECTORY &&
+            pullRequestMessages.directoryId
+        ) {
+            const codeReviewParam = await this.parametersService.findByKey(
+                ParametersKey.CODE_REVIEW_CONFIG,
+                { organizationId, teamId },
+            );
+            const repo = (
+                codeReviewParam?.configValue?.repositories ?? []
+            ).find((r) => r.id === pullRequestMessages.repositoryId);
+            const dir = (repo?.directories ?? []).find(
+                (d) => d.id === pullRequestMessages.directoryId,
+            );
+            if (dir?.folders && dir.folders.length > 0) {
+                directoryFolders = dir.folders;
+            }
+        }
+
         const pr =
             await this.centralizedConfigPrService.createMutationPullRequestIfEnabled(
                 buildKodusConfigCentralizedMutationRequest({
@@ -296,11 +318,10 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
                         pullRequestMessages.configLevel === ConfigLevel.GLOBAL
                             ? undefined
                             : pullRequestMessages.repositoryId,
-                    directoryPath: directoryPath || undefined,
-                    directoryId:
-                        pullRequestMessages.configLevel === ConfigLevel.DIRECTORY
-                            ? pullRequestMessages.directoryId
-                            : undefined,
+                    directoryPath: directoryFolders
+                        ? undefined
+                        : directoryPath || undefined,
+                    folders: directoryFolders,
                     configFileContent:
                         Object.keys(configFileContent).length > 0
                             ? configFileContent

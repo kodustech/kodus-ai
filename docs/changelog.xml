@@ -5,8 +5,41 @@
         <link>https://docs.kodus.io/changelog</link>
         <description>Latest Kodus updates and improvements.</description>
         <language>en</language>
-        <lastBuildDate>Mon, 08 Jun 2026 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Mon, 15 Jun 2026 00:00:00 GMT</lastBuildDate>
         <atom:link href="https://docs.kodus.io/changelog.xml" rel="self" type="application/rss+xml" />
+        <item>
+            <title>June 15, 2026 - Kodus updates</title>
+            <link>https://docs.kodus.io/changelog</link>
+            <guid isPermaLink="false">kodus-changelog-2026-06-15</guid>
+            <pubDate>Mon, 15 Jun 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[
+                <h2>What's new</h2>
+                <h3>Operational metrics in Cockpit</h3>
+                <p>Track the health of your review pipeline in real time. Throughput, queue, and processing time metrics are now available in Cockpit.</p>
+                <p>Video: https://kodus.io/wp-content/uploads/2026/06/cockpit.mp4</p>
+
+                <h3>Redesigned Kodus Review tab</h3>
+                <p>The review tab has been redesigned with a cleaner interface and more direct actions. You can now analyze and act on suggestions without leaving the PR screen.</p>
+                <p>Video: https://kodus.io/wp-content/uploads/2026/06/kody-review-tab.mp4</p>
+
+                <h2>Improvements</h2>
+                <h3>Backend on pnpm</h3>
+                <p>We migrated the backend from Yarn 1 to pnpm. This makes builds faster, improves lockfile consistency, and reduces cache issues across environments.</p>
+
+                <h3>Token usage screen</h3>
+                <p>The token usage screen has been redesigned to make consumption by organization and period easier to understand. It is now simpler to track usage and see how tokens are being consumed over time.</p>
+                <p>Video: https://kodus.io/wp-content/uploads/2026/06/token_usage.mp4</p>
+
+                <h2>Bug fixes</h2>
+                <ul>
+                    <li>Self-hosted analytics: we fixed the analytics integration for self-hosted deployments. Usage metrics now appear correctly in the dashboard.</li>
+                    <li>Issue cache: the issue count in the sidebar could sometimes become outdated. The cache is now invalidated correctly after changes.</li>
+                    <li>GitHub rate limit: we fixed a rate limit issue in cloud E2E tests. We now use round-robin across multiple bot accounts to better distribute requests.</li>
+                    <li>Notification routing: we fixed the behavior of targeted notifications when combined with audience settings. Notifications now reach the right people without duplicates.</li>
+                    <li>Centralized config sync: we fixed issues in the centralized sync of Kody Rules configurations across repositories. Sync now correctly handles multiple scopes, stale configurations, and merge-triggered updates.</li>
+                </ul>
+            ]]></description>
+        </item>
         <item>
             <title>June 8, 2026 - Kodus updates</title>
             <link>https://docs.kodus.io/changelog</link>

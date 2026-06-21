@@ -3,7 +3,6 @@ import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
-import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { ActionType } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
@@ -100,13 +99,16 @@ export class DeleteIntegrationUseCase {
             });
         }
 
-        const integrationConfig = await this.integrationConfigService.findOne({
-            configKey: IntegrationConfigKey.REPOSITORIES,
+        // Delete every config tied to this integration (REPOSITORIES,
+        // INSTALLATION_GITHUB, CODE_MANAGEMENT_PAT, ...). Any row left behind
+        // violates the integration_configs.integration_id FK (ON DELETE NO
+        // ACTION) and aborts the integration delete below, leaving a stale
+        // active integration that breaks future reconnects.
+        const integrationConfigs = await this.integrationConfigService.find({
             integration: { uuid: integration.uuid },
-            team: { uuid: params.teamId },
         });
 
-        if (integrationConfig) {
+        for (const integrationConfig of integrationConfigs ?? []) {
             await this.integrationConfigService.delete(integrationConfig.uuid);
         }
 

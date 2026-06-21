@@ -24,6 +24,7 @@ import { checkPermissions } from '@libs/identity/infrastructure/adapters/service
 import { CreateOrUpdateOrganizationParametersUseCase } from '@libs/organization/application/use-cases/organizationParameters/create-or-update.use-case';
 import { SelfHostedLicenseService } from '@libs/ee/license/self-hosted-license.service';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
+import { TrialExtensionNotifierService } from '../services/trial-extension-notifier.service';
 
 @ApiTags('License')
 @ApiBearerAuth('jwt')
@@ -33,6 +34,7 @@ export class LicenseController {
     constructor(
         private readonly selfHostedLicenseService: SelfHostedLicenseService,
         private readonly createOrUpdateOrganizationParametersUseCase: CreateOrUpdateOrganizationParametersUseCase,
+        private readonly trialExtensionNotifierService: TrialExtensionNotifierService,
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
@@ -254,5 +256,33 @@ export class LicenseController {
         }
 
         return { successful, failed };
+    }
+
+    @Post('/trial-extension-request')
+    @UseGuards(PolicyGuard)
+    @ApiOperation({
+        summary: 'Request more trial PR reviews',
+        description:
+            'Forwards a trial extension request (team size + message) to our team channel. Available to any authenticated org member.',
+    })
+    public async requestTrialExtension(
+        @Body() body: { teamId?: string; teamSize?: number; message?: string },
+    ) {
+        const organization = this.request?.user?.organization;
+
+        if (!organization?.uuid) {
+            throw new BadRequestException(
+                'Organization ID is missing from request',
+            );
+        }
+
+        return this.trialExtensionNotifierService.notify({
+            organizationId: organization.uuid,
+            organizationName: organization.name,
+            teamId: body.teamId,
+            requestedByEmail: this.request?.user?.email,
+            teamSize: body.teamSize,
+            message: body.message,
+        });
     }
 }

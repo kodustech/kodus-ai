@@ -157,3 +157,13 @@ export function createMockIntegrationConfigEntity() {
         configValue: MOCK_REPOSITORIES,
     };
 }
+
+export const MOCK_INSTALLATION_CONFIG_UUID = 'integration-config-uuid-0002';
+
+export function createMockInstallationConfigEntity() {
+    return {
+        uuid: MOCK_INSTALLATION_CONFIG_UUID,
+        configKey: 'installation_github',
+        configValue: { installId: '12345', installationStatus: 'SUCCESS' },
+    };
+}

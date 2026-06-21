@@ -104,6 +104,10 @@ export interface CodeReviewPipelineContext extends PipelineContext {
         notificationHandled?: boolean;
         showStatusFeedback?: boolean;
         forceFullRerun?: boolean;
+        /** Org subscription status (e.g. 'trial', 'active'), captured by
+         *  ValidatePrerequisitesStage from the license validation so later
+         *  stages can pick a trial-specific model. */
+        subscriptionStatus?: string;
         /** Set by the pipeline provider before execution. When true, the
          *  agent (v4) engine will run, which has its own token-budget chunking
          *  and tolerates much larger PRs than the legacy engine. */

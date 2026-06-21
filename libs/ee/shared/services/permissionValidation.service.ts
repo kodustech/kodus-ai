@@ -46,7 +46,16 @@ export interface ValidationResult {
     byokConfig?: BYOKConfig | null;
     errorType?: ValidationErrorType;
     metadata?: Record<string, any>;
+    // Subscription status of the org (e.g. 'trial', 'active'). Exposed so
+    // downstream consumers (the review pipeline) can pick a trial-specific
+    // model without re-validating the license.
+    subscriptionStatus?: string;
 }
+
+export type ExecutionPermissionValidationOptions = {
+    consumeTrialReviewCredit?: boolean;
+    trialReviewCreditUsageKey?: string;
+};
 
 @Injectable()
 export class PermissionValidationService {
@@ -114,6 +123,7 @@ export class PermissionValidationService {
         organizationAndTeamData: OrganizationAndTeamData,
         userGitId?: string,
         contextName?: string,
+        options: ExecutionPermissionValidationOptions = {},
     ): Promise<ValidationResult> {
         try {
             // Development mode always allows
@@ -164,9 +174,135 @@ export class PermissionValidationService {
                 };
             }
 
-            // 2. Trial always allows (no BYOK required and no user validation)
+            // 2. Trial skips user validation, but still honors BYOK and
+            // billing-managed review credits when those fields are present.
             if (validation.subscriptionStatus === 'trial') {
-                return { allowed: true };
+                let trialByokConfig: BYOKConfig | null = null;
+                let byokLookupFailed = false;
+
+                try {
+                    trialByokConfig = await this.getBYOKConfig(
+                        organizationAndTeamData,
+                    );
+                } catch (error) {
+                    byokLookupFailed = true;
+                    this.logger.warn({
+                        message:
+                            'Could not resolve BYOK config for trial; continuing with managed trial validation',
+                        context:
+                            contextName || PermissionValidationService.name,
+                        metadata: { organizationAndTeamData },
+                        error,
+                    });
+                }
+
+                // Only enforce the credit gate when we're CONFIDENT there's no
+                // BYOK. If the lookup threw we can't rule out a connected key,
+                // so a user who burned their credits and then connected BYOK
+                // must not be blocked by a flaky read — fail open on BYOK.
+                const noByok = !trialByokConfig && !byokLookupFailed;
+
+                // Only trials created under the managed-credit model carry
+                // these fields. Legacy trials (started before this shipped)
+                // have no credit data — they must keep the old behaviour:
+                // unlimited reviews for the full trial, no consumption, no gate.
+                const usesTrialCredits =
+                    typeof validation.trialReviewCreditsTotal === 'number' ||
+                    typeof validation.trialReviewCreditsRemaining === 'number';
+
+                if (
+                    usesTrialCredits &&
+                    noByok &&
+                    validation.trialReviewCreditsRemaining === 0
+                ) {
+                    this.logger.warn({
+                        message: 'Trial managed review credits exhausted',
+                        context:
+                            contextName || PermissionValidationService.name,
+                        metadata: {
+                            organizationAndTeamData,
+                            trialReviewCreditsTotal:
+                                validation.trialReviewCreditsTotal,
+                            trialReviewCreditsUsed:
+                                validation.trialReviewCreditsUsed,
+                            trialCreditTier: validation.trialCreditTier,
+                            trialUnlocks: validation.trialUnlocks,
+                        },
+                    });
+
+                    return {
+                        allowed: false,
+                        errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
+                        metadata: { validation },
+                        subscriptionStatus: validation.subscriptionStatus,
+                    };
+                }
+
+                if (
+                    usesTrialCredits &&
+                    noByok &&
+                    options.consumeTrialReviewCredit
+                ) {
+                    const consumeResult =
+                        await this.licenseService.consumeTrialReviewCredit(
+                            organizationAndTeamData,
+                            options.trialReviewCreditUsageKey,
+                        );
+
+                    if (!consumeResult.allowed) {
+                        this.logger.warn({
+                            message: 'Trial review credit consumption denied',
+                            context:
+                                contextName || PermissionValidationService.name,
+                            metadata: {
+                                organizationAndTeamData,
+                                reason: consumeResult.reason,
+                                trialReviewCreditUsageKey:
+                                    options.trialReviewCreditUsageKey,
+                                consumeResult,
+                            },
+                        });
+
+                        return {
+                            allowed: false,
+                            errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
+                            metadata: { validation, consumeResult },
+                            subscriptionStatus: validation.subscriptionStatus,
+                        };
+                    }
+
+                    validation.trialReviewCreditsTotal =
+                        consumeResult.trialReviewCreditsTotal ??
+                        validation.trialReviewCreditsTotal;
+                    validation.trialReviewCreditsUsed =
+                        consumeResult.trialReviewCreditsUsed ??
+                        validation.trialReviewCreditsUsed;
+                    validation.trialReviewCreditsRemaining =
+                        consumeResult.trialReviewCreditsRemaining ??
+                        validation.trialReviewCreditsRemaining;
+                    validation.trialCreditTier =
+                        consumeResult.trialCreditTier ??
+                        validation.trialCreditTier;
+                    validation.trialUnlocks =
+                        consumeResult.trialUnlocks ?? validation.trialUnlocks;
+                }
+
+                return {
+                    allowed: true,
+                    byokConfig: trialByokConfig,
+                    subscriptionStatus: validation.subscriptionStatus,
+                    metadata: {
+                        byok: Boolean(trialByokConfig),
+                        trialReviewCreditsTotal:
+                            validation.trialReviewCreditsTotal,
+                        trialReviewCreditsUsed:
+                            validation.trialReviewCreditsUsed,
+                        trialReviewCreditsRemaining:
+                            validation.trialReviewCreditsRemaining,
+                        trialCreditTier: validation.trialCreditTier,
+                        trialUnlocks: validation.trialUnlocks,
+                    },
+                };
             }
 
             // 3. Identify plan type
@@ -255,6 +391,7 @@ export class PermissionValidationService {
             return {
                 allowed: true,
                 byokConfig,
+                subscriptionStatus: validation.subscriptionStatus,
                 metadata: { planType: validation.planType, identifiedPlanType },
             };
         } catch (error) {

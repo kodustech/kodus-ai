@@ -5,17 +5,26 @@ import { Card } from "@components/ui/card";
 
 import type { ExplorerSearchParams } from "../page";
 
+// Keep in sync with LabelType in
+// libs/common/utils/codeManagement/labels.ts — suggestions are stored with
+// any of these label values, and the cockpit feedback widgets link here with
+// `?category=<label>`. Missing values (e.g. "bug") made those links land on a
+// filter the dropdown couldn't represent, silently showing "Category: all".
 const CATEGORIES = [
     "security",
     "potential_issues",
     "error_handling",
     "performance_and_optimization",
+    "performance",
     "maintainability",
     "refactoring",
     "code_style",
     "documentation_and_comments",
     "kody_rules",
     "breaking_changes",
+    "bug",
+    "cross_file",
+    "business_logic",
 ];
 
 const SEVERITIES = ["critical", "high", "medium", "low"];
@@ -67,6 +76,12 @@ export const ExplorerFilters = ({
                     apply({ category: e.target.value || undefined })
                 }>
                 <option value="">Category: all</option>
+                {/* A category that arrived via the URL but isn't in the
+                    canonical list still renders, so the active filter is
+                    visible instead of falling back to "Category: all". */}
+                {params.category && !CATEGORIES.includes(params.category) && (
+                    <option value={params.category}>{params.category}</option>
+                )}
                 {CATEGORIES.map((c) => (
                     <option key={c} value={c}>
                         {c}

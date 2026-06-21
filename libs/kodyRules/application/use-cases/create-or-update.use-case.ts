@@ -357,9 +357,16 @@ export class CreateOrUpdateKodyRulesUseCase {
         const ruleType =
             (effectiveRule.type as KodyRulesType) || KodyRulesType.STANDARD;
 
+        const groupFolderName =
+            await this.centralizedConfigPrService.resolveDirectoryGroupFolderName(
+                resolvedOrgAndTeamData,
+                effectiveRule.repositoryId,
+                effectiveRule.directoryId,
+            );
+
         if (
             !effectiveRule.centralizedConfig?.path &&
-            existingRule?.title &&
+            effectiveRule.title &&
             effectiveRule.repositoryId
         ) {
             const repositoryFolder =
@@ -371,12 +378,12 @@ export class CreateOrUpdateKodyRulesUseCase {
             const rulesDirectory =
                 ruleType === KodyRulesType.MEMORY ? 'memories' : 'review';
 
-            const fileName = `${this.centralizedConfigPrService.sanitizeFileName(existingRule.title, 'rule')}.yml`;
+            const fileName = `${this.centralizedConfigPrService.sanitizeFileName(effectiveRule.title, 'rule')}.yml`;
 
-            const centralizedPath = effectiveRule.directoryId
+            const centralizedPath = groupFolderName
                 ? this.centralizedConfigPrService.buildDirectoryGroupRulesPath(
                       repositoryFolder,
-                      effectiveRule.directoryId,
+                      groupFolderName,
                       rulesDirectory,
                       fileName,
                   )
@@ -397,6 +404,7 @@ export class CreateOrUpdateKodyRulesUseCase {
                     centralizedConfigPrService: this.centralizedConfigPrService,
                     organizationAndTeamData: resolvedOrgAndTeamData,
                     repositoryId: effectiveRule.repositoryId,
+                    groupFolderName: groupFolderName ?? undefined,
                     ruleContent: effectiveRule,
                     ruleType,
                     operation: kodyRule.uuid ? 'update' : 'create',
@@ -438,6 +446,13 @@ export class CreateOrUpdateKodyRulesUseCase {
                     effectiveRule.repositoryId,
                 );
 
+            const groupFolderName =
+                await this.centralizedConfigPrService.resolveDirectoryGroupFolderName(
+                    organizationAndTeamData,
+                    effectiveRule.repositoryId,
+                    effectiveRule.directoryId,
+                );
+
             const centralizedPath = buildKodyRuleCentralizedFilePath({
                 centralizedConfigPrService: this.centralizedConfigPrService,
                 repositoryFolder,
@@ -447,6 +462,7 @@ export class CreateOrUpdateKodyRulesUseCase {
                     operation === 'update' && existingRule
                         ? existingRule
                         : effectiveRule,
+                groupFolderName: groupFolderName ?? undefined,
             });
 
             if (operation === 'create') {

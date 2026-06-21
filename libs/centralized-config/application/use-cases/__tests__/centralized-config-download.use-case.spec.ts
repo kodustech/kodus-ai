@@ -169,21 +169,19 @@ describe('CentralizedConfigDownloadUseCase', () => {
             (e) => e.path === 'repo-one/kodus-config.yml',
         );
         const dirConfigEntry = entries.find(
-            (e) => e.path === 'repo-one/.kody-directory-groups/dir-1/kodus-config.yml',
-        );
-        const dirFoldersEntry = entries.find(
-            (e) => e.path === 'repo-one/.kody-directory-groups/dir-1/folders.yml',
+            (e) => e.path === 'repo-one/src/kodus-config.yml',
         );
 
         expect(globalEntry).toBeDefined();
         expect(repoEntry).toBeDefined();
         expect(dirConfigEntry).toBeDefined();
-        expect(dirFoldersEntry).toBeDefined();
+        expect(
+            entries.some((e) => e.path.includes('folders.yml')),
+        ).toBe(false);
 
         const globalConfig = yaml.load(globalEntry.content) as any;
         const repoConfig = yaml.load(repoEntry.content) as any;
         const dirConfig = yaml.load(dirConfigEntry.content) as any;
-        const dirFolders = yaml.load(dirFoldersEntry.content) as any;
 
         expect(globalConfig.customMessages.startReviewMessage.content).toBe(
             'global-start',
@@ -195,7 +193,6 @@ describe('CentralizedConfigDownloadUseCase', () => {
             hideComments: true,
             suggestionCopyPrompt: false,
         });
-        expect(dirFolders.folders).toEqual([{ path: '/src' }]);
     });
 
     it('creates config file when scope has only custom messages and empty base config', async () => {
@@ -401,20 +398,19 @@ describe('CentralizedConfigDownloadUseCase', () => {
             (entry) => entry.path === 'repo-one/kodus-config.yml',
         );
         const parentDirConfigEntry = entries.find(
-            (entry) => entry.path === 'repo-one/.kody-directory-groups/dir-parent/kodus-config.yml',
-        );
-        const parentDirFoldersEntry = entries.find(
-            (entry) => entry.path === 'repo-one/.kody-directory-groups/dir-parent/folders.yml',
+            (entry) => entry.path === 'repo-one/src/kodus-config.yml',
         );
         const childDirConfigEntry = entries.find(
-            (entry) => entry.path === 'repo-one/.kody-directory-groups/dir-child/kodus-config.yml',
+            (entry) => entry.path === 'repo-one/src%2Fapp/kodus-config.yml',
         );
 
         expect(globalEntry).toBeDefined();
         expect(parentDirConfigEntry).toBeDefined();
-        expect(parentDirFoldersEntry).toBeDefined();
         expect(repoEntry).toBeUndefined();
         expect(childDirConfigEntry).toBeUndefined();
+        expect(
+            entries.some((e) => e.path.includes('folders.yml')),
+        ).toBe(false);
 
         const globalConfig = yaml.load(globalEntry.content) as any;
         const parentDirConfig = yaml.load(parentDirConfigEntry.content) as any;

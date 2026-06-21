@@ -154,7 +154,7 @@ export default function App() {
     const autoJoinEnabled = form.watch("autoJoin");
 
     return (
-        <Page.Root className="mx-auto flex max-h-screen flex-row overflow-hidden p-6">
+        <Page.Root className="mx-auto flex min-h-full w-full flex-row p-6">
             <div className="bg-card-lv1 flex flex-10 flex-col justify-center gap-10 rounded-3xl p-12">
                 <div className="flex-1 overflow-hidden rounded-3xl">
                     <video

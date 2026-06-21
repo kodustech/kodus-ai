@@ -1,9 +1,12 @@
 import { createLogger } from '@kodus/flow';
 
+import { AxiosError } from 'axios';
+
 import { AxiosLicenseService } from '@libs/core/infrastructure/config/axios/microservices/license.axios';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
 import {
+    ConsumeTrialReviewCreditResult,
     ILicenseService,
     OrganizationLicenseValidationResult,
     UserWithLicense,
@@ -51,6 +54,45 @@ export class LicenseService implements ILicenseService {
                 },
             });
             return { valid: false };
+        }
+    }
+
+    async consumeTrialReviewCredit(
+        organizationAndTeamData: OrganizationAndTeamData,
+        usageKey?: string,
+    ): Promise<ConsumeTrialReviewCreditResult> {
+        try {
+            return await this.licenseRequest.post(
+                'trial-review-credit/consume',
+                {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    usageKey,
+                },
+            );
+        } catch (error) {
+            const responseData = (error as AxiosError)?.response
+                ?.data as ConsumeTrialReviewCreditResult;
+
+            if (responseData?.allowed === false) {
+                return responseData;
+            }
+
+            this.logger.error({
+                message: 'ConsumeTrialReviewCredit not working',
+                context: LicenseService.name,
+                error,
+                serviceName: 'LicenseService consumeTrialReviewCredit',
+                metadata: {
+                    ...organizationAndTeamData,
+                    usageKey,
+                },
+            });
+
+            return {
+                allowed: false,
+                reason: 'CONSUME_TRIAL_REVIEW_CREDIT_FAILED',
+            };
         }
     }
 

@@ -126,7 +126,7 @@ export class CommentManagerService implements ICommentManagerService {
                         model: model as any,
                         system: systemPrompt,
                         prompt: userPrompt,
-                        temperature: 0,
+                        temperature: byokConfig?.main?.temperature ?? 0,
                         experimental_telemetry: buildLangfuseTelemetry(
                             runName,
                             metadata,

@@ -335,7 +335,9 @@ case "$TEST_VM_PROVIDER" in
     *) err "Unknown TEST_VM_PROVIDER=$TEST_VM_PROVIDER"; exit 1 ;;
 esac
 
-if [ ! -d "$KODUS_INSTALLER_PATH" ]; then
+# The benchmark farm (BENCH_BASE_ONLY=1) builds the stack from kodus-ai source
+# on the droplet and never touches kodus-installer, so don't require it there.
+if [ "${BENCH_BASE_ONLY:-0}" != "1" ] && [ ! -d "$KODUS_INSTALLER_PATH" ]; then
     err "KODUS_INSTALLER_PATH=$KODUS_INSTALLER_PATH does not exist."
     err "Either clone https://github.com/kodustech/kodus-installer next to this repo,"
     err "or set KODUS_INSTALLER_PATH to your local checkout."
@@ -409,6 +411,21 @@ save_state "ssh-up"
 log "Waiting for cloud-init (~2 min)..."
 ssh_vm "cloud-init status --wait" >/dev/null
 ssh_vm "test -f /var/lib/cloud/instance/kodus-ready" || { err "cloud-init failed"; exit 1; }
+
+# ---------- base-only mode (benchmark farm) ----------
+# BENCH_BASE_ONLY=1 stops here: a bare droplet with Docker + git + rsync +
+# cloudflared (installed by cloud-init above) and nothing else. The benchmark
+# farm (scripts/benchmark/farm/) rsyncs the kodus-ai SOURCE for a given branch
+# and builds the compiled artifact ON the droplet via docker-compose.bench.yml,
+# instead of pulling kodus-installer's prebuilt GHCR images. Everything below
+# (installer transfer + install.sh + GHCR) is skipped.
+if [ "${BENCH_BASE_ONLY:-0}" = "1" ]; then
+    save_state "base-ready"
+    ok "Base droplet ready (BENCH_BASE_ONLY) — '${NAME}' at ${SERVER_IP}"
+    dim "  Docker + cloudflared installed; no Kodus stack yet."
+    dim "  Build a branch onto it: scripts/benchmark/farm/bench-sync.sh ${NAME#bench-} <branch>"
+    exit 0
+fi
 
 # ---------- transfer installer ----------
 log "Transferring kodus-installer from $KODUS_INSTALLER_PATH..."

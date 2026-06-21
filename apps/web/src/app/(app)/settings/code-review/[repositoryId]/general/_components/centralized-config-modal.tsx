@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
 import {
@@ -122,6 +123,7 @@ export const CentralizedConfigModal = ({
     onSaved,
 }: CentralizedConfigModalProps) => {
     const { resetQueries, generateQueryKey } = useReactQueryInvalidateQueries();
+    const router = useRouter();
 
     // UI State
     const [enabled, setEnabled] = useState(centralizedConfig.enabled);
@@ -188,6 +190,7 @@ export const CentralizedConfigModal = ({
             }),
         );
         await Promise.all(keys.map((queryKey) => resetQueries({ queryKey })));
+        router.refresh();
         await onSaved();
     };
 

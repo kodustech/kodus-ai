@@ -361,6 +361,7 @@ export const ByokPageClient = ({
                     ) : (
                         <CuratedCatalog
                             slot="main"
+                            existingConfig={config?.main}
                             existingKeyByProvider={existingKeyByProvider}
                             onSave={onSaveMain}
                             onCancel={
@@ -394,6 +395,7 @@ export const ByokPageClient = ({
                         ) : (
                             <CuratedCatalog
                                 slot="fallback"
+                                existingConfig={config?.fallback}
                                 existingKeyByProvider={existingKeyByProvider}
                                 onSave={onSaveFallback}
                                 onCancel={() => setFallbackState("idle")}

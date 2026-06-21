@@ -16,6 +16,13 @@ scenarios:
     - command-review
     - kody-rules-create-and-apply
     - license-attribution
+    # Cockpit analytics availability (github × license-paid cell only via
+    # appliesTo): proves the analytics warehouse is up (API) AND the /cockpit
+    # page isn't gated behind the vestigial WEB_ANALYTICS_SECRET (browser).
+    # Guards the self-hosted "Analytics Not Available despite valid license"
+    # regression. Skips the browser layer (not fails) if the SH e2e license
+    # isn't Enterprise-tier.
+    - cockpit-analytics
     # per-seat gate (license-paid only); exercises pollForLicenseBlock on all
     # four providers — the cross-provider validation this run is for.
     - per-seat-license-toggle

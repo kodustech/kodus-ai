@@ -5,6 +5,9 @@ import { EmailModule } from '@libs/common/email/email.module';
 import { LicenseModule } from '@libs/ee/license/license.module';
 import { UserModule } from '@libs/identity/modules/user.module';
 import { OrganizationModule } from '@libs/organization/modules/organization.module';
+import { TeamModule } from '@libs/organization/modules/team.module';
+import { ParametersModule } from '@libs/organization/modules/parameters.module';
+import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
 
 import { COCKPIT_DEVELOPER_PRODUCTIVITY_SERVICE_TOKEN } from '../domain/contracts/cockpit-developer-productivity.service.contract';
 import { COCKPIT_REVIEW_ANALYTICS_SERVICE_TOKEN } from '../domain/contracts/cockpit-review-analytics.service.contract';
@@ -35,6 +38,9 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         forwardRef(() => OrganizationModule),
         forwardRef(() => NotificationModule),
         forwardRef(() => KodyRulesModule),
+        forwardRef(() => TeamModule),
+        forwardRef(() => ParametersModule),
+        forwardRef(() => IntegrationConfigModule),
     ],
     providers: [
         CockpitSourceResolver,

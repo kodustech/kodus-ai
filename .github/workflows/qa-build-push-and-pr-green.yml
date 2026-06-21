@@ -63,6 +63,8 @@ jobs:
             # Required by github/codeql-action/upload-sarif to publish
             # Trivy findings to the repo's Security tab.
             security-events: write
+            # Push the buildx layer cache to GHCR (images still go to ECR).
+            packages: write
 
         steps:
             - name: Checkout code
@@ -123,12 +125,25 @@ jobs:
             - name: Set up Docker Buildx
               uses: docker/setup-buildx-action@v4.0.0
 
+            # Cache push/pull target. Images go to ECR; the buildx layer
+            # cache lives in GHCR (durable, no 10GB GHA eviction).
+            - name: Login to GitHub Container Registry (build cache)
+              uses: docker/login-action@v4.1.0
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
             - name: Build, tag, and push (api/webhooks/worker)
               env:
                   # Authenticates @vscode/ripgrep's postinstall download via
                   # the bake-level `github_token` secret (anonymous GitHub
                   # API calls from runner IPs are rate-limited → 403).
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  # Durable registry build cache in GHCR (read by bake's
+                  # CACHE_TYPE/CACHE_REF — see docker-bake.hcl). arm64-only tag.
+                  CACHE_TYPE: registry
+                  CACHE_REF: ghcr.io/${{ github.repository_owner }}/kodus-ai-buildcache:qa-arm64
                   ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
                   API_TAGS: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_API
                       }}:${{ env.IMAGE_TAG }}
@@ -142,8 +157,6 @@ jobs:
                   docker buildx bake -f docker-bake.hcl \
                     --set base.args.RELEASE_VERSION=${{ env.IMAGE_TAG }} \
                     --set base.args.API_CLOUD_MODE=true \
-                    --set base.cache-from=type=gha,scope=${{ env.BUILDX_CACHE_SCOPE }} \
-                    --set base.cache-to=type=gha,scope=${{ env.BUILDX_CACHE_SCOPE }},mode=max \
                     --set *.platform=${{ env.BUILDX_PLATFORMS }} \
                     --push \
                     api webhooks worker

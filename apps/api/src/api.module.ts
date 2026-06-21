@@ -68,6 +68,7 @@ import { IssuesController } from './controllers/issues.controller';
 import { KodyRulesController } from './controllers/kodyRules.controller';
 import { LicenseController } from './controllers/license.controller';
 import { OrganizationController } from './controllers/organization.controller';
+import { TrialExtensionNotifierService } from './services/trial-extension-notifier.service';
 import { OrganizationParametersController } from './controllers/organizationParameters.controller';
 import { ParametersController } from './controllers/parameters.controller';
 import { PermissionsController } from './controllers/permissions.controller';
@@ -193,6 +194,6 @@ import { NotificationController } from './controllers/notification.controller';
         CockpitWeeklyRecapController,
         NotificationController,
     ],
-    providers: [LangfuseShutdownProvider],
+    providers: [LangfuseShutdownProvider, TrialExtensionNotifierService],
 })
 export class ApiModule {}

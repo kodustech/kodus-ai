@@ -32,6 +32,7 @@ scenarios:
     # managed-review = throwaway repo + real managed-LLM review (the only
     # cell on Kodus-managed keys). See fast.yml for the full rationale.
     - trial-entitlement-gate
+    - trial-credits-consume
     - trial-managed-review
     # Per-seat gate: appliesTo restricts to self-hosted × github × license-paid
     # (one cell). Skipped automatically when SH_LICENSE_KEY_PATH (default
@@ -67,6 +68,11 @@ scenarios:
     # Chromium per role and asserts the Token Usage menu item + /token-usage
     # screen actually RENDER, and denied roles get a rendered /forbidden page.
     - rbac-ui-render
+    # Cockpit analytics availability (real browser): warehouse-up API probe +
+    # /cockpit page not gated behind the vestigial WEB_ANALYTICS_SECRET. Runs
+    # on cloud (paid/trial) and self-hosted (license-paid) github cells via
+    # appliesTo; browser layer self-skips on non-cockpit tiers.
+    - cockpit-analytics
     # Public PR-review demo API (also in fast.yml). Anonymous, cloud-only;
     # appliesTo pins it to one cell (cloud × github × paid).
     - public-pr-demo
