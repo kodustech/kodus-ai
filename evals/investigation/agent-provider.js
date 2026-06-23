@@ -100,6 +100,8 @@ function defaultApiKeyEnv(provider) {
             return 'API_ANTHROPIC_API_KEY';
         case 'openrouter':
             return 'API_OPENROUTER_KEY';
+        case 'requesty':
+            return 'API_REQUESTY_KEY';
         case 'google':
         default:
             return 'API_GOOGLE_AI_API_KEY';
@@ -143,7 +145,9 @@ function buildOpenAICompatibleConfig(config, apiKey, defaultName) {
             config.baseURL ||
             (config.provider === 'openrouter'
                 ? 'https://openrouter.ai/api/v1'
-                : undefined),
+                : config.provider === 'requesty'
+                  ? 'https://router.requesty.ai/v1'
+                  : undefined),
         ...(config.headers ? { headers: config.headers } : {}),
         ...(config.queryParams ? { queryParams: config.queryParams } : {}),
         ...(openRouterProviderRouting
@@ -195,7 +199,11 @@ async function createModel(config) {
         })(model);
     }
 
-    if (provider === 'openrouter' || provider === 'openai-compatible') {
+    if (
+        provider === 'openrouter' ||
+        provider === 'openai-compatible' ||
+        provider === 'requesty'
+    ) {
         const { createOpenAICompatible } = await import(
             '@ai-sdk/openai-compatible'
         );

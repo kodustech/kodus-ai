@@ -23,6 +23,7 @@ const DEFAULT_API_KEY_ENVS = {
     openai: 'API_OPEN_AI_API_KEY',
     'openai-compatible': 'API_OPEN_AI_API_KEY',
     openrouter: 'API_OPENROUTER_KEY',
+    requesty: 'API_REQUESTY_KEY',
 };
 
 const MODEL_PRESETS = {
@@ -119,6 +120,10 @@ function defaultApiKeyEnv(provider) {
 function defaultBaseUrl(provider) {
     if (provider === 'openrouter') {
         return 'https://openrouter.ai/api/v1';
+    }
+
+    if (provider === 'requesty') {
+        return 'https://router.requesty.ai/v1';
     }
 
     return undefined;

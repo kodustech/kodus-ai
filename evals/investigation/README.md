@@ -152,7 +152,7 @@ pnpm run eval:investigation:no-cache \
 
 Supported custom flags:
 - `--preset <name>`: use a known model preset, can be repeated
-- `--provider <google|anthropic|openai|openai-compatible|openrouter>`: custom provider
+- `--provider <google|anthropic|openai|openai-compatible|openrouter|requesty>`: custom provider
 - `--model <id>`: custom model id
 - `--label <name>`: display label for the provider row
 - `--api-key-env <ENV_VAR>`: custom API key env var
@@ -186,6 +186,17 @@ pnpm run eval:investigation:all:no-cache \
   --provider-order moonshot \
   --no-provider-fallbacks \
   --label kimi-k2.5-openrouter-moonshot
+```
+
+Run an OpenAI-compatible model through Requesty (default base URL
+`https://router.requesty.ai/v1`, key from `API_REQUESTY_KEY`,
+`provider/model` naming):
+
+```bash
+pnpm run eval:investigation:all:no-cache \
+  --provider requesty \
+  --model openai/gpt-4o-mini \
+  --label gpt-4o-mini-requesty
 ```
 
 Debug artifacts from the latest run:
