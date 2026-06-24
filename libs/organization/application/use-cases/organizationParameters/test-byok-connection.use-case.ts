@@ -671,6 +671,15 @@ export class TestByokConnectionUseCase {
                     },
                 };
 
+            case BYOKProvider.REQUESTY:
+                return {
+                    url: 'https://router.requesty.ai/v1/models',
+                    headers: {
+                        Authorization: `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                };
+
             case BYOKProvider.NOVITA:
                 return {
                     url: 'https://api.novita.ai/v3/openai/models',

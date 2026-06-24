@@ -89,6 +89,11 @@ export class GetModelsByProviderUseCase {
                     process.env.API_OPEN_ROUTER_API_KEY,
                 );
 
+            case BYOKProvider.REQUESTY:
+                return this.getRequestyModels(
+                    process.env.API_REQUESTY_API_KEY,
+                );
+
             case BYOKProvider.NOVITA:
                 return this.getNovitaModels(process.env.API_NOVITA_AI_API_KEY);
 
@@ -335,6 +340,32 @@ export class GetModelsByProviderUseCase {
         } catch (error) {
             throw new BadRequestException(
                 `Error fetching OpenRouter models: ${(error as Error).message}`,
+            );
+        }
+    }
+
+    private async getRequestyModels(apiKey?: string): Promise<ModelResponse> {
+        try {
+            const response = await axios.get<OpenAIResponse>(
+                'https://router.requesty.ai/v1/models',
+                {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                },
+            );
+
+            return {
+                provider: BYOKProvider.REQUESTY,
+                models: response.data.data.map((model: OpenAIModel) => ({
+                    id: model.id,
+                    name: model.id,
+                })),
+            };
+        } catch (error) {
+            throw new BadRequestException(
+                `Error fetching Requesty models: ${(error as Error).message}`,
             );
         }
     }

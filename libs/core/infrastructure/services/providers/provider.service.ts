@@ -63,6 +63,14 @@ export class ProviderService {
             requiresApiKey: true,
             requiresBaseUrl: false,
         },
+        [BYOKProvider.REQUESTY]: {
+            id: BYOKProvider.REQUESTY,
+            name: 'Requesty',
+            description: 'Multiple models through Requesty',
+            supported: true,
+            requiresApiKey: true,
+            requiresBaseUrl: false,
+        },
         [BYOKProvider.NOVITA]: {
             id: BYOKProvider.NOVITA,
             name: 'Novita',

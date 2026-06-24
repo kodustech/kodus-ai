@@ -56,7 +56,7 @@ const MANUAL_OVERRIDES: Record<string, number> = {
 function normalize(name: string): string {
     return name
         .toLowerCase()
-        .replace(/^(openai|anthropic|google|gemini|vertex_ai|bedrock|azure|together_ai|openrouter|novita|fireworks_ai|deepseek|mistral|moonshot|hf|huggingface)\//, '')
+        .replace(/^(openai|anthropic|google|gemini|vertex_ai|bedrock|azure|together_ai|openrouter|requesty|novita|fireworks_ai|deepseek|mistral|moonshot|hf|huggingface)\//, '')
         .replace(/[-_.\s/:]/g, '');
 }
 

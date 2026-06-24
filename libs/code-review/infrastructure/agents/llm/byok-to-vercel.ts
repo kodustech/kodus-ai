@@ -171,6 +171,7 @@ const DEFAULT_MODEL = {
  * - GOOGLE_GEMINI → @ai-sdk/google
  * - GOOGLE_VERTEX → @ai-sdk/google-vertex
  * - OPEN_ROUTER → @ai-sdk/openai-compatible (OpenRouter is OpenAI-compatible)
+ * - REQUESTY → @ai-sdk/openai-compatible (Requesty is OpenAI-compatible)
  * - OPENAI_COMPATIBLE → @ai-sdk/openai-compatible
  * - NOVITA → @ai-sdk/openai-compatible
  *
@@ -424,6 +425,16 @@ export function byokToVercelModel(
                 name: 'open-router',
                 apiKey,
                 baseURL: baseURL || 'https://openrouter.ai/api/v1',
+                supportsStructuredOutputs:
+                    options.structuredOutputs === true &&
+                    shouldEnableJsonSchema(provider, model, baseURL),
+            })(model);
+
+        case BYOKProvider.REQUESTY:
+            return createOpenAICompatible({
+                name: 'requesty',
+                apiKey,
+                baseURL: baseURL || 'https://router.requesty.ai/v1',
                 supportsStructuredOutputs:
                     options.structuredOutputs === true &&
                     shouldEnableJsonSchema(provider, model, baseURL),

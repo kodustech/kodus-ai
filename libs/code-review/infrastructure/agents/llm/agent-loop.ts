@@ -235,6 +235,7 @@ const PROVIDER_OPTIONS_NAMESPACE: Partial<Record<string, string>> = {
     [BYOKProvider.GOOGLE_VERTEX]: 'google',
     [BYOKProvider.OPENAI]: 'openai',
     [BYOKProvider.OPEN_ROUTER]: 'openrouter',
+    [BYOKProvider.REQUESTY]: 'openaiCompatible',
     [BYOKProvider.OPENAI_COMPATIBLE]: 'openaiCompatible',
     [BYOKProvider.NOVITA]: 'openaiCompatible',
 };
