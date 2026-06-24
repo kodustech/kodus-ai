@@ -51,17 +51,15 @@ export class SandboxLeaseModel extends CoreDocument {
     consumer?: string; // Last consumer label ('review' | 'conversation')
 
     /**
-     * State enum. INVALIDATED is required to handle the mid-create invalidation
-     * race (RESEARCH.md Pitfall 5): when a force-push/pr-close event fires while
-     * acquire() is still in-flight (state = CREATING), invalidate() sets this to
-     * INVALIDATED instead of deleting the doc. The create path checks for this
-     * state after updateReady() and immediately kills the sandbox, preventing
-     * orphaned E2B sandboxes with no Mongo lease document.
+     * State enum. INVALIDATED handles the mid-create invalidation race
+     * (force-push/pr-close while acquire() is still in-flight). DELETING is a
+     * transient cleanup state used to block warm reuse while local directories
+     * or remote sandboxes are being removed.
      */
     @Prop({
         type: String,
         required: true,
-        enum: ['CREATING', 'READY', 'PAUSED', 'INVALIDATED'],
+        enum: ['CREATING', 'READY', 'PAUSED', 'INVALIDATED', 'DELETING'],
     })
     state: string;
 
@@ -93,6 +91,9 @@ export const SandboxLeaseSchema: MongooseSchema<SandboxLeaseModel> =
 
 // Reaper range scan: find all leases past their expiry regardless of state
 SandboxLeaseSchema.index({ expiresAt: 1 });
+
+// Reaper recovery scan: find docs stuck in DELETING without scanning the whole collection
+SandboxLeaseSchema.index({ state: 1, expiresAt: 1 });
 
 // Invalidate-by-sandboxId when prKey is unknown (sparse: unused entries have no entry)
 SandboxLeaseSchema.index({ sandboxId: 1 }, { sparse: true });

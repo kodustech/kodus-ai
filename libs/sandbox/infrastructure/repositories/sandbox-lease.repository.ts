@@ -3,6 +3,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 
 import { SandboxLeaseModel } from './schemas/sandbox-lease.model';
+import {
+    ISandboxLeaseRepository,
+    SandboxLeaseLookup,
+} from '@libs/sandbox/domain/contracts/sandbox-lease.repository.contract';
 
 /**
  * Decompose a prKey ("{orgId}:{repoId}:{prNumber}") into its parts.
@@ -49,7 +53,7 @@ function decomposePrKey(prKey: string): {
 }
 
 @Injectable()
-export class SandboxLeaseRepository {
+export class SandboxLeaseRepository implements ISandboxLeaseRepository {
     constructor(
         @InjectModel(SandboxLeaseModel.name)
         private readonly leaseModel: Model<SandboxLeaseModel>,
@@ -60,11 +64,13 @@ export class SandboxLeaseRepository {
      *
      * Single findOneAndUpdate with BOTH operators in one update document:
      *   - $setOnInsert: sets initial state/timestamps on the INSERT path only
+     *   - $set: refreshes expiresAt and consumer on BOTH insert and update paths
      *   - $inc: { leaseCount: 1 } increments the counter on BOTH insert and update paths
      *
-     * On INSERT:  MongoDB applies $setOnInsert (state='CREATING', dates) and $inc
+     * On INSERT:  MongoDB applies $setOnInsert (state='CREATING', createdAt) and $inc
      *             (leaseCount 0→1). Returned doc has leaseCount === 1.
-     * On UPDATE:  $setOnInsert is a no-op; $inc bumps leaseCount to N+1.
+     * On UPDATE:  $setOnInsert is a no-op; $set refreshes expiresAt and $inc
+     *             bumps leaseCount to N+1.
      *
      * Caller identifies itself as creator when doc.leaseCount === 1.
      * Caller must poll when doc.leaseCount > 1 and doc.state === 'CREATING'.
@@ -87,13 +93,15 @@ export class SandboxLeaseRepository {
                 $setOnInsert: {
                     state: 'CREATING',
                     createdAt: now,
-                    expiresAt,
                     ...decomposed,
                 },
-                // Track the most recent consumer label so it's queryable in
-                // Mongo without parsing logs. Updated on every acquire (both
-                // insert and update paths).
-                $set: consumer ? { consumer } : {},
+                // Track the most recent consumer label and refresh the lease
+                // expiry on every acquire. The expired-lease reaper uses this
+                // timestamp as its atomic "not re-acquired" guard.
+                $set: {
+                    expiresAt,
+                    ...(consumer ? { consumer } : {}),
+                },
                 $inc: { leaseCount: 1 },
             },
             { upsert: true, new: true },
@@ -140,13 +148,19 @@ export class SandboxLeaseRepository {
     /**
      * Find a lease document by its prKey (_id).
      */
-    async findByPrKey(prKey: string): Promise<SandboxLeaseModel | null> {
-        return this.leaseModel.findOne({ _id: prKey });
+    async findByPrKey(prKey: string): Promise<SandboxLeaseLookup | null> {
+        return this.leaseModel
+            .findOne({ _id: prKey })
+            .select('_id state sandboxId')
+            .lean<SandboxLeaseLookup>()
+            .exec();
     }
 
     /**
-     * Find all leases past their expiry date. Used by the reaper regardless
-     * of leaseCount — crashed-worker leases stay at leaseCount > 0 forever.
+     * Find a bounded batch of leases past their expiry date, plus any lease
+     * already stuck in the transient DELETING state. Used by the reaper
+     * regardless of leaseCount — crashed-worker leases stay at leaseCount > 0
+     * forever, and cleanup/delete crashes leave DELETING docs behind.
      *
      * Read-only: projection keeps the response narrow and `.lean()` skips
      * Mongoose hydration since the reaper only reads the values, never
@@ -154,37 +168,122 @@ export class SandboxLeaseRepository {
      */
     async findExpired(
         now: Date,
+        limit?: number,
     ): Promise<Pick<SandboxLeaseModel, '_id' | 'sandboxId' | 'state'>[]> {
-        return this.leaseModel
-            .find({ expiresAt: { $lt: now } })
+        const query = this.leaseModel
+            .find({
+                $or: [{ expiresAt: { $lt: now } }, { state: 'DELETING' }],
+            })
+            .sort({ expiresAt: 1 })
             .select('_id sandboxId state')
             .lean();
+
+        if (limit !== undefined) {
+            query.limit(limit);
+        }
+
+        return query;
     }
 
     /**
-     * Delete a lease document by prKey. Called by invalidate() after soft-drain
-     * and by the reaper after killing the E2B sandbox.
+     * Delete a lease document by prKey. Used when the caller has already made
+     * the lease non-reusable (for example invalidation, expired reaper cleanup,
+     * or stale remote reconnect recovery). Normal local release/idle cleanup
+     * uses deleteIfNoActiveLeases() instead.
      */
     async delete(prKey: string): Promise<void> {
         await this.leaseModel.deleteOne({ _id: prKey });
     }
 
     /**
-     * Atomically set the `killAt` timestamp on a lease document. Used by
-     * release() to schedule an idle-kill that any worker (in a multi-worker
-     * deployment) can pick up via findReadyToKill().
+     * Move an idle lease into a transient deleting state only when no active
+     * leases remain. Local cleanup removes the worker-local directory first
+     * and deletes the Mongo doc only after that succeeds, so failed rm attempts
+     * can be retried by the expired reaper. E2B idle-kill uses the same state
+     * to block warm reuse while the remote sandbox is being killed.
+     */
+    async markDeletingIfNoActiveLeases(prKey: string): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
+            {
+                _id: prKey,
+                leaseCount: { $lte: 0 },
+            },
+            {
+                $set: { state: 'DELETING' },
+                $unset: { killAt: '' },
+            },
+        );
+
+        return result.matchedCount > 0;
+    }
+
+    /**
+     * Move an expired lease into a transient deleting state only if no acquire
+     * has renewed it since the reaper read the expired batch. Already-DELETING
+     * docs are matched regardless of expiresAt so the reaper can recover from a
+     * crash between cleanup and final delete. Unlike
+     * markDeletingIfNoActiveLeases(), this intentionally allows leaseCount > 0:
+     * those are the crashed-worker or over-TTL leases the expired reaper exists
+     * to clean.
+     */
+    async markExpiredDeletingIfNotRenewed(
+        prKey: string,
+        expiredBefore: Date,
+    ): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
+            {
+                _id: prKey,
+                $or: [
+                    { expiresAt: { $lt: expiredBefore } },
+                    { state: 'DELETING' },
+                ],
+            },
+            {
+                $set: { state: 'DELETING' },
+                $unset: { killAt: '' },
+            },
+        );
+
+        return result.matchedCount > 0;
+    }
+
+    /**
+     * Delete a lease only when no active leases remain.
+     *
+     * Used after local sandbox directory cleanup. The lease count can be
+     * incremented by a concurrent acquire after release()/idle-kill observes
+     * leaseCount <= 0, so the final document delete must re-check the counter
+     * atomically to avoid deleting a lease another caller just joined.
+     */
+    async deleteIfNoActiveLeases(prKey: string): Promise<boolean> {
+        const result = await this.leaseModel.deleteOne({
+            _id: prKey,
+            leaseCount: { $lte: 0 },
+        });
+
+        return result.deletedCount > 0;
+    }
+
+    /**
+     * Atomically set the `killAt` timestamp on a lease document only when
+     * no active leases remain. Used by release() to schedule an idle-kill
+     * that any worker (in a multi-worker deployment) can pick up via
+     * findReadyToKill().
      *
      * Only sets killAt when the lease has a real sandboxId — there's no
      * point scheduling a kill for a NullSandbox or a CREATING-only lease.
      */
-    async setKillAt(prKey: string, killAt: Date): Promise<void> {
-        await this.leaseModel.updateOne(
+    async setKillAt(prKey: string, killAt: Date): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
             {
                 _id: prKey,
+                leaseCount: { $lte: 0 },
                 sandboxId: { $exists: true, $ne: '' },
             },
             { $set: { killAt } },
         );
+
+        return result.modifiedCount > 0;
     }
 
     /**

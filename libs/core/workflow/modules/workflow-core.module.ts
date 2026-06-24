@@ -22,6 +22,7 @@ import { JOB_STATUS_SERVICE_TOKEN } from '../domain/contracts/job-status.service
 import { WORKFLOW_JOB_REPOSITORY_TOKEN } from '../domain/contracts/workflow-job.repository.contract';
 import { OUTBOX_MESSAGE_REPOSITORY_TOKEN } from '../domain/contracts/outbox-message.repository.contract';
 import { INBOX_MESSAGE_REPOSITORY_TOKEN } from '../domain/contracts/inbox-message.repository.contract';
+import { DISTRIBUTED_LOCK_SERVICE_TOKEN } from '../domain/contracts/distributed-lock.service.contract';
 
 const coreProviders = [
     // Repositories
@@ -53,6 +54,10 @@ const coreProviders = [
 
     // Distributed Lock
     DistributedLockService,
+    {
+        provide: DISTRIBUTED_LOCK_SERVICE_TOKEN,
+        useExisting: DistributedLockService,
+    },
 ];
 
 @Global()
