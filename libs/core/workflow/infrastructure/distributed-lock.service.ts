@@ -1,12 +1,16 @@
 import { createLogger } from '@kodus/flow';
 import { Injectable } from '@nestjs/common';
 import { DataSource, QueryRunner } from 'typeorm';
+import {
+    IDistributedLock,
+    IDistributedLockService,
+} from '../domain/contracts/distributed-lock.service.contract';
 
 export interface DistributedLockOptions {
     ttl?: number; // Time to live in ms (optional, for auto-release)
 }
 
-export class DistributedLock {
+export class DistributedLock implements IDistributedLock {
     private released = false;
     private ttlTimer?: NodeJS.Timeout;
 
@@ -92,7 +96,7 @@ export class DistributedLock {
 }
 
 @Injectable()
-export class DistributedLockService {
+export class DistributedLockService implements IDistributedLockService {
     private readonly logger = createLogger(DistributedLockService.name);
 
     constructor(private readonly dataSource: DataSource) {}

@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { shSingleQuote } from '../shell-quote';
 
-export const KODUS_GRAPH_VERSION = '0.2.19';
+export const KODUS_GRAPH_VERSION: string = '0.2.19';
 
 export const KODUS_GRAPH_TIMEOUTS = {
     install: 120_000,
@@ -97,7 +97,7 @@ export class KodusGraphCli {
         const result = await sandbox.run(
             [
                 BUN_PATH_PREFIX,
-                `cd ${sandbox.repoDir}`,
+                `cd ${shSingleQuote(sandbox.repoDir)}`,
                 `mkdir -p ${shSingleQuote(outDir)}`,
                 cmd,
             ].join(' && '),
@@ -133,7 +133,7 @@ export class KodusGraphCli {
         const result = await sandbox.run(
             [
                 BUN_PATH_PREFIX,
-                `cd ${sandbox.repoDir}`,
+                `cd ${shSingleQuote(sandbox.repoDir)}`,
                 `mkdir -p ${shSingleQuote(outDir)}`,
                 `kodus-graph parse --files ${filesArg} --repo-dir ${shSingleQuote(repoDir)} --out ${shSingleQuote(outPath)}`,
             ].join(' && '),
@@ -174,7 +174,7 @@ export class KodusGraphCli {
         const result = await sandbox.run(
             [
                 BUN_PATH_PREFIX,
-                `cd ${sandbox.repoDir}`,
+                `cd ${shSingleQuote(sandbox.repoDir)}`,
                 `mkdir -p ${shSingleQuote(outDir)}`,
                 cmd,
             ].join(' && '),

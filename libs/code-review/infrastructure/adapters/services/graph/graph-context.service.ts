@@ -298,7 +298,7 @@ export class GraphContextService {
 
             const extractResult = await sandbox.run(
                 [
-                    `cd ${sandbox.repoDir}`,
+                    `cd ${shSingleQuote(sandbox.repoDir)}`,
                     `rm -rf ${BASE_FILES_DIR} && mkdir -p ${BASE_FILES_DIR}`,
                     // `${f%/*}` is POSIX parameter expansion — it strips the
                     // last `/...` from the path without spawning a subshell.
@@ -444,9 +444,12 @@ export class GraphContextService {
         }
         const diffContent = patches.join('\n');
         const diffPath = `${sandbox.repoDir}/${GRAPH_DIR}/pr.diff`;
-        await sandbox.run(`mkdir -p ${sandbox.repoDir}/${GRAPH_DIR}`, {
-            timeoutMs: 5_000,
-        });
+        await sandbox.run(
+            `mkdir -p ${shSingleQuote(`${sandbox.repoDir}/${GRAPH_DIR}`)}`,
+            {
+                timeoutMs: 5_000,
+            },
+        );
         await sandbox.writeFile(diffPath, diffContent);
         this.logger.log({
             message: `[KODUS-GRAPH] Diff written to sandbox: ${diffContent.length} chars, ${patches.length} files`,

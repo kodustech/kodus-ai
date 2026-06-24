@@ -196,7 +196,7 @@ describe('GraphIndexerService', () => {
                 cmd.includes('kodus-graph parse --all'),
             );
             const parseCmd = runCmd(customSandbox, parseIdx);
-            expect(parseCmd).toContain('cd /workspace/my-repo');
+            expect(parseCmd).toContain("cd '/workspace/my-repo'");
             expect(parseCmd).not.toContain('/home/user/repo');
 
             const readFilePath = customSandbox.readFile.mock
@@ -436,7 +436,7 @@ describe('GraphIndexerService', () => {
                 cmd.includes('kodus-graph parse --files'),
             );
             const parseCmd = runCmd(customSandbox, parseIdx);
-            expect(parseCmd).toContain('cd /workspace/project');
+            expect(parseCmd).toContain("cd '/workspace/project'");
         });
     });
 });

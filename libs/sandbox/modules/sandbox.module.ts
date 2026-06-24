@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 
 import { SANDBOX_PROVIDER_TOKEN } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { SANDBOX_LEASE_MANAGER_TOKEN } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
+import { SANDBOX_LEASE_REPOSITORY_TOKEN } from '@libs/sandbox/domain/contracts/sandbox-lease.repository.contract';
 import { E2BSandboxService } from '@libs/sandbox/infrastructure/providers/e2b-sandbox.service';
 import { LocalSandboxService } from '@libs/sandbox/infrastructure/providers/local-sandbox.service';
 import { NullSandboxProvider } from '@libs/sandbox/infrastructure/providers/null-sandbox.service';
@@ -51,7 +52,10 @@ import { SandboxLeaseReaperService } from '@libs/sandbox/infrastructure/services
             },
             inject: [ConfigService],
         },
-        SandboxLeaseRepository,
+        {
+            provide: SANDBOX_LEASE_REPOSITORY_TOKEN,
+            useClass: SandboxLeaseRepository,
+        },
         {
             provide: SANDBOX_LEASE_MANAGER_TOKEN,
             useClass: SandboxLeaseManager,
