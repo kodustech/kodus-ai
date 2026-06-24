@@ -43,8 +43,9 @@ export interface SandboxInstance {
     /**
      * Stable identifier the lease manager persists on the lease doc so a
      * second consumer can warm-resume by reconnecting via the provider.
-     * For e2b this is the E2B sandboxId; for local it is a generated id;
-     * for null it is the empty string (marker for "no real sandbox").
+     * For e2b this is the E2B sandboxId; for local it is the worker-local
+     * temp directory path; for null it is the empty string (marker for
+     * "no real sandbox").
      */
     sandboxId: string;
     /** Base branch fetched in the sandbox (e.g. "main"). Allows tools to run git diff origin/${baseBranch}...HEAD */
@@ -52,11 +53,18 @@ export interface SandboxInstance {
     /** Absolute path to the repo root inside the sandbox */
     repoDir: string;
     /** Run a shell command inside the sandbox */
-    run(command: string, opts?: { timeoutMs?: number }): Promise<SandboxRunResult>;
+    run(
+        command: string,
+        opts?: { timeoutMs?: number },
+    ): Promise<SandboxRunResult>;
     /** Read a file from the sandbox filesystem */
     readFile(path: string, opts?: { timeoutMs?: number }): Promise<string>;
     /** Write a file to the sandbox filesystem */
-    writeFile(path: string, content: string, opts?: { timeoutMs?: number }): Promise<void>;
+    writeFile(
+        path: string,
+        content: string,
+        opts?: { timeoutMs?: number },
+    ): Promise<void>;
 }
 
 export interface ISandboxProvider {
@@ -67,6 +75,14 @@ export interface ISandboxProvider {
     createSandboxWithRepo(
         params: CreateSandboxParams,
     ): Promise<SandboxInstance>;
+
+    /**
+     * Reconnect to a previously-created sandbox by sandboxId.
+     *
+     * Providers that cannot reconnect may omit this method; the lease manager
+     * treats a missing reconnect as a stale lease and cold-starts instead.
+     */
+    connectToExistingSandbox?(sandboxId: string): Promise<SandboxInstance>;
 }
 
 export const SANDBOX_PROVIDER_TOKEN = Symbol('SANDBOX_PROVIDER_TOKEN');

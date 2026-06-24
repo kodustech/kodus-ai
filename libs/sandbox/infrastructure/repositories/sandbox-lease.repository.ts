@@ -3,6 +3,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 
 import { SandboxLeaseModel } from './schemas/sandbox-lease.model';
+import {
+    ISandboxLeaseRepository,
+    SandboxLeaseLookup,
+} from '@libs/sandbox/domain/contracts/sandbox-lease.repository.contract';
 
 /**
  * Decompose a prKey ("{orgId}:{repoId}:{prNumber}") into its parts.
@@ -49,7 +53,7 @@ function decomposePrKey(prKey: string): {
 }
 
 @Injectable()
-export class SandboxLeaseRepository {
+export class SandboxLeaseRepository implements ISandboxLeaseRepository {
     constructor(
         @InjectModel(SandboxLeaseModel.name)
         private readonly leaseModel: Model<SandboxLeaseModel>,
@@ -140,8 +144,12 @@ export class SandboxLeaseRepository {
     /**
      * Find a lease document by its prKey (_id).
      */
-    async findByPrKey(prKey: string): Promise<SandboxLeaseModel | null> {
-        return this.leaseModel.findOne({ _id: prKey });
+    async findByPrKey(prKey: string): Promise<SandboxLeaseLookup | null> {
+        return this.leaseModel
+            .findOne({ _id: prKey })
+            .select('_id state sandboxId')
+            .lean<SandboxLeaseLookup>()
+            .exec();
     }
 
     /**
@@ -170,21 +178,42 @@ export class SandboxLeaseRepository {
     }
 
     /**
-     * Atomically set the `killAt` timestamp on a lease document. Used by
-     * release() to schedule an idle-kill that any worker (in a multi-worker
-     * deployment) can pick up via findReadyToKill().
+     * Delete a lease only when no active leases remain.
+     *
+     * Used by local sandbox release before deleting the worker-local temp
+     * directory. The lease count can be incremented by a concurrent acquire
+     * after release() decrements it, so the delete must re-check the counter
+     * atomically to avoid removing a directory that another caller just joined.
+     */
+    async deleteIfNoActiveLeases(prKey: string): Promise<boolean> {
+        const result = await this.leaseModel.deleteOne({
+            _id: prKey,
+            leaseCount: { $lte: 0 },
+        });
+
+        return result.deletedCount > 0;
+    }
+
+    /**
+     * Atomically set the `killAt` timestamp on a lease document only when
+     * no active leases remain. Used by release() to schedule an idle-kill
+     * that any worker (in a multi-worker deployment) can pick up via
+     * findReadyToKill().
      *
      * Only sets killAt when the lease has a real sandboxId — there's no
      * point scheduling a kill for a NullSandbox or a CREATING-only lease.
      */
-    async setKillAt(prKey: string, killAt: Date): Promise<void> {
-        await this.leaseModel.updateOne(
+    async setKillAt(prKey: string, killAt: Date): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
             {
                 _id: prKey,
+                leaseCount: { $lte: 0 },
                 sandboxId: { $exists: true, $ne: '' },
             },
             { $set: { killAt } },
         );
+
+        return result.modifiedCount > 0;
     }
 
     /**

@@ -1,21 +1,31 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { createLogger } from '@kodus/flow';
 import { Sandbox } from 'e2b';
 import {
-    DistributedLock,
-    DistributedLockService,
-} from '@libs/core/workflow/infrastructure/distributed-lock.service';
-import { SandboxLeaseRepository } from '@libs/sandbox/infrastructure/repositories/sandbox-lease.repository';
+    DISTRIBUTED_LOCK_SERVICE_TOKEN,
+    IDistributedLock,
+    IDistributedLockService,
+} from '@libs/core/workflow/domain/contracts/distributed-lock.service.contract';
+import {
+    ISandboxLeaseRepository,
+    SANDBOX_LEASE_REPOSITORY_TOKEN,
+} from '@libs/sandbox/domain/contracts/sandbox-lease.repository.contract';
+import {
+    cleanupLocalSandboxDirectory,
+    isLocalSandboxPath,
+} from './local-sandbox-cleanup';
 
 @Injectable()
 export class SandboxLeaseReaperService {
     private readonly logger = createLogger(SandboxLeaseReaperService.name);
 
     constructor(
-        private readonly leaseRepository: SandboxLeaseRepository,
-        private readonly distributedLockService: DistributedLockService,
+        @Inject(SANDBOX_LEASE_REPOSITORY_TOKEN)
+        private readonly leaseRepository: ISandboxLeaseRepository,
+        @Inject(DISTRIBUTED_LOCK_SERVICE_TOKEN)
+        private readonly distributedLockService: IDistributedLockService,
         private readonly configService: ConfigService,
     ) {}
 
@@ -36,6 +46,14 @@ export class SandboxLeaseReaperService {
             await Promise.allSettled(
                 expired.map(async (lease) => {
                     if (
+                        lease.sandboxId &&
+                        isLocalSandboxPath(lease.sandboxId)
+                    ) {
+                        await this.cleanupLocalSandbox(
+                            lease.sandboxId,
+                            '[SANDBOX-REAPER]',
+                        );
+                    } else if (
                         lease.sandboxId &&
                         lease.state !== 'INVALIDATED' &&
                         apiKey
@@ -96,14 +114,42 @@ export class SandboxLeaseReaperService {
         if (!lock) return;
 
         try {
-            const ready = await this.leaseRepository.findReadyToKill(new Date());
+            const ready = await this.leaseRepository.findReadyToKill(
+                new Date(),
+            );
             if (ready.length === 0) return;
 
             const apiKey = this.configService.get<string>('API_E2B_KEY');
 
             await Promise.allSettled(
                 ready.map(async (lease) => {
-                    if (lease.sandboxId && apiKey) {
+                    const deleted =
+                        await this.leaseRepository.deleteIfNoActiveLeases(
+                            lease._id,
+                        );
+                    if (!deleted) {
+                        this.logger.log({
+                            message:
+                                '[SANDBOX-IDLE-KILL] Skipped sandbox because lease was re-acquired',
+                            context: SandboxLeaseReaperService.name,
+                            metadata: {
+                                prKey: lease._id,
+                                sandboxId: lease.sandboxId,
+                                killAt: lease.killAt,
+                            },
+                        });
+                        return;
+                    }
+
+                    if (
+                        lease.sandboxId &&
+                        isLocalSandboxPath(lease.sandboxId)
+                    ) {
+                        await this.cleanupLocalSandbox(
+                            lease.sandboxId,
+                            '[SANDBOX-IDLE-KILL]',
+                        );
+                    } else if (lease.sandboxId && apiKey) {
                         await Sandbox.kill(lease.sandboxId, { apiKey }).catch(
                             (err) => {
                                 this.logger.warn({
@@ -118,8 +164,6 @@ export class SandboxLeaseReaperService {
                             },
                         );
                     }
-
-                    await this.leaseRepository.delete(lease._id);
 
                     this.logger.log({
                         message: '[SANDBOX-IDLE-KILL] Killed idle sandbox',
@@ -143,7 +187,7 @@ export class SandboxLeaseReaperService {
     private async acquireCronLock(
         key: string,
         ttl: number,
-    ): Promise<DistributedLock | null> {
+    ): Promise<IDistributedLock | null> {
         try {
             return await this.distributedLockService.acquire(key, { ttl });
         } catch (error) {
@@ -156,8 +200,26 @@ export class SandboxLeaseReaperService {
         }
     }
 
+    private async cleanupLocalSandbox(
+        sandboxId: string,
+        logPrefix: string,
+    ): Promise<void> {
+        try {
+            await cleanupLocalSandboxDirectory(sandboxId);
+        } catch (err) {
+            this.logger.warn({
+                message: `${logPrefix} Failed to remove local sandbox directory - continuing`,
+                context: SandboxLeaseReaperService.name,
+                metadata: {
+                    sandboxId,
+                    error: String(err),
+                },
+            });
+        }
+    }
+
     private async releaseCronLock(
-        lock: DistributedLock | null,
+        lock: IDistributedLock | null,
         errorMessage: string,
     ): Promise<void> {
         if (!lock) return;
