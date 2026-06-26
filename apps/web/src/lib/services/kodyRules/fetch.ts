@@ -288,12 +288,12 @@ export const discardPendingKodyRules = async (
     return response.data as KodyRule[];
 };
 
-export const convertPendingUpdatesToMemories = async (
+export const convertPendingUpdatesToNew = async (
     teamId: string,
     ruleIds: string[],
 ) => {
     const response = await axiosAuthorized.post<any>(
-        KODY_RULES_PATHS.CONVERT_PENDING_UPDATES_TO_MEMORIES,
+        KODY_RULES_PATHS.CONVERT_PENDING_UPDATES_TO_NEW,
         { teamId, ruleIds },
     );
 

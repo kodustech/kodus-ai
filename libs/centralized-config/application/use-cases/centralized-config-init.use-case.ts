@@ -168,10 +168,10 @@ export class CentralizedConfigInitUseCase {
                 prUrl: pr.prUrl,
             };
         } catch (error) {
-            const message = 'Failed to initialize centralized config';
+            const message = `Failed to initialize centralized config. ${this.describeInitFailure(error)}`;
 
             this.logger.error({
-                message,
+                message: 'Failed to initialize centralized config',
                 context: CentralizedConfigInitUseCase.name,
                 error:
                     error instanceof Error ? error : new Error(String(error)),
@@ -194,6 +194,34 @@ export class CentralizedConfigInitUseCase {
                 message,
             };
         }
+    }
+
+    // Turns a raw provider error into an actionable, user-facing reason so the
+    // failure is understandable from the UI without digging through logs.
+    private describeInitFailure(error: unknown): string {
+        const { status, message } = (error ?? {}) as {
+            status?: number;
+            message?: string;
+        };
+        const detail =
+            typeof message === 'string' && message.trim()
+                ? message.trim()
+                : String(error);
+
+        if (status === 409 || /git repository is empty|is empty/i.test(detail)) {
+            return 'The selected repository is empty. Add an initial commit (for example a README) and try again.';
+        }
+        if (
+            status === 401 ||
+            status === 403 ||
+            /permission|forbidden|not authorized/i.test(detail)
+        ) {
+            return "Kodus doesn't have write access to the repository. Make sure its integration can write repository contents and open pull requests.";
+        }
+        if (status === 404 || /not found/i.test(detail)) {
+            return 'The repository or its default branch could not be found. Confirm the repository still exists and is connected to Kodus.';
+        }
+        return `Reason: ${detail}`;
     }
 
     private async checkIfCentralizedConfigEnabled(

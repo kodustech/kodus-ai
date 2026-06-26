@@ -35,7 +35,7 @@ const CODE_REVIEW_ROUTE_OVERRIDE_PATH_PREFIXES: Record<string, string[]> = {
         // the Kody Rules nav badge show "1" on repos that hadn't actually
         // customised any rule policy, which read as "1 custom rule" to
         // users.
-        "llmGeneratedMemoriesRequireApproval",
+        "kodyKnowledgeApproval",
         "kodyRulesGeneratorEnabled",
     ],
 };

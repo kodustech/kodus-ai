@@ -5,8 +5,8 @@ import { ImportFastKodyRulesDto } from '@libs/kodyRules/dtos/import-fast-kody-ru
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { KodyRuleSeverity } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
 import {
-    KodyRulesOrigin,
     KodyRulesScope,
+    KodyRulesOrigin,
     KodyRulesStatus,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { validateAndScopeIdeRulePath } from '@libs/common/utils/kody-rules/file-patterns';
@@ -81,7 +81,7 @@ export class ImportFastKodyRulesUseCase {
                         KodyRuleSeverity.MEDIUM,
                     scope: rule.scope || KodyRulesScope.FILE,
                     repositoryId: rule.repositoryId,
-                    origin: KodyRulesOrigin.USER,
+                    origin: KodyRulesOrigin.REPO_FILE_SYNC,
                     status: KodyRulesStatus.ACTIVE,
                     examples: Array.isArray(rule.examples) ? rule.examples : [],
                 };
@@ -96,6 +96,9 @@ export class ImportFastKodyRulesUseCase {
                                 (this.request.user as any)?.email ||
                                 'kody@kodus.io',
                         },
+                        undefined,
+                        undefined,
+                        this.request.user,
                     );
 
                 results.push(created);

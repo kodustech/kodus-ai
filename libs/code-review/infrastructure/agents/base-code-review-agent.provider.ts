@@ -81,6 +81,17 @@ const PROMPT_STATIC_OVERHEAD_CHARS = 62_000;
 const PROMPT_STATIC_OVERHEAD_CHARS_COMPACT = 48_000;
 
 /**
+ * Operational cross-file anchoring rule appended to every <Scope> block. Without
+ * it the model anchors cross-file findings on the UNCHANGED symptom file or a
+ * placeholder path, and they get dropped at the @@PATH_MISMATCH@@ filter (the
+ * relevantFile-not-in-changedFiles drop) before reaching Mongo. This keeps the
+ * anchor on the changed trigger line so verify-kept findings survive.
+ */
+const SCOPE_CROSS_FILE_EXTRA = `
+    CROSS-FILE: when the bug spans files, set relevantFile/relevantLinesStart/relevantLinesEnd to the CHANGED line that TRIGGERS it (the modified call, usage, import, or signature) — NOT the unchanged file where the symptom surfaces — and explain the cross-file effect in suggestionContent.
+    NEVER emit a placeholder, guessed, "unknown", or non-diff path for relevantFile. If you cannot anchor the finding to a specific changed line present in this diff, OMIT the finding entirely.`;
+
+/**
  * Low-signal glob patterns dropped from changedFiles only when a large PR
  * is reviewed in non-deep mode. Tests, docs, and pure styles rarely carry
  * the kinds of findings the agent targets, and keeping them in the diff
@@ -1871,6 +1882,23 @@ export abstract class BaseCodeReviewAgentProvider {
         Examples: "Does Rails serializer require ? suffix on include_ methods?", "Does Python dataclass use shared mutable defaults?", "Does Prisma @updatedAt fire with empty data object?"
         Do NOT guess framework behavior — verify it.
 
+    STANCE — review like a senior engineer who treats the change as unproven.
+      Before judging any changed unit, first UNDERSTAND it: what does the surrounding
+      code actually do, and what is this change trying to accomplish (its intent/contract)?
+      Then reason about IMPACT: what does this change ripple into — callers,
+      implementations of a changed interface, shared state, invariants — and does it
+      still hold there?
+      A change being intentional does NOT make it correct. Your job is to PROVE it
+      fulfills its intent everywhere it touches:
+        - When the proof depends on another site (a caller, an implementation, a
+          function it now relies on), use getCallers / grep / readFile to actually
+          inspect that site — do not assume it was updated. A site left on the old
+          contract is a concrete defect.
+        - Apply the failure heuristics below to EACH changed unit — not only the one
+          that caught your eye.
+      Conclude "safe" only after a real attempt to break it came up empty.
+      "It looks correct" is not a verdict; "I traced X and confirmed Y holds" is.
+
     PHASE 2 — CHALLENGE (think adversarially)
 
       For each changed function, ask yourself these questions:
@@ -1886,10 +1914,10 @@ export abstract class BaseCodeReviewAgentProvider {
 
     PHASE 3 — RESPOND
 
-      Write reasoning that shows your adversarial analysis:
-        For each changed function: what you challenged, what you found, why you reported or dismissed it.
-        BAD reasoning: "The code looks correct."
-        GOOD reasoning: "Challenged CreateDevice: what if two requests pass count check simultaneously? Grepped TagDevice(, found caller at impl.go:155. No lock or unique constraint — race condition. Reported."
+      For each finding you report or dismiss, give a one-line certificate:
+        Premise (what the changed code does) → Path (the concrete input/state that makes it fail, or why it cannot) → Verdict (report/dismiss + the evidence you inspected).
+        BAD: "The code looks correct."
+        GOOD: "CreateDevice: Premise — inserts a device after a count check. Path — two concurrent requests pass the check before either writes (caller impl.go:155, no lock or unique constraint). Verdict — race, reported."
 
       Do not stop after finding the first issue — investigate ALL changed code before responding.
       Do not burn steps rereading the same body. If a readFile range overlaps heavily with what you already saw, reread only when a newly discovered symbol or branch creates a new concrete question; otherwise continue with grep, caller/callee tracing, or another changed file.
@@ -1904,7 +1932,7 @@ export abstract class BaseCodeReviewAgentProvider {
   <Scope>
     Root cause must be in lines added or modified by this PR.
     relevantFile/relevantLinesStart/relevantLinesEnd must point to the changed lines.
-    Trace impact through callers — symptom can appear elsewhere, but the cause must be in the diff.
+    Trace impact through callers — symptom can appear elsewhere, but the cause must be in the diff.${SCOPE_CROSS_FILE_EXTRA}
   </Scope>
 
 ${overridesSection}
@@ -2026,18 +2054,13 @@ ${callGraphSection}
   <Task>
     Review this Pull Request for ${taskDescription}.
     For each changed function: grep callers → read context → challenge with adversarial questions.${input.callGraph ? '\n    Use the call graph above as a fast map of production callers/callees, but still verify with tools before reporting.' : ''}
-    Promote a finding only when you can point to a concrete failure path, broken contract, wrong branch behavior, unsafe state transition, or caller/callee incompatibility introduced by the diff.
-    Prefer concrete findings over speculative theories. Dismiss only what you can explain WHY it cannot fail.
+    Promote a finding when the changed code gives you a code-backed suspicion of a defect. You don't need to fully prove the failure — anchor it to a specific changed line and let the verifier filter unsupported claims.
+    Dismiss only what you can explain WHY it cannot fail; when in doubt, report rather than self-censor.
 ${mixedLabelTaskGuidance}
   </Task>
 
   <CoverageContract>
-    ${
-        input.fileTiers
-            ? 'You must readFile EVERY hunk of every CRITICAL file below before finalizing — a file with multiple hunks is only fully covered when each listed line range has been read. Warm files contribute to the 70% total coverage requirement — readFile their hunks if budget allows. Optional files appear with hunk headers only; do not spend steps on them unless a concrete hypothesis points to one.'
-            : 'You must readFile EVERY hunk of every changed file below before finalizing. A file with multiple hunks is only fully covered when each listed line range has been read; reading the first hunk of a multi-hunk file does NOT cover the rest.'
-    }
-    grep, findFile, and listDir help navigation, but they do not count as coverage.
+    Below are the changed hunks. Go DEEP on the ones that can hide a bug — trace callers, read the surrounding logic, challenge each with adversarial questions. SKIP trivial hunks (renames, formatting, comments, config/lockfiles). You do NOT need to read every hunk: fully reasoning about the few suspicious ones beats skimming all of them. Depth of analysis over breadth of reading.
 ${coverageTargets ? `${coverageTargets}\n` : ''}
   </CoverageContract>
 
@@ -2045,18 +2068,15 @@ ${coverageTargets ? `${coverageTargets}\n` : ''}
     - Root cause must be in lines added or modified by this PR.
     - Pre-existing issues: report only if this PR makes them worse or newly reachable.
     - "Looks correct" is not a valid reason to dismiss — explain the specific reason it is safe.
-    - Before finalizing, make sure you have inspected every ${input.fileTiers ? 'CRITICAL' : 'changed'} file listed above.
-    - Before reporting, be able to answer at least one of these: which changed line creates the risk, what concrete failing path follows, which caller/callee assumption is broken, or what observable bad behavior would happen.
-    - Do not promote a finding from a mere possibility. Plausible is not enough. The changed code plus the code you inspected must show a concrete failure path and a concrete wrong outcome.
-    - Do not report generic resource exhaustion, shell injection, bypass, or performance theories unless the modified code directly creates or worsens that path.
-    - Clear local defects in the diff should still be reported immediately. Cross-file claims require at least one confirming reference from a caller, callee, test, or nearby state transition.
+    - Before finalizing, make sure you went DEEP on the suspicious hunks — skipping trivial ones is fine.
+    - Reporting threshold (high-recall): report any defect the changed code makes you suspect, as long as you (1) anchor it to a specific changed line and (2) name the kind of failure — wrong output, crash, broken contract, wrong target or branch, lost side effect, or broken caller/callee assumption. You do NOT need to prove the exact triggering input or rule out every safe explanation; a later verifier filters unsupported claims. Only pure speculation with no anchor in the changed code is out.
+    - Resource-exhaustion, injection, bypass, or performance concerns: report them when the changed code makes you suspect them — anchor to a changed line and let the verifier filter; do not pre-suppress by class.
+    - Clear local defects in the diff should still be reported immediately. Cross-file claims are welcome — anchor to a changed line and name the other site to check; the verifier confirms.
     - Before every readFile call, identify the exact unanswered question that this read will answer.
     - Do not reread the same or highly overlapping range just to gain confidence. Confidence-seeking rereads are a mistake.
     - Treat redundant readFile calls as a mistake. Only reread overlapping lines if a newly discovered symbol, caller/callee, or branch creates a new concrete question that the previous read did not answer.
-    - Do NOT report generic efficiency concerns (O(N), N+1, redundant calls, missing pagination, missing timeouts) as bugs. Report them only when the changed code creates a concrete, material slowdown or resource blowup, and then label them as performance.
-    - Do NOT report missing defensive measures (missing CSRF, missing rate limiting, missing input validation) unless you can demonstrate a specific exploit path in the changed code.
-    - Every finding must pass this test: "Can I name the exact input or state that triggers the failure, and the exact wrong behavior, wrong output, or crash that results?" If not, do not report it.
-    - Before reporting, ask what would make the behavior intentional or safe. If the code you inspected does not let you reject that safe explanation, do not report the finding.
+    - Performance concerns (O(N), N+1, redundant calls, missing pagination/timeouts): report them when the changed code makes you suspect a real slowdown — label as performance and let the verifier filter; do not pre-suppress by class.
+    - Missing defensive measures (CSRF, rate limiting, input validation): report them when the changed code plausibly exposes the gap — anchor to a changed line and let the verifier judge exploitability; do not pre-suppress by class.
     - Concrete findings include build-time and contract failures too. If the diff introduces a signature mismatch, wrong delegate call, impossible method call, or dropped required side effect, you may report it even without a runtime trace.
     - For wrappers, middleware, providers, caches, and adapters, verify both behavior and wiring: the changed code may be wrong because it calls the wrong target, preserves the wrong cached semantics, or silently stops propagating tracing/logging/metrics/auth state.
     - For security flows, challenge any value that became static, shared, or reused across requests/users when it should be per-request, per-session, or per-principal.
@@ -2213,7 +2233,7 @@ ${coverageTargets ?? ''}</CoverageContract>
 
   <Scope>
     Root cause must be in lines added or modified by this change.
-    relevantFile/relevantLinesStart/relevantLinesEnd must point to the changed lines.
+    relevantFile/relevantLinesStart/relevantLinesEnd must point to the changed lines.${SCOPE_CROSS_FILE_EXTRA}
   </Scope>
 
 ${overridesSection}

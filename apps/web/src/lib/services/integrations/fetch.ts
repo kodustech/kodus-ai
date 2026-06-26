@@ -23,6 +23,25 @@ export const cloneIntegration = async (
     }
 };
 
+export const checkIssuesProviderSupported = async ({
+    teamId,
+}: {
+    teamId: string;
+}) => {
+    try {
+        const response = await axiosAuthorized.fetcher<boolean>(
+            INTEGRATION.ISSUES_SUPPORTED,
+            {
+                params: { teamId },
+            },
+        );
+
+        return response.data;
+    } catch (error: any) {
+        return { error: error.response?.status || "Erro desconhecido" };
+    }
+};
+
 export const checkHasConnectionByPlatform = async ({
     platform,
     category,

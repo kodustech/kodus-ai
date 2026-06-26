@@ -9,7 +9,9 @@ import { AuthorizationService } from '@libs/identity/infrastructure/adapters/ser
 import {
     IKodyRule,
     KodyRulesStatus,
+    KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { buildKodyRuleCentralizedMutationRequest } from '@libs/centralized-config/utils/kody-rules-centralized-pr.builder';
 import { Inject } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
@@ -100,13 +102,14 @@ export class ChangeStatusKodyRulesUseCase {
                 userEmail: this.request.user?.email || 'kody@kodus.io',
             };
 
+            const centralizedEnabled = Boolean(
+                await this.centralizedConfigPrService.getCentralizedRepositoryIfEnabled(
+                    organizationAndTeamData,
+                ),
+            );
+
             const shouldUseCentralizedDelete =
-                status === KodyRulesStatus.DELETED &&
-                Boolean(
-                    await this.centralizedConfigPrService.getCentralizedRepositoryIfEnabled(
-                        organizationAndTeamData,
-                    ),
-                );
+                status === KodyRulesStatus.DELETED && centralizedEnabled;
 
             for (const rule of targetRules) {
                 let result:
@@ -116,7 +119,14 @@ export class ChangeStatusKodyRulesUseCase {
                     | boolean
                     | null = null;
 
-                if (status === KodyRulesStatus.ACTIVE) {
+                if (
+                    status === KodyRulesStatus.ACTIVE ||
+                    status === KodyRulesStatus.PAUSED
+                ) {
+                    // Route through the centralized-aware upsert: when
+                    // centralized config is on, this re-emits the rule file
+                    // (paused → `enabled: false`) as a PR change instead of
+                    // writing the status straight to the DB.
                     result = await this.createOrUpdateKodyRulesUseCase.execute(
                         {
                             ...(rule as any),
@@ -148,6 +158,21 @@ export class ChangeStatusKodyRulesUseCase {
                         );
                     }
                 } else {
+                    // Rejecting a pending item that was proposed into the
+                    // centralized PR (it has a centralizedConfig path) must
+                    // withdraw that proposal — otherwise the file lingers in
+                    // the rolling PR and the rule reappears on merge.
+                    if (
+                        status === KodyRulesStatus.REJECTED &&
+                        centralizedEnabled &&
+                        rule.centralizedConfig?.path
+                    ) {
+                        await this.withdrawCentralizedProposal(
+                            organizationAndTeamData,
+                            rule,
+                        );
+                    }
+
                     result = await this.kodyRulesService.createOrUpdate(
                         organizationAndTeamData,
                         {
@@ -188,6 +213,30 @@ export class ChangeStatusKodyRulesUseCase {
             });
             throw error;
         }
+    }
+
+    private async withdrawCentralizedProposal(
+        organizationAndTeamData: { organizationId: string; teamId?: string },
+        rule: Partial<IKodyRule>,
+    ): Promise<void> {
+        const groupFolderName =
+            await this.centralizedConfigPrService.resolveDirectoryGroupFolderName(
+                organizationAndTeamData,
+                rule.repositoryId,
+                rule.directoryId,
+            );
+
+        await this.centralizedConfigPrService.createMutationPullRequestIfEnabled(
+            buildKodyRuleCentralizedMutationRequest({
+                centralizedConfigPrService: this.centralizedConfigPrService,
+                organizationAndTeamData,
+                repositoryId: rule.repositoryId,
+                groupFolderName: groupFolderName ?? undefined,
+                ruleContent: rule,
+                ruleType: (rule.type as KodyRulesType) || KodyRulesType.STANDARD,
+                operation: 'delete',
+            }),
+        );
     }
 
     private isCentralizedPrMetadata(

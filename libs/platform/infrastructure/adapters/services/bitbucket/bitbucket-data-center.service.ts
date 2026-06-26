@@ -43,6 +43,16 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
+import {
+    EMPTY_REPO_SEED_COMMIT_MESSAGE,
+    EMPTY_REPO_SEED_CONTENT,
+    EMPTY_REPO_SEED_PATH,
+} from '../code-management-defaults.constants';
+import {
+    CodeManagementIssue,
+    GetIssueParams,
+    ListIssuesParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
 
 @Injectable()
 export class BitbucketDataCenterService implements Omit<
@@ -83,6 +93,28 @@ export class BitbucketDataCenterService implements Omit<
         private readonly configService: ConfigService,
         private readonly mcpManagerService?: MCPManagerService,
     ) {}
+
+    // Bitbucket Data Center / Server has no built-in issue tracker (issues are a
+    // Bitbucket Cloud-only feature; Server users track work in Jira). These
+    // satisfy the contract for the routing wrapper and return empty so the
+    // generic issues MCP degrades gracefully on Server.
+    async listIssues(_params: ListIssuesParams): Promise<CodeManagementIssue[]> {
+        this.logger.warn({
+            message:
+                'listIssues called on Bitbucket Data Center, which has no issue tracker',
+            context: BitbucketDataCenterService.name,
+        });
+        return [];
+    }
+
+    async getIssue(_params: GetIssueParams): Promise<CodeManagementIssue | null> {
+        this.logger.warn({
+            message:
+                'getIssue called on Bitbucket Data Center, which has no issue tracker',
+            context: BitbucketDataCenterService.name,
+        });
+        return null;
+    }
 
     /**
      * Helper to create a pre-configured Axios instance for Bitbucket Data Center
@@ -1366,6 +1398,56 @@ export class BitbucketDataCenterService implements Omit<
         }
     }
 
+    // Seeds an empty repository with an initial commit so the base branch
+    // exists for the branch + PR flow. A no-op when the branch already exists.
+    private async ensureBaseBranchExists(params: {
+        axiosClient: AxiosInstance;
+        projectKey: string;
+        repoSlug: string;
+        baseBranch: string;
+    }): Promise<void> {
+        const { axiosClient, projectKey, repoSlug, baseBranch } = params;
+
+        try {
+            const res = await axiosClient.get(
+                `/projects/${projectKey}/repos/${repoSlug}/branches`,
+                { params: { filterText: baseBranch, limit: 100 } },
+            );
+            const branches = res.data?.values ?? [];
+            const exists = branches.some(
+                (b: any) =>
+                    b?.displayId === baseBranch ||
+                    b?.id === `refs/heads/${baseBranch}`,
+            );
+            if (exists) {
+                return;
+            }
+        } catch (error) {
+            // Listing branches on a commit-less repo can 404; fall through to
+            // seeding the initial commit.
+        }
+
+        // A PUT to /browse without a `sourceCommitId` creates the first commit
+        // (and the branch) on an empty repository.
+        const form = new FormData();
+        form.append('branch', baseBranch);
+        form.append('message', EMPTY_REPO_SEED_COMMIT_MESSAGE);
+        form.append('content', EMPTY_REPO_SEED_CONTENT);
+
+        await axiosClient.put(
+            `/projects/${projectKey}/repos/${repoSlug}/browse/${EMPTY_REPO_SEED_PATH}`,
+            form,
+            { headers: { 'Content-Type': 'multipart/form-data' } },
+        );
+
+        this.logger.log({
+            message:
+                'Seeded empty Bitbucket Data Center repository with an initial commit for centralized config',
+            context: BitbucketDataCenterService.name,
+            metadata: { repoSlug, baseBranch },
+        });
+    }
+
     async createPullRequestWithFiles(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string };
@@ -1415,6 +1497,16 @@ export class BitbucketDataCenterService implements Omit<
             const resolvedSourceBranch =
                 sourceBranch || `kody-auto-${Date.now()}`;
             const resolvedTargetBranch = targetBranch || 'master';
+
+            // An empty repository has no base branch yet, so branch creation
+            // and the PR below fail. Seed an initial commit so the base branch
+            // exists. No-op when the branch is already there.
+            await this.ensureBaseBranchExists({
+                axiosClient,
+                projectKey,
+                repoSlug,
+                baseBranch: resolvedTargetBranch,
+            });
 
             // 1. Upload the files sequentially to the source branch
             const uploadSuccess = await this.uploadFiles({
@@ -1471,7 +1563,8 @@ export class BitbucketDataCenterService implements Omit<
                 context: BitbucketDataCenterService.name,
                 error,
             });
-            return null;
+            // Propagate the real cause so the caller can surface it.
+            throw error;
         }
     }
 

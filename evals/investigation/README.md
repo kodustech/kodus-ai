@@ -18,6 +18,70 @@ What is here now:
 - `promptfoo.yaml`: smoke suite config
 - `datasets/smoke.json`: minimal smoke case using replayed `readFile` and `listDir`
 
+## Finder-RECALL eval (`promptfoo-recall.yaml`)
+
+The base suite above only checks **tool-use behavior** (did the agent call the right
+tools). That can pass while the finder misses real bugs. The recall suite scores what
+actually matters: **does the finder's output name the golden bugs?**
+
+It runs the live `generalist` agent loop over benchmark-grounded cases with
+deterministic tool replay (no sandbox / droplet / GitHub), then a Sonnet judge matches
+the agent's findings against each PR's golden bugs. Per PR it reports:
+
+- **recall** — goldens covered by ≥1 finding (did we catch the real bugs?)
+- **precision** — findings that hit ≥1 golden (is what we post real, not noise?)
+- **F1**
+- **fair-recall** — recall with *replay artifacts* removed from the denominator. A
+  missed golden is an artifact if its code wasn't in the corpus the finder saw (the
+  replay never gave it the file), so it's not a real recognition miss.
+- **loop-fidelity** — % of the agent's tool calls the replay could serve. Low
+  fidelity = the agent explored beyond the recording and reflected on empty results →
+  that PR's number is unreliable, discard it.
+
+What this eval validates: changes to **how the finder/verify judge the code they
+already see** (prompt tweaks, sink checklists, few-shot, verify tuning, model, thinking
+effort). What it does NOT: exploration/navigation tool changes (replay can't serve novel
+exploration — loop-fidelity flags it), the downstream pipeline (cap/dedup/anchoring/
+delivery), or executable proof (needs a real sandbox).
+
+Files: `recall-assertion.js` (judge + recall/precision/fairness/fidelity),
+`recall-judge.js` (Sonnet matcher, same algo as `scripts/benchmark/scorecard.ts`),
+`recall-tests.js` (builds cases from the per-PR datasets), `promptfoo-recall.yaml`.
+
+Run (ALWAYS set `PROMPTFOO_DISABLE_TEMPLATING=1` — case diffs contain `#{}`/`{{}}` that
+nunjucks otherwise fails to render):
+
+```bash
+# one PR per repo (cheap smoke)
+env -u ANTHROPIC_API_KEY -u BYOK_ANTHROPIC_API_KEY \
+  API_GOOGLE_AI_API_KEY=$BYOK_GOOGLE_API_KEY \
+  PROMPTFOO_DISABLE_TEMPLATING=1 \
+  promptfoo eval -c promptfoo-recall.yaml --no-cache
+
+# every PR, a specific model
+env -u ANTHROPIC_API_KEY -u BYOK_ANTHROPIC_API_KEY \
+  API_GOOGLE_AI_API_KEY=$BYOK_GOOGLE_API_KEY \
+  PROMPTFOO_DISABLE_TEMPLATING=1 RECALL_ALL=1 RECALL_MODEL=gemini-3.5-flash \
+  promptfoo eval -c promptfoo-recall.yaml --no-cache --output /tmp/recall.json
+```
+
+Scope/model env: `RECALL_ALL=1` (all PRs) or `RECALL_CASES=id1,id2` (subset);
+`RECALL_MODEL=<id>` overrides the model from this one config.
+
+### Execution-based replays (`extract-replay-from-trace.js`)
+
+The per-PR datasets are built from **real finder executions**, not a fabricated diff
+dump. `extract-replay-from-trace.js` maps each benchmark PR to its Langfuse finder trace
+by changed-file overlap, then injects the cross-file files the finder actually read (with
+full content from the repo, so ranges/greps flex). It also audits, per PR, whether the
+golden files were read (fairness). Run after regenerating base skeletons with
+`extract-benchmark-case.js`:
+
+```bash
+node extract-replay-from-trace.js --env verify-gemini \
+  --from 2026-06-22T21:00:00Z --to 2026-06-23T00:30:00Z --write
+```
+
 What belongs here next:
 - `datasets/`: real cases derived from benchmark traces
 - `fixtures/`: replayed `readFile`, `grep`, `checkTypes`, and later `searchDocs` outputs

@@ -70,6 +70,11 @@ import {
 } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
 import {
+    CodeManagementIssue,
+    GetIssueParams,
+    ListIssuesParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
+import {
     PullRequest,
     PullRequestAuthor,
     PullRequestCodeReviewTime,
@@ -83,6 +88,10 @@ import {
     buildDefaultSourceBranchName,
     DEFAULT_COMMIT_MESSAGE,
     DEFAULT_PR_TITLE,
+    EMPTY_REPO_DEFAULT_BRANCH,
+    EMPTY_REPO_SEED_COMMIT_MESSAGE,
+    EMPTY_REPO_SEED_CONTENT,
+    EMPTY_REPO_SEED_PATH,
 } from './code-management-defaults.constants';
 
 @Injectable()
@@ -300,6 +309,97 @@ export class GitlabService implements Omit<
         });
     }
 
+    async listIssues(
+        params: ListIssuesParams,
+    ): Promise<CodeManagementIssue[]> {
+        const { organizationAndTeamData, repository, filters = {} } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        const gitlabAPI = this.instanceGitlabApi(authDetail);
+        const projectId = `${repository.owner}/${repository.name}`;
+
+        const stateMap = { open: 'opened', closed: 'closed' } as const;
+
+        const issues = await gitlabAPI.Issues.all({
+            projectId,
+            state:
+                filters.state && filters.state !== 'all'
+                    ? stateMap[filters.state]
+                    : undefined,
+            labels: filters.labels?.length
+                ? filters.labels.join(',')
+                : undefined,
+            assigneeUsername: filters.assignee
+                ? [filters.assignee]
+                : undefined,
+            updatedAfter: filters.since,
+            page: filters.page,
+            perPage: Math.min(Math.max(1, filters.perPage ?? 30), 100),
+        });
+
+        return issues.map((issue) => this.mapGitlabIssue(issue));
+    }
+
+    async getIssue(
+        params: GetIssueParams,
+    ): Promise<CodeManagementIssue | null> {
+        const { organizationAndTeamData, repository, issueNumber } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return null;
+        }
+
+        const gitlabAPI = this.instanceGitlabApi(authDetail);
+        const projectId = `${repository.owner}/${repository.name}`;
+
+        try {
+            const issue = await gitlabAPI.Issues.show(issueNumber, {
+                projectId,
+            });
+            return issue ? this.mapGitlabIssue(issue) : null;
+        } catch (error) {
+            if (
+                (error as { cause?: { response?: { status?: number } } })?.cause
+                    ?.response?.status === 404
+            ) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
+    private mapGitlabIssue(issue: any): CodeManagementIssue {
+        return {
+            id: String(issue.id),
+            number: issue.iid,
+            title: issue.title,
+            body: issue.description ?? null,
+            state: issue.state === 'closed' ? 'closed' : 'open',
+            url: issue.web_url,
+            labels: Array.isArray(issue.labels) ? issue.labels : [],
+            assignees: (issue.assignees ?? [])
+                .map((assignee: any) => assignee?.username)
+                .filter((username: unknown): username is string =>
+                    Boolean(username),
+                ),
+            author: issue.author
+                ? {
+                      username: issue.author.username,
+                      id: String(issue.author.id),
+                  }
+                : null,
+            createdAt: issue.created_at,
+            updatedAt: issue.updated_at,
+            closedAt: issue.closed_at ?? null,
+            platform: PlatformType.GITLAB,
+        };
+    }
+
     private normalizeGitlabHost(host?: string): string | undefined {
         if (!host?.trim()) {
             return undefined;
@@ -402,7 +502,8 @@ export class GitlabService implements Omit<
                 (await this.getDefaultBranch({
                     organizationAndTeamData,
                     repository,
-                }));
+                })) ||
+                EMPTY_REPO_DEFAULT_BRANCH;
             const resolvedBaseBranch = baseBranch || resolvedTargetBranch;
 
             const gitlabAuthDetail = await this.getAuthDetails(
@@ -414,6 +515,16 @@ export class GitlabService implements Omit<
             }
 
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
+
+            // An empty project has no default-branch ref yet, so branch
+            // creation and the MR below fail. Seed an initial commit so the
+            // base branch exists. No-op when the branch is already there.
+            await this.ensureBaseBranchExists({
+                gitlabAPI,
+                repositoryId: repository.id,
+                baseBranch: resolvedBaseBranch,
+                author,
+            });
 
             const uploadResult = await this.uploadFiles({
                 organizationAndTeamData,
@@ -454,7 +565,8 @@ export class GitlabService implements Omit<
                 error,
                 metadata: params,
             });
-            return null;
+            // Propagate the real cause so the caller can surface it.
+            throw error;
         }
     }
 
@@ -627,6 +739,55 @@ export class GitlabService implements Omit<
 
             throw error;
         }
+    }
+
+    // Seeds an empty project with an initial commit so the base branch exists
+    // for the branch + MR flow. A no-op when the branch already exists.
+    private async ensureBaseBranchExists(params: {
+        gitlabAPI: any;
+        repositoryId: string;
+        baseBranch: string;
+        author?: { name: string; email?: string };
+    }): Promise<void> {
+        const { gitlabAPI, repositoryId, baseBranch, author } = params;
+
+        const exists = await this.checkGitlabBranchExists(
+            gitlabAPI,
+            repositoryId,
+            baseBranch,
+        );
+        if (exists) {
+            return;
+        }
+
+        // On a commit-less project, GitLab's Commits API creates the target
+        // branch as the initial commit when no `startBranch` is given.
+        await gitlabAPI.Commits.create(
+            repositoryId,
+            baseBranch,
+            EMPTY_REPO_SEED_COMMIT_MESSAGE,
+            [
+                {
+                    action: 'create',
+                    filePath: EMPTY_REPO_SEED_PATH,
+                    content: EMPTY_REPO_SEED_CONTENT,
+                    encoding: 'text',
+                },
+            ],
+            author?.name
+                ? {
+                      authorName: author.name,
+                      authorEmail: author.email || 'kody@kodus.io',
+                  }
+                : {},
+        );
+
+        this.logger.log({
+            message:
+                'Seeded empty GitLab project with an initial commit for centralized config',
+            context: GitlabService.name,
+            metadata: { repositoryId, baseBranch },
+        });
     }
 
     private async checkGitlabFileExists(

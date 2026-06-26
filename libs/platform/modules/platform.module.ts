@@ -97,6 +97,7 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
     ],
     exports: [
         PlatformCoreModule,
+        GithubModule,
         ...CodeManagementUseCases,
         GetConnectionsUseCase,
         GetOrganizationLanguageUseCase,

@@ -2,7 +2,7 @@ import { createLogger } from '@kodus/flow';
 import { PlatformType } from '@libs/core/domain/enums';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Sandbox } from 'e2b';
+import { CommandExitError, Sandbox } from 'e2b';
 
 import {
     CreateSandboxParams,
@@ -634,6 +634,33 @@ export class E2BSandboxService implements ISandboxProvider {
     }
 
     private buildRemoteCommands(sandbox: Sandbox): RemoteCommands {
+        // E2B's `commands.run` THROWS a CommandExitError on any non-zero exit.
+        // That is wrong for the agent's read-only tools: ripgrep exits 1 on
+        // "no matches" (a legitimate, informative result — "no caller found"
+        // is evidence, not a failure), `cat`/`sed` exit 1 on a missing file,
+        // etc. If we let the throw propagate, the model receives a generic
+        // "Error" and treats the tool as broken, triggering retry cascades and
+        // discarding valid negative evidence. This helper normalizes the throw
+        // back into a CommandResult so each tool can inspect exitCode/stderr and
+        // decide for itself what is an error vs. an empty-but-valid result.
+        const runCmd = async (
+            cmd: string,
+            opts?: { timeoutMs?: number },
+        ): Promise<{ stdout: string; stderr: string; exitCode: number }> => {
+            try {
+                return await sandbox.commands.run(cmd, opts);
+            } catch (err) {
+                if (err instanceof CommandExitError) {
+                    return {
+                        stdout: err.stdout,
+                        stderr: err.stderr,
+                        exitCode: err.exitCode,
+                    };
+                }
+                throw err;
+            }
+        };
+
         return {
             grep: async (
                 pattern: string,
@@ -655,14 +682,20 @@ export class E2BSandboxService implements ISandboxProvider {
                 // because `resolvePath` already validated that `path` is safe (no .. or /).
                 const safeRelativePath = path.replace(/'/g, "'\\''");
 
-                const result = await sandbox.commands.run(
+                const result = await runCmd(
                     `cd ${REPO_DIR} && rg --no-heading -n '${escapedPattern}' '${safeRelativePath}'${globArg}`,
                     { timeoutMs: TIMEOUTS.COMMAND_LONG_MS },
                 );
                 // rg returns exit code 1 for "no matches" (not an error)
-                // but stderr may contain actual errors like "permission denied"
-                if (!result.stdout && result.stderr && result.exitCode !== 1) {
+                // but stderr may contain actual errors like "permission denied".
+                // exitCode >= 2 is a real ripgrep error; exit 1 with empty
+                // stdout means simply "no matches", which we surface as such so
+                // the model reads it as valid evidence rather than a failure.
+                if (!result.stdout && result.exitCode >= 2 && result.stderr) {
                     return `Error: ${result.stderr}`;
+                }
+                if (!result.stdout) {
+                    return 'No matches found.';
                 }
                 return result.stdout;
             },
@@ -681,7 +714,7 @@ export class E2BSandboxService implements ISandboxProvider {
                         ? `cat '${escapedPath}'`
                         : // sed is 1-indexed; a start address of 0 is invalid in GNU sed.
                           `sed -n '${start < 1 ? 1 : start},${end}p' '${escapedPath}'`;
-                const result = await sandbox.commands.run(cmd, {
+                const result = await runCmd(cmd, {
                     timeoutMs: TIMEOUTS.COMMAND_SHORT_MS,
                 });
                 // Debug: log when read returns empty
@@ -691,9 +724,13 @@ export class E2BSandboxService implements ISandboxProvider {
                         context: E2BSandboxService.name,
                     });
                 }
-                // Return stderr if stdout is empty (e.g. "No such file or directory")
+                // THROW (not return a string) when the read failed — empty
+                // stdout + stderr means "No such file or directory" / permission
+                // denied. Returning the error as if it were file content
+                // bypassed the readFile tool's catch block (which runs the
+                // near-miss path suggestion) and caused retry cascades.
                 if (!result.stdout && result.stderr) {
-                    return `Error: ${result.stderr}`;
+                    throw new Error(result.stderr.trim());
                 }
                 return result.stdout;
             },
@@ -704,7 +741,7 @@ export class E2BSandboxService implements ISandboxProvider {
             ): Promise<string> => {
                 const fullPath = this.resolvePath(path);
                 const escapedPath = fullPath.replace(/'/g, "'\\''");
-                const result = await sandbox.commands.run(
+                const result = await runCmd(
                     `find '${escapedPath}' -maxdepth ${maxDepth} -type f`,
                     { timeoutMs: TIMEOUTS.COMMAND_LONG_MS },
                 );
@@ -714,10 +751,13 @@ export class E2BSandboxService implements ISandboxProvider {
             exec: async (
                 command: string,
             ): Promise<{ stdout: string; exitCode: number }> => {
-                const result = await sandbox.commands.run(
+                const result = await runCmd(
                     `cd ${REPO_DIR} && ${command}`,
                     { timeoutMs: TIMEOUTS.COMMAND_LONG_MS },
                 );
+                // With runCmd, a non-zero exit no longer throws: the model now
+                // receives the real exitCode plus stderr, so the {stdout,exitCode}
+                // contract is finally honest (it used to always report 0).
                 return {
                     stdout: result.stdout + (result.stderr || ''),
                     exitCode: result.exitCode,

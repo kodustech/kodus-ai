@@ -5,8 +5,37 @@
         <link>https://docs.kodus.io/changelog</link>
         <description>Latest Kodus updates and improvements.</description>
         <language>en</language>
-        <lastBuildDate>Mon, 15 Jun 2026 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Mon, 22 Jun 2026 00:00:00 GMT</lastBuildDate>
         <atom:link href="https://docs.kodus.io/changelog.xml" rel="self" type="application/rss+xml" />
+        <item>
+            <title>June 22, 2026 - Kodus updates</title>
+            <link>https://docs.kodus.io/changelog</link>
+            <guid isPermaLink="false">kodus-changelog-2026-06-22</guid>
+            <pubDate>Mon, 22 Jun 2026 00:00:00 GMT</pubDate>
+            <description><![CDATA[
+                <h2>What's new</h2>
+                <h3>Forgejo support is now on par with GitHub &amp; GitLab</h3>
+                <p>Review comments, commit statuses, force-push detection, and webhook coverage now work consistently for Forgejo repositories. If you self-host with Forgejo, Kody behaves just like on any other major platform.</p>
+
+                <h2>Improvements</h2>
+                <h3>Faster PR closing for large repos</h3>
+                <p>Eliminated duplicate API calls when syncing Kody Rules from changed files. PRs with many files now close noticeably faster.</p>
+
+                <h3>Cleaner settings UI</h3>
+                <p>Platform settings that don't apply to your current Git provider, such as GitHub-specific options when you're on GitLab, are now hidden automatically. Less clutter, fewer misconfigurations.</p>
+
+                <h2>Bug fixes</h2>
+                <ul>
+                    <li>Reconnecting a Git provider after disconnecting: previously, disconnecting a provider left stale integration configs behind, causing reconnects to fail. Now stale rows are properly cleaned up.</li>
+                    <li>Kody conversation replies with empty responses: resolved an issue where Kody occasionally replied with blank content in PR comment threads when using Claude Sonnet.</li>
+                    <li>NaN deduplication indices: added three-layer protection against NaN values appearing in suggestion deduplication indices, preventing rare but confusing duplicate suggestions.</li>
+                    <li>Forgejo prompt field always empty: the formatPromptForLLM function was reading a non-existent field on Forgejo PRs, causing the prompt section to be blank. Now it reads the correct field.</li>
+                    <li>Self-hosted AST graph reliability: the kodus-graph CLI was installed but not available to the runtime user in self-hosted worker images. Fixed PATH and install order so graph indexing works out of the box.</li>
+                    <li>Orphaned agent trace records: prevented a race condition in chunked review mode that could leave orphaned IN_PROGRESS trace records in the database.</li>
+                    <li>Platform settings not scoped to Git tool: settings incompatible with your current Git provider were still visible. Now they're properly filtered based on the connected tool.</li>
+                </ul>
+            ]]></description>
+        </item>
         <item>
             <title>June 15, 2026 - Kodus updates</title>
             <link>https://docs.kodus.io/changelog</link>

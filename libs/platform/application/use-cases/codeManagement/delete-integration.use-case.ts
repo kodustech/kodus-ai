@@ -4,7 +4,6 @@ import { REQUEST } from '@nestjs/core';
 
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
-import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { ActionType } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
 import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
 import { AUTH_INTEGRATION_SERVICE_TOKEN } from '@libs/integrations/domain/authIntegrations/contracts/auth-integration.service.contracts';
@@ -14,7 +13,7 @@ import { AuthIntegrationService } from '@libs/integrations/infrastructure/adapte
 import { IntegrationService } from '@libs/integrations/infrastructure/adapters/services/integration.service';
 import { IntegrationConfigService } from '@libs/integrations/infrastructure/adapters/services/integrationConfig.service';
 import {
-    KODUS_MCP_GITHUB_ISSUES_INTEGRATION_ID,
+    KODUS_ISSUES_INTEGRATION_ID,
     MCPManagerService,
 } from '@libs/mcp-server/services/mcp-manager.service';
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
@@ -60,24 +59,14 @@ export class DeleteIntegrationUseCase {
             return;
         }
 
-        if (integration.platform === PlatformType.GITHUB) {
-            const organizationGithubIntegrations =
-                await this.integrationService.find({
-                    organization: { uuid: params.organizationId },
-                    integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
-                    platform: PlatformType.GITHUB,
-                    status: true,
-                });
-
-            if ((organizationGithubIntegrations ?? []).length === 1) {
-                await this.mcpManagerService.deleteConnectionByIntegrationId(
-                    {
-                        organizationId: params.organizationId,
-                    },
-                    KODUS_MCP_GITHUB_ISSUES_INTEGRATION_ID,
-                );
-            }
-        }
+        // The generic issues MCP reuses the team's code-management integration,
+        // so removing/switching the provider (e.g. GitHub -> Azure) must clear
+        // the issues connection — otherwise it points at the wrong (or an
+        // unsupported) host until re-installed.
+        await this.mcpManagerService.deleteConnectionByIntegrationId(
+            { organizationId: params.organizationId },
+            KODUS_ISSUES_INTEGRATION_ID,
+        );
 
         try {
             await this.codeManagementService.deleteWebhook({

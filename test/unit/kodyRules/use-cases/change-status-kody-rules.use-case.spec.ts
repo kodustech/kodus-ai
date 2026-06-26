@@ -39,6 +39,10 @@ describe('ChangeStatusKodyRulesUseCase', () => {
 
     const centralizedConfigPrServiceMock = {
         getCentralizedRepositoryIfEnabled: jest.fn(),
+        resolveDirectoryGroupFolderName: jest.fn().mockResolvedValue(null),
+        createMutationPullRequestIfEnabled: jest
+            .fn()
+            .mockResolvedValue({ mode: 'centralized-pr' }),
     };
 
     const findRulesUseCaseMock = {
@@ -149,6 +153,46 @@ describe('ChangeStatusKodyRulesUseCase', () => {
         });
     });
 
+    it('routes PAUSED status through centralized-aware createOrUpdate use case', async () => {
+        findRulesUseCaseMock.execute.mockResolvedValue([
+            {
+                uuid: 'rule-1',
+                repositoryId: 'repo-1',
+                title: 'Rule 1',
+                rule: 'Do X',
+                status: KodyRulesStatus.ACTIVE,
+            },
+        ]);
+
+        createOrUpdateUseCaseMock.execute.mockResolvedValue({
+            mode: 'centralized-pr',
+            prUrl: 'https://example.com/pr/3',
+        });
+
+        const result = await useCase.execute({
+            ruleIds: ['rule-1'],
+            status: KodyRulesStatus.PAUSED,
+        });
+
+        expect(createOrUpdateUseCaseMock.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                uuid: 'rule-1',
+                status: KodyRulesStatus.PAUSED,
+            }),
+            'org-1',
+            { userId: 'user-1', userEmail: 'dev@kodus.io' },
+            true,
+            undefined,
+        );
+        // The bug being fixed: pause must NOT write straight to the DB,
+        // bypassing centralized config.
+        expect(kodyRulesServiceMock.createOrUpdate).not.toHaveBeenCalled();
+        expect(result).toEqual({
+            mode: 'centralized-pr',
+            prUrl: 'https://example.com/pr/3',
+        });
+    });
+
     it('keeps workflow statuses as DB-only updates', async () => {
         findRulesUseCaseMock.execute.mockResolvedValue([
             {
@@ -185,6 +229,73 @@ describe('ChangeStatusKodyRulesUseCase', () => {
                 status: KodyRulesStatus.REJECTED,
             },
         ]);
+    });
+
+    it('withdraws the centralized proposal when rejecting a pending item that has one', async () => {
+        findRulesUseCaseMock.execute.mockResolvedValue([
+            {
+                uuid: 'rule-1',
+                repositoryId: 'repo-1',
+                title: 'Rule 1',
+                rule: 'Do X',
+                status: KodyRulesStatus.PENDING,
+                centralizedConfig: { path: 'repo-1/.kody-rules/review/x.yml' },
+            },
+        ]);
+        centralizedConfigPrServiceMock.getCentralizedRepositoryIfEnabled.mockResolvedValue(
+            { id: 'central-repo-id', name: 'central-repo' },
+        );
+        kodyRulesServiceMock.createOrUpdate.mockResolvedValue({
+            uuid: 'rule-1',
+            status: KodyRulesStatus.REJECTED,
+        } as any);
+
+        await useCase.execute({
+            ruleIds: ['rule-1'],
+            status: KodyRulesStatus.REJECTED,
+        });
+
+        // The proposed file is withdrawn from the rolling PR...
+        expect(
+            centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled,
+        ).toHaveBeenCalledTimes(1);
+        // ...and the DB row is still marked REJECTED.
+        expect(kodyRulesServiceMock.createOrUpdate).toHaveBeenCalledWith(
+            { organizationId: 'org-1', teamId: undefined },
+            expect.objectContaining({
+                uuid: 'rule-1',
+                status: KodyRulesStatus.REJECTED,
+            }),
+            expect.any(Object),
+        );
+    });
+
+    it('does not touch the centralized PR when rejecting an item without a proposal', async () => {
+        findRulesUseCaseMock.execute.mockResolvedValue([
+            {
+                uuid: 'rule-1',
+                repositoryId: 'repo-1',
+                title: 'Rule 1',
+                rule: 'Do X',
+                status: KodyRulesStatus.PENDING,
+            },
+        ]);
+        centralizedConfigPrServiceMock.getCentralizedRepositoryIfEnabled.mockResolvedValue(
+            { id: 'central-repo-id', name: 'central-repo' },
+        );
+        kodyRulesServiceMock.createOrUpdate.mockResolvedValue({
+            uuid: 'rule-1',
+            status: KodyRulesStatus.REJECTED,
+        } as any);
+
+        await useCase.execute({
+            ruleIds: ['rule-1'],
+            status: KodyRulesStatus.REJECTED,
+        });
+
+        expect(
+            centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled,
+        ).not.toHaveBeenCalled();
     });
 
     it('routes DELETED status through centralized delete flow when centralized config is enabled', async () => {

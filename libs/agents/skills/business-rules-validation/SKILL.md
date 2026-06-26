@@ -41,7 +41,7 @@ metadata:
         required-mcps:
             - category: task-management
               label: Task Management
-              examples: Jira, Linear, Notion, ClickUp, Github Issues
+              examples: Jira, Atlassian Rovo, Linear, Notion, ClickUp, Github Issues
 ---
 
 # Business Rules Gap Analysis

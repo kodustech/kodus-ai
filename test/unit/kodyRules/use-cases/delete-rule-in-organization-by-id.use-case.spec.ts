@@ -27,8 +27,10 @@ describe('DeleteRuleInOrganizationByIdKodyRulesUseCase', () => {
     let centralizedConfigPrServiceMock: {
         createMutationPullRequestIfEnabled: jest.Mock;
         resolveRepositoryFolderName: jest.Mock;
+        resolveDirectoryGroupFolderName: jest.Mock;
         buildCentralizedPath: jest.Mock;
         sanitizeFileName: jest.Mock;
+        buildRuleFileName: jest.Mock;
     };
 
     beforeEach(async () => {
@@ -50,6 +52,10 @@ describe('DeleteRuleInOrganizationByIdKodyRulesUseCase', () => {
                         : `${repositoryFolder}/${relativePath}`,
                 ),
             sanitizeFileName: jest.fn().mockReturnValue('no-console-logs'),
+            buildRuleFileName: jest.fn(
+                (_t?: string, u?: string) =>
+                    `no-console-logs${u ? `-${String(u).slice(0, 8)}` : ''}.yml`,
+            ),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -221,14 +227,19 @@ describe('DeleteRuleInOrganizationByIdKodyRulesUseCase — repo scope', () => {
                     provide: CentralizedConfigPrService,
                     useValue: centralizedConfigPrServiceMock,
                 },
-                {
-                    provide: REQUEST,
-                    useValue: user ? { user } : undefined,
-                },
             ],
         }).compile();
 
-        return module.get(DeleteRuleInOrganizationByIdKodyRulesUseCase);
+        const useCase = module.get(
+            DeleteRuleInOrganizationByIdKodyRulesUseCase,
+        );
+
+        // Use-cases no longer inject REQUEST — the controller forwards the
+        // authenticated user. Wrap execute() to pass the test user through.
+        return {
+            execute: (ruleId: string, actor?: any) =>
+                useCase.execute(ruleId, actor, (user ?? undefined) as any),
+        };
     };
 
     const ruleIn = (repositoryId: string) => ({

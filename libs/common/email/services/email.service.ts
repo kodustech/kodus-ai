@@ -16,10 +16,6 @@ import ForgotPasswordEmail, {
 } from '../templates/forgot-password';
 import InviteEmail, { inviteEmailMeta } from '../templates/invite';
 import KodyRulesEmail, { kodyRulesEmailMeta } from '../templates/kody-rules';
-import WeeklyRecapEmail, {
-    type WeeklyRecapEmailProps,
-    weeklyRecapEmailMeta,
-} from '../templates/weekly-recap';
 import { ResendClientProvider } from './resend.client';
 
 type SendInput = {
@@ -178,38 +174,6 @@ export class EmailService {
         return results;
     }
 
-    async sendWeeklyRecap(
-        recipient: { email: string; name: string },
-        props: Omit<WeeklyRecapEmailProps, 'devName'>,
-        logger?: SimpleLogger,
-    ) {
-        try {
-            const meta = weeklyRecapEmailMeta({
-                kodySuggestions: props.kodySuggestions,
-                criticalIssues: props.criticalIssues,
-            });
-            return await this.send({
-                ...meta,
-                to: recipient.email,
-                react: WeeklyRecapEmail({
-                    ...props,
-                    devName: recipient.name,
-                }),
-            });
-        } catch (error) {
-            this.logFailure(
-                logger,
-                `Error in sendWeeklyRecap for ${recipient.email}`,
-                error,
-                {
-                    email: recipient.email,
-                    company: props.company,
-                    startDate: props.startDate,
-                    endDate: props.endDate,
-                },
-            );
-        }
-    }
 
     async createContact(
         input: { email: string; name?: string },

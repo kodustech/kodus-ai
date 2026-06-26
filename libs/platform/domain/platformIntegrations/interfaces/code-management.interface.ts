@@ -8,6 +8,11 @@ import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationCo
 
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { GitCloneParams } from '../types/codeManagement/gitCloneParams.type';
+import {
+    CodeManagementIssue,
+    GetIssueParams,
+    ListIssuesParams,
+} from '../types/codeManagement/issues.type';
 import { Organization } from '../types/codeManagement/organization.type';
 import {
     PullRequest,
@@ -42,6 +47,22 @@ export type CodeManagementConnectionStatus = {
 };
 
 export interface ICodeManagementService extends ICommonPlatformIntegrationService {
+    /**
+     * Read the host's native issue tracker. Optional: implemented per provider
+     * as the generic issues MCP rolls out (GitHub first). The facade throws a
+     * clear error for platforms that don't implement it yet.
+     */
+    listIssues?(params: ListIssuesParams): Promise<CodeManagementIssue[]>;
+    getIssue?(params: GetIssueParams): Promise<CodeManagementIssue | null>;
+    /**
+     * Optional refinement of issue support beyond "the method exists" — e.g.
+     * Bitbucket implements `listIssues` but Data Center/Server has no issue
+     * tracker, so it returns false there.
+     */
+    supportsIssues?(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<boolean>;
+
     findRepositoryByName(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         name: string;

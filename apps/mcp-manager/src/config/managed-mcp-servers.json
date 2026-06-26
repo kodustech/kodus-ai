@@ -6,9 +6,7 @@
         "protocol": "http",
         "logoUrl": "https://avatars.githubusercontent.com/u/74989412?s=48&v=4",
         "headers": {},
-        "auth": {
-            "type": "none"
-        }
+        "authMethods": [{ "id": "none", "type": "none", "default": true }]
     },
     {
         "id": "kodus-docs-default",
@@ -17,20 +15,16 @@
         "protocol": "http",
         "logoUrl": "https://kodus.io/wp-content/uploads/2025/11/Kodus-AI-Logo-6.png",
         "headers": {},
-        "auth": {
-            "type": "none"
-        }
+        "authMethods": [{ "id": "none", "type": "none", "default": true }]
     },
     {
-        "id": "kodus-github-issues-default",
-        "name": "Github Issues by Kodus",
-        "baseUrl": "/mcp/github-issues",
+        "id": "kodus-issues-default",
+        "name": "Git Issues",
+        "baseUrl": "/mcp/issues",
         "protocol": "http",
-        "logoUrl": "https://kodus.io/wp-content/uploads/2026/03/github_kodus.png",
+        "logoUrl": "https://kodus.io/wp-content/uploads/2025/11/Kodus-AI-Logo-6.png",
         "headers": {},
-        "auth": {
-            "type": "none"
-        }
+        "authMethods": [{ "id": "none", "type": "none", "default": true }]
     },
     {
         "id": "sentry-default",
@@ -39,10 +33,15 @@
         "protocol": "http",
         "logoUrl": "https://kodus.io/wp-content/uploads/2025/12/sentry-glyph-light-400x367-1.svg",
         "headers": {},
-        "auth": {
-            "type": "oauth2",
-            "dynamicRegistration": true
-        }
+        "authMethods": [
+            {
+                "id": "oauth",
+                "label": "OAuth",
+                "type": "oauth2",
+                "dynamicRegistration": true,
+                "default": true
+            }
+        ]
     },
     {
         "id": "exa-default",
@@ -51,9 +50,7 @@
         "protocol": "http",
         "logoUrl": "https://exa.ai/images/favicon-32x32.png",
         "headers": {},
-        "auth": {
-            "type": "none"
-        }
+        "authMethods": [{ "id": "none", "type": "none", "default": true }]
     },
     {
         "id": "kodus-osv-default",
@@ -62,9 +59,7 @@
         "protocol": "http",
         "logoUrl": "https://kodus.io/wp-content/uploads/2025/11/Kodus-AI-Logo-6.png",
         "headers": {},
-        "auth": {
-            "type": "none"
-        }
+        "authMethods": [{ "id": "none", "type": "none", "default": true }]
     },
     {
         "id": "linear-default",
@@ -73,10 +68,28 @@
         "protocol": "http",
         "logoUrl": "https://static.linear.app/client/assets/newAppIcon-256x256-full.NvjGn2GI.png",
         "headers": {},
-        "auth": {
-            "type": "oauth2",
-            "dynamicRegistration": true
-        }
+        "authMethods": [
+            {
+                "id": "oauth",
+                "label": "OAuth",
+                "type": "oauth2",
+                "dynamicRegistration": true,
+                "default": true
+            },
+            {
+                "id": "token",
+                "label": "API key",
+                "type": "bearer_token",
+                "userFields": [
+                    {
+                        "name": "apiKey",
+                        "label": "Linear API key",
+                        "required": true,
+                        "secret": true
+                    }
+                ]
+            }
+        ]
     },
     {
         "id": "atlassian-rovo-default",
@@ -85,9 +98,73 @@
         "protocol": "http",
         "logoUrl": "https://avatars.githubusercontent.com/u/21215?s=200&v=4",
         "headers": {},
-        "auth": {
-            "type": "oauth2",
-            "dynamicRegistration": true
-        }
+        "authMethods": [
+            {
+                "id": "oauth",
+                "label": "OAuth",
+                "type": "oauth2",
+                "dynamicRegistration": true,
+                "default": true
+            },
+            {
+                "id": "token",
+                "label": "API token",
+                "type": "basic",
+                "userFields": [
+                    {
+                        "name": "email",
+                        "label": "Atlassian account email",
+                        "required": true
+                    },
+                    {
+                        "name": "apiToken",
+                        "label": "API token",
+                        "required": true,
+                        "secret": true
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "id": "notion-default",
+        "name": "Notion",
+        "baseUrl": "https://mcp.notion.com/mcp",
+        "protocol": "http",
+        "logoUrl": "https://www.notion.so/images/favicon.ico",
+        "headers": {},
+        "authMethods": [
+            {
+                "id": "oauth",
+                "label": "OAuth",
+                "type": "oauth2",
+                "dynamicRegistration": true,
+                "default": true
+            }
+        ]
+    },
+    {
+        "id": "fireflies-default",
+        "name": "Fireflies",
+        "baseUrl": "https://api.fireflies.ai/mcp",
+        "protocol": "http",
+        "logoUrl": "https://fireflies.ai/favicon.ico",
+        "headers": {},
+        "authMethods": [
+            {
+                "id": "token",
+                "label": "API key",
+                "type": "bearer_token",
+                "default": true,
+                "userFields": [
+                    {
+                        "name": "apiKey",
+                        "label": "Fireflies API key",
+                        "required": true,
+                        "secret": true
+                    }
+                ]
+            }
+        ]
     }
 ]

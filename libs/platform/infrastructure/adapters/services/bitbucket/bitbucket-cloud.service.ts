@@ -53,6 +53,11 @@ import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeM
 import { ICodeManagementService } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
 import {
+    CodeManagementIssue,
+    GetIssueParams,
+    ListIssuesParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
+import {
     OneSentenceSummaryItem,
     PullRequest,
     PullRequestAuthor,
@@ -76,6 +81,10 @@ import {
     buildDefaultSourceBranchName,
     DEFAULT_COMMIT_MESSAGE,
     DEFAULT_PR_TITLE,
+    EMPTY_REPO_DEFAULT_BRANCH,
+    EMPTY_REPO_SEED_COMMIT_MESSAGE,
+    EMPTY_REPO_SEED_CONTENT,
+    EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 
 @Injectable()
@@ -201,7 +210,8 @@ export class BitbucketCloudService implements Omit<
                 (await this.getDefaultBranch({
                     organizationAndTeamData,
                     repository,
-                }));
+                })) ||
+                EMPTY_REPO_DEFAULT_BRANCH;
             const resolvedBaseBranch = baseBranch || resolvedTargetBranch;
 
             const bitbucketAuthDetail = await this.getAuthDetails(
@@ -226,6 +236,17 @@ export class BitbucketCloudService implements Omit<
                     'Failed to get workspace from repository',
                 );
             }
+
+            // An empty repository has no default-branch ref yet, so branch
+            // creation and the PR below fail. Seed an initial commit so the
+            // base branch exists. No-op when the branch is already there.
+            await this.ensureBaseBranchExists({
+                bitbucketAPI,
+                workspace,
+                repositoryId: repository.id,
+                baseBranch: resolvedBaseBranch,
+                author,
+            });
 
             const uploadResult = await this.uploadFiles({
                 organizationAndTeamData,
@@ -430,6 +451,55 @@ export class BitbucketCloudService implements Omit<
     }): Promise<boolean> {
         const head = await this.getBitbucketBranchHeadHash(params);
         return Boolean(head);
+    }
+
+    // Seeds an empty repository with an initial commit so the base branch
+    // exists for the branch + PR flow. A no-op when the branch already exists.
+    private async ensureBaseBranchExists(params: {
+        bitbucketAPI: any;
+        workspace: string;
+        repositoryId: string;
+        baseBranch: string;
+        author?: { name: string; email?: string };
+    }): Promise<void> {
+        const { bitbucketAPI, workspace, repositoryId, baseBranch, author } =
+            params;
+
+        const exists = await this.checkBitbucketBranchExists({
+            bitbucketAPI,
+            workspace,
+            repositoryId,
+            branchName: baseBranch,
+        });
+        if (exists) {
+            return;
+        }
+
+        // Committing to /src with a `branch` and no `parents` creates the
+        // first commit on an empty repository.
+        const form = new FormData();
+        form.append('branch', baseBranch);
+        form.append('message', EMPTY_REPO_SEED_COMMIT_MESSAGE);
+        if (author?.name) {
+            form.append(
+                'author',
+                `${author.name} <${author.email || 'kody@kodus.io'}>`,
+            );
+        }
+        form.append(`/${EMPTY_REPO_SEED_PATH}`, EMPTY_REPO_SEED_CONTENT);
+
+        await bitbucketAPI.source.createFileCommit({
+            workspace: `{${workspace}}`,
+            repo_slug: `{${repositoryId}}`,
+            _body: form,
+        });
+
+        this.logger.log({
+            message:
+                'Seeded empty Bitbucket repository with an initial commit for centralized config',
+            context: BitbucketCloudService.name,
+            metadata: { repositoryId, baseBranch },
+        });
     }
 
     private async getBitbucketBranchHeadHash(params: {
@@ -3176,6 +3246,103 @@ export class BitbucketCloudService implements Omit<
             });
             throw error;
         }
+    }
+
+    async listIssues(
+        params: ListIssuesParams,
+    ): Promise<CodeManagementIssue[]> {
+        const { organizationAndTeamData, repository, filters = {} } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        const bitbucketAPI = this.instanceBitbucketApi(authDetail);
+
+        const { data } = await bitbucketAPI.repositories.listIssues({
+            workspace: repository.owner,
+            repo_slug: repository.name,
+            pagelen: Math.min(Math.max(1, filters.perPage ?? 30), 100),
+            ...(filters.page ? { page: String(filters.page) } : {}),
+        });
+
+        let issues = (data?.values ?? []).map((issue) =>
+            this.mapBitbucketIssue(issue),
+        );
+
+        // Bitbucket filters via BBQL; keep state filtering client-side for a
+        // simple, robust mapping.
+        if (filters.state && filters.state !== 'all') {
+            issues = issues.filter((issue) => issue.state === filters.state);
+        }
+
+        return issues;
+    }
+
+    async getIssue(
+        params: GetIssueParams,
+    ): Promise<CodeManagementIssue | null> {
+        const { organizationAndTeamData, repository, issueNumber } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return null;
+        }
+
+        const bitbucketAPI = this.instanceBitbucketApi(authDetail);
+
+        try {
+            const { data } = await bitbucketAPI.repositories.getIssue({
+                workspace: repository.owner,
+                repo_slug: repository.name,
+                issue_id: String(issueNumber),
+            });
+            return data ? this.mapBitbucketIssue(data) : null;
+        } catch (error) {
+            if ((error as { status?: number })?.status === 404) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
+    private mapBitbucketIssue(issue: any): CodeManagementIssue {
+        const closedStates = new Set([
+            'resolved',
+            'closed',
+            'invalid',
+            'duplicate',
+            'wontfix',
+        ]);
+
+        const reporter = issue.reporter;
+        const assignee = issue.assignee;
+
+        return {
+            id: String(issue.id),
+            number: issue.id,
+            title: issue.title,
+            body: issue.content?.raw ?? null,
+            state: closedStates.has(issue.state) ? 'closed' : 'open',
+            url: issue.links?.html?.href ?? '',
+            labels: [],
+            assignees: assignee
+                ? [assignee.nickname ?? assignee.display_name].filter(
+                      (name): name is string => Boolean(name),
+                  )
+                : [],
+            author: reporter
+                ? {
+                      username: reporter.nickname ?? reporter.display_name,
+                      id: reporter.account_id,
+                  }
+                : null,
+            createdAt: issue.created_on,
+            updatedAt: issue.updated_on,
+            closedAt: null,
+            platform: PlatformType.BITBUCKET,
+        };
     }
 
     async getAuthDetails(

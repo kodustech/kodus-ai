@@ -14,14 +14,14 @@ describe("parseFiltersFromParams", () => {
 
     it("parses query, origins, severities and onlyOrphans correctly", () => {
         const params = new URLSearchParams(
-            "q=logging&origins=Auto-sync,Onboard&severities=critical,high&onlyOrphans=1",
+            "q=logging&origins=Auto-sync,Onboarding&severities=critical,high&onlyOrphans=1",
         );
         const result = parseFiltersFromParams(params);
 
         expect(result.query).toBe("logging");
         expect(Array.from(result.listFilters.origins).sort()).toEqual([
             "Auto-sync",
-            "Onboard",
+            "Onboarding",
         ]);
         expect(Array.from(result.listFilters.severities).sort()).toEqual([
             "critical",
@@ -99,7 +99,7 @@ describe("applyFiltersToParams", () => {
 
     it("round-trips parse → apply → parse", () => {
         const params = new URLSearchParams(
-            "q=logging&origins=Onboard&severities=critical,low&onlyOrphans=1",
+            "q=logging&origins=Onboarding&severities=critical,low&onlyOrphans=1",
         );
         const parsed = parseFiltersFromParams(params);
 

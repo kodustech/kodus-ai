@@ -1,7 +1,12 @@
 import { createLogger } from '@kodus/flow';
-import { Inject, Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import pLimit from 'p-limit';
 
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import { requiresKnowledgeApproval } from '@libs/common/utils/kody-rules/knowledge-approval';
 import { with429Retry } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { GenerateKodyRulesDTO } from '@libs/core/domain/dtos/generate-kody-rules.dto';
 
@@ -22,6 +27,7 @@ import {
     INTEGRATION_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import {
+    KodyRulesOrigin,
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
@@ -76,7 +82,40 @@ export class GenerateKodyRulesUseCase {
         private readonly commentAnalysisService: CommentAnalysisService,
         private readonly moduleRef: ModuleRef,
         private readonly sendRulesNotificationUseCase: SendRulesNotificationUseCase,
+        @Inject(forwardRef(() => CODE_BASE_CONFIG_SERVICE_TOKEN))
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
     ) {}
+
+    /**
+     * Whether past-review-generated rules for this repo should land pending
+     * (awaiting approval) per the unified knowledge-approval policy. Defaults
+     * to active (false) when the config can't be resolved.
+     */
+    private async requiresPastReviewApproval(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId: string,
+    ): Promise<boolean> {
+        try {
+            const mergedConfig =
+                await this.codeBaseConfigService.getSimpleConfig(
+                    organizationAndTeamData,
+                    { repositoryId },
+                );
+            return requiresKnowledgeApproval(
+                mergedConfig.kodyKnowledgeApproval,
+                KodyRulesOrigin.PAST_REVIEWS,
+            );
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve kodyKnowledgeApproval for generated rules; defaulting to active',
+                context: GenerateKodyRulesUseCase.name,
+                error: error instanceof Error ? error : new Error(String(error)),
+                metadata: { organizationAndTeamData, repositoryId },
+            });
+            return false;
+        }
+    }
 
     async execute(body: GenerateKodyRulesDTO, organizationId: string) {
         let platformConfig: ParametersEntity<ParametersKey.PLATFORM_CONFIGS>;
@@ -231,16 +270,27 @@ export class GenerateKodyRulesUseCase {
                     continue;
                 }
 
+                // Pending vs active is the unified approval policy's call, per
+                // repo. Default (no approval configured) → active, matching the
+                // historical force-activate; with approval on, rules land in
+                // the Pending area for review.
+                const targetStatus = (await this.requiresPastReviewApproval(
+                    organizationAndTeamData,
+                    repository.id,
+                ))
+                    ? KodyRulesStatus.PENDING
+                    : KodyRulesStatus.ACTIVE;
+
                 for (const rule of rules) {
                     const dto: CreateKodyRuleDto = {
                         type: KodyRulesType.STANDARD,
                         examples: rule.examples,
-                        origin: rule.origin,
+                        origin: KodyRulesOrigin.PAST_REVIEWS,
                         rule: rule.rule,
                         title: rule.title,
                         repositoryId: repository.id,
                         path: '',
-                        status: KodyRulesStatus.PENDING,
+                        status: targetStatus,
                         severity: rule.severity as KodyRuleSeverity,
                     };
 

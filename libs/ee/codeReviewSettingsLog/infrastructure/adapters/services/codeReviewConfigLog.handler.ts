@@ -109,8 +109,8 @@ const PROPERTY_CONFIGS: Record<string, PropertyConfig> = {
     'kodyRulesGeneratorEnabled': {
         actionDescription: 'Kody Rules Generator',
     },
-    'llmGeneratedMemoriesRequireApproval': {
-        actionDescription: 'LLM Generated Memories Require Approval',
+    'kodyKnowledgeApproval.enabled': {
+        actionDescription: 'Kody Knowledge Approval',
     },
     //#endregion
 

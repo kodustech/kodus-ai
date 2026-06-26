@@ -3,6 +3,7 @@ import {
     CustomMCPPlugin,
     CustomMCPProtocolType,
     MCP_CONNECTION_STATUS,
+    MCPAuthMethod,
     PluginAuthScheme,
 } from "./types";
 import { mcpManagerFetch } from "./utils";
@@ -62,6 +63,7 @@ export const getMCPPluginById = ({
         oauthScopes?: string[];
         dynamicRegistration?: boolean;
         active?: boolean;
+        authMethods?: MCPAuthMethod[];
     }>(`/mcp/${provider}/integrations/${id}`);
 
 export const getMCPPluginTools = ({
@@ -298,17 +300,40 @@ export const deleteMCPCustomPlugin = async (id: string) => {
 export const initializeOauthCustomMCPPlugin = async (
     provider: string,
     id: string,
+    authMethod?: string,
 ) => {
     const response = await mcpManagerFetch<{ authUrl: string }>(
         `/mcp/integration/${provider}/oauth/initialize`,
         {
             method: "POST",
-            body: JSON.stringify({ integrationId: id }),
+            body: JSON.stringify({ integrationId: id, authMethod }),
         },
     );
-    console.log("RESPONSEEEEE", response);
 
     return response;
+};
+
+export const connectMCPPluginWithToken = async ({
+    integrationId,
+    authMethod,
+    secret,
+    fields,
+}: {
+    integrationId: string;
+    authMethod?: string;
+    secret: string;
+    fields?: Record<string, string>;
+}) => {
+    return mcpManagerFetch<{
+        id: string;
+        integrationId: string;
+        provider: string;
+        status: MCP_CONNECTION_STATUS;
+        appName: string;
+    }>(`/mcp/integration/kodusmcp/${integrationId}/token`, {
+        method: "POST",
+        body: JSON.stringify({ authMethod, secret, fields }),
+    });
 };
 
 export const finishOauthCustomMCPPluginInstallation = async ({

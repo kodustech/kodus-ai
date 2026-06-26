@@ -72,6 +72,11 @@ import {
 import { IntegrationEntity } from '@libs/integrations/domain/integrations/entities/integration.entity';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { IGithubService } from '@libs/platform/domain/github/contracts/github.service.contract';
+import {
+    CodeManagementIssue,
+    GetIssueParams,
+    ListIssuesParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import {
     CodeManagementConnectionStatus,
@@ -106,6 +111,9 @@ import {
     buildDefaultSourceBranchName,
     DEFAULT_COMMIT_MESSAGE,
     DEFAULT_PR_TITLE,
+    EMPTY_REPO_SEED_COMMIT_MESSAGE,
+    EMPTY_REPO_SEED_CONTENT,
+    EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 
 interface GitHubAuthResponse {
@@ -287,8 +295,52 @@ export class GithubService
         }) as unknown as Octokit;
     }
 
+    private assertGithubAppEnv(): void {
+        const required = [
+            'API_GITHUB_APP_ID',
+            'API_GITHUB_PRIVATE_KEY',
+        ] as const;
+
+        const missing = required.filter(
+            (key) => !this.configService.get<string>(key)?.trim(),
+        );
+
+        if (missing.length > 0) {
+            const message = `GitHub App is not configured. Missing required env var(s): ${missing.join(', ')}. Populate them from your GitHub App settings (https://github.com/settings/apps/<your-app>) and restart the API.`;
+            this.logger.error({
+                message,
+                context: GithubService.name,
+            });
+            throw new BadRequestException(message);
+        }
+    }
+
+    // OAuth web-flow specific check — only relevant when exchanging an
+    // installation code for tokens via authenticateWithCodeOauth.
+    private assertGithubOAuthEnv(): void {
+        const required = [
+            'GLOBAL_GITHUB_CLIENT_ID',
+            'API_GITHUB_CLIENT_SECRET',
+        ] as const;
+
+        const missing = required.filter(
+            (key) => !this.configService.get<string>(key)?.trim(),
+        );
+
+        if (missing.length > 0) {
+            const message = `GitHub OAuth is not configured. Missing required env var(s): ${missing.join(', ')}. Populate them from your GitHub App settings (https://github.com/settings/apps/<your-app>) and restart the API.`;
+            this.logger.error({
+                message,
+                context: GithubService.name,
+            });
+            throw new BadRequestException(message);
+        }
+    }
+
     // Helper functions
     private createOctokitInstance(): Octokit {
+        this.assertGithubAppEnv();
+
         let privateKey = this.configService.get<string>(
             'API_GITHUB_PRIVATE_KEY',
         );
@@ -457,6 +509,7 @@ export class GithubService
         params: any,
     ): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
         try {
+            this.assertGithubOAuthEnv();
             const appOctokit = this.createOctokitInstance();
 
             const installationAuthentication = await appOctokit.auth({
@@ -518,7 +571,10 @@ export class GithubService
                 githubStatus?.installationStatus === InstallationStatus.PENDING
             ) {
                 await this.updateInstallationItems(
-                    { installationStatus: InstallationStatus.SUCCESS },
+                    {
+                        installationStatus: InstallationStatus.SUCCESS,
+                        organizationName: accountLogin,
+                    },
                     params.organizationAndTeamData,
                 );
             }
@@ -528,6 +584,7 @@ export class GithubService
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
         } catch (err) {
+            if (err instanceof BadRequestException) throw err;
             throw new BadRequestException(
                 err.message || 'Error authenticating with OAUTH.',
             );
@@ -726,6 +783,28 @@ export class GithubService
             commitMessage?.trim() || DEFAULT_COMMIT_MESSAGE;
 
         try {
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                organizationAndTeamData,
+            );
+
+            const octokit = await this.instanceOctokit(
+                organizationAndTeamData,
+                githubAuthDetail,
+            );
+
+            const owner = await this.getCorrectOwner(githubAuthDetail, octokit);
+
+            // A freshly created repository has no ref for its default branch
+            // yet, so branch creation and the PR below fail with "Git
+            // Repository is empty". Seed an initial commit first so there is a
+            // base branch to branch from and target.
+            await this.ensureBaseBranchExists({
+                octokit,
+                owner,
+                repo: repository.name,
+                baseBranch: resolvedBaseBranch,
+            });
+
             const uploadResult = await this.uploadFiles({
                 organizationAndTeamData,
                 repository,
@@ -749,19 +828,10 @@ export class GithubService
                         files: files.map((f) => f.path),
                     },
                 });
-                return null;
+                throw new Error(
+                    `Failed to upload files to "${repository.name}" for the pull request.`,
+                );
             }
-
-            const githubAuthDetail = await this.getGithubAuthDetails(
-                organizationAndTeamData,
-            );
-
-            const octokit = await this.instanceOctokit(
-                organizationAndTeamData,
-                githubAuthDetail,
-            );
-
-            const owner = await this.getCorrectOwner(githubAuthDetail, octokit);
 
             const prResponse = await octokit.rest.pulls.create({
                 owner,
@@ -796,7 +866,9 @@ export class GithubService
                     },
                 });
 
-                return null;
+                throw new Error(
+                    `GitHub rejected the pull request creation (status ${prResponse.status}).`,
+                );
             }
         } catch (error) {
             this.logger.error({
@@ -813,7 +885,9 @@ export class GithubService
                 },
             });
 
-            return null;
+            // Propagate the real cause (empty repo, permissions, etc.) so the
+            // caller can surface it instead of a generic "failed" message.
+            throw error;
         }
     }
 
@@ -976,8 +1050,7 @@ export class GithubService
                 const droppedPaths = effectiveTreeItems
                     .filter(
                         (item) =>
-                            item.sha === null &&
-                            !existingPaths.has(item.path),
+                            item.sha === null && !existingPaths.has(item.path),
                     )
                     .map((item) => item.path);
 
@@ -1024,13 +1097,12 @@ export class GithubService
                 });
 
                 effectiveTreeItems = filtered;
-                const { data: retryTree } =
-                    await octokit.rest.git.createTree({
-                        owner,
-                        repo: repository.name,
-                        tree: effectiveTreeItems,
-                        base_tree: parentSha,
-                    });
+                const { data: retryTree } = await octokit.rest.git.createTree({
+                    owner,
+                    repo: repository.name,
+                    tree: effectiveTreeItems,
+                    base_tree: parentSha,
+                });
                 createdTreeSha = retryTree.sha;
             }
 
@@ -1080,6 +1152,67 @@ export class GithubService
 
             return false;
         }
+    }
+
+    // GitHub answers ref/branch reads on a commit-less repository with a 409
+    // "Git Repository is empty" instead of a 404.
+    private isEmptyRepositoryError(error: unknown): boolean {
+        const { status, message } = (error ?? {}) as {
+            status?: number;
+            message?: string;
+        };
+        return (
+            status === 409 &&
+            typeof message === 'string' &&
+            message.toLowerCase().includes('empty')
+        );
+    }
+
+    // Ensures the base branch exists so the branch + PR flow has something to
+    // target. A brand-new repository has no commits and therefore no
+    // default-branch ref; in that case we create an initial commit so it can be
+    // branched from. A no-op when the branch already exists.
+    private async ensureBaseBranchExists(params: {
+        octokit: Octokit;
+        owner: string;
+        repo: string;
+        baseBranch: string;
+    }): Promise<void> {
+        const { octokit, owner, repo, baseBranch } = params;
+
+        try {
+            await octokit.rest.git.getRef({
+                owner,
+                repo,
+                ref: `heads/${baseBranch}`,
+            });
+            return;
+        } catch (error) {
+            const status = (error as { status?: number })?.status;
+            if (status !== 404 && !this.isEmptyRepositoryError(error)) {
+                throw error;
+            }
+        }
+
+        // The Contents API initializes a commit-less repository in a single
+        // call — it creates the file, the initial commit, and the branch. The
+        // low-level git data API (blobs/trees/commits) rejects an empty repo
+        // with "Git Repository is empty".
+        await octokit.rest.repos.createOrUpdateFileContents({
+            owner,
+            repo,
+            path: EMPTY_REPO_SEED_PATH,
+            message: EMPTY_REPO_SEED_COMMIT_MESSAGE,
+            content: Buffer.from(EMPTY_REPO_SEED_CONTENT).toString('base64'),
+            branch: baseBranch,
+        });
+
+        this.logger.log({
+            message:
+                'Seeded empty repository with an initial commit for centralized config',
+            context: GithubService.name,
+            metadata: { repo, baseBranch },
+        });
     }
 
     private isBadObjectStateError(error: unknown): boolean {
@@ -1241,14 +1374,19 @@ export class GithubService
 
             const aliasFields = batch.map((login) => {
                 const alias = `u${aliasCounter++}`;
-                const safeLogin = login.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+                const safeLogin = login
+                    .replace(/\\/g, '\\\\')
+                    .replace(/"/g, '\\"');
                 return `${alias}: user(login: "${safeLogin}") { suspendedAt }`;
             });
 
             const query = `query { ${aliasFields.join('\n')} }`;
 
             try {
-                const response = await octokit.graphql(query) as Record<string, { suspendedAt: string | null } | null>;
+                const response = (await octokit.graphql(query)) as Record<
+                    string,
+                    { suspendedAt: string | null } | null
+                >;
 
                 batch.forEach((login, idx) => {
                     const alias = `u${aliasCounter - batch.length + idx}`;
@@ -1279,7 +1417,9 @@ export class GithubService
 
         if (!members || members.length === 0) return [];
 
-        const octokit = await this.instanceOctokit(params.organizationAndTeamData);
+        const octokit = await this.instanceOctokit(
+            params.organizationAndTeamData,
+        );
         const logins = members.map((user) => user.login);
         const activeMap = await this.getSuspendedStatusBatch(octokit, logins);
 
@@ -2509,6 +2649,103 @@ export class GithubService
         return this.instanceOctokit(organizationAndTeamData);
     }
 
+    async listIssues(
+        params: ListIssuesParams,
+    ): Promise<CodeManagementIssue[]> {
+        const { organizationAndTeamData, repository, filters = {} } = params;
+
+        const page = Math.max(1, filters.page ?? 1);
+        const perPage = Math.min(Math.max(1, filters.perPage ?? 30), 100);
+
+        const octokit = await this.getAuthenticatedOctokit(
+            organizationAndTeamData,
+        );
+
+        const response = await octokit.rest.issues.listForRepo({
+            owner: repository.owner,
+            repo: repository.name,
+            state: filters.state,
+            labels: filters.labels?.join(','),
+            assignee: filters.assignee,
+            since: filters.since,
+            page,
+            per_page: perPage,
+        });
+
+        // GitHub returns PRs in the issues list; keep only real issues.
+        return response.data
+            .filter((item) => !item.pull_request)
+            .map((item) => this.mapGithubIssue(item));
+    }
+
+    async getIssue(
+        params: GetIssueParams,
+    ): Promise<CodeManagementIssue | null> {
+        const { organizationAndTeamData, repository, issueNumber } = params;
+
+        const octokit = await this.getAuthenticatedOctokit(
+            organizationAndTeamData,
+        );
+
+        try {
+            const response = await octokit.rest.issues.get({
+                owner: repository.owner,
+                repo: repository.name,
+                issue_number: issueNumber,
+            });
+
+            if ((response.data as { pull_request?: unknown }).pull_request) {
+                return null;
+            }
+
+            return this.mapGithubIssue(response.data);
+        } catch (error) {
+            if ((error as { status?: number })?.status === 404) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
+    private mapGithubIssue(item: {
+        id: number;
+        number: number;
+        title: string;
+        body?: string | null;
+        state: string;
+        html_url: string;
+        labels?: Array<string | { name?: string }>;
+        assignees?: Array<{ login?: string }>;
+        user?: { login: string; id: number } | null;
+        created_at: string;
+        updated_at: string;
+        closed_at?: string | null;
+    }): CodeManagementIssue {
+        return {
+            id: String(item.id),
+            number: item.number,
+            title: item.title,
+            body: item.body ?? null,
+            state: item.state === 'closed' ? 'closed' : 'open',
+            url: item.html_url,
+            labels: (item.labels ?? [])
+                .map((label) =>
+                    typeof label === 'string' ? label : label?.name,
+                )
+                .filter((name): name is string => Boolean(name)),
+            assignees: (item.assignees ?? [])
+                .map((assignee) => assignee?.login)
+                .filter((login): login is string => Boolean(login)),
+            author: item.user
+                ? { username: item.user.login, id: String(item.user.id) }
+                : null,
+            createdAt: item.created_at,
+            updatedAt: item.updated_at,
+            closedAt: item.closed_at ?? null,
+            platform: PlatformType.GITHUB,
+        };
+    }
+
     private async instanceOctokit(
         organizationAndTeamData: OrganizationAndTeamData,
         authDetails?: GithubAuthDetail,
@@ -3465,9 +3702,8 @@ export class GithubService
             ? `gh:pr-files:${organizationAndTeamData?.organizationId ?? 'no-org'}:${repository?.id ?? repository?.name}:${prNumber}:${headSha}`
             : null;
         if (cacheKey) {
-            const cached = await this.cacheService.getFromCache<any[]>(
-                cacheKey,
-            );
+            const cached =
+                await this.cacheService.getFromCache<any[]>(cacheKey);
             if (cached) return cached;
         }
 
@@ -4330,9 +4566,8 @@ This is an experimental feature that generates committable changes. Review the d
                 ? `gh:contents:${githubAuthDetail?.org}/${repository.name}:${file.sha}:${file.filename}`
                 : undefined;
             if (cacheKey) {
-                const cached = await this.cacheService.getFromCache<any>(
-                    cacheKey,
-                );
+                const cached =
+                    await this.cacheService.getFromCache<any>(cacheKey);
                 if (cached) return cached;
             }
 
@@ -4464,8 +4699,9 @@ This is an experimental feature that generates committable changes. Review the d
         //    up to ~100 aliases but 50 keeps payloads small and limits
         //    blast radius on transient errors)
         if (batchable.length > 0) {
-            const graphqlClient =
-                await this.instanceGraphQL(organizationAndTeamData);
+            const graphqlClient = await this.instanceGraphQL(
+                organizationAndTeamData,
+            );
             const BATCH_SIZE = 50;
 
             for (let i = 0; i < batchable.length; i += BATCH_SIZE) {
@@ -4500,10 +4736,7 @@ This is an experimental feature that generates committable changes. Review the d
                 `;
 
                 try {
-                    const response: any = await graphqlClient(
-                        query,
-                        variables,
-                    );
+                    const response: any = await graphqlClient(query, variables);
                     const repoNode = response?.repository;
 
                     // Temporary instrumentation: log the actual GraphQL
@@ -4516,8 +4749,7 @@ This is an experimental feature that generates committable changes. Review the d
                             message: `[GRAPHQL_BATCH_COST] files=${batch.length} cost=${rl.cost} remaining=${rl.remaining} limit=${rl.limit} resetAt=${rl.resetAt}`,
                             context: GithubService.name,
                             metadata: {
-                                instrumentation:
-                                    'graphql_batch_content_cost',
+                                instrumentation: 'graphql_batch_content_cost',
                                 batchSize: batch.length,
                                 cost: rl.cost,
                                 remaining: rl.remaining,
@@ -4607,14 +4839,12 @@ This is an experimental feature that generates committable changes. Review the d
                             batch.map(({ file }) =>
                                 limit(async () => {
                                     const fallback =
-                                        await this.getRepositoryContentFile(
-                                            {
-                                                organizationAndTeamData,
-                                                repository,
-                                                file,
-                                                pullRequest,
-                                            },
-                                        );
+                                        await this.getRepositoryContentFile({
+                                            organizationAndTeamData,
+                                            repository,
+                                            file,
+                                            pullRequest,
+                                        });
                                     if (fallback)
                                         result.set(file.filename, fallback);
                                 }),
@@ -4666,9 +4896,8 @@ This is an experimental feature that generates committable changes. Review the d
             ? `gh:pr-commits:${organizationAndTeamData?.organizationId ?? 'no-org'}:${repository?.id ?? repository?.name}:${prNumber}:${headSha}`
             : null;
         if (cacheKey) {
-            const cached = await this.cacheService.getFromCache<any[]>(
-                cacheKey,
-            );
+            const cached =
+                await this.cacheService.getFromCache<any[]>(cacheKey);
             if (cached) return cached;
         }
 
@@ -6094,9 +6323,7 @@ This is an experimental feature that generates committable changes. Review the d
         const BATCH_SIZE = 50;
         let graphqlClient: any;
         try {
-            graphqlClient = await this.instanceGraphQL(
-                organizationAndTeamData,
-            );
+            graphqlClient = await this.instanceGraphQL(organizationAndTeamData);
         } catch (err) {
             this.logger.warn({
                 message:

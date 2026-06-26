@@ -28,18 +28,39 @@ describe('EMAIL_TEMPLATE_REGISTRY', () => {
             domain: 'acme.com',
             organizationName: 'Acme',
         },
-        [NotificationEvent.WEEKLY_RECAP]: {
-            // Weekly recap template touches many optional arrays
-            // (topAnalysisTypes, prsMerged, etc.). Provide an empty
-            // shape with the numeric counters the meta needs.
+        [NotificationEvent.ORG_REPORT]: {
             props: {
-                kodySuggestions: 12,
-                criticalIssues: 1,
-                topAnalysisTypes: [],
-                prsMerged: [],
-                topContributors: [],
-                criticalSuggestions: [],
-                kodySuggestionsList: [],
+                recipientName: 'David',
+                company: 'Acme',
+                startDate: '2026-05-01',
+                endDate: '2026-05-31',
+                reviews: 100,
+                reviewsTrend: 'improved',
+                reviewsChangePct: 10,
+                implementationRate: 0.46,
+                implementationRateTrend: 'improved',
+                implementationRatePpChange: 4,
+                suggestionsImplemented: 120,
+                criticalImplemented: 7,
+                prCycleTimeHours: 20,
+                prCycleTimeTrend: 'improved',
+                prCycleTimeChangePct: -5,
+                implementationRateEvolution: [],
+                repoRanking: [],
+                highlights: [],
+                rulesNeedingAttention: [],
+                rulesNeedingAttentionMore: 0,
+                cockpitLink: 'https://app.kodus.io/cockpit',
+            },
+        },
+        [NotificationEvent.REPO_REPORT]: {
+            props: {
+                recipientName: 'Sam',
+                company: 'Acme',
+                startDate: '2026-06-01',
+                endDate: '2026-06-15',
+                sections: [],
+                cockpitLink: 'https://app.kodus.io/cockpit',
             },
         },
         [NotificationEvent.ORG_MEMBER_REMOVED]: {

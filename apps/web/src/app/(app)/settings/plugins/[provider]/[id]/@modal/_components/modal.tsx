@@ -22,7 +22,7 @@ import { MagicModalContext } from "@components/ui/magic-modal";
 import { PopoverTrigger } from "@components/ui/popover";
 import { useToast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
-import { checkHasConnectionByPlatform } from "@services/integrations/fetch";
+import { checkIssuesProviderSupported } from "@services/integrations/fetch";
 import {
     deleteMCPConnection,
     deleteMCPCustomPlugin,
@@ -35,8 +35,9 @@ import {
 } from "@services/mcp-manager/fetch";
 import {
     CUSTOM_MCP_SESSION_STORAGE_KEYS,
-    KODUS_MCP_GITHUB_ISSUES_INTEGRATION_ID,
+    KODUS_ISSUES_INTEGRATION_ID,
 } from "@services/mcp-manager/types";
+import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { EditIcon, PlugIcon, RefreshCwIcon, Trash } from "lucide-react";
@@ -44,6 +45,7 @@ import type { AwaitedReturnType } from "src/core/types";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
+import { AuthMethodConnect } from "./auth-method-connect";
 import { RequiredConfiguration } from "./required-configuration";
 import { SelectTools } from "./select-tools";
 
@@ -94,16 +96,35 @@ export const PluginModal = ({
     const isDefault = plugin.isDefault;
     const canEdit = usePermission(Action.Update, ResourceType.PluginSettings);
     const canDelete = usePermission(Action.Delete, ResourceType.PluginSettings);
-    const requiresGithubIntegration =
-        plugin.id === KODUS_MCP_GITHUB_ISSUES_INTEGRATION_ID;
-    const [hasGithubIntegration, setHasGithubIntegration] = useState<
-        boolean | null
-    >(requiresGithubIntegration ? null : true);
+    const { teamId } = useSelectedTeamId();
+    // The generic issues MCP reuses the team's code-management integration, so
+    // it only works on hosts with a native issue tracker (not Azure Repos or
+    // Bitbucket Data Center). Gate install on backend-confirmed support.
+    const requiresIssuesSupport = plugin.id === KODUS_ISSUES_INTEGRATION_ID;
+    const [isIssuesSupported, setIsIssuesSupported] = useState<boolean | null>(
+        requiresIssuesSupport ? null : true,
+    );
 
     const isCustomOauthUnauthorized =
         plugin.authScheme?.toLowerCase() === "oauth2" &&
         ["custom", "kodusmcp"].includes(plugin.provider) &&
         !plugin.active;
+
+    // Only label "OAuth login" when OAuth is the *only* way to connect — not for
+    // integrations that also accept a token (e.g. Jira/Linear) or token-only ones.
+    const hasNonOauthMethod =
+        plugin.authMethods?.some(
+            (method) => method.type !== "oauth2" && method.type !== "none",
+        ) ?? false;
+    const showsOAuthBadge =
+        plugin.authScheme?.toLowerCase() === "oauth2" && !hasNonOauthMethod;
+
+    // Managed integrations that require auth (OAuth and/or a token) show the
+    // auth-method picker + token form before connecting — covers single-method
+    // (e.g. Fireflies: API key only) and multi-method (e.g. Jira: OAuth or token).
+    const needsAuthSetup =
+        !isConnected &&
+        (plugin.authMethods?.some((method) => method.type !== "none") ?? false);
 
     const [requiredParamsValues, setRequiredParamsValues] = useState<
         Record<string, string>
@@ -128,35 +149,31 @@ export const PluginModal = ({
     useEffect(() => {
         let mounted = true;
 
-        if (!requiresGithubIntegration) {
-            setHasGithubIntegration(true);
+        if (!requiresIssuesSupport || !teamId) {
             return;
         }
 
         (async () => {
-            const result = await checkHasConnectionByPlatform({
-                platform: "github",
-                category: "codeManagement",
-            });
+            const result = await checkIssuesProviderSupported({ teamId });
 
             if (!mounted) {
                 return;
             }
 
-            const hasConnection =
+            const supported =
                 typeof result === "boolean"
                     ? result
                     : "error" in result
                       ? false
                       : Boolean(result);
 
-            setHasGithubIntegration(hasConnection);
+            setIsIssuesSupported(supported);
         })();
 
         return () => {
             mounted = false;
         };
-    }, [requiresGithubIntegration]);
+    }, [requiresIssuesSupport, teamId]);
 
     const hasToolsWithWarningSelected = useMemo(
         () =>
@@ -172,10 +189,11 @@ export const PluginModal = ({
         Object.values(requiredParamsValues).every((v) => v.trim().length > 0);
 
     const [authorizePlugin, { loading: isAuthorizePluginLoading }] =
-        useAsyncAction(async () => {
+        useAsyncAction(async (authMethod?: string) => {
             const initializeResponse = await initializeOauthCustomMCPPlugin(
                 plugin.provider,
                 plugin.id,
+                authMethod,
             );
             if (initializeResponse && "authUrl" in initializeResponse) {
                 sessionStorage.setItem(
@@ -204,12 +222,12 @@ export const PluginModal = ({
 
     const [installPlugin, { loading: isInstallPluginLoading }] = useAsyncAction(
         async () => {
-            if (requiresGithubIntegration && !hasGithubIntegration) {
+            if (requiresIssuesSupport && isIssuesSupported === false) {
                 toast({
                     variant: "warning",
-                    title: "GitHub integration required",
+                    title: "Issue tracker not supported",
                     description:
-                        "Connect GitHub in Settings > Integrations before installing this MCP.",
+                        "Your connected code provider has no native issue tracker (Azure Repos and Bitbucket Data Center aren't supported).",
                 });
                 return;
             }
@@ -311,12 +329,12 @@ export const PluginModal = ({
         isResetAuthLoading ||
         isDeletePluginLoading;
 
-    const isGithubIntegrationMissing =
-        requiresGithubIntegration && hasGithubIntegration === false;
-    const isGithubIntegrationPending =
-        requiresGithubIntegration && hasGithubIntegration === null;
-    const isGithubIntegrationBlocked =
-        isGithubIntegrationMissing || isGithubIntegrationPending;
+    const isIssuesProviderUnsupported =
+        requiresIssuesSupport && isIssuesSupported === false;
+    const isIssuesSupportPending =
+        requiresIssuesSupport && isIssuesSupported === null;
+    const isIssuesSupportBlocked =
+        isIssuesProviderUnsupported || isIssuesSupportPending;
 
     return (
         <MagicModalContext
@@ -347,11 +365,13 @@ export const PluginModal = ({
 
                     <div className="-mx-6 overflow-auto px-6">
                         <div className="flex flex-col gap-3">
-                            {plugin.authScheme.toLowerCase() === "oauth2" && (
+                            {(showsOAuthBadge || isConnected || isDefault) && (
                                 <div className="mb-2 flex items-center gap-2">
-                                    <Badge className="pointer-events-none">
-                                        Oauth login
-                                    </Badge>
+                                    {showsOAuthBadge && (
+                                        <Badge className="pointer-events-none">
+                                            Oauth login
+                                        </Badge>
+                                    )}
 
                                     {isConnected && (
                                         <Badge
@@ -380,27 +400,39 @@ export const PluginModal = ({
                                 />
                             )}
 
-                            {(isGithubIntegrationMissing ||
-                                isGithubIntegrationPending) && (
+                            {isIssuesSupportBlocked && (
                                 <Card
                                     className="flex w-full flex-col gap-2 px-4 py-3 text-sm"
                                     color="lv1">
-                                    {isGithubIntegrationPending ? (
+                                    {isIssuesSupportPending ? (
                                         <p className="text-text-secondary">
-                                            Checking GitHub integration
-                                            status...
+                                            Checking issue-tracker support…
                                         </p>
                                     ) : (
                                         <p className="text-text-secondary">
-                                            GitHub integration is required to
-                                            install this MCP. Connect GitHub in
-                                            Settings &gt; Integrations.
+                                            Your connected code provider doesn’t
+                                            have a native issue tracker (Azure
+                                            Repos and Bitbucket Data Center
+                                            aren’t supported), so this MCP can’t
+                                            be installed.
                                         </p>
                                     )}
                                 </Card>
                             )}
 
-                            {isCustomOauthUnauthorized && !isConnected ? (
+                            {needsAuthSetup && plugin.authMethods ? (
+                                <AuthMethodConnect
+                                    integrationId={plugin.id}
+                                    appName={plugin.appName}
+                                    authMethods={plugin.authMethods}
+                                    canEdit={canEdit}
+                                    isDefault={Boolean(isDefault)}
+                                    onAuthorize={(authMethod) =>
+                                        authorizePlugin(authMethod)
+                                    }
+                                    isAuthorizing={isAuthorizePluginLoading}
+                                />
+                            ) : isCustomOauthUnauthorized && !isConnected ? (
                                 <Card
                                     className="flex w-full flex-col items-center justify-center py-8"
                                     color="lv1">
@@ -521,7 +553,7 @@ export const PluginModal = ({
                                                     !areRequiredParametersValid ||
                                                     selectedTools.length ===
                                                         0 ||
-                                                    isGithubIntegrationBlocked ||
+                                                    isIssuesSupportBlocked ||
                                                     (hasToolsWithWarningSelected &&
                                                         !confirmInstallationOfToolsWithWarnings)
                                                 }>
@@ -541,7 +573,7 @@ export const PluginModal = ({
                                                             !areRequiredParametersValid ||
                                                             selectedTools.length ===
                                                                 0 ||
-                                                            isGithubIntegrationBlocked ||
+                                                            isIssuesSupportBlocked ||
                                                             (hasToolsWithWarningSelected &&
                                                                 !confirmInstallationOfToolsWithWarnings)
                                                         }>

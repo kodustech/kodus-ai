@@ -317,6 +317,11 @@ class CustomMessagesDto {
     endReviewMessage?: CustomMessagesEndReviewMessageDto;
 }
 
+class KodyKnowledgeApprovalDto {
+    @IsBoolean()
+    enabled: boolean;
+}
+
 class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsString()
@@ -401,8 +406,9 @@ class CodeReviewConfigWithoutLLMProviderDto {
     kodyRulesGeneratorEnabled?: boolean;
 
     @IsOptional()
-    @IsBoolean()
-    llmGeneratedMemoriesRequireApproval?: boolean;
+    @ValidateNested()
+    @Type(() => KodyKnowledgeApprovalDto)
+    kodyKnowledgeApproval?: KodyKnowledgeApprovalDto;
 
     @IsOptional()
     @ValidateNested()

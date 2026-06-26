@@ -6,8 +6,8 @@ import {
     IKodyRulesExample,
     KodyRuleProcessingStatus,
     KodyRuleRequestType,
-    KodyRulesOrigin,
     KodyRulesScope,
+    KodyRulesOrigin,
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
@@ -180,9 +180,14 @@ export class CreateKodyRuleDto {
     @ApiPropertyOptional({ example: 'src/services' })
     directoryId?: string;
 
+    @IsOptional()
     @IsEnum(KodyRulesOrigin)
-    @ApiProperty({ enum: KodyRulesOrigin, enumName: 'KodyRulesOrigin' })
-    origin: KodyRulesOrigin;
+    @ApiPropertyOptional({
+        enum: KodyRulesOrigin,
+        enumName: 'KodyRulesOrigin',
+        description: 'Where the rule came from. Defaults to manual when omitted.',
+    })
+    origin?: KodyRulesOrigin;
 
     @IsEnum(KodyRulesStatus)
     @IsOptional()

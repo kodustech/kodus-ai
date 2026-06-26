@@ -93,15 +93,72 @@ if [[ -f "$OUTPUT" && "$FORCE" -eq 0 ]]; then
     echo "backed up existing .env → $(basename "$BACKUP")"
 fi
 
-# `op inject` resolves every op://... ref and writes the result. Any
-# unresolved ref (missing item/field) becomes a hard error and we exit
-# non-zero so the dev sees what's missing instead of a half-broken .env.
+# `op inject` resolves every op://... ref and writes the result. It is
+# atomic: a single unresolved ref aborts the whole run. That's the right
+# behaviour for a @required secret, but NOT for an @optional one — an
+# optional secret whose vault item doesn't exist yet is a legitimate state
+# (the app treats it as unset), and it must not block the pull for everyone.
+#
+# So: try the fast all-at-once inject first (the common case where every
+# item exists). If it fails because an OPTIONAL item is missing from the
+# vault, blank that ref and retry; if a REQUIRED item is missing, hard-error
+# as before. We loop because op reports only the first missing item per run.
 #
 # Inject to a temp file first, validate it, then move into place — so a
 # malformed value never lands as the active .env (see the guard below).
 TMP="${OUTPUT}.tmp.$$"
-trap 'rm -f "$TMP"' EXIT
-op inject --in-file "$TEMPLATE" --out-file "$TMP" --force
+WORK="${OUTPUT}.work.$$"
+ERR="${OUTPUT}.err.$$"
+trap 'rm -f "$TMP" "$WORK" "$ERR"' EXIT
+
+# A template item is optional unless its generated hint line — `# (...)`,
+# emitted just above the assignment — contains "required" (see
+# scripts/env/generate.ts renderItem). Returns 0 (true) when required.
+is_required() {
+    local name="$1"
+    awk -v target="$name" '
+        /^[[:space:]]*$/ { hint=""; next }
+        /^# \(/          { hint=$0; next }
+        $0 ~ "^"target"=" { exit (index(hint,"required") ? 0 : 1) }
+    ' "$TEMPLATE"
+}
+
+cp "$TEMPLATE" "$WORK"
+SKIPPED=()
+# Bound the loop by the number of op:// refs so a parse miss can't spin forever.
+MAX_ITERS="$(grep -c 'op://' "$TEMPLATE" || true)"
+for ((i = 0; i <= MAX_ITERS; i++)); do
+    if op inject --in-file "$WORK" --out-file "$TMP" --force 2>"$ERR"; then
+        break
+    fi
+
+    # op's message for an absent item: "...could not find item <NAME> in vault..."
+    MISSING="$(sed -n 's/.*could not find item \([A-Za-z0-9_]*\) .*/\1/p' "$ERR" | head -1)"
+    if [[ -z "$MISSING" ]]; then
+        # Some other failure (auth, missing field on an existing item, etc.).
+        # Surface op's own error verbatim and bail.
+        cat "$ERR" >&2
+        exit 1
+    fi
+
+    if is_required "$MISSING"; then
+        cat >&2 <<EOF
+error: required secret "$MISSING" is missing from the "$VAULT" vault.
+
+Add it to the vault (ask an admin if needed), then re-run \`pnpm run env:pull\`.
+EOF
+        exit 1
+    fi
+
+    # Optional + missing: leave it empty and keep going.
+    sed -i.bak "s|^${MISSING}=op://.*|${MISSING}=|" "$WORK" && rm -f "${WORK}.bak"
+    SKIPPED+=("$MISSING")
+done
+
+if [[ ${#SKIPPED[@]} -gt 0 ]]; then
+    printf 'note: %d optional secret(s) not in the "%s" vault — left empty: %s\n' \
+        "${#SKIPPED[@]}" "$VAULT" "${SKIPPED[*]}" >&2
+fi
 
 # ── Guard: no raw newlines inside values ──────────────────────────────────────
 #

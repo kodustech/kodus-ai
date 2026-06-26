@@ -99,6 +99,7 @@ describe('KodyRulesSyncService.syncRepositoryMain', () => {
             codeManagementService as any,
             updateOrCreateCodeReviewParameterUseCase as any,
             {} as any, // createOrUpdateKodyRulesUseCase
+            {} as any, // deleteRuleInOrganizationByIdKodyRulesUseCase
             promptRunnerService as any,
             permissionValidationService as any,
             observabilityService as any,
@@ -238,6 +239,7 @@ describe('KodyRulesSyncService — Bug: path scoping from sourcePath (Bug 1)', (
             codeManagementService as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any, // updateOrCreateCodeReviewParameterUseCase
             {} as any, // createOrUpdateKodyRulesUseCase (unused for this path)
+            {} as any, // deleteRuleInOrganizationByIdKodyRulesUseCase
             {} as any, // promptRunnerService
             { validateBasicLicense: jest.fn().mockResolvedValue({ allowed: true }), getBYOKConfig: jest.fn().mockResolvedValue(undefined) } as any,
             {} as any, // observabilityService
@@ -334,8 +336,17 @@ describe('KodyRulesSyncService — Bug: orphaned rules after IDE sync toggle-off
             findByOrganizationId: jest
                 .fn()
                 .mockResolvedValue({ rules: existingRules }),
-            // Soft-delete flips status via createOrUpdate — no hard-delete use case needed.
             createOrUpdate: jest.fn().mockResolvedValue({ uuid: 'rule-updated' }),
+        };
+
+        // Bulk pause/resume route through the centralized-aware upsert use case;
+        // delete routes through the centralized-aware delete use case. Both fall
+        // back to a direct DB write internally when centralized config is off.
+        const createOrUpdateKodyRulesUseCase = {
+            execute: jest.fn().mockResolvedValue({ uuid: 'rule-updated' }),
+        };
+        const deleteRuleInOrganizationByIdKodyRulesUseCase = {
+            execute: jest.fn().mockResolvedValue(true),
         };
 
         const service = new KodyRulesSyncService(
@@ -344,14 +355,20 @@ describe('KodyRulesSyncService — Bug: orphaned rules after IDE sync toggle-off
             {} as any, // contextResolutionService
             {} as any, // codeManagementService
             {} as any, // updateOrCreateCodeReviewParameterUseCase
-            {} as any, // createOrUpdateKodyRulesUseCase
+            createOrUpdateKodyRulesUseCase as any,
+            deleteRuleInOrganizationByIdKodyRulesUseCase as any,
             {} as any, // promptRunnerService
             {} as any, // permissionValidationService
             {} as any, // observabilityService
             {} as any, // contextReferenceDetectionService
         );
 
-        return { service, kodyRulesService };
+        return {
+            service,
+            kodyRulesService,
+            createOrUpdateKodyRulesUseCase,
+            deleteRuleInOrganizationByIdKodyRulesUseCase,
+        };
     }
 
     it('soft-deletes (status=DELETED) all rules with a sourcePath when IDE sync is purged for a repository', async () => {
@@ -360,7 +377,8 @@ describe('KodyRulesSyncService — Bug: orphaned rules after IDE sync toggle-off
         // indefinitely as orphans. Purge flips their status to DELETED, which keeps the
         // record for audit/undo while removing it from the active rule set (filterKodyRules
         // drops any rule whose status !== ACTIVE).
-        const { service, kodyRulesService } = buildServiceForCleanup([
+        const { service, deleteRuleInOrganizationByIdKodyRulesUseCase } =
+            buildServiceForCleanup([
             { uuid: 'rule-from-bff', repositoryId: 'repo-1', sourcePath: 'applications/backoffice-bff/.cursorrules', status: 'active' },
             { uuid: 'rule-from-sales', repositoryId: 'repo-1', sourcePath: 'applications/sales-flow/.cursor/rules/arch.mdc', status: 'active' },
             { uuid: 'rule-user-created', repositoryId: 'repo-1', sourcePath: null, status: 'active' },
@@ -372,21 +390,15 @@ describe('KodyRulesSyncService — Bug: orphaned rules after IDE sync toggle-off
             repositoryId: 'repo-1',
         });
 
-        expect(kodyRulesService.createOrUpdate).toHaveBeenCalledTimes(2);
-        expect(kodyRulesService.createOrUpdate).toHaveBeenCalledWith(
-            organizationAndTeamData,
-            expect.objectContaining({ uuid: 'rule-from-bff', status: 'deleted' }),
-            expect.any(Object),
-        );
-        expect(kodyRulesService.createOrUpdate).toHaveBeenCalledWith(
-            organizationAndTeamData,
-            expect.objectContaining({ uuid: 'rule-from-sales', status: 'deleted' }),
-            expect.any(Object),
-        );
+        const del = deleteRuleInOrganizationByIdKodyRulesUseCase.execute;
+        expect(del).toHaveBeenCalledTimes(2);
+        const deletedIds = (del as jest.Mock).mock.calls.map(([id]) => id);
+        expect(deletedIds.sort()).toEqual(['rule-from-bff', 'rule-from-sales']);
     });
 
     it('does not touch user-created rules (sourcePath is null) during purge', async () => {
-        const { service, kodyRulesService } = buildServiceForCleanup([
+        const { service, deleteRuleInOrganizationByIdKodyRulesUseCase } =
+            buildServiceForCleanup([
             { uuid: 'rule-hand-authored', repositoryId: 'repo-1', sourcePath: null, status: 'active' },
             { uuid: 'rule-no-source', repositoryId: 'repo-1', sourcePath: undefined, status: 'active' },
         ]);
@@ -396,11 +408,14 @@ describe('KodyRulesSyncService — Bug: orphaned rules after IDE sync toggle-off
             repositoryId: 'repo-1',
         });
 
-        expect(kodyRulesService.createOrUpdate).not.toHaveBeenCalled();
+        expect(
+            deleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+        ).not.toHaveBeenCalled();
     });
 
     it('does not touch rules from other repositories during purge', async () => {
-        const { service, kodyRulesService } = buildServiceForCleanup([
+        const { service, deleteRuleInOrganizationByIdKodyRulesUseCase } =
+            buildServiceForCleanup([
             { uuid: 'rule-repo-2', repositoryId: 'repo-2', sourcePath: 'some/.cursorrules', status: 'active' },
         ]);
 
@@ -409,11 +424,14 @@ describe('KodyRulesSyncService — Bug: orphaned rules after IDE sync toggle-off
             repositoryId: 'repo-1',
         });
 
-        expect(kodyRulesService.createOrUpdate).not.toHaveBeenCalled();
+        expect(
+            deleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+        ).not.toHaveBeenCalled();
     });
 
     it('pauseAllIdeSyncRulesForRepository flips ACTIVE rules to PAUSED, leaves PAUSED/DELETED alone', async () => {
-        const { service, kodyRulesService } = buildServiceForCleanup([
+        const { service, createOrUpdateKodyRulesUseCase } =
+            buildServiceForCleanup([
             { uuid: 'rule-active', repositoryId: 'repo-1', sourcePath: '.cursorrules', status: 'active' },
             { uuid: 'rule-already-paused', repositoryId: 'repo-1', sourcePath: '.cursorrules', status: 'paused' },
             { uuid: 'rule-deleted', repositoryId: 'repo-1', sourcePath: '.cursorrules', status: 'deleted' },
@@ -426,16 +444,19 @@ describe('KodyRulesSyncService — Bug: orphaned rules after IDE sync toggle-off
         });
 
         // Only the ACTIVE auto-sync rule is touched
-        expect(kodyRulesService.createOrUpdate).toHaveBeenCalledTimes(1);
-        expect(kodyRulesService.createOrUpdate).toHaveBeenCalledWith(
-            organizationAndTeamData,
+        expect(createOrUpdateKodyRulesUseCase.execute).toHaveBeenCalledTimes(1);
+        expect(createOrUpdateKodyRulesUseCase.execute).toHaveBeenCalledWith(
             expect.objectContaining({ uuid: 'rule-active', status: 'paused' }),
+            organizationAndTeamData.organizationId,
             expect.any(Object),
+            true,
+            organizationAndTeamData.teamId,
         );
     });
 
     it('resumeAllIdeSyncRulesForRepository flips PAUSED rules back to ACTIVE, leaves DELETED alone', async () => {
-        const { service, kodyRulesService } = buildServiceForCleanup([
+        const { service, createOrUpdateKodyRulesUseCase } =
+            buildServiceForCleanup([
             { uuid: 'rule-paused-1', repositoryId: 'repo-1', sourcePath: '.cursorrules', status: 'paused' },
             { uuid: 'rule-paused-2', repositoryId: 'repo-1', sourcePath: 'apps/foo/.cursor/rules/x.mdc', status: 'paused' },
             { uuid: 'rule-active', repositoryId: 'repo-1', sourcePath: '.cursorrules', status: 'active' },
@@ -448,13 +469,12 @@ describe('KodyRulesSyncService — Bug: orphaned rules after IDE sync toggle-off
         });
 
         // Only PAUSED auto-sync rules are flipped — DELETED is not resurrected here
-        expect(kodyRulesService.createOrUpdate).toHaveBeenCalledTimes(2);
-        const flipped = (kodyRulesService.createOrUpdate as jest.Mock).mock.calls.map(
-            ([, rule]) => rule.uuid,
-        );
+        const upsert = createOrUpdateKodyRulesUseCase.execute as jest.Mock;
+        expect(upsert).toHaveBeenCalledTimes(2);
+        const flipped = upsert.mock.calls.map(([rule]) => rule.uuid);
         expect(flipped.sort()).toEqual(['rule-paused-1', 'rule-paused-2']);
-        for (const call of (kodyRulesService.createOrUpdate as jest.Mock).mock.calls) {
-            expect(call[1].status).toBe('active');
+        for (const call of upsert.mock.calls) {
+            expect(call[0].status).toBe('active');
         }
     });
 
@@ -493,7 +513,8 @@ describe('KodyRulesSyncService — Bug: orphaned rules after IDE sync toggle-off
         // they had explicitly asked to delete come back without explanation.
         // The chip already excludes pinned from the "orphan" count, so the
         // bulk action must match for the two surfaces to agree.
-        const { service, kodyRulesService } = buildServiceForCleanup([
+        const { service, deleteRuleInOrganizationByIdKodyRulesUseCase } =
+            buildServiceForCleanup([
             { uuid: 'rule-pinned', repositoryId: 'repo-1', sourcePath: '.cursorrules', status: 'active', pinnedSync: true },
             { uuid: 'rule-orphan', repositoryId: 'repo-1', sourcePath: '.cursorrules', status: 'active' },
         ]);
@@ -503,18 +524,16 @@ describe('KodyRulesSyncService — Bug: orphaned rules after IDE sync toggle-off
             repositoryId: 'repo-1',
         });
 
-        expect(kodyRulesService.createOrUpdate).toHaveBeenCalledTimes(1);
-        expect(kodyRulesService.createOrUpdate).toHaveBeenCalledWith(
-            organizationAndTeamData,
-            expect.objectContaining({ uuid: 'rule-orphan', status: 'deleted' }),
-            expect.any(Object),
-        );
+        const del = deleteRuleInOrganizationByIdKodyRulesUseCase.execute;
+        expect(del).toHaveBeenCalledTimes(1);
+        expect(del).toHaveBeenCalledWith('rule-orphan', expect.any(Object));
     });
 
     it('pauseAllIdeSyncRulesForRepository skips pinnedSync rules', async () => {
         // Same reasoning as purge: pause would just be undone by the next
         // sync's `status: ACTIVE` write coming from the force-sync flow.
-        const { service, kodyRulesService } = buildServiceForCleanup([
+        const { service, createOrUpdateKodyRulesUseCase } =
+            buildServiceForCleanup([
             { uuid: 'rule-pinned', repositoryId: 'repo-1', sourcePath: '.cursorrules', status: 'active', pinnedSync: true },
             { uuid: 'rule-active', repositoryId: 'repo-1', sourcePath: '.cursorrules', status: 'active' },
         ]);
@@ -524,11 +543,13 @@ describe('KodyRulesSyncService — Bug: orphaned rules after IDE sync toggle-off
             repositoryId: 'repo-1',
         });
 
-        expect(kodyRulesService.createOrUpdate).toHaveBeenCalledTimes(1);
-        expect(kodyRulesService.createOrUpdate).toHaveBeenCalledWith(
-            organizationAndTeamData,
+        expect(createOrUpdateKodyRulesUseCase.execute).toHaveBeenCalledTimes(1);
+        expect(createOrUpdateKodyRulesUseCase.execute).toHaveBeenCalledWith(
             expect.objectContaining({ uuid: 'rule-active', status: 'paused' }),
+            organizationAndTeamData.organizationId,
             expect.any(Object),
+            true,
+            organizationAndTeamData.teamId,
         );
     });
 
@@ -539,7 +560,8 @@ describe('KodyRulesSyncService — Bug: orphaned rules after IDE sync toggle-off
         // that are not in the IDE-rule pattern set). Toggling IDE auto-sync off
         // would silently delete those Onboard rules. The filter now requires
         // the sourcePath to match RULE_FILE_PATTERNS via isIdeRuleSource.
-        const { service, kodyRulesService } = buildServiceForCleanup([
+        const { service, deleteRuleInOrganizationByIdKodyRulesUseCase } =
+            buildServiceForCleanup([
             // Auto-sync rules — should be purged
             { uuid: 'rule-cursor-root', repositoryId: 'repo-1', sourcePath: '.cursorrules', status: 'active' },
             { uuid: 'rule-cursor-subdir', repositoryId: 'repo-1', sourcePath: 'applications/foo/.cursor/rules/api.mdc', status: 'active' },
@@ -554,10 +576,9 @@ describe('KodyRulesSyncService — Bug: orphaned rules after IDE sync toggle-off
             repositoryId: 'repo-1',
         });
 
-        expect(kodyRulesService.createOrUpdate).toHaveBeenCalledTimes(2);
-        const purgedUuids = (kodyRulesService.createOrUpdate as jest.Mock).mock.calls.map(
-            ([, rule]) => rule.uuid,
-        );
+        const del = deleteRuleInOrganizationByIdKodyRulesUseCase.execute as jest.Mock;
+        expect(del).toHaveBeenCalledTimes(2);
+        const purgedUuids = del.mock.calls.map(([id]) => id);
         expect(purgedUuids.sort()).toEqual(['rule-cursor-root', 'rule-cursor-subdir']);
     });
 });
@@ -633,6 +654,7 @@ describe('KodyRulesSyncService — Bug: stale pinnedSync after marker removal (d
             codeManagementService as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
             {} as any, // createOrUpdateKodyRulesUseCase
+            {} as any, // deleteRuleInOrganizationByIdKodyRulesUseCase
             {} as any, // promptRunnerService
             {} as any, // permissionValidationService
             {} as any, // observabilityService
@@ -824,6 +846,7 @@ describe('KodyRulesSyncService — depin pass: syncRepositoryMain full-scan + sy
             codeManagementService as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
             {} as any, // createOrUpdateKodyRulesUseCase
+            {} as any, // deleteRuleInOrganizationByIdKodyRulesUseCase
             {} as any, // promptRunnerService
             { validateBasicLicense: jest.fn().mockResolvedValue({ allowed: true }), getBYOKConfig: jest.fn().mockResolvedValue(undefined) } as any,
             {} as any, // observabilityService
@@ -1131,6 +1154,7 @@ describe('KodyRulesSyncService.getConfiguredDirectories', () => {
             {} as any, // codeManagementService
             {} as any, // updateOrCreateCodeReviewParameterUseCase
             {} as any, // createOrUpdateKodyRulesUseCase
+            {} as any, // deleteRuleInOrganizationByIdKodyRulesUseCase
             {} as any, // promptRunnerService
             {} as any, // permissionValidationService
             {} as any, // observabilityService

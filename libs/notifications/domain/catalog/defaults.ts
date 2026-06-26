@@ -97,10 +97,17 @@ export const EVENT_DEFAULTS: Readonly<
         defaultChannels: new Set([NotificationChannel.EMAIL]),
         icon: 'shield-alert',
     },
-    [NotificationEvent.WEEKLY_RECAP]: {
+    [NotificationEvent.REPO_REPORT]: {
         criticality: Criticality.INFORMATIONAL,
         category: 'cockpit',
-        label: 'Weekly Recap',
+        label: 'Repo Report',
+        defaultChannels: new Set([NotificationChannel.EMAIL]),
+        icon: 'info',
+    },
+    [NotificationEvent.ORG_REPORT]: {
+        criticality: Criticality.INFORMATIONAL,
+        category: 'cockpit',
+        label: 'Org Report',
         defaultChannels: new Set([NotificationChannel.EMAIL]),
         icon: 'info',
     },

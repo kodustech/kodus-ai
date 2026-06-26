@@ -20,8 +20,8 @@ import {
     IKodyRule,
     IKodyRuleMemory,
     IKodyRulesExample,
-    KodyRulesOrigin,
     KodyRulesScope,
+    KodyRulesOrigin,
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
@@ -172,7 +172,6 @@ export class KodyRulesTools {
                             )
                             .optional(),
                         repositoryId: z.string().optional(),
-                        origin: z.enum(KodyRulesOrigin).optional(),
                         createdAt: z.iso.datetime().optional(),
                         updatedAt: z.iso.datetime().optional(),
                         reason: z.string().nullable().optional(),
@@ -255,7 +254,6 @@ export class KodyRulesTools {
                             )
                             .optional(),
                         repositoryId: z.string().optional(),
-                        origin: z.enum(KodyRulesOrigin).optional(),
                         createdAt: z.iso.datetime().optional(),
                         updatedAt: z.iso.datetime().optional(),
                         reason: z.string().nullable().optional(),
@@ -448,7 +446,7 @@ export class KodyRulesTools {
                             scope: args.kodyRule.scope,
                             examples: (args.kodyRule.examples ||
                                 []) as IKodyRulesExample[],
-                            origin: KodyRulesOrigin.GENERATED,
+                            origin: KodyRulesOrigin.MCP_AGENT,
                             status: KodyRulesStatus.PENDING,
                             repositoryId:
                                 args.kodyRule.repositoryId || 'global',
@@ -690,7 +688,6 @@ export class KodyRulesTools {
                     const kodyRule: CreateKodyRuleDto = {
                         uuid: args.ruleId,
                         type: KodyRulesType.STANDARD,
-                        origin: KodyRulesOrigin.USER, // Default origin for MCP tool updates
                         ...(args.kodyRule.title && {
                             title: args.kodyRule.title,
                         }),
@@ -964,7 +961,7 @@ export class KodyRulesTools {
                             title: args.kodyRule.title,
                             type: KodyRulesType.MEMORY,
                             rule: args.kodyRule.rule,
-                            origin: KodyRulesOrigin.GENERATED,
+                            origin: KodyRulesOrigin.MCP_AGENT,
                             status: KodyRulesStatus.ACTIVE,
                             repositoryId:
                                 args.kodyRule.repositoryId || 'global',

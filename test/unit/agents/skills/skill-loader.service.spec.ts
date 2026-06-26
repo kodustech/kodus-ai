@@ -134,7 +134,8 @@ describe('SkillLoaderService', () => {
             {
                 category: 'task-management',
                 label: 'Task Management',
-                examples: 'Jira, Linear, Notion, ClickUp, Github Issues',
+                examples:
+                    'Jira, Atlassian Rovo, Linear, Notion, ClickUp, Github Issues',
             },
         ]);
     });

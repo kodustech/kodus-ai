@@ -25,6 +25,11 @@ import {
 } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
 import {
+    CodeManagementIssue,
+    GetIssueParams,
+    ListIssuesParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
+import {
     PullRequest,
     PullRequestAuthor,
     PullRequestReviewComment,
@@ -74,6 +79,87 @@ export class CodeManagementService implements ICodeManagementService {
             });
             return null;
         }
+    }
+
+    async listIssues(
+        params: ListIssuesParams,
+        type?: PlatformType,
+    ): Promise<CodeManagementIssue[]> {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                extractOrganizationAndTeamData(params),
+            );
+        }
+
+        if (!type) {
+            return [];
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (typeof codeManagementService.listIssues !== 'function') {
+            throw new Error(
+                `Reading issues is not supported for platform ${type}`,
+            );
+        }
+
+        return codeManagementService.listIssues(params);
+    }
+
+    async getIssue(
+        params: GetIssueParams,
+        type?: PlatformType,
+    ): Promise<CodeManagementIssue | null> {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                extractOrganizationAndTeamData(params),
+            );
+        }
+
+        if (!type) {
+            return null;
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (typeof codeManagementService.getIssue !== 'function') {
+            throw new Error(
+                `Reading issues is not supported for platform ${type}`,
+            );
+        }
+
+        return codeManagementService.getIssue(params);
+    }
+
+    /**
+     * Whether the team's connected code host supports reading native issues.
+     * False for hosts without an issue tracker (Azure Repos → none; Bitbucket
+     * Data Center → none, refined via `supportsIssues`). Used to gate installing
+     * the generic issues MCP.
+     */
+    async isIssuesSupported(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<boolean> {
+        const type = await this.getTypeIntegration(organizationAndTeamData);
+
+        if (!type) {
+            return false;
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (typeof codeManagementService.listIssues !== 'function') {
+            return false;
+        }
+
+        if (typeof codeManagementService.supportsIssues === 'function') {
+            return codeManagementService.supportsIssues(organizationAndTeamData);
+        }
+
+        return true;
     }
 
     async findRepositoryByName(

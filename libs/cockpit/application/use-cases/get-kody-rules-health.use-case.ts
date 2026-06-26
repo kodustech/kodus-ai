@@ -26,13 +26,12 @@ import { Repositories } from '@libs/platform/domain/platformIntegrations/types/c
 import {
     CockpitRangeQuery,
     KodyRuleHealthRow,
-    KodyRuleHealthState,
-    KodyRuleUsageRow,
 } from '../../domain/types';
 import {
     COCKPIT_REVIEW_ANALYTICS_SERVICE_TOKEN,
     ICockpitReviewAnalyticsService,
 } from '../../domain/contracts/cockpit-review-analytics.service.contract';
+import { computeRuleState } from '../../domain/helpers/kody-rules-health.helper';
 
 /**
  * "Kody Rules — health" table: merges warehouse usage (triggers /
@@ -40,55 +39,9 @@ import {
  * with rule metadata from Mongo `kodyRules` — which is also what surfaces
  * ACTIVE rules that never triggered in the window (`stale`).
  *
- * States:
- *  - `stale`     active rule with zero triggers in the window
- *  - `low_data`  triggered, but not enough sample to judge
- *  - `noisy`     the team actively downvotes what this rule produces
- *  - `ignored`   triggers a lot, almost nothing gets implemented
- *  - `healthy`   everything else
- *
- * `noisy` outranks `ignored`: explicit disagreement is a stronger signal
- * than passive inaction, and its fix is different (rewrite/scope the rule
- * vs. ask whether it matters at all).
+ * The state classification lives in `domain/helpers/kody-rules-health.helper`
+ * so report SERVICES can reuse it without importing this use-case.
  */
-
-const MIN_TRIGGERS_TO_JUDGE = 5;
-const IGNORED_MAX_RATE = 0.2;
-const NOISY_MIN_THUMBS_DOWN = 3;
-
-export function computeRuleState(usage: KodyRuleUsageRow | undefined): {
-    state: KodyRuleHealthState;
-    usage: Omit<KodyRuleUsageRow, 'ruleId'>;
-} {
-    if (!usage || usage.triggers === 0) {
-        return {
-            state: 'stale',
-            usage: {
-                triggers: 0,
-                implemented: 0,
-                rate: 0,
-                thumbsUp: usage?.thumbsUp ?? 0,
-                thumbsDown: usage?.thumbsDown ?? 0,
-                lastTriggeredAt: usage?.lastTriggeredAt ?? null,
-            },
-        };
-    }
-
-    const { triggers, implemented, rate, thumbsUp, thumbsDown, lastTriggeredAt } =
-        usage;
-    let state: KodyRuleHealthState = 'healthy';
-    if (triggers < MIN_TRIGGERS_TO_JUDGE) {
-        state = 'low_data';
-    } else if (thumbsDown >= NOISY_MIN_THUMBS_DOWN && thumbsDown > thumbsUp) {
-        state = 'noisy';
-    } else if (rate <= IGNORED_MAX_RATE) {
-        state = 'ignored';
-    }
-    return {
-        state,
-        usage: { triggers, implemented, rate, thumbsUp, thumbsDown, lastTriggeredAt },
-    };
-}
 
 @Injectable()
 export class GetKodyRulesHealthUseCase {

@@ -58,6 +58,11 @@ import {
     PullRequestFileChange,
 } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
+import {
+    CodeManagementIssue,
+    GetIssueParams,
+    ListIssuesParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
 import { Organization } from '@libs/platform/domain/platformIntegrations/types/codeManagement/organization.type';
 import {
     OneSentenceSummaryItem,
@@ -75,6 +80,10 @@ import {
     buildDefaultSourceBranchName,
     DEFAULT_COMMIT_MESSAGE,
     DEFAULT_PR_TITLE,
+    EMPTY_REPO_DEFAULT_BRANCH,
+    EMPTY_REPO_SEED_COMMIT_MESSAGE,
+    EMPTY_REPO_SEED_CONTENT,
+    EMPTY_REPO_SEED_PATH,
 } from './code-management-defaults.constants';
 
 import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
@@ -92,7 +101,9 @@ import {
     issueDeleteIssueReaction,
     issueEditComment,
     issueGetComments,
+    issueGetIssue,
     issueGetIssueReactions,
+    issueListIssues,
     issuePostCommentReaction,
     issuePostIssueReaction,
     orgListCurrentUserOrgs,
@@ -211,6 +222,88 @@ export class ForgejoService implements Omit<
         };
     }
 
+    async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
+        const { organizationAndTeamData, repository, filters = {} } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        const client = this.createForgejoClient(authDetail);
+
+        const result = await issueListIssues({
+            client,
+            path: { owner: repository.owner, repo: repository.name },
+            query: {
+                type: 'issues',
+                state: filters.state ?? 'open',
+                labels: filters.labels?.length
+                    ? filters.labels.join(',')
+                    : undefined,
+                page: filters.page,
+                limit: filters.perPage,
+            },
+        });
+
+        return (result.data ?? [])
+            .filter((issue) => !issue.pull_request)
+            .map((issue) => this.mapForgejoIssue(issue));
+    }
+
+    async getIssue(
+        params: GetIssueParams,
+    ): Promise<CodeManagementIssue | null> {
+        const { organizationAndTeamData, repository, issueNumber } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return null;
+        }
+
+        const client = this.createForgejoClient(authDetail);
+
+        const result = await issueGetIssue({
+            client,
+            path: {
+                owner: repository.owner,
+                repo: repository.name,
+                index: issueNumber,
+            },
+        });
+
+        const issue = result.data;
+        if (!issue || issue.pull_request) {
+            return null;
+        }
+
+        return this.mapForgejoIssue(issue);
+    }
+
+    private mapForgejoIssue(issue: any): CodeManagementIssue {
+        return {
+            id: String(issue.id),
+            number: issue.number,
+            title: issue.title,
+            body: issue.body ?? null,
+            state: issue.state === 'closed' ? 'closed' : 'open',
+            url: issue.html_url,
+            labels: (issue.labels ?? [])
+                .map((label: any) => label?.name)
+                .filter((name: unknown): name is string => Boolean(name)),
+            assignees: (issue.assignees ?? [])
+                .map((assignee: any) => assignee?.login)
+                .filter((login: unknown): login is string => Boolean(login)),
+            author: issue.user
+                ? { username: issue.user.login, id: String(issue.user.id) }
+                : null,
+            createdAt: issue.created_at,
+            updatedAt: issue.updated_at,
+            closedAt: issue.closed_at ?? null,
+            platform: PlatformType.FORGEJO,
+        };
+    }
+
     public async getAuthDetails(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<ForgejoAuthDetail | null> {
@@ -316,7 +409,8 @@ export class ForgejoService implements Omit<
                 (await this.getDefaultBranch({
                     organizationAndTeamData,
                     repository,
-                }));
+                })) ||
+                EMPTY_REPO_DEFAULT_BRANCH;
             const resolvedBaseBranch = baseBranch || resolvedTargetBranch;
 
             const authDetail = await this.getAuthDetails(
@@ -337,6 +431,16 @@ export class ForgejoService implements Omit<
             }
 
             const client = this.createForgejoClient(authDetail);
+
+            // An empty repository has no default-branch ref yet, so branch
+            // creation and the PR below fail. Seed an initial commit so the
+            // base branch exists. No-op when the branch is already there.
+            await this.ensureBaseBranchExists({
+                client,
+                repoInfo,
+                baseBranch: resolvedBaseBranch,
+                author,
+            });
 
             const uploadResult = await this.uploadFiles({
                 organizationAndTeamData,
@@ -382,7 +486,8 @@ export class ForgejoService implements Omit<
                 error,
                 metadata: { params },
             });
-            return null;
+            // Propagate the real cause so the caller can surface it.
+            throw error;
         }
     }
 
@@ -495,7 +600,8 @@ export class ForgejoService implements Omit<
                             ? ('update' as const)
                             : ('create' as const),
                         path: file.path,
-                        content: file.content,
+                        // Forgejo's change-files API requires base64 content.
+                        content: Buffer.from(file.content).toString('base64'),
                     } as any;
                 })
                 .filter((change): change is NonNullable<typeof change> =>
@@ -572,6 +678,69 @@ export class ForgejoService implements Omit<
 
             throw error;
         }
+    }
+
+    // Seeds an empty repository with an initial commit so the base branch
+    // exists for the branch + PR flow. A no-op when the branch already exists.
+    private async ensureBaseBranchExists(params: {
+        client: Client;
+        repoInfo: { owner: string; repo: string };
+        baseBranch: string;
+        author?: { name: string; email?: string };
+    }): Promise<void> {
+        const { client, repoInfo, baseBranch, author } = params;
+
+        const exists = await this.checkForgejoBranchExists(
+            client,
+            repoInfo,
+            baseBranch,
+        );
+        if (exists) {
+            return;
+        }
+
+        const identity = author?.name
+            ? {
+                  name: author.name,
+                  email: author.email || 'kody@kodus.io',
+              }
+            : undefined;
+
+        const res = await repoChangeFiles({
+            client,
+            path: repoInfo,
+            body: {
+                files: [
+                    {
+                        operation: 'create',
+                        path: EMPTY_REPO_SEED_PATH,
+                        // Forgejo's change-files API requires base64 content.
+                        content:
+                            Buffer.from(EMPTY_REPO_SEED_CONTENT).toString(
+                                'base64',
+                            ),
+                    },
+                ] as any,
+                message: EMPTY_REPO_SEED_COMMIT_MESSAGE,
+                branch: baseBranch,
+                ...(identity
+                    ? { author: identity, committer: identity }
+                    : {}),
+            },
+        });
+
+        if (!res || res.status >= 300) {
+            throw new Error(
+                `Failed to initialize empty repository: ${res?.status}`,
+            );
+        }
+
+        this.logger.log({
+            message:
+                'Seeded empty Forgejo repository with an initial commit for centralized config',
+            context: ForgejoService.name,
+            metadata: { repo: repoInfo.repo, baseBranch },
+        });
     }
 
     private async checkForgejoFileExists(

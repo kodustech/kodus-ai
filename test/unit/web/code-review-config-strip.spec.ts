@@ -38,7 +38,7 @@ const REQUIRED_WHITELIST_KEYS = [
     // the toggle-off action never reaches the backend.
     "ideSyncDisableAction",
     "kodyRulesGeneratorEnabled",
-    "llmGeneratedMemoriesRequireApproval",
+    "kodyKnowledgeApproval",
 ] as const;
 
 describe("codeReviewConfigRemovePropertiesNotInType expectedKeys whitelist", () => {

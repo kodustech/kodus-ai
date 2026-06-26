@@ -35,6 +35,8 @@ packages/**/*.js
 .env.local
 .env.reconciled
 .env.bak.*
+.env.err.*
+.env.work.*
 
 # E2B sandbox secrets
 e2b-sandbox/config.json

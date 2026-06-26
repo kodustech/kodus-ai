@@ -1,5 +1,16 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import {
+    Body,
+    Controller,
+    Get,
+    Inject,
+    Post,
+    Query,
+    UseGuards,
+} from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
 
+import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import {
     Action,
     ResourceType,
@@ -41,6 +52,11 @@ export class IntegrationController {
         private readonly cloneIntegrationUseCase: CloneIntegrationUseCase,
         private readonly checkHasIntegrationByPlatformUseCase: CheckHasIntegrationByPlatformUseCase,
         private readonly getConnectionsUseCase: GetConnectionsUseCase,
+        private readonly codeManagementService: CodeManagementService,
+        // HTTP-only controller — REQUEST carries the org from the JWT; the team
+        // comes from the query (the web passes the selected team).
+        @Inject(REQUEST)
+        private readonly request: UserRequest,
     ) {}
 
     @Post('/clone-integration')
@@ -108,6 +124,32 @@ export class IntegrationController {
     @ApiOkResponse({ type: ApiBooleanResponseDto })
     public async checkHasConnectionByPlatform(@Query() query: any) {
         return this.checkHasIntegrationByPlatformUseCase.execute(query);
+    }
+
+    @Get('/issues-supported')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.GitSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Check whether the code host supports reading issues',
+        description:
+            "Whether the team's connected code host has a native issue tracker (false for Azure Repos and Bitbucket Data Center). Used to gate installing the generic issues MCP.",
+    })
+    @ApiOkResponse({ type: ApiBooleanResponseDto })
+    public async isIssuesSupported(@Query('teamId') teamId: string) {
+        const organizationId = this.request.user?.organization?.uuid;
+        if (!organizationId || !teamId) {
+            return false;
+        }
+
+        return this.codeManagementService.isIssuesSupported({
+            organizationId,
+            teamId,
+        });
     }
 
     @Get('/organization-id')

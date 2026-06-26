@@ -24,7 +24,6 @@ import {
     SuggestionsExplorerQuery,
 } from '@libs/cockpit';
 import { GetKodyRulesHealthUseCase } from '@libs/cockpit/application/use-cases/get-kody-rules-health.use-case';
-import { SendWeeklyRecapUseCase } from '@libs/cockpit/application/use-cases/send-weekly-recap.use-case';
 import { CockpitTierGuard } from '@libs/cockpit/infrastructure/guards/cockpit-tier.guard';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
 import {
@@ -415,40 +414,9 @@ export class CockpitProductivityController {
     }
 }
 
-// -------------------------------------------------------------------------
-// /cockpit/weekly-recap  — admin-triggered weekly summary email
-// Replaces the legacy n8n flow that called Customer.io. Sends one email
-// per ACTIVE owner of the org with metrics from the cockpit warehouse.
-// -------------------------------------------------------------------------
-
-type SendWeeklyRecapBody = {
-    organizationId: string;
-    startDate: string;
-    endDate: string;
-};
-
-@ApiTags('Cockpit')
-@ApiBearerAuth('jwt')
-@UseGuards(CockpitTierGuard)
-@Controller('cockpit/weekly-recap')
-export class CockpitWeeklyRecapController {
-    constructor(private readonly useCase: SendWeeklyRecapUseCase) {}
-
-    @Post('/')
-    @ApiOperation({
-        summary:
-            'Send the weekly recap email to ACTIVE owners of an organization. Skips orgs with zero PRs in the window.',
-    })
-    send(@Body() body: SendWeeklyRecapBody) {
-        if (!body?.organizationId || !body?.startDate || !body?.endDate) {
-            throw new BadRequestException(
-                'Missing required fields: organizationId, startDate, endDate',
-            );
-        }
-        return this.useCase.execute({
-            organizationId: body.organizationId,
-            startDate: body.startDate,
-            endDate: body.endDate,
-        });
-    }
-}
+// The org/repo report emails are driven entirely by their scheduled crons
+// (service identity, no end-user caller). There is intentionally no HTTP
+// trigger endpoint: a user-facing "send report for org X" action takes an
+// arbitrary organizationId and would be an email-DoS / cross-tenant surface,
+// and the codebase has no super-admin guard to gate it cleanly. Manual/ops
+// re-sends are done out-of-band (the cron, or a one-off script).

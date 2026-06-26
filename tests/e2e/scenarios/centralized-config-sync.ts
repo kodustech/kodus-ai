@@ -498,7 +498,7 @@ export const centralizedConfigSync: Scenario = {
                         title: pendingTitle,
                         rule: `E2E pending-flow rule (${uniq}): created via API while centralized config is enabled; must arrive through a merged PR, never directly.`,
                         severity: "medium",
-                        origin: "user",
+                        origin: "manual",
                         path: "",
                     },
                     timeoutMs: 60_000,

@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    Logger,
+    NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -6,8 +11,16 @@ import { IntegrationOAuthService } from '../integrations/integration-oauth.servi
 import { MCPIntegrationAuthType } from '../integrations/enums/integration.enum';
 import { MCPIntegrationInterface } from '../integrations/interfaces/mcp-integration.interface';
 import { IntegrationsService } from '../integrations/integrations.service';
-import { MCPProviderType } from '../providers/interfaces/provider.interface';
+import {
+    MCPProviderType,
+    MCPTool,
+} from '../providers/interfaces/provider.interface';
 import { ProviderFactory } from '../providers/provider.factory';
+import { KodusMCPProvider } from '../providers/kodusMCP/kodus-mcp.provider';
+import { getAuthMethod } from '../providers/kodusMCP/auth-methods';
+import { validateTokenSubmission } from '../providers/kodusMCP/token-submission';
+import { defaultReadOnlyToolSlugs } from '../providers/read-only-tools';
+import { ConnectTokenDto } from './dto/connect-token.dto';
 import { CreateIntegrationDto } from './dto/create-integration.dto';
 import { FinishOAuthDto } from './dto/finish-oauth.dto';
 import { InitiateConnectionDto } from './dto/initiate-connection.dto';
@@ -46,22 +59,9 @@ export class McpService {
         connectionId: string,
         organizationId: string,
     ) {
-        // Try to find by UUID first
-        let connection = await this.connectionRepository.findOne({
+        return this.connectionRepository.findOne({
             where: { id: connectionId, organizationId },
         });
-
-        // If not found and looks like Composio ID, try other ways
-        if (!connection && connectionId.startsWith('ca_')) {
-            connection = await this.connectionRepository.findOne({
-                where: {
-                    organizationId,
-                    metadata: { connection: { id: connectionId } },
-                },
-            });
-        }
-
-        return connection;
     }
 
     async getConnection(connectionId: string, organizationId: string) {
@@ -249,15 +249,7 @@ export class McpService {
 
         const provider = this.providerFactory.getProvider(connection.provider);
 
-        const composioConnectionId = connection.metadata?.connection?.id;
-
-        if (!composioConnectionId) {
-            console.warn(
-                'Composio connection ID not found in metadata, using provided ID',
-            );
-        }
-
-        await provider.deleteConnection(composioConnectionId || connectionId);
+        await provider.deleteConnection(connectionId);
 
         // Remove OAuth state for the integration associated with this connection
         await this.integrationOAuthService.deleteOAuthState(
@@ -430,6 +422,159 @@ export class McpService {
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Resolve the auth header(s) the agent runtime must send for a managed
+     * (kodusmcp) connection — refreshed OAuth bearer or a stored static token.
+     * Internal use only (consumed by the runtime's connection formatter).
+     */
+    async getKodusMCPConnectionConfig(
+        organizationId: string,
+        integrationId: string,
+    ): Promise<{ headers: Record<string, string> }> {
+        const headers =
+            await this.integrationOAuthService.resolveManagedAuthHeaders(
+                organizationId,
+                integrationId,
+            );
+
+        return { headers };
+    }
+
+    /**
+     * Connect a managed (kodusmcp) integration using a user-supplied static
+     * token (bring-your-own-token auth method). Validates the submission against
+     * the selected method, stores the encrypted credential, and upserts an
+     * ACTIVE connection row tagged with the chosen method.
+     */
+    async connectManagedToken(
+        organizationId: string,
+        integrationId: string,
+        dto: ConnectTokenDto,
+    ) {
+        const provider = this.providerFactory.getProvider(
+            'kodusmcp',
+        ) as KodusMCPProvider;
+
+        const methods = provider.getAuthMethods(integrationId);
+        const method = getAuthMethod(methods, dto.authMethod);
+
+        if (!method) {
+            throw new BadRequestException(
+                `Unknown auth method "${dto.authMethod}" for integration ${integrationId}`,
+            );
+        }
+
+        const credential = validateTokenSubmission(method, {
+            secret: dto.secret,
+            fields: dto.fields,
+        });
+
+        await this.integrationOAuthService.saveTokenCredential(
+            organizationId,
+            integrationId,
+            credential,
+        );
+
+        // Verify the credential actually works before marking connected. A
+        // valid integration exposes tools; bad credentials throw or list none.
+        let tools: MCPTool[] = [];
+        try {
+            tools = await provider.verifyManagedConnection(
+                integrationId,
+                organizationId,
+            );
+        } catch (error) {
+            this.logger.warn(
+                `Token verification failed for ${integrationId}`,
+                error instanceof Error ? error.stack : String(error),
+            );
+        }
+
+        if (tools.length === 0) {
+            // Roll back the just-saved (bad) credential so the user can retry.
+            await this.integrationOAuthService.deleteOAuthState(
+                organizationId,
+                integrationId,
+            );
+            throw new BadRequestException(
+                `Could not connect with the provided credentials. Please check them and try again.`,
+            );
+        }
+
+        const allowedTools = dto.allowedTools?.length
+            ? dto.allowedTools
+            : defaultReadOnlyToolSlugs(tools);
+
+        return this.upsertManagedConnection(
+            organizationId,
+            integrationId,
+            method.id,
+            allowedTools,
+        );
+    }
+
+    /**
+     * Create or update the ACTIVE `mcp_connections` row for a managed (kodusmcp)
+     * integration once its credential is in place — used by both the token path
+     * and the OAuth finalize. Without this, OAuth-connected integrations had no
+     * connection row, so the UI couldn't tell they were connected.
+     *
+     * Defaults `allowedTools` to the read-only set (verification use case) when
+     * none is given; tool-listing failures fall back to "all" so a transient
+     * hiccup never blocks the connection.
+     */
+    private async upsertManagedConnection(
+        organizationId: string,
+        integrationId: string,
+        authMethodId: string,
+        allowedToolsOverride?: string[],
+    ) {
+        const provider = this.providerFactory.getProvider(
+            'kodusmcp',
+        ) as KodusMCPProvider;
+
+        const config = provider.getManagedConfig(integrationId);
+
+        let allowedTools = allowedToolsOverride;
+        if (!allowedTools?.length) {
+            try {
+                const tools = await provider.getIntegrationTools(
+                    integrationId,
+                    organizationId,
+                );
+                allowedTools = defaultReadOnlyToolSlugs(tools);
+            } catch (error) {
+                this.logger.warn(
+                    `Failed to list tools for ${integrationId}; defaulting to all tools`,
+                    error instanceof Error ? error.stack : String(error),
+                );
+                allowedTools = [];
+            }
+        }
+
+        const existingConnection = await this.connectionRepository.findOne({
+            where: { integrationId, organizationId },
+        });
+
+        const newConnection = {
+            integrationId,
+            organizationId,
+            provider: 'kodusmcp',
+            status: MCPConnectionStatus.ACTIVE,
+            appName: config.name,
+            mcpUrl: config.baseUrl,
+            allowedTools,
+            metadata: {
+                ...(existingConnection?.metadata ?? {}),
+                authMethod: authMethodId,
+            },
+        };
+
+        return this.connectionRepository.save(
+            Object.assign(existingConnection || {}, newConnection),
+        );
     }
 
     async createIntegration(
@@ -624,6 +769,7 @@ export class McpService {
             const authUrl = await mcpProvider.initiateManagedOAuth(
                 organizationId,
                 integrationId,
+                body.authMethod,
             );
 
             return { authUrl };
@@ -671,6 +817,22 @@ export class McpService {
                 code,
                 state,
             });
+
+            // Create the connection row so the integration reads as connected
+            // (the OAuth grant is now ACTIVE). Tag it with the integration's
+            // OAuth method.
+            const kodusProvider = mcpProvider as KodusMCPProvider;
+            const oauthMethod = kodusProvider
+                .getAuthMethods(integrationId)
+                .find(
+                    (method) => method.type === MCPIntegrationAuthType.OAUTH2,
+                );
+
+            await this.upsertManagedConnection(
+                organizationId,
+                integrationId,
+                oauthMethod?.id ?? 'oauth',
+            );
 
             return { message: 'OAuth integration finalized' };
         }

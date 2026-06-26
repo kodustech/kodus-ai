@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ModuleRef } from '@nestjs/core';
 
 import { GenerateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/generate-kody-rules.use-case';
+import { CODE_BASE_CONFIG_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import {
     IIntegrationService,
     INTEGRATION_SERVICE_TOKEN,
@@ -56,6 +57,13 @@ describe('GenerateKodyRulesUseCase', () => {
     };
     const sendRulesNotificationUseCaseMock = {
         execute: jest.fn(),
+    };
+
+    // Approval enabled → past-review-generated rules land PENDING.
+    const codeBaseConfigServiceMock = {
+        getSimpleConfig: jest.fn().mockResolvedValue({
+            kodyKnowledgeApproval: { enabled: true },
+        }),
     };
 
     const findRulesUseCaseMock = {
@@ -152,6 +160,10 @@ describe('GenerateKodyRulesUseCase', () => {
                     provide: SendRulesNotificationUseCase,
                     useValue: sendRulesNotificationUseCaseMock,
                 },
+                {
+                    provide: CODE_BASE_CONFIG_SERVICE_TOKEN,
+                    useValue: codeBaseConfigServiceMock,
+                },
             ],
         }).compile();
 
@@ -209,6 +221,48 @@ describe('GenerateKodyRulesUseCase', () => {
             }),
             'org-1',
             expect.objectContaining({ userId: 'kody-system-rules-generator' }),
+        );
+    });
+
+    it('generates rules ACTIVE when knowledge approval is disabled (policy-driven, no force-activate)', async () => {
+        codeBaseConfigServiceMock.getSimpleConfig.mockResolvedValueOnce({
+            kodyKnowledgeApproval: { enabled: false },
+        });
+        parametersServiceMock.findByKey.mockImplementation((key: any) => {
+            if (key === ParametersKey.CODE_REVIEW_CONFIG) {
+                return Promise.resolve({
+                    configValue: {
+                        repositories: [
+                            {
+                                id: 'repo-1',
+                                name: 'repo-one',
+                                isSelected: true,
+                                directories: [],
+                            },
+                        ],
+                    },
+                });
+            }
+            if (key === ParametersKey.PLATFORM_CONFIGS) {
+                return Promise.resolve({
+                    configValue: { kodyLearningStatus: 'disabled' },
+                });
+            }
+            return Promise.resolve(null);
+        });
+        createOrUpdateRuleUseCaseMock.execute.mockResolvedValue({
+            uuid: 'rule-1',
+        });
+
+        await useCase.execute({ teamId: 'team-1', days: 7 } as any, 'org-1');
+
+        expect(createOrUpdateRuleUseCaseMock.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                status: KodyRulesStatus.ACTIVE,
+                repositoryId: 'repo-1',
+            }),
+            'org-1',
+            expect.anything(),
         );
     });
 

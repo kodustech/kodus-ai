@@ -212,6 +212,8 @@ header a[href*="changelog"]:hover svg {
 .kodus-changelog-shell:has(#kodus-filter-ai-engine:checked) .filter-ai-engine,
 .kodus-changelog-shell:has(#kodus-filter-self-hosted:checked) .filter-self-hosted,
 .kodus-changelog-shell:has(#kodus-filter-git-provider:checked) .filter-git-provider,
+.kodus-changelog-shell:has(#kodus-filter-performance:checked) .filter-performance,
+.kodus-changelog-shell:has(#kodus-filter-ux-interface:checked) .filter-ux-interface,
 .kodus-changelog-shell:has(#kodus-filter-notifications:checked) .filter-notifications,
 .kodus-changelog-shell:has(#kodus-filter-kody-rules:checked) .filter-kody-rules,
 .kodus-changelog-shell:has(#kodus-filter-security:checked) .kodus-changelog-section:has(.filter-security),
@@ -220,6 +222,8 @@ header a[href*="changelog"]:hover svg {
 .kodus-changelog-shell:has(#kodus-filter-ai-engine:checked) .kodus-changelog-section:has(.filter-ai-engine),
 .kodus-changelog-shell:has(#kodus-filter-self-hosted:checked) .kodus-changelog-section:has(.filter-self-hosted),
 .kodus-changelog-shell:has(#kodus-filter-git-provider:checked) .kodus-changelog-section:has(.filter-git-provider),
+.kodus-changelog-shell:has(#kodus-filter-performance:checked) .kodus-changelog-section:has(.filter-performance),
+.kodus-changelog-shell:has(#kodus-filter-ux-interface:checked) .kodus-changelog-section:has(.filter-ux-interface),
 .kodus-changelog-shell:has(#kodus-filter-notifications:checked) .kodus-changelog-section:has(.filter-notifications),
 .kodus-changelog-shell:has(#kodus-filter-kody-rules:checked) .kodus-changelog-section:has(.filter-kody-rules) {
     display: block;
@@ -231,6 +235,8 @@ header a[href*="changelog"]:hover svg {
 .kodus-changelog-shell:has(#kodus-filter-ai-engine:checked) .kodus-changelog-release:has(.filter-ai-engine),
 .kodus-changelog-shell:has(#kodus-filter-self-hosted:checked) .kodus-changelog-release:has(.filter-self-hosted),
 .kodus-changelog-shell:has(#kodus-filter-git-provider:checked) .kodus-changelog-release:has(.filter-git-provider),
+.kodus-changelog-shell:has(#kodus-filter-performance:checked) .kodus-changelog-release:has(.filter-performance),
+.kodus-changelog-shell:has(#kodus-filter-ux-interface:checked) .kodus-changelog-release:has(.filter-ux-interface),
 .kodus-changelog-shell:has(#kodus-filter-notifications:checked) .kodus-changelog-release:has(.filter-notifications),
 .kodus-changelog-shell:has(#kodus-filter-kody-rules:checked) .kodus-changelog-release:has(.filter-kody-rules) {
     display: grid;

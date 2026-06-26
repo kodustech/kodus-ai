@@ -196,6 +196,23 @@ export interface KodyRuleUsageRow {
     lastTriggeredAt: string | null;
 }
 
+/**
+ * Review-quality split by suggestion origin — rule-driven (enforces a Kody
+ * Rule) vs Kodus-native analysis — computed in one pass over `suggestions_mv`
+ * joined to feedback, using the same IS_KODY_RULE predicate as the severity
+ * chart. Powers the report's "is the team acting on / liking what we say?"
+ * read without needing per-rule metadata from Mongo.
+ */
+export interface ReviewQualityByRuleGroupRow {
+    group: 'kody_rules' | 'general';
+    sent: number;
+    implemented: number;
+    /** implemented / sent, 0..1. */
+    rate: number;
+    thumbsUp: number;
+    thumbsDown: number;
+}
+
 export type KodyRuleHealthState =
     | 'healthy'
     | 'noisy'

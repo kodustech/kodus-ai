@@ -46,9 +46,6 @@ importers:
       '@casl/ability':
         specifier: ^6.8.1
         version: 6.8.1
-      '@composio/core':
-        specifier: ^0.1.36-next.2
-        version: 0.1.55(ws@8.18.3)(zod@4.4.3)
       '@faker-js/faker':
         specifier: ^10.4.0
         version: 10.4.0
@@ -928,19 +925,6 @@ packages:
   '@colors/colors@1.5.0':
     resolution: {integrity: sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ==}
     engines: {node: '>=0.1.90'}
-
-  '@composio/client@0.1.0-alpha.37':
-    resolution: {integrity: sha512-2YzXiRXlxqOgEz7nEh1aKdJ9vwQRb69+RX6UH+LTDmuTwW+pOjI2qbhIBxTbP2z9e2SyHVG0/AtMxc9tR5jU0w==}
-
-  '@composio/core@0.1.55':
-    resolution: {integrity: sha512-GLSWTS/gZeycQ7W2wSZQ21DKV+LC6WTAilhSj+JG9Apslx3re9luF1Lyblm4UMSf4DzYWKOrtipwQOaeg7bmTg==}
-    peerDependencies:
-      zod: '>=3.25.76 <5'
-
-  '@composio/json-schema-to-zod@0.1.16':
-    resolution: {integrity: sha512-vu6RUQTWDW/0wLDWsQHtWJ97JsnMjA1olTQwVD88BAtKZTdDLuzjnGRxSllxp5JG/GntnovUphraZWcWfe80eQ==}
-    peerDependencies:
-      zod: '>=3.25.76 <5'
 
   '@connectrpc/connect-web@2.0.0-rc.3':
     resolution: {integrity: sha512-w88P8Lsn5CCsA7MFRl2e6oLY4J/5toiNtJns/YJrlyQaWOy3RO8pDgkz+iIkG98RPMhj2thuBvsd3Cn4DKKCkw==}
@@ -7798,9 +7782,6 @@ packages:
   pure-rand@7.0.1:
     resolution: {integrity: sha512-oTUZM/NAZS8p7ANR3SHh30kXB+zK2r2BPcEn/awJIbOvq82WoMN4p62AWWp3Hhw50G0xMsw1mhIBLqHw64EcNQ==}
 
-  pusher-js@8.5.0:
-    resolution: {integrity: sha512-V7uzGi9bqOOOyM/6IkJdpFyjGZj7llz1v0oWnYkZKcYLvbz6VcHVLmzKqkvegjuMumpfIEKGLmWHwFb39XFCpw==}
-
   qs@6.15.2:
     resolution: {integrity: sha512-Rzq0KEyX/w/tEybncDgdkZrJgVUsUMk3xjh3t5bv3S1HTAtg+uOYt72+ZfwiQwKdysThkTBdL/rTi6HDmX9Ddw==}
     engines: {node: '>=0.6'}
@@ -8628,9 +8609,6 @@ packages:
     resolution: {integrity: sha512-1h/Lnq9yajKY2PEbBadPXj3VxsDDu844OnaAo52UVmIzIvwwtBPIuNvkjuzBlTWpfJyUbG3ez0KSBibQkj4ojg==}
     engines: {node: '>=0.6.11 <=0.7.0 || >=0.7.3'}
 
-  tweetnacl@1.0.3:
-    resolution: {integrity: sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw==}
-
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
     engines: {node: '>= 0.8.0'}
@@ -8861,10 +8839,6 @@ packages:
 
   uuid@11.1.1:
     resolution: {integrity: sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==}
-    hasBin: true
-
-  uuid@13.0.2:
-    resolution: {integrity: sha512-vzi9uRZ926x4XV73S/4qQaTwPXM2JBj6/6lI/byHH1jOpCzb0zDbfytgA9LcN/hzb2l7WQSQnxITOVx5un/wGw==}
     hasBin: true
 
   uuid@14.0.0:
@@ -9570,27 +9544,6 @@ snapshots:
 
   '@colors/colors@1.5.0':
     optional: true
-
-  '@composio/client@0.1.0-alpha.37': {}
-
-  '@composio/core@0.1.55(ws@8.18.3)(zod@4.4.3)':
-    dependencies:
-      '@composio/client': 0.1.0-alpha.37
-      '@composio/json-schema-to-zod': 0.1.16(zod@4.4.3)
-      '@types/json-schema': 7.0.15
-      chalk: 4.1.2
-      openai: 5.23.2(ws@8.18.3)(zod@4.4.3)
-      pusher-js: 8.5.0
-      semver: 7.7.4
-      uuid: 13.0.2
-      zod: 4.4.3
-      zod-to-json-schema: 3.25.2(zod@4.4.3)
-    transitivePeerDependencies:
-      - ws
-
-  '@composio/json-schema-to-zod@0.1.16(zod@4.4.3)':
-    dependencies:
-      zod: 4.4.3
 
   '@connectrpc/connect-web@2.0.0-rc.3(@bufbuild/protobuf@2.12.0)(@connectrpc/connect@2.0.0-rc.3(@bufbuild/protobuf@2.12.0))':
     dependencies:
@@ -16515,11 +16468,6 @@ snapshots:
       ws: 8.18.3
       zod: 3.25.76
 
-  openai@5.23.2(ws@8.18.3)(zod@4.4.3):
-    optionalDependencies:
-      ws: 8.18.3
-      zod: 4.4.3
-
   openai@6.38.0(ws@8.18.3)(zod@4.4.3):
     optionalDependencies:
       ws: 8.18.3
@@ -16922,10 +16870,6 @@ snapshots:
   punycode@2.3.1: {}
 
   pure-rand@7.0.1: {}
-
-  pusher-js@8.5.0:
-    dependencies:
-      tweetnacl: 1.0.3
 
   qs@6.15.2:
     dependencies:
@@ -17918,8 +17862,6 @@ snapshots:
 
   tunnel@0.0.6: {}
 
-  tweetnacl@1.0.3: {}
-
   type-check@0.4.0:
     dependencies:
       prelude-ls: 1.2.1
@@ -18139,8 +18081,6 @@ snapshots:
   utils-merge@1.0.1: {}
 
   uuid@11.1.1: {}
-
-  uuid@13.0.2: {}
 
   uuid@14.0.0: {}
 

@@ -122,8 +122,10 @@ export const kodyRulesCreateAndApply: Scenario = {
             data?: { uuid?: string; id?: string };
         }>(
             // POST /kody-rules/create-or-update (CreateKodyRuleDto). `type`,
-            // `title`, `rule`, `severity`, `origin` are required by the DTO;
-            // severity is lowercase, origin must be 'user'|'library'|'generated'.
+            // `title`, `rule`, `severity` are required by the DTO; severity is
+            // lowercase. `origin` is optional (defaults to 'manual') and must be
+            // one of the KodyRulesOrigin values: manual, library, past_reviews,
+            // repo_file_sync, onboarding_repo_analysis, mcp_agent, cli.
             `${ctx.target.apiBaseUrl}/kody-rules/create-or-update`,
             {
                 method: "POST",
@@ -135,7 +137,7 @@ export const kodyRulesCreateAndApply: Scenario = {
                     title: ruleName,
                     rule: ruleInstruction,
                     severity: "high",
-                    origin: "user",
+                    origin: "manual",
                     path: "",
                 },
                 timeoutMs: 30_000,

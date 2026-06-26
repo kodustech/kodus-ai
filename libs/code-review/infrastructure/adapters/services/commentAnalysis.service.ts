@@ -43,7 +43,6 @@ import { KodyRuleSeverity } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import {
     IKodyRule,
-    KodyRulesOrigin,
     KodyRulesStatus,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
@@ -449,9 +448,6 @@ export class CommentAnalysisService {
                 rule: rule.rule || '',
                 severity: rule.severity || KodyRuleSeverity.LOW,
                 examples: rule.examples || [],
-                origin: rule.uuid
-                    ? KodyRulesOrigin.LIBRARY
-                    : KodyRulesOrigin.GENERATED,
                 repositoryId: 'global',
                 status: KodyRulesStatus.PENDING,
             }));

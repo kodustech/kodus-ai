@@ -34,6 +34,14 @@ rss: true
                     <span>GIT Provider</span>
                 </label>
                 <label className="kodus-changelog-filter-button">
+                    <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-performance" />
+                    <span>Performance</span>
+                </label>
+                <label className="kodus-changelog-filter-button">
+                    <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-ux-interface" />
+                    <span>UX &amp; Interface</span>
+                </label>
+                <label className="kodus-changelog-filter-button">
                     <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-notifications" />
                     <span>Notifications</span>
                 </label>
@@ -42,6 +50,73 @@ rss: true
                     <span>Kody Rules</span>
                 </label>
             </div>
+        </div>
+    </div>
+
+    <div className="kodus-changelog-release">
+        <div className="kodus-changelog-meta">
+            <span className="kodus-changelog-date">June 22, 2026</span>
+        </div>
+
+        <div className="kodus-changelog-content">
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">What's new</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-git-provider">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Forgejo support is now on par with GitHub &amp; GitLab</div>
+                    <p className="kodus-changelog-copy">Review comments, commit statuses, force-push detection, and webhook coverage now work consistently for Forgejo repositories. If you self-host with Forgejo, Kody behaves just like on any other major platform.</p>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Improvements</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-performance">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Faster PR closing for large repos</div>
+                    <p className="kodus-changelog-copy">Eliminated duplicate API calls when syncing Kody Rules from changed files. PRs with many files now close noticeably faster.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ux-interface">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Cleaner settings UI</div>
+                    <p className="kodus-changelog-copy">Platform settings that don't apply to your current Git provider, such as GitHub-specific options when you're on GitLab, are now hidden automatically. Less clutter, fewer misconfigurations.</p>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Bug fixes</div>
+
+                <div className="kodus-changelog-fix-list">
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Reconnecting a Git provider after disconnecting:</strong> previously, disconnecting a provider left stale integration configs behind, causing reconnects to fail. Now stale rows are properly cleaned up.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Kody conversation replies with empty responses:</strong> resolved an issue where Kody occasionally replied with blank content in PR comment threads when using Claude Sonnet.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">NaN deduplication indices:</strong> added three-layer protection against NaN values appearing in suggestion deduplication indices, preventing rare but confusing duplicate suggestions.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Forgejo prompt field always empty:</strong> the formatPromptForLLM function was reading a non-existent field on Forgejo PRs, causing the prompt section to be blank. Now it reads the correct field.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-self-hosted">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Self-hosted AST graph reliability:</strong> the kodus-graph CLI was installed but not available to the runtime user in self-hosted worker images. Fixed PATH and install order so graph indexing works out of the box.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Orphaned agent trace records:</strong> prevented a race condition in chunked review mode that could leave orphaned <code className="kodus-changelog-code">IN_PROGRESS</code> trace records in the database.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Platform settings not scoped to Git tool:</strong> settings incompatible with your current Git provider were still visible. Now they're properly filtered based on the connected tool.</p>
+                    </div>
+                </div>
+            </div>
+
+            <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
         </div>
     </div>
 
@@ -205,6 +280,46 @@ rss: true
 </div>
 
 <div className="kodus-changelog-rss-source" aria-hidden="true">
+    <Update label="June 22, 2026 - Forgejo support is now on par with GitHub & GitLab" tags={["GIT Provider"]}>
+        Review comments, commit statuses, force-push detection, and webhook coverage now work consistently for Forgejo repositories. If you self-host with Forgejo, Kody behaves just like on any other major platform.
+    </Update>
+
+    <Update label="June 22, 2026 - Faster PR closing for large repos" tags={["Performance"]}>
+        Eliminated duplicate API calls when syncing Kody Rules from changed files. PRs with many files now close noticeably faster.
+    </Update>
+
+    <Update label="June 22, 2026 - Cleaner settings UI" tags={["UX & Interface"]}>
+        Platform settings that don't apply to your current Git provider, such as GitHub-specific options when you're on GitLab, are now hidden automatically. Less clutter, fewer misconfigurations.
+    </Update>
+
+    <Update label="June 22, 2026 - Reconnecting a Git provider after disconnecting" tags={["GIT Provider"]}>
+        Previously, disconnecting a provider left stale integration configs behind, causing reconnects to fail. Now stale rows are properly cleaned up.
+    </Update>
+
+    <Update label="June 22, 2026 - Kody conversation replies with empty responses" tags={["AI Engine"]}>
+        Resolved an issue where Kody occasionally replied with blank content in PR comment threads when using Claude Sonnet.
+    </Update>
+
+    <Update label="June 22, 2026 - NaN deduplication indices" tags={["AI Engine"]}>
+        Added three-layer protection against NaN values appearing in suggestion deduplication indices, preventing rare but confusing duplicate suggestions.
+    </Update>
+
+    <Update label="June 22, 2026 - Forgejo prompt field always empty" tags={["GIT Provider"]}>
+        The formatPromptForLLM function was reading a non-existent field on Forgejo PRs, causing the prompt section to be blank. Now it reads the correct field.
+    </Update>
+
+    <Update label="June 22, 2026 - Self-hosted AST graph reliability" tags={["Self-hosted"]}>
+        The kodus-graph CLI was installed but not available to the runtime user in self-hosted worker images. Fixed PATH and install order so graph indexing works out of the box.
+    </Update>
+
+    <Update label="June 22, 2026 - Orphaned agent trace records" tags={["AI Engine"]}>
+        Prevented a race condition in chunked review mode that could leave orphaned IN_PROGRESS trace records in the database.
+    </Update>
+
+    <Update label="June 22, 2026 - Platform settings not scoped to Git tool" tags={["UX & Interface"]}>
+        Settings incompatible with your current Git provider were still visible. Now they're properly filtered based on the connected tool.
+    </Update>
+
     <Update label="June 15, 2026 - Operational metrics in Cockpit" tags={["Cockpit"]}>
         Track the health of your review pipeline in real time. Throughput, queue, and processing time metrics are now available in Cockpit.
 

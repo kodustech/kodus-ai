@@ -308,6 +308,52 @@ jobs:
             matrix_file: matrix/fast.yml
         secrets: inherit
 
+    # ---- Tier-0 model benchmark (engine changes only) -----------------
+    # The model-quality benchmark used to be its own push-triggered workflow,
+    # but it raced this async deploy: it gated on /health reporting the pushed
+    # SHA within ~15min while the build+atlantis+ECS rollout takes far longer,
+    # so every engine merge aborted at the gate (measured nothing for weeks).
+    # Driving it from here — after the image is built and rolling out — means
+    # its settle gate only waits for the rollout. We keep the original "only on
+    # engine changes" scope via a paths-filter (the filter that used to live in
+    # the benchmark's `push.paths`); a backend change that doesn't touch the
+    # engine builds+deploys as usual but skips the $17 benchmark.
+    detect-engine-change:
+        name: Detect engine-path change
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        outputs:
+            engine: ${{ steps.filter.outputs.engine }}
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: dorny/paths-filter@v4.0.1
+              id: filter
+              with:
+                  filters: |
+                      engine:
+                        - 'libs/code-review/**'
+                        - 'libs/ee/codeBase/**'
+                        - 'libs/ee/codeReview/**'
+                        - 'libs/ee/kodyRules/**'
+                        - 'libs/kodyRules/**'
+                        - 'libs/sandbox/**'
+                        - 'libs/core/infrastructure/services/tokenTracking/**'
+                        - 'apps/web/src/features/ee/byok/_data/curated-models.json'
+                        - 'tests/e2e/benchmark/**'
+                        - 'scripts/benchmark/tier0-bench-prs.json'
+
+    benchmark-engine:
+        name: Tier-0 model benchmark
+        needs: [ build_push_and_open_pr, detect-engine-change ]
+        # Only when the engine actually changed AND the image built/pushed OK
+        # (so QA will roll out to the SHA the benchmark's settle gate waits for).
+        if: needs.build_push_and_open_pr.result == 'success' && needs.detect-engine-change.outputs.engine == 'true'
+        permissions:
+            contents: read
+        uses: ./.github/workflows/code-review-model-benchmark.yml
+        secrets: inherit
+
     notify-build-failure:
         # The actual build job has Trivy + AWS + Docker + GitOps steps;
         # any of them failing leaves QA stuck on the previous image with

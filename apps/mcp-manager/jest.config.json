@@ -16,6 +16,6 @@
   "coverageDirectory": "../coverage",
   "coveragePathIgnorePatterns": ["dist", "node_modules", "test", "src/main.ts", ".eslintrc.js"],
   "transformIgnorePatterns": [
-    "node_modules/(?!(@composio/core|chalk|ansi-styles)/)"
+    "node_modules/(?!(chalk|ansi-styles)/)"
   ]
 }

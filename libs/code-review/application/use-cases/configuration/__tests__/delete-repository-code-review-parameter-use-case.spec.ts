@@ -18,6 +18,10 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
                         : `${repositoryFolder}/${relativePath}`,
                 ),
             sanitizeFileName: jest.fn().mockReturnValue('memory-rule'),
+            buildRuleFileName: jest.fn(
+                (_t?: string, u?: string) =>
+                    `memory-rule${u ? `-${String(u).slice(0, 8)}` : ''}.yml`,
+            ),
         };
 
         const useCase = new DeleteRepositoryCodeReviewParameterUseCase(
@@ -117,7 +121,7 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
                     operation: 'delete',
                 }),
                 expect.objectContaining({
-                    path: 'repo-1-name/.kody-rules/memories/memory-rule.yml',
+                    path: 'repo-1-name/.kody-rules/memories/memory-rule-rule-2.yml',
                     operation: 'delete',
                 }),
             ]),
@@ -158,6 +162,10 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
                         `${repositoryFolder}/${groupFolderName}/.kody-rules/${rulesDirectory}/${fileName}`,
                 ),
             sanitizeFileName: jest.fn().mockReturnValue('fallback-rule'),
+            buildRuleFileName: jest.fn(
+                (_t?: string, u?: string) =>
+                    `fallback-rule${u ? `-${String(u).slice(0, 8)}` : ''}.yml`,
+            ),
         };
 
         const useCase = new DeleteRepositoryCodeReviewParameterUseCase(
@@ -277,7 +285,7 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
                     operation: 'delete',
                 }),
                 expect.objectContaining({
-                    path: 'repo-1-name/src%2Fapi/.kody-rules/review/fallback-rule.yml',
+                    path: 'repo-1-name/src%2Fapi/.kody-rules/review/fallback-rule-rule-dir.yml',
                     operation: 'delete',
                 }),
             ]),

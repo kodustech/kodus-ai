@@ -16,11 +16,15 @@ import { AllTeamsProvider } from "src/core/providers/all-teams-context";
 import { AuthProvider } from "src/core/providers/auth.provider";
 import { SelectedTeamProvider } from "src/core/providers/selected-team-context";
 import { TEAM_STATUS } from "src/core/types";
+import { getCurrentPathnameOnServerComponents } from "src/core/utils/headers";
 import { OrganizationProvider } from "src/features/organization/_providers/organization-context";
 
 import { SetupGithubStars } from "./_components/setup-github-stars";
 import { SetupUserNav } from "./_components/setup-user-nav";
 import { SetupProgressSaver } from "./setup/_components/setup-step-tracker";
+
+/** OAuth providers redirect here after authorization; must run even when onboarding is finished. */
+const MCP_OAUTH_CALLBACK_PATH = "/setup/mcp/oauth";
 
 export default async function Layout(props: React.PropsWithChildren) {
     const [teams, organizationId, organizationName, session] =
@@ -50,7 +54,14 @@ export default async function Layout(props: React.PropsWithChildren) {
             teamId: candidateTeamId,
         }).catch(() => null);
         if (platformConfigs?.configValue?.finishOnboard) {
-            redirect("/");
+            const currentPath = await getCurrentPathnameOnServerComponents();
+            const isMcpOauthCallback =
+                currentPath === MCP_OAUTH_CALLBACK_PATH ||
+                currentPath?.startsWith(`${MCP_OAUTH_CALLBACK_PATH}/`);
+
+            if (!isMcpOauthCallback) {
+                redirect("/");
+            }
         }
     }
 

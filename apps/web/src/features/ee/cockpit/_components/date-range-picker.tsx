@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@components/ui/button";
 import { Calendar } from "@components/ui/calendar";
 import {
@@ -17,6 +17,7 @@ import { CalendarIcon } from "lucide-react";
 import { type PropsRange } from "react-day-picker";
 
 import { setCockpitDateRangeCookie } from "../_actions/set-cockpit-date-range";
+import { COCKPIT_PARAM } from "../_constants";
 
 type Props = Omit<PropsRange, "mode"> & {
     cookieValue: string | undefined;
@@ -69,10 +70,17 @@ const defaultItem = ranges[0];
 
 export const DateRangePicker = ({ cookieValue, ...props }: Props) => {
     const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     const [loading, startTransition] = useTransition();
     const [open, setOpen] = useState(false);
 
     const [selectedRange, setSelectedRange] = useState<DateRangeString>(() => {
+        // URL wins: keep the trigger label in sync with a shared link.
+        const urlFrom = searchParams.get(COCKPIT_PARAM.start);
+        const urlTo = searchParams.get(COCKPIT_PARAM.end);
+        if (urlFrom && urlTo) return { from: urlFrom, to: urlTo };
+
         const cookie = cookieValue;
 
         if (!cookie) return defaultItem.range;
@@ -92,6 +100,20 @@ export const DateRangePicker = ({ cookieValue, ...props }: Props) => {
             to: cookieDateRange.to,
         };
     });
+
+    // Persist to cookie (cross-session default) and push the range onto
+    // the URL (source of truth) so the view is shareable. The navigation
+    // re-runs the server slots, which now read the range from the URL.
+    const commitRange = (range: DateRangeString) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set(COCKPIT_PARAM.start, range.from);
+        params.set(COCKPIT_PARAM.end, range.to);
+
+        startTransition(async () => {
+            await setCockpitDateRangeCookie(range);
+            router.push(`${pathname}?${params.toString()}`);
+        });
+    };
 
     const label = ranges.find(
         (r) =>
@@ -189,15 +211,7 @@ export const DateRangePicker = ({ cookieValue, ...props }: Props) => {
 
                             setOpen(false);
                             setSelectedRange(range);
-
-                            startTransition(async () => {
-                                await setCockpitDateRangeCookie(range);
-                                // Parallel-route slots (the cockpit tabs)
-                                // don't reliably re-render from revalidateTag
-                                // alone — force a refresh so they re-read the
-                                // new range cookie.
-                                router.refresh();
-                            });
+                            commitRange(range);
                         }}
                     />
 
@@ -223,12 +237,9 @@ export const DateRangePicker = ({ cookieValue, ...props }: Props) => {
                                         from: r.range.from,
                                         to: r.range.to,
                                     });
-
-                                    startTransition(async () => {
-                                        await setCockpitDateRangeCookie(
-                                            r.range,
-                                        );
-                                        router.refresh();
+                                    commitRange({
+                                        from: r.range.from,
+                                        to: r.range.to,
                                     });
                                 }}>
                                 {r.label}

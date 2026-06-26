@@ -25,6 +25,7 @@ import {
     ReviewOperationalMetricsPeriod,
     ReviewOperationalMetricsWeeklyRow,
     ReviewOperationalRateComparison,
+    ReviewQualityByRuleGroupRow,
     SuggestionsExplorerItem,
     SuggestionsExplorerQuery,
     SuggestionsExplorerResult,
@@ -772,6 +773,54 @@ export class CockpitReviewAnalyticsService
             thumbsUp: Number(r.thumbs_up),
             thumbsDown: Number(r.thumbs_down),
             lastTriggeredAt: r.last_triggered_at,
+        }));
+    }
+
+    /**
+     * Review quality split into rule-driven vs Kodus-native suggestions in a
+     * single pass. Same closed-PR universe and IMPLEMENTED definition as every
+     * other chart; feedback is LEFT-joined (one row per suggestion, so no
+     * fan-out). `IS_KODY_RULE` matches the severity chart's predicate — a
+     * suggestion is rule-driven when it enforces a Kody Rule (or is labelled
+     * as such) — so the report's group split is honest about origin rather
+     * than approximating from `label` alone.
+     */
+    async getReviewQualityByRuleGroup(
+        q: CockpitRangeQuery,
+    ): Promise<ReviewQualityByRuleGroupRow[]> {
+        const params: unknown[] = [];
+        const where = this.closedPrWhere(q, params);
+        const IS_KODY_RULE = `(s."brokenKodyRulesIds" IS NOT NULL OR lower(s."label") = 'kody_rules')`;
+
+        const rows = (await this.ds.query(
+            `SELECT
+                CASE WHEN ${IS_KODY_RULE} THEN 'kody_rules' ELSE 'general' END AS grp,
+                COUNT(*)::int AS sent,
+                COUNT(*) FILTER (WHERE s."suggestionImplementationStatus" ${IMPLEMENTED})::int AS implemented,
+                COALESCE(SUM(f."thumbs_up"), 0)::int AS thumbs_up,
+                COALESCE(SUM(f."thumbs_down"), 0)::int AS thumbs_down
+              FROM "analytics"."suggestions_mv" s
+              JOIN "analytics"."pull_requests_opt" pr ON pr."_id" = s."pullRequestId"
+              LEFT JOIN "analytics"."suggestion_feedback" f
+                     ON f."suggestion_id" = s."suggestion_id"
+             WHERE ${where}
+             GROUP BY grp`,
+            params,
+        )) as Array<{
+            grp: 'kody_rules' | 'general';
+            sent: number;
+            implemented: number;
+            thumbs_up: number;
+            thumbs_down: number;
+        }>;
+
+        return rows.map((r) => ({
+            group: r.grp,
+            sent: Number(r.sent),
+            implemented: Number(r.implemented),
+            rate: this.rate(Number(r.sent), Number(r.implemented)),
+            thumbsUp: Number(r.thumbs_up),
+            thumbsDown: Number(r.thumbs_down),
         }));
     }
 

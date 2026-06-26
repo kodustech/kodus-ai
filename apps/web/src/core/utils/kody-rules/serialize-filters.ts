@@ -5,7 +5,7 @@
  * trivially testable.
  *
  * Param shape:
- *   ?q=<text>&origins=Auto-sync,Onboard&severities=critical,high&onlyOrphans=1
+ *   ?q=<text>&origins=Auto-sync,Onboarding&severities=critical,high&onlyOrphans=1
  */
 import {
     EMPTY_LIST_FILTERS,
@@ -15,9 +15,11 @@ import type { InferredRuleOrigin } from "./infer-origin";
 
 const ALLOWED_ORIGINS: ReadonlySet<InferredRuleOrigin> = new Set([
     "Auto-sync",
-    "Onboard",
+    "Onboarding",
     "Kody-generated",
     "Library",
+    "MCP/Agent",
+    "CLI",
     "manual",
 ]);
 

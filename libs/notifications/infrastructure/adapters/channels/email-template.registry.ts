@@ -43,9 +43,12 @@ import RuleFileReferencesInvalidEmail, {
 import TrialExpiringEmail, {
     trialExpiringEmailMeta,
 } from '@libs/common/email/templates/trial-expiring';
-import WeeklyRecapEmail, {
-    weeklyRecapEmailMeta,
-} from '@libs/common/email/templates/weekly-recap';
+import RepoReportEmail, {
+    repoReportEmailMeta,
+} from '@libs/common/email/templates/repo-report';
+import OrgReportEmail, {
+    orgReportEmailMeta,
+} from '@libs/common/email/templates/org-report';
 import IdeRulesSyncedEmail, {
     ideRulesSyncedEmailMeta,
 } from '@libs/common/email/templates/ide-rules-synced';
@@ -172,14 +175,28 @@ export const EMAIL_TEMPLATE_REGISTRY: Partial<
         };
     },
 
-    [NotificationEvent.WEEKLY_RECAP]: (metadata) => {
+    [NotificationEvent.REPO_REPORT]: (metadata) => {
+        const props = metadata.props as Record<string, unknown>;
+        const sections = (props.sections as Array<{ repository?: string }>) ?? [];
+        return {
+            ...repoReportEmailMeta({
+                repoCount: sections.length,
+                repoName: sections[0]?.repository,
+                startDate: (props.startDate as string) ?? '',
+                endDate: (props.endDate as string) ?? '',
+            }),
+            react: RepoReportEmail(props as any),
+        };
+    },
+
+    [NotificationEvent.ORG_REPORT]: (metadata) => {
         const props = metadata.props as Record<string, unknown>;
         return {
-            ...weeklyRecapEmailMeta({
-                kodySuggestions: (props.kodySuggestions as number) ?? 0,
-                criticalIssues: (props.criticalIssues as number) ?? 0,
+            ...orgReportEmailMeta({
+                company: (props.company as string) ?? '',
+                startDate: (props.startDate as string) ?? '',
             }),
-            react: WeeklyRecapEmail(props as any),
+            react: OrgReportEmail(props as any),
         };
     },
 

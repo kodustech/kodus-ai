@@ -70,6 +70,7 @@ export class AddLibraryKodyRulesUseCase {
                         undefined,
                         undefined,
                         libraryKodyRules.teamId,
+                        this.request.user,
                     );
 
                 if (!result) {
@@ -109,6 +110,7 @@ export class AddLibraryKodyRulesUseCase {
                             undefined,
                             undefined,
                             libraryKodyRules.teamId,
+                            this.request.user,
                         );
 
                     if (!result) {

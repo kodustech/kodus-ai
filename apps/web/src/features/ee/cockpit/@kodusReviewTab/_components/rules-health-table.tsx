@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DataTable } from "@components/ui/data-table";
 import { cn } from "src/core/utils/components";
 
+import { COCKPIT_REVIEW_PARAM } from "../../_constants";
+import { useShallowParam } from "../../_helpers/use-shallow-param";
 import type {
     KodyRuleHealthRow,
     KodyRuleHealthState,
 } from "../../_services/analytics/review/fetch";
 import { rulesColumns } from "./rules-columns";
 
-const FILTERS: Array<{ value: KodyRuleHealthState | "all"; label: string }> = [
+type RuleFilter = KodyRuleHealthState | "all";
+
+const FILTERS: Array<{ value: RuleFilter; label: string }> = [
     { value: "all", label: "All" },
     { value: "healthy", label: "Healthy" },
     { value: "noisy", label: "Noisy" },
@@ -19,9 +22,19 @@ const FILTERS: Array<{ value: KodyRuleHealthState | "all"; label: string }> = [
     { value: "stale", label: "Stale" },
 ];
 
+const FILTER_VALUES = FILTERS.map((f) => f.value);
+
 export const RulesHealthTable = ({ data }: { data: KodyRuleHealthRow[] }) => {
     const router = useRouter();
-    const [filter, setFilter] = useState<KodyRuleHealthState | "all">("all");
+    const [filter, setFilter] = useShallowParam<RuleFilter>(
+        COCKPIT_REVIEW_PARAM.rulesHealth,
+        "all",
+        FILTER_VALUES,
+    );
+    const [search, setSearch] = useShallowParam<string>(
+        COCKPIT_REVIEW_PARAM.rulesQuery,
+        "",
+    );
 
     if (!data.length) {
         return (
@@ -58,6 +71,8 @@ export const RulesHealthTable = ({ data }: { data: KodyRuleHealthRow[] }) => {
                 data={filtered}
                 searchable
                 searchPlaceholder="Search rules…"
+                searchValue={search}
+                onSearchChange={setSearch}
                 pageSize={10}
                 getRowId={(row) => row.ruleId}
                 onRowClick={(row) =>

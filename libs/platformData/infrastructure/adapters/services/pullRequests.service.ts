@@ -856,6 +856,16 @@ export class PullRequestsService implements IPullRequestsService {
         }
     }
 
+    /** Mirror of normalizeRepoPath (code-review): strip leading slashes,
+     * backslashes → /, trim. Kept local to avoid a platformData → code-review
+     * layer dependency. */
+    private normalizeRepoPath(path?: string): string {
+        return String(path || '')
+            .replace(/^\/+/, '')
+            .replace(/\\/g, '/')
+            .trim();
+    }
+
     private getSuggestionsForFile(
         filePath: string,
         prioritizedSuggestions: Array<ISuggestion>,
@@ -876,7 +886,13 @@ export class PullRequestsService implements IPullRequestsService {
 
             const filteredSuggestions = allSuggestions
                 .filter((suggestion) => {
-                    const matches = suggestion.relevantFile === filePath;
+                    // Normalize both sides: an exact-string match silently
+                    // dropped (never persisted) any finding whose relevantFile
+                    // differed only in path shape (leading slash, backslashes,
+                    // whitespace) from the changed file's path.
+                    const matches =
+                        this.normalizeRepoPath(suggestion.relevantFile) ===
+                        this.normalizeRepoPath(filePath);
                     return matches;
                 })
                 .map((suggestion) => ({

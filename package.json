@@ -260,7 +260,6 @@
         "@ai-sdk/openai": "^3.0.64",
         "@ai-sdk/openai-compatible": "^2.0.47",
         "@casl/ability": "^6.8.1",
-        "@composio/core": "^0.1.36-next.2",
         "@faker-js/faker": "^10.4.0",
         "@fastify/cors": "^11.2.0",
         "@fastify/swagger": "^9.7.0",

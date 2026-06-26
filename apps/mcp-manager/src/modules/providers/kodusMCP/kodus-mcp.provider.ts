@@ -1,6 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 import managedMcpServers from '../../../config/managed-mcp-servers.json';
+import {
+    defaultAuthBlock,
+    getAuthMethod,
+    ManagedAuthMethod,
+    normalizeAuthMethods,
+    resolveAuthMethodEnv,
+    toPublicAuthMethods,
+} from './auth-methods';
 import { CustomClient } from '../../../clients/custom';
 import { KodusMCPClient } from '../../../clients/kodusMCP';
 import {
@@ -21,6 +29,7 @@ import {
     MCPTool,
 } from '../interfaces/provider.interface';
 import { IntegrationDescriptionService } from '../services/integration-description.service';
+import { defaultReadOnlyToolSlugs } from '../read-only-tools';
 
 interface ManagedIntegrationConfig {
     id: string;
@@ -32,7 +41,26 @@ interface ManagedIntegrationConfig {
     auth: {
         type: MCPIntegrationAuthType;
     } & MCPIntegrationAllUniqueFields;
+    /**
+     * Optional multi-method auth declaration. When present, the end user picks
+     * one method per connection (e.g. Jira: OAuth or API token). Normalized at
+     * load time into {@link ManagedAuthMethod}[]; the `auth` block above is then
+     * *derived* from the default method, so config declares auth in exactly one
+     * place.
+     */
+    authMethods?: Array<
+        { type: MCPIntegrationAuthType } & Record<string, unknown>
+    >;
 }
+
+/**
+ * The raw shape as it appears in `managed-mcp-servers.json`: an entry may
+ * declare a single `auth` block (legacy) OR an `authMethods` array (multi-method),
+ * so `auth` is optional here and filled in at load time.
+ */
+type RawManagedIntegrationConfig = Omit<ManagedIntegrationConfig, 'auth'> & {
+    auth?: ManagedIntegrationConfig['auth'];
+};
 
 @Injectable()
 export class KodusMCPProvider extends BaseProvider {
@@ -40,7 +68,7 @@ export class KodusMCPProvider extends BaseProvider {
     private readonly integrationDescriptionService: IntegrationDescriptionService;
     private readonly managedIntegrations: Map<
         string,
-        { config: ManagedIntegrationConfig }
+        { config: ManagedIntegrationConfig; authMethods: ManagedAuthMethod[] }
     > = new Map();
     statusMap: Record<string, MCPConnectionStatus> = {
         ACTIVE: MCPConnectionStatus.ACTIVE,
@@ -67,13 +95,28 @@ export class KodusMCPProvider extends BaseProvider {
             // both dev and prod) inlines the JSON into the compiled bundle,
             // so there is no runtime fs lookup. Path-resolve / dist-fallback
             // are not needed.
-            const managedConfigs =
-                managedMcpServers as ManagedIntegrationConfig[];
+            const rawConfigs =
+                managedMcpServers as RawManagedIntegrationConfig[];
 
-            for (const entry of managedConfigs) {
-                entry.baseUrl = this.resolveManagedBaseUrl(entry.baseUrl);
-                this.managedIntegrations.set(entry.id, {
-                    config: entry,
+            for (const raw of rawConfigs) {
+                const authMethods = normalizeAuthMethods(raw).map((method) =>
+                    resolveAuthMethodEnv(method, process.env),
+                );
+                const config: ManagedIntegrationConfig = {
+                    ...raw,
+                    baseUrl: this.resolveManagedBaseUrl(raw.baseUrl),
+                    // Single source of truth: derive the legacy `auth` block
+                    // (read by the server-side tool-listing/OAuth paths) from the
+                    // default method when the entry only declares `authMethods`.
+                    auth:
+                        raw.auth ??
+                        (defaultAuthBlock(
+                            authMethods,
+                        ) as ManagedIntegrationConfig['auth']),
+                };
+                this.managedIntegrations.set(config.id, {
+                    config,
+                    authMethods,
                 });
             }
         } catch (error) {
@@ -198,7 +241,7 @@ export class KodusMCPProvider extends BaseProvider {
                 id: integration.id,
                 name: integration.name,
                 description: this.integrationDescriptionService.getDescription(
-                    'composio',
+                    'kodusmcp',
                     integration.appName,
                 ),
                 authScheme: integration.authScheme,
@@ -260,6 +303,24 @@ export class KodusMCPProvider extends BaseProvider {
         }
     }
 
+    /**
+     * List a managed integration's tools using the org's stored credential
+     * WITHOUT swallowing errors (unlike {@link getIntegrationTools}, which uses
+     * `safeGetTools`). Used to verify a just-submitted token actually works
+     * before the connection is marked active — bad credentials throw here.
+     */
+    async verifyManagedConnection(
+        integrationId: string,
+        organizationId: string,
+    ): Promise<MCPTool[]> {
+        const client = await this.buildManagedClient(
+            organizationId,
+            integrationId,
+        );
+
+        return client.getTools();
+    }
+
     async updateSelectedTools(
         integrationId: string,
         organizationId: string,
@@ -298,12 +359,13 @@ export class KodusMCPProvider extends BaseProvider {
                     config.integrationId,
                 );
                 const tools = await this.safeGetTools(client);
-                const allToolSlugs = tools.map((tool) => tool.slug);
 
+                // Default to read-only tools (verification use case); admins can
+                // widen the selection afterwards via the tools UI.
                 const allowedTools =
                     config.allowedTools && config.allowedTools.length > 0
                         ? config.allowedTools
-                        : allToolSlugs;
+                        : defaultReadOnlyToolSlugs(tools);
 
                 return {
                     id: managed.config.id,
@@ -387,16 +449,18 @@ export class KodusMCPProvider extends BaseProvider {
             );
         }
 
-        let active = true;
+        // Active when the integration needs no auth (a `none` method), or when
+        // the org has connected with *any* method (OAuth grant or stored token).
+        const requiresAuth = entry.authMethods.some(
+            (method) => method.type !== MCPIntegrationAuthType.NONE,
+        );
 
-        if (entry.config.auth.type === MCPIntegrationAuthType.OAUTH2) {
-            const status = await this.integrationOAuthService.getOAuthStatus(
-                organizationId,
-                integrationId,
-            );
-
-            active = status === MCPIntegrationOAuthStatus.ACTIVE;
-        }
+        const active = requiresAuth
+            ? await this.integrationOAuthService.hasManagedCredential(
+                  organizationId,
+                  integrationId,
+              )
+            : true;
 
         let tools: MCPTool[] = [];
         if (active) {
@@ -419,6 +483,7 @@ export class KodusMCPProvider extends BaseProvider {
             appName: entry.config.name,
             logo: entry.config.logoUrl,
             provider: MCPProviderType.KODUSMCP,
+            authMethods: toPublicAuthMethods(entry.authMethods),
             allowedTools: tools.map((tool) => tool.slug),
             baseUrl: entry.config.baseUrl,
             protocol: entry.config.protocol ?? 'http',
@@ -442,42 +507,65 @@ export class KodusMCPProvider extends BaseProvider {
             entry.config,
         ) as any;
 
-        if (entry.config.auth.type === MCPIntegrationAuthType.OAUTH2) {
-            let oauthState = await this.integrationOAuthService.getOAuthState(
+        // Resolve the org's auth header for *whichever* method it connected with
+        // (refreshed OAuth bearer or stored static token). Passing it as a plain
+        // header keeps this path method-agnostic — no OAuth-only special-casing.
+        const authHeaders =
+            await this.integrationOAuthService.resolveManagedAuthHeaders(
                 organizationId,
                 integrationId,
             );
 
-            if (oauthState) {
-                try {
-                    oauthState =
-                        await this.integrationOAuthService.refreshOAuthStateIfNeeded(
-                            {
-                                organizationId,
-                                integrationId,
-                                oauthState,
-                            },
-                        );
-                } catch (error) {
-                    console.error(
-                        'Failed to refresh managed Kodus MCP OAuth tokens:',
-                        error,
-                    );
-                }
-            }
+        return new CustomClient({
+            ...baseIntegration,
+            authType: MCPIntegrationAuthType.NONE,
+            headers: { ...(baseIntegration.headers ?? {}), ...authHeaders },
+        });
+    }
 
-            return new CustomClient({
-                ...baseIntegration,
-                tokens: oauthState?.tokens,
-            });
+    /**
+     * The selectable auth methods for a managed integration (e.g. Jira: OAuth or
+     * API token). Single-auth entries normalize to one default method.
+     */
+    getAuthMethods(integrationId: string): ManagedAuthMethod[] {
+        const entry = this.managedIntegrations.get(integrationId);
+
+        if (!entry) {
+            throw new Error(
+                `Integration ${integrationId} não suportada pela Kodus`,
+            );
         }
 
-        return new CustomClient(baseIntegration);
+        return entry.authMethods;
+    }
+
+    /**
+     * Static config for a managed integration (no OAuth status / tool listing),
+     * used when creating a connection row for the bring-your-own-token path.
+     */
+    getManagedConfig(integrationId: string): {
+        id: string;
+        name: string;
+        baseUrl: string;
+        protocol: MCPIntegrationProtocol;
+        logoUrl: string;
+    } {
+        const entry = this.managedIntegrations.get(integrationId);
+
+        if (!entry) {
+            throw new Error(
+                `Integration ${integrationId} não suportada pela Kodus`,
+            );
+        }
+
+        const { id, name, baseUrl, protocol, logoUrl } = entry.config;
+        return { id, name, baseUrl, protocol, logoUrl };
     }
 
     async initiateManagedOAuth(
         organizationId: string,
         integrationId: string,
+        authMethodId?: string,
     ): Promise<string> {
         try {
             const entry = this.managedIntegrations.get(integrationId);
@@ -488,13 +576,15 @@ export class KodusMCPProvider extends BaseProvider {
                 );
             }
 
-            if (entry.config.auth.type !== MCPIntegrationAuthType.OAUTH2) {
+            const method = getAuthMethod(entry.authMethods, authMethodId);
+
+            if (!method || method.type !== MCPIntegrationAuthType.OAUTH2) {
                 throw new Error('Integration is not OAuth2');
             }
 
             const { baseUrl } = entry.config;
             const { oauthScopes, dynamicRegistration, clientId, clientSecret } =
-                entry.config.auth as any;
+                method;
 
             const oauthInit = await this.integrationOAuthService.initiateOAuth({
                 baseUrl,
@@ -550,8 +640,12 @@ export class KodusMCPProvider extends BaseProvider {
                 );
             }
 
-            if (entry.config.auth.type !== MCPIntegrationAuthType.OAUTH2) {
-                throw new Error('Integration is not OAuth2');
+            if (
+                !entry.authMethods.some(
+                    (method) => method.type === MCPIntegrationAuthType.OAUTH2,
+                )
+            ) {
+                throw new Error('Integration does not support OAuth2');
             }
 
             const { baseUrl } = entry.config;

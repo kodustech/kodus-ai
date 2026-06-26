@@ -10,15 +10,26 @@ name: "Benchmark: tier-0 model code review"
 # (`benchmark:scorecard`, judged by Sonnet vs golden_comments) is uploaded as an
 # ARTIFACT for regression tracking against main — it is NOT a gate.
 #
-# Triggers (locked spec 2026-05-28, revised 2026-05-28):
-#   - push to main on engine paths → FULL run (5 models, 5 PRs each = 25
-#     reviews, ~$17, ~40min). Notify-only.
+# Triggers (locked spec 2026-05-28, revised 2026-06-26):
+#   - workflow_call from qa-build-push-and-pr-green.yml AFTER the QA GitOps
+#     deploy of the engine image → FULL run (5 models, 5 PRs each = 25
+#     reviews, ~$17, ~40min). Notify-only. That workflow guards the call
+#     behind an engine-paths filter, so it still only runs when the engine
+#     actually changes.
 #   - workflow_dispatch → manual: pin one model (only_model).
+# WHY NOT push (the old trigger, removed 2026-06-26): the benchmark used to
+# fire on the SAME push that kicks off the QA deploy, then wait ≤15min for
+# /health to report the pushed SHA. But the QA deploy is async and slow
+# (arm64 build + atlantis apply + ECS blue/green ≫ 15min), so the version
+# NEVER landed in the window and EVERY engine merge aborted at the settle
+# gate — the benchmark silently measured nothing for weeks. Driving it from
+# the deploy workflow means the image is already built when we start, so the
+# gate only waits for the rollout. (See settle step + the deploy workflow.)
 # NO pull_request trigger: the benchmark drives reviews on qa.web.kodus.io,
 # which runs main's image — a PR-time LIGHT run would benchmark MAIN's
 # engine quality (not the PR's), defeating the purpose. The right signal
 # at PR-time is the kody rule "engine sem benchmark" reminding the dev to
-# update the dataset; the FULL run after merge measures the actual change.
+# update the dataset; the FULL run after deploy measures the actual change.
 # NO nightly cron: full FULL run only when the engine actually changes,
 # to keep cost bounded. Opus is dropped at the driver level
 # (tests/e2e/benchmark/run.ts DEFAULT_EXCLUDED) — ~$23/run extra and not
@@ -46,21 +57,17 @@ on:
                 required: false
                 default: ""
                 type: string
-    push:
-        branches: [main]
-        paths:
-            # Engine paths — anything that can change review OUTPUT quality.
-            # Stages/agents/prompts/rules/sandbox/BYOK + the model catalog.
-            - "libs/code-review/**"
-            - "libs/ee/codeBase/**"
-            - "libs/ee/codeReview/**"
-            - "libs/ee/kodyRules/**"
-            - "libs/kodyRules/**"
-            - "libs/sandbox/**"
-            - "libs/core/infrastructure/services/tokenTracking/**"
-            - "apps/web/src/features/ee/byok/_data/curated-models.json"
-            - "tests/e2e/benchmark/**"
-            - "scripts/benchmark/tier0-bench-prs.json"
+    # Called by the QA GitOps deploy once the engine image is built + rolling
+    # out. The engine-paths filter that used to live in `push.paths` now lives
+    # in the caller (qa-build-push-and-pr-green.yml → detect-engine-change), so
+    # this still only runs when review-output-affecting code changes.
+    workflow_call:
+        inputs:
+            only_model:
+                description: "Restrict to one model slug; empty = full run"
+                required: false
+                default: ""
+                type: string
 
 concurrency:
     # Single benchmark tenant + shared repos → never run two at once.
@@ -95,33 +102,36 @@ jobs:
               working-directory: tests/e2e
               run: npm install --no-audit --no-fund
 
-            - name: Decide scope (push main = full, dispatch = manual override)
+            - name: Decide scope (no model pinned = full, else restrict)
               id: scope
+              # `inputs.only_model` is populated for BOTH workflow_call (the
+              # deploy passes nothing → full) and workflow_dispatch (a dev may
+              # pin one model, e.g. "opus-4-7" to opt into the excluded model).
+              # Keying on the input — not the event — keeps both paths correct.
               run: |
                   set -euo pipefail
-                  ONLY_MODEL_INPUT="${{ github.event.inputs.only_model }}"
+                  ONLY_MODEL_INPUT="${{ inputs.only_model }}"
 
-                  if [ "${{ github.event_name }}" = "push" ]; then
-                      # FULL on merge: all recommended models EXCEPT the ones
-                      # excluded at the driver level (Opus, see run.ts
-                      # DEFAULT_EXCLUDED) — 5 models, ~$17.
-                      echo "only_model=" >> "$GITHUB_OUTPUT"
-                      echo "Full run (engine merged to main): 5 models (Opus excluded by driver)"
-                  else
-                      # workflow_dispatch — pass through whatever was given,
-                      # including "opus-4-7" to opt into the otherwise-excluded model.
+                  if [ -n "$ONLY_MODEL_INPUT" ]; then
                       echo "only_model=$ONLY_MODEL_INPUT" >> "$GITHUB_OUTPUT"
-                      echo "Manual dispatch: only_model='$ONLY_MODEL_INPUT'"
+                      echo "Restricted run: only_model='$ONLY_MODEL_INPUT'"
+                  else
+                      # FULL: all recommended models EXCEPT the ones excluded at
+                      # the driver level (Opus, see run.ts DEFAULT_EXCLUDED) —
+                      # 5 models, ~$17.
+                      echo "only_model=" >> "$GITHUB_OUTPUT"
+                      echo "Full run: 5 models (Opus excluded by driver)"
                   fi
 
             - name: Wait for QA backend to settle on this build (avoid deploy-race)
               env:
                   CLOUD_WEB_BASE_URL: ${{ vars.CLOUD_QA_WEB_URL || 'https://qa.web.kodus.io' }}
                   QA_WAF_BYPASS_HEADER: ${{ secrets.QA_WAF_BYPASS_HEADER }}
-                  # The benchmark fires on the SAME push that triggers the QA GitOps
-                  # deploy of github.sha. Gate on the live /health version matching
-                  # this SHA so the benchmark BLOCKS until its own rollout has fully
-                  # landed — and stays settled — before opening 25 PRs. Empty on
+                  # When called from the QA deploy (caller event = push), the
+                  # engine image for github.sha was just built and is rolling out
+                  # via atlantis/ECS. Gate on /health reporting this SHA so the
+                  # benchmark BLOCKS until that rollout has fully landed — and
+                  # stays settled — before opening 25 PRs. Empty on a direct
                   # workflow_dispatch (no deploy in flight) → pure readiness probe.
                   EXPECTED_VERSION: ${{ github.event_name == 'push' && github.sha || '' }}
               run: |
@@ -131,20 +141,24 @@ jobs:
                   if [ -n "${QA_WAF_BYPASS_HEADER:-}" ]; then
                       WAF_HDR=(-H "x-kodus-e2e: ${QA_WAF_BYPASS_HEADER}")
                   fi
-                  # On push this runs alongside the QA GitOps deploy, so it can hit
-                  # the backend mid-rollout: the gateway answers 403/5xx/000, OR the
-                  # API answers app-level for a moment and then restarts again as the
-                  # rollout rolls across replicas — and a single momentary 200 is
-                  # exactly how the review WORKER ends up not-yet-consuming when the
-                  # 25 reviews fire (every model × repo then "review timeout", the
-                  # 2026-06-12 red). So we do NOT proceed on the first healthy probe:
-                  # we require the backend to stay app-ready AND on THIS build for
-                  # several CONSECUTIVE checks, proving the rollout has settled.
+                  # This runs after the deploy job built+pushed the image and
+                  # opened the infra PR, so it hits the backend mid-rollout: the
+                  # gateway answers 403/5xx/000, OR the API answers app-level for a
+                  # moment and then restarts again as the rollout rolls across
+                  # replicas — and a single momentary 200 is exactly how the review
+                  # WORKER ends up not-yet-consuming when the 25 reviews fire (every
+                  # model × repo then "review timeout", the 2026-06-12 red). So we do
+                  # NOT proceed on the first healthy probe: we require the backend to
+                  # stay app-ready AND on THIS build for several CONSECUTIVE checks,
+                  # proving the rollout has settled. Budget covers the atlantis apply
+                  # + ECS blue/green rollout (the build itself already finished in the
+                  # deploy job) — 180×10s = ~30min.
                   echo "Probing $BASE/auth/login for app-level readiness (settle gate)…"
                   NEED_OK=3          # consecutive clean probes required to proceed
                   SETTLE_SLEEP=10    # spacing between probes (s)
+                  MAX_TRIES=180      # ~30min ceiling for the rollout to land + settle
                   ok_streak=0
-                  for i in $(seq 1 90); do
+                  for i in $(seq 1 "$MAX_TRIES"); do
                       code=$(curl -sS -o /dev/null -w '%{http_code}' \
                           -X POST "$BASE/auth/login" \
                           "${WAF_HDR[@]}" \
@@ -171,23 +185,23 @@ jobs:
                           200|201|400|401|404|422)
                               if [ "$ver_ok" = 1 ]; then
                                   ok_streak=$((ok_streak + 1))
-                                  echo "attempt $i/90: app-ready (HTTP $code), settle streak $ok_streak/$NEED_OK"
+                                  echo "attempt $i/$MAX_TRIES: app-ready (HTTP $code), settle streak $ok_streak/$NEED_OK"
                                   if [ "$ok_streak" -ge "$NEED_OK" ]; then
                                       echo "QA settled on this build — proceeding with the benchmark."
                                       exit 0
                                   fi
                               else
-                                  echo "attempt $i/90: app-ready (HTTP $code) but version='$ver' (rollout still moving) — resetting streak"
+                                  echo "attempt $i/$MAX_TRIES: app-ready (HTTP $code) but version='$ver' (rollout still moving) — resetting streak"
                                   ok_streak=0
                               fi
                               sleep "$SETTLE_SLEEP" ;;
                           *)
-                              echo "attempt $i/90: HTTP $code (gateway/rollout) — resetting streak, waiting ${SETTLE_SLEEP}s…"
+                              echo "attempt $i/$MAX_TRIES: HTTP $code (gateway/rollout) — resetting streak, waiting ${SETTLE_SLEEP}s…"
                               ok_streak=0
                               sleep "$SETTLE_SLEEP" ;;
                       esac
                   done
-                  echo "::error::QA backend never settled (app-ready + this build, $NEED_OK consecutive) in ~15min — aborting before the benchmark to avoid deploy-race false failures."
+                  echo "::error::QA backend never settled (app-ready + this build, $NEED_OK consecutive) in ~30min — aborting before the benchmark to avoid deploy-race false failures."
                   exit 1
 
             - name: Run benchmark (mechanical gate — fails if any review fails)

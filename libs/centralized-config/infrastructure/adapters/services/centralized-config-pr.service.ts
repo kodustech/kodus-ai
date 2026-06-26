@@ -482,6 +482,17 @@ export class CentralizedConfigPrService {
         return normalized || fallback;
     }
 
+    /**
+     * Canonical centralized-config file name for a rule. The init export and
+     * every mutation MUST derive the name the same way — otherwise updating a
+     * rule writes to a freshly-named file, orphaning the original and creating
+     * a duplicate on the next sync. The uuid suffix keeps it stable and unique.
+     */
+    buildRuleFileName(title?: string, uuid?: string): string {
+        const base = this.sanitizeFileName(title, 'rule');
+        return `${base}${uuid ? `-${uuid.slice(0, 8)}` : ''}.yml`;
+    }
+
     async getCentralizedConfigWithValidatedPullRequest(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<CentralizedConfigParameter | null> {

@@ -44,6 +44,18 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
     ];
     private static readonly TIMEOUT_MS = 300_000; // 5 min
 
+    /** Jira-style issue keys, e.g. LKDB-286, PROJ_1-42 (case-insensitive). */
+    private static readonly TICKET_KEY_PATTERN = /[A-Za-z][A-Za-z0-9_]+-\d+/g;
+
+    /** MCPs that can resolve ticket keys (not URL-only sources like Notion). */
+    private static readonly TICKET_KEY_MCPS = [
+        'jira',
+        'linear',
+        'clickup',
+        'githubissues',
+        'atlassianrovo',
+    ] as const;
+
     private static readonly TASK_MANAGEMENT_HINTS = [
         'jira',
         'linear',
@@ -345,14 +357,16 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
             return {
                 reason: 'no_task_mcp',
                 message:
-                    'Skipped: no task-management MCP connected (Jira, Linear, Notion, ClickUp, etc.).',
+                    'Skipped: no task-management MCP connected (Jira, Atlassian Rovo, Linear, Notion, ClickUp, etc.).',
             };
         }
 
         const prBody = context.pullRequest?.body ?? '';
         const signalSources = this.buildSignalSources(context);
 
-        if (!this.hasRelevantBusinessSignals(signalSources, connectedMcps)) {
+        if (
+            !this.hasRelevantBusinessSignals(signalSources, connectedMcps)
+        ) {
             return {
                 reason: 'no_signals',
                 message:
@@ -406,45 +420,54 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
 
     /**
      * Returns the normalized names of connected task-management MCPs
-     * (e.g. ['jira', 'linear']). Empty array = none connected.
+     * (e.g. ['jira', 'atlassianrovo']). Considers both installed connections
+     * (`mcp_connections`) and OAuth-authenticated managed plugins
+     * (`mcp_integration_oauth`, surfaced as `active` on integrations).
      */
     private async getConnectedTaskManagementMcps(
         context: CodeReviewPipelineContext,
     ): Promise<string[]> {
         try {
+            const orgId = context.organizationAndTeamData?.organizationId;
+            const matched: string[] = [];
+
             const allConnections = await this.mcpManagerService.getConnections(
                 context.organizationAndTeamData,
                 false,
             );
 
-            const orgId = context.organizationAndTeamData?.organizationId;
-            const connections = (allConnections ?? []).filter(
+            for (const conn of (allConnections ?? []).filter(
                 (c) => c.organizationId === orgId,
+            )) {
+                this.appendTaskManagementHints(matched, [
+                    conn.appName,
+                    conn.provider,
+                    conn.integrationId,
+                ]);
+            }
+
+            const integrations = await this.mcpManagerService.getIntegrations(
+                context.organizationAndTeamData,
             );
 
-            const matched: string[] = [];
-
-            for (const conn of connections) {
-                const aliases = [conn.appName, conn.provider]
-                    .map((v) =>
-                        typeof v === 'string'
-                            ? v
-                                  .trim()
-                                  .toLowerCase()
-                                  .replace(/[^a-z0-9]+/g, '')
-                            : '',
-                    )
-                    .filter(Boolean);
-
-                for (const alias of aliases) {
-                    const hint =
-                        BusinessLogicValidationStage.TASK_MANAGEMENT_HINTS.find(
-                            (h) => alias.includes(h) || h.includes(alias),
-                        );
-                    if (hint && !matched.includes(hint)) {
-                        matched.push(hint);
-                    }
+            for (const integration of integrations ?? []) {
+                if (integration.isDefault) {
+                    continue;
                 }
+
+                const isUsable =
+                    integration.isConnected === true ||
+                    integration.active === true;
+                if (!isUsable) {
+                    continue;
+                }
+
+                this.appendTaskManagementHints(matched, [
+                    integration.id,
+                    integration.appName,
+                    integration.name,
+                    integration.provider,
+                ]);
             }
 
             return matched;
@@ -458,6 +481,47 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         }
     }
 
+    private appendTaskManagementHints(
+        matched: string[],
+        aliases: Array<string | undefined>,
+    ): void {
+        for (const hint of this.matchTaskManagementHints(aliases)) {
+            if (!matched.includes(hint)) {
+                matched.push(hint);
+            }
+        }
+    }
+
+    private normalizeMcpAlias(value: string | undefined): string {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+    }
+
+    private matchTaskManagementHints(
+        aliases: Array<string | undefined>,
+    ): string[] {
+        const matched: string[] = [];
+
+        for (const raw of aliases) {
+            const alias = this.normalizeMcpAlias(raw);
+            if (!alias) {
+                continue;
+            }
+
+            const hint =
+                BusinessLogicValidationStage.TASK_MANAGEMENT_HINTS.find(
+                    (h) => alias.includes(h) || h.includes(alias),
+                );
+            if (hint && !matched.includes(hint)) {
+                matched.push(hint);
+            }
+        }
+
+        return matched;
+    }
+
     /**
      * Returns true when the PR description contains business signals
      * (ticket keys or URLs) that match a connected task-management MCP.
@@ -467,13 +531,14 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         body: string,
         connectedMcps: string[],
     ): boolean {
-        // Ticket keys (e.g. KAN-1) are valid if any MCP that handles
-        // tickets is connected (jira, linear, clickup, githubissues).
         const ticketKeys = this.detectTicketKeys(body);
-        const ticketMcps = ['jira', 'linear', 'clickup', 'githubissues'];
         if (
             ticketKeys.length > 0 &&
-            connectedMcps.some((mcp) => ticketMcps.includes(mcp))
+            connectedMcps.some((mcp) =>
+                (
+                    BusinessLogicValidationStage.TICKET_KEY_MCPS as readonly string[]
+                ).includes(mcp),
+            )
         ) {
             return true;
         }
@@ -495,8 +560,9 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         return false;
     }
 
-    private detectTicketKeys(body: string): string[] {
-        const matches = body.match(/[A-Za-z]{2,}-\d+/g) ?? [];
+    private detectTicketKeys(text: string): string[] {
+        const matches =
+            text.match(BusinessLogicValidationStage.TICKET_KEY_PATTERN) ?? [];
         return Array.from(new Set(matches.map((m) => m.toUpperCase())));
     }
 

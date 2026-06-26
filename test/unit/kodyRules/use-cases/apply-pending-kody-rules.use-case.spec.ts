@@ -120,7 +120,7 @@ describe('ApplyPendingKodyRulesUseCase', () => {
                 repositoryId: 'repo-1',
                 status: KodyRulesStatus.PENDING,
                 type: KodyRulesType.MEMORY,
-                requestType: KodyRuleRequestType.MEMORY_UPDATE,
+                requestType: KodyRuleRequestType.UPDATE,
                 targetRuleUuid: 'target-1',
             },
         ]);
@@ -159,7 +159,7 @@ describe('ApplyPendingKodyRulesUseCase', () => {
                 repositoryId: 'repo-1',
                 status: KodyRulesStatus.PENDING,
                 type: KodyRulesType.MEMORY,
-                requestType: KodyRuleRequestType.MEMORY_UPDATE,
+                requestType: KodyRuleRequestType.UPDATE,
                 targetRuleUuid: 'target-1',
             },
         ]);

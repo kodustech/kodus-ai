@@ -7,6 +7,7 @@ import { GenerateKodusConfigFileUseCase } from '@libs/code-review/application/us
 import { GetCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/get-code-review-parameter.use-case';
 import { CentralizedConfigPrService } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
 import { buildGroupFolderName } from '@libs/centralized-config/utils/path-encoder';
+import { formatRuleToYaml } from '@libs/centralized-config/utils/kody-rules-centralized-pr.builder';
 import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/find-rules-in-organization-by-filter.use-case';
 import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/create-or-update.use-case';
 import {
@@ -376,8 +377,13 @@ export class CentralizedConfigDownloadUseCase {
                     : { status: KodyRulesStatus.ACTIVE },
             )) as IKodyRule[];
 
+        // Only approved rules belong in the centralized config: exporting a
+        // PENDING (awaiting approval) or REJECTED rule would resurrect it as
+        // ACTIVE when the PR is merged and synced back.
         const rules = fetchedRules.filter(
-            (rule) => rule.status !== KodyRulesStatus.DELETED,
+            (rule) =>
+                rule.status === KodyRulesStatus.ACTIVE ||
+                rule.status === KodyRulesStatus.PAUSED,
         );
 
         if (rules.length === 0) {
@@ -428,25 +434,11 @@ export class CentralizedConfigDownloadUseCase {
 
             entries.push({
                 path: entryPath,
-                content: this.formatRuleToYaml(rule),
+                content: formatRuleToYaml(rule),
             });
         }
 
         return entries;
-    }
-
-    private formatRuleToYaml(rule: IKodyRule): string {
-        const ruleForYaml = {
-            title: rule.title,
-            rule: rule.rule,
-            ...(rule.severity ? { severity: rule.severity } : {}),
-            ...(rule.scope ? { scope: rule.scope } : {}),
-            ...(rule.path ? { path: rule.path } : {}),
-            ...(rule.examples ? { examples: rule.examples } : {}),
-            ...(rule.inheritance ? { inheritance: rule.inheritance } : {}),
-        };
-
-        return yaml.dump(ruleForYaml);
     }
 
     private async ensureRulePendingWithSourcePath(
@@ -869,13 +861,10 @@ export class CentralizedConfigDownloadUseCase {
     }
 
     private getRuleFileName(rule: IKodyRule): string {
-        const preferredName =
-            this.centralizedConfigPrService.sanitizeFileName(
-                rule.title,
-                'rule',
-            ) + (rule.uuid ? `-${rule.uuid.slice(0, 8)}` : '');
-
-        return `${preferredName}.yml`;
+        return this.centralizedConfigPrService.buildRuleFileName(
+            rule.title,
+            rule.uuid,
+        );
     }
 
     private getRuleEntryPath(
@@ -889,6 +878,20 @@ export class CentralizedConfigDownloadUseCase {
             }
         >,
     ): string | null {
+        // Reuse the rule's existing centralized path so re-exporting an
+        // already-synced rule keeps the same file. Otherwise a rule that was
+        // created via a mutation (title-only name) would be re-exported under
+        // a different (title+uuid) name, orphaning the old file and creating a
+        // duplicate on the next sync.
+        const existingPath = rule.centralizedConfig?.path?.trim();
+        if (
+            existingPath &&
+            !existingPath.startsWith('/') &&
+            !existingPath.includes('..')
+        ) {
+            return existingPath;
+        }
+
         const rulesDirectory =
             rule.type === KodyRulesType.MEMORY ? 'memories' : 'review';
         const fileName = this.getRuleFileName(rule);

@@ -31,6 +31,7 @@ import {
 } from '@nestjs/swagger';
 import { ErrorResponseDto } from '../../common/dto';
 import { AuthGuard } from '../../common/guards/auth.guard';
+import { ConnectTokenDto } from './dto/connect-token.dto';
 import { CreateIntegrationDto } from './dto/create-integration.dto';
 import { FinishOAuthDto } from './dto/finish-oauth.dto';
 import { InitiateConnectionDto } from './dto/initiate-connection.dto';
@@ -83,7 +84,7 @@ export class McpController {
         name: 'provider',
         required: false,
         type: String,
-        example: 'composio',
+        example: 'kodusmcp',
     })
     @ApiQuery({
         name: 'appName',
@@ -249,7 +250,7 @@ export class McpController {
     @ApiParam({
         name: 'provider',
         type: String,
-        example: 'composio',
+        example: 'kodusmcp',
     })
     @ApiParam({
         name: 'integrationId',
@@ -281,7 +282,7 @@ export class McpController {
     @ApiParam({
         name: 'provider',
         type: String,
-        example: 'composio',
+        example: 'kodusmcp',
     })
     @ApiParam({
         name: 'integrationId',
@@ -311,7 +312,7 @@ export class McpController {
     @ApiParam({
         name: 'provider',
         type: String,
-        example: 'composio',
+        example: 'kodusmcp',
     })
     @ApiParam({
         name: 'integrationId',
@@ -343,7 +344,7 @@ export class McpController {
     @ApiParam({
         name: 'provider',
         type: String,
-        example: 'composio',
+        example: 'kodusmcp',
     })
     @ApiBody({ type: InitiateConnectionDto })
     initiateConnection(
@@ -438,6 +439,59 @@ export class McpController {
         return this.mcpService.getCustomIntegrationConnectionConfig(
             request.organizationId,
             integrationId,
+        );
+    }
+
+    @Get('integration/kodusmcp/:integrationId/connection-config')
+    @ApiOperation({
+        summary: 'Get Kodus MCP integration connection config',
+        description:
+            'Returns the resolved auth header(s) for a managed (kodusmcp) connection — refreshed OAuth bearer or a stored static token. Internal use only.',
+    })
+    @ApiParam({
+        name: 'integrationId',
+        type: String,
+        example: 'linear-default',
+    })
+    @ApiUnauthorizedResponse({ type: ErrorResponseDto })
+    @ApiForbiddenResponse({ type: ErrorResponseDto })
+    @ApiInternalServerErrorResponse({ type: ErrorResponseDto })
+    getKodusMcpConnectionConfig(
+        @Param('integrationId') integrationId: string,
+        @Req() request: FastifyRequest,
+    ) {
+        return this.mcpService.getKodusMCPConnectionConfig(
+            request.organizationId,
+            integrationId,
+        );
+    }
+
+    @Post('integration/kodusmcp/:integrationId/token')
+    @ApiOperation({
+        summary: 'Connect a managed integration with a token',
+        description:
+            'Connects a managed (kodusmcp) integration using a user-supplied static token (bring-your-own-token auth method).',
+    })
+    @ApiCreatedResponse({ type: McpConnectionDto })
+    @ApiBadRequestResponse({ type: ErrorResponseDto })
+    @ApiUnauthorizedResponse({ type: ErrorResponseDto })
+    @ApiForbiddenResponse({ type: ErrorResponseDto })
+    @ApiInternalServerErrorResponse({ type: ErrorResponseDto })
+    @ApiParam({
+        name: 'integrationId',
+        type: String,
+        example: 'atlassian-rovo-default',
+    })
+    @ApiBody({ type: ConnectTokenDto })
+    connectManagedToken(
+        @Param('integrationId') integrationId: string,
+        @Body() body: ConnectTokenDto,
+        @Req() request: FastifyRequest,
+    ) {
+        return this.mcpService.connectManagedToken(
+            request.organizationId,
+            integrationId,
+            body,
         );
     }
 

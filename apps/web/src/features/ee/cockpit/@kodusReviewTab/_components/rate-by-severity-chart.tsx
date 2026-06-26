@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
     Bar,
     BarChart,
@@ -15,6 +14,8 @@ import {
 } from "recharts";
 
 import { CockpitNoDataPlaceholder } from "../../_components/no-data-placeholder";
+import { COCKPIT_REVIEW_PARAM } from "../../_constants";
+import { useShallowParam } from "../../_helpers/use-shallow-param";
 import type { ImplementationRateBySeverityRow } from "../../_services/analytics/review/fetch";
 import { SEVERITY_COLORS } from "./chart-constants";
 import { TogglePills } from "./toggle-pills";
@@ -69,7 +70,11 @@ export const RateBySeverityChart = ({
 }: {
     data: ImplementationRateBySeverityRow[];
 }) => {
-    const [source, setSource] = useState<Source>("all");
+    const [source, setSource] = useShallowParam<Source>(
+        COCKPIT_REVIEW_PARAM.severitySource,
+        "all",
+        ["all", "native"],
+    );
 
     if (!data.length) return <CockpitNoDataPlaceholder />;
 

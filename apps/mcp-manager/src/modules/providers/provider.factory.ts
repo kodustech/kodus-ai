@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IntegrationOAuthService } from '../integrations/integration-oauth.service';
 import { IntegrationsService } from '../integrations/integrations.service';
-import { ComposioProvider } from './composio/composio.provider';
 import { CustomProvider } from './custom/custom.provider';
 import { MCPProvider } from './interfaces/provider.interface';
 import { KodusMCPProvider } from './kodusMCP/kodus-mcp.provider';
@@ -26,22 +25,13 @@ export class ProviderFactory {
 
     private initializeProviders(): void {
         const enabledProviders = this.configService
-            .get<string>('providers', 'composio,kodusmcp,custom')
+            .get<string>('providers', 'kodusmcp,custom')
             .split(',')
             .map((provider) => provider.trim())
             .filter(Boolean);
 
         for (const provider of enabledProviders) {
             switch (provider) {
-                case 'composio':
-                    this.providers.set(
-                        'composio',
-                        new ComposioProvider(
-                            this.configService,
-                            this.integrationDescriptionService,
-                        ),
-                    );
-                    break;
                 case 'kodusmcp':
                     this.providers.set(
                         'kodusmcp',
@@ -60,6 +50,14 @@ export class ProviderFactory {
                             this.integrationsService,
                             this.integrationOAuthService,
                         ),
+                    );
+                    break;
+                case 'composio':
+                    // Composio is decommissioned. Tolerate a stale
+                    // `API_MCP_MANAGER_MCP_PROVIDERS` entry (skip instead of
+                    // crashing on boot) until it's dropped from the env.
+                    this.logger.warn(
+                        'Ignoring decommissioned provider "composio"',
                     );
                     break;
                 default:

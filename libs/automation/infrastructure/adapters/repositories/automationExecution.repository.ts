@@ -331,7 +331,17 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
 
             let total = 0;
             if (includeTotal) {
-                total = await queryBuilder.getCount();
+                // COUNT(*) instead of TypeORM's getCount() (COUNT(DISTINCT uuid)).
+                // The join chain automation_execution -> teamAutomation -> team
+                // -> organization is ManyToOne at every hop and the review
+                // filter is an EXISTS semi-join, so there is no row fan-out:
+                // COUNT(*) === COUNT(DISTINCT uuid). The DISTINCT variant sorted
+                // the whole filtered set to disk (~28GB of temp files in prod).
+                const countRow = await queryBuilder
+                    .clone()
+                    .select('COUNT(*)', 'cnt')
+                    .getRawOne<{ cnt: string }>();
+                total = Number(countRow?.cnt ?? 0);
 
                 if (total === 0) {
                     return { data: [], total: 0 };
@@ -340,8 +350,17 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
 
             const executions = await queryBuilder
                 .orderBy('automation_execution.createdAt', order)
-                .skip(skip)
-                .take(take)
+                // Deterministic tiebreaker: reproduces the exact ordering the
+                // previous DISTINCT-pagination wrapper emitted (createdAt, uuid).
+                .addOrderBy('automation_execution.uuid', 'ASC')
+                // offset/limit instead of skip/take. skip/take makes TypeORM wrap
+                // the query in SELECT DISTINCT "distinctAlias" (...) to paginate
+                // safely across to-many joins. There are none here (all ManyToOne
+                // + EXISTS), so that wrapper only added a full-set sort that
+                // spilled ~52GB of temp files. Raw offset/limit returns the
+                // identical rows without the DISTINCT pass.
+                .offset(skip)
+                .limit(take)
                 .getMany();
 
             const mapped =
@@ -462,7 +481,16 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
 
             let total = 0;
             if (includeTotal) {
-                total = await queryBuilder.getCount();
+                // COUNT(*) instead of getCount()'s COUNT(DISTINCT uuid). The
+                // teamAutomation/team/organization joins are LEFT JOINs onto
+                // ManyToOne relations, so each automation_execution still yields
+                // exactly one row (one match or null) — no fan-out, so
+                // COUNT(*) === COUNT(DISTINCT uuid) without the disk-spilling sort.
+                const countRow = await queryBuilder
+                    .clone()
+                    .select('COUNT(*)', 'cnt')
+                    .getRawOne<{ cnt: string }>();
+                total = Number(countRow?.cnt ?? 0);
 
                 if (total === 0) {
                     return { data: [], total: 0 };
@@ -471,8 +499,15 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
 
             const executions = await queryBuilder
                 .orderBy('automation_execution.createdAt', order)
-                .skip(skip)
-                .take(take)
+                // Deterministic tiebreaker, mirroring the ordering the previous
+                // DISTINCT-pagination wrapper produced (createdAt, uuid).
+                .addOrderBy('automation_execution.uuid', 'ASC')
+                // offset/limit instead of skip/take: only ManyToOne (LEFT) joins
+                // are present, so TypeORM's DISTINCT pagination wrapper is
+                // unnecessary and its full-set sort spilled to disk. Raw
+                // offset/limit returns the identical rows.
+                .offset(skip)
+                .limit(take)
                 .getMany();
 
             const mapped =

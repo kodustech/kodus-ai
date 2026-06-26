@@ -32,6 +32,7 @@ import {
 } from '@libs/core/domain/enums/code-review.enum';
 import { IClusterizedSuggestion } from '@libs/kodyFineTuning/domain/interfaces/kodyFineTuning.interface';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { KodyKnowledgeApprovalConfig } from '@libs/common/utils/kody-rules/knowledge-approval';
 import { OrganizationAndTeamData } from './organizationAndTeamData';
 import { ConfigLevel } from './pullRequestMessages.type';
 
@@ -321,7 +322,7 @@ export type CodeReviewConfig = {
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive?: boolean;
     kodyRulesGeneratorEnabled?: boolean;
-    llmGeneratedMemoriesRequireApproval?: boolean;
+    kodyKnowledgeApproval?: KodyKnowledgeApprovalConfig;
     reviewModeConfig?: ReviewModeConfig;
     ideRulesSyncEnabled?: boolean;
     kodyFineTuningConfig?: KodyFineTuningConfig;

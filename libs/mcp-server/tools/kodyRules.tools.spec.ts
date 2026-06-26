@@ -8,7 +8,6 @@ import {
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import {
-    KodyRulesOrigin,
     KodyRulesScope,
     KodyRulesStatus,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
@@ -89,7 +88,6 @@ describe('KodyRulesTools.createKodyRule', () => {
             rule: 'Do not commit console.log statements',
             status: KodyRulesStatus.PENDING,
             repositoryId: 'repo-1',
-            origin: KodyRulesOrigin.GENERATED,
         } as any);
 
         const result = await runCreate({ repositoryId: 'repo-1' });
@@ -115,7 +113,6 @@ describe('KodyRulesTools.createKodyRule', () => {
             rule: 'Do not commit console.log statements',
             status: KodyRulesStatus.PENDING,
             repositoryId: 'global',
-            origin: KodyRulesOrigin.GENERATED,
         } as any);
 
         const result = await runCreate();
@@ -133,7 +130,6 @@ describe('KodyRulesTools.createKodyRule', () => {
             rule: 'Do not commit console.log statements',
             status: KodyRulesStatus.ACTIVE,
             repositoryId: 'repo-1',
-            origin: KodyRulesOrigin.GENERATED,
         } as any);
 
         const result = await runCreate({ repositoryId: 'repo-1' });

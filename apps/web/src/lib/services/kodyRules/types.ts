@@ -136,10 +136,15 @@ export type KodyRuleBucket = {
     rulesCount: number;
 };
 
+// Mirrors the backend `KodyRulesOrigin`.
 export enum KodyRulesOrigin {
-    USER = "user",
+    MANUAL = "manual",
     LIBRARY = "library",
-    GENERATED = "generated",
+    PAST_REVIEWS = "past_reviews",
+    REPO_FILE_SYNC = "repo_file_sync",
+    ONBOARDING_REPO_ANALYSIS = "onboarding_repo_analysis",
+    MCP_AGENT = "mcp_agent",
+    CLI = "cli",
 }
 
 export enum KodyRulesStatus {
@@ -166,8 +171,8 @@ export enum KodyRulesType {
 }
 
 export enum KodyRuleRequestType {
-    MEMORY_CREATE = "memory_create",
-    MEMORY_UPDATE = "memory_update",
+    CREATE = "create",
+    UPDATE = "update",
 }
 
 export type KodyRulesCentralizedPrMetadata = {

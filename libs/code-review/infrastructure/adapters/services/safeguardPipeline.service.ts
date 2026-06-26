@@ -623,11 +623,11 @@ export class SafeguardPipelineService {
 
 You do NOT have access to the full codebase — only the diff, the file content, and any cross-file snippets provided below. Decide based ONLY on what you can see.
 
-## Rules
-- If the defect is clearly visible in the provided context → verdict: true (keep)
-- If the defect requires seeing code NOT shown here to confirm → verdict: false (discard — insufficient evidence)
-- If the suggestion is speculative ("what if...") without proof in the visible code → verdict: false
-- Default to false (discard) when uncertain — reducing noise is more important than catching every edge case
+## Rules (refute-to-drop: keep is the default)
+- Your job is to try to REFUTE the finding using ONLY the visible context.
+- If the visible context concretely DISPROVES the defect (the guard is present, the path is unreachable, the syntax is actually correct) → verdict: false (discard)
+- Otherwise → verdict: true (keep). This includes: the defect is plausibly visible, the context is insufficient to disprove it, or you are uncertain.
+- Do NOT discard merely because confirming would need code not shown here, or because the harm is "theoretical" — those are not refutations. Only discard with concrete refuting evidence from the visible context.
 
 ## Suggestion Under Review
 **File**: ${suggestion.filePath || params.file?.filename || 'unknown'}
@@ -822,16 +822,20 @@ Evidence field in ${params.languageResultPrompt}.`;
 
             // Final verdict
             if ('verdict' in parsed) {
-                // Reject "keep" verdicts on the first turn — the agent must
-                // make at least one tool call to verify the code actually
-                // contains the claimed defect before accepting a suggestion.
-                if (turn === 0 && parsed.verdict === true) {
+                // Reject ANY verdict on the first turn — the agent must make at
+                // least one tool call before deciding. Keeping requires evidence
+                // the defect is real; discarding (refute-to-drop) requires
+                // evidence it is wrong/mitigated. Neither can be proven without
+                // investigating, so a turn-0 verdict is never grounded.
+                if (turn === 0) {
                     messages.push({
                         prompt: JSON.stringify(parsed),
                         role: PromptRole.AI,
                     });
                     messages.push({
-                        prompt: 'You must use at least one tool call to verify the defect exists in the actual code before giving a verdict. Search for the key symbol or read the file first.',
+                        prompt: parsed.verdict === true
+                            ? 'You must use at least one tool call to verify the defect exists in the actual code before giving a verdict. Search for the key symbol or read the file first.'
+                            : 'You must use at least one tool call to actively REFUTE the defect before discarding. A discard requires concrete evidence the finding is wrong, mitigated, or unreachable — search for the key symbol or read the file first.',
                         role: PromptRole.USER,
                     });
                     continue;

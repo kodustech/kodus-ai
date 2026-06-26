@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
     Card,
@@ -20,6 +19,8 @@ import {
 } from "recharts";
 
 import { CockpitNoDataPlaceholder } from "../../_components/no-data-placeholder";
+import { COCKPIT_REVIEW_PARAM } from "../../_constants";
+import { useShallowParam } from "../../_helpers/use-shallow-param";
 import type {
     NegativeFeedbackByCategoryRow,
     NegativeFeedbackWeeklyRow,
@@ -152,7 +153,11 @@ export const FeedbackSection = ({
     byCategory: NegativeFeedbackByCategoryRow[];
     weekly: NegativeFeedbackWeeklyRow[];
 }) => {
-    const [mode, setMode] = useState<Mode>("category");
+    const [mode, setMode] = useShallowParam<Mode>(
+        COCKPIT_REVIEW_PARAM.feedbackMode,
+        "category",
+        ["category", "trend"],
+    );
 
     return (
         <Card color="lv1">

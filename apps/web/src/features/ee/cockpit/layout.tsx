@@ -1,17 +1,19 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Page } from "@components/ui/page";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
+import { TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { getCockpitMetricsVisibility } from "@services/organizationParameters/fetch";
 import type { CookieName } from "src/core/utils/cookie";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
 import { greeting } from "src/core/utils/helpers";
 
 import { validateOrganizationLicense } from "../subscription/_services/billing/fetch";
+import { CockpitTabs } from "./_components/cockpit-tabs";
 import { DateRangePicker } from "./_components/date-range-picker";
 import { ExpandableCardsLayout } from "./_components/expandable-cards-layout";
 import { CockpitNoDataBanner } from "./_components/no-data-banner";
 import { RepositoryPicker } from "./_components/repository-picker";
+import { ShareViewButton } from "./_components/share-view-button";
 import { tabs, type TabValue } from "./_constants";
 import { extractApiData } from "./_helpers/api-data-extractor";
 import { isCockpitTierAllowed } from "./_helpers/tier-policy";
@@ -96,6 +98,10 @@ export default async function Layout({
         ? "kodus-review"
         : "productivity";
 
+    const visibleTabs = (Object.keys(tabsVisibility) as TabValue[]).filter(
+        (tab) => tabsVisibility[tab],
+    );
+
     const entries = Object.entries(tabs);
 
     return (
@@ -110,12 +116,15 @@ export default async function Layout({
                         teamId={selectedTeamId}
                     />
                     <DateRangePicker cookieValue={dateRangeCookieValue} />
+                    <ShareViewButton />
                 </div>
             </Page.Header>
 
             <Page.Content className="max-w-full px-6">
                 <div>
-                    <Tabs defaultValue={defaultTab}>
+                    <CockpitTabs
+                        defaultTab={defaultTab}
+                        visibleTabs={visibleTabs}>
                         <TabsList>
                             {/* TODO: add JIRA tab */}
                             {entries.map(([value, name]) => {
@@ -187,7 +196,7 @@ export default async function Layout({
                             {kodusReviewTab}
                         </TabsContent>
                         )}
-                    </Tabs>
+                    </CockpitTabs>
                 </div>
 
                 {children}

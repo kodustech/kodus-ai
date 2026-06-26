@@ -29,8 +29,8 @@ export const KODY_RULES_PATHS = {
     ),
     APPLY_PENDING_KODY_RULES: pathToApiUrl("/kody-rules/pending/apply"),
     DISCARD_PENDING_KODY_RULES: pathToApiUrl("/kody-rules/pending/discard"),
-    CONVERT_PENDING_UPDATES_TO_MEMORIES: pathToApiUrl(
-        "/kody-rules/pending/convert-updates-to-memories",
+    CONVERT_PENDING_UPDATES_TO_NEW: pathToApiUrl(
+        "/kody-rules/pending/convert-updates-to-new",
     ),
     GENERATE_KODY_RULES: pathToApiUrl("/kody-rules/generate-kody-rules"),
     SYNC_IDE_RULES: pathToApiUrl("/kody-rules/sync-ide-rules"),

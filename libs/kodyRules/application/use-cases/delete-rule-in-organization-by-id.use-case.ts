@@ -1,6 +1,5 @@
 import { createLogger } from '@kodus/flow';
-import { Injectable, Inject, Optional } from '@nestjs/common';
-import { REQUEST } from '@nestjs/core';
+import { Injectable, Inject } from '@nestjs/common';
 
 import {
     CentralizedConfigPrService,
@@ -29,10 +28,6 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
         DeleteRuleInOrganizationByIdKodyRulesUseCase.name,
     );
     constructor(
-        @Optional()
-        @Inject(REQUEST)
-        private readonly request: UserRequest,
-
         @Inject(KODY_RULES_SERVICE_TOKEN)
         private readonly kodyRulesService: IKodyRulesService,
 
@@ -50,13 +45,17 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
             userId?: string;
             userEmail?: string;
         },
+        // The authenticated user, forwarded by the controller. Use-cases must
+        // not inject REQUEST (it makes them request-scoped, which bubbles up
+        // into singleton callers like event listeners and sync services).
+        requestUser?: UserRequest['user'],
     ): Promise<boolean | CentralizedPrMetadata> {
         try {
-            const requestUser = this.request?.user as any;
+            const ru: any = requestUser;
             const organizationId =
-                actor?.organizationId || requestUser?.organization?.uuid;
+                actor?.organizationId || ru?.organization?.uuid;
             const teamId =
-                actor?.teamId || requestUser?.team?.uuid || requestUser?.teamId;
+                actor?.teamId || ru?.team?.uuid || ru?.teamId;
 
             const existingRule = await this.kodyRulesService.findById(ruleId);
 
@@ -66,13 +65,9 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
             // may only delete rules of its assigned repositories; rules
             // without a repositoryId (org-wide/global) stay owner-only.
             // Machine flows (sync, or no request context) are exempt.
-            if (
-                existingRule &&
-                actor?.source !== 'sync' &&
-                this.request?.user
-            ) {
+            if (existingRule && actor?.source !== 'sync' && requestUser) {
                 await this.authorizationService.ensure({
-                    user: this.request.user,
+                    user: requestUser,
                     action: Action.Delete,
                     resource: ResourceType.KodyRules,
                     repoIds: existingRule.repositoryId
@@ -124,7 +119,11 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
                             ? 'memories'
                             : 'review';
 
-                    const fileName = `${this.centralizedConfigPrService.sanitizeFileName(existingRule.title, 'rule')}.yml`;
+                    const fileName =
+                        this.centralizedConfigPrService.buildRuleFileName(
+                            existingRule.title,
+                            existingRule.uuid,
+                        );
 
                     const centralizedPath =
                         existingRule.centralizedConfig?.path ||
@@ -176,8 +175,8 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
                 },
                 ruleId,
                 {
-                    userId: actor?.userId || requestUser?.uuid,
-                    userEmail: actor?.userEmail || requestUser?.email,
+                    userId: actor?.userId || ru?.uuid,
+                    userEmail: actor?.userEmail || ru?.email,
                 },
             );
         } catch (error) {
@@ -188,7 +187,7 @@ export class DeleteRuleInOrganizationByIdKodyRulesUseCase {
                 metadata: {
                     organizationId:
                         actor?.organizationId ||
-                        this.request?.user?.organization?.uuid,
+                        (requestUser as any)?.organization?.uuid,
                     ruleId,
                 },
             });

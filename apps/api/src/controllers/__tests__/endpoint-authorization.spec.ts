@@ -74,10 +74,6 @@ const INTENTIONALLY_UNGATED = new Set<string>([
     'codeManagement.controller.ts#getWebhookStatus', // webhook connectivity status
     'organization.controller.ts#getOrganizationsByDomain', // domain→org lookup (onboarding/SSO discovery)
 
-    // --- Cron-triggered service endpoint (no end-user caller) ---
-    // weekly-recap sends the recap email to ACTIVE org owners; it is invoked by
-    // a scheduled cron with a service identity, not reachable through the UI.
-    'cockpit.controller.ts#send',
 ]);
 
 type Handler = {

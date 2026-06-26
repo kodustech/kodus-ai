@@ -7,6 +7,7 @@ import {
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
     IKodyRule,
+    KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
@@ -81,7 +82,10 @@ export function buildKodyRuleCentralizedFilePath(params: {
         return normalizedPath;
     }
 
-    const fileName = `${params.centralizedConfigPrService.sanitizeFileName(params.ruleContent.title, 'rule')}.yml`;
+    const fileName = params.centralizedConfigPrService.buildRuleFileName(
+        params.ruleContent.title,
+        params.ruleContent.uuid,
+    );
 
     if (params.groupFolderName) {
         return params.centralizedConfigPrService.buildDirectoryGroupRulesPath(
@@ -121,6 +125,9 @@ export function formatRuleToYaml(rule: Partial<IKodyRule>): string {
         ...(rule.path ? { path: rule.path } : {}),
         ...(rule.examples ? { examples: rule.examples } : {}),
         ...(rule.inheritance ? { inheritance: rule.inheritance } : {}),
+        // Present = enforced. A paused rule stays in the config but is not
+        // enforced; absence means enabled (keeps active-rule files unchanged).
+        ...(rule.status === KodyRulesStatus.PAUSED ? { enabled: false } : {}),
     };
 
     return yaml.dump(ruleForYaml);

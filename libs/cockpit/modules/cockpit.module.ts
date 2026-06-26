@@ -9,15 +9,21 @@ import { TeamModule } from '@libs/organization/modules/team.module';
 import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
 
+import { COCKPIT_CODE_HEALTH_SERVICE_TOKEN } from '../domain/contracts/cockpit-code-health.service.contract';
 import { COCKPIT_DEVELOPER_PRODUCTIVITY_SERVICE_TOKEN } from '../domain/contracts/cockpit-developer-productivity.service.contract';
+import { COCKPIT_REPORTS_SERVICE_TOKEN } from '../domain/contracts/cockpit-reports.service.contract';
 import { COCKPIT_REVIEW_ANALYTICS_SERVICE_TOKEN } from '../domain/contracts/cockpit-review-analytics.service.contract';
+import { REPORT_RECIPIENTS_SERVICE_TOKEN } from '../domain/contracts/report-recipients.service.contract';
 import { GetKodyRulesHealthUseCase } from '../application/use-cases/get-kody-rules-health.use-case';
-import { SendWeeklyRecapUseCase } from '../application/use-cases/send-weekly-recap.use-case';
+import { SendOrgReportUseCase } from '../application/use-cases/send-org-report.use-case';
+import { SendRepoReportUseCase } from '../application/use-cases/send-repo-report.use-case';
+import { ReportRecipientsService } from '../application/services/report-recipients.service';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
 import { CockpitTierGuard } from '../infrastructure/guards/cockpit-tier.guard';
 import { CockpitCodeHealthService } from '../infrastructure/services/cockpit-code-health.service';
 import { CockpitDeveloperProductivityService } from '../infrastructure/services/cockpit-developer-productivity.service';
 import { CockpitHealthService } from '../infrastructure/services/cockpit-health.service';
+import { CockpitReportsService } from '../infrastructure/services/cockpit-reports.service';
 import { CockpitReviewAnalyticsService } from '../infrastructure/services/cockpit-review-analytics.service';
 import { CockpitSourceResolver } from '../infrastructure/services/cockpit-source.resolver';
 import { CockpitValidationService } from '../infrastructure/services/cockpit-validation.service';
@@ -57,9 +63,24 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
             provide: COCKPIT_REVIEW_ANALYTICS_SERVICE_TOKEN,
             useExisting: CockpitReviewAnalyticsService,
         },
+        {
+            provide: COCKPIT_CODE_HEALTH_SERVICE_TOKEN,
+            useExisting: CockpitCodeHealthService,
+        },
         CockpitTierGuard,
         GetKodyRulesHealthUseCase,
-        SendWeeklyRecapUseCase,
+        CockpitReportsService,
+        ReportRecipientsService,
+        {
+            provide: COCKPIT_REPORTS_SERVICE_TOKEN,
+            useExisting: CockpitReportsService,
+        },
+        {
+            provide: REPORT_RECIPIENTS_SERVICE_TOKEN,
+            useExisting: ReportRecipientsService,
+        },
+        SendOrgReportUseCase,
+        SendRepoReportUseCase,
     ],
     exports: [
         CockpitSourceResolver,
@@ -70,9 +91,11 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         CockpitDeveloperProductivityService,
         COCKPIT_DEVELOPER_PRODUCTIVITY_SERVICE_TOKEN,
         COCKPIT_REVIEW_ANALYTICS_SERVICE_TOKEN,
+        COCKPIT_CODE_HEALTH_SERVICE_TOKEN,
         CockpitTierGuard,
         GetKodyRulesHealthUseCase,
-        SendWeeklyRecapUseCase,
+        SendOrgReportUseCase,
+        SendRepoReportUseCase,
     ],
 })
 export class CockpitModule {}

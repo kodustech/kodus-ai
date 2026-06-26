@@ -49,9 +49,13 @@ export const IN_APP_TEMPLATE_REGISTRY: Partial<
         title: 'Verify your SSO domain',
         body: `Verify your SSO domain: ${m.domain ?? ''}`,
     }),
-    [NotificationEvent.WEEKLY_RECAP]: () => ({
-        title: 'Weekly recap ready',
-        body: 'Your weekly engineering recap is ready.',
+    [NotificationEvent.ORG_REPORT]: () => ({
+        title: 'Your Kodus report is ready',
+        body: 'Your organization review report is ready.',
+    }),
+    [NotificationEvent.REPO_REPORT]: () => ({
+        title: 'Your Kodus repo digest is ready',
+        body: 'Your per-repo review digest is ready.',
     }),
 
     // ── New events (this PR) ───────────────────────────────────

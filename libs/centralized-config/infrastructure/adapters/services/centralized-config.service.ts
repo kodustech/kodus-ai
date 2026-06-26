@@ -53,8 +53,8 @@ import {
     kodyRuleSchema,
     kodyRulesExampleSchema,
     kodyRulesInheritanceSchema,
-    KodyRulesOrigin,
     KodyRulesScope,
+    KodyRulesOrigin,
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
@@ -1741,7 +1741,12 @@ export class CentralizedConfigService implements ICentralizedConfigService {
 
             const existingRuleBySourcePath = new Map<
                 string,
-                { uuid: string; status?: KodyRulesStatus; updatedAt?: Date }
+                {
+                    uuid: string;
+                    status?: KodyRulesStatus;
+                    origin?: KodyRulesOrigin;
+                    updatedAt?: Date;
+                }
             >();
 
             for (const existingRule of existingRulesEntity?.rules || []) {
@@ -1760,6 +1765,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     existingRuleBySourcePath.set(sourcePathKey, {
                         uuid: existingRule.uuid,
                         status: existingRule.status,
+                        origin: existingRule.origin,
                         updatedAt: existingRule.updatedAt,
                     });
                     continue;
@@ -1775,6 +1781,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     existingRuleBySourcePath.set(sourcePathKey, {
                         uuid: existingRule.uuid,
                         status: existingRule.status,
+                        origin: existingRule.origin,
                         updatedAt: existingRule.updatedAt,
                     });
                     continue;
@@ -1793,6 +1800,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     existingRuleBySourcePath.set(sourcePathKey, {
                         uuid: existingRule.uuid,
                         status: existingRule.status,
+                        origin: existingRule.origin,
                         updatedAt: existingRule.updatedAt,
                     });
                 }
@@ -1933,20 +1941,44 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                         continue;
                     }
 
+                    const { enabled, ...ruleFields } = compliantRule;
+                    const existingMatch = existingRuleBySourcePath.get(
+                        getSourcePathLookupKey(ruleFileMeta.path),
+                    );
+
+                    // Sync mirrors content, not the approval lifecycle. Only
+                    // already-approved rules (ACTIVE/PAUSED) follow the YAML's
+                    // `enabled` flag. A rule in any other lifecycle state
+                    // (PENDING approval, REJECTED, ...) keeps its status, so
+                    // merging the centralized-config PR can't silently approve
+                    // a pending rule or resurrect a rejected one. Likewise,
+                    // keep an existing rule's origin instead of reclassifying
+                    // it as a repo-file sync.
+                    const existingStatus = existingMatch?.status;
+                    const isExistingApproved =
+                        existingStatus === KodyRulesStatus.ACTIVE ||
+                        existingStatus === KodyRulesStatus.PAUSED;
+                    const resolvedStatus =
+                        existingStatus && !isExistingApproved
+                            ? existingStatus
+                            : enabled === false
+                              ? KodyRulesStatus.PAUSED
+                              : KodyRulesStatus.ACTIVE;
+
                     const ruleDto = {
-                        ...compliantRule,
-                        uuid: existingRuleBySourcePath.get(
-                            getSourcePathLookupKey(ruleFileMeta.path),
-                        )?.uuid,
+                        ...ruleFields,
+                        uuid: existingMatch?.uuid,
                         type: ruleFileMeta.ruleType,
-                        status: KodyRulesStatus.ACTIVE,
+                        status: resolvedStatus,
                         repositoryId: ruleFileMeta.repositoryId || 'global',
                         directoryId,
                         centralizedConfig: {
                             path: ruleFileMeta.path,
                             status: KodyRuleCentralizedStatus.SYNCED,
                         },
-                        origin: KodyRulesOrigin.USER,
+                        origin:
+                            existingMatch?.origin ??
+                            KodyRulesOrigin.REPO_FILE_SYNC,
                     };
 
                     await this.createOrUpdateKodyRulesUseCase.execute(
@@ -2059,6 +2091,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     include: [],
                     exclude: [],
                 }),
+                enabled: z.boolean().default(true),
             })
             .safeParse(ruleContent);
 
@@ -2104,6 +2137,15 @@ export class CentralizedConfigService implements ICentralizedConfigService {
 
             for (const rule of existingRules) {
                 const sourcePath = rule.centralizedConfig?.path;
+
+                // Only rules that were actually synced from a centralized file
+                // can go stale. A rule without a path was never exported (e.g.
+                // a pending/rejected rule, or a manual rule created while the
+                // centralized PR is open) — deleting it here would wipe data
+                // the centralized config never owned.
+                if (!sourcePath) {
+                    continue;
+                }
 
                 if (!currentSourcePaths.has(sourcePath)) {
                     try {

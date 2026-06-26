@@ -1,7 +1,5 @@
-import {
-    computeRuleState,
-    GetKodyRulesHealthUseCase,
-} from '@libs/cockpit/application/use-cases/get-kody-rules-health.use-case';
+import { GetKodyRulesHealthUseCase } from '@libs/cockpit/application/use-cases/get-kody-rules-health.use-case';
+import { computeRuleState } from '@libs/cockpit/domain/helpers/kody-rules-health.helper';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 describe('computeRuleState', () => {
@@ -35,6 +33,14 @@ describe('computeRuleState', () => {
         expect(computeRuleState(usage(20, 12, 0, 5)).state).toBe('noisy');
         // thumbsUp >= thumbsDown neutralizes the signal
         expect(computeRuleState(usage(42, 30, 6, 3)).state).toBe('healthy');
+    });
+
+    it('requires downvotes to be a proportional share, not just an absolute count', () => {
+        // 4 👎 over 74 triggers = 5% — below the proportional bar → NOT noisy.
+        // Impl rate 30% (> 20%) keeps it out of `ignored` too → healthy.
+        expect(computeRuleState(usage(74, 22, 1, 4)).state).toBe('healthy');
+        // The same downvotes on a low-volume rule (4/8 = 50%) IS noisy.
+        expect(computeRuleState(usage(8, 4, 1, 4)).state).toBe('noisy');
     });
 
     it('flags high-trigger, low-implementation rules as ignored', () => {

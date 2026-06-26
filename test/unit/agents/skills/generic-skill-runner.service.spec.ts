@@ -247,6 +247,41 @@ describe('GenericSkillRunnerService', () => {
         ).resolves.toBeDefined();
     });
 
+    it('accepts Atlassian Rovo when it is listed in required MCP examples', async () => {
+        skillLoaderService.loadSkillMetaFromFilesystem.mockReturnValue(
+            withSkillMeta({
+                requiredMcps: [
+                    {
+                        category: 'task-management',
+                        label: 'Task Management',
+                        examples:
+                            'Jira, Atlassian Rovo, Linear, Notion, ClickUp, Github Issues',
+                    },
+                ],
+            }),
+        );
+        mcpManagerService.getConnections.mockResolvedValue([
+            {
+                provider: 'kodusmcp',
+                name: 'Kodus MCP',
+                allowedTools: ['KODUS_GET_PULL_REQUEST'],
+            },
+            {
+                provider: 'kodusmcp',
+                name: 'Atlassian Rovo',
+                allowedTools: ['getJiraIssue'],
+            },
+        ] as any);
+
+        await expect(
+            service.createFetcherOrchestration(
+                'business-rules-validation',
+                {} as any,
+                organizationAndTeamData,
+            ),
+        ).resolves.toBeDefined();
+    });
+
     it('filters external MCP providers by required MCP hints while keeping kodusmcp', async () => {
         skillLoaderService.loadSkillMetaFromFilesystem.mockReturnValue(
             withSkillMeta({

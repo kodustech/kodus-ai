@@ -23,6 +23,10 @@ import {
     MCPIntegrationOAuthStatus,
 } from './enums/integration.enum';
 import { MCPIntegrationUniqueFields } from './interfaces/mcp-integration.interface';
+import { ManagedTokenCredential } from './managed-credential.types';
+import { renderTokenAuthHeaders } from './managed-auth-header';
+
+const MANAGED_TOKEN_KIND = 'managed-token';
 
 type IntegrationOAuthState = Partial<
     MCPIntegrationUniqueFields<MCPIntegrationAuthType.OAUTH2>
@@ -383,6 +387,152 @@ export class IntegrationOAuthService {
             });
             throw error;
         }
+    }
+
+    /**
+     * Persist a per-org static-token credential for a managed integration
+     * (bring-your-own-token auth method). Reuses the `mcp_integration_oauth`
+     * row for (org, integrationId); the payload is tagged `kind: 'managed-token'`
+     * so it is never confused with OAuth state.
+     */
+    async saveTokenCredential(
+        organizationId: string,
+        integrationId: string,
+        credential: ManagedTokenCredential,
+    ): Promise<void> {
+        try {
+            const payload = this.encryptionUtils.encrypt(
+                JSON.stringify({
+                    kind: MANAGED_TOKEN_KIND,
+                    ...credential,
+                }),
+            );
+
+            let entity = await this.integrationOAuthRepository.findOne({
+                where: { integrationId, organizationId },
+            });
+
+            if (!entity) {
+                entity = this.integrationOAuthRepository.create({
+                    organizationId,
+                    integrationId,
+                    auth: payload,
+                    status: MCPIntegrationOAuthStatus.ACTIVE,
+                });
+            } else {
+                entity.auth = payload;
+                entity.status = MCPIntegrationOAuthStatus.ACTIVE;
+            }
+
+            await this.integrationOAuthRepository.save(entity);
+        } catch (error) {
+            this.logger.error('Failed to save token credential', {
+                organizationId,
+                integrationId,
+                error,
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Read the per-org static-token credential for a managed integration, or
+     * `null` when none is stored (or the row holds OAuth state instead).
+     */
+    async getManagedCredential(
+        organizationId: string,
+        integrationId: string,
+    ): Promise<ManagedTokenCredential | null> {
+        try {
+            const entity = await this.integrationOAuthRepository.findOne({
+                where: { integrationId, organizationId },
+            });
+
+            if (!entity?.auth) {
+                return null;
+            }
+
+            const parsed = this.decryptAndParse<
+                ({ kind?: string } & ManagedTokenCredential) | null
+            >(entity.auth, null);
+
+            if (!parsed || parsed.kind !== MANAGED_TOKEN_KIND) {
+                return null;
+            }
+
+            const { kind: _kind, ...credential } = parsed;
+            return credential;
+        } catch (error) {
+            this.logger.error('Failed to get managed credential', {
+                organizationId,
+                integrationId,
+                error,
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Resolve the ready-to-send auth header(s) for a managed (kodusmcp)
+     * connection on the agent-runtime path. Picks the credential that exists for
+     * (org, integrationId): a stored static-token credential takes precedence,
+     * otherwise the OAuth access token (refreshed on read). Returns `{}` when the
+     * integration needs no auth (e.g. `none` servers).
+     */
+    async resolveManagedAuthHeaders(
+        organizationId: string,
+        integrationId: string,
+    ): Promise<Record<string, string>> {
+        const credential = await this.getManagedCredential(
+            organizationId,
+            integrationId,
+        );
+
+        if (credential) {
+            return renderTokenAuthHeaders(credential);
+        }
+
+        let oauthState = await this.getOAuthState(
+            organizationId,
+            integrationId,
+        );
+
+        if (oauthState?.tokens) {
+            oauthState = await this.refreshOAuthStateIfNeeded({
+                organizationId,
+                integrationId,
+                oauthState,
+            });
+
+            const accessToken = (oauthState.tokens as TokenData)?.accessToken;
+            if (accessToken) {
+                return { Authorization: `Bearer ${accessToken}` };
+            }
+        }
+
+        return {};
+    }
+
+    /**
+     * Whether the org has *any* usable credential for a managed integration —
+     * a stored static token, or an ACTIVE OAuth grant. Method-agnostic, so it is
+     * correct regardless of which auth method the org connected with.
+     */
+    async hasManagedCredential(
+        organizationId: string,
+        integrationId: string,
+    ): Promise<boolean> {
+        const credential = await this.getManagedCredential(
+            organizationId,
+            integrationId,
+        );
+
+        if (credential) {
+            return true;
+        }
+
+        const status = await this.getOAuthStatus(organizationId, integrationId);
+        return status === MCPIntegrationOAuthStatus.ACTIVE;
     }
 
     async deleteOAuthState(

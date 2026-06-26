@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
     Area,
     AreaChart,
@@ -14,6 +13,8 @@ import {
 } from "recharts";
 
 import { CockpitNoDataPlaceholder } from "../../_components/no-data-placeholder";
+import { COCKPIT_REVIEW_PARAM } from "../../_constants";
+import { useShallowParam } from "../../_helpers/use-shallow-param";
 import type { ImplementationRateWeeklyRow } from "../../_services/analytics/review/fetch";
 import { ChartTooltip } from "./chart-tooltip";
 import { SEVERITY_COLORS, SEVERITY_ORDER } from "./chart-constants";
@@ -32,7 +33,11 @@ export const WeeklyImplementationChart = ({
 }: {
     data: ImplementationRateWeeklyRow[];
 }) => {
-    const [mode, setMode] = useState<Mode>("overall");
+    const [mode, setMode] = useShallowParam<Mode>(
+        COCKPIT_REVIEW_PARAM.weeklyMode,
+        "overall",
+        ["overall", "severity"],
+    );
 
     if (!data.length) return <CockpitNoDataPlaceholder />;
 

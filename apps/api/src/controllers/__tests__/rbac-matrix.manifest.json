@@ -561,6 +561,17 @@
     }
   },
   {
+    "key": "github.controller.ts#getOrganizationName",
+    "httpMethod": "GET",
+    "urlPath": "/github/organization-name",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "integration.controller.ts#checkHasConnectionByPlatform",
     "httpMethod": "GET",
     "urlPath": "/integration/check-connection-platform",
@@ -597,6 +608,17 @@
     "key": "integration.controller.ts#getOrganizationId",
     "httpMethod": "GET",
     "urlPath": "/integration/organization-id",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "integration.controller.ts#isIssuesSupported",
+    "httpMethod": "GET",
+    "urlPath": "/integration/issues-supported",
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",
@@ -704,9 +726,9 @@
     }
   },
   {
-    "key": "kodyRules.controller.ts#convertPendingUpdatesToNewMemories",
+    "key": "kodyRules.controller.ts#convertPendingUpdatesToNew",
     "httpMethod": "POST",
-    "urlPath": "/kody-rules/pending/convert-updates-to-memories",
+    "urlPath": "/kody-rules/pending/convert-updates-to-new",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",
@@ -839,6 +861,17 @@
     "key": "kodyRules.controller.ts#getInheritedRules",
     "httpMethod": "GET",
     "urlPath": "/kody-rules/inherited-rules",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "kodyRules.controller.ts#getPending",
+    "httpMethod": "GET",
+    "urlPath": "/kody-rules/pending",
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",

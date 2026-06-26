@@ -18,7 +18,8 @@ describe('IN_APP_TEMPLATE_REGISTRY', () => {
             organizationName: 'Acme',
         },
         [NotificationEvent.SSO_DOMAIN_VERIFICATION]: { domain: 'acme.com' },
-        [NotificationEvent.WEEKLY_RECAP]: {},
+        [NotificationEvent.ORG_REPORT]: {},
+        [NotificationEvent.REPO_REPORT]: {},
         [NotificationEvent.REVIEW_AUTO_APPROVED]: {
             repoName: 'acme/api',
             prUrl: 'https://github.com/acme/api/pull/1',

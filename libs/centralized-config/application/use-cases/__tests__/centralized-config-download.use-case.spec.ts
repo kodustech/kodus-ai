@@ -25,7 +25,7 @@ describe('CentralizedConfigDownloadUseCase', () => {
 
     const centralizedConfigPrServiceMock: Pick<
         CentralizedConfigPrService,
-        'sanitizeFileName' | 'buildCentralizedPath'
+        'sanitizeFileName' | 'buildCentralizedPath' | 'buildRuleFileName'
     > = {
         sanitizeFileName: ((
             name?: string,
@@ -41,6 +41,11 @@ describe('CentralizedConfigDownloadUseCase', () => {
 
             return normalized || fallback;
         }) as CentralizedConfigPrService['sanitizeFileName'],
+        buildRuleFileName: ((title?: string, uuid?: string) => {
+            const base =
+                centralizedConfigPrServiceMock.sanitizeFileName(title, 'rule');
+            return `${base}${uuid ? `-${uuid.slice(0, 8)}` : ''}.yml`;
+        }) as CentralizedConfigPrService['buildRuleFileName'],
         buildCentralizedPath: ((params: {
             repositoryFolder: string;
             relativePath: string;
@@ -513,5 +518,103 @@ describe('CentralizedConfigDownloadUseCase', () => {
         const exportedRule = yaml.load(ruleEntry!.content) as any;
         expect(exportedRule.status).toBeUndefined();
         expect(exportedRule.sourcePath).toBeUndefined();
+    });
+
+    it('exports only approved rules — never PENDING or REJECTED', async () => {
+        const getCodeReviewParameterUseCase = {
+            execute: jest.fn().mockResolvedValue({
+                configValue: {
+                    repositories: [
+                        {
+                            id: 'repo-1',
+                            name: 'repo-one',
+                            isSelected: true,
+                            directories: [],
+                        },
+                    ],
+                },
+            }),
+        };
+
+        const generateKodusConfigFileUseCase = {
+            execute: jest.fn().mockResolvedValue({
+                yamlString: 'languageResultPrompt: english\n',
+            }),
+        };
+
+        const baseRule = {
+            severity: 'medium',
+            type: 'standard',
+            scope: 'file',
+            path: '**/*',
+            examples: [],
+            inheritance: { inheritable: true, include: [], exclude: [] },
+            repositoryId: 'repo-1',
+        };
+
+        const findRulesInOrganizationByRuleFilterKodyRulesUseCase = {
+            execute: jest.fn().mockResolvedValue([
+                {
+                    ...baseRule,
+                    uuid: 'active-rule',
+                    title: 'Active rule',
+                    rule: 'Approved',
+                    status: 'active',
+                },
+                {
+                    ...baseRule,
+                    uuid: 'pending-rule',
+                    title: 'Pending rule',
+                    rule: 'Awaiting approval',
+                    status: 'pending',
+                },
+                {
+                    ...baseRule,
+                    uuid: 'rejected-rule',
+                    title: 'Rejected rule',
+                    rule: 'Should stay hidden',
+                    status: 'rejected',
+                },
+            ]),
+        };
+
+        const createOrUpdateKodyRulesUseCase = {
+            execute: jest.fn().mockResolvedValue({ uuid: 'active-rule' }),
+        };
+
+        const pullRequestMessagesService = {
+            find: jest.fn().mockResolvedValue([]),
+        };
+
+        const useCase = new CentralizedConfigDownloadUseCase(
+            getCodeReviewParameterUseCase as any,
+            generateKodusConfigFileUseCase as any,
+            findRulesInOrganizationByRuleFilterKodyRulesUseCase as any,
+            createOrUpdateKodyRulesUseCase as any,
+            pullRequestMessagesService as any,
+            centralizedConfigPrServiceMock as CentralizedConfigPrService,
+        );
+
+        const entries = await useCase.execute(user, teamId, {
+            skipAuthorization: true,
+            markRulesAsPendingWithSourcePath: true,
+        });
+
+        const ruleEntries = entries.filter((entry) =>
+            entry.path.startsWith('repo-one/.kody-rules/review/'),
+        );
+
+        // Only the approved (active) rule is exported.
+        expect(ruleEntries).toHaveLength(1);
+        const exported = yaml.load(ruleEntries[0].content) as any;
+        expect(exported.title).toBe('Active rule');
+
+        // The pending/rejected rules are never marked into the centralized PR.
+        const markedUuids = createOrUpdateKodyRulesUseCase.execute.mock.calls.map(
+            (call) => call[0]?.uuid,
+        );
+        expect(markedUuids).toContain('active-rule');
+        expect(markedUuids).not.toContain('pending-rule');
+        expect(markedUuids).not.toContain('rejected-rule');
     });
 });

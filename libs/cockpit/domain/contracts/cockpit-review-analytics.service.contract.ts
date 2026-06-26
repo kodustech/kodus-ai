@@ -11,6 +11,7 @@ import {
     RepositoryHealthRow,
     ReviewOperationalMetrics,
     ReviewOperationalMetricsWeeklyRow,
+    ReviewQualityByRuleGroupRow,
     SuggestionsExplorerQuery,
     SuggestionsExplorerResult,
 } from '../types';
@@ -56,6 +57,14 @@ export interface ICockpitReviewAnalyticsService {
         q: CockpitRangeQuery,
     ): Promise<ReviewOperationalMetricsWeeklyRow[]>;
     getKodyRulesUsage(q: CockpitRangeQuery): Promise<KodyRuleUsageRow[]>;
+    /**
+     * Review quality split into rule-driven vs Kodus-native suggestions, in a
+     * single warehouse pass. Powers the report's "is the team acting on /
+     * liking what we say?" section without per-rule Mongo metadata.
+     */
+    getReviewQualityByRuleGroup(
+        q: CockpitRangeQuery,
+    ): Promise<ReviewQualityByRuleGroupRow[]>;
     /**
      * Map of `repositoryId` → `repo_full_name` for the org, from the
      * warehouse. Lets the rule-health table label scope ("which repo")

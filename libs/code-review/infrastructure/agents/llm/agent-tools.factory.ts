@@ -6,6 +6,14 @@ import { RemoteCommands } from '../../adapters/services/collectCrossFileContexts
 const logger = createLogger('AgentTools');
 
 export const MAX_GREP_MATCHES = 50;
+/**
+ * Cap on distinct match GROUPS returned by the rg context search (groups are
+ * separated by `--` lines under `-C`). Capping by match groups instead of raw
+ * lines — paired with a tighter `-C 2` context — lets the agent see ~10x more
+ * distinct locations for the same token budget, so a definition is not buried
+ * beyond the cutoff when a symbol has many usages.
+ */
+export const MAX_GREP_GROUPS = 40;
 export const MAX_READ_LENGTH = 8_000;
 export const MAX_LIST_LENGTH = 4_000;
 export const MAX_SHELL_OUTPUT = 10_000;
@@ -132,6 +140,7 @@ export function buildAgentTools(
     repositoryFullName?: string,
     documentationSearchService?: DocumentationSearchAdapter,
     documentationSearchOptions?: Record<string, unknown>,
+    callGraph?: string,
 ): Record<string, any> {
     if (!remoteCommands) {
         return {};
@@ -197,7 +206,7 @@ export function buildAgentTools(
                         const excludeTestsArgs = excludeTests
                             ? ` --glob '!*test*' --glob '!*Test*' --glob '!*spec*' --glob '!*Spec*' --glob '!*__tests__*'`
                             : '';
-                        const modeArg = namesOnly ? ' -l' : ' -n -C 5';
+                        const modeArg = namesOnly ? ' -l' : ' -n -C 2';
                         const cmd = `rg '${safePattern}'${globArg}${excludeTestsArgs}${modeArg} '${safePath}'`;
                         const { stdout, exitCode } =
                             await remoteCommands.exec(cmd);
@@ -205,27 +214,40 @@ export function buildAgentTools(
                         if (exitCode === 1 && stdout.includes('not allowed')) {
                             throw new Error('rg blocked by sandbox');
                         }
+                        // exit code >= 2 = a real ripgrep error (e.g. invalid
+                        // regex). Now that exec surfaces the true exit code
+                        // instead of throwing, we must distinguish this from a
+                        // no-match (exit 1); fall through to the fallback so the
+                        // model gets a real error rather than a misleading
+                        // "No matches found."
+                        if (exitCode >= 2) {
+                            throw new Error('rg error');
+                        }
                         // exit code 1 = no matches (not an error)
                         if (exitCode === 1 || !stdout.trim())
                             return 'No matches found.';
                         if (exitCode === 0) {
                             const raw = stdout.trim();
-                            const lines = raw.split('\n');
                             if (namesOnly) {
-                                return lines
+                                return raw
+                                    .split('\n')
                                     .slice(0, MAX_GREP_MATCHES)
                                     .join('\n');
                             }
-
-                            if (lines.length > MAX_GREP_MATCHES) {
+                            // Cap by match GROUPS (rg separates them with `--`
+                            // under -C), not raw lines, so many distinct match
+                            // locations survive the cutoff instead of a few
+                            // context-heavy blocks.
+                            const groups = raw.split(/\n--\n/);
+                            if (groups.length > MAX_GREP_GROUPS) {
                                 return (
-                                    lines
-                                        .slice(0, MAX_GREP_MATCHES)
-                                        .join('\n') +
-                                    `\n... (${lines.length - MAX_GREP_MATCHES} more lines)`
+                                    groups
+                                        .slice(0, MAX_GREP_GROUPS)
+                                        .join('\n--\n') +
+                                    `\n... (${groups.length - MAX_GREP_GROUPS} more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)`
                                 );
                             }
-                            return stdout.trim();
+                            return raw;
                         }
                     } catch {
                         // rg not available, fall through to remoteCommands.grep
@@ -258,7 +280,7 @@ export function buildAgentTools(
                 if (lines.length > MAX_GREP_MATCHES) {
                     result =
                         lines.slice(0, MAX_GREP_MATCHES).join('\n') +
-                        `\n... (${lines.length - MAX_GREP_MATCHES} more matches)`;
+                        `\n... (${lines.length - MAX_GREP_MATCHES} more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)`;
                 }
                 return result;
             },
@@ -306,20 +328,56 @@ export function buildAgentTools(
                         endLine,
                     );
                 } catch (err) {
-                    return `Error reading ${filePath}: ${err instanceof Error ? err.message : String(err)}`;
+                    const base = `Error reading ${filePath}: ${err instanceof Error ? err.message : String(err)}`;
+                    // Suggest near-miss filenames from the parent dir so the model
+                    // corrects the path instead of re-guessing (retry cascade).
+                    try {
+                        const slash = filePath.lastIndexOf('/');
+                        const dir = slash > 0 ? filePath.slice(0, slash) : '.';
+                        const wanted = (
+                            slash > 0 ? filePath.slice(slash + 1) : filePath
+                        ).toLowerCase();
+                        const listing = await remoteCommands.listDir(dir, 1);
+                        const similar = listing
+                            .split('\n')
+                            .map((l) => l.trim())
+                            .filter(Boolean)
+                            .filter((name) => {
+                                const b = (name.split('/').pop() || '').toLowerCase();
+                                return (
+                                    b.length > 0 &&
+                                    (b.includes(wanted) || wanted.includes(b))
+                                );
+                            })
+                            .slice(0, 3);
+                        if (similar.length > 0) {
+                            return `${base}\nDid you mean: ${similar.join(', ')}?`;
+                        }
+                    } catch {
+                        // listing failed — return the base error alone
+                    }
+                    return base;
                 }
                 if (!result && result !== '') {
                     return `Error: readFile returned ${typeof result} for ${filePath}`;
                 }
                 const baseLineNumber = startLine > 0 ? startLine : 1;
-                result = addLineNumbers(result, baseLineNumber);
-                if (result.length > MAX_READ_LENGTH) {
-                    const lines = result.split('\n');
-                    result =
-                        result.substring(0, MAX_READ_LENGTH) +
-                        `\n... (truncated — file has ~${lines.length} lines, call readFile again with startLine/endLine to read the rest)`;
+                const numbered = addLineNumbers(result, baseLineNumber);
+                if (numbered.length > MAX_READ_LENGTH) {
+                    // Cut on a line boundary so we can hand the model an exact
+                    // resume point instead of a vague "read the rest".
+                    const head = numbered.slice(0, MAX_READ_LENGTH);
+                    const lastNewline = head.lastIndexOf('\n');
+                    const shown =
+                        lastNewline > 0 ? head.slice(0, lastNewline) : head;
+                    const shownLines = shown.split('\n').length;
+                    const lastShown = baseLineNumber + shownLines - 1;
+                    return (
+                        shown +
+                        `\n... (showing lines ${baseLineNumber}-${lastShown}; file continues — call readFile(startLine=${lastShown + 1}) to read more)`
+                    );
                 }
-                return result;
+                return numbered;
             },
         ),
 
@@ -369,7 +427,7 @@ export function buildAgentTools(
                 if (result.length > MAX_LIST_LENGTH) {
                     result =
                         result.substring(0, MAX_LIST_LENGTH) +
-                        `\n... (truncated)`;
+                        `\n... (truncated — pass a more specific path or a lower maxDepth to narrow the listing)`;
                 }
                 return result;
             },
@@ -594,6 +652,13 @@ fi
                 }
 
                 const results: string[] = [];
+                // Track whether a real compiler/linter actually executed, as
+                // opposed to being absent from the sandbox. A clean run (empty
+                // output) and an unavailable tool ("command not found") both
+                // leave `results` empty — without this flag we cannot tell them
+                // apart and end up reporting "no errors" for code we never
+                // actually checked, manufacturing false confidence.
+                let anyCheckerExecuted = false;
 
                 const pushScopedResult = (
                     lang: string,
@@ -601,11 +666,18 @@ fi
                     rawOutput: string,
                 ) => {
                     const output = rawOutput?.trim();
-                    if (
-                        !output ||
-                        output.includes('command not found') ||
-                        output.includes('not found')
-                    ) {
+                    // Tool not present in the sandbox: the check did NOT run.
+                    // Match ONLY the shell "command not found" form — a bare
+                    // "not found" also shows up in REAL diagnostics ("Module not
+                    // found", "Cannot resolve ... not found"); discarding those
+                    // both loses the finding and falsely reports no checker ran.
+                    if (output && output.includes('command not found')) {
+                        return;
+                    }
+                    // We got here because the compiler/linter actually ran
+                    // (it either emitted diagnostics or produced clean output).
+                    anyCheckerExecuted = true;
+                    if (!output) {
                         return;
                     }
 
@@ -831,7 +903,14 @@ fi
                 }
 
                 if (results.length === 0) {
-                    return 'No type errors or linter issues found (or no supported linter available).';
+                    if (anyCheckerExecuted) {
+                        return 'Ran a build/type check on the changed files — no type errors or linter diagnostics found.';
+                    }
+                    return (
+                        '⚠️ Could NOT run a build/type check here — no compiler/linter for these files is available in the sandbox (missing toolchain or dependencies). ' +
+                        'This is NOT a clean result: the code was not verified. Do not assume it compiles or that signatures, argument types, and return types are correct. ' +
+                        'Verify manually — read the callee/definition with readFile and confirm the call matches its signature.'
+                    );
                 }
 
                 return truncateShellOutput(results.join('\n\n'));
@@ -981,6 +1060,67 @@ fi
     //         );
     //     }
     // }
+
+    // ── Call Graph lookup tool (EXP: stance + graph) ────────────────
+    // On-demand caller/callee lookup, backed by the runtime callGraph string
+    // (kodus-graph). The STANCE prompt gives the agent a REASON to pull it:
+    // proving a change fulfills its intent "everywhere it touches" requires
+    // checking callers/implementations. Parsed by ←/→ markers.
+    if (callGraph && callGraph.trim().length > 0) {
+        const blocks: Array<{ header: string; lines: string[] }> = [];
+        for (const raw of callGraph.split('\n')) {
+            const line = raw.replace(/\s+$/, '');
+            if (!line.trim()) continue;
+            const isChild = /^\s+[←→]/.test(line) || /^\s+\(no /.test(line);
+            if (isChild && blocks.length > 0) {
+                blocks[blocks.length - 1].lines.push(line.trim());
+            } else if (!/^Changed functions/i.test(line) && !line.startsWith(' ')) {
+                blocks.push({ header: line.trim(), lines: [] });
+            }
+        }
+        if (blocks.length > 0) {
+            const names = blocks.map((b) => b.header);
+            tools.getCallers = mkTool(
+                'CROSS-FILE tool: look up who CALLS a changed function and what it CALLS ' +
+                    '(callers ← and callees →) from the precomputed AST call graph. ' +
+                    'Use this for EVERY changed function to check cross-file impact — ' +
+                    'who breaks if the signature/behavior changes, and which dependencies it relies on. ' +
+                    'Then readFile each caller to confirm. More precise than grep for caller lookup.',
+                {
+                    type: 'object',
+                    properties: {
+                        functionName: {
+                            type: 'string',
+                            description:
+                                'Function or method name to look up (e.g. "get_item_key")',
+                        },
+                    },
+                    required: ['functionName'],
+                },
+                async (args: any) => {
+                    const q = (args?.functionName || '').toString().trim();
+                    if (!q) return 'Error: functionName is required';
+                    const hits = blocks.filter((b) =>
+                        b.header.toLowerCase().includes(q.toLowerCase()),
+                    );
+                    if (hits.length === 0) {
+                        return (
+                            `No call-graph entry for "${q}". ` +
+                            `Changed functions in the graph: ${names.join(', ')}`
+                        );
+                    }
+                    return hits
+                        .slice(0, 3)
+                        .map((b) =>
+                            b.lines.length > 0
+                                ? `${b.header}\n${b.lines.map((l) => '  ' + l).join('\n')}`
+                                : `${b.header}\n  (no callers/callees recorded)`,
+                        )
+                        .join('\n\n');
+                },
+            );
+        }
+    }
 
     // ── External documentation lookup (Exa) ─────────────────────────
     if (documentationSearchService) {

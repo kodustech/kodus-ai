@@ -114,6 +114,7 @@ export class CustomClient {
                 provider:
                     this.integration.providerType || MCPProviderType.CUSTOM,
                 warning: false,
+                readOnly: Boolean(tool.annotations?.readOnlyHint),
             }));
         } catch (error) {
             console.error(`Failed to fetch custom tools:`, error.message);

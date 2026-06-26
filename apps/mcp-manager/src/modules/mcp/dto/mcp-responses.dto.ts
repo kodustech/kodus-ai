@@ -10,7 +10,7 @@ export class McpConnectionDto {
     @ApiProperty({ example: 'int_456' })
     integrationId: string;
 
-    @ApiProperty({ example: 'composio' })
+    @ApiProperty({ example: 'kodusmcp' })
     provider: string;
 
     @ApiProperty({ example: 'ACTIVE' })
@@ -27,7 +27,7 @@ export class McpConnectionDto {
 
     @ApiPropertyOptional({
         description: 'Provider-specific metadata for the connection',
-        example: { connection: { id: 'ca_123' } },
+        example: { authMethod: 'oauth' },
     })
     metadata?: Record<string, any>;
 
@@ -76,7 +76,7 @@ export class McpToolDto {
     @ApiProperty({ example: 'Reads repository contents' })
     description: string;
 
-    @ApiProperty({ example: 'composio' })
+    @ApiProperty({ example: 'kodusmcp' })
     provider: string;
 
     @ApiProperty({ example: false })
@@ -99,7 +99,7 @@ export class McpIntegrationDto {
     @ApiPropertyOptional({ example: 'GitHub' })
     appName?: string;
 
-    @ApiPropertyOptional({ example: 'composio' })
+    @ApiPropertyOptional({ example: 'kodusmcp' })
     provider?: string;
 
     @ApiPropertyOptional({ example: 'https://logo.example.com' })

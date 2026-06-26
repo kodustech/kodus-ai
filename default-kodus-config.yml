@@ -46,7 +46,8 @@ summary:
 # kody rules
 ideRulesSyncEnabled: false
 kodyRulesGeneratorEnabled: true
-llmGeneratedMemoriesRequireApproval: false
+kodyKnowledgeApproval:
+    enabled: false
 
 # custom messages
 customMessages:

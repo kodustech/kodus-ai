@@ -103,7 +103,7 @@ describe("matchesOriginFilter", () => {
 
     it("treats multiple origin selections as union (OR within section)", () => {
         const filter: ListFilters = {
-            origins: new Set(["Auto-sync", "Onboard"]),
+            origins: new Set(["Auto-sync", "Onboarding"]),
             severities: new Set(),
             withSyncErrors: false,
             pausedOnly: false,

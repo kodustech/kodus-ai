@@ -32,8 +32,9 @@ export enum NotificationEvent {
     // ── SSO ────────────────────────────────────────────────────
     SSO_DOMAIN_VERIFICATION = 'sso.domain_verification',
 
-    // ── Cockpit ────────────────────────────────────────────────
-    WEEKLY_RECAP = 'cockpit.weekly_recap',
+    // ── Cockpit reports ────────────────────────────────────────
+    REPO_REPORT = 'cockpit.repo_report',
+    ORG_REPORT = 'cockpit.org_report',
 
     // ── Billing ────────────────────────────────────────────────
     BILLING_PAYMENT_FAILED = 'billing.payment_failed',
@@ -97,7 +98,12 @@ export interface NotificationPayloadMap {
         domain: string;
     };
 
-    [NotificationEvent.WEEKLY_RECAP]: {
+    [NotificationEvent.REPO_REPORT]: {
+        recipient: { email: string; name: string };
+        props: Record<string, unknown>;
+    };
+
+    [NotificationEvent.ORG_REPORT]: {
         recipient: { email: string; name: string };
         props: Record<string, unknown>;
     };

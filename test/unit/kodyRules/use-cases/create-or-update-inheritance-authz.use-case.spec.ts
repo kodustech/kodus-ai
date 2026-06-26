@@ -1,5 +1,4 @@
 import { ForbiddenException } from '@nestjs/common';
-import { REQUEST } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { ContextReferenceDetectionService } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
@@ -61,6 +60,15 @@ describe('CreateOrUpdateKodyRulesUseCase — inheritance toggle authz', () => {
         resolveDirectoryGroupFolderName: jest.fn().mockResolvedValue(null),
         buildCentralizedPath: jest.fn(),
         sanitizeFileName: jest.fn(),
+        buildRuleFileName: jest.fn(
+            (title?: string, uuid?: string) =>
+                `${(title || '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, '') || 'rule'}${
+                    uuid ? `-${String(uuid).slice(0, 8)}` : ''
+                }.yml`,
+        ),
     };
 
     // repo_admin assigned ONLY to repo-a.
@@ -94,7 +102,7 @@ describe('CreateOrUpdateKodyRulesUseCase — inheritance toggle authz', () => {
         scope: 'file',
         status: KodyRulesStatus.ACTIVE,
         type: KodyRulesType.STANDARD,
-        origin: KodyRulesOrigin.USER,
+        origin: KodyRulesOrigin.MANUAL,
         repositoryId: 'global',
         examples: [],
         inheritance: {
@@ -140,14 +148,30 @@ describe('CreateOrUpdateKodyRulesUseCase — inheritance toggle authz', () => {
                     provide: CentralizedConfigPrService,
                     useValue: centralizedConfigPrServiceMock,
                 },
-                {
-                    provide: REQUEST,
-                    useValue: { user },
-                },
             ],
         }).compile();
 
-        return module.get(CreateOrUpdateKodyRulesUseCase);
+        const useCase = module.get(CreateOrUpdateKodyRulesUseCase);
+
+        // Use-cases no longer inject REQUEST — the controller forwards the
+        // authenticated user. Wrap execute() to pass the test user through.
+        return {
+            execute: (
+                dto: any,
+                organizationId: string,
+                userInfo?: { userId: string; userEmail: string },
+                skipAuthorization?: boolean,
+                teamIdOverride?: string,
+            ) =>
+                useCase.execute(
+                    dto,
+                    organizationId,
+                    userInfo,
+                    skipAuthorization,
+                    teamIdOverride,
+                    user as any,
+                ),
+        };
     };
 
     beforeEach(() => {

@@ -1,11 +1,13 @@
 "use client";
 
 import { useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { DataTable } from "@components/ui/data-table";
 
 import { setCockpitRepositoryCookie } from "../../_actions/set-cockpit-repository";
 import { CockpitNoDataPlaceholder } from "../../_components/no-data-placeholder";
+import { COCKPIT_PARAM, COCKPIT_REVIEW_PARAM } from "../../_constants";
+import { useShallowParam } from "../../_helpers/use-shallow-param";
 import type { RepositoryHealthRow } from "../../_services/analytics/review/fetch";
 import { repositoriesColumns } from "./repositories-columns";
 
@@ -15,14 +17,26 @@ export const RepositoriesHealthTable = ({
     data: RepositoryHealthRow[];
 }) => {
     const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     const [, startTransition] = useTransition();
+    const [search, setSearch] = useShallowParam<string>(
+        COCKPIT_REVIEW_PARAM.reposQuery,
+        "",
+    );
 
     if (!data.length) return <CockpitNoDataPlaceholder />;
 
+    // Push the repository onto the URL (source of truth, so the focused
+    // view is shareable and not shadowed by a stale `repository` param)
+    // and persist it to the cookie default — same contract as the
+    // top-bar repository picker.
     const focusRepository = (row: RepositoryHealthRow) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set(COCKPIT_PARAM.repository, row.repository);
         startTransition(async () => {
             await setCockpitRepositoryCookie(row.repository);
-            router.refresh();
+            router.push(`${pathname}?${params.toString()}`);
         });
     };
 
@@ -33,6 +47,8 @@ export const RepositoriesHealthTable = ({
                 data={data}
                 searchable
                 searchPlaceholder="Search repositories…"
+                searchValue={search}
+                onSearchChange={setSearch}
                 pageSize={10}
                 getRowId={(row) => row.repository}
                 onRowClick={focusRepository}
