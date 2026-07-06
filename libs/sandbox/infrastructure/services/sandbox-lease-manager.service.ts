@@ -570,11 +570,12 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         }
 
         const retryAt = new Date(Date.now() + CLEANUP_RETRY_DELAY_MS);
-        const scheduled = await this.leaseRepo.markDeletingWithSandboxId(
-            prKey,
-            sandboxId,
-            retryAt,
-        );
+        const scheduled =
+            await this.leaseRepo.markDeletingWithSandboxIdIfNoActiveLeases(
+                prKey,
+                sandboxId,
+                retryAt,
+            );
 
         if (!scheduled) {
             return false;

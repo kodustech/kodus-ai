@@ -54,6 +54,9 @@ function makeMockLeaseRepo(): jest.Mocked<SandboxLeaseRepository> {
         setKillAt: jest.fn().mockResolvedValue(true),
         scheduleCleanupRetry: jest.fn().mockResolvedValue(true),
         markDeletingWithSandboxId: jest.fn().mockResolvedValue(true),
+        markDeletingWithSandboxIdIfNoActiveLeases: jest
+            .fn()
+            .mockResolvedValue(true),
         clearKillAt: jest.fn().mockResolvedValue(undefined),
         findReadyToKill: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<SandboxLeaseRepository>;
@@ -632,11 +635,11 @@ describe('SandboxLeaseManager', () => {
                 'invalidation',
             );
 
-            expect(leaseRepo.markDeletingWithSandboxId).toHaveBeenCalledTimes(
-                1,
-            );
+            expect(
+                leaseRepo.markDeletingWithSandboxIdIfNoActiveLeases,
+            ).toHaveBeenCalledTimes(1);
             const [calledPrKey, calledSandboxId, retryAt] = (
-                leaseRepo.markDeletingWithSandboxId as jest.Mock
+                leaseRepo.markDeletingWithSandboxIdIfNoActiveLeases as jest.Mock
             ).mock.calls[0];
             expect(calledPrKey).toBe(prKey);
             expect(calledSandboxId).toBe(tempDir);

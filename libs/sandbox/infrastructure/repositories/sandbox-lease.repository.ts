@@ -414,6 +414,33 @@ export class SandboxLeaseRepository {
     }
 
     /**
+     * Retry cleanup for an INVALIDATED local lease only when no active joiner
+     * remains at the exact update moment.
+     */
+    async markDeletingWithSandboxIdIfNoActiveLeases(
+        prKey: string,
+        sandboxId: string,
+        retryAt: Date,
+    ): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
+            {
+                _id: prKey,
+                state: 'INVALIDATED',
+                sandboxId,
+                leaseCount: { $lte: 0 },
+            },
+            {
+                $set: {
+                    state: 'DELETING',
+                    killAt: retryAt,
+                },
+            },
+        );
+
+        return result.matchedCount > 0;
+    }
+
+    /**
      * Atomically clear `killAt`. Called by acquire() when a new caller
      * joins before the idle window expires — keeps the warm sandbox alive
      * even if the worker that scheduled the kill is a different process.

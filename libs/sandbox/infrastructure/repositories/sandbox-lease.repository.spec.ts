@@ -351,6 +351,40 @@ describe('SandboxLeaseRepository', () => {
         );
     });
 
+    it('markDeletingWithSandboxIdIfNoActiveLeases preserves active INVALIDATED joiners', async () => {
+        const leaseModel = {
+            updateOne: jest.fn().mockResolvedValue({
+                matchedCount: 1,
+                modifiedCount: 1,
+            }),
+        };
+        const repo = new SandboxLeaseRepository(leaseModel as any);
+        const retryAt = new Date('2026-01-01T00:01:00.000Z');
+
+        await expect(
+            repo.markDeletingWithSandboxIdIfNoActiveLeases(
+                '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:214',
+                '/tmp/kodus-sandbox-invalidated',
+                retryAt,
+            ),
+        ).resolves.toBe(true);
+
+        expect(leaseModel.updateOne).toHaveBeenCalledWith(
+            {
+                _id: '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:214',
+                state: 'INVALIDATED',
+                sandboxId: '/tmp/kodus-sandbox-invalidated',
+                leaseCount: { $lte: 0 },
+            },
+            {
+                $set: {
+                    state: 'DELETING',
+                    killAt: retryAt,
+                },
+            },
+        );
+    });
+
     it('findExpired applies an explicit query limit', async () => {
         const query = {
             select: jest.fn().mockReturnThis(),
