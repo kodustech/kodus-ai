@@ -330,8 +330,8 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     /**
      * Invalidate a lease for the given prKey, called on PR-close or force-push.
      *
-     * - state === CREATING: mark as INVALIDATED; the in-flight create path will
-     *   detect this and kill the sandbox after it finishes (preventing orphans).
+     * - state === CREATING: atomically mark as INVALIDATED only if it is still
+     *   CREATING; otherwise re-read and fall through to active-lease cleanup.
      * - state === READY or PAUSED: soft-drain (60s setTimeout) then delete doc.
      * - doc not found: no-op (idempotent).
      */
@@ -342,7 +342,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             metadata: { prKey },
         });
 
-        const doc = await this.leaseRepo.findByPrKey(prKey);
+        let doc = await this.leaseRepo.findByPrKey(prKey);
         if (!doc) {
             // Idempotent: no lease to invalidate
             this.logger.log({
@@ -363,14 +363,35 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         }
 
         if (doc.state === 'CREATING') {
-            // Mid-create race: mark as INVALIDATED so the create path can detect and kill
-            await this.leaseRepo.markInvalidated(prKey);
-            this.logger.log({
-                message: `SandboxLeaseManager: marked INVALIDATED (mid-create) prKey="${prKey}"`,
-                context: SandboxLeaseManager.name,
-                metadata: { prKey },
-            });
-            return;
+            const invalidated =
+                await this.leaseRepo.markInvalidatedIfCreating(prKey);
+            if (invalidated) {
+                this.logger.log({
+                    message: `SandboxLeaseManager: marked INVALIDATED (mid-create) prKey="${prKey}"`,
+                    context: SandboxLeaseManager.name,
+                    metadata: { prKey },
+                });
+                return;
+            }
+
+            doc = await this.leaseRepo.findByPrKey(prKey);
+            if (!doc) {
+                this.logger.log({
+                    message: `SandboxLeaseManager: invalidate no-op after CREATING claim lost (doc not found) prKey="${prKey}"`,
+                    context: SandboxLeaseManager.name,
+                    metadata: { prKey },
+                });
+                return;
+            }
+
+            if (doc.state === 'DELETING') {
+                this.logger.log({
+                    message: `SandboxLeaseManager: invalidate skipped after CREATING claim lost because cleanup is already in progress prKey="${prKey}"`,
+                    context: SandboxLeaseManager.name,
+                    metadata: { prKey, sandboxId: doc.sandboxId },
+                });
+                return;
+            }
         }
 
         const invalidated = await this.leaseRepo.markInvalidated(prKey);

@@ -149,7 +149,21 @@ export class SandboxLeaseRepository {
      */
     async markInvalidated(prKey: string): Promise<boolean> {
         const result = await this.leaseModel.updateOne(
-            { _id: prKey, state: { $in: ['CREATING', 'READY', 'PAUSED'] } },
+            { _id: prKey, state: { $in: ['READY', 'PAUSED'] } },
+            { $set: { state: 'INVALIDATED' } },
+        );
+
+        return result.matchedCount > 0;
+    }
+
+    /**
+     * Mark a lease INVALIDATED only while it is still CREATING.
+     * Used by invalidate() to avoid overwriting a concurrent CREATING→READY
+     * transition with INVALIDATED after a sandbox has already become usable.
+     */
+    async markInvalidatedIfCreating(prKey: string): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
+            { _id: prKey, state: 'CREATING' },
             { $set: { state: 'INVALIDATED' } },
         );
 

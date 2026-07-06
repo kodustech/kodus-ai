@@ -178,7 +178,28 @@ describe('SandboxLeaseRepository', () => {
         expect(leaseModel.updateOne).toHaveBeenCalledWith(
             {
                 _id: '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:206',
-                state: { $in: ['CREATING', 'READY', 'PAUSED'] },
+                state: { $in: ['READY', 'PAUSED'] },
+            },
+            { $set: { state: 'INVALIDATED' } },
+        );
+    });
+
+    it('markInvalidatedIfCreating only invalidates leases that are still CREATING', async () => {
+        const leaseModel = {
+            updateOne: jest.fn().mockResolvedValue({ matchedCount: 1 }),
+        };
+        const repo = new SandboxLeaseRepository(leaseModel as any);
+
+        await expect(
+            repo.markInvalidatedIfCreating(
+                '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:209',
+            ),
+        ).resolves.toBe(true);
+
+        expect(leaseModel.updateOne).toHaveBeenCalledWith(
+            {
+                _id: '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:209',
+                state: 'CREATING',
             },
             { $set: { state: 'INVALIDATED' } },
         );

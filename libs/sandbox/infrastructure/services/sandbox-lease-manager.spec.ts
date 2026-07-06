@@ -42,6 +42,7 @@ function makeMockLeaseRepo(): jest.Mocked<SandboxLeaseRepository> {
         decrementLease: jest.fn(),
         updateReady: jest.fn().mockResolvedValue(undefined),
         markInvalidated: jest.fn().mockResolvedValue(true),
+        markInvalidatedIfCreating: jest.fn().mockResolvedValue(true),
         findByPrKey: jest.fn().mockResolvedValue(null),
         findExpired: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue(undefined),
@@ -475,6 +476,40 @@ describe('SandboxLeaseManager', () => {
         expect(leaseRepo.clearKillAt).not.toHaveBeenCalledWith(prKey);
         expect(Sandbox.setTimeout).not.toHaveBeenCalled();
         expect(leaseRepo.delete).not.toHaveBeenCalledWith(prKey);
+    });
+
+    it('invalidate re-reads and soft-drains when a CREATING lease becomes READY before the invalidation claim', async () => {
+        const prKey = 'org:repo:83';
+
+        leaseRepo.findByPrKey
+            .mockResolvedValueOnce({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'CREATING',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any)
+            .mockResolvedValueOnce({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: 'e2b-ready-race',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+        leaseRepo.markInvalidatedIfCreating.mockResolvedValueOnce(false);
+        leaseRepo.markInvalidated.mockResolvedValueOnce(true);
+
+        await manager.invalidate(prKey);
+
+        expect(leaseRepo.markInvalidatedIfCreating).toHaveBeenCalledWith(prKey);
+        expect(leaseRepo.markInvalidated).toHaveBeenCalledWith(prKey);
+        expect(Sandbox.setTimeout).toHaveBeenCalledWith(
+            'e2b-ready-race',
+            60_000,
+            { apiKey: 'test-e2b-key' },
+        );
+        expect(leaseRepo.delete).toHaveBeenCalledWith(prKey);
     });
 
     it('invalidate removes a local sandbox directory before deleting an inactive lease', async () => {
