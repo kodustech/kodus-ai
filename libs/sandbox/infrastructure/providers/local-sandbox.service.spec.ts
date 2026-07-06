@@ -1,5 +1,8 @@
 import { PlatformType } from '@libs/core/domain/enums';
 import { LocalSandboxService } from './local-sandbox.service';
+import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 /**
  * buildAuthHeader is the git-over-HTTPS Authorization builder used when the
@@ -16,9 +19,10 @@ describe('LocalSandboxService.buildAuthHeader', () => {
         (service as any).buildAuthHeader(platform, token, username) as string;
 
     const decode = (header: string) =>
-        Buffer.from(header.replace('Authorization: Basic ', ''), 'base64').toString(
-            'utf8',
-        );
+        Buffer.from(
+            header.replace('Authorization: Basic ', ''),
+            'base64',
+        ).toString('utf8');
 
     it('uses x-access-token for GitHub', () => {
         expect(decode(build(PlatformType.GITHUB, 'ghtok'))).toBe(
@@ -27,7 +31,9 @@ describe('LocalSandboxService.buildAuthHeader', () => {
     });
 
     it('uses oauth2 for GitLab and Azure', () => {
-        expect(decode(build(PlatformType.GITLAB, 'gltok'))).toBe('oauth2:gltok');
+        expect(decode(build(PlatformType.GITLAB, 'gltok'))).toBe(
+            'oauth2:gltok',
+        );
         expect(decode(build(PlatformType.AZURE_REPOS, 'aztok'))).toBe(
             'oauth2:aztok',
         );
@@ -47,7 +53,9 @@ describe('LocalSandboxService.buildAuthHeader', () => {
 
         it('uses the account username for classic app passwords', () => {
             expect(
-                decode(build(PlatformType.BITBUCKET, 'classicapppw', 'kodususer')),
+                decode(
+                    build(PlatformType.BITBUCKET, 'classicapppw', 'kodususer'),
+                ),
             ).toBe('kodususer:classicapppw');
         });
 
@@ -62,5 +70,40 @@ describe('LocalSandboxService.buildAuthHeader', () => {
                 /Bitbucket authentication requires/i,
             );
         });
+    });
+});
+
+describe('LocalSandboxService.connectToExistingSandbox', () => {
+    const service = new LocalSandboxService({} as any);
+
+    it('reconnects to an existing local sandbox directory', async () => {
+        const tempDir = await mkdtemp(join(tmpdir(), 'kodus-sandbox-'));
+        await writeFile(join(tempDir, 'README.md'), 'hello', 'utf-8');
+
+        try {
+            const sandbox = await service.connectToExistingSandbox(tempDir);
+
+            expect(sandbox.type).toBe('local');
+            expect(sandbox.sandboxId).toBe(tempDir);
+            expect(sandbox.repoDir).toBe(tempDir);
+            await expect(sandbox.readFile('README.md')).resolves.toBe('hello');
+        } finally {
+            await rm(tempDir, { recursive: true, force: true });
+        }
+    });
+
+    it('rejects unsafe reconnect paths', async () => {
+        await expect(
+            service.connectToExistingSandbox('/tmp/not-kodus-sandbox-test'),
+        ).rejects.toThrow(/refusing to reconnect unsafe sandbox path/i);
+    });
+
+    it('rejects missing local sandbox directories', async () => {
+        const tempDir = await mkdtemp(join(tmpdir(), 'kodus-sandbox-'));
+        await rm(tempDir, { recursive: true, force: true });
+
+        await expect(
+            service.connectToExistingSandbox(tempDir),
+        ).rejects.toThrow();
     });
 });

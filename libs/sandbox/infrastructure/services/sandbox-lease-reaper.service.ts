@@ -8,6 +8,13 @@ import {
     DistributedLockService,
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { SandboxLeaseRepository } from '@libs/sandbox/infrastructure/repositories/sandbox-lease.repository';
+import {
+    cleanupLocalSandboxDirectory,
+    isLocalSandboxPath,
+    localSandboxDirectoryExists,
+} from './local-sandbox-cleanup';
+
+const SANDBOX_REAPER_BATCH_LIMIT = 100;
 
 @Injectable()
 export class SandboxLeaseReaperService {
@@ -28,31 +35,80 @@ export class SandboxLeaseReaperService {
         if (!lock) return;
 
         try {
-            const expired = await this.leaseRepository.findExpired(new Date());
+            const expired = await this.leaseRepository.findExpired(
+                new Date(),
+                SANDBOX_REAPER_BATCH_LIMIT,
+            );
             if (expired.length === 0) return;
 
             const apiKey = this.configService.get<string>('API_E2B_KEY');
 
             await Promise.allSettled(
                 expired.map(async (lease) => {
+                    if (lease.sandboxId) {
+                        const claimed =
+                            await this.leaseRepository.markDeletingIfExpired(
+                                lease._id,
+                                lease.expiresAt,
+                            );
+                        if (!claimed) {
+                            this.logger.log({
+                                message:
+                                    '[SANDBOX-REAPER] Skipped stale expired candidate because lease was refreshed',
+                                context: SandboxLeaseReaperService.name,
+                                metadata: {
+                                    prKey: lease._id,
+                                    sandboxId: lease.sandboxId,
+                                    expiresAt: lease.expiresAt,
+                                },
+                            });
+                            return;
+                        }
+                    }
+
                     if (
                         lease.sandboxId &&
-                        lease.state !== 'INVALIDATED' &&
-                        apiKey
+                        isLocalSandboxPath(lease.sandboxId)
                     ) {
-                        await Sandbox.kill(lease.sandboxId, { apiKey }).catch(
-                            (err) => {
-                                this.logger.warn({
-                                    message:
-                                        '[SANDBOX-REAPER] Failed to kill sandbox — continuing',
-                                    context: SandboxLeaseReaperService.name,
-                                    metadata: {
-                                        sandboxId: lease.sandboxId,
-                                        error: String(err),
-                                    },
-                                });
-                            },
+                        const cleaned = await this.cleanupLocalExpiredSandbox(
+                            lease._id,
+                            lease.sandboxId,
                         );
+                        if (!cleaned) {
+                            return;
+                        }
+
+                        await this.leaseRepository.delete(lease._id);
+                        this.logger.log({
+                            message:
+                                '[SANDBOX-REAPER] Reaped expired local lease',
+                            context: SandboxLeaseReaperService.name,
+                            metadata: {
+                                prKey: lease._id,
+                                sandboxId: lease.sandboxId,
+                                state: lease.state,
+                            },
+                        });
+                        return;
+                    }
+
+                    if (lease.sandboxId && lease.state !== 'INVALIDATED') {
+                        if (!apiKey) {
+                            this.logMissingE2BApiKey(
+                                lease._id,
+                                lease.sandboxId,
+                            );
+                            return;
+                        }
+
+                        const killed = await this.killE2BSandbox(
+                            lease.sandboxId,
+                            apiKey,
+                            '[SANDBOX-REAPER]',
+                        );
+                        if (!killed) {
+                            return;
+                        }
                     }
 
                     await this.leaseRepository.delete(lease._id);
@@ -96,27 +152,67 @@ export class SandboxLeaseReaperService {
         if (!lock) return;
 
         try {
-            const ready = await this.leaseRepository.findReadyToKill(new Date());
+            const ready = await this.leaseRepository.findReadyToKill(
+                new Date(),
+                SANDBOX_REAPER_BATCH_LIMIT,
+            );
             if (ready.length === 0) return;
 
             const apiKey = this.configService.get<string>('API_E2B_KEY');
 
             await Promise.allSettled(
                 ready.map(async (lease) => {
-                    if (lease.sandboxId && apiKey) {
-                        await Sandbox.kill(lease.sandboxId, { apiKey }).catch(
-                            (err) => {
-                                this.logger.warn({
-                                    message:
-                                        '[SANDBOX-IDLE-KILL] Failed to kill sandbox — Mongo doc still deleted; reaper will retry if E2B still has it',
-                                    context: SandboxLeaseReaperService.name,
-                                    metadata: {
-                                        sandboxId: lease.sandboxId,
-                                        error: String(err),
-                                    },
-                                });
-                            },
+                    if (!lease.killAt) {
+                        return;
+                    }
+
+                    const claimed =
+                        await this.leaseRepository.markDeletingIfReadyToKill(
+                            lease._id,
+                            lease.killAt,
                         );
+                    if (!claimed) {
+                        this.logger.log({
+                            message:
+                                '[SANDBOX-IDLE-KILL] Skipped stale idle candidate because lease was re-acquired',
+                            context: SandboxLeaseReaperService.name,
+                            metadata: {
+                                prKey: lease._id,
+                                sandboxId: lease.sandboxId,
+                                killAt: lease.killAt,
+                            },
+                        });
+                        return;
+                    }
+
+                    if (
+                        lease.sandboxId &&
+                        isLocalSandboxPath(lease.sandboxId)
+                    ) {
+                        const cleaned = await this.cleanupLocalExpiredSandbox(
+                            lease._id,
+                            lease.sandboxId,
+                        );
+                        if (!cleaned) {
+                            return;
+                        }
+
+                        await this.leaseRepository.delete(lease._id);
+                        return;
+                    }
+
+                    if (lease.sandboxId && apiKey) {
+                        const killed = await this.killE2BSandbox(
+                            lease.sandboxId,
+                            apiKey,
+                            '[SANDBOX-IDLE-KILL]',
+                        );
+                        if (!killed) {
+                            return;
+                        }
+                    } else if (lease.sandboxId) {
+                        this.logMissingE2BApiKey(lease._id, lease.sandboxId);
+                        return;
                     }
 
                     await this.leaseRepository.delete(lease._id);
@@ -154,6 +250,67 @@ export class SandboxLeaseReaperService {
             });
             return null;
         }
+    }
+
+    private async cleanupLocalExpiredSandbox(
+        prKey: string,
+        sandboxId: string,
+    ): Promise<boolean> {
+        try {
+            const exists = await localSandboxDirectoryExists(sandboxId);
+            if (!exists) {
+                return true;
+            }
+
+            const cleaned = await cleanupLocalSandboxDirectory(sandboxId);
+            if (!cleaned) {
+                this.logger.warn({
+                    message:
+                        '[SANDBOX-REAPER] Local sandbox cleanup returned false',
+                    context: SandboxLeaseReaperService.name,
+                    metadata: { prKey, sandboxId },
+                });
+            }
+            return cleaned;
+        } catch (error) {
+            this.logger.warn({
+                message: '[SANDBOX-REAPER] Failed to clean local sandbox',
+                context: SandboxLeaseReaperService.name,
+                error,
+                metadata: { prKey, sandboxId },
+            });
+            return false;
+        }
+    }
+
+    private async killE2BSandbox(
+        sandboxId: string,
+        apiKey: string,
+        logPrefix: string,
+    ): Promise<boolean> {
+        try {
+            await Sandbox.kill(sandboxId, { apiKey });
+            return true;
+        } catch (err) {
+            this.logger.warn({
+                message: `${logPrefix} Failed to kill sandbox — keeping lease for retry`,
+                context: SandboxLeaseReaperService.name,
+                metadata: {
+                    sandboxId,
+                    error: String(err),
+                },
+            });
+            return false;
+        }
+    }
+
+    private logMissingE2BApiKey(prKey: string, sandboxId: string): void {
+        this.logger.warn({
+            message:
+                '[SANDBOX-REAPER] Missing API_E2B_KEY — keeping lease for retry',
+            context: SandboxLeaseReaperService.name,
+            metadata: { prKey, sandboxId },
+        });
     }
 
     private async releaseCronLock(
