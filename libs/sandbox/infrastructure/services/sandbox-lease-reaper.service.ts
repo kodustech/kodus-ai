@@ -224,6 +224,10 @@ export class SandboxLeaseReaperService {
     }): Promise<void> {
         if (!lease.sandboxId || !isLocalSandboxPath(lease.sandboxId)) return;
 
+        // Re-check: a concurrent acquire may have bumped leaseCount
+        const current = await this.leaseRepository.findByPrKey(lease._id);
+        if (!current || (current.leaseCount ?? 0) > 0) return;
+
         const staleThreshold = new Date(Date.now() - 5 * 60 * 1000);
         await this.leaseRepository.resetStaleCleanup(lease._id, staleThreshold);
 

@@ -488,7 +488,15 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 // Kill the sandbox we just created; it is orphaned
                 if (sandboxId) {
                     if (isLocalSandboxPath(sandboxId)) {
-                        await deleteLocalSandbox(sandboxId).catch(() => {});
+                        try {
+                            await deleteLocalSandbox(sandboxId);
+                        } catch (localErr) {
+                            this.logger.warn({
+                                message: `SandboxLeaseManager: Failed to clean local sandbox after mid-create invalidation prKey="${prKey}"`,
+                                context: SandboxLeaseManager.name,
+                                error: localErr as Error,
+                            });
+                        }
                     } else {
                         const apiKey =
                             this.configService.get<string>('API_E2B_KEY');
@@ -529,19 +537,22 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 try {
                     await deleteLocalSandbox(sandboxId);
                 } catch (cleanupErr) {
-                    // Local cleanup failed — persist retry marker and DON'T
-                    // delete lease doc so the reaper can retry.
-                    try {
+                    // Claim cleanup first, then mark as failed
+                    const claimed = await this.leaseRepo.claimCleanup(
+                        prKey,
+                        sandboxId,
+                    );
+                    if (claimed) {
                         await this.leaseRepo.failCleanup(
                             prKey,
                             sandboxId,
                             (cleanupErr as Error).message,
                         );
-                    } catch (markerErr) {
-                        this.logger.error({
-                            message: `Failed to persist local cleanup retry marker for prKey="${prKey}"`,
+                    } else {
+                        this.logger.warn({
+                            message: `SandboxLeaseManager: local cleanup failed but sandboxId not on doc — directory may be orphaned prKey="${prKey}" sandboxId="${sandboxId}"`,
                             context: SandboxLeaseManager.name,
-                            error: markerErr as Error,
+                            error: cleanupErr as Error,
                         });
                     }
                     throw err;
@@ -613,6 +624,18 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         sandboxId?: string,
     ): Promise<AcquireResult> {
         if (state === 'INVALIDATED') {
+            // Clean up local sandbox directory if applicable
+            if (sandboxId && isLocalSandboxPath(sandboxId)) {
+                try {
+                    await deleteLocalSandbox(sandboxId);
+                } catch (err) {
+                    this.logger.warn({
+                        message: `SandboxLeaseManager: failed to clean local sandbox on INVALIDATED prKey="${prKey}" sandboxId="${sandboxId}"`,
+                        context: SandboxLeaseManager.name,
+                        error: err as Error,
+                    });
+                }
+            }
             throw new Error(
                 `SandboxLeaseManager: sandbox invalidated for prKey="${prKey}"`,
             );
