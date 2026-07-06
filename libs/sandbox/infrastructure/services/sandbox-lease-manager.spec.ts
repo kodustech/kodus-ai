@@ -246,8 +246,9 @@ describe('SandboxLeaseManager', () => {
             expect(leaseRepo.markDeletingIfNoActiveLeases).toHaveBeenCalledWith(
                 prKey,
             );
-            expect(leaseRepo.deleteIfNoActiveLeases).toHaveBeenCalledWith(
+            expect(leaseRepo.deleteDeletingWithSandboxId).toHaveBeenCalledWith(
                 prKey,
+                tempDir,
             );
             expect(leaseRepo.setKillAt).not.toHaveBeenCalled();
             expect(Sandbox.setTimeout).not.toHaveBeenCalled();
@@ -293,7 +294,10 @@ describe('SandboxLeaseManager', () => {
         expect(leaseRepo.markDeletingIfNoActiveLeases).toHaveBeenCalledWith(
             prKey,
         );
-        expect(leaseRepo.deleteIfNoActiveLeases).toHaveBeenCalledWith(prKey);
+        expect(leaseRepo.deleteDeletingWithSandboxId).toHaveBeenCalledWith(
+            prKey,
+            tempDir,
+        );
         expect(leaseRepo.setKillAt).not.toHaveBeenCalled();
         expect(Sandbox.setTimeout).not.toHaveBeenCalled();
     });
@@ -537,8 +541,9 @@ describe('SandboxLeaseManager', () => {
             expect(leaseRepo.markDeletingIfNoActiveLeases).toHaveBeenCalledWith(
                 prKey,
             );
-            expect(leaseRepo.deleteIfNoActiveLeases).toHaveBeenCalledWith(
+            expect(leaseRepo.deleteDeletingWithSandboxId).toHaveBeenCalledWith(
                 prKey,
+                tempDir,
             );
             expect(leaseRepo.delete).not.toHaveBeenCalledWith(prKey);
             expect(Sandbox.setTimeout).not.toHaveBeenCalled();
@@ -667,7 +672,10 @@ describe('SandboxLeaseManager', () => {
         expect(leaseRepo.markDeletingIfNoActiveLeases).toHaveBeenCalledWith(
             prKey,
         );
-        expect(leaseRepo.deleteIfNoActiveLeases).toHaveBeenCalledWith(prKey);
+        expect(leaseRepo.deleteDeletingWithSandboxId).toHaveBeenCalledWith(
+            prKey,
+            tempDir,
+        );
         expect(leaseRepo.delete).not.toHaveBeenCalledWith(prKey);
         expect(Sandbox.setTimeout).not.toHaveBeenCalled();
     });
@@ -1581,7 +1589,10 @@ describe('SandboxLeaseManager', () => {
             cloneParams,
         );
 
-        expect(leaseRepo.deleteIfNoActiveLeases).toHaveBeenCalledWith(prKey);
+        expect(leaseRepo.deleteDeletingWithSandboxId).toHaveBeenCalledWith(
+            prKey,
+            tempDir,
+        );
         expect(leaseRepo.upsertAcquire).toHaveBeenCalledTimes(2);
         expect(result.sandboxId).toBe('fresh-after-finalized-deleting');
         expect(result.wasCreated).toBe(true);

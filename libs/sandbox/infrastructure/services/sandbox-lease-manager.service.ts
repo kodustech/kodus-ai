@@ -494,7 +494,10 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             return;
         }
 
-        const deleted = await this.leaseRepo.deleteIfNoActiveLeases(prKey);
+        const deleted = await this.leaseRepo.deleteDeletingWithSandboxId(
+            prKey,
+            sandboxId,
+        );
         if (!deleted) {
             this.logger.log({
                 message: `SandboxLeaseManager: skipped local sandbox lease delete after ${reason} because lease was re-acquired prKey="${prKey}"`,
@@ -1110,7 +1113,10 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 !(await this.localSandboxExists(prKey, doc.sandboxId))
             ) {
                 const deleted =
-                    await this.leaseRepo.deleteIfNoActiveLeases(prKey);
+                    await this.leaseRepo.deleteDeletingWithSandboxId(
+                        prKey,
+                        doc.sandboxId,
+                    );
                 if (deleted) {
                     return;
                 }
