@@ -2009,6 +2009,44 @@ describe('SandboxLeaseReaperService', () => {
         );
     });
 
+    it('reaper kills an expired INVALIDATED E2B lease that still has a sandboxId', async () => {
+        const leaseRepo = makeMockLeaseRepo();
+        const configService = makeMockConfigService('test-e2b-key');
+        const expiresAt = new Date(Date.now() - 10 * 60 * 1000);
+
+        leaseRepo.findExpired.mockResolvedValue([
+            {
+                _id: 'org:repo:invalidated-e2b',
+                sandboxId: 'e2b-invalidated',
+                leaseCount: 0,
+                state: 'INVALIDATED',
+                createdAt: new Date(Date.now() - 60 * 60 * 1000),
+                expiresAt,
+            } as any,
+        ]);
+
+        const mockLock = { release: jest.fn().mockResolvedValue(undefined) };
+        const mockDistributedLockService = {
+            acquire: jest.fn().mockResolvedValue(mockLock),
+        };
+
+        const reaper = new SandboxLeaseReaperService(
+            leaseRepo,
+            mockDistributedLockService as any,
+            configService,
+        );
+
+        await reaper.reapExpiredLeases();
+
+        expect(Sandbox.kill).toHaveBeenCalledWith('e2b-invalidated', {
+            apiKey: 'test-e2b-key',
+        });
+        expect(leaseRepo.deleteDeletingWithSandboxId).toHaveBeenCalledWith(
+            'org:repo:invalidated-e2b',
+            'e2b-invalidated',
+        );
+    });
+
     it('reaper skips a stale expired sandboxless result when the atomic claim loses the race', async () => {
         const leaseRepo = makeMockLeaseRepo();
         const configService = makeMockConfigService('test-e2b-key');

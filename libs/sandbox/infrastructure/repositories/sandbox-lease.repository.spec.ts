@@ -21,9 +21,11 @@ describe('SandboxLeaseRepository', () => {
                         consumer: 'review',
                         expiresAt: {
                             $cond: [
-                                { $eq: ['$state', 'DELETING'] },
-                                '$expiresAt',
+                                { $in: ['$state', ['READY', 'PAUSED']] },
                                 expect.any(Date),
+                                {
+                                    $ifNull: ['$expiresAt', expect.any(Date)],
+                                },
                             ],
                         },
                     }),
@@ -33,7 +35,7 @@ describe('SandboxLeaseRepository', () => {
         );
     });
 
-    it('upsertAcquire preserves expiresAt for DELETING leases so cleanup retries are not postponed', async () => {
+    it('upsertAcquire preserves expiresAt for non-reusable leases so cleanup retries are not postponed', async () => {
         const leaseModel = {
             findOneAndUpdate: jest.fn().mockResolvedValue({}),
         };
@@ -48,7 +50,8 @@ describe('SandboxLeaseRepository', () => {
         const [, update] = leaseModel.findOneAndUpdate.mock.calls[0];
         expect(Array.isArray(update)).toBe(true);
         expect(JSON.stringify(update)).toContain('"$cond"');
-        expect(JSON.stringify(update)).toContain('"DELETING"');
+        expect(JSON.stringify(update)).toContain('"READY"');
+        expect(JSON.stringify(update)).toContain('"PAUSED"');
         expect(JSON.stringify(update)).toContain('"$expiresAt"');
     });
 

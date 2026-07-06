@@ -94,9 +94,9 @@ export class SandboxLeaseRepository {
             },
             expiresAt: {
                 $cond: [
-                    { $eq: ['$state', 'DELETING'] },
-                    '$expiresAt',
+                    { $in: ['$state', ['READY', 'PAUSED']] },
                     expiresAt,
+                    { $ifNull: ['$expiresAt', expiresAt] },
                 ],
             },
             leaseCount: { $add: [{ $ifNull: ['$leaseCount', 0] }, 1] },

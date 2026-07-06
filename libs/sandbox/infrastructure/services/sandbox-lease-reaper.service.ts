@@ -99,7 +99,7 @@ export class SandboxLeaseReaperService {
                         return;
                     }
 
-                    if (lease.sandboxId && lease.state !== 'INVALIDATED') {
+                    if (lease.sandboxId) {
                         if (!apiKey) {
                             this.logMissingE2BApiKey(
                                 lease._id,
