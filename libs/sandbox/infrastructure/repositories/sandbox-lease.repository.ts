@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 
+import { SANDBOX_LEASE_CLEANUP_STATUS } from './schemas/sandbox-lease.model';
 import { SandboxLeaseModel } from './schemas/sandbox-lease.model';
 
 /**
@@ -218,5 +219,83 @@ export class SandboxLeaseRepository {
             })
             .select('_id sandboxId killAt')
             .lean();
+    }
+
+    /**
+     * Atomically claim a local cleanup. Returns the doc only when prKey and
+     * sandboxId match and cleanup is not already in_progress or completed.
+     */
+    async claimCleanup(
+        prKey: string,
+        expectedSandboxId: string,
+    ): Promise<SandboxLeaseModel | null> {
+        return this.leaseModel
+            .findOneAndUpdate(
+                {
+                    _id: prKey,
+                    sandboxId: expectedSandboxId,
+                    cleanupStatus: {
+                        $nin: [
+                            SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
+                            SANDBOX_LEASE_CLEANUP_STATUS.COMPLETED,
+                        ],
+                    },
+                },
+                {
+                    $set: {
+                        cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
+                        cleanupRetryAt: null,
+                    },
+                    $inc: { cleanupAttempts: 1 },
+                },
+                { new: true },
+            )
+            .exec();
+    }
+
+    /**
+     * Complete a local cleanup by deleting the lease doc.
+     * Only deletes when prKey, sandboxId, and cleanupStatus=IN_PROGRESS match.
+     */
+    async completeCleanup(
+        prKey: string,
+        expectedSandboxId: string,
+    ): Promise<boolean> {
+        const result = await this.leaseModel
+            .deleteOne({
+                _id: prKey,
+                sandboxId: expectedSandboxId,
+                cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
+            })
+            .exec();
+        return result.deletedCount === 1;
+    }
+
+    /**
+     * Mark a local cleanup as failed. Sets a retry marker.
+     * Only updates when prKey, sandboxId, and cleanupStatus=IN_PROGRESS match.
+     */
+    async failCleanup(
+        prKey: string,
+        expectedSandboxId: string,
+        error: string,
+    ): Promise<boolean> {
+        const result = await this.leaseModel
+            .updateOne(
+                {
+                    _id: prKey,
+                    sandboxId: expectedSandboxId,
+                    cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
+                },
+                {
+                    $set: {
+                        cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.FAILED,
+                        cleanupRetryAt: new Date(Date.now() + 60_000),
+                        cleanupError: error.slice(0, 500),
+                    },
+                },
+            )
+            .exec();
+        return result.modifiedCount === 1;
     }
 }

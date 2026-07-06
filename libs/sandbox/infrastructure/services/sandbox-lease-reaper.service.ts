@@ -8,6 +8,10 @@ import {
     DistributedLockService,
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { SandboxLeaseRepository } from '@libs/sandbox/infrastructure/repositories/sandbox-lease.repository';
+import {
+    isLocalSandboxPath,
+    deleteLocalSandbox,
+} from './local-sandbox-cleanup.service';
 
 const CLEANUP_CONCURRENCY = 5;
 
@@ -75,6 +79,10 @@ export class SandboxLeaseReaperService {
                 expired,
                 CLEANUP_CONCURRENCY,
                 async (lease) => {
+                    if (isLocalSandboxPath(lease.sandboxId)) {
+                        await this.cleanupLocalLease(lease);
+                        return;
+                    }
                     if (
                         lease.sandboxId &&
                         lease.state !== 'INVALIDATED' &&
@@ -158,6 +166,10 @@ export class SandboxLeaseReaperService {
                 ready,
                 CLEANUP_CONCURRENCY,
                 async (lease) => {
+                    if (isLocalSandboxPath(lease.sandboxId)) {
+                        await this.cleanupLocalLease(lease);
+                        return;
+                    }
                     if (lease.sandboxId && apiKey) {
                         try {
                             await Sandbox.kill(lease.sandboxId, { apiKey });
@@ -203,6 +215,51 @@ export class SandboxLeaseReaperService {
                 lock,
                 'Failed to release sandbox idle-kill lock',
             );
+        }
+    }
+
+    private async cleanupLocalLease(lease: {
+        _id: string;
+        sandboxId?: string;
+    }): Promise<void> {
+        if (!lease.sandboxId || !isLocalSandboxPath(lease.sandboxId)) return;
+
+        const claimed = await this.leaseRepository.claimCleanup(
+            lease._id,
+            lease.sandboxId,
+        );
+        if (!claimed) return;
+
+        try {
+            await deleteLocalSandbox(lease.sandboxId);
+            await this.leaseRepository.completeCleanup(
+                lease._id,
+                lease.sandboxId,
+            );
+            this.logger.log({
+                message: '[SANDBOX-REAPER] Cleaned local sandbox',
+                context: SandboxLeaseReaperService.name,
+                metadata: {
+                    prKey: lease._id,
+                    sandboxId: lease.sandboxId,
+                },
+            });
+        } catch (err) {
+            await this.leaseRepository.failCleanup(
+                lease._id,
+                lease.sandboxId,
+                (err as Error).message,
+            );
+            this.logger.warn({
+                message:
+                    '[SANDBOX-REAPER] Local cleanup failed, retry marker set',
+                context: SandboxLeaseReaperService.name,
+                metadata: {
+                    prKey: lease._id,
+                    sandboxId: lease.sandboxId,
+                    error: String(err),
+                },
+            });
         }
     }
 
