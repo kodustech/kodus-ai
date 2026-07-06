@@ -105,7 +105,7 @@ describe('SandboxLeaseRepository', () => {
         );
     });
 
-    it('markDeletingIfReadyToKill claims an idle lease only when killAt still matches and no active leases remain', async () => {
+    it('markDeletingIfReadyToKill claims inactive idle leases and DELETING retry records', async () => {
         const leaseModel = {
             updateOne: jest.fn().mockResolvedValue({ matchedCount: 1 }),
         };
@@ -123,9 +123,14 @@ describe('SandboxLeaseRepository', () => {
             {
                 _id: '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:205',
                 killAt,
-                leaseCount: { $lte: 0 },
                 sandboxId: { $exists: true, $ne: '' },
-                state: { $in: ['READY', 'PAUSED', 'DELETING'] },
+                $or: [
+                    {
+                        state: { $in: ['READY', 'PAUSED'] },
+                        leaseCount: { $lte: 0 },
+                    },
+                    { state: 'DELETING' },
+                ],
             },
             { $set: { state: 'DELETING' } },
         );

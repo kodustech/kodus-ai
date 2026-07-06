@@ -264,9 +264,14 @@ export class SandboxLeaseRepository {
             {
                 _id: prKey,
                 killAt,
-                leaseCount: { $lte: 0 },
                 sandboxId: { $exists: true, $ne: '' },
-                state: { $in: ['READY', 'PAUSED', 'DELETING'] },
+                $or: [
+                    {
+                        state: { $in: ['READY', 'PAUSED'] },
+                        leaseCount: { $lte: 0 },
+                    },
+                    { state: 'DELETING' },
+                ],
             },
             { $set: { state: 'DELETING' } },
         );
