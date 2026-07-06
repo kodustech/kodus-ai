@@ -266,6 +266,33 @@ describe('SandboxLeaseRepository', () => {
         ).resolves.toBe(false);
     });
 
+    it('scheduleCleanupRetry sets killAt only for DELETING leases with a sandbox', async () => {
+        const leaseModel = {
+            updateOne: jest.fn().mockResolvedValue({
+                matchedCount: 1,
+                modifiedCount: 1,
+            }),
+        };
+        const repo = new SandboxLeaseRepository(leaseModel as any);
+        const retryAt = new Date('2026-01-01T00:01:00.000Z');
+
+        await expect(
+            repo.scheduleCleanupRetry(
+                '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:210',
+                retryAt,
+            ),
+        ).resolves.toBe(true);
+
+        expect(leaseModel.updateOne).toHaveBeenCalledWith(
+            {
+                _id: '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:210',
+                state: 'DELETING',
+                sandboxId: { $exists: true, $ne: '' },
+            },
+            { $set: { killAt: retryAt } },
+        );
+    });
+
     it('findExpired applies an explicit query limit', async () => {
         const query = {
             select: jest.fn().mockReturnThis(),
@@ -282,6 +309,11 @@ describe('SandboxLeaseRepository', () => {
 
         expect(leaseModel.find).toHaveBeenCalledWith({
             expiresAt: { $lt: now },
+            $or: [
+                { state: { $ne: 'DELETING' } },
+                { killAt: { $exists: false } },
+                { killAt: { $lte: now } },
+            ],
         });
         expect(query.select).toHaveBeenCalledWith(
             '_id sandboxId state expiresAt',

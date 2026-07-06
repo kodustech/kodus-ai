@@ -15,6 +15,7 @@ import {
 } from './local-sandbox-cleanup';
 
 const SANDBOX_REAPER_BATCH_LIMIT = 100;
+const CLEANUP_RETRY_DELAY_MS = 60_000;
 
 @Injectable()
 export class SandboxLeaseReaperService {
@@ -73,6 +74,11 @@ export class SandboxLeaseReaperService {
                             lease.sandboxId,
                         );
                         if (!cleaned) {
+                            await this.scheduleCleanupRetry(
+                                lease._id,
+                                lease.sandboxId,
+                                '[SANDBOX-REAPER]',
+                            );
                             return;
                         }
 
@@ -96,6 +102,11 @@ export class SandboxLeaseReaperService {
                                 lease._id,
                                 lease.sandboxId,
                             );
+                            await this.scheduleCleanupRetry(
+                                lease._id,
+                                lease.sandboxId,
+                                '[SANDBOX-REAPER]',
+                            );
                             return;
                         }
 
@@ -105,6 +116,11 @@ export class SandboxLeaseReaperService {
                             '[SANDBOX-REAPER]',
                         );
                         if (!killed) {
+                            await this.scheduleCleanupRetry(
+                                lease._id,
+                                lease.sandboxId,
+                                '[SANDBOX-REAPER]',
+                            );
                             return;
                         }
                     }
@@ -192,6 +208,11 @@ export class SandboxLeaseReaperService {
                             lease.sandboxId,
                         );
                         if (!cleaned) {
+                            await this.scheduleCleanupRetry(
+                                lease._id,
+                                lease.sandboxId,
+                                '[SANDBOX-IDLE-KILL]',
+                            );
                             return;
                         }
 
@@ -206,10 +227,20 @@ export class SandboxLeaseReaperService {
                             '[SANDBOX-IDLE-KILL]',
                         );
                         if (!killed) {
+                            await this.scheduleCleanupRetry(
+                                lease._id,
+                                lease.sandboxId,
+                                '[SANDBOX-IDLE-KILL]',
+                            );
                             return;
                         }
                     } else if (lease.sandboxId) {
                         this.logMissingE2BApiKey(lease._id, lease.sandboxId);
+                        await this.scheduleCleanupRetry(
+                            lease._id,
+                            lease.sandboxId,
+                            '[SANDBOX-IDLE-KILL]',
+                        );
                         return;
                     }
 
@@ -308,6 +339,33 @@ export class SandboxLeaseReaperService {
                 '[SANDBOX-REAPER] Missing API_E2B_KEY — keeping lease for retry',
             context: SandboxLeaseReaperService.name,
             metadata: { prKey, sandboxId },
+        });
+    }
+
+    private async scheduleCleanupRetry(
+        prKey: string,
+        sandboxId: string,
+        logPrefix: string,
+    ): Promise<void> {
+        const retryAt = new Date(Date.now() + CLEANUP_RETRY_DELAY_MS);
+        const scheduled = await this.leaseRepository.scheduleCleanupRetry(
+            prKey,
+            retryAt,
+        );
+
+        if (!scheduled) {
+            this.logger.log({
+                message: `${logPrefix} Skipped cleanup retry schedule because lease state changed`,
+                context: SandboxLeaseReaperService.name,
+                metadata: { prKey, sandboxId, retryAt },
+            });
+            return;
+        }
+
+        this.logger.warn({
+            message: `${logPrefix} Scheduled cleanup retry`,
+            context: SandboxLeaseReaperService.name,
+            metadata: { prKey, sandboxId, retryAt },
         });
     }
 

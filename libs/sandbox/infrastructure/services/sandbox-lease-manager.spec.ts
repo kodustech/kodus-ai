@@ -51,6 +51,7 @@ function makeMockLeaseRepo(): jest.Mocked<SandboxLeaseRepository> {
         markDeletingIfExpired: jest.fn().mockResolvedValue(true),
         markDeletingIfReadyToKill: jest.fn().mockResolvedValue(true),
         setKillAt: jest.fn().mockResolvedValue(true),
+        scheduleCleanupRetry: jest.fn().mockResolvedValue(true),
         clearKillAt: jest.fn().mockResolvedValue(undefined),
         findReadyToKill: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<SandboxLeaseRepository>;
@@ -574,6 +575,33 @@ describe('SandboxLeaseManager', () => {
         } finally {
             await rm(tempDir, { recursive: true, force: true });
         }
+    });
+
+    it('cleanupInactiveLocalSandbox schedules a near-term retry when local cleanup fails after the DELETING claim', async () => {
+        const prKey = 'org:repo:84';
+        const sandboxId = 'not-a-local-sandbox-path';
+
+        const before = Date.now();
+        await (manager as any).cleanupInactiveLocalSandbox(
+            prKey,
+            sandboxId,
+            'test',
+        );
+
+        expect(leaseRepo.markDeletingIfNoActiveLeases).toHaveBeenCalledWith(
+            prKey,
+        );
+        expect(leaseRepo.scheduleCleanupRetry).toHaveBeenCalledTimes(1);
+        const [calledPrKey, retryAt] = (
+            leaseRepo.scheduleCleanupRetry as jest.Mock
+        ).mock.calls[0];
+        expect(calledPrKey).toBe(prKey);
+        expect(retryAt.getTime()).toBeGreaterThanOrEqual(before);
+        expect(retryAt.getTime()).toBeLessThanOrEqual(
+            Date.now() + 2 * 60 * 1000,
+        );
+        expect(leaseRepo.deleteIfNoActiveLeases).not.toHaveBeenCalled();
+        expect(leaseRepo.delete).not.toHaveBeenCalledWith(prKey);
     });
 
     it('invalidate deletes a local lease when the directory is already missing', async () => {
@@ -1723,6 +1751,55 @@ describe('SandboxLeaseReaperService', () => {
         expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:local-missing');
     });
 
+    it('reaper schedules a cleanup retry when an expired E2B lease cannot be killed without an API key', async () => {
+        const leaseRepo = makeMockLeaseRepo();
+        const configService = makeMockConfigService('');
+        const expiresAt = new Date(Date.now() - 10 * 60 * 1000);
+
+        leaseRepo.findExpired.mockResolvedValue([
+            {
+                _id: 'org:repo:e2b-no-api-key-expired',
+                sandboxId: 'e2b-no-api-key-expired',
+                leaseCount: 1,
+                state: 'READY',
+                createdAt: new Date(Date.now() - 60 * 60 * 1000),
+                expiresAt,
+            } as any,
+        ]);
+
+        const mockLock = { release: jest.fn().mockResolvedValue(undefined) };
+        const mockDistributedLockService = {
+            acquire: jest.fn().mockResolvedValue(mockLock),
+        };
+
+        const reaper = new SandboxLeaseReaperService(
+            leaseRepo,
+            mockDistributedLockService as any,
+            configService,
+        );
+
+        const before = Date.now();
+        await reaper.reapExpiredLeases();
+
+        expect(leaseRepo.markDeletingIfExpired).toHaveBeenCalledWith(
+            'org:repo:e2b-no-api-key-expired',
+            expiresAt,
+        );
+        expect(leaseRepo.scheduleCleanupRetry).toHaveBeenCalledTimes(1);
+        const [calledPrKey, retryAt] = (
+            leaseRepo.scheduleCleanupRetry as jest.Mock
+        ).mock.calls[0];
+        expect(calledPrKey).toBe('org:repo:e2b-no-api-key-expired');
+        expect(retryAt.getTime()).toBeGreaterThanOrEqual(before);
+        expect(retryAt.getTime()).toBeLessThanOrEqual(
+            Date.now() + 2 * 60 * 1000,
+        );
+        expect(Sandbox.kill).not.toHaveBeenCalled();
+        expect(leaseRepo.delete).not.toHaveBeenCalledWith(
+            'org:repo:e2b-no-api-key-expired',
+        );
+    });
+
     it('reaper skips a stale expired local result when the atomic claim loses the race', async () => {
         const leaseRepo = makeMockLeaseRepo();
         const configService = makeMockConfigService('test-e2b-key');
@@ -2058,6 +2135,7 @@ describe('SandboxLeaseReaperService', () => {
         await reaper.killIdleSandboxes();
 
         expect(leaseRepo.delete).not.toHaveBeenCalledWith('org-uuid:repo:9');
+        expect(leaseRepo.scheduleCleanupRetry).toHaveBeenCalledTimes(1);
         expect(mockLock.release).toHaveBeenCalledTimes(1);
     });
 
@@ -2091,6 +2169,7 @@ describe('SandboxLeaseReaperService', () => {
         await reaper.killIdleSandboxes();
 
         expect(Sandbox.kill).not.toHaveBeenCalled();
+        expect(leaseRepo.scheduleCleanupRetry).toHaveBeenCalledTimes(1);
         expect(leaseRepo.delete).not.toHaveBeenCalledWith('org-uuid:repo:10');
         expect(mockLock.release).toHaveBeenCalledTimes(1);
     });

@@ -192,7 +192,14 @@ export class SandboxLeaseRepository {
         Pick<SandboxLeaseModel, '_id' | 'sandboxId' | 'state' | 'expiresAt'>[]
     > {
         return this.leaseModel
-            .find({ expiresAt: { $lt: now } })
+            .find({
+                expiresAt: { $lt: now },
+                $or: [
+                    { state: { $ne: 'DELETING' } },
+                    { killAt: { $exists: false } },
+                    { killAt: { $lte: now } },
+                ],
+            })
             .select('_id sandboxId state expiresAt')
             .limit(limit)
             .lean();
@@ -314,6 +321,27 @@ export class SandboxLeaseRepository {
                 sandboxId: { $exists: true, $ne: '' },
             },
             { $set: { killAt } },
+        );
+
+        return result.matchedCount > 0;
+    }
+
+    /**
+     * Schedule a near-term cleanup retry for a lease that is already DELETING.
+     *
+     * Unlike setKillAt(), this intentionally does not require leaseCount <= 0:
+     * expired crashed-worker leases can still have a positive count, but once
+     * they are claimed as DELETING they still need a retry cursor when resource
+     * cleanup fails.
+     */
+    async scheduleCleanupRetry(prKey: string, retryAt: Date): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
+            {
+                _id: prKey,
+                state: 'DELETING',
+                sandboxId: { $exists: true, $ne: '' },
+            },
+            { $set: { killAt: retryAt } },
         );
 
         return result.matchedCount > 0;

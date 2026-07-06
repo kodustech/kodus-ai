@@ -44,6 +44,13 @@ const IDLE_TIMEOUT_MS = 300_000; // 5 minutes — default for conversation flow
 const DEFAULT_LEASE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
+ * Retry cursor used when cleanup has already claimed a lease as DELETING but
+ * the filesystem/resource cleanup failed. Keeps failed local cleanup from
+ * blocking a PR until the full acquire TTL expires.
+ */
+const CLEANUP_RETRY_DELAY_MS = 60_000;
+
+/**
  * How often to poll when waiting for a concurrent creator to finish.
  */
 const POLL_INTERVAL_MS = 500;
@@ -473,6 +480,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             reason,
         );
         if (!cleaned) {
+            await this.scheduleCleanupRetry(prKey, sandboxId, reason);
             return;
         }
 
@@ -528,6 +536,33 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             });
             return false;
         }
+    }
+
+    private async scheduleCleanupRetry(
+        prKey: string,
+        sandboxId: string,
+        reason: string,
+    ): Promise<void> {
+        const retryAt = new Date(Date.now() + CLEANUP_RETRY_DELAY_MS);
+        const scheduled = await this.leaseRepo.scheduleCleanupRetry(
+            prKey,
+            retryAt,
+        );
+
+        if (!scheduled) {
+            this.logger.log({
+                message: `SandboxLeaseManager: skipped cleanup retry schedule after ${reason} because lease state changed prKey="${prKey}"`,
+                context: SandboxLeaseManager.name,
+                metadata: { prKey, sandboxId, reason, retryAt },
+            });
+            return;
+        }
+
+        this.logger.warn({
+            message: `SandboxLeaseManager: scheduled cleanup retry after ${reason}`,
+            context: SandboxLeaseManager.name,
+            metadata: { prKey, sandboxId, reason, retryAt },
+        });
     }
 
     private async handleCreatorPath(
