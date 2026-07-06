@@ -114,6 +114,15 @@ export class SandboxLeaseModel extends CoreDocument {
 
     @Prop({ type: String, required: false })
     cleanupError?: string;
+
+    /**
+     * Timestamp when cleanup was claimed (set by claimCleanup).
+     * Used by the reaper to detect stale in_progress claims left behind
+     * by a crashed worker. After a timeout (e.g. 5 minutes), the reaper
+     * resets the status to FAILED so the next tick can retry.
+     */
+    @Prop({ type: Date, required: false })
+    cleanupStartedAt?: Date;
 }
 
 // Explicit type annotation: with the killAt field added the inferred type

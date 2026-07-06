@@ -263,6 +263,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 const claimed = await this.leaseRepo.claimCleanup(
                     prKey,
                     updated.sandboxId,
+                    true,
                 );
                 if (claimed) {
                     try {
@@ -390,6 +391,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 const claimed = await this.leaseRepo.claimCleanup(
                     prKey,
                     doc.sandboxId,
+                    true,
                 );
                 if (claimed) {
                     try {
@@ -527,6 +529,8 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 try {
                     await deleteLocalSandbox(sandboxId);
                 } catch (cleanupErr) {
+                    // Local cleanup failed — persist retry marker and DON'T
+                    // delete lease doc so the reaper can retry.
                     try {
                         await this.leaseRepo.failCleanup(
                             prKey,
@@ -540,6 +544,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                             error: markerErr as Error,
                         });
                     }
+                    throw err;
                 }
             }
             // If a real E2B sandbox was created but a later step failed
@@ -557,7 +562,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                     await Sandbox.kill(sandboxId, { apiKey }).catch(() => {});
                 }
             }
-            // Remove the lease doc so other callers don't poll forever
+            // Remove lease doc only if local cleanup succeeded or E2B/null path
             await this.leaseRepo.delete(prKey).catch(() => {});
             throw err;
         }
