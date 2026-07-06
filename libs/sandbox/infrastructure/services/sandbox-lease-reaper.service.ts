@@ -234,6 +234,7 @@ export class SandboxLeaseReaperService {
         const claimed = await this.leaseRepository.claimCleanup(
             lease._id,
             lease.sandboxId,
+            true,
         );
         if (!claimed) return;
 

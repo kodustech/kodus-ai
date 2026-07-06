@@ -1123,13 +1123,12 @@ describe('SandboxLeaseManager', () => {
             expect(leaseRepo.delete).not.toHaveBeenCalled();
         });
 
-        it('joiner path cleans local sandbox on INVALIDATED state', async () => {
+        it('joiner path throws on INVALIDATED state without deleting local sandbox', async () => {
             const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:47';
             const os = require('os');
             const path = require('path');
             const localSandboxId = path.join(os.tmpdir(), 'kodus-sandbox-invalidated');
 
-            // First acquire: joiner path with INVALIDATED state
             leaseRepo.upsertAcquire.mockResolvedValue({
                 _id: prKey,
                 leaseCount: 2,
@@ -1143,12 +1142,12 @@ describe('SandboxLeaseManager', () => {
                 manager.acquire(prKey, 'review'),
             ).rejects.toThrow(/sandbox invalidated/);
 
-            expect(localCleanup.deleteLocalSandbox).toHaveBeenCalledWith(
-                localSandboxId,
-            );
+            // Finding 2 fix: must NOT delete sandbox on INVALIDATED —
+            // active leases may still be using it
+            expect(localCleanup.deleteLocalSandbox).not.toHaveBeenCalled();
         });
 
-        it('mid-create invalidation logs local cleanup errors instead of swallowing', async () => {
+        it('mid-create invalidation preserves lease doc when local cleanup fails', async () => {
             const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:88';
             const os = require('os');
             const path = require('path');
@@ -1180,7 +1179,6 @@ describe('SandboxLeaseManager', () => {
                 repoDir: localSandboxId,
             } as any);
 
-            // Post-create check returns INVALIDATED
             leaseRepo.findByPrKey.mockResolvedValue({
                 _id: prKey,
                 leaseCount: 1,
@@ -1190,7 +1188,6 @@ describe('SandboxLeaseManager', () => {
                 expiresAt: new Date(Date.now() + 30 * 60 * 1000),
             } as any);
 
-            // Mock deleteLocalSandbox to throw
             (localCleanup.deleteLocalSandbox as jest.Mock).mockRejectedValue(
                 new Error('Permission denied'),
             );
@@ -1202,7 +1199,55 @@ describe('SandboxLeaseManager', () => {
             expect(localCleanup.deleteLocalSandbox).toHaveBeenCalledWith(
                 localSandboxId,
             );
-            expect(leaseRepo.delete).toHaveBeenCalledWith(prKey);
+            // Finding 4 fix: lease doc preserved so reaper can retry
+            expect(leaseRepo.delete).not.toHaveBeenCalled();
+        });
+
+        it('acquire waits for cleanup IN_PROGRESS then retries', async () => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:50';
+
+            // First upsertAcquire returns doc with cleanupStatus IN_PROGRESS
+            // Second call (retry) returns normal CREATING doc
+            leaseRepo.upsertAcquire
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 1,
+                    state: 'READY',
+                    cleanupStatus: 'in_progress',
+                    sandboxId: '/tmp/kodus-sandbox-cleanup-wait',
+                    createdAt: new Date(),
+                    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                } as any)
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 1,
+                    state: 'CREATING',
+                    createdAt: new Date(),
+                    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                } as any);
+
+            // Poll finds doc gone (cleanup completed)
+            leaseRepo.findByPrKey.mockResolvedValue(null);
+
+            // Post-create check: READY
+            leaseRepo.findByPrKey.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: '',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+
+            jest.useFakeTimers();
+            const acquirePromise = manager.acquire(prKey, 'review');
+            await jest.runAllTimersAsync();
+            const result = await acquirePromise;
+            jest.useRealTimers();
+
+            expect(result.sandbox).toBeDefined();
+            // Two upsertAcquire calls: first hit IN_PROGRESS, second succeeded
+            expect(leaseRepo.upsertAcquire).toHaveBeenCalledTimes(2);
         });
     });
 });
@@ -1683,6 +1728,7 @@ describe('SandboxLeaseReaperService', () => {
         expect(leaseRepo.claimCleanup).toHaveBeenCalledWith(
             'org:repo:stale',
             localSandboxId,
+            true,
         );
         expect(leaseRepo.completeCleanup).toHaveBeenCalledWith(
             'org:repo:stale',

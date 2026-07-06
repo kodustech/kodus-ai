@@ -17,6 +17,9 @@ import { randomUUID } from 'crypto';
 
 import { calculateBackoffInterval } from '@libs/common/utils/polling';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
+import {
+    SANDBOX_LEASE_CLEANUP_STATUS,
+} from '../repositories/schemas/sandbox-lease.model';
 import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
 import { buildE2BRemoteCommands } from '../providers/e2b-sandbox.service';
 import {
@@ -164,6 +167,29 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             leaseTtlMs,
             consumer,
         );
+
+        // Finding 1 fix: if cleanup is in progress, wait for it to complete
+        // (doc will be deleted), then retry acquire from scratch. Prevents
+        // attaching to a doc that's being cleaned up.
+        if (
+            doc.cleanupStatus ===
+            SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS
+        ) {
+            this.logger.log({
+                message: `SandboxLeaseManager: cleanup in progress, waiting for completion prKey="${prKey}"`,
+                context: SandboxLeaseManager.name,
+                metadata: { prKey },
+            });
+            const deadline = Date.now() + MAX_POLL_WAIT_MS;
+            while (Date.now() < deadline) {
+                await sleep(POLL_INTERVAL_MS);
+                const check = await this.leaseRepo.findByPrKey(prKey);
+                if (!check) break; // Doc deleted — cleanup complete
+            }
+            // Retry acquire from scratch
+            return this.acquire(prKey, consumer, leaseTtlMs, cloneParams);
+        }
+
         const leaseId = randomUUID();
 
         // A new acquire arrived — atomically clear any pending idle-kill so
@@ -496,6 +522,12 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                                 context: SandboxLeaseManager.name,
                                 error: localErr as Error,
                             });
+                            // Finding 4 fix: don't delete the lease doc when
+                            // local cleanup fails — keep it so the reaper can
+                            // retry the cleanup.
+                            throw new Error(
+                                `SandboxLeaseManager: sandbox invalidated mid-create for prKey="${prKey}"`,
+                            );
                         }
                     } else {
                         const apiKey =
@@ -507,7 +539,6 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                         }
                     }
                 }
-                // Clean up the invalidated doc
                 await this.leaseRepo.delete(prKey);
                 throw new Error(
                     `SandboxLeaseManager: sandbox invalidated mid-create for prKey="${prKey}"`,
@@ -624,18 +655,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         sandboxId?: string,
     ): Promise<AcquireResult> {
         if (state === 'INVALIDATED') {
-            // Clean up local sandbox directory if applicable
-            if (sandboxId && isLocalSandboxPath(sandboxId)) {
-                try {
-                    await deleteLocalSandbox(sandboxId);
-                } catch (err) {
-                    this.logger.warn({
-                        message: `SandboxLeaseManager: failed to clean local sandbox on INVALIDATED prKey="${prKey}" sandboxId="${sandboxId}"`,
-                        context: SandboxLeaseManager.name,
-                        error: err as Error,
-                    });
-                }
-            }
+            // Finding 2 fix: do NOT delete the sandbox here — active leases
+            // may still be using it. The reaper will clean up when all leases
+            // release and the TTL expires.
             throw new Error(
                 `SandboxLeaseManager: sandbox invalidated for prKey="${prKey}"`,
             );
