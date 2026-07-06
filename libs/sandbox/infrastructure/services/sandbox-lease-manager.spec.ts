@@ -47,6 +47,7 @@ function makeMockLeaseRepo(): jest.Mocked<SandboxLeaseRepository> {
         findExpired: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue(undefined),
         deleteIfNoActiveLeases: jest.fn().mockResolvedValue(true),
+        deleteDeletingWithSandboxId: jest.fn().mockResolvedValue(true),
         markDeletingIfNoActiveLeases: jest.fn().mockResolvedValue(true),
         markDeletingIfExpired: jest.fn().mockResolvedValue(true),
         markDeletingIfReadyToKill: jest.fn().mockResolvedValue(true),
@@ -603,6 +604,48 @@ describe('SandboxLeaseManager', () => {
         );
         expect(leaseRepo.deleteIfNoActiveLeases).not.toHaveBeenCalled();
         expect(leaseRepo.delete).not.toHaveBeenCalledWith(prKey);
+    });
+
+    it('cleanupInactiveLocalSandbox retries an inactive INVALIDATED local lease when the first DELETING claim loses to a transient join', async () => {
+        const prKey = 'org:repo:85';
+        const tempDir = await mkdtemp(join(tmpdir(), 'kodus-sandbox-'));
+        leaseRepo.markDeletingIfNoActiveLeases.mockResolvedValueOnce(false);
+        leaseRepo.findByPrKey.mockResolvedValueOnce({
+            _id: prKey,
+            leaseCount: 0,
+            state: 'INVALIDATED',
+            sandboxId: tempDir,
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+
+        const before = Date.now();
+        try {
+            await (manager as any).cleanupInactiveLocalSandbox(
+                prKey,
+                tempDir,
+                'invalidation',
+            );
+
+            expect(leaseRepo.markDeletingWithSandboxId).toHaveBeenCalledTimes(
+                1,
+            );
+            const [calledPrKey, calledSandboxId, retryAt] = (
+                leaseRepo.markDeletingWithSandboxId as jest.Mock
+            ).mock.calls[0];
+            expect(calledPrKey).toBe(prKey);
+            expect(calledSandboxId).toBe(tempDir);
+            expect(retryAt.getTime()).toBeGreaterThanOrEqual(before);
+            expect(retryAt.getTime()).toBeLessThanOrEqual(
+                Date.now() + 2 * 60 * 1000,
+            );
+            await expect(localSandboxDirectoryExists(tempDir)).resolves.toBe(
+                true,
+            );
+            expect(leaseRepo.deleteIfNoActiveLeases).not.toHaveBeenCalled();
+        } finally {
+            await rm(tempDir, { recursive: true, force: true });
+        }
     });
 
     it('invalidate deletes a local lease when the directory is already missing', async () => {
@@ -1733,8 +1776,11 @@ describe('SandboxLeaseReaperService', () => {
             apiKey: 'test-e2b-key',
         });
 
-        // Mongo doc deleted
-        expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:1');
+        // Mongo doc deleted only if it is still the claimed lease
+        expect(leaseRepo.deleteDeletingWithSandboxId).toHaveBeenCalledWith(
+            'org:repo:1',
+            'e2b-123',
+        );
     });
 
     it('reaper removes expired local sandbox directories before deleting the lease', async () => {
@@ -1768,7 +1814,10 @@ describe('SandboxLeaseReaperService', () => {
 
         await expect(localSandboxDirectoryExists(tempDir)).resolves.toBe(false);
         expect(Sandbox.kill).not.toHaveBeenCalled();
-        expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:local-expired');
+        expect(leaseRepo.deleteDeletingWithSandboxId).toHaveBeenCalledWith(
+            'org:repo:local-expired',
+            tempDir,
+        );
     });
 
     it('reaper deletes an expired local lease when the directory is already missing', async () => {
@@ -1802,7 +1851,10 @@ describe('SandboxLeaseReaperService', () => {
         await reaper.reapExpiredLeases();
 
         expect(Sandbox.kill).not.toHaveBeenCalled();
-        expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:local-missing');
+        expect(leaseRepo.deleteDeletingWithSandboxId).toHaveBeenCalledWith(
+            'org:repo:local-missing',
+            tempDir,
+        );
     });
 
     it('reaper schedules a cleanup retry when an expired E2B lease cannot be killed without an API key', async () => {
@@ -2037,8 +2089,14 @@ describe('SandboxLeaseReaperService', () => {
         expect(Sandbox.kill).toHaveBeenCalledWith('e2b-idle-2', {
             apiKey: 'test-e2b-key',
         });
-        expect(leaseRepo.delete).toHaveBeenCalledWith('org-uuid:repo:1');
-        expect(leaseRepo.delete).toHaveBeenCalledWith('org-uuid:repo:2');
+        expect(leaseRepo.deleteDeletingWithSandboxId).toHaveBeenCalledWith(
+            'org-uuid:repo:1',
+            'e2b-idle-1',
+        );
+        expect(leaseRepo.deleteDeletingWithSandboxId).toHaveBeenCalledWith(
+            'org-uuid:repo:2',
+            'e2b-idle-2',
+        );
         expect(mockLock.release).toHaveBeenCalledTimes(1);
     });
 

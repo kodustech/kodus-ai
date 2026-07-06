@@ -83,6 +83,26 @@ describe('SandboxLeaseRepository', () => {
         ).resolves.toBe(false);
     });
 
+    it('deleteDeletingWithSandboxId removes only the claimed DELETING lease', async () => {
+        const leaseModel = {
+            deleteOne: jest.fn().mockResolvedValue({ deletedCount: 1 }),
+        };
+        const repo = new SandboxLeaseRepository(leaseModel as any);
+
+        await expect(
+            repo.deleteDeletingWithSandboxId(
+                '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:213',
+                '/tmp/kodus-sandbox-claimed',
+            ),
+        ).resolves.toBe(true);
+
+        expect(leaseModel.deleteOne).toHaveBeenCalledWith({
+            _id: '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:213',
+            state: 'DELETING',
+            sandboxId: '/tmp/kodus-sandbox-claimed',
+        });
+    });
+
     it('markDeletingIfNoActiveLeases blocks reuse only when no active leases remain', async () => {
         const leaseModel = {
             updateOne: jest.fn().mockResolvedValue({ matchedCount: 1 }),

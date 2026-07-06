@@ -230,6 +230,37 @@ export class SandboxLeaseRepository {
     }
 
     /**
+     * Delete only the lease document that was previously claimed as DELETING.
+     *
+     * Reapers can race with a waiter that deletes the DELETING document and
+     * immediately creates a fresh lease for the same prKey. Guarding by state
+     * and sandboxId prevents the reaper from deleting that new lease.
+     */
+    async deleteDeletingWithSandboxId(
+        prKey: string,
+        sandboxId?: string,
+    ): Promise<boolean> {
+        const query: Record<string, unknown> = {
+            _id: prKey,
+            state: 'DELETING',
+        };
+
+        if (sandboxId) {
+            query.sandboxId = sandboxId;
+        } else {
+            query.$or = [
+                { sandboxId: { $exists: false } },
+                { sandboxId: '' },
+                { sandboxId: null },
+            ];
+        }
+
+        const result = await this.leaseModel.deleteOne(query);
+
+        return result.deletedCount > 0;
+    }
+
+    /**
      * Atomically block reuse before resource cleanup.
      *
      * Local directories must not be removed while a concurrent acquire can

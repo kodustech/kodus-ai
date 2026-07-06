@@ -466,6 +466,16 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     ): Promise<void> {
         const marked = await this.leaseRepo.markDeletingIfNoActiveLeases(prKey);
         if (!marked) {
+            const retryScheduled =
+                await this.scheduleInactiveInvalidatedLocalCleanupRetry(
+                    prKey,
+                    sandboxId,
+                    reason,
+                );
+            if (retryScheduled) {
+                return;
+            }
+
             this.logger.log({
                 message: `SandboxLeaseManager: skipped local sandbox cleanup after ${reason} because lease was re-acquired prKey="${prKey}"`,
                 context: SandboxLeaseManager.name,
@@ -536,6 +546,43 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             });
             return false;
         }
+    }
+
+    private async scheduleInactiveInvalidatedLocalCleanupRetry(
+        prKey: string,
+        sandboxId: string,
+        reason: string,
+    ): Promise<boolean> {
+        if (reason !== 'invalidation') {
+            return false;
+        }
+
+        const latest = await this.leaseRepo.findByPrKey(prKey);
+        if (
+            latest?.state !== 'INVALIDATED' ||
+            latest.sandboxId !== sandboxId ||
+            (latest.leaseCount ?? 0) > 0
+        ) {
+            return false;
+        }
+
+        const retryAt = new Date(Date.now() + CLEANUP_RETRY_DELAY_MS);
+        const scheduled = await this.leaseRepo.markDeletingWithSandboxId(
+            prKey,
+            sandboxId,
+            retryAt,
+        );
+
+        if (!scheduled) {
+            return false;
+        }
+
+        this.logger.warn({
+            message: `SandboxLeaseManager: scheduled inactive INVALIDATED local cleanup retry after ${reason}`,
+            context: SandboxLeaseManager.name,
+            metadata: { prKey, sandboxId, reason, retryAt },
+        });
+        return true;
     }
 
     private async scheduleCleanupRetry(

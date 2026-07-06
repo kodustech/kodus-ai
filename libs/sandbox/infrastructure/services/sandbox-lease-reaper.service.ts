@@ -82,7 +82,10 @@ export class SandboxLeaseReaperService {
                             return;
                         }
 
-                        await this.leaseRepository.delete(lease._id);
+                        await this.leaseRepository.deleteDeletingWithSandboxId(
+                            lease._id,
+                            lease.sandboxId,
+                        );
                         this.logger.log({
                             message:
                                 '[SANDBOX-REAPER] Reaped expired local lease',
@@ -125,7 +128,10 @@ export class SandboxLeaseReaperService {
                         }
                     }
 
-                    await this.leaseRepository.delete(lease._id);
+                    await this.leaseRepository.deleteDeletingWithSandboxId(
+                        lease._id,
+                        lease.sandboxId,
+                    );
 
                     this.logger.log({
                         message: '[SANDBOX-REAPER] Reaped expired lease',
@@ -216,7 +222,10 @@ export class SandboxLeaseReaperService {
                             return;
                         }
 
-                        await this.leaseRepository.delete(lease._id);
+                        await this.leaseRepository.deleteDeletingWithSandboxId(
+                            lease._id,
+                            lease.sandboxId,
+                        );
                         return;
                     }
 
@@ -244,7 +253,10 @@ export class SandboxLeaseReaperService {
                         return;
                     }
 
-                    await this.leaseRepository.delete(lease._id);
+                    await this.leaseRepository.deleteDeletingWithSandboxId(
+                        lease._id,
+                        lease.sandboxId,
+                    );
 
                     this.logger.log({
                         message: '[SANDBOX-IDLE-KILL] Killed idle sandbox',
