@@ -1014,6 +1014,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                     });
                     return {
                         stdout: result.stdout || '',
+                        stderr: result.stderr || '',
                         exitCode: result.exitCode,
                     };
                 },

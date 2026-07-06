@@ -1,4 +1,3 @@
-import { CoreDocument } from '@libs/core/infrastructure/repositories/model/mongodb';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Schema as MongooseSchema } from 'mongoose';
 
@@ -19,7 +18,7 @@ const PR_KEY_REGEX: RegExp =
  * cleaned up properly.
  */
 @Schema({ collection: 'sandbox_leases', timestamps: false })
-export class SandboxLeaseModel extends CoreDocument {
+export class SandboxLeaseModel {
     // prKey: "{orgId}:{repoId}:{prNumber}" — used as the document _id.
     // SECURITY: regex enforces that the first segment is a UUID (the
     // organizationId) so a malformed prKey can never reach Mongo. A doc

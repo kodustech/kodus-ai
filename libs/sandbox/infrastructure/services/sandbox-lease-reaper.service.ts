@@ -45,25 +45,23 @@ export class SandboxLeaseReaperService {
 
             await Promise.allSettled(
                 expired.map(async (lease) => {
-                    if (lease.sandboxId) {
-                        const claimed =
-                            await this.leaseRepository.markDeletingIfExpired(
-                                lease._id,
-                                lease.expiresAt,
-                            );
-                        if (!claimed) {
-                            this.logger.log({
-                                message:
-                                    '[SANDBOX-REAPER] Skipped stale expired candidate because lease was refreshed',
-                                context: SandboxLeaseReaperService.name,
-                                metadata: {
-                                    prKey: lease._id,
-                                    sandboxId: lease.sandboxId,
-                                    expiresAt: lease.expiresAt,
-                                },
-                            });
-                            return;
-                        }
+                    const claimed =
+                        await this.leaseRepository.markDeletingIfExpired(
+                            lease._id,
+                            lease.expiresAt,
+                        );
+                    if (!claimed) {
+                        this.logger.log({
+                            message:
+                                '[SANDBOX-REAPER] Skipped stale expired candidate because lease was refreshed',
+                            context: SandboxLeaseReaperService.name,
+                            metadata: {
+                                prKey: lease._id,
+                                sandboxId: lease.sandboxId,
+                                expiresAt: lease.expiresAt,
+                            },
+                        });
+                        return;
                     }
 
                     if (

@@ -15,17 +15,41 @@ describe('SandboxLeaseRepository', () => {
 
         expect(leaseModel.findOneAndUpdate).toHaveBeenCalledWith(
             { _id: '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:199' },
-            expect.objectContaining({
-                $set: expect.objectContaining({
-                    consumer: 'review',
-                    expiresAt: expect.any(Date),
-                }),
-                $setOnInsert: expect.not.objectContaining({
-                    expiresAt: expect.any(Date),
-                }),
-            }),
+            [
+                {
+                    $set: expect.objectContaining({
+                        consumer: 'review',
+                        expiresAt: {
+                            $cond: [
+                                { $eq: ['$state', 'DELETING'] },
+                                '$expiresAt',
+                                expect.any(Date),
+                            ],
+                        },
+                    }),
+                },
+            ],
             { upsert: true, new: true },
         );
+    });
+
+    it('upsertAcquire preserves expiresAt for DELETING leases so cleanup retries are not postponed', async () => {
+        const leaseModel = {
+            findOneAndUpdate: jest.fn().mockResolvedValue({}),
+        };
+        const repo = new SandboxLeaseRepository(leaseModel as any);
+
+        await repo.upsertAcquire(
+            '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:299',
+            60_000,
+            'review',
+        );
+
+        const [, update] = leaseModel.findOneAndUpdate.mock.calls[0];
+        expect(Array.isArray(update)).toBe(true);
+        expect(JSON.stringify(update)).toContain('"$cond"');
+        expect(JSON.stringify(update)).toContain('"DELETING"');
+        expect(JSON.stringify(update)).toContain('"$expiresAt"');
     });
 
     it('deleteIfNoActiveLeases returns true when the guarded delete removes a lease', async () => {
@@ -125,8 +149,15 @@ describe('SandboxLeaseRepository', () => {
             {
                 _id: '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:207',
                 expiresAt,
-                sandboxId: { $exists: true, $ne: '' },
-                state: { $in: ['READY', 'PAUSED', 'INVALIDATED', 'DELETING'] },
+                state: {
+                    $in: [
+                        'CREATING',
+                        'READY',
+                        'PAUSED',
+                        'INVALIDATED',
+                        'DELETING',
+                    ],
+                },
             },
             { $set: { state: 'DELETING' } },
         );

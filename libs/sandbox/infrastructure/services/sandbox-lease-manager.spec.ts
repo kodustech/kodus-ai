@@ -1777,6 +1777,45 @@ describe('SandboxLeaseReaperService', () => {
         );
     });
 
+    it('reaper skips a stale expired sandboxless result when the atomic claim loses the race', async () => {
+        const leaseRepo = makeMockLeaseRepo();
+        const configService = makeMockConfigService('test-e2b-key');
+        const expiresAt = new Date(Date.now() - 10 * 60 * 1000);
+
+        leaseRepo.findExpired.mockResolvedValue([
+            {
+                _id: 'org:repo:sandboxless-expired-race',
+                sandboxId: undefined,
+                leaseCount: 1,
+                state: 'CREATING',
+                createdAt: new Date(Date.now() - 60 * 60 * 1000),
+                expiresAt,
+            } as any,
+        ]);
+        leaseRepo.markDeletingIfExpired.mockResolvedValueOnce(false);
+
+        const mockLock = { release: jest.fn().mockResolvedValue(undefined) };
+        const mockDistributedLockService = {
+            acquire: jest.fn().mockResolvedValue(mockLock),
+        };
+
+        const reaper = new SandboxLeaseReaperService(
+            leaseRepo,
+            mockDistributedLockService as any,
+            configService,
+        );
+
+        await reaper.reapExpiredLeases();
+
+        expect(leaseRepo.markDeletingIfExpired).toHaveBeenCalledWith(
+            'org:repo:sandboxless-expired-race',
+            expiresAt,
+        );
+        expect(leaseRepo.delete).not.toHaveBeenCalledWith(
+            'org:repo:sandboxless-expired-race',
+        );
+    });
+
     // ─── Idle-kill cron tests ────────────────────────────────────────────
 
     it('killIdleSandboxes: kills + deletes leases past their killAt', async () => {
