@@ -58,13 +58,15 @@ export class SandboxLeaseRepository {
     /**
      * Atomically acquire (or join) a lease for the given prKey.
      *
-     * Single findOneAndUpdate with BOTH operators in one update document:
-     *   - $setOnInsert: sets initial state/timestamps on the INSERT path only
-     *   - $inc: { leaseCount: 1 } increments the counter on BOTH insert and update paths
+     * Single findOneAndUpdate with an aggregation pipeline:
+     *   - Missing fields are initialized on the INSERT path only via $ifNull
+     *   - leaseCount increments on BOTH insert and update paths
+     *   - expiresAt refreshes on normal acquires but is preserved for DELETING
+     *     leases so failed cleanup retry cursors are not postponed by user retries
      *
-     * On INSERT:  MongoDB applies $setOnInsert (state='CREATING', dates) and $inc
-     *             (leaseCount 0→1). Returned doc has leaseCount === 1.
-     * On UPDATE:  $setOnInsert is a no-op; $inc bumps leaseCount to N+1.
+     * On INSERT:  MongoDB applies defaults (state='CREATING', dates) and increments
+     *             leaseCount 0→1. Returned doc has leaseCount === 1.
+     * On UPDATE:  Existing defaults are preserved; leaseCount bumps to N+1.
      *
      * Caller identifies itself as creator when doc.leaseCount === 1.
      * Caller must poll when doc.leaseCount > 1 and doc.state === 'CREATING'.
@@ -81,21 +83,36 @@ export class SandboxLeaseRepository {
         const expiresAt = new Date(now.getTime() + leaseTtlMs);
         const decomposed = decomposePrKey(prKey);
 
+        const setStage: Record<string, unknown> = {
+            state: { $ifNull: ['$state', 'CREATING'] },
+            createdAt: { $ifNull: ['$createdAt', now] },
+            organizationId: {
+                $ifNull: ['$organizationId', decomposed.organizationId],
+            },
+            repositoryId: {
+                $ifNull: ['$repositoryId', decomposed.repositoryId],
+            },
+            expiresAt: {
+                $cond: [
+                    { $in: ['$state', ['READY', 'PAUSED']] },
+                    expiresAt,
+                    { $ifNull: ['$expiresAt', expiresAt] },
+                ],
+            },
+            leaseCount: { $add: [{ $ifNull: ['$leaseCount', 0] }, 1] },
+        };
+
+        if (decomposed.prNumber !== undefined) {
+            setStage.prNumber = { $ifNull: ['$prNumber', decomposed.prNumber] };
+        }
+
+        if (consumer) {
+            setStage.consumer = consumer;
+        }
+
         const doc = await this.leaseModel.findOneAndUpdate(
             { _id: prKey },
-            {
-                $setOnInsert: {
-                    state: 'CREATING',
-                    createdAt: now,
-                    expiresAt,
-                    ...decomposed,
-                },
-                // Track the most recent consumer label so it's queryable in
-                // Mongo without parsing logs. Updated on every acquire (both
-                // insert and update paths).
-                $set: consumer ? { consumer } : {},
-                $inc: { leaseCount: 1 },
-            },
+            [{ $set: setStage }],
             { upsert: true, new: true },
         );
 
@@ -130,11 +147,27 @@ export class SandboxLeaseRepository {
      * Mark a CREATING lease as INVALIDATED (mid-create race handling).
      * The create path will check for this state after completing and kill the sandbox.
      */
-    async markInvalidated(prKey: string): Promise<void> {
-        await this.leaseModel.updateOne(
+    async markInvalidated(prKey: string): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
+            { _id: prKey, state: { $in: ['READY', 'PAUSED'] } },
+            { $set: { state: 'INVALIDATED' } },
+        );
+
+        return result.matchedCount > 0;
+    }
+
+    /**
+     * Mark a lease INVALIDATED only while it is still CREATING.
+     * Used by invalidate() to avoid overwriting a concurrent CREATING→READY
+     * transition with INVALIDATED after a sandbox has already become usable.
+     */
+    async markInvalidatedIfCreating(prKey: string): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
             { _id: prKey, state: 'CREATING' },
             { $set: { state: 'INVALIDATED' } },
         );
+
+        return result.matchedCount > 0;
     }
 
     /**
@@ -154,10 +187,21 @@ export class SandboxLeaseRepository {
      */
     async findExpired(
         now: Date,
-    ): Promise<Pick<SandboxLeaseModel, '_id' | 'sandboxId' | 'state'>[]> {
+        limit: number,
+    ): Promise<
+        Pick<SandboxLeaseModel, '_id' | 'sandboxId' | 'state' | 'expiresAt'>[]
+    > {
         return this.leaseModel
-            .find({ expiresAt: { $lt: now } })
-            .select('_id sandboxId state')
+            .find({
+                expiresAt: { $lt: now },
+                $or: [
+                    { state: { $ne: 'DELETING' } },
+                    { killAt: { $exists: false } },
+                    { killAt: { $lte: now } },
+                ],
+            })
+            .select('_id sandboxId state expiresAt')
+            .limit(limit)
             .lean();
     }
 
@@ -170,6 +214,147 @@ export class SandboxLeaseRepository {
     }
 
     /**
+     * Delete a lease only when no active leases remain.
+     *
+     * Local sandbox cleanup and idle reapers can observe leaseCount <= 0 and
+     * then race with a concurrent acquire. The final delete must re-check the
+     * counter atomically so it never removes a lease another caller just joined.
+     */
+    async deleteIfNoActiveLeases(
+        prKey: string,
+        sandboxId?: string,
+    ): Promise<boolean> {
+        const query: Record<string, unknown> = {
+            _id: prKey,
+            leaseCount: { $lte: 0 },
+        };
+
+        if (sandboxId) {
+            query.sandboxId = sandboxId;
+        }
+
+        const result = await this.leaseModel.deleteOne(query);
+
+        return result.deletedCount > 0;
+    }
+
+    /**
+     * Delete only the lease document that was previously claimed as DELETING.
+     *
+     * Reapers can race with a waiter that deletes the DELETING document and
+     * immediately creates a fresh lease for the same prKey. Guarding by state
+     * and sandboxId prevents the reaper from deleting that new lease.
+     */
+    async deleteDeletingWithSandboxId(
+        prKey: string,
+        sandboxId?: string,
+    ): Promise<boolean> {
+        const query: Record<string, unknown> = {
+            _id: prKey,
+            state: 'DELETING',
+        };
+
+        if (sandboxId) {
+            query.sandboxId = sandboxId;
+        } else {
+            query.$or = [
+                { sandboxId: { $exists: false } },
+                { sandboxId: '' },
+                { sandboxId: null },
+            ];
+        }
+
+        const result = await this.leaseModel.deleteOne(query);
+
+        return result.deletedCount > 0;
+    }
+
+    /**
+     * Atomically block reuse before resource cleanup.
+     *
+     * Local directories must not be removed while a concurrent acquire can
+     * still warm-reuse the READY lease. Marking DELETING first makes joiners
+     * wait/retry instead of connecting to a directory being deleted.
+     */
+    async markDeletingIfNoActiveLeases(
+        prKey: string,
+        sandboxId: string,
+    ): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
+            {
+                _id: prKey,
+                sandboxId,
+                leaseCount: { $lte: 0 },
+                state: { $in: ['READY', 'PAUSED', 'INVALIDATED', 'DELETING'] },
+            },
+            { $set: { state: 'DELETING' } },
+        );
+
+        return result.matchedCount > 0;
+    }
+
+    /**
+     * Atomically claim an idle-kill candidate before resource cleanup.
+     *
+     * The reaper reads candidates first, then cleanup can race with a fresh
+     * acquire that increments leaseCount and clears killAt. This guard
+     * re-checks both values before switching the lease to DELETING.
+     */
+    async markDeletingIfReadyToKill(
+        prKey: string,
+        killAt: Date,
+    ): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
+            {
+                _id: prKey,
+                killAt,
+                sandboxId: { $exists: true, $ne: '' },
+                $or: [
+                    {
+                        state: { $in: ['READY', 'PAUSED'] },
+                        leaseCount: { $lte: 0 },
+                    },
+                    { state: 'DELETING' },
+                ],
+            },
+            { $set: { state: 'DELETING' } },
+        );
+
+        return result.matchedCount > 0;
+    }
+
+    /**
+     * Atomically claim an expired lease before resource cleanup.
+     *
+     * Expired leases may still have leaseCount > 0 when a worker crashed before
+     * releasing. Matching the original expiresAt lets a fresh acquire extend
+     * the TTL and make this claim fail before the reaper removes anything.
+     */
+    async markDeletingIfExpired(
+        prKey: string,
+        expiresAt: Date,
+    ): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
+            {
+                _id: prKey,
+                expiresAt,
+                state: {
+                    $in: [
+                        'CREATING',
+                        'READY',
+                        'PAUSED',
+                        'INVALIDATED',
+                        'DELETING',
+                    ],
+                },
+            },
+            { $set: { state: 'DELETING' } },
+        );
+
+        return result.matchedCount > 0;
+    }
+
+    /**
      * Atomically set the `killAt` timestamp on a lease document. Used by
      * release() to schedule an idle-kill that any worker (in a multi-worker
      * deployment) can pick up via findReadyToKill().
@@ -177,14 +362,95 @@ export class SandboxLeaseRepository {
      * Only sets killAt when the lease has a real sandboxId — there's no
      * point scheduling a kill for a NullSandbox or a CREATING-only lease.
      */
-    async setKillAt(prKey: string, killAt: Date): Promise<void> {
-        await this.leaseModel.updateOne(
+    async setKillAt(prKey: string, killAt: Date): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
             {
                 _id: prKey,
+                leaseCount: { $lte: 0 },
                 sandboxId: { $exists: true, $ne: '' },
             },
             { $set: { killAt } },
         );
+
+        return result.matchedCount > 0;
+    }
+
+    /**
+     * Schedule a near-term cleanup retry for a lease that is already DELETING.
+     *
+     * Unlike setKillAt(), this intentionally does not require leaseCount <= 0:
+     * expired crashed-worker leases can still have a positive count, but once
+     * they are claimed as DELETING they still need a retry cursor when resource
+     * cleanup fails.
+     */
+    async scheduleCleanupRetry(prKey: string, retryAt: Date): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
+            {
+                _id: prKey,
+                state: 'DELETING',
+                sandboxId: { $exists: true, $ne: '' },
+            },
+            { $set: { killAt: retryAt } },
+        );
+
+        return result.matchedCount > 0;
+    }
+
+    /**
+     * Persist the sandboxId for a creator-path local orphan and move the lease
+     * into DELETING so cleanup can be retried by the idle-kill cursor.
+     *
+     * This is intentionally limited to states used before/around creator-path
+     * completion. READY/PAUSED cleanup should use the normal guarded deletion
+     * flow that checks active lease counts.
+     */
+    async markDeletingWithSandboxId(
+        prKey: string,
+        sandboxId: string,
+        retryAt: Date,
+    ): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
+            {
+                _id: prKey,
+                state: { $in: ['CREATING', 'INVALIDATED', 'DELETING'] },
+            },
+            {
+                $set: {
+                    state: 'DELETING',
+                    sandboxId,
+                    killAt: retryAt,
+                },
+            },
+        );
+
+        return result.matchedCount > 0;
+    }
+
+    /**
+     * Retry cleanup for an INVALIDATED local lease only when no active joiner
+     * remains at the exact update moment.
+     */
+    async markDeletingWithSandboxIdIfNoActiveLeases(
+        prKey: string,
+        sandboxId: string,
+        retryAt: Date,
+    ): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
+            {
+                _id: prKey,
+                state: 'INVALIDATED',
+                sandboxId,
+                leaseCount: { $lte: 0 },
+            },
+            {
+                $set: {
+                    state: 'DELETING',
+                    killAt: retryAt,
+                },
+            },
+        );
+
+        return result.matchedCount > 0;
     }
 
     /**
@@ -194,7 +460,7 @@ export class SandboxLeaseRepository {
      */
     async clearKillAt(prKey: string): Promise<void> {
         await this.leaseModel.updateOne(
-            { _id: prKey },
+            { _id: prKey, state: { $ne: 'DELETING' } },
             { $unset: { killAt: '' } },
         );
     }
@@ -210,6 +476,7 @@ export class SandboxLeaseRepository {
      */
     async findReadyToKill(
         now: Date,
+        limit: number,
     ): Promise<Pick<SandboxLeaseModel, '_id' | 'sandboxId' | 'killAt'>[]> {
         return this.leaseModel
             .find({
@@ -217,6 +484,7 @@ export class SandboxLeaseRepository {
                 sandboxId: { $exists: true, $ne: '' },
             })
             .select('_id sandboxId killAt')
+            .limit(limit)
             .lean();
     }
 }

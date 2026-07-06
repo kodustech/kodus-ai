@@ -52,11 +52,18 @@ export interface SandboxInstance {
     /** Absolute path to the repo root inside the sandbox */
     repoDir: string;
     /** Run a shell command inside the sandbox */
-    run(command: string, opts?: { timeoutMs?: number }): Promise<SandboxRunResult>;
+    run(
+        command: string,
+        opts?: { timeoutMs?: number },
+    ): Promise<SandboxRunResult>;
     /** Read a file from the sandbox filesystem */
     readFile(path: string, opts?: { timeoutMs?: number }): Promise<string>;
     /** Write a file to the sandbox filesystem */
-    writeFile(path: string, content: string, opts?: { timeoutMs?: number }): Promise<void>;
+    writeFile(
+        path: string,
+        content: string,
+        opts?: { timeoutMs?: number },
+    ): Promise<void>;
 }
 
 export interface ISandboxProvider {
@@ -67,6 +74,15 @@ export interface ISandboxProvider {
     createSandboxWithRepo(
         params: CreateSandboxParams,
     ): Promise<SandboxInstance>;
+
+    /**
+     * Reconnect to a previously-created sandbox by sandboxId.
+     *
+     * Local sandbox ids are worker-local filesystem paths. E2B sandbox ids are
+     * globally reconnectable through the E2B API. Providers may omit this when
+     * reconnect is not supported.
+     */
+    connectToExistingSandbox?(sandboxId: string): Promise<SandboxInstance>;
 }
 
 export const SANDBOX_PROVIDER_TOKEN = Symbol('SANDBOX_PROVIDER_TOKEN');
