@@ -52,6 +52,7 @@ function makeMockLeaseRepo(): jest.Mocked<SandboxLeaseRepository> {
         markDeletingIfReadyToKill: jest.fn().mockResolvedValue(true),
         setKillAt: jest.fn().mockResolvedValue(true),
         scheduleCleanupRetry: jest.fn().mockResolvedValue(true),
+        markDeletingWithSandboxId: jest.fn().mockResolvedValue(true),
         clearKillAt: jest.fn().mockResolvedValue(undefined),
         findReadyToKill: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<SandboxLeaseRepository>;
@@ -814,6 +815,59 @@ describe('SandboxLeaseManager', () => {
             expect(leaseRepo.delete).toHaveBeenCalledWith(prKey);
             expect(Sandbox.kill).not.toHaveBeenCalled();
         } finally {
+            await rm(tempDir, { recursive: true, force: true });
+        }
+    });
+
+    it('persists the local sandbox path for retry when creator-path cleanup fails after updateReady fails', async () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:214';
+        const tempDir = await mkdtemp(join(tmpdir(), 'kodus-sandbox-'));
+        const cloneParams = {
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'token',
+            branch: 'feature',
+            prNumber: 214,
+            platform: 'GITHUB' as any,
+        };
+        const cleanupSpy = jest
+            .spyOn(manager as any, 'cleanupLocalSandbox')
+            .mockResolvedValueOnce(false);
+
+        leaseRepo.upsertAcquire.mockResolvedValue({
+            _id: prKey,
+            leaseCount: 1,
+            state: 'CREATING',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+        sandboxProvider.createSandboxWithRepo.mockResolvedValue(
+            makeLocalSandboxInstance(tempDir),
+        );
+        leaseRepo.updateReady.mockRejectedValueOnce(
+            new Error('Mongo connection lost'),
+        );
+
+        const before = Date.now();
+        try {
+            await expect(
+                manager.acquire(prKey, 'review', undefined, cloneParams),
+            ).rejects.toThrow(/Mongo connection lost/);
+
+            expect(leaseRepo.markDeletingWithSandboxId).toHaveBeenCalledTimes(
+                1,
+            );
+            const [calledPrKey, calledSandboxId, retryAt] = (
+                leaseRepo.markDeletingWithSandboxId as jest.Mock
+            ).mock.calls[0];
+            expect(calledPrKey).toBe(prKey);
+            expect(calledSandboxId).toBe(tempDir);
+            expect(retryAt.getTime()).toBeGreaterThanOrEqual(before);
+            expect(retryAt.getTime()).toBeLessThanOrEqual(
+                Date.now() + 2 * 60 * 1000,
+            );
+            expect(leaseRepo.delete).not.toHaveBeenCalledWith(prKey);
+        } finally {
+            cleanupSpy.mockRestore();
             await rm(tempDir, { recursive: true, force: true });
         }
     });

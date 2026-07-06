@@ -348,6 +348,36 @@ export class SandboxLeaseRepository {
     }
 
     /**
+     * Persist the sandboxId for a creator-path local orphan and move the lease
+     * into DELETING so cleanup can be retried by the idle-kill cursor.
+     *
+     * This is intentionally limited to states used before/around creator-path
+     * completion. READY/PAUSED cleanup should use the normal guarded deletion
+     * flow that checks active lease counts.
+     */
+    async markDeletingWithSandboxId(
+        prKey: string,
+        sandboxId: string,
+        retryAt: Date,
+    ): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
+            {
+                _id: prKey,
+                state: { $in: ['CREATING', 'INVALIDATED', 'DELETING'] },
+            },
+            {
+                $set: {
+                    state: 'DELETING',
+                    sandboxId,
+                    killAt: retryAt,
+                },
+            },
+        );
+
+        return result.matchedCount > 0;
+    }
+
+    /**
      * Atomically clear `killAt`. Called by acquire() when a new caller
      * joins before the idle window expires — keeps the warm sandbox alive
      * even if the worker that scheduled the kill is a different process.

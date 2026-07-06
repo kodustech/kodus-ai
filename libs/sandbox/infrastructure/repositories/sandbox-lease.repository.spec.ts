@@ -293,6 +293,39 @@ describe('SandboxLeaseRepository', () => {
         );
     });
 
+    it('markDeletingWithSandboxId persists a local orphan path for cleanup retry', async () => {
+        const leaseModel = {
+            updateOne: jest.fn().mockResolvedValue({
+                matchedCount: 1,
+                modifiedCount: 1,
+            }),
+        };
+        const repo = new SandboxLeaseRepository(leaseModel as any);
+        const retryAt = new Date('2026-01-01T00:01:00.000Z');
+
+        await expect(
+            repo.markDeletingWithSandboxId(
+                '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:211',
+                '/tmp/kodus-sandbox-orphan',
+                retryAt,
+            ),
+        ).resolves.toBe(true);
+
+        expect(leaseModel.updateOne).toHaveBeenCalledWith(
+            {
+                _id: '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:211',
+                state: { $in: ['CREATING', 'INVALIDATED', 'DELETING'] },
+            },
+            {
+                $set: {
+                    state: 'DELETING',
+                    sandboxId: '/tmp/kodus-sandbox-orphan',
+                    killAt: retryAt,
+                },
+            },
+        );
+    });
+
     it('findExpired applies an explicit query limit', async () => {
         const query = {
             select: jest.fn().mockReturnThis(),

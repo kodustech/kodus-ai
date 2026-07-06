@@ -651,6 +651,12 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                     );
                     if (cleaned) {
                         await this.leaseRepo.delete(prKey).catch(() => {});
+                    } else {
+                        await this.persistLocalCreatorCleanupRetry(
+                            prKey,
+                            sandboxId,
+                            'creator-path failure',
+                        );
                     }
                     throw err;
                 }
@@ -673,6 +679,43 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             // Local sandbox cleanup above only deletes after confirmed rm.
             await this.leaseRepo.delete(prKey).catch(() => {});
             throw err;
+        }
+    }
+
+    private async persistLocalCreatorCleanupRetry(
+        prKey: string,
+        sandboxId: string,
+        reason: string,
+    ): Promise<void> {
+        const retryAt = new Date(Date.now() + CLEANUP_RETRY_DELAY_MS);
+
+        try {
+            const marked = await this.leaseRepo.markDeletingWithSandboxId(
+                prKey,
+                sandboxId,
+                retryAt,
+            );
+            if (!marked) {
+                this.logger.log({
+                    message: `SandboxLeaseManager: skipped local creator cleanup retry after ${reason} because lease state changed prKey="${prKey}"`,
+                    context: SandboxLeaseManager.name,
+                    metadata: { prKey, sandboxId, reason, retryAt },
+                });
+                return;
+            }
+
+            this.logger.warn({
+                message: `SandboxLeaseManager: persisted local creator cleanup retry after ${reason}`,
+                context: SandboxLeaseManager.name,
+                metadata: { prKey, sandboxId, reason, retryAt },
+            });
+        } catch (error) {
+            this.logger.warn({
+                message: `SandboxLeaseManager: failed to persist local creator cleanup retry after ${reason}`,
+                context: SandboxLeaseManager.name,
+                error,
+                metadata: { prKey, sandboxId, reason, retryAt },
+            });
         }
     }
 
