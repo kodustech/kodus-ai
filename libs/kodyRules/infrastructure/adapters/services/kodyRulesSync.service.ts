@@ -236,11 +236,34 @@ export class KodyRulesSyncService {
             const existing = await this.kodyRulesService.findByOrganizationId(
                 organizationAndTeamData.organizationId,
             );
-            const found = existing?.rules?.find(
-                (r) =>
-                    r?.repositoryId === repositoryId &&
-                    r?.sourcePath === sourcePath,
+            const matches =
+                existing?.rules?.filter(
+                    (r) =>
+                        r?.repositoryId === repositoryId &&
+                        r?.sourcePath === sourcePath,
+                ) ?? [];
+
+            if (!matches.length) return null;
+
+            // Prefer the NEWEST non-deleted record. The old `Array.find`
+            // returned the first (i.e. oldest) match regardless of status,
+            // so when a sourcePath had both a stale soft-DELETED record and
+            // a newer live one, re-imports kept resurrecting/updating the
+            // stale record (customer-reported: "old rule persisted; toggle
+            // off removed it, toggle on re-added it"). Falling back to a
+            // deleted match is intentional — if the source file still
+            // exists in the repo, reviving that record (with refreshed
+            // content) beats accumulating duplicates.
+            const newestFirst = [...matches].sort(
+                (a, b) =>
+                    new Date((b as any)?.createdAt ?? 0).getTime() -
+                    new Date((a as any)?.createdAt ?? 0).getTime(),
             );
+            const found =
+                newestFirst.find(
+                    (r) => r?.status !== KodyRulesStatus.DELETED,
+                ) ?? newestFirst[0];
+
             return found ? { uuid: found.uuid } : null;
         } catch (error) {
             this.logger.error({

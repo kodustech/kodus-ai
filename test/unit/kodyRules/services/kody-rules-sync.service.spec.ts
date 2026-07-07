@@ -1318,3 +1318,111 @@ describe('KodyRulesSyncService.resolveSyncDefaultStatus (IDE-sync knowledge-appr
         expect(status).toBe(KodyRulesStatus.ACTIVE);
     });
 });
+
+describe('KodyRulesSyncService.findRuleBySourcePath — stale-record precedence', () => {
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    };
+
+    function createService(rules: any[]) {
+        const kodyRulesService = {
+            findByOrganizationId: jest.fn().mockResolvedValue({ rules }),
+        };
+        const service = new KodyRulesSyncService(
+            kodyRulesService as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+        return service;
+    }
+
+    const lookup = (service: KodyRulesSyncService) =>
+        (service as any).findRuleBySourcePath({
+            organizationAndTeamData,
+            repositoryId: 'repo-1',
+            sourcePath: '.kody/rules/naming.md',
+        });
+
+    it('prefers the newest non-deleted record over an older soft-deleted one', async () => {
+        // Customer-reported: "old rule persisted; toggle off removed it,
+        // toggle on re-added it". Array.find picked the OLDEST record for
+        // the sourcePath regardless of status, resurrecting the stale one.
+        const service = createService([
+            {
+                uuid: 'stale-deleted',
+                repositoryId: 'repo-1',
+                sourcePath: '.kody/rules/naming.md',
+                status: KodyRulesStatus.DELETED,
+                createdAt: '2026-01-01T00:00:00.000Z',
+            },
+            {
+                uuid: 'live-newer',
+                repositoryId: 'repo-1',
+                sourcePath: '.kody/rules/naming.md',
+                status: KodyRulesStatus.ACTIVE,
+                createdAt: '2026-06-01T00:00:00.000Z',
+            },
+        ]);
+
+        await expect(lookup(service)).resolves.toEqual({ uuid: 'live-newer' });
+    });
+
+    it('prefers a non-deleted record even when it is older', async () => {
+        const service = createService([
+            {
+                uuid: 'deleted-newer',
+                repositoryId: 'repo-1',
+                sourcePath: '.kody/rules/naming.md',
+                status: KodyRulesStatus.DELETED,
+                createdAt: '2026-06-01T00:00:00.000Z',
+            },
+            {
+                uuid: 'live-older',
+                repositoryId: 'repo-1',
+                sourcePath: '.kody/rules/naming.md',
+                status: KodyRulesStatus.ACTIVE,
+                createdAt: '2026-01-01T00:00:00.000Z',
+            },
+        ]);
+
+        await expect(lookup(service)).resolves.toEqual({ uuid: 'live-older' });
+    });
+
+    it('falls back to the deleted record when it is the only match (intentional revive)', async () => {
+        const service = createService([
+            {
+                uuid: 'only-deleted',
+                repositoryId: 'repo-1',
+                sourcePath: '.kody/rules/naming.md',
+                status: KodyRulesStatus.DELETED,
+                createdAt: '2026-01-01T00:00:00.000Z',
+            },
+        ]);
+
+        await expect(lookup(service)).resolves.toEqual({
+            uuid: 'only-deleted',
+        });
+    });
+
+    it('returns null when nothing matches repo + sourcePath', async () => {
+        const service = createService([
+            {
+                uuid: 'other-repo',
+                repositoryId: 'repo-2',
+                sourcePath: '.kody/rules/naming.md',
+                status: KodyRulesStatus.ACTIVE,
+            },
+        ]);
+
+        await expect(lookup(service)).resolves.toBeNull();
+    });
+});
