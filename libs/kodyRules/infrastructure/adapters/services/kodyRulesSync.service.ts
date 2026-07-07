@@ -25,6 +25,10 @@ import {
     isIdeRuleSource,
     validateAndScopeIdeRulePath,
 } from '@libs/common/utils/kody-rules/file-patterns';
+import {
+    isKodyRuleTemplateFile,
+    parseKodyRuleFile,
+} from '@libs/common/utils/kody-rules/kody-rule-file-parser';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import {
     CreateKodyRuleDto,
@@ -533,19 +537,22 @@ export class KodyRulesSyncService {
                 // Reuse cached content from the @kody-sync scan when
                 // available to avoid a duplicate API call for the same
                 // file (the scan already fetched it moments ago).
-                let decoded: string | null = contentCache.get(f.filename) ?? null;
+                let decoded: string | null =
+                    contentCache.get(f.filename) ?? null;
 
                 if (!decoded) {
                     const contentResp =
-                        await this.codeManagementService.getRepositoryContentFile({
-                            organizationAndTeamData,
-                            repository: {
-                                id: repository.id,
-                                name: repository.name,
+                        await this.codeManagementService.getRepositoryContentFile(
+                            {
+                                organizationAndTeamData,
+                                repository: {
+                                    id: repository.id,
+                                    name: repository.name,
+                                },
+                                file: { filename: f.filename },
+                                pullRequest: pullRequestParam,
                             },
-                            file: { filename: f.filename },
-                            pullRequest: pullRequestParam,
-                        });
+                        );
                     // Fallbacks if the source branch was deleted on merge (e.g., GitLab):
                     // 1) Try with base as head
                     // 2) Try with default branch as head
@@ -563,7 +570,9 @@ export class KodyRulesSyncService {
                                                 name: repository.name,
                                             },
                                             file: { filename: f.filename },
-                                            pullRequest: { head: { ref: baseRef } },
+                                            pullRequest: {
+                                                head: { ref: baseRef },
+                                            },
                                         },
                                     );
                                 if (baseAsHead?.data?.content) {
@@ -577,13 +586,15 @@ export class KodyRulesSyncService {
                     if (!effectiveContent?.data?.content) {
                         try {
                             const defaultBranch =
-                                await this.codeManagementService.getDefaultBranch({
-                                    organizationAndTeamData,
-                                    repository: {
-                                        id: repository.id,
-                                        name: repository.name,
+                                await this.codeManagementService.getDefaultBranch(
+                                    {
+                                        organizationAndTeamData,
+                                        repository: {
+                                            id: repository.id,
+                                            name: repository.name,
+                                        },
                                     },
-                                });
+                                );
                             if (defaultBranch) {
                                 const defAsHead =
                                     await this.codeManagementService.getRepositoryContentFile(
@@ -615,7 +626,9 @@ export class KodyRulesSyncService {
 
                     decoded =
                         effectiveContent?.data?.encoding === 'base64'
-                            ? Buffer.from(rawContent, 'base64').toString('utf-8')
+                            ? Buffer.from(rawContent, 'base64').toString(
+                                  'utf-8',
+                              )
                             : rawContent;
                 }
 
@@ -888,9 +901,7 @@ export class KodyRulesSyncService {
                 //     marker dropped → depin (no-op if already not pinned).
                 //   - sourcePath in `forceSyncFiles` → will be re-synced
                 //     below, which writes `pinnedSync: true` again.
-                const allFilePaths = new Set(
-                    allFiles.map((f: any) => f.path),
-                );
+                const allFilePaths = new Set(allFiles.map((f: any) => f.path));
                 const forceSyncFilePaths = new Set(forceSyncFiles);
                 const existing =
                     await this.kodyRulesService.findByOrganizationId(
@@ -1546,17 +1557,52 @@ export class KodyRulesSyncService {
                 return response;
             }
 
-            const rules = manifestMode
-                ? await this.convertManifestsToKodyRulesFastBatch({
-                      files: candidates,
-                      repositoryId: repository.id,
-                      organizationAndTeamData,
-                  })
-                : await this.convertFilesToKodyRulesFastBatch({
-                      files: candidates,
-                      repositoryId: repository.id,
-                      organizationAndTeamData,
-                  });
+            // Structured `.kody/rules/**` templates never go through the
+            // batch LLM — parse them verbatim and only send the free-form
+            // remainder to the model (same policy as the main sync path).
+            const templateRules: Array<Partial<CreateKodyRuleDto>> = [];
+            const llmCandidates: typeof candidates = [];
+            for (const candidate of candidates) {
+                const parsed = isKodyRuleTemplateFile(candidate.path)
+                    ? parseKodyRuleFile(candidate.content)
+                    : null;
+                if (parsed) {
+                    if (!parsed.enabled) continue;
+                    templateRules.push({
+                        title: parsed.title,
+                        rule: parsed.rule,
+                        path: parsed.path,
+                        sourcePath: candidate.path,
+                        severity: parsed.severity as KodyRuleSeverity,
+                        scope: parsed.scope as KodyRulesScope,
+                        examples: parsed.examples,
+                        // Template paths are author-declared; the loop below
+                        // must not re-scope them.
+                        pathSource: 'declared',
+                    } as any);
+                } else {
+                    llmCandidates.push(candidate);
+                }
+            }
+
+            const llmRules = !llmCandidates.length
+                ? []
+                : manifestMode
+                  ? await this.convertManifestsToKodyRulesFastBatch({
+                        files: llmCandidates,
+                        repositoryId: repository.id,
+                        organizationAndTeamData,
+                    })
+                  : await this.convertFilesToKodyRulesFastBatch({
+                        files: llmCandidates,
+                        repositoryId: repository.id,
+                        organizationAndTeamData,
+                    });
+
+            const rules = [
+                ...templateRules,
+                ...(Array.isArray(llmRules) ? llmRules : []),
+            ];
 
             if (Array.isArray(rules)) {
                 for (const rule of rules) {
@@ -1790,6 +1836,65 @@ export class KodyRulesSyncService {
                 params.organizationAndTeamData,
                 params.repositoryId,
             ));
+
+        // Structured `.kody/rules/**` templates are imported VERBATIM —
+        // the user authored the exact shape we document, so LLM conversion
+        // would only lose content (trimmed examples, rewritten wording,
+        // stripped identifiers). Non-template `.kody` files (no/invalid
+        // frontmatter) fall through to the LLM path below.
+        if (isKodyRuleTemplateFile(params.filePath)) {
+            const parsed = parseKodyRuleFile(params.content);
+            if (parsed) {
+                if (!parsed.enabled) {
+                    this.logger.log({
+                        message:
+                            '[kody-rules-sync] template file disabled via frontmatter, skipping import',
+                        context: KodyRulesSyncService.name,
+                        metadata: {
+                            filePath: params.filePath,
+                            repositoryId: params.repositoryId,
+                        },
+                    });
+                    return [];
+                }
+
+                // Keep the same path guard the LLM path uses so a template
+                // can't scope a rule against the rule sources themselves.
+                const validated = validateAndScopeIdeRulePath({
+                    llmPath: parsed.path,
+                    sourceFilePath: params.filePath,
+                    pathSource: 'declared',
+                });
+
+                this.logger.log({
+                    message:
+                        '[kody-rules-sync] imported .kody/rules template verbatim (no LLM)',
+                    context: KodyRulesSyncService.name,
+                    metadata: {
+                        filePath: params.filePath,
+                        repositoryId: params.repositoryId,
+                        examplesCount: parsed.examples.length,
+                        pathValidation: validated.reason,
+                    },
+                });
+
+                return [
+                    {
+                        ...(parsed.uuid ? { uuid: parsed.uuid } : {}),
+                        title: parsed.title,
+                        rule: parsed.rule,
+                        path: validated.path,
+                        sourcePath: params.filePath,
+                        severity: parsed.severity as KodyRuleSeverity,
+                        scope: parsed.scope as KodyRulesScope,
+                        repositoryId: params.repositoryId,
+                        origin: KodyRulesOrigin.REPO_FILE_SYNC,
+                        status: effectiveDefaultStatus,
+                        examples: parsed.examples,
+                    },
+                ];
+            }
+        }
 
         const mainProvider =
             options?.mainProvider ?? LLMModelProvider.GEMINI_2_5_FLASH;
