@@ -15,6 +15,10 @@ scenarios:
     - code-review-basic
     - command-review
     - kody-rules-create-and-apply
+    # Repo-file rule sync (customer case): .kody/rules template imported
+    # verbatim + multi-glob path enforced on a file matching the 2nd glob.
+    # github-only (needs mergePR).
+    - kody-rules-file-sync
     - license-attribution
     # Cockpit analytics availability (github × license-paid cell only via
     # appliesTo): proves the analytics warehouse is up (API) AND the /cockpit

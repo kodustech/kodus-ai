@@ -23,6 +23,10 @@ scenarios:
     # from the command. Covers all 4 providers.
     - command-review
     - kody-rules-create-and-apply
+    # Repo-file rule sync (customer case): .kody/rules template imported
+    # verbatim + multi-glob path enforced on a file matching the 2nd glob.
+    # github-only (needs mergePR).
+    - kody-rules-file-sync
     - license-attribution
     # Per-seat gate: appliesTo restricts to self-hosted × github × license-paid
     # (one cell). Skipped automatically when SH_LICENSE_KEY_PATH (default

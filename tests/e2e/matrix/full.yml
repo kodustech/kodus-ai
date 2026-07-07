@@ -30,6 +30,10 @@ scenarios:
     # second real review per cell, too heavy for the PR-check fast tier.
     - command-review-focus
     - kody-rules-create-and-apply
+    # Repo-file rule sync (customer case): .kody/rules template imported
+    # verbatim + multi-glob path enforced on a file matching the 2nd glob.
+    # github-only (needs mergePR).
+    - kody-rules-file-sync
     # Centralized config (config-as-code) init→sync→disable on a throwaway org.
     # github × {paid, license-paid}; skipped unless CENTRALIZED_CONFIG_TEST_REPO is set.
     - centralized-config-sync
