@@ -186,19 +186,21 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         }
 
         // Acquire-vs-invalidated race: upsertAcquire() already incremented
-        // leaseCount, but the doc is INVALIDATED. If we proceed to
-        // handleJoinerPath it will throw without decrementing, leaking the
-        // count. Undo the increment, delete the stale doc, and retry so
-        // the next acquire creates a fresh lease.
+        // leaseCount, but the doc is INVALIDATED. Undo the increment so it
+        // doesn't block cleanup. Do NOT delete the doc — a concurrent creator
+        // may still need to observe the INVALIDATED state, and the reaper
+        // handles stale doc cleanup. Throw so the caller knows the acquire
+        // failed; the caller can retry with a fresh acquire if needed.
         if (doc.state === 'INVALIDATED') {
-            await this.leaseRepo.decrementLease(prKey);
-            await this.leaseRepo.delete(prKey);
+            const updated = await this.leaseRepo.decrementLease(prKey);
             this.logger.log({
-                message: `SandboxLeaseManager: acquired INVALIDATED doc, cleaned up stale lease prKey="${prKey}"`,
+                message: `SandboxLeaseManager: acquired INVALIDATED doc, decremented lease prKey="${prKey}" leaseCount=${updated?.leaseCount ?? 'unknown'}`,
                 context: SandboxLeaseManager.name,
-                metadata: { prKey },
+                metadata: { prKey, leaseCount: updated?.leaseCount },
             });
-            return this.acquire(prKey, consumer, leaseTtlMs, cloneParams);
+            throw new Error(
+                `SandboxLeaseManager: sandbox invalidated for prKey="${prKey}"`,
+            );
         }
 
         const leaseId = randomUUID();
