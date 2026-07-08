@@ -1070,7 +1070,10 @@ describe('SandboxLeaseManager', () => {
             const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:46';
             const os = require('os');
             const path = require('path');
-            const localSandboxId = path.join(os.tmpdir(), 'kodus-sandbox-orphan');
+            const localSandboxId = path.join(
+                os.tmpdir(),
+                'kodus-sandbox-orphan',
+            );
             const cloneParams = {
                 cloneUrl: 'https://github.com/org/repo.git',
                 authToken: 'token',
@@ -1123,35 +1126,125 @@ describe('SandboxLeaseManager', () => {
             expect(leaseRepo.delete).not.toHaveBeenCalled();
         });
 
-        it('joiner path throws on INVALIDATED state without deleting local sandbox', async () => {
+        it('acquire on INVALIDATED decrements leaseCount, deletes stale doc, retries', async () => {
             const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:47';
             const os = require('os');
             const path = require('path');
-            const localSandboxId = path.join(os.tmpdir(), 'kodus-sandbox-invalidated');
+            const localSandboxId = path.join(
+                os.tmpdir(),
+                'kodus-sandbox-invalidated',
+            );
 
-            leaseRepo.upsertAcquire.mockResolvedValue({
+            // First call: INVALIDATED (race with invalidate())
+            leaseRepo.upsertAcquire
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 2,
+                    state: 'INVALIDATED',
+                    sandboxId: localSandboxId,
+                    createdAt: new Date(),
+                    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                } as any)
+                // Retry: fresh CREATING doc
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 1,
+                    state: 'CREATING',
+                    createdAt: new Date(),
+                    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                } as any);
+
+            leaseRepo.decrementLease.mockResolvedValue({
                 _id: prKey,
-                leaseCount: 2,
+                leaseCount: 1,
                 state: 'INVALIDATED',
-                sandboxId: localSandboxId,
+            } as any);
+
+            leaseRepo.findByPrKey.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: '',
                 createdAt: new Date(),
                 expiresAt: new Date(Date.now() + 30 * 60 * 1000),
             } as any);
 
-            await expect(
-                manager.acquire(prKey, 'review'),
-            ).rejects.toThrow(/sandbox invalidated/);
+            const result = await manager.acquire(prKey, 'review');
 
-            // Finding 2 fix: must NOT delete sandbox on INVALIDATED —
-            // active leases may still be using it
+            // Must NOT delete the local sandbox — active leases may still use it
             expect(localCleanup.deleteLocalSandbox).not.toHaveBeenCalled();
+            // Must decrement the leaked leaseCount
+            expect(leaseRepo.decrementLease).toHaveBeenCalledWith(prKey);
+            // Must delete the stale INVALIDATED doc
+            expect(leaseRepo.delete).toHaveBeenCalledWith(prKey);
+            // Retry succeeded
+            expect(result.sandbox).toBeDefined();
+        });
+
+        it('acquire on INVALIDATED local lease decrements leaseCount and retries', async () => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:48';
+            const os = require('os');
+            const path = require('path');
+            const localSandboxId = path.join(
+                os.tmpdir(),
+                'kodus-sandbox-inval-race',
+            );
+
+            // First upsertAcquire: returns INVALIDATED doc (lease was invalidated
+            // while this acquire was in flight). leaseCount was incremented by
+            // upsertAcquire but the acquire must not leak it.
+            leaseRepo.upsertAcquire
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 2,
+                    state: 'INVALIDATED',
+                    sandboxId: localSandboxId,
+                    createdAt: new Date(),
+                    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                } as any)
+                // Second upsertAcquire (retry): fresh CREATING doc
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 1,
+                    state: 'CREATING',
+                    createdAt: new Date(),
+                    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                } as any);
+
+            leaseRepo.decrementLease.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'INVALIDATED',
+            } as any);
+
+            leaseRepo.findByPrKey.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: '',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+
+            const result = await manager.acquire(prKey, 'review');
+
+            // leaseCount was decremented to undo the leaked increment
+            expect(leaseRepo.decrementLease).toHaveBeenCalledWith(prKey);
+            // Stale INVALIDATED doc was deleted
+            expect(leaseRepo.delete).toHaveBeenCalledWith(prKey);
+            // acquire retried and succeeded
+            expect(result.sandbox).toBeDefined();
+            expect(leaseRepo.upsertAcquire).toHaveBeenCalledTimes(2);
         });
 
         it('mid-create invalidation preserves lease doc when local cleanup fails', async () => {
             const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:88';
             const os = require('os');
             const path = require('path');
-            const localSandboxId = path.join(os.tmpdir(), 'kodus-sandbox-mid-create');
+            const localSandboxId = path.join(
+                os.tmpdir(),
+                'kodus-sandbox-mid-create',
+            );
             const cloneParams = {
                 cloneUrl: 'https://github.com/org/repo.git',
                 authToken: 'token',

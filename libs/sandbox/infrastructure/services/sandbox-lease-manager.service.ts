@@ -17,9 +17,7 @@ import { randomUUID } from 'crypto';
 
 import { calculateBackoffInterval } from '@libs/common/utils/polling';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
-import {
-    SANDBOX_LEASE_CLEANUP_STATUS,
-} from '../repositories/schemas/sandbox-lease.model';
+import { SANDBOX_LEASE_CLEANUP_STATUS } from '../repositories/schemas/sandbox-lease.model';
 import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
 import { buildE2BRemoteCommands } from '../providers/e2b-sandbox.service';
 import {
@@ -171,10 +169,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         // Finding 1 fix: if cleanup is in progress, wait for it to complete
         // (doc will be deleted), then retry acquire from scratch. Prevents
         // attaching to a doc that's being cleaned up.
-        if (
-            doc.cleanupStatus ===
-            SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS
-        ) {
+        if (doc.cleanupStatus === SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS) {
             this.logger.log({
                 message: `SandboxLeaseManager: cleanup in progress, waiting for completion prKey="${prKey}"`,
                 context: SandboxLeaseManager.name,
@@ -187,6 +182,22 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 if (!check) break; // Doc deleted — cleanup complete
             }
             // Retry acquire from scratch
+            return this.acquire(prKey, consumer, leaseTtlMs, cloneParams);
+        }
+
+        // Acquire-vs-invalidated race: upsertAcquire() already incremented
+        // leaseCount, but the doc is INVALIDATED. If we proceed to
+        // handleJoinerPath it will throw without decrementing, leaking the
+        // count. Undo the increment, delete the stale doc, and retry so
+        // the next acquire creates a fresh lease.
+        if (doc.state === 'INVALIDATED') {
+            await this.leaseRepo.decrementLease(prKey);
+            await this.leaseRepo.delete(prKey);
+            this.logger.log({
+                message: `SandboxLeaseManager: acquired INVALIDATED doc, cleaned up stale lease prKey="${prKey}"`,
+                context: SandboxLeaseManager.name,
+                metadata: { prKey },
+            });
             return this.acquire(prKey, consumer, leaseTtlMs, cloneParams);
         }
 
