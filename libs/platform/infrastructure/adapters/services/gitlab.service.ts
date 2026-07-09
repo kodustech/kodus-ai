@@ -14,6 +14,7 @@ import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/code
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
+import { resolveGitlabDraftStatus } from '@libs/common/utils/webhooks/gitlab-draft.utils';
 import { CacheService } from '@libs/core/cache/cache.service';
 import {
     CreateAuthIntegrationStatus,
@@ -4828,7 +4829,7 @@ export class GitlabService implements Omit<
                 name: mergeRequest?.author?.name ?? '',
                 id: mergeRequest?.author?.id?.toString() ?? '',
             },
-            isDraft: mergeRequest?.draft ?? false,
+            isDraft: resolveGitlabDraftStatus(mergeRequest),
         };
     }
 

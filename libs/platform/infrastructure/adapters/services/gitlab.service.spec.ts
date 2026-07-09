@@ -120,4 +120,65 @@ describe('GitlabService', () => {
             token: 'oauth-token',
         });
     });
+
+    describe('getPullRequest draft detection', () => {
+        const repository = {
+            id: 'repo-1',
+            name: 'repo',
+            default_branch: 'main',
+        };
+
+        const getPullRequest = async (mergeRequest: object) => {
+            Object.defineProperty(service, 'getAuthDetails', {
+                value: jest.fn().mockResolvedValue({
+                    accessToken: 'oauth-token',
+                    authMode: AuthMode.OAUTH,
+                }),
+            });
+
+            mockedGitlab.mockReturnValue({
+                MergeRequests: {
+                    show: jest.fn().mockResolvedValue(mergeRequest),
+                },
+            });
+
+            return service.getPullRequest({
+                organizationAndTeamData,
+                repository,
+                prNumber: 1,
+            });
+        };
+
+        it('maps draft null and work_in_progress true to draft', async () => {
+            const result = await getPullRequest({
+                id: 1,
+                iid: 1,
+                draft: null,
+                work_in_progress: true,
+            });
+
+            expect(result?.isDraft).toBe(true);
+        });
+
+        it('maps omitted draft and work_in_progress true to draft', async () => {
+            const result = await getPullRequest({
+                id: 1,
+                iid: 1,
+                work_in_progress: true,
+            });
+
+            expect(result?.isDraft).toBe(true);
+        });
+
+        it('prefers explicit draft false over work_in_progress true', async () => {
+            const result = await getPullRequest({
+                id: 1,
+                iid: 1,
+                draft: false,
+                work_in_progress: true,
+            });
+
+            expect(result?.isDraft).toBe(false);
+        });
+    });
 });
