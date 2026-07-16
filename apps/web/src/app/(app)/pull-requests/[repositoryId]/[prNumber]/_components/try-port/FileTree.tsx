@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
     ChevronDown,
     ChevronsDownUp,
@@ -8,10 +8,16 @@ import {
     File as FileIconLucide,
     Folder,
     FolderOpen,
+    FolderTree,
     LayoutList,
     PanelLeftClose,
 } from "lucide-react";
+
+import { buildCohorts } from "./cohorts";
 import type { DiffFile, ReviewIssue } from "./types";
+
+/** Which grouping the file list renders in. */
+export type FileTreeMode = "tree" | "grouped";
 
 type DirNode = {
     kind: "dir";
@@ -40,6 +46,7 @@ export function FileTree({
     prRef,
     onHide,
     onToggleMode,
+    mode = "tree",
 }: {
     files: DiffFile[];
     issues: ReviewIssue[];
@@ -51,7 +58,10 @@ export function FileTree({
     onHide?: () => void;
     /** When provided, renders a Tree↔Grouped toggle in the header. */
     onToggleMode?: () => void;
+    /** Folder tree (default) or role-grouped cohort view. */
+    mode?: FileTreeMode;
 }) {
+    const grouped = mode === "grouped";
     const tree = useMemo(() => buildTree(files), [files]);
     const issueCount = useMemo(() => {
         const m = new Map<string, number>();
@@ -80,37 +90,38 @@ export function FileTree({
     return (
         <nav
             aria-label="Changed files"
-            className="rounded-lg border border-[var(--border)] bg-[var(--bg-2)]/70 overflow-hidden"
-        >
-            <header className="px-3 py-2 border-b border-[var(--border)] bg-[var(--bg)] flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
+            className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-2)]/70">
+            <header className="flex items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--bg)] px-3 py-2">
+                <div className="flex min-w-0 items-center gap-2">
                     {prRef && (
-                        <p className="text-xs font-mono text-[var(--text-muted)] truncate">
+                        <p className="truncate font-mono text-xs text-[var(--text-muted)]">
                             {prRef}
                         </p>
                     )}
-                    <p className="text-[10px] uppercase tracking-wider text-[var(--text-dim)] shrink-0">
+                    <p className="shrink-0 text-[10px] tracking-wider text-[var(--text-dim)] uppercase">
                         {files.length} file{files.length === 1 ? "" : "s"}
                     </p>
                 </div>
-                <div className="flex items-center gap-0.5 shrink-0">
+                <div className="flex shrink-0 items-center gap-0.5">
                     {onToggleMode && (
                         <TreeAction
-                            label="Switch to grouped view"
-                            onClick={onToggleMode}
-                        >
-                            <LayoutList size={13} />
+                            label={
+                                grouped
+                                    ? "Switch to folder tree"
+                                    : "Group by role"
+                            }
+                            onClick={onToggleMode}>
+                            {grouped ? (
+                                <FolderTree size={13} />
+                            ) : (
+                                <LayoutList size={13} />
+                            )}
                         </TreeAction>
                     )}
-                    {allDirPaths.length > 0 && (
+                    {!grouped && allDirPaths.length > 0 && (
                         <TreeAction
-                            label={
-                                allCollapsed ? "Expand all" : "Collapse all"
-                            }
-                            onClick={
-                                allCollapsed ? expandAll : collapseAll
-                            }
-                        >
+                            label={allCollapsed ? "Expand all" : "Collapse all"}
+                            onClick={allCollapsed ? expandAll : collapseAll}>
                             {allCollapsed ? (
                                 <ChevronsUpDown size={13} />
                             ) : (
@@ -119,29 +130,36 @@ export function FileTree({
                         </TreeAction>
                     )}
                     {onHide && (
-                        <TreeAction
-                            label="Hide file tree"
-                            onClick={onHide}
-                        >
+                        <TreeAction label="Hide file tree" onClick={onHide}>
                             <PanelLeftClose size={13} />
                         </TreeAction>
                     )}
                 </div>
             </header>
             <div className="py-1.5 text-[13px] select-none">
-                {tree.map((node) => (
-                    <TreeRow
-                        key={nodeKey(node)}
-                        node={node}
-                        depth={0}
+                {grouped ? (
+                    <CohortView
+                        files={files}
                         activePath={activePath}
                         viewed={viewed}
-                        collapsed={collapsed}
-                        onToggle={toggle}
-                        onPick={onPick}
                         issueCount={issueCount}
+                        onPick={onPick}
                     />
-                ))}
+                ) : (
+                    tree.map((node) => (
+                        <TreeRow
+                            key={nodeKey(node)}
+                            node={node}
+                            depth={0}
+                            activePath={activePath}
+                            viewed={viewed}
+                            collapsed={collapsed}
+                            onToggle={toggle}
+                            onPick={onPick}
+                            issueCount={issueCount}
+                        />
+                    ))
+                )}
             </div>
         </nav>
     );
@@ -176,12 +194,11 @@ function TreeRow({
             <div>
                 <button
                     onClick={() => onToggle(node.path)}
-                    className="w-full flex items-center gap-1.5 px-2.5 py-1 hover:bg-[var(--bg-input)]/60 text-left transition-colors"
-                    style={{ paddingLeft: 10 + indent }}
-                >
+                    className="flex w-full items-center gap-1.5 px-2.5 py-1 text-left transition-colors hover:bg-[var(--bg-input)]/60"
+                    style={{ paddingLeft: 10 + indent }}>
                     <Chevron open={isOpen} />
                     <FolderIcon open={isOpen} />
-                    <span className="text-[var(--text-muted)] truncate">
+                    <span className="truncate text-[var(--text-muted)]">
                         {node.name}
                     </span>
                 </button>
@@ -206,7 +223,43 @@ function TreeRow({
         );
     }
 
-    const file = node.file;
+    // Files line up with their parent dir's name (past the chevron +
+    // folder-icon column).
+    return (
+        <FileRow
+            file={node.file}
+            paddingLeft={10 + indent + 14}
+            activePath={activePath}
+            viewed={viewed}
+            issueCount={issueCount}
+            onPick={onPick}>
+            <span className="flex-1 truncate">{node.name}</span>
+        </FileRow>
+    );
+}
+
+/**
+ * A single file row — the leaf shared by the folder tree and the grouped
+ * (cohort) view. `children` is the name area, so the tree can show a bare
+ * basename while the grouped view shows a dimmed directory + basename.
+ */
+function FileRow({
+    file,
+    paddingLeft,
+    activePath,
+    viewed,
+    issueCount,
+    onPick,
+    children,
+}: {
+    file: DiffFile;
+    paddingLeft: number;
+    activePath: string | null;
+    viewed: Record<string, boolean>;
+    issueCount: Map<string, number>;
+    onPick: (path: string) => void;
+    children: ReactNode;
+}) {
     const isActive = activePath === file.path;
     const isViewed = !!viewed[file.path];
     const count = issueCount.get(file.path) ?? 0;
@@ -214,33 +267,104 @@ function TreeRow({
     return (
         <button
             onClick={() => onPick(file.path)}
-            className={`w-full flex items-center gap-1.5 px-2.5 py-1 text-left transition-colors group ${
+            className={`group flex w-full items-center gap-1.5 px-2.5 py-1 text-left transition-colors ${
                 isActive
                     ? "bg-[var(--bg-input)] text-[var(--text)]"
                     : "text-[var(--text-muted)] hover:bg-[var(--bg-input)]/60 hover:text-[var(--text)]"
+            } ${
+                isViewed
+                    ? "[&_.file-name]:line-through [&_.file-name]:decoration-[var(--text-dim)] [&_.file-name]:opacity-60"
+                    : ""
             }`}
-            // Files line up with their parent dir's name (past the
-            // chevron + folder-icon column).
-            style={{ paddingLeft: 10 + indent + 14 }}
-        >
+            style={{ paddingLeft }}>
             <FileIcon viewed={isViewed} />
-            <span
-                className={`truncate flex-1 ${
-                    isViewed ? "opacity-60 line-through decoration-[var(--text-dim)]" : ""
-                }`}
-            >
-                {node.name}
+            <span className="file-name min-w-0 flex-1 truncate">
+                {children}
             </span>
             {count > 0 && (
-                <span className="shrink-0 text-[10px] font-semibold px-1.5 py-px rounded bg-[var(--yellow)]/15 text-[var(--yellow)]">
+                <span className="shrink-0 rounded bg-[var(--yellow)]/15 px-1.5 py-px text-[10px] font-semibold text-[var(--yellow)]">
                     {count}
                 </span>
             )}
-            <span className="shrink-0 text-[11px] font-mono">
+            <span className="shrink-0 font-mono text-[11px]">
                 <span className="text-[var(--green)]">+{file.additions}</span>{" "}
                 <span className="text-[var(--red)]">−{file.deletions}</span>
             </span>
         </button>
+    );
+}
+
+/**
+ * Grouped ("cohort") view: files organized by the role they play in the
+ * change, in reading order (contracts → implementation → tests → config →
+ * docs). Each group shows its file count and aggregate +/−. Files display
+ * their full path (dimmed directory + basename) since there's no folder
+ * hierarchy to convey it.
+ */
+function CohortView({
+    files,
+    activePath,
+    viewed,
+    issueCount,
+    onPick,
+}: {
+    files: DiffFile[];
+    activePath: string | null;
+    viewed: Record<string, boolean>;
+    issueCount: Map<string, number>;
+    onPick: (path: string) => void;
+}) {
+    const cohorts = useMemo(() => buildCohorts(files), [files]);
+    return (
+        <div>
+            {cohorts.map((cohort) => (
+                <section key={cohort.meta.key}>
+                    <div
+                        className="flex items-center gap-2 border-t border-[var(--border)] bg-[var(--bg)]/60 px-2.5 py-1 first:border-t-0"
+                        title={cohort.meta.hint}>
+                        <span className="truncate text-[10px] font-semibold tracking-wider text-[var(--text-muted)] uppercase">
+                            {cohort.meta.label}
+                        </span>
+                        <span className="shrink-0 text-[10px] text-[var(--text-dim)]">
+                            {cohort.files.length}
+                        </span>
+                        <span className="ml-auto shrink-0 font-mono text-[11px]">
+                            <span className="text-[var(--green)]">
+                                +{cohort.additions}
+                            </span>{" "}
+                            <span className="text-[var(--red)]">
+                                −{cohort.deletions}
+                            </span>
+                        </span>
+                    </div>
+                    {cohort.files.map((file) => (
+                        <FileRow
+                            key={file.path}
+                            file={file}
+                            paddingLeft={16}
+                            activePath={activePath}
+                            viewed={viewed}
+                            issueCount={issueCount}
+                            onPick={onPick}>
+                            <PathLabel path={file.path} />
+                        </FileRow>
+                    ))}
+                </section>
+            ))}
+        </div>
+    );
+}
+
+/** Dimmed directory prefix + emphasized basename, e.g. `libs/x/` + `foo.ts`. */
+function PathLabel({ path }: { path: string }) {
+    const slash = path.lastIndexOf("/");
+    const dir = slash >= 0 ? path.slice(0, slash + 1) : "";
+    const base = slash >= 0 ? path.slice(slash + 1) : path;
+    return (
+        <span className="truncate">
+            {dir && <span className="text-[var(--text-dim)]">{dir}</span>}
+            <span>{base}</span>
+        </span>
     );
 }
 
@@ -331,13 +455,15 @@ function firstChild(node: Mut): Mut {
 }
 
 function sortNodes(nodes: TreeNode[]): TreeNode[] {
-    return [...nodes].sort((a, b) => {
-        // Folders first, then alpha. Matches the Devin/VS Code default.
-        if (a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;
-        return a.name.localeCompare(b.name);
-    }).map((n) =>
-        n.kind === "dir" ? { ...n, children: sortNodes(n.children) } : n,
-    );
+    return [...nodes]
+        .sort((a, b) => {
+            // Folders first, then alpha. Matches the Devin/VS Code default.
+            if (a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;
+            return a.name.localeCompare(b.name);
+        })
+        .map((n) =>
+            n.kind === "dir" ? { ...n, children: sortNodes(n.children) } : n,
+        );
 }
 
 function nodeKey(n: TreeNode): string {
@@ -351,7 +477,7 @@ function TreeAction({
 }: {
     label: string;
     onClick: () => void;
-    children: React.ReactNode;
+    children: ReactNode;
 }) {
     return (
         <button
@@ -359,8 +485,7 @@ function TreeAction({
             onClick={onClick}
             aria-label={label}
             title={label}
-            className="w-6 h-6 rounded text-[var(--text-dim)] hover:text-[var(--text)] hover:bg-[var(--bg-input)] flex items-center justify-center transition-colors"
-        >
+            className="flex h-6 w-6 items-center justify-center rounded text-[var(--text-dim)] transition-colors hover:bg-[var(--bg-input)] hover:text-[var(--text)]">
             {children}
         </button>
     );
@@ -384,7 +509,7 @@ function Chevron({ open }: { open: boolean }) {
     return (
         <ChevronDown
             size={12}
-            className={`text-[var(--text-dim)] shrink-0 transition-transform ${
+            className={`shrink-0 text-[var(--text-dim)] transition-transform ${
                 open ? "" : "-rotate-90"
             }`}
             aria-hidden
@@ -395,11 +520,7 @@ function Chevron({ open }: { open: boolean }) {
 function FolderIcon({ open }: { open: boolean }) {
     const Icon = open ? FolderOpen : Folder;
     return (
-        <Icon
-            size={14}
-            className="text-[var(--accent)] shrink-0"
-            aria-hidden
-        />
+        <Icon size={14} className="shrink-0 text-[var(--accent)]" aria-hidden />
     );
 }
 

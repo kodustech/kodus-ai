@@ -23,13 +23,14 @@ import { DiffViewer } from "./diff-viewer";
 import { ReviewStateProvider, useReviewStore } from "./review-store";
 import { adaptForTryDiffViewer, buildHeaderPrInfo } from "./try-port/adapt";
 import { CommitsList } from "./try-port/CommitsList";
-import { FileTree } from "./try-port/FileTree";
+import { FileTree, type FileTreeMode } from "./try-port/FileTree";
 import { PrHeader, type PrTab } from "./try-port/PrHeader";
 import { RightSidebar } from "./try-port/RightSidebar";
 
 // Web only carries data for these two tabs (Kody doesn't store the PR body
 // or comment threads), so we render a narrower tab bar than try's four.
 const WEB_TABS: PrTab[] = ["review", "commits"];
+const FILE_TREE_MODE_KEY = "kodus:pr-file-tree-mode";
 
 function PanelError({ error }: FallbackProps) {
     const message =
@@ -200,6 +201,24 @@ function ReviewLayout({
 }) {
     const { state, dispatch, navigateFile } = useReviewStore();
     const [activeTab, setActiveTab] = useState<PrTab>("review");
+    // Folder tree vs. role-grouped cohorts. Persisted so the choice sticks
+    // across PRs. Applied AFTER mount (not in the initializer) so the server
+    // and the first client render agree on the "tree" default — reading
+    // localStorage in the initializer would diverge and trip a hydration
+    // mismatch. This one-time sync of a client-only preference is the case the
+    // set-state-in-effect heuristic doesn't cover, hence the scoped disable.
+    const [treeMode, setTreeMode] = useState<FileTreeMode>("tree");
+    useEffect(() => {
+        const saved = window.localStorage.getItem(FILE_TREE_MODE_KEY);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        if (saved === "grouped" || saved === "tree") setTreeMode(saved);
+    }, []);
+    const toggleTreeMode = () =>
+        setTreeMode((m) => {
+            const next = m === "tree" ? "grouped" : "tree";
+            window.localStorage.setItem(FILE_TREE_MODE_KEY, next);
+            return next;
+        });
 
     // Deep link: /pull-requests/<repo>/<num>?file=<path>&suggestion=<id>
     // Lands the user on the exact finding — scrolls to it and lights it up.
@@ -342,6 +361,8 @@ function ReviewLayout({
                                     viewed={state.viewedFiles}
                                     onPick={jumpToFile}
                                     prRef={`PR #${prNumber}`}
+                                    mode={treeMode}
+                                    onToggleMode={toggleTreeMode}
                                     onHide={() =>
                                         dispatch({ type: "TOGGLE_SIDEBAR" })
                                     }
