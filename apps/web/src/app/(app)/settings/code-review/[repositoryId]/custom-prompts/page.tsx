@@ -15,7 +15,7 @@ import { KodyLearningStatus } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { SaveIcon } from "lucide-react";
-import { Path, useFormContext, useWatch } from "react-hook-form";
+import { Path, useFormContext, useFormState, useWatch } from "react-hook-form";
 import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
@@ -149,7 +149,7 @@ function CustomPromptsContent() {
         [promptFieldConfigs],
     );
     const { isValid: formIsValid, isSubmitting: formIsSubmitting } =
-        form.formState;
+        useFormState({ control: form.control });
 
     const watchedPromptValues = useWatch({
         control: form.control,

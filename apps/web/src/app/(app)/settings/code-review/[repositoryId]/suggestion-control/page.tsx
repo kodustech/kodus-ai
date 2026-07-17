@@ -5,7 +5,7 @@ import { Page } from "@components/ui/page";
 import { toast } from "@components/ui/toaster/use-toast";
 import { KodyLearningStatus } from "@services/parameters/types";
 import { RotateCcwIcon, Save } from "lucide-react";
-import { useFormContext } from "react-hook-form";
+import { useFormContext, useFormState } from "react-hook-form";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
 
@@ -80,7 +80,7 @@ export default function SuggestionControl(
         isDirty: formIsDirty,
         isValid: formIsValid,
         isSubmitting: formIsSubmitting,
-    } = form.formState;
+    } = useFormState({ control: form.control });
 
     if (
         platformConfig.kodyLearningStatus ===

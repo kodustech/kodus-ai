@@ -174,6 +174,15 @@ export const AnalysisTypes = () => {
                                         }
                                     });
 
+                                    // TEMP DEBUG (save-in-setup)
+                                    // eslint-disable-next-line no-console
+                                    console.log(
+                                        "[save-debug] reviewOptions onChange",
+                                        {
+                                            fieldDisabled: field.disabled,
+                                            selected: values,
+                                        },
+                                    );
                                     field.onChange(updatedOptions);
                                 }}>
                                 {reviewOptionsOptions.map((option) => {
