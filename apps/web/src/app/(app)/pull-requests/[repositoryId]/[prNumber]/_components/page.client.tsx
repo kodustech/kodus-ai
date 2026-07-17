@@ -94,11 +94,28 @@ export function ReviewPageClient({
         error: filesError,
     } = usePullRequestFiles(repositoryId, prNumber, teamId, repoName);
 
-    const fileSuggestions = suggestionsData?.data?.suggestions?.files ?? [];
-    const prLevelSuggestions =
-        suggestionsData?.data?.suggestions?.prLevel ?? [];
-    const patchFiles: PullRequestFile[] = filesData?.data?.files ?? [];
-    const commits: PullRequestCommit[] = filesData?.data?.commits ?? [];
+    // Derive these through useMemo so their reference is stable across renders
+    // while the underlying query data is unchanged. Without it, `?? []` (and
+    // the optional-chain miss during loading) hands a fresh array to every
+    // downstream memo — adaptForTryDiffViewer, buildTree, buildCohorts — on
+    // each render, defeating their memoization on a screen whose diffs are the
+    // expensive part to recompute.
+    const fileSuggestions = useMemo(
+        () => suggestionsData?.data?.suggestions?.files ?? [],
+        [suggestionsData],
+    );
+    const prLevelSuggestions = useMemo(
+        () => suggestionsData?.data?.suggestions?.prLevel ?? [],
+        [suggestionsData],
+    );
+    const patchFiles: PullRequestFile[] = useMemo(
+        () => filesData?.data?.files ?? [],
+        [filesData],
+    );
+    const commits: PullRequestCommit[] = useMemo(
+        () => filesData?.data?.commits ?? [],
+        [filesData],
+    );
     const patchFilenames = useMemo(
         () => patchFiles.map((f) => f.filename),
         [patchFiles],

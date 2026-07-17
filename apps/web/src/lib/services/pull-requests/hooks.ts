@@ -258,24 +258,59 @@ export const usePullRequestAuthors = (teamId?: string, enabled = true) => {
     });
 };
 
+// Key + fetcher shared by the hook and the hover-prefetch below, so the
+// prefetched entry lands under the EXACT key the screen's useQuery reads —
+// any drift and the prefetch silently misses and the screen refetches anyway.
+const suggestionsQuery = (
+    repositoryId: string | undefined,
+    prNumber: number | undefined,
+    filters?: { severity?: string; category?: string },
+) => ({
+    queryKey: ["pull-request-suggestions", repositoryId, prNumber, filters],
+    queryFn: () =>
+        axiosAuthorized.fetcher<PullRequestSuggestionsResponse>(
+            PULL_REQUEST_API.GET_SUGGESTIONS({
+                repositoryId: repositoryId!,
+                prNumber: prNumber!,
+                ...filters,
+            }),
+        ),
+});
+
 export const usePullRequestSuggestions = (
     repositoryId: string | undefined,
     prNumber: number | undefined,
     filters?: { severity?: string; category?: string },
 ) => {
     return useQuery({
-        queryKey: ["pull-request-suggestions", repositoryId, prNumber, filters],
-        queryFn: () =>
-            axiosAuthorized.fetcher<PullRequestSuggestionsResponse>(
-                PULL_REQUEST_API.GET_SUGGESTIONS({
-                    repositoryId: repositoryId!,
-                    prNumber: prNumber!,
-                    ...filters,
-                }),
-            ),
+        ...suggestionsQuery(repositoryId, prNumber, filters),
         enabled: !!repositoryId && !!prNumber,
         retry: false,
     });
+};
+
+/**
+ * Warms the react-query cache for a PR's suggestions on hover/focus of a link
+ * into its review screen. `next/link` already prefetches the ROUTE; this
+ * prefetches the DATA the screen blocks on (page.client gates the whole view
+ * on suggestionsLoading), so an intentful hover turns the open from
+ * spinner→content into content-immediately. The 30s staleTime dedupes repeated
+ * hovers; the screen still background-revalidates on mount, so freshness is
+ * unchanged — this only buys a head start.
+ */
+export const usePrefetchPullRequestReview = () => {
+    const queryClient = useQueryClient();
+    return useCallback(
+        (repositoryId: string, prNumber: number) => {
+            // prefetchQuery swallows its own errors; fire-and-forget matches
+            // the codebase's other prefetch call sites (navbar).
+            queryClient.prefetchQuery({
+                ...suggestionsQuery(repositoryId, prNumber),
+                staleTime: 30_000,
+            });
+        },
+        [queryClient],
+    );
 };
 
 export const usePullRequestFiles = (
