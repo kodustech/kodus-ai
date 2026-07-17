@@ -82,8 +82,32 @@ export default function Layout(props: React.PropsWithChildren) {
     });
     const {
         isSubmitting: formIsSubmitting,
+        isDirty: formIsDirty,
+        isValid: formIsValid,
         dirtyFields,
     } = form.formState;
+
+    // TEMP DEBUG (save-in-setup): logs why the Save button stays disabled.
+    useEffect(() => {
+        // eslint-disable-next-line no-console
+        console.log("[save-debug] formState", {
+            hydrationKey,
+            canEdit,
+            formDisabled: !canEdit,
+            isDirty: formIsDirty,
+            isValid: formIsValid,
+            isSubmitting: formIsSubmitting,
+            dirtyFieldKeys: Object.keys(dirtyFields ?? {}),
+            saveDisabled: !formIsDirty || !formIsValid,
+        });
+    }, [
+        canEdit,
+        dirtyFields,
+        formIsDirty,
+        formIsValid,
+        formIsSubmitting,
+        hydrationKey,
+    ]);
 
     useEffect(() => {
         if (
@@ -94,6 +118,14 @@ export default function Layout(props: React.PropsWithChildren) {
         ) {
             return;
         }
+
+        // TEMP DEBUG (save-in-setup): a reset here right after an edit would
+        // explain a dirty flag that never sticks.
+        // eslint-disable-next-line no-console
+        console.log("[save-debug] form.reset()", {
+            from: hydratedStateKeyRef.current,
+            to: hydrationKey,
+        });
 
         form.reset(initialFormValues);
         hydratedStateKeyRef.current = hydrationKey;

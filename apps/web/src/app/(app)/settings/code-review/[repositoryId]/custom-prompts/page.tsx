@@ -15,7 +15,7 @@ import { KodyLearningStatus } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { SaveIcon } from "lucide-react";
-import { Path, useFormContext, useWatch } from "react-hook-form";
+import { Path, useFormContext, useFormState, useWatch } from "react-hook-form";
 import { useUnsavedChangesGuard } from "src/core/hooks/use-unsaved-changes-guard";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
@@ -148,8 +148,11 @@ function CustomPromptsContent() {
         () => promptFieldConfigs.map((field) => field.name) as string[],
         [promptFieldConfigs],
     );
-    const { isValid: formIsValid, isSubmitting: formIsSubmitting } =
-        form.formState;
+    const {
+        isValid: formIsValid,
+        isSubmitting: formIsSubmitting,
+        defaultValues: formDefaultValues,
+    } = useFormState({ control: form.control });
 
     const watchedPromptValues = useWatch({
         control: form.control,
@@ -162,7 +165,7 @@ function CustomPromptsContent() {
                 promptFields.map((fieldName, index) => {
                     const currentVal = watchedPromptValues[index];
                     const savedVal = getValueAtPath(
-                        form.formState.defaultValues ?? {},
+                        formDefaultValues ?? {},
                         fieldName,
                     );
                     const currentText = getPromptFieldText(
@@ -174,7 +177,7 @@ function CustomPromptsContent() {
                     return [fieldName, currentText !== savedText];
                 }),
             ),
-        [watchedPromptValues, promptFields],
+        [watchedPromptValues, promptFields, formDefaultValues],
     );
     const isPromptsDirty = useMemo(
         () => Object.values(dirtyFields).some(Boolean),

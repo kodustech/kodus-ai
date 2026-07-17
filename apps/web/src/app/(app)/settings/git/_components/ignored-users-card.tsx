@@ -262,11 +262,11 @@ export const IgnoredUsersCard = ({
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent
-                        className="w-[var(--radix-popover-trigger-width)] p-0"
+                        className="flex max-h-[var(--radix-popover-content-available-height)] w-[var(--radix-popover-trigger-width)] flex-col overflow-hidden p-0"
                         align="start">
-                        <Command>
+                        <Command className="min-h-0 flex-1">
                             <CommandInput placeholder="Search authors..." />
-                            <CommandList>
+                            <CommandList className="max-h-none min-h-0 flex-1">
                                 <CommandEmpty>No author found.</CommandEmpty>
                                 <CommandGroup>
                                     {organizationMembers.map((user) => (
@@ -296,7 +296,7 @@ export const IgnoredUsersCard = ({
                                     ))}
                                 </CommandGroup>
                             </CommandList>
-                            <div className="flex items-center gap-2 border-t p-2">
+                            <div className="flex shrink-0 items-center gap-2 border-t p-2">
                                 <Button
                                     className="flex-1"
                                     size="sm"
