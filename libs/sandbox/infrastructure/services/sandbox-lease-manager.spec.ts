@@ -1150,9 +1150,9 @@ describe('SandboxLeaseManager', () => {
                 state: 'INVALIDATED',
             } as any);
 
-            await expect(
-                manager.acquire(prKey, 'review'),
-            ).rejects.toThrow(/sandbox invalidated/);
+            await expect(manager.acquire(prKey, 'review')).rejects.toThrow(
+                /sandbox invalidated/,
+            );
 
             // Must decrement the leaked leaseCount
             expect(leaseRepo.decrementLease).toHaveBeenCalledWith(prKey);
@@ -1944,9 +1944,9 @@ describe('SandboxLeaseManager reconnect RemoteCommands (blind-read fix)', () => 
             makeFakeE2bSandbox(run),
         );
 
-        await expect(remoteCommands.grep('x', '/etc', undefined)).rejects.toThrow(
-            /Absolute/,
-        );
+        await expect(
+            remoteCommands.grep('x', '/etc', undefined),
+        ).rejects.toThrow(/Absolute/);
         await expect(
             remoteCommands.grep('x', '../secrets', undefined),
         ).rejects.toThrow(/\.\./);
@@ -1966,7 +1966,9 @@ describe('SandboxLeaseManager reconnect RemoteCommands (blind-read fix)', () => 
             .mockImplementation(() => undefined);
 
         // prKey passed by buildReconnectCommands is 'org:repo:225'.
-        await expect(remoteCommands.read('x.ts', 1, 10)).rejects.toThrow(/boom/);
+        await expect(remoteCommands.read('x.ts', 1, 10)).rejects.toThrow(
+            /boom/,
+        );
         expect(warnSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 metadata: expect.objectContaining({

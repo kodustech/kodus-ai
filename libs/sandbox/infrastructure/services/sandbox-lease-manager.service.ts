@@ -540,6 +540,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                             // retry the cleanup.
                             throw new Error(
                                 `SandboxLeaseManager: sandbox invalidated mid-create for prKey="${prKey}"`,
+                                { cause: localErr },
                             );
                         }
                     } else {
