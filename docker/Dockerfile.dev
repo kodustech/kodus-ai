@@ -37,8 +37,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=private \
       ca-certificates python3 make g++ procps git ripgrep
 
 # Copy the bun binary from the official image and install kodus-graph globally.
+ARG KODUS_GRAPH_VERSION=0.3.0
 COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun
-RUN bun install -g @kodus/kodus-graph
+RUN bun install -g @kodus/kodus-graph@${KODUS_GRAPH_VERSION}
 
 RUN npm i -g yalc nodemon @ast-grep/cli
 
