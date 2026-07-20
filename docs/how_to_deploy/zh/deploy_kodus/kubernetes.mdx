@@ -74,7 +74,7 @@ helm install kodus . -f values.yaml -f values-openshift.yaml \
 
 - **MCP manager** — `--set services.mcp-manager.enabled=true`
 - **Analytics worker** — `--set services.worker-analytics.enabled=true`
-- **健康检查** — `./scripts/doctor-k8s.sh -n kodus` 会检查工作负载、配置以及真实的健康端点。
+- **健康检查** — `../../scripts/doctor-k8s.sh -n kodus` 会检查工作负载、配置以及真实的健康端点。
 
 <Card title="完整 Helm 参考" icon="github" href="https://github.com/kodustech/kodus-installer/blob/main/charts/README.md">
   数据存储 operator 配置、复用现有数据库、离线/隔离网络安装、通过 ExternalSecrets 管理 secret、

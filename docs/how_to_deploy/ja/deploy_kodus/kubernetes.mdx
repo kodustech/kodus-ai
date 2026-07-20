@@ -79,7 +79,7 @@ helm install kodus . -f values.yaml -f values-openshift.yaml \
 
 - **MCP manager** — `--set services.mcp-manager.enabled=true`
 - **Analytics worker** — `--set services.worker-analytics.enabled=true`
-- **ヘルスチェック** — `./scripts/doctor-k8s.sh -n kodus` がワークロード、設定、実際の
+- **ヘルスチェック** — `../../scripts/doctor-k8s.sh -n kodus` がワークロード、設定、実際の
   ヘルスエンドポイントを検査します。
 
 <Card title="Helm の完全なリファレンス" icon="github" href="https://github.com/kodustech/kodus-installer/blob/main/charts/README.md">
