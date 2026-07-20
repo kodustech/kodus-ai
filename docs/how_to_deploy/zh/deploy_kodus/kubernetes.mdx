@@ -1,0 +1,82 @@
+---
+title: "Kubernetes 与 OpenShift"
+description: "使用官方 Helm charts 在 Kubernetes 或 OpenShift 上部署 Kodus。"
+icon: "dharmachakra"
+---
+
+相比单台虚拟机更倾向于使用集群？Kodus 在
+[kodus-installer](https://github.com/kodustech/kodus-installer) 仓库中提供了适用于
+Kubernetes 和 OpenShift 的 **Helm charts**。本页面是概览——charts 的
+[README](https://github.com/kodustech/kodus-installer/blob/main/charts/README.md)
+才是完整参考（离线/隔离网络安装、ExternalSecrets、operator、可观测性，以及面向 SOC 2 的加固）。
+
+## 前提条件
+
+- Helm 3.8+
+- Kubernetes 1.28+ 或 OpenShift 4.14+
+- 对于 `mode: operator` 的数据存储，需在集群中安装对应的 operator
+
+## 快速开始（内置数据存储）
+
+默认的 `bundled` 模式会将 PostgreSQL（pgvector）、MongoDB 和 RabbitMQ 作为由 chart
+管理的 StatefulSet 启动——等同于 Docker Compose 的 `USE_LOCAL_DB=true`。一条命令，无需 operator：
+
+```bash
+git clone https://github.com/kodustech/kodus-installer
+cd kodus-installer/charts/kodus
+helm dependency build
+helm install kodus . -n kodus --create-namespace \
+  --set imageTag=<版本> \
+  --set global.config.WEB_HOSTNAME_API=api.kodus.example.com \
+  --set global.config.NEXTAUTH_URL=https://kodus.example.com \
+  --set ingress.hosts.web.host=kodus.example.com \
+  --set ingress.hosts.api.host=api.kodus.example.com
+```
+
+`imageTag` 为整个技术栈固定 Kodus 版本（类似 Docker Compose 的 `IMAGE_TAG`）；生产环境
+请使用真实的 tag，切勿使用 `latest`。认证/加密所需的 secret 会以正确格式自动生成，并在升级
+之间保持稳定。
+
+<Tip>
+  webhooks 服务需要它自己的公网主机名。将 `ingress.hosts.webhooks.host`（在 OpenShift 上为
+  `route.hosts.webhooks.host`）指向一个专用主机名，chart 会自动推导出
+  `API_<provider>_CODE_MANAGEMENT_WEBHOOK`。
+</Tip>
+
+## 数据存储模式
+
+每个存储（`postgres`、`mongodb`、`rabbitmq`）都有独立的 `mode`：
+
+| mode | 作用 | 适用于 |
+|------|------|--------|
+| `bundled` *(默认)* | 由 chart 管理的 StatefulSet | 开发 / 试用 |
+| `external` | 通过 `existingSecret` 使用你自己托管/自管的服务 | 生产 |
+| `operator` | 由集群 operator 协调的 CR（高可用）——CloudNativePG、RabbitMQ Cluster Operator、MongoDB Community Operator | 生产 |
+
+生产环境请优先选择 `external` 或 `operator`——它们把数据库运维交给专门的组件处理。
+
+## OpenShift
+
+添加 OpenShift overlay——用 Route 取代 Ingress，Pod 的 UID 交由命名空间的 SCC
+（`restricted-v2`）分配，因此不会硬编码 UID：
+
+```bash
+helm install kodus . -f values.yaml -f values-openshift.yaml \
+  -n kodus --create-namespace --set imageTag=<版本>
+```
+
+将 `route.hosts.*.host` 留空，OpenShift 会自动分配 `<name>-<namespace>.apps…` 主机名。
+注意：某些集群会镜像或屏蔽 Docker Hub 的 `library/*` 镜像，因此内置的 `mongo` 镜像可能需要
+覆盖（`--set mongodb.bundled.image=mirror.gcr.io/library/mongo:8`），或改用 `external` /
+`operator` 数据存储。
+
+## 可选服务与验证
+
+- **MCP manager** — `--set services.mcp-manager.enabled=true`
+- **Analytics worker** — `--set services.worker-analytics.enabled=true`
+- **健康检查** — `./scripts/doctor-k8s.sh -n kodus` 会检查工作负载、配置以及真实的健康端点。
+
+<Card title="完整 Helm 参考" icon="github" href="https://github.com/kodustech/kodus-installer/blob/main/charts/README.md">
+  数据存储 operator 配置、复用现有数据库、离线/隔离网络安装、通过 ExternalSecrets 管理 secret、
+  可观测性以及安全默认值。
+</Card>

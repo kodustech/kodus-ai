@@ -70,7 +70,7 @@ API_DATABASE_DISABLE_SSL=true                # desactiva SSL para el Postgres lo
 ```
 
 <Tip>
-  `API_PG_DB_PASSWORD` y `API_MG_DB_PASSWORD` se generan automáticamente con `./scripts/install.sh` (vía `generate-secrets.sh`) si quedan vacíos. Solo defínelos manualmente si vas a apuntar el instalador a bases de datos externas.
+  Para bases de datos integradas, deja `API_PG_DB_PASSWORD` y `API_MG_DB_PASSWORD` en blanco y ejecuta `./scripts/generate-secrets.sh` para generarlas, o define las tuyas. Para bases de datos externas, usa la contraseña de la base de datos existente.
 </Tip>
 
 ### Configuración de RabbitMQ

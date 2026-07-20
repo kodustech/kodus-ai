@@ -1,0 +1,88 @@
+---
+title: "Kubernetes と OpenShift"
+description: "公式 Helm チャートで Kodus を Kubernetes または OpenShift にデプロイします。"
+icon: "dharmachakra"
+---
+
+単一の VM よりもクラスターを使いたい場合は、Kodus が
+[kodus-installer](https://github.com/kodustech/kodus-installer) リポジトリで
+Kubernetes と OpenShift 向けの **Helm チャート** を提供しています。このページは概要です
+——完全なリファレンスはチャートの
+[README](https://github.com/kodustech/kodus-installer/blob/main/charts/README.md)
+です（エアギャップ環境でのインストール、ExternalSecrets、operator、可観測性、SOC 2 を意識した
+ハードニングなど）。
+
+## 要件
+
+- Helm 3.8+
+- Kubernetes 1.28+ または OpenShift 4.14+
+- `mode: operator` のデータストアには、対応する operator をクラスターに事前インストール
+
+## クイックスタート（バンドルされたデータストア）
+
+デフォルトの `bundled` モードは、PostgreSQL（pgvector）、MongoDB、RabbitMQ を
+チャートが管理する StatefulSet として起動します——Docker Compose の `USE_LOCAL_DB=true`
+に相当します。operator 不要、コマンド 1 つで完了します:
+
+```bash
+git clone https://github.com/kodustech/kodus-installer
+cd kodus-installer/charts/kodus
+helm dependency build
+helm install kodus . -n kodus --create-namespace \
+  --set imageTag=<バージョン> \
+  --set global.config.WEB_HOSTNAME_API=api.kodus.example.com \
+  --set global.config.NEXTAUTH_URL=https://kodus.example.com \
+  --set ingress.hosts.web.host=kodus.example.com \
+  --set ingress.hosts.api.host=api.kodus.example.com
+```
+
+`imageTag` はスタック全体の Kodus バージョンを固定します（Docker Compose の `IMAGE_TAG`
+と同様）。本番環境では `latest` ではなく実際のタグを使用してください。認証・暗号化用の
+シークレットは正しい形式で自動生成され、アップグレード後も安定して維持されます。
+
+<Tip>
+  webhooks サービスには専用の公開ホストが必要です。`ingress.hosts.webhooks.host`
+  （OpenShift では `route.hosts.webhooks.host`）を専用のホスト名に向けると、チャートが
+  `API_<provider>_CODE_MANAGEMENT_WEBHOOK` を自動的に導出します。
+</Tip>
+
+## データストアのモード
+
+各ストア（`postgres`、`mongodb`、`rabbitmq`）は独立した `mode` を持ちます:
+
+| mode | 内容 | 用途 |
+|------|------|------|
+| `bundled` *(デフォルト)* | チャートが管理する StatefulSet | 開発 / お試し |
+| `external` | `existingSecret` を介したマネージド/自己管理サービス | 本番 |
+| `operator` | クラスター operator が調整する CR（HA）——CloudNativePG、RabbitMQ Cluster Operator、MongoDB Community Operator | 本番 |
+
+本番環境では `external` または `operator` を推奨します——データベースの運用を専用の
+コンポーネントに委ねられます。
+
+## OpenShift
+
+OpenShift オーバーレイを追加します——Ingress の代わりに Route を使用し、Pod の UID は
+namespace の SCC（`restricted-v2`）に委ねられるため、UID はハードコードされません:
+
+```bash
+helm install kodus . -f values.yaml -f values-openshift.yaml \
+  -n kodus --create-namespace --set imageTag=<バージョン>
+```
+
+`route.hosts.*.host` を空のままにすると、OpenShift が `<name>-<namespace>.apps…`
+ホスト名を自動的に割り当てます。一部のクラスターは Docker Hub の `library/*` イメージを
+ミラーまたはブロックするため、バンドルされた `mongo` イメージにはオーバーライド
+（`--set mongodb.bundled.image=mirror.gcr.io/library/mongo:8`）または `external` /
+`operator` データストアが必要になる場合があります。
+
+## オプションのサービスと検証
+
+- **MCP manager** — `--set services.mcp-manager.enabled=true`
+- **Analytics worker** — `--set services.worker-analytics.enabled=true`
+- **ヘルスチェック** — `./scripts/doctor-k8s.sh -n kodus` がワークロード、設定、実際の
+  ヘルスエンドポイントを検査します。
+
+<Card title="Helm の完全なリファレンス" icon="github" href="https://github.com/kodustech/kodus-installer/blob/main/charts/README.md">
+  データストア operator の設定、既存データベースの再利用、エアギャップ環境でのインストール、
+  ExternalSecrets によるシークレット管理、可観測性、セキュリティのデフォルト値。
+</Card>
