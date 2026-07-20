@@ -2814,7 +2814,7 @@ export class GitlabService implements Omit<
                 const existingHooks = await gitlabAPI.ProjectHooks.all(repo.id);
 
                 const hookExists = existingHooks.some(
-                    (hook) => hook.url === webhookUrl,
+                    (hook) => hook?.url === webhookUrl,
                 );
 
                 if (!hookExists) {
@@ -4247,7 +4247,7 @@ export class GitlabService implements Omit<
                         );
 
                         const webhookToDelete = webhooks.find(
-                            (webhook) => webhook.url === webhookUrl,
+                            (webhook) => webhook?.url === webhookUrl,
                         );
 
                         if (webhookToDelete) {

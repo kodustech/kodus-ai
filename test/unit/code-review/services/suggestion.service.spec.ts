@@ -14,6 +14,7 @@ import { PULL_REQUESTS_SERVICE_TOKEN } from '@/platformData/domain/pullRequests/
 import { DeliveryStatus } from '@/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { PriorityStatus } from '@/platformData/domain/pullRequests/enums/priorityStatus.enum';
+import { CacheService } from '@libs/core/cache/cache.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { Test, TestingModule } from '@nestjs/testing';
 
@@ -47,6 +48,13 @@ describe('SuggestionService', () => {
         teamId: 'team-456',
     };
 
+    // getFromCache returns undefined (cache miss) so the review-thread path
+    // still exercises the real provider call the tests assert on.
+    const mockCacheService = {
+        getFromCache: jest.fn(),
+        addToCache: jest.fn(),
+    };
+
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -66,6 +74,10 @@ describe('SuggestionService', () => {
                 {
                     provide: CodeManagementService,
                     useValue: mockCodeManagementService,
+                },
+                {
+                    provide: CacheService,
+                    useValue: mockCacheService,
                 },
             ],
         }).compile();

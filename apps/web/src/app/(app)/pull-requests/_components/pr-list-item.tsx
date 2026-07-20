@@ -14,6 +14,7 @@ import {
 import { useGetTimezone } from "@services/organizationParameters/hooks";
 import {
     buildPullRequestUrl,
+    usePrefetchPullRequestReview,
     type CodeReviewTimelineItem,
     type ReviewWarning,
     type ReviewWarningKind,
@@ -404,6 +405,12 @@ const isAutomationStartMessage = (message: string) => {
 export const PrListItem = ({ group }: PrListItemProps) => {
     const { latest, executions, reviewCount } = group;
     const timezone = useGetTimezone();
+    const prefetchReview = usePrefetchPullRequestReview();
+    // Warm the review screen's blocking query on intent (hover/focus of a link
+    // into it). Idempotent and deduped by a staleTime, so wiring it to several
+    // entry points costs nothing extra.
+    const prefetchThisReview = () =>
+        prefetchReview(latest.repositoryId, latest.prNumber);
     const [isOpen, setIsOpen] = useState(false);
     const [collapsedReviews, setCollapsedReviews] = useState<Set<number>>(
         () => new Set(executions.slice(1).map((_, i) => i + 1)),
@@ -578,6 +585,8 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                 <NextLink
                     href={`/pull-requests/${latest.repositoryId}/${latest.prNumber}`}
                     onClick={(e) => e.stopPropagation()}
+                    onMouseEnter={prefetchThisReview}
+                    onFocus={prefetchThisReview}
                     className="hover:bg-card-lv3/40 flex w-fit items-center gap-1.5 rounded-md px-1 py-1 transition-colors">
                     <Tooltip>
                         <TooltipTrigger asChild>
@@ -637,6 +646,8 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                             <NextLink
                                 href={`/pull-requests/${latest.repositoryId}/${latest.prNumber}`}
                                 onClick={(e) => e.stopPropagation()}
+                                onMouseEnter={prefetchThisReview}
+                                onFocus={prefetchThisReview}
                                 className="text-text-tertiary hover:text-primary-light inline-flex items-center gap-1 text-xs font-medium transition-colors">
                                 Open full review
                                 <ArrowRightIcon className="size-3.5" />

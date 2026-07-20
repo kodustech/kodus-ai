@@ -3209,7 +3209,7 @@ export class BitbucketCloudService implements Omit<
                     .then((res) => this.getPaginatedResults(bitbucketAPI, res));
 
                 const hookExists = existingHooks.some(
-                    (hook) => hook.url === webhookUrl,
+                    (hook) => hook?.url === webhookUrl,
                 );
 
                 if (!hookExists) {
@@ -4715,7 +4715,7 @@ export class BitbucketCloudService implements Omit<
                             );
 
                         const webhook = existingHooks.find(
-                            (hook) => hook.url === webhookUrl,
+                            (hook) => hook?.url === webhookUrl,
                         );
 
                         if (webhook) {

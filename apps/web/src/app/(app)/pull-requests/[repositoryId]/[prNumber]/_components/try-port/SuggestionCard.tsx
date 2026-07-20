@@ -107,26 +107,18 @@ export function SuggestionCard({
 
 function Identity() {
     return (
-        <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                    src={KODY_AVATAR_URL}
-                    alt=""
-                    width={20}
-                    height={20}
-                    className="rounded-full ring-1 ring-[var(--border)]"
-                />
-                <span className="text-[13px] font-medium text-[var(--text)]">
-                    Kody
-                </span>
-            </div>
-            <button
-                type="button"
-                aria-label="More"
-                className="text-[var(--text-dim)] hover:text-[var(--text-muted)] w-6 h-6 flex items-center justify-center rounded hover:bg-[var(--bg-3)]">
-                <DotsIcon />
-            </button>
+        <div className="flex items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+                src={KODY_AVATAR_URL}
+                alt=""
+                width={20}
+                height={20}
+                className="rounded-full ring-1 ring-[var(--border)]"
+            />
+            <span className="text-[13px] font-medium text-[var(--text)]">
+                Kody
+            </span>
         </div>
     );
 }
@@ -382,21 +374,6 @@ function Chevron({ open }: { open: boolean }) {
                 open ? "rotate-180" : ""
             }`}>
             <polyline points="6 9 12 15 18 9" />
-        </svg>
-    );
-}
-
-function DotsIcon() {
-    return (
-        <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            aria-hidden>
-            <circle cx="5" cy="12" r="1.6" />
-            <circle cx="12" cy="12" r="1.6" />
-            <circle cx="19" cy="12" r="1.6" />
         </svg>
     );
 }

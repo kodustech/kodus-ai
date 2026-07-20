@@ -909,7 +909,7 @@ export class BitbucketDataCenterService implements Omit<
                 );
                 const existingHooks = existingHooksRes.data.values || [];
                 const hookExists = existingHooks.some(
-                    (hook: any) => hook.url === webhookUrl,
+                    (hook: any) => hook?.url === webhookUrl,
                 );
 
                 // 2. Create if it doesn't exist
@@ -980,7 +980,7 @@ export class BitbucketDataCenterService implements Omit<
 
             return (
                 response.data.values?.some(
-                    (hook: any) => hook.url === webhookUrl && hook.active,
+                    (hook: any) => hook?.url === webhookUrl && hook?.active,
                 ) ?? false
             );
         } catch (error) {
@@ -3034,7 +3034,7 @@ export class BitbucketDataCenterService implements Omit<
 
                     // Find our webhook
                     const hookToDelete = existingHooks.find(
-                        (hook: any) => hook.url === webhookUrl,
+                        (hook: any) => hook?.url === webhookUrl,
                     );
 
                     if (hookToDelete) {
