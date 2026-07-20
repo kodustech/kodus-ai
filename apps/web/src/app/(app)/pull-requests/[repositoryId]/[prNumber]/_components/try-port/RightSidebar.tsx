@@ -20,14 +20,33 @@ export function RightSidebar({
     pr?: PrInfo;
     issues: ReviewIssue[];
     isCompleted: boolean;
-    onJumpToIssue: (file: string) => void;
+    onJumpToIssue: (issue: ReviewIssue) => void;
 }) {
-    const bugs = issues.filter((i) =>
-        ["critical", "high"].includes((i.severity || "").toLowerCase()),
-    );
-    const flags = issues.filter(
-        (i) => !["critical", "high"].includes((i.severity || "").toLowerCase()),
-    );
+    // Signal hierarchy: most severe first within each group so the finding
+    // most likely to matter sits at the top, not buried mid-list.
+    const SEV_RANK: Record<string, number> = {
+        critical: 0,
+        high: 1,
+        medium: 2,
+        low: 3,
+        info: 4,
+    };
+    const bySeverity = (a: ReviewIssue, b: ReviewIssue) =>
+        (SEV_RANK[(a.severity || "info").toLowerCase()] ?? 5) -
+        (SEV_RANK[(b.severity || "info").toLowerCase()] ?? 5);
+    const bugs = issues
+        .filter((i) =>
+            ["critical", "high"].includes((i.severity || "").toLowerCase()),
+        )
+        .sort(bySeverity);
+    const flags = issues
+        .filter(
+            (i) =>
+                !["critical", "high"].includes(
+                    (i.severity || "").toLowerCase(),
+                ),
+        )
+        .sort(bySeverity);
 
     return (
         <aside className="space-y-3">
@@ -137,7 +156,7 @@ function BugsCard({
     onJumpToIssue,
 }: {
     bugs: ReviewIssue[];
-    onJumpToIssue: (file: string) => void;
+    onJumpToIssue: (issue: ReviewIssue) => void;
 }) {
     const [open, setOpen] = useState(true);
     return (
@@ -161,7 +180,7 @@ function BugsCard({
                         <IssueRow
                             key={i}
                             issue={bug}
-                            onClick={() => onJumpToIssue(bug.file)}
+                            onClick={() => onJumpToIssue(bug)}
                         />
                     ))}
                 </ul>
@@ -175,7 +194,7 @@ function FlagsCard({
     onJumpToIssue,
 }: {
     flags: ReviewIssue[];
-    onJumpToIssue: (file: string) => void;
+    onJumpToIssue: (issue: ReviewIssue) => void;
 }) {
     const [open, setOpen] = useState(false);
     return (
@@ -191,7 +210,7 @@ function FlagsCard({
                         <IssueRow
                             key={i}
                             issue={flag}
-                            onClick={() => onJumpToIssue(flag.file)}
+                            onClick={() => onJumpToIssue(flag)}
                         />
                     ))}
                 </ul>

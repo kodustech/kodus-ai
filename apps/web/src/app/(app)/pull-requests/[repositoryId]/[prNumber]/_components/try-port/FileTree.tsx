@@ -371,8 +371,8 @@ function PathLabel({ path }: { path: string }) {
 /**
  * Build a directory tree from the flat list of changed files, then
  * collapse any directory that has a single directory child into a
- * "chain" label (e.g. `routers/grpc/common`). Devin Review does this
- * so deep paths don't waste vertical space on empty rungs.
+ * "chain" label (e.g. `routers/grpc/common`) so deep paths don't
+ * waste vertical space on empty rungs.
  */
 type Mut = {
     name: string;
@@ -457,7 +457,7 @@ function firstChild(node: Mut): Mut {
 function sortNodes(nodes: TreeNode[]): TreeNode[] {
     return [...nodes]
         .sort((a, b) => {
-            // Folders first, then alpha. Matches the Devin/VS Code default.
+            // Folders first, then alpha. Matches the VS Code default.
             if (a.kind !== b.kind) return a.kind === "dir" ? -1 : 1;
             return a.name.localeCompare(b.name);
         })

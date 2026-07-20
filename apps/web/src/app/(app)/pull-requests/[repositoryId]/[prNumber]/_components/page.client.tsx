@@ -26,6 +26,7 @@ import { CommitsList } from "./try-port/CommitsList";
 import { FileTree, type FileTreeMode } from "./try-port/FileTree";
 import { PrHeader, type PrTab } from "./try-port/PrHeader";
 import { RightSidebar } from "./try-port/RightSidebar";
+import type { ReviewIssue } from "./try-port/types";
 
 // Web only carries data for these two tabs (Kody doesn't store the PR body
 // or comment threads), so we render a narrower tab bar than try's four.
@@ -43,6 +44,64 @@ function PanelError({ error }: FallbackProps) {
             <p className="max-w-md font-mono text-xs break-words text-[var(--text-dim)]">
                 {message}
             </p>
+        </div>
+    );
+}
+
+/**
+ * Slim bar above the diff: signal hierarchy on the left (what needs attention
+ * vs. what's minor) and review progress on the right (files viewed / total).
+ * Gives the reviewer an overview and a sense of "where am I" before the diff —
+ * the two things GitHub's raw file list never answers.
+ */
+function ReviewProgressBar({
+    viewed,
+    total,
+    attention,
+    minor,
+}: {
+    viewed: number;
+    total: number;
+    attention: number;
+    minor: number;
+}) {
+    const pct = total > 0 ? Math.round((100 * viewed) / total) : 0;
+    return (
+        <div className="mt-3 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-2)]/70 px-4 py-2.5">
+            <div className="flex items-center gap-2.5 text-sm">
+                {attention > 0 ? (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-[var(--warn)]">
+                        <span className="size-1.5 rounded-full bg-[var(--warn)]" />
+                        {attention} preciso de atenção
+                    </span>
+                ) : (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-[var(--green)]">
+                        <span className="size-1.5 rounded-full bg-[var(--green)]" />
+                        nada crítico
+                    </span>
+                )}
+                {minor > 0 && (
+                    <span className="text-[var(--text-dim)]">
+                        · {minor} menor{minor === 1 ? "" : "es"}
+                    </span>
+                )}
+            </div>
+            <div className="flex items-center gap-2.5">
+                <span className="font-mono text-xs text-[var(--text-muted)] tabular-nums">
+                    {viewed} / {total} vistos
+                </span>
+                <span
+                    className="h-1.5 w-24 overflow-hidden rounded-full bg-[var(--bg-4)]"
+                    role="progressbar"
+                    aria-valuenow={pct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}>
+                    <span
+                        className="block h-full rounded-full bg-[var(--accent)] transition-[width] duration-300"
+                        style={{ width: `${pct}%` }}
+                    />
+                </span>
+            </div>
         </div>
     );
 }
@@ -269,8 +328,50 @@ function ReviewLayout({
 
     const suggestionCount = fileSuggestions.length + prLevelSuggestions.length;
 
+    // Orientation + signal hierarchy for the review header: how far the
+    // reviewer has gotten, and how many findings actually need attention vs.
+    // are minor. Bucketed case-insensitively so it survives severity casing.
+    const viewedCount = useMemo(
+        () => treeFiles.filter((f) => state.viewedFiles[f.path]).length,
+        [treeFiles, state.viewedFiles],
+    );
+    const attentionCount = useMemo(
+        () =>
+            treeIssues.filter((i) =>
+                ["critical", "high"].includes((i.severity ?? "").toLowerCase()),
+            ).length,
+        [treeIssues],
+    );
+
     const jumpToFile = (path: string) =>
         dispatch({ type: "SELECT_FILE", path });
+
+    // Click on a sidebar finding → land ON that suggestion (not the file top)
+    // and pulse it. Targets the `suggestion-<id>` anchor, which is keyed on the
+    // finding's own id, so it works even when the finding's file path doesn't
+    // match the diff's — the reason clicking used to do nothing. Retries a few
+    // frames while the diff finishes mounting.
+    const [activeIssueId, setActiveIssueId] = useState<string | null>(null);
+    const jumpToIssue = (issue: ReviewIssue) => {
+        if (issue.file) dispatch({ type: "SELECT_FILE", path: issue.file });
+        const targetId = issue.id
+            ? `suggestion-${issue.id}`
+            : issue.file
+              ? `file-${issue.file}`
+              : null;
+        if (issue.id) setActiveIssueId(issue.id);
+        if (!targetId) return;
+        let tries = 0;
+        const tryScroll = () => {
+            const el = document.getElementById(targetId);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                return;
+            }
+            if (tries++ < 60) requestAnimationFrame(tryScroll);
+        };
+        requestAnimationFrame(tryScroll);
+    };
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -405,6 +506,18 @@ function ReviewLayout({
                             />
 
                             {activeTab === "review" && (
+                                <ReviewProgressBar
+                                    viewed={viewedCount}
+                                    total={treeFiles.length}
+                                    attention={attentionCount}
+                                    minor={Math.max(
+                                        0,
+                                        suggestionCount - attentionCount,
+                                    )}
+                                />
+                            )}
+
+                            {activeTab === "review" && (
                                 <ErrorBoundary FallbackComponent={PanelError}>
                                     <DiffViewer
                                         patchFiles={patchFiles}
@@ -414,7 +527,9 @@ function ReviewLayout({
                                         prUrl={prUrl}
                                         repositoryName={repositoryName}
                                         highlightIssueId={
-                                            deepLinkIssue ?? undefined
+                                            activeIssueId ??
+                                            deepLinkIssue ??
+                                            undefined
                                         }
                                     />
                                 </ErrorBoundary>
@@ -432,7 +547,7 @@ function ReviewLayout({
                                     pr={pr}
                                     issues={treeIssues}
                                     isCompleted
-                                    onJumpToIssue={jumpToFile}
+                                    onJumpToIssue={jumpToIssue}
                                 />
                             </ErrorBoundary>
                         </aside>
