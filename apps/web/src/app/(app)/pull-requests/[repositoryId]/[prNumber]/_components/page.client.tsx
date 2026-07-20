@@ -335,13 +335,21 @@ function ReviewLayout({
         () => treeFiles.filter((f) => state.viewedFiles[f.path]).length,
         [treeFiles, state.viewedFiles],
     );
-    const attentionCount = useMemo(
-        () =>
-            treeIssues.filter((i) =>
-                ["critical", "high"].includes((i.severity ?? "").toLowerCase()),
-            ).length,
-        [treeIssues],
-    );
+    // Count critical/high across BOTH file-level and PR-level findings so the
+    // "needs attention" figure — and the derived "minor" count below — line up
+    // with suggestionCount, which also includes prLevelSuggestions. Counting
+    // only treeIssues here let PR-level criticals leak into the "minor" tally.
+    const attentionCount = useMemo(() => {
+        const isAttention = (severity?: string) =>
+            ["critical", "high"].includes((severity ?? "").toLowerCase());
+        const fromFiles = treeIssues.filter((i) =>
+            isAttention(i.severity),
+        ).length;
+        const fromPrLevel = prLevelSuggestions.filter((s) =>
+            isAttention(s?.severity),
+        ).length;
+        return fromFiles + fromPrLevel;
+    }, [treeIssues, prLevelSuggestions]);
 
     const jumpToFile = (path: string) =>
         dispatch({ type: "SELECT_FILE", path });
@@ -372,6 +380,14 @@ function ReviewLayout({
         };
         requestAnimationFrame(tryScroll);
     };
+
+    // Keep the highlight in sync with the URL: navigating to (or away from) a
+    // deep-linked finding overrides a stale activeIssueId left by a prior
+    // sidebar click, so back/forward doesn't light up the wrong card.
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setActiveIssueId(deepLinkIssue ?? null);
+    }, [deepLinkIssue]);
 
     // Keyboard shortcuts
     useEffect(() => {
