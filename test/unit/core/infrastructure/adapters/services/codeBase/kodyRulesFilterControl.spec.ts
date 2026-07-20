@@ -14,6 +14,7 @@ import { LLM_ANALYSIS_SERVICE_TOKEN } from '@libs/core/infrastructure/adapters/s
 import { SuggestionService } from '@libs/core/infrastructure/adapters/services/codeBase/suggestion.service';
 import { SeverityLevel } from '@libs/common/enums/severityLevel.enum';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { CacheService } from '@libs/core/cache/cache.service';
 
 describe('SuggestionService - Kody Rules Filter Control', () => {
     let service: SuggestionService;
@@ -70,6 +71,13 @@ describe('SuggestionService - Kody Rules Filter Control', () => {
                         getPullRequestReviewThreads: jest.fn(),
                         getPullRequestReviewComments: jest.fn(),
                         markReviewCommentAsResolved: jest.fn(),
+                    },
+                },
+                {
+                    provide: CacheService,
+                    useValue: {
+                        getFromCache: jest.fn(),
+                        addToCache: jest.fn(),
                     },
                 },
             ],
