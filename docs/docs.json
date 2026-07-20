@@ -172,6 +172,12 @@
                                 ]
                             },
                             {
+                                "group": "Deploy with Kubernetes",
+                                "pages": [
+                                    "how_to_deploy/en/deploy_kodus/kubernetes"
+                                ]
+                            },
+                            {
                                 "group": "Git providers configuration",
                                 "pages": [
                                     {
@@ -471,6 +477,12 @@
                                     "how_to_deploy/es/deploy_kodus/telemetry",
                                     "how_to_deploy/es/deploy_kodus/troubleshooting",
                                     "how_to_deploy/es/deploy_kodus/updating"
+                                ]
+                            },
+                            {
+                                "group": "Desplegar con Kubernetes",
+                                "pages": [
+                                    "how_to_deploy/es/deploy_kodus/kubernetes"
                                 ]
                             },
                             {
@@ -776,6 +788,12 @@
                                 ]
                             },
                             {
+                                "group": "Implantar com Kubernetes",
+                                "pages": [
+                                    "how_to_deploy/pt-br/deploy_kodus/kubernetes"
+                                ]
+                            },
+                            {
                                 "group": "Configuração de Provedores Git",
                                 "pages": [
                                     {
@@ -1078,6 +1096,12 @@
                                 ]
                             },
                             {
+                                "group": "Kubernetes でデプロイ",
+                                "pages": [
+                                    "how_to_deploy/ja/deploy_kodus/kubernetes"
+                                ]
+                            },
+                            {
                                 "group": "Gitプロバイダーの設定",
                                 "pages": [
                                     {
@@ -1377,6 +1401,12 @@
                                     "how_to_deploy/zh/deploy_kodus/telemetry",
                                     "how_to_deploy/zh/deploy_kodus/troubleshooting",
                                     "how_to_deploy/zh/deploy_kodus/updating"
+                                ]
+                            },
+                            {
+                                "group": "使用 Kubernetes 部署",
+                                "pages": [
+                                    "how_to_deploy/zh/deploy_kodus/kubernetes"
                                 ]
                             },
                             {

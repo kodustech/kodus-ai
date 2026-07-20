@@ -66,7 +66,7 @@ API_DATABASE_DISABLE_SSL=true                # ローカル DB の SSL を無効
 ```
 
 <Tip>
-  `API_PG_DB_PASSWORD` と `API_MG_DB_PASSWORD` は、空のままにすると `./scripts/install.sh`（`generate-secrets.sh` 経由）が自動生成します。インストーラーを外部データベースに向ける場合のみ、手動で設定してください。
+  バンドルされたデータベースの場合は、`API_PG_DB_PASSWORD` と `API_MG_DB_PASSWORD` を空のままにして `./scripts/generate-secrets.sh` を実行すると生成されます。あるいは自分で設定することもできます。外部データベースの場合は、既存のデータベースのパスワードを使用してください。
 </Tip>
 
 ### RabbitMQの設定
