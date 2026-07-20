@@ -141,7 +141,7 @@ describe('GraphIndexerService', () => {
         it('should find preinstalled kodus-graph through the Bun global bin path', async () => {
             mockSandbox.run
                 .mockResolvedValueOnce({
-                    stdout: '/home/node/.bun/bin/kodus-graph\n0.2.19',
+                    stdout: '/home/node/.bun/bin/kodus-graph\n0.3.0',
                     stderr: '',
                     exitCode: 0,
                 })
