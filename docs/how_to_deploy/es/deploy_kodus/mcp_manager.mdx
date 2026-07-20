@@ -18,7 +18,7 @@ MCP Manager es el servicio backend que gestiona esas conexiones MCP para
 Kodus. Lleva un registro de los proveedores, integraciones y herramientas permitidas por
 workspace, y luego expone ese catálogo a la API de Kodus.
 
-- Registro central de proveedores MCP (Kodus, Composio y personalizados)
+- Registro central de proveedores MCP (Kodus y personalizados)
 - Almacena metadatos de integración (estado de conexión, URL MCP, herramientas permitidas)
 - Gestiona los flujos de autenticación específicos de cada proveedor y el descubrimiento de herramientas
 - Expone APIs que Kodus usa para listar e invocar herramientas MCP
@@ -28,7 +28,6 @@ graph TD
     A[Kodus] --> B[MCP Manager]
     B --> C[Providers]
     C --> D[Kodus MCPs]
-    C --> E[Composio]
     C --> F[Custom]
 ```
 
@@ -47,13 +46,6 @@ workspace.
 El proveedor Kodus agrupa los MCPs de primera parte gestionados por Kodus, incluyendo el
 Kodus MCP, Context7 MCP y Kodus Docs MCP.
 
-### Proveedor Composio
-
-Composio es una plataforma de integración gestionada con un amplio catálogo de herramientas SaaS.
-MCP Manager usa Composio para la autenticación y para aprovisionar endpoints MCP
-que Kodus puede llamar. Consulta la documentación oficial para detalles de configuración:
-[Documentación MCP de Composio](https://docs.composio.dev/docs/mcp-providers)
-
 ### Proveedores personalizados
 
 Puedes agregar proveedores personalizados para integrar sistemas internos o plataformas de terceros.
@@ -61,14 +53,3 @@ En despliegues auto-hospedados, lista el proveedor en
 `API_MCP_MANAGER_MCP_PROVIDERS` y luego implementa el proveedor en el código fuente de MCP Manager.
 La implementación de referencia se encuentra aquí:
 [repositorio kodus-mcp-manager](https://github.com/kodustech/kodus-mcp-manager#-adding-a-new-provider)
-
-## Configurar Composio
-
-1. Crea una cuenta en Composio y una integración para la herramienta que deseas
-   exponer.
-2. Habilita o crea un servidor MCP para esa integración (consulta la documentación de Composio).
-3. Establece estas variables en tu `.env` de Kodus:
-   - `API_MCP_MANAGER_COMPOSIO_API_KEY`
-   - `API_MCP_MANAGER_COMPOSIO_BASE_URL` (por defecto:
-     `https://backend.composio.dev/api/v3`)
-4. Asegúrate de que `composio` esté listado en `API_MCP_MANAGER_MCP_PROVIDERS`.
