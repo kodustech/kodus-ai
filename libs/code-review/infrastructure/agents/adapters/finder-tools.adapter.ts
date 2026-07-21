@@ -23,6 +23,11 @@ import {
     CachingTool,
     ToolCallCache,
 } from '@libs/agent-harness/infrastructure/tools/caching-tool.decorator';
+import {
+    BoundedResultStore,
+    BoundedResultTool,
+    makeFetchResultTool,
+} from '@libs/agent-harness/infrastructure/tools/bounded-result.decorator';
 import { OutlineFirstReadTool } from '@libs/code-review/infrastructure/agents/adapters/outline-first-read.decorator';
 
 import {
@@ -58,6 +63,13 @@ const READ_ONLY_NAV_TOOLS = new Set([
     'readReference',
 ]);
 
+/** High-fan-out tools whose raw output can flood the finder window (a grep of
+ *  hundreds of matches, a listing of a huge dir, a wide caller set). When the
+ *  bounding knob is on, these are wrapped so the model gets a preview + handle
+ *  and pulls slices via `fetchResult`. readFile is excluded — the outline-first
+ *  decorator already governs large reads. */
+const BOUNDED_RESULT_TOOLS = new Set(['grep', 'listDir', 'getCallers']);
+
 /** Named options for the finder tool registry — same fields buildAgentTools
  *  takes positionally, but callers pass only what they need instead of
  *  threading `undefined` placeholders. */
@@ -71,11 +83,15 @@ export interface FinderToolRegistryOptions {
     /** Gated (default off): wrap readFile so a range-less read of a large file
      *  returns a symbol outline instead of dumping the head. A/B knob. */
     outlineFirst?: boolean;
+    /** Gated (default off): wrap high-fan-out tools (grep/listDir/getCallers) so
+     *  an oversized result is stored out-of-band and the model gets a preview +
+     *  handle instead of the flood, pulling slices via `fetchResult`. A/B knob. */
+    boundedResults?: boolean;
 }
 
 export function buildFinderToolRegistry(
     options: FinderToolRegistryOptions,
-): { registry: ToolRegistry; cache: ToolCallCache } {
+): { registry: ToolRegistry; cache: ToolCallCache; boundedStore: BoundedResultStore } {
     const raw = buildAgentTools(
         options.remoteCommands,
         options.gitHubToken,
@@ -115,10 +131,11 @@ export function buildFinderToolRegistry(
     // searchDocs are left uncached (rarely repeated; external/heavier). The
     // cache is per-run because the registry is built per-run.
     const cache = new ToolCallCache();
+    const boundedStore = new BoundedResultStore();
     const cached = tools.map((tool) => {
         // Gated outline-first wraps readFile, composed INSIDE the cache so the
         // outline itself is memoized: Caching(OutlineFirst(readFile)).
-        const base =
+        let base =
             options.outlineFirst &&
             tool.name === 'readFile' &&
             options.remoteCommands?.read
@@ -127,12 +144,25 @@ export function buildFinderToolRegistry(
                           options.remoteCommands!.read(p, 0, 0),
                   })
                 : tool;
+        // Gated bounding for high-fan-out tools, composed INSIDE the cache so the
+        // bounded shape (preview + handle) is what gets memoized:
+        // Caching(Bounded(grep)). A cache hit re-serves the same handle, still
+        // valid in the store (Bounded did not re-run).
+        if (options.boundedResults && BOUNDED_RESULT_TOOLS.has(tool.name)) {
+            base = new BoundedResultTool(base, boundedStore);
+        }
         return READ_ONLY_NAV_TOOLS.has(tool.name)
             ? new CachingTool(base, cache)
             : base;
     });
 
-    // Return the cache alongside the registry so the caller (composition root)
-    // owns its lifecycle and can surface hit/miss stats for the run.
-    return { registry: new InMemoryToolRegistry(cached), cache };
+    // When bounding is on, the model needs the companion tool to pull slices of
+    // a bounded result by its handle. Not cached (a cheap in-memory lookup).
+    if (options.boundedResults) {
+        cached.push(makeFetchResultTool(boundedStore));
+    }
+
+    // Return the cache + bounded store alongside the registry so the caller
+    // (composition root) owns their lifecycle and can surface run stats.
+    return { registry: new InMemoryToolRegistry(cached), cache, boundedStore };
 }
