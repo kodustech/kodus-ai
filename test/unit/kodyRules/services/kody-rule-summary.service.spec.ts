@@ -478,6 +478,25 @@ describe('KodyRuleSummaryService', () => {
             );
         });
 
+        it('caps atom generation per review and defers the rest (backfill budget)', async () => {
+            const { service, repository } = createService();
+            const rules = Array.from({ length: 8 }, (_, i) => ({
+                uuid: `r${i}`,
+                rule: LONG_TEXT,
+            }));
+
+            const out = await service.ensureAtoms(rules, orgData);
+
+            // 5 decomposed (persisted), 3 deferred untouched
+            expect(repository.updateRule).toHaveBeenCalledTimes(5);
+            expect(out.filter((r) => r.atoms).length).toBe(5);
+            expect(loggerSpy.log).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining('backfill budget'),
+                }),
+            );
+        });
+
         it('ensureAtoms persists the decomposition on the rule doc', async () => {
             const { service, repository } = createService();
 

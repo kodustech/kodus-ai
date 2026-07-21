@@ -55,6 +55,15 @@ import {
 const LONG_RULE_THRESHOLD_CHARS = 1000;
 const SUMMARY_CONCURRENCY = 3;
 const MAX_ATOMS_PER_RULE = 12;
+/**
+ * Lazy-backfill budget per review: decomposing one rule costs 1 decomposition
+ * call + up to MAX_ATOMS_PER_RULE compiler calls, so a legacy org with ~20
+ * long rules would add minutes to its FIRST review if fully backfilled in one
+ * go. Capping converges over a few reviews (deferred rules fall back to
+ * summary/full text meanwhile); newly created/edited rules never hit this —
+ * the write hook generates them asynchronously.
+ */
+const MAX_ATOM_GENERATIONS_PER_REVIEW = 5;
 
 /**
  * Verbatim from the validated eval (evals/kody-rules/decompose-rules.js).
@@ -579,11 +588,24 @@ export class KodyRuleSummaryService {
         rules: Partial<IKodyRule>[],
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<Partial<IKodyRule>[]> {
-        const pending = rules.filter(
+        const allPending = rules.filter(
             (r) => r.uuid && this.isLong(r.rule) && !this.hasValidAtoms(r),
         );
-        if (pending.length === 0) {
+        if (allPending.length === 0) {
             return rules;
+        }
+        const pending = allPending.slice(0, MAX_ATOM_GENERATIONS_PER_REVIEW);
+        if (allPending.length > pending.length) {
+            this.logger.log({
+                message: `[kody-rule-atoms] backfill budget: decomposing ${pending.length}/${allPending.length} pending rules this review — the rest fall back to summary/full text and are picked up next review`,
+                context: KodyRuleSummaryService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    deferredRuleUuids: allPending
+                        .slice(MAX_ATOM_GENERATIONS_PER_REVIEW)
+                        .map((r) => r.uuid),
+                },
+            });
         }
 
         let docUuid: string | null = null;
