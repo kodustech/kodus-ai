@@ -205,6 +205,8 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                     message: `Sandbox lease superseded for ${label} (PR closed or force-pushed) — continuing without it`,
                     context: this.stageName,
                     metadata: {
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
                         prNumber: context?.pullRequest?.number,
                     },
                 });
