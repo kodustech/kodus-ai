@@ -64,9 +64,6 @@ export interface StepDirectives {
 export interface AgentPolicy {
     readonly name: string;
 
-    /** Called once before the loop starts. */
-    onRunStart?(view: StepView): void | Promise<void>;
-
     /** prepareStep seam — runs before each model step. */
     prepareStep?(view: StepView): StepDirectives | Promise<StepDirectives>;
 
@@ -79,6 +76,6 @@ export interface AgentPolicy {
      *  trace). Read-only w.r.t. control flow. */
     onStepFinish?(view: StepView): void | Promise<void>;
 
-    /** Called once after the loop ends. */
+    /** Called once after the loop ends (read-only; marking, trace flush). */
     onRunFinish?(view: StepView): void | Promise<void>;
 }

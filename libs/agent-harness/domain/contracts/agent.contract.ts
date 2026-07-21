@@ -75,7 +75,13 @@ export interface AgentRunInput {
 /** Adapter that exposes an AgentSpec AS A TOOL (sub-agent-as-tool pattern).
  *  This is how orchestration composes agents: a parent calls a sub-agent
  *  the same way it calls grep. Gives context isolation (own window) and
- *  returns a distilled summary, not the full transcript. */
+ *  returns a distilled summary, not the full transcript.
+ *
+ *  STAGED (no consumer yet): reserved for internal multi-agent orchestration —
+ *  finder + verifier + security/test-gen coordinated on one runner (Fase 4).
+ *  Kept rather than pruned because it is on the roadmap (not build-ahead
+ *  guesswork) and DefaultSubAgentFactory is already tested. Wire the first
+ *  consumer when Fase 4 lands, or prune if that work is dropped. */
 export interface SubAgentFactory {
     asTool(params: {
         name: string;

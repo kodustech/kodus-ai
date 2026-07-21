@@ -103,10 +103,6 @@ export class AiSdkAgentRunner implements AgentRunner {
 
         const allToolNames = spec.tools.list().map((t) => t.name);
 
-        await this.runPolicyHook(spec.policies, 'onRunStart', () =>
-            buildView(0, messages, allToolNames),
-        );
-
         let stopReason: string | undefined;
 
         let result: Awaited<ReturnType<typeof generateText>>;
@@ -397,21 +393,6 @@ export class AiSdkAgentRunner implements AgentRunner {
         return merged;
     }
 
-    private async runPolicyHook(
-        policies: readonly AgentPolicy[],
-        hook: 'onRunStart',
-        viewFactory: () => StepView,
-    ): Promise<void> {
-        const view = viewFactory();
-
-        for (const p of policies) {
-            const fn = p[hook];
-
-            if (fn) {
-                await fn.call(p, view);
-            }
-        }
-    }
 }
 
 /** Coerce any system-role message in a conversation array to a user turn.
