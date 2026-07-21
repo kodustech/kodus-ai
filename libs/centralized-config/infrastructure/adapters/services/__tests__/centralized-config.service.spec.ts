@@ -705,7 +705,12 @@ describe('CentralizedConfigService', () => {
 
     describe('removeStaleConfigs', () => {
         it('should remove stale custom messages even when regular config does not change', async () => {
-            const configFiles: IConfigFileMeta[] = [];
+            // Non-empty discovery (a repo scope) so the #1518 empty-discovery
+            // guard does not trigger; the GLOBAL message is stale because no
+            // global config file was discovered.
+            const configFiles: IConfigFileMeta[] = [
+                { repositoryId: 'repo-1' } as any,
+            ];
 
             const codeReviewConfig = {
                 configValue: {
@@ -746,6 +751,120 @@ describe('CentralizedConfigService', () => {
             );
             expect(
                 mockCreateOrUpdateParametersUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+    });
+
+    // ---------------------------------------------------------------------
+    // Issue #1518 — empty/failed discovery must NOT wipe data. A read failure
+    // (repositories mapping unavailable, tree read failed) yields the same
+    // empty result as a genuinely empty repo, and the non-transactional
+    // reconcile then deleted every rule and reset the org's global config
+    // (default model / BYOK) plus custom messages. These assert the SAFE
+    // post-guard behavior and are the regression coverage for the fix.
+    // ---------------------------------------------------------------------
+    describe('#1518 empty-discovery wipe guard', () => {
+        it('discoverKodyRulesFiles THROWS (not []) when the repositories mapping cannot be loaded', async () => {
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([
+                { type: 'file', path: 'my-repo/.kody-rules/review/a.yml' },
+            ]);
+            // Transient integration-config read failure → null (a FAILURE, not
+            // "zero files"). Must surface so the sync aborts before deletion.
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                null,
+            );
+
+            await expect(
+                service.discoverKodyRulesFiles({
+                    organizationAndTeamData,
+                    repository: { name: 'config-repo', id: 'repo-1' },
+                }),
+            ).rejects.toThrow();
+        });
+
+        it('removeStaleKodyRules does NOT delete centralized rules when discovery is empty', async () => {
+            const ruleFiles: any[] = []; // empty discovery
+
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                toJson: () => ({
+                    rules: [
+                        {
+                            uuid: 'r1',
+                            title: 'A',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/a.yml',
+                            },
+                        },
+                        {
+                            uuid: 'r2',
+                            title: 'B',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/b.yml',
+                            },
+                        },
+                    ],
+                }),
+            });
+
+            const result = await service.removeStaleKodyRules({
+                organizationAndTeamData,
+                ruleFiles,
+                actor,
+            });
+
+            expect(result.success).toBe(true);
+            expect(result.removedRuleCount).toBe(0);
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('removeStaleConfigs does NOT reset global config / delete repo configs / delete messages when discovery is empty', async () => {
+            const configFiles: IConfigFileMeta[] = []; // empty discovery
+
+            const codeReviewConfig = {
+                configValue: {
+                    // org-wide defaults: LLM provider + model + BYOK reference
+                    configs: {
+                        llmProvider: 'openai_byok',
+                        byokConfig: { apiKey: 'sk-live-secret' },
+                    },
+                    repositories: [
+                        {
+                            id: 'repo-1',
+                            isSelected: true,
+                            configs: { reviewOptions: { security: true } },
+                            directories: [],
+                        },
+                    ],
+                },
+            };
+
+            mockParametersService.findByKey.mockImplementation((key: any) =>
+                key === ParametersKey.CODE_REVIEW_CONFIG
+                    ? Promise.resolve(codeReviewConfig)
+                    : Promise.resolve({ configValue: {} }),
+            );
+            mockPullRequestMessagesService.find.mockResolvedValue([
+                { uuid: 'global-message-1', configLevel: ConfigLevel.GLOBAL },
+            ]);
+
+            const result = await service.removeStaleConfigs({
+                organizationAndTeamData,
+                configFiles,
+                actor,
+            });
+
+            expect(result.success).toBe(true);
+            // None of the destructive paths may fire on empty discovery.
+            expect(
+                mockCreateOrUpdateParametersUseCase.execute,
+            ).not.toHaveBeenCalled();
+            expect(
+                mockDeleteRepositoryCodeReviewParameterUseCase.execute,
+            ).not.toHaveBeenCalled();
+            expect(
+                mockPullRequestMessagesService.delete,
             ).not.toHaveBeenCalled();
         });
     });
@@ -1269,7 +1388,12 @@ describe('CentralizedConfigService', () => {
             const result = await service.removeStaleKodyRules({
                 organizationAndTeamData,
                 actor,
-                ruleFiles: [],
+                // Non-empty discovery (a real file list that just doesn't
+                // include pending.yml) so the #1518 empty-discovery guard does
+                // not trigger — this validates genuine stale removal.
+                ruleFiles: [
+                    { path: '.kody-rules/review/other.yml' } as any,
+                ],
             });
 
             expect(result.success).toBe(true);

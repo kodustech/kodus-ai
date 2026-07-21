@@ -508,6 +508,25 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 };
             }
 
+            // #1518 guard: an empty discovery would reset the global config
+            // (default model / BYOK) to {}, delete every repository config, and
+            // wipe custom messages. An empty configFiles set almost always
+            // means a failed/empty read, not "the user removed everything" —
+            // refuse to reconcile-delete and surface it.
+            if (configFiles.length === 0) {
+                this.logger.warn({
+                    message:
+                        'Skipping stale config removal: discovery returned zero config files — refusing to reset global config / delete repo configs / wipe messages (likely a failed read)',
+                    context: CentralizedConfigService.name,
+                    metadata: { organizationAndTeamData },
+                });
+                return {
+                    success: true,
+                    message:
+                        'Skipped stale config removal (empty-discovery guard)',
+                };
+            }
+
             const desiredHasGlobalConfig = configFiles.some(
                 (meta) => !meta.repositoryId,
             );
@@ -2144,6 +2163,31 @@ export class CentralizedConfigService implements ICentralizedConfigService {
 
             const existingRules = existingEntity?.toJson?.()?.rules || [];
 
+            // #1518 guard: an empty discovery (currentSourcePaths empty) while
+            // centralized rules exist would delete every synced rule. That is
+            // almost always a failed/empty read, not an intentional "delete
+            // all" — refuse to wipe and surface it.
+            const centralizedRuleCount = existingRules.filter(
+                (rule) => rule.centralizedConfig?.path,
+            ).length;
+            if (currentSourcePaths.size === 0 && centralizedRuleCount > 0) {
+                this.logger.warn({
+                    message:
+                        'Skipping stale Kody rule removal: discovery returned zero rule files but centralized rules exist — refusing to wipe (likely a failed read)',
+                    context: CentralizedConfigService.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        centralizedRuleCount,
+                    },
+                });
+                return {
+                    success: true,
+                    message:
+                        'Skipped stale Kody rule removal (empty-discovery guard)',
+                    removedRuleCount: 0,
+                };
+            }
+
             for (const rule of existingRules) {
                 const sourcePath = rule.centralizedConfig?.path;
 
@@ -2250,13 +2294,20 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             });
 
         if (!repositories || !Array.isArray(repositories)) {
-            this.logger.warn({
+            // A missing/failed repositories mapping is a READ FAILURE, not
+            // "zero files". Returning [] here made discovery indistinguishable
+            // from an empty repo, which then drove removeStale* to wipe every
+            // rule and reset the org's global config (issue #1518). Throw so
+            // the sync aborts before any deletion runs.
+            this.logger.error({
                 message:
-                    'No repositories found in integration config during tree scan',
+                    'Could not load repositories integration config during tree scan — aborting discovery to avoid a destructive empty result',
                 context: CentralizedConfigService.name,
                 metadata: { organizationAndTeamData },
             });
-            return [];
+            throw new Error(
+                'Centralized config discovery: repositories integration config unavailable',
+            );
         }
 
         const resolvedRepoIds = new Map(
