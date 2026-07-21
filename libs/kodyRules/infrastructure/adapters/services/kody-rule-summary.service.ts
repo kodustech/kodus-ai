@@ -175,6 +175,7 @@ export class KodyRuleSummaryService {
                         '[kody-rule-summary] skipping generation: trial ended and no BYOK configured',
                     context: KodyRuleSummaryService.name,
                     metadata: {
+                        organizationId: organizationAndTeamData.organizationId,
                         ruleUuid: rule.uuid,
                         subscriptionStatus,
                     },
@@ -198,7 +199,11 @@ export class KodyRuleSummaryService {
                     message:
                         '[kody-rule-summary] generated text missing required sections — discarding',
                     context: KodyRuleSummaryService.name,
-                    metadata: { ruleUuid: rule.uuid, ruleTitle: rule.title },
+                    metadata: {
+                        organizationId: organizationAndTeamData.organizationId,
+                        ruleUuid: rule.uuid,
+                        ruleTitle: rule.title,
+                    },
                 });
                 return null;
             }
@@ -215,6 +220,7 @@ export class KodyRuleSummaryService {
                     '[kody-rule-summary] generation failed — review will use the full rule text',
                 context: KodyRuleSummaryService.name,
                 metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
                     ruleUuid: rule.uuid,
                     ruleTitle: rule.title,
                     error:
@@ -286,6 +292,8 @@ export class KodyRuleSummaryService {
                             '[kody-rule-summary] persist failed — summary used in-memory only for this review',
                         context: KodyRuleSummaryService.name,
                         metadata: {
+                            organizationId:
+                                organizationAndTeamData.organizationId,
                             ruleUuid: rule.uuid,
                             error:
                                 error instanceof Error

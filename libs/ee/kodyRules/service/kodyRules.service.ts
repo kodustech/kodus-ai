@@ -172,6 +172,7 @@ export class KodyRulesService implements IKodyRulesService {
                         '[kody-rule-summary] background generation failed after rule write',
                     context: KodyRulesService.name,
                     metadata: {
+                        organizationId: orgData.organizationId,
                         ruleUuid: rule.uuid,
                         error:
                             error instanceof Error
