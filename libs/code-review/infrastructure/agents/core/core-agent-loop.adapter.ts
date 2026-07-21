@@ -26,6 +26,7 @@ import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-s
 import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
 import { DiffCoverageLedger } from '@libs/code-review/infrastructure/agents/adapters/diff-coverage-ledger.adapter';
 import { buildFinderToolRegistry } from '@libs/code-review/infrastructure/agents/adapters/finder-tools.adapter';
+import { SandboxCommandRunner } from '@libs/code-review/infrastructure/agents/adapters/sandbox-command-runner';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
 import { anthropicSystemCacheControl } from '@libs/llm/system-cache';
 import {
@@ -75,6 +76,7 @@ export async function runAgentLoopViaCore(
         repositoryFullName: input.repositoryFullName,
         callGraph: input.callGraph,
         outlineFirst: input.outlineFirst,
+        boundedResults: input.boundedResults,
     });
 
     const coverageLedger = new DiffCoverageLedger({
@@ -169,6 +171,12 @@ export async function runAgentLoopViaCore(
             tools,
             providerOptions,
             systemProviderOptions,
+            // Objective-first verify (gated): give the verifier a sandbox
+            // command runner so it can run `tsc`. Absent exec → LLM-only.
+            commandRunner: secrets.remoteCommands
+                ? new SandboxCommandRunner(secrets.remoteCommands)
+                : undefined,
+            executableVerify: input.executableVerify,
             skipHeavyPasses,
             skipSynthesisRescue,
             // HEAVY mode — extra critic pass. Only meaningful when heavy passes

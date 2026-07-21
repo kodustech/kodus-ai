@@ -384,6 +384,15 @@ export type CodeReviewConfig = {
      *  a symbol outline for range-less reads of large files instead of dumping
      *  the head — fewer model tokens. Threaded to ReviewAgentInput.outlineFirst. */
     outlineFirst?: boolean;
+    /** Experimental A/B (default off): when true, high-fan-out finder tools
+     *  (grep/listDir/getCallers) return a preview + handle for oversized results
+     *  and the model pulls slices via fetchResult, keeping the window clean.
+     *  Threaded to ReviewAgentInput.boundedResults. */
+    boundedResults?: boolean;
+    /** Experimental A/B (default off): objective-first verify — run the project's
+     *  `tsc` and trust a compiler-confirmed finding, deferring the rest to the
+     *  LLM. Threaded to ReviewAgentInput.executableVerify. */
+    executableVerify?: boolean;
     // This is the default branch of the repository, used only during the review process
     // This field is populated dynamically from the API (GitHub/GitLab) and should NOT be saved to the database
     // It represents the repository's default branch (e.g., 'main', 'develop') that comes from the code management platform

@@ -26,6 +26,9 @@ import type {
     ToolRegistry,
 } from '@libs/agent-harness/domain/contracts/tool.contract';
 import { runVerificationPass } from '@libs/agent-harness/infrastructure/orchestration/verification-pass';
+import { ExecutableVerifier } from '@libs/agent-harness/infrastructure/verify/executable-verifier';
+import { CompositeVerifier } from '@libs/agent-harness/infrastructure/verify/composite-verifier';
+import type { CommandRunner } from '@libs/agent-harness/domain/contracts/command-runner.contract';
 import { BudgetPolicy } from '@libs/agent-harness/infrastructure/policies/budget.policy';
 import { CompressionPolicy } from '@libs/agent-harness/infrastructure/policies/compression.policy';
 import { CompletionGatePolicy } from '@libs/agent-harness/infrastructure/policies/completion-gate.policy';
@@ -33,6 +36,7 @@ import { ForceFinalizePolicy } from '@libs/agent-harness/infrastructure/policies
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 
 import { LlmVerifier } from '@libs/code-review/infrastructure/agents/core/verifier.agent';
+import { tscCheck } from '@libs/code-review/infrastructure/agents/core/tsc-check';
 import { buildToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/core/agent-anomalies';
 import { supportsStrictTools } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/review-agent.contract';
@@ -384,6 +388,14 @@ export interface RunFinderWithVerifyParams {
     /** System-message provider options (e.g. Anthropic prompt caching), forwarded
      *  to the finder spec and the verifier runs. */
     systemProviderOptions?: Readonly<Record<string, unknown>>;
+    /** Objective-first verify (gated): a CommandRunner (sandbox exec) so the
+     *  verifier can run `tsc` and trust a compiler-confirmed finding. Absent →
+     *  LLM-only verify (current behavior). */
+    commandRunner?: CommandRunner;
+    /** Gated A/B knob (default off): wrap the LLM verifier in a CompositeVerifier
+     *  that runs `tsc` first (ExecutableVerifier) and defers only the uncertain
+     *  candidates to the LLM. Requires `commandRunner`. */
+    executableVerify?: boolean;
     /** Skip the recall pass entirely (fast mode / self-contained trial). */
     skipHeavyPasses?: boolean;
     /** Skip ONLY the synthesis-rescue pass. */
@@ -527,7 +539,7 @@ export async function runFinderWithVerify(
 
     // Verify each finding (HV2 refute-to-drop) with the confidence SPLIT inside
     // LlmVerifier: high-confidence → light depth, low-confidence → full depth.
-    const verifier = new LlmVerifier(params.runner, {
+    const llmVerifier = new LlmVerifier(params.runner, {
         modelId: params.modelId,
         tools: params.tools,
         providerOptions: params.providerOptions,
@@ -535,6 +547,20 @@ export async function runFinderWithVerify(
         telemetryMetadata: params.telemetryMetadata,
         agentName: params.agentName,
     });
+    // Objective-first (gated): run `tsc` in the sandbox and TRUST a
+    // compiler-confirmed finding (high confidence → the composite skips the LLM);
+    // defer everything else to the LLM. Off, or no sandbox exec → LLM-only. The
+    // evidence-gate re-verify below stays LLM-only (secondary net).
+    const verifier =
+        params.executableVerify && params.commandRunner
+            ? new CompositeVerifier<FinderSuggestion>(
+                  new ExecutableVerifier<FinderSuggestion>(
+                      params.commandRunner,
+                      tscCheck,
+                  ),
+                  llmVerifier,
+              )
+            : llmVerifier;
     const pass = await runVerificationPass<FinderSuggestion>(
         { candidates: suggestions, verifier, concurrency: params.concurrency },
         ctx,
@@ -610,7 +636,10 @@ export async function runFinderWithVerify(
             verifierEvidence: evidenceOf(d.candidate),
         })),
         finderState,
-        verifyUsage: sumVerifyUsage(verifier.usage, gateUsage),
+        // LLM verify usage lives on the LlmVerifier itself; findings the
+        // ExecutableVerifier decides skip the LLM, so this counts only what the
+        // LLM actually judged (whether or not it was wrapped in a composite).
+        verifyUsage: sumVerifyUsage(llmVerifier.usage, gateUsage),
         recallUsage,
     };
 }

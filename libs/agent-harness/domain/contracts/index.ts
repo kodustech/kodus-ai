@@ -48,3 +48,7 @@ export type {
     ConversationMessage,
     ConversationAppendMeta,
 } from './conversation-store.contract';
+export type {
+    CommandRunner,
+    CommandResult,
+} from './command-runner.contract';

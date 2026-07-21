@@ -99,6 +99,12 @@ export function buildOrchestratorInput(
         // Experimental A/B knob (config-driven, default off): outline-first
         // readFile. Flows down to the finder's tool registry.
         outlineFirst: context.codeReviewConfig?.outlineFirst,
+        // Experimental A/B knob (config-driven, default off): bounded high-fan-out
+        // tool results (grep/listDir/getCallers) + fetchResult.
+        boundedResults: context.codeReviewConfig?.boundedResults,
+        // Experimental A/B knob (config-driven, default off): objective-first
+        // verify (run `tsc` before the LLM judge).
+        executableVerify: context.codeReviewConfig?.executableVerify,
         parentSignal: context.parentSignal,
     };
 }

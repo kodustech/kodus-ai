@@ -14,19 +14,25 @@
  */
 import type { ToolContext } from './tool.contract';
 
+/** One scored criterion of a verdict: a named pass/fail with an optional note.
+ *  E.g. ExecutableVerifier emits a `{ name: 'tsc', pass: false, note: '…' }`
+ *  dimension carrying the objective compiler/linter signal. */
 export interface VerdictDimension {
     readonly name: string;
     readonly pass: boolean;
     readonly note?: string;
 }
 
-/** A structured verdict (a rubric, not a bare boolean). `keep` is the gate the
+/** A structured verdict (not a bare boolean). `keep` is the gate the
  *  verification pass acts on; `confidence`/`rationale`/`dimensions` are evidence
- *  for observability and tuning. Domains decide which dimensions to score. */
+ *  for observability and tuning. */
 export interface Verdict {
     readonly keep: boolean;
     readonly confidence?: 'high' | 'medium' | 'low';
     readonly rationale?: string;
+    /** Scored rubric — each entry a named pass/fail. Populated by verifiers that
+     *  reason over distinct criteria (e.g. an objective `tsc`/`lint` dimension
+     *  from ExecutableVerifier); a plain LLM verdict may leave it absent. */
     readonly dimensions?: readonly VerdictDimension[];
     /** Tools the verifier invoked while judging this candidate (generic —
      *  name/args/result, no domain shape). Lets a domain attribute per-candidate

@@ -574,6 +574,8 @@ export abstract class BaseCodeReviewAgentProvider {
                     // so without this line the resample passes never run.
                     heavy: input.heavy,
                     outlineFirst: input.outlineFirst,
+                    boundedResults: input.boundedResults,
+                    executableVerify: input.executableVerify,
                     // Context window is sized against the main model; the
                     // fallback reuses it (usually a comparable model) rather
                     // than re-running the whole preflight/prompt build.

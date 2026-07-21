@@ -232,6 +232,12 @@ export interface ReviewAgentInput
     /** Gated A/B knob (default off): forwarded to AgentLoopInput.outlineFirst.
      *  The pipeline/experiment sets it; everything below threads it down. */
     outlineFirst?: boolean;
+    /** Gated A/B knob (default off): forwarded to AgentLoopInput.boundedResults.
+     *  Bounds high-fan-out tool results (grep/listDir/getCallers). */
+    boundedResults?: boolean;
+    /** Gated A/B knob (default off): forwarded to AgentLoopInput.executableVerify.
+     *  Runs `tsc` first in the verify pass (objective-first, LLM for the rest). */
+    executableVerify?: boolean;
     /**
      * Commits that make up this PR (SHA + subject line), oldest→newest. Threaded
      * so commit-hygiene rules ("don't mix mechanical and behavioral changes")
@@ -307,6 +313,15 @@ export interface AgentLoopInput {
      *  large file returns a symbol outline + expand hint instead of dumping the
      *  head — fewer model tokens. Off = current behavior. */
     outlineFirst?: boolean;
+    /** Gated A/B knob (default off): wrap high-fan-out tools (grep/listDir/
+     *  getCallers) so an oversized result is stored out-of-band and the model
+     *  gets a preview + handle (+ fetchResult) instead of the flood. Off =
+     *  current behavior. */
+    boundedResults?: boolean;
+    /** Gated A/B knob (default off): objective-first verify — run `tsc` in the
+     *  sandbox and trust a compiler-confirmed finding, deferring only the
+     *  uncertain to the LLM. Off = LLM-only verify (current behavior). */
+    executableVerify?: boolean;
     /** When true, skip ONLY the synthesis-rescue pass while still running
      *  coverage-recovery and coverage-second-chance. Useful for agents
      *  that benefit from re-investigating uncovered files but don't need
