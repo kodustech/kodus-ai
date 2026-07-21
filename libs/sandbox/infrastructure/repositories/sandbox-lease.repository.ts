@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 
+import { SANDBOX_LEASE_CLEANUP_STATUS } from './schemas/sandbox-lease.model';
 import { SandboxLeaseModel } from './schemas/sandbox-lease.model';
 
 /**
@@ -127,12 +128,17 @@ export class SandboxLeaseRepository {
     }
 
     /**
-     * Mark a CREATING lease as INVALIDATED (mid-create race handling).
-     * The create path will check for this state after completing and kill the sandbox.
+     * Mark a CREATING or READY lease as INVALIDATED.
+     *
+     * CREATING: mid-create race handling — the create path detects this
+     * after completing and kills the sandbox.
+     * READY: called by invalidate() when a local READY lease has active
+     * consumers (leaseCount > 0). The state change prevents new acquires
+     * from attaching to the stale sandbox.
      */
     async markInvalidated(prKey: string): Promise<void> {
         await this.leaseModel.updateOne(
-            { _id: prKey, state: 'CREATING' },
+            { _id: prKey, state: { $in: ['CREATING', 'READY'] } },
             { $set: { state: 'INVALIDATED' } },
         );
     }
@@ -218,5 +224,126 @@ export class SandboxLeaseRepository {
             })
             .select('_id sandboxId killAt')
             .lean();
+    }
+
+    /**
+     * Atomically claim a local cleanup. Returns the doc only when prKey and
+     * sandboxId match and cleanup is not already in_progress or completed.
+     *
+     * @param requireLeaseCountZero When true, also requires leaseCount <= 0.
+     *   Used by release/invalidate to prevent deleting a local sandbox
+     *   directory while a concurrent acquire has re-incremented the lease
+     *   count (race between decrementLease and claimCleanup). The reaper
+     *   path passes false (default) because it force-reclaims regardless
+     *   of active leases (expired TTL = all leases are dead).
+     */
+    async claimCleanup(
+        prKey: string,
+        expectedSandboxId: string,
+        requireLeaseCountZero = false,
+    ): Promise<SandboxLeaseModel | null> {
+        const filter: Record<string, unknown> = {
+            _id: prKey,
+            sandboxId: expectedSandboxId,
+            cleanupStatus: {
+                $nin: [
+                    SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
+                    SANDBOX_LEASE_CLEANUP_STATUS.COMPLETED,
+                ],
+            },
+        };
+        if (requireLeaseCountZero) {
+            filter.leaseCount = { $lte: 0 };
+        }
+        return this.leaseModel
+            .findOneAndUpdate(
+                filter,
+                {
+                    $set: {
+                        cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
+                        cleanupRetryAt: null,
+                        cleanupStartedAt: new Date(),
+                    },
+                    $inc: { cleanupAttempts: 1 },
+                },
+                { new: true },
+            )
+            .exec();
+    }
+
+    /**
+     * Complete a local cleanup by deleting the lease doc.
+     * Only deletes when prKey, sandboxId, and cleanupStatus=IN_PROGRESS match.
+     */
+    async completeCleanup(
+        prKey: string,
+        expectedSandboxId: string,
+    ): Promise<boolean> {
+        const result = await this.leaseModel
+            .deleteOne({
+                _id: prKey,
+                sandboxId: expectedSandboxId,
+                cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
+            })
+            .exec();
+        return result.deletedCount === 1;
+    }
+
+    /**
+     * Mark a local cleanup as failed. Sets a retry marker.
+     * Only updates when prKey, sandboxId, and cleanupStatus=IN_PROGRESS match.
+     */
+    async failCleanup(
+        prKey: string,
+        expectedSandboxId: string,
+        error: string,
+    ): Promise<boolean> {
+        const result = await this.leaseModel
+            .updateOne(
+                {
+                    _id: prKey,
+                    sandboxId: expectedSandboxId,
+                    cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
+                },
+                {
+                    $set: {
+                        cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.FAILED,
+                        cleanupRetryAt: new Date(Date.now() + 60_000),
+                        cleanupError: error.slice(0, 500),
+                    },
+                },
+            )
+            .exec();
+        return result.modifiedCount === 1;
+    }
+
+    /**
+     * Reset stale in_progress cleanup claims left behind by a crashed worker.
+     * When a worker crashes after claiming cleanup (cleanupStatus=IN_PROGRESS)
+     * but before completing it, the lease gets stuck forever — claimCleanup
+     * rejects IN_PROGRESS docs. This method detects stale claims by checking
+     * cleanupStartedAt against a threshold (typically 5 minutes) and resets
+     * them to FAILED so the reaper can retry on the next tick.
+     */
+    async resetStaleCleanup(
+        prKey: string,
+        staleThreshold: Date,
+    ): Promise<void> {
+        await this.leaseModel
+            .updateOne(
+                {
+                    _id: prKey,
+                    cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
+                    cleanupStartedAt: { $lt: staleThreshold },
+                },
+                {
+                    $set: {
+                        cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.FAILED,
+                        cleanupError:
+                            'Worker crash recovery — stale in_progress reset',
+                    },
+                },
+            )
+            .exec();
     }
 }
