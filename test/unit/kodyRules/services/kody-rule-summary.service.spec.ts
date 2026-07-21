@@ -16,11 +16,17 @@ jest.mock('@libs/core/log/logger', () => ({
 const tracedGenerateTextMock = jest.fn();
 jest.mock('@libs/llm/llm-call', () => ({
     tracedGenerateText: (...args: unknown[]) => tracedGenerateTextMock(...args),
+    timeoutSignal: jest.fn(() => undefined),
+    LLM_CALL_TIMEOUT_MS: 600_000,
 }));
 
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     byokToVercelModel: jest.fn(() => ({})),
     getModelName: jest.fn(() => 'openai_compatible:test-model'),
+}));
+
+jest.mock('@libs/core/log/langfuse', () => ({
+    buildLangfuseTelemetry: jest.fn(() => undefined),
 }));
 
 const sha256 = (text: string) =>
@@ -60,11 +66,22 @@ function createService(
         updateRule: jest.fn().mockResolvedValue({ uuid: 'doc-uuid' }),
         ...opts.repository,
     };
+    // Pass-through observability stub: exec() runs, usage span is a no-op.
+    // The "records the usage span" test asserts runAiSdkLLMInSpan was used.
+    const observabilityService = {
+        runAiSdkLLMInSpan: jest.fn(async ({ exec }: any) => exec()),
+    };
     const service = new KodyRuleSummaryService(
         permissionValidationService as any,
         repository as any,
+        observabilityService as any,
     );
-    return { service, permissionValidationService, repository };
+    return {
+        service,
+        permissionValidationService,
+        repository,
+        observabilityService,
+    };
 }
 
 const validSummaryText =
@@ -240,6 +257,29 @@ describe('KodyRuleSummaryService', () => {
 
             const callArgs = tracedGenerateTextMock.mock.calls[0][0];
             expect(callArgs).not.toHaveProperty('temperature');
+        });
+
+        it('records the LLM call through the usage span (BYOK token accounting)', async () => {
+            // Generation may burn the customer's BYOK key: the call MUST go
+            // through runAiSdkLLMInSpan so tokens reach the usage analytics.
+            const { service, observabilityService } = createService();
+
+            await service.generate(
+                { uuid: 'r1', title: 't', rule: LONG_TEXT },
+                orgData,
+            );
+
+            expect(
+                observabilityService.runAiSdkLLMInSpan,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    runName: 'kody-rules.summary-generation',
+                    model: 'openai_compatible:test-model',
+                    attrs: expect.objectContaining({
+                        organizationId: orgData.organizationId,
+                    }),
+                }),
+            );
         });
     });
 

@@ -4,7 +4,13 @@ import { createLogger } from '@libs/core/log/logger';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
 import { byokToVercelModel, getModelName } from '@libs/llm/byok-to-vercel';
-import { tracedGenerateText } from '@libs/llm/llm-call';
+import {
+    tracedGenerateText,
+    timeoutSignal,
+    LLM_CALL_TIMEOUT_MS,
+} from '@libs/llm/llm-call';
+import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
+import { ObservabilityService } from '@libs/core/log/observability.service';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
     IKodyRulesRepository,
@@ -93,6 +99,10 @@ export class KodyRuleSummaryService {
         private readonly permissionValidationService: PermissionValidationService,
         @Inject(KODY_RULES_REPOSITORY_TOKEN)
         private readonly kodyRulesRepository: IKodyRulesRepository,
+        // Required: generation runs on the customer's BYOK key — every call
+        // MUST emit the usage span so tokens reach the user-facing analytics
+        // (same contract as the shard judge's runStructuredReviewCall).
+        private readonly observabilityService: ObservabilityService,
     ) {}
 
     isLong(ruleText: string | undefined | null): boolean {
@@ -184,10 +194,35 @@ export class KodyRuleSummaryService {
             }
 
             const model = byokToVercelModel(byokConfig ?? undefined, 'main', {});
-            const { text } = await tracedGenerateText({
-                model,
-                system: SUMMARY_SYSTEM_PROMPT,
-                prompt: `Rule title: ${rule.title ?? ''}\n\nRule text:\n${rule.rule}`,
+            const modelName = getModelName(byokConfig ?? undefined);
+            const runName = 'kody-rules.summary-generation';
+            // Usage span + Langfuse telemetry: generation may run on the
+            // customer's BYOK key, so tokens must reach the user-facing
+            // analytics — same wrap the shard judge uses. The timeout keeps a
+            // hung provider call from delaying the review (the lazy backfill
+            // awaits this before the orchestrator starts).
+            const { text } = await this.observabilityService.runAiSdkLLMInSpan({
+                spanName: runName,
+                runName,
+                model: modelName,
+                attrs: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    ruleUuid: rule.uuid,
+                },
+                exec: () =>
+                    tracedGenerateText({
+                        model,
+                        system: SUMMARY_SYSTEM_PROMPT,
+                        prompt: `Rule title: ${rule.title ?? ''}\n\nRule text:\n${rule.rule}`,
+                        abortSignal: timeoutSignal(LLM_CALL_TIMEOUT_MS),
+                        experimental_telemetry: buildLangfuseTelemetry(
+                            runName,
+                            {
+                                organizationId:
+                                    organizationAndTeamData.organizationId,
+                            },
+                        ),
+                    } as any),
             });
 
             const content = (text ?? '').trim();
@@ -212,7 +247,7 @@ export class KodyRuleSummaryService {
                 content,
                 sourceHash: this.hashOf(rule.rule),
                 generatedAt: new Date(),
-                model: getModelName(byokConfig ?? undefined),
+                model: modelName,
             };
         } catch (error) {
             this.logger.warn({

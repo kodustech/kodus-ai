@@ -102,7 +102,8 @@ async function main() {
         // Trial + no BYOK → generation runs on the env-selected model (the
         // same one under eval), mirroring the managed-default path.
         const permStub = { getBYOKConfig: async () => null, getSubscriptionStatus: async () => 'trial' };
-        const summaryService = new KodyRuleSummaryService(permStub, repoStub);
+        const obsStub = { runAiSdkLLMInSpan: async ({ exec }) => exec() };
+        const summaryService = new KodyRuleSummaryService(permStub, repoStub, obsStub);
         prepareRules = async (rules) => {
             const seeded = rules.map((r) => (cache[r.uuid] ? { ...r, summary: cache[r.uuid] } : r));
             const ensured = await summaryService.ensureSummaries(seeded, { organizationId: 'eval-org', teamId: 'eval-team' });
