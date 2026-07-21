@@ -63,6 +63,100 @@ rss: true
 
     <div className="kodus-changelog-release">
         <div className="kodus-changelog-meta">
+            <span className="kodus-changelog-date">July 20, 2026</span>
+        </div>
+
+        <div className="kodus-changelog-content">
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">What's new</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-kody-rules filter-ux-interface">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Kody Rules: Select Reviewers</div>
+                    <p className="kodus-changelog-copy">Kody Rules can now take selected reviewers into account during the configuration flow. This gives teams greater control when directing specific rules to the people or groups best suited to the context of a review.</p>
+                    <p className="kodus-changelog-copy">This update helps reduce noise and improves rule governance, especially in organizations with multiple teams, domain areas, or repositories with clearly distributed ownership.</p>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Improvements</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ux-interface filter-kody-rules">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Removed Preset Step, Added Severity Level, and Fixed Enable/Disable Buttons</div>
+                    <p className="kodus-changelog-copy">We simplified the review setup by removing the preset step and adding severity-level configuration. Teams can now define the level of criticality that reviews should consider directly during onboarding.</p>
+                    <p className="kodus-changelog-copy">We also fixed the enabled and disabled states of several buttons, making the setup flow more predictable and reducing confusion during initial configuration.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine filter-ux-interface">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Append Team-Authored Custom Messages to Error Comments</div>
+                    <p className="kodus-changelog-copy">Custom messages written by the team are now also included in code review error comments.</p>
+                    <p className="kodus-changelog-copy">This allows Kody's communication to preserve the tone, context, and instructions defined by each organization, even when an analysis identifies an issue. The improvement helps standardize the developer experience and makes comments better aligned with each team's internal processes.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-self-hosted filter-performance">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Bounded Reaper Concurrency and Improved Handling for E2B Sandboxes That No Longer Exist</div>
+                    <p className="kodus-changelog-copy">We improved the process responsible for cleaning up sandboxes by introducing controlled concurrency. This prevents spikes in simultaneous operations and makes cleanup more stable in high-volume environments.</p>
+                    <p className="kodus-changelog-copy">We also now correctly handle cases where a sandbox no longer exists in E2B, preventing unnecessary errors and making the sandbox lifecycle more resilient.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-performance filter-cockpit filter-ux-interface">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Performance Improvements for Heavy Screens and Analytics</div>
+                    <p className="kodus-changelog-copy">We refactored some of the product's heavier screens, particularly areas containing lists, filters, and analytics, to improve performance and responsiveness.</p>
+                    <p className="kodus-changelog-copy">The work includes improvements to queries, rendering, data loading, and the overall visual experience in workflows that handle large amounts of information. The expected result is smoother navigation, less frontend overhead, and more reliable presentation of the displayed data.</p>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Bug fixes</div>
+
+                <div className="kodus-changelog-fix-list">
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Rules Generated from Past Reviews:</strong> fixed the generation of Kody Rules from previous reviews, improving the reliability of the rule-learning and creation flow.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-self-hosted">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Use the Correct Queue Names for the RabbitMQ Health Check:</strong> fixed the queue names used by the RabbitMQ health check. Previously, the check could fail to accurately reflect the state of the queues used by the application. It now checks the expected queue names, improving the accuracy of the system's health signals.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-security filter-self-hosted">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Harden Local Sandbox <code className="kodus-changelog-code">readFile</code>/<code className="kodus-changelog-code">writeFile</code> Path Validation:</strong> strengthened path validation for <code className="kodus-changelog-code">readFile</code> and <code className="kodus-changelog-code">writeFile</code> operations in the local sandbox. The change prevents unauthorized access outside the permitted directory and reinforces execution-environment isolation. This improves the security and reliability of file read and write operations within the sandbox.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fix Bitbucket Requests to Avoid 429 Errors:</strong> adjusted how requests are made to Bitbucket to reduce the occurrence of 429 rate-limit errors. The fix improves integration stability, especially for organizations with a high volume of repositories, pull requests, or simultaneous operations.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-security filter-self-hosted">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Close Parent Directory Swap TOCTOU Vulnerability in Local Sandbox <code className="kodus-changelog-code">writeFile</code>:</strong> fixed a time-of-check to time-of-use race condition in the local sandbox's <code className="kodus-changelog-code">writeFile</code> operation. The flow now performs stronger validation of the actual path before writing, preventing changes to the parent directory from redirecting the operation outside the expected location. This strengthens isolation and reduces risks during write operations.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Change <code className="kodus-changelog-code">@Kody resume</code> to <code className="kodus-changelog-code">@Kody start-review</code> in the Cadence Message:</strong> updated the cadence message to correctly instruct users to use <code className="kodus-changelog-code">@Kody start-review</code> instead of <code className="kodus-changelog-code">@Kody resume</code>. This reduces ambiguity and prevents incorrect commands from being suggested during the review flow.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-self-hosted">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Resolve CLI Sandbox Clone Platform from the Connected Integration:</strong> fixed how the platform used to clone repositories inside the CLI sandbox is resolved. The platform is now determined based on the integration connected to the repository, preventing inconsistencies in environments using GitLab, Bitbucket, or other self-managed integrations.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fix LLM Compression Message:</strong> fixed the compression message generated by the LLM during the code review flow. This step is used when the context needs to be compressed so the analysis can continue. The fix makes the communication clearer and prevents incorrect or confusing messages during processing.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Remove Repository from Integration Configuration When Removed from Repository Settings:</strong> fixed synchronization between repository-level settings and integration settings. When a repository is removed from the repository-level configuration, it is now also correctly removed from the integration configuration, preventing inconsistent states and unexpected review behavior.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine filter-kody-rules">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Business Rules Validation:</strong> fixed the business rules validation flow. This change improves the reliability of business-rule-based analysis, helping Kody interpret and apply these validations more consistently during code review.</p>
+                    </div>
+                </div>
+            </div>
+
+            <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
+        </div>
+    </div>
+
+    <div className="kodus-changelog-release">
+        <div className="kodus-changelog-meta">
             <span className="kodus-changelog-date">July 13, 2026</span>
         </div>
 
