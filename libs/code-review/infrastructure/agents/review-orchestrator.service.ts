@@ -10,6 +10,7 @@ import { BugAgentProvider } from '@libs/code-review/infrastructure/agents/provid
 import { SecurityAgentProvider } from '@libs/code-review/infrastructure/agents/providers/security-agent.provider';
 import { PerformanceAgentProvider } from '@libs/code-review/infrastructure/agents/providers/performance-agent.provider';
 import { GeneralistAgentProvider } from '@libs/code-review/infrastructure/agents/providers/generalist-agent.provider';
+import { TestGenAgentProvider } from '@libs/code-review/infrastructure/agents/providers/test-gen-agent.provider';
 import { KodyRulesAgentProvider } from '@libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider';
 import {
     ReviewAgentInput,
@@ -59,6 +60,7 @@ export class ReviewOrchestratorService {
         'security': 3,
         'performance': 3,
         'kody-rules': 4,
+        'test-gen': 4,
     };
     private static readonly NORMAL_MODE_MAX_STEPS: Record<string, number> = {
         'generalist': 20,
@@ -66,6 +68,7 @@ export class ReviewOrchestratorService {
         'security': 12,
         'performance': 12,
         'kody-rules': 20,
+        'test-gen': 12,
     };
     private static readonly DEEP_MODE_MAX_STEPS = 100;
 
@@ -76,6 +79,8 @@ export class ReviewOrchestratorService {
         private readonly generalistAgent: GeneralistAgentProvider,
         @Optional()
         private readonly kodyRulesAgent?: KodyRulesAgentProvider,
+        @Optional()
+        private readonly testGenAgent?: TestGenAgentProvider,
     ) {}
 
     async execute(input: OrchestratorInput): Promise<OrchestratorOutput> {
@@ -137,6 +142,17 @@ export class ReviewOrchestratorService {
                             kodyRules,
                         }),
                 },
+            });
+        }
+
+        // Test-gen agent (Phase 4, gated): additive AgentSpec that proposes a
+        // unit test for an under-tested changed function. Off by default — only
+        // dispatched when the `testGen` knob is on, so it never affects the
+        // existing finder review. It does not run tests (that is Phase 5).
+        if (this.testGenAgent && agentInput.testGen) {
+            agentTasks.push({
+                name: 'test-gen',
+                provider: this.testGenAgent,
             });
         }
 

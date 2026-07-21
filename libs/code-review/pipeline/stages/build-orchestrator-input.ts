@@ -108,6 +108,9 @@ export function buildOrchestratorInput(
         // Experimental A/B knob (config-driven, default off): progressive
         // disclosure of memory rules (compact index + getKodyRule tool).
         progressiveRules: context.codeReviewConfig?.progressiveRules,
+        // Gated (config-driven, default off): dispatch the additive test-gen
+        // agent (proposes a unit test for an under-tested changed function).
+        testGen: context.codeReviewConfig?.testGen,
         parentSignal: context.parentSignal,
     };
 }

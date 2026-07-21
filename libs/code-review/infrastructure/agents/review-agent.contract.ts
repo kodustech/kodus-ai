@@ -242,6 +242,10 @@ export interface ReviewAgentInput
      *  Carries memory rules as a compact index + getKodyRule tool instead of
      *  dumping every full rule body into the system prompt. */
     progressiveRules?: boolean;
+    /** Gated knob (default off): when on, the orchestrator additionally dispatches
+     *  the test-gen agent, which PROPOSES (does not run) a unit test for a new or
+     *  changed under-tested function. Additive — off leaves the review untouched. */
+    testGen?: boolean;
     /**
      * Commits that make up this PR (SHA + subject line), oldest→newest. Threaded
      * so commit-hygiene rules ("don't mix mechanical and behavioral changes")

@@ -397,6 +397,10 @@ export type CodeReviewConfig = {
      *  a getKodyRule tool for on-demand full bodies, instead of dumping every
      *  full rule into the system prompt. Threaded to ReviewAgentInput.progressiveRules. */
     progressiveRules?: boolean;
+    /** Gated (default off): additionally run the test-gen agent, which proposes
+     *  (does not run) a unit test for an under-tested changed function. Additive.
+     *  Threaded to ReviewAgentInput.testGen. */
+    testGen?: boolean;
     // This is the default branch of the repository, used only during the review process
     // This field is populated dynamically from the API (GitHub/GitLab) and should NOT be saved to the database
     // It represents the repository's default branch (e.g., 'main', 'develop') that comes from the code management platform
