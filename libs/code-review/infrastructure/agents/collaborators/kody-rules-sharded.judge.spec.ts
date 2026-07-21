@@ -352,6 +352,66 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         expect(res.violations[0].relevantFile).toBeUndefined();
     });
 
+    it('sends the FULL diff of every changed file to the PR-scope shard', async () => {
+        // Regression guard: the sharded refactor originally sent only file
+        // NAMES to the PR shard, blinding content-dependent PR-scope rules
+        // (the migration-safety rule missed 100% across every model — it
+        // could not see `add_index` vs `create_table`). The old agentic path
+        // saw the patches; the PR shard must too.
+        let prUser = '';
+        const run: RunJudge = async ({ filename, user }) => {
+            if (filename === null) prUser = user;
+            return [];
+        };
+        await judgeKodyRulesSharded({
+            changedFiles: [
+                file(
+                    'db/migrate/add_index.rb',
+                    "6 +    add_index :cases, %i[provider_id last_digested_at]",
+                ),
+                file('app/models/case.rb', '3 +  belongs_to :provider'),
+            ],
+            rules: [
+                {
+                    uuid: 'pr1',
+                    title: 'migration safety',
+                    rule: 'index changes on existing tables need concurrently',
+                    scope: KodyRulesScope.PULL_REQUEST,
+                },
+            ],
+            runJudge: run,
+        });
+        expect(prUser).toContain('add_index :cases');
+        expect(prUser).toContain('belongs_to :provider');
+    });
+
+    it('degrades an over-budget file to a name-only marker in the PR shard (never silently)', async () => {
+        let prUser = '';
+        const run: RunJudge = async ({ filename, user }) => {
+            if (filename === null) prUser = user;
+            return [];
+        };
+        await judgeKodyRulesSharded({
+            changedFiles: [
+                file('src/huge.ts', '1 +' + 'x'.repeat(200_000)),
+                file('src/small.ts', '1 +const a = 1;'),
+            ],
+            rules: [
+                {
+                    uuid: 'pr1',
+                    title: 't',
+                    rule: 'r',
+                    scope: KodyRulesScope.PULL_REQUEST,
+                },
+            ],
+            runJudge: run,
+        });
+        expect(prUser).toContain(
+            "## file: 'src/huge.ts' (diff omitted — PR diff budget exceeded)",
+        );
+        expect(prUser).toContain('const a = 1;');
+    });
+
     it('counts a shard error without aborting the sweep', async () => {
         let n = 0;
         const run: RunJudge = async ({ filename }) => {

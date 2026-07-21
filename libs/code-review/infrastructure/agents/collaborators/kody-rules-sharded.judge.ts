@@ -205,7 +205,7 @@ Rules of engagement:
 - Identify the violated rule by its number — the [n] shown before each rule. Put that number in "ruleId". Never invent a number; if a real issue matches no listed rule, DROP it.
 - If nothing violates, return an empty list.`;
 
-export const SHARD_PR_SYSTEM_PROMPT = `You evaluate PULL-REQUEST-level team rules against a PR's metadata (title, description, and the list of changed files). Judge the PR as a whole. Identify each violated rule by its number — the [n] shown before each rule — and put that number in "ruleId"; never invent one. Return only real violations.`;
+export const SHARD_PR_SYSTEM_PROMPT = `You evaluate PULL-REQUEST-level team rules against a PR: its title, description, the list of changed files, and the FULL DIFF of every changed file. Judge the PR as a whole — cross-file conditions (e.g. "one migration = one logical change", "index added to a table that already existed before this PR") are exactly what these rules are about, so reason across the whole diff. Identify each violated rule by its number — the [n] shown before each rule — and put that number in "ruleId"; never invent one. Return only real violations.`;
 
 function ruleBlock(rules: Array<Partial<IKodyRule>>): string {
     return rules
@@ -248,12 +248,41 @@ function fileShardUser(
     ].join('\n');
 }
 
+/**
+ * Total diff budget for the PR-scope shard. The shard originally sent only the
+ * file NAME list — which blinded every content-dependent PR-scope rule (the
+ * migration-safety rule missed 100% across all models: the model literally
+ * could not see `add_index` vs `create_table`). The old agentic path saw the
+ * full patches, so metadata-only was a regression of the sharded refactor.
+ * The budget keeps a runaway PR from blowing the context window; files beyond
+ * it degrade to name-only with an explicit marker (never silently).
+ */
+const PR_SHARD_DIFF_BUDGET_CHARS = 150_000;
+
 function prShardUser(
     files: FileChange[],
     rules: Array<Partial<IKodyRule>>,
     prTitle?: string,
     prBody?: string,
 ): string {
+    let used = 0;
+    const diffs: string[] = [];
+    for (const f of files) {
+        const raw = (f as any).patchWithLinesStr ?? f.patch;
+        const diff = raw ? String(raw) : '';
+        if (!diff) {
+            diffs.push(`## file: '${f.filename}' (no diff available)`);
+            continue;
+        }
+        if (used + diff.length > PR_SHARD_DIFF_BUDGET_CHARS) {
+            diffs.push(
+                `## file: '${f.filename}' (diff omitted — PR diff budget exceeded)`,
+            );
+            continue;
+        }
+        used += diff.length;
+        diffs.push(diff);
+    }
     return [
         `<Rules>`,
         ruleBlock(rules),
@@ -263,6 +292,11 @@ function prShardUser(
         `Description: ${prBody ? prBody.slice(0, 1000) : '(empty)'}`,
         `Changed files (${files.length}):`,
         ...files.map((f) => `- ${f.filename}`),
+        ``,
+        `Full diff of every changed file (each line prefixed with its file line number; '+' marks a line ADDED by this PR):`,
+        '```diff',
+        ...diffs,
+        '```',
         `</PR>`,
         ``,
         `Return ONLY JSON (ruleId is the rule's [n] number): {"violations":[{"ruleId":<n>,"suggestionContent":"WHAT/WHY","oneSentenceSummary":"<short>"}]}`,

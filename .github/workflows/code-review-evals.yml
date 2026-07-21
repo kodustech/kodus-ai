@@ -220,6 +220,45 @@ jobs:
               # runs confirm the number is stable per model.
               run: node evals/kody-rules/behavioral-shipped.js --dataset=github-cases --model=${{ matrix.model }} --temp=0
 
+    pr-kody-rules-atoms:
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
+        needs: harness
+        name: "PR kody-rules atoms · gpt-5.4-mini"
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+            - name: Install deps
+              run: pnpm install --frozen-lockfile
+            - name: Create environment.ts (gitignored EE config)
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+            - name: Run atoms convention eval
+              env:
+                  BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+              # CONVENTION-rule coverage the mechanical github-cases can't give:
+              # drives the REAL KodyRulesAgentProvider.execute() end-to-end
+              # (atomic decomposition from the FROZEN rails-convention-atoms.json
+              # fixture — no generation calls in CI — T0 detector sweep, shard
+              # judge, mapAgentFindings) over the 27-file Rails analog PR with
+              # 27 real-shaped rules, including the pull-request-scoped one.
+              #
+              # Advisory (no gate): the case has 19 ground-truth sites, so
+              # single-run variance is ~±10pp — a hard floor would flake.
+              # Reference band (gpt-5.4-mini, measured): 74-89% deliverable
+              # (file-level + PR-scope). Gate once the case set grows enough to
+              # damp the variance.
+              run: pnpm run eval:kody-rules:atoms
+
     pr-anchoring-canary:
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
         needs: harness

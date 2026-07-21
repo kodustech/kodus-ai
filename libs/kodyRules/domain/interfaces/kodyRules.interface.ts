@@ -73,6 +73,27 @@ export interface IKodyRule {
      * schema migration is needed).
      */
     detector?: IKodyRuleDetector;
+    /**
+     * Structured validation summary for LONG rules (> 1000 chars), generated
+     * once by an LLM ("WHAT TO VALIDATE / HOW TO VALIDATE" bullets) and reused
+     * on every review — measured to nearly double occurrence-recall on terse
+     * models without regressing strong ones (docs/plans/
+     * kody-rules-summary-productization.md).
+     *
+     * Consumed EXCLUSIVELY by the code-review path (the shard prompt swaps
+     * `rule` for `summary.content` when `sourceHash` matches the current rule
+     * text). UI, sync and export always use the full `rule`. A stale summary
+     * (hash mismatch after an edit some write path missed) is ignored and
+     * logged, never used. Stored inline on the embedded rule (the Mongo
+     * `rules` array is a plain Array, so no schema migration is needed).
+     */
+    summary?: IKodyRuleSummary;
+    /**
+     * Atomic decomposition (see IKodyRuleAtoms). Review-path only, like
+     * `summary`; stored inline on the embedded rule (plain Array in Mongo,
+     * no migration).
+     */
+    atoms?: IKodyRuleAtoms;
     repositoryId: string;
     origin?: KodyRulesOrigin;
     createdAt?: Date;
@@ -139,6 +160,58 @@ export interface IKodyRulesExtendedContext {
 export interface IKodyRulesExample {
     snippet: string;
     isCorrect: boolean;
+}
+
+export interface IKodyRuleSummary {
+    /** "WHAT TO VALIDATE / HOW TO VALIDATE" bullets, English, plain text. */
+    content: string;
+    /** sha256 of the exact `rule` text the summary was generated from. */
+    sourceHash: string;
+    generatedAt: Date;
+    /** Model id that generated it (BYOK main or managed default). */
+    model: string;
+}
+
+/**
+ * One atomic requirement decomposed from a LONG compound rule. Atoms are the
+ * review-time unit of judgment: each is fed to the shard judge as its own
+ * numbered item (or, when `detector` compiled, checked by the T0 regex sweep
+ * with zero LLM). Suggestions always map back to the PARENT rule's uuid — the
+ * customer only ever sees their own rule cited.
+ */
+export interface IKodyRuleAtom {
+    /** Stable id: `${parentUuid}-atom-${n}`. */
+    id: string;
+    /** Short imperative label for the single condition. */
+    title: string;
+    /** One-condition "WHAT / HOW" validation spec, English. */
+    spec: string;
+    /** Atom-specific bad/good snippets — also the compile gate's material. */
+    examples?: IKodyRulesExample[];
+    /** Present when the atom compiled into a T0 regex (deterministic path). */
+    detector?: IKodyRuleDetector;
+    /** Audit: why the compiler kept this atom on the LLM path. */
+    declineReason?: string;
+}
+
+/**
+ * Atomic decomposition of a long rule (> threshold), generated once and
+ * reused on every review. Replaces `summary` as the primary review-time
+ * artifact when present and fresh; `summary` remains the fallback.
+ * Validated on the Rails convention analog eval (2 reps/model, deliverable
+ * recall): glm 76%→92%, gpt-5.4-mini 79%→84%, kimi flat — and the compound
+ * -rule blind spots (requirements buried among ~18 siblings) broke.
+ */
+export interface IKodyRuleAtoms {
+    items: IKodyRuleAtom[];
+    /**
+     * sha256 over `rule` text AND serialized `examples`: examples gate the
+     * atom detectors, so an example edit must invalidate the decomposition
+     * (unlike `summary.sourceHash`, which covers the rule text only).
+     */
+    sourceHash: string;
+    generatedAt: Date;
+    model: string;
 }
 
 /**
