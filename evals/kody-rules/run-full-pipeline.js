@@ -87,7 +87,36 @@ async function main() {
     // the repository stub — generated once, reused across reps/models, exactly
     // like prod. Delete .summary-cache.json to force regeneration.
     let prepareRules = async (rules) => rules;
-    if (args.summary) {
+    // --atoms: virtual atomic decomposition (phase-2 experiment). Long rules
+    // are replaced by their atoms from .atoms-cache.json (decompose-rules.js),
+    // each atom carrying the PARENT's uuid so suggestions/scoring/severity all
+    // resolve to the customer rule. Atoms with a compiled detector go through
+    // the provider's real T0 sweep; the rest are judged as individual numbered
+    // rules by the shard.
+    if (args.atoms) {
+        const atomsCache = require('./.atoms-cache.json');
+        prepareRules = async (rules) => {
+            const out = [];
+            let nAtoms = 0, nT0 = 0;
+            for (const r of rules) {
+                const atoms = atomsCache[r.uuid];
+                if (!atoms || (r.rule || '').length <= 1000) { out.push(r); continue; }
+                for (const a of atoms) {
+                    nAtoms++;
+                    if (a.detector) nT0++;
+                    out.push({
+                        ...r,                    // uuid/path/scope/severity/type/status da mãe
+                        title: a.title,
+                        rule: a.spec,
+                        examples: a.examples || [],
+                        ...(a.detector ? { detector: a.detector } : {}),
+                    });
+                }
+            }
+            console.log(`  atoms mode: ${rules.length} rules → ${out.length} items (${nAtoms} atoms, ${nT0} T0)`);
+            return out;
+        };
+    } else if (args.summary) {
         const { KodyRuleSummaryService } = require(path.join(__dirname, '../../libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service.ts'));
         const cachePath = path.join(__dirname, '.summary-cache.json');
         const cache = fs.existsSync(cachePath) ? JSON.parse(fs.readFileSync(cachePath, 'utf8')) : {};

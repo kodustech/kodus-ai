@@ -18,8 +18,18 @@ import {
 } from '@libs/kodyRules/domain/contracts/kodyRules.repository.contract';
 import {
     IKodyRule,
+    IKodyRuleAtom,
+    IKodyRuleAtoms,
     IKodyRuleSummary,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { z } from 'zod';
+import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
+import {
+    compileRuleDetector,
+    compilerOutputSchema,
+    CompilerOutput,
+    makeLLMRunCompiler,
+} from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
 
 /**
  * Structured validation summaries for LONG kody rules.
@@ -44,6 +54,42 @@ import {
 
 const LONG_RULE_THRESHOLD_CHARS = 1000;
 const SUMMARY_CONCURRENCY = 3;
+const MAX_ATOMS_PER_RULE = 12;
+
+/**
+ * Verbatim from the validated eval (evals/kody-rules/decompose-rules.js).
+ * Changing this wording is a measured-regression risk — re-run the analog
+ * eval matrix before touching it.
+ */
+const DECOMPOSE_SYSTEM_PROMPT = `You decompose a long team code-review rule into ATOMIC requirements. Each atom is ONE independently-checkable condition a reviewer flags in a code diff.
+
+Return ONLY JSON:
+{"atoms":[{"title":"<short imperative label, <=80 chars>","spec":"WHAT: <the single condition to flag>\\nHOW: <what pattern/signal in the ADDED lines of a diff indicates this violation>","examples":[{"snippet":"<code violating THIS atom>","isCorrect":false},{"snippet":"<compliant version>","isCorrect":true}]}]}
+
+Constraints:
+- At most ${MAX_ATOMS_PER_RULE} atoms. If the rule has more requirements, merge the closest ones — never drop an enforceable requirement silently.
+- Each atom covers exactly ONE condition. No compound atoms ("X and also Y").
+- Examples are SHORT (1-4 lines), concrete, in the rule's target language, and must violate/satisfy THIS atom specifically.
+- English output. Do NOT invent requirements that are not in the rule.`;
+
+const decomposeOutputSchema = z.object({
+    atoms: z
+        .array(
+            z.object({
+                title: z.string(),
+                spec: z.string(),
+                examples: z
+                    .array(
+                        z.object({
+                            snippet: z.string(),
+                            isCorrect: z.boolean(),
+                        }),
+                    )
+                    .optional(),
+            }),
+        )
+        .default([]),
+});
 
 /**
  * Verbatim from the validated experiment (evals/kody-rules/summarize-rules.js,
@@ -356,5 +402,299 @@ export class KodyRuleSummaryService {
                 ? { ...r, summary: generated.get(r.uuid) }
                 : r,
         );
+    }
+
+    // ── atomic decomposition (phase 2 — primary review-time artifact) ────────
+
+    /**
+     * Atoms hash covers rule text AND examples: examples are the compile gate
+     * for atom detectors, so an example edit must invalidate the decomposition.
+     */
+    atomsHashOf(rule: Partial<IKodyRule>): string {
+        return this.hashOf(
+            `${rule.rule ?? ''} ${JSON.stringify(rule.examples ?? [])}`,
+        );
+    }
+
+    hasValidAtoms(rule: Partial<IKodyRule>): boolean {
+        return (
+            !!rule.atoms?.items?.length &&
+            rule.atoms.sourceHash === this.atomsHashOf(rule)
+        );
+    }
+
+    /**
+     * Decompose one long rule into <= MAX_ATOMS_PER_RULE atomic requirements
+     * (one structured call), then run each atom through the REAL detector
+     * compiler + its example gate — atoms that compile become T0 regexes and
+     * skip the LLM at review time. Same model policy and null-on-failure
+     * contract as generate(); every call is token-accounted via
+     * runStructuredReviewCall.
+     */
+    async generateAtoms(
+        rule: Partial<IKodyRule>,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<IKodyRuleAtoms | null> {
+        if (!this.isLong(rule.rule) || !rule.uuid) {
+            return null;
+        }
+        try {
+            const [byokConfig, subscriptionStatus] = await Promise.all([
+                this.permissionValidationService.getBYOKConfig(
+                    organizationAndTeamData,
+                ),
+                this.permissionValidationService.getSubscriptionStatus(
+                    organizationAndTeamData,
+                ),
+            ]);
+            const hasByok = !!byokConfig?.main;
+            if (
+                !hasByok &&
+                POST_TRIAL_REQUIRES_BYOK.includes(
+                    subscriptionStatus as SubscriptionStatus,
+                )
+            ) {
+                this.logger.log({
+                    message:
+                        '[kody-rule-atoms] skipping decomposition: trial ended and no BYOK configured',
+                    context: KodyRuleSummaryService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData.organizationId,
+                        ruleUuid: rule.uuid,
+                        subscriptionStatus,
+                    },
+                });
+                return null;
+            }
+
+            const decomposed = (await runStructuredReviewCall({
+                byokConfig: byokConfig ?? undefined,
+                schema: decomposeOutputSchema,
+                system: DECOMPOSE_SYSTEM_PROMPT,
+                user: `Rule title: ${rule.title ?? ''}\n\nRule text:\n${rule.rule}`,
+                runName: 'kody-rules.atom-decomposition',
+                organizationId: organizationAndTeamData.organizationId,
+                attrs: { ruleUuid: rule.uuid },
+                observabilityService: this.observabilityService,
+            })) as z.infer<typeof decomposeOutputSchema> | null;
+
+            const raw = decomposed?.atoms?.slice(0, MAX_ATOMS_PER_RULE) ?? [];
+            if (raw.length === 0) {
+                this.logger.warn({
+                    message:
+                        '[kody-rule-atoms] decomposition produced no atoms — rule stays on summary/full-text path',
+                    context: KodyRuleSummaryService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData.organizationId,
+                        ruleUuid: rule.uuid,
+                    },
+                });
+                return null;
+            }
+
+            // T0 attempt per atom via the shipped compiler + example gate.
+            // A compiler failure only keeps that atom semantic — never fails
+            // the decomposition.
+            const runCompiler = makeLLMRunCompiler(async ({ system, user }) => {
+                const parsed = await runStructuredReviewCall({
+                    byokConfig: byokConfig ?? undefined,
+                    schema: compilerOutputSchema,
+                    system,
+                    user,
+                    runName: 'kody-rules.atom-detector-compiler',
+                    organizationId: organizationAndTeamData.organizationId,
+                    observabilityService: this.observabilityService,
+                });
+                return (parsed as CompilerOutput) ?? null;
+            });
+
+            const items: IKodyRuleAtom[] = [];
+            for (let i = 0; i < raw.length; i++) {
+                const a = raw[i];
+                const atom: IKodyRuleAtom = {
+                    id: `${rule.uuid}-atom-${i + 1}`,
+                    title: a.title,
+                    spec: a.spec,
+                    examples: a.examples,
+                };
+                try {
+                    const out = await compileRuleDetector(
+                        {
+                            uuid: atom.id,
+                            title: atom.title,
+                            rule: atom.spec,
+                            examples: atom.examples,
+                        },
+                        runCompiler,
+                        { modelName: hasByok ? 'byok' : 'system' },
+                    );
+                    if (out.detector) atom.detector = out.detector;
+                    else atom.declineReason = out.declineReason;
+                } catch (error) {
+                    atom.declineReason = `compile error: ${
+                        error instanceof Error ? error.message : String(error)
+                    }`.slice(0, 120);
+                }
+                items.push(atom);
+            }
+
+            this.logger.log({
+                message: `[kody-rule-atoms] decomposed rule into ${items.length} atoms (${items.filter((a) => a.detector).length} T0)`,
+                context: KodyRuleSummaryService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    ruleUuid: rule.uuid,
+                },
+            });
+
+            return {
+                items,
+                sourceHash: this.atomsHashOf(rule),
+                generatedAt: new Date(),
+                model: getModelName(byokConfig ?? undefined),
+            };
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    '[kody-rule-atoms] decomposition failed — review will fall back to summary/full text',
+                context: KodyRuleSummaryService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    ruleUuid: rule.uuid,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                },
+            });
+            return null;
+        }
+    }
+
+    /**
+     * Lazy backfill for atoms (mirrors ensureSummaries): generate + persist
+     * for long rules lacking a fresh decomposition, returning the rules with
+     * atoms attached so the current review already benefits. Failures degrade
+     * per-rule to the summary/full-text path — a review is never blocked.
+     */
+    async ensureAtoms(
+        rules: Partial<IKodyRule>[],
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<Partial<IKodyRule>[]> {
+        const pending = rules.filter(
+            (r) => r.uuid && this.isLong(r.rule) && !this.hasValidAtoms(r),
+        );
+        if (pending.length === 0) {
+            return rules;
+        }
+
+        let docUuid: string | null = null;
+        try {
+            const doc = await this.kodyRulesRepository.findByOrganizationId(
+                organizationAndTeamData.organizationId,
+            );
+            docUuid = doc?.uuid ?? null;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    '[kody-rule-atoms] could not resolve kodyRules doc for persistence — atoms used in-memory only',
+                context: KodyRuleSummaryService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                },
+            });
+        }
+
+        const generated = new Map<string, IKodyRuleAtoms>();
+        await mapLimit(pending, SUMMARY_CONCURRENCY, async (rule) => {
+            const atoms = await this.generateAtoms(
+                rule,
+                organizationAndTeamData,
+            );
+            if (!atoms) {
+                return;
+            }
+            generated.set(rule.uuid!, atoms);
+            if (docUuid) {
+                try {
+                    await this.kodyRulesRepository.updateRule(
+                        docUuid,
+                        rule.uuid!,
+                        { atoms },
+                    );
+                } catch (error) {
+                    this.logger.warn({
+                        message:
+                            '[kody-rule-atoms] persist failed — atoms used in-memory only for this review',
+                        context: KodyRuleSummaryService.name,
+                        metadata: {
+                            organizationId:
+                                organizationAndTeamData.organizationId,
+                            ruleUuid: rule.uuid,
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                        },
+                    });
+                }
+            }
+        });
+
+        return rules.map((r) =>
+            r.uuid && generated.has(r.uuid)
+                ? { ...r, atoms: generated.get(r.uuid) }
+                : r,
+        );
+    }
+
+    /**
+     * Expand one rule into its review-time judgment units. A rule with fresh
+     * atoms becomes N atom-rules CARRYING THE PARENT UUID (suggestions,
+     * severity, path/scope routing and customer-facing citation all resolve to
+     * the customer's rule); atoms with a compiled detector ride the provider's
+     * T0 sweep. Anything else falls back to the summary swap / full text.
+     */
+    expandForReview(rule: Partial<IKodyRule>): Partial<IKodyRule>[] {
+        if (!this.isLong(rule.rule) || !rule.atoms?.items?.length) {
+            return [this.resolveForReview(rule)];
+        }
+        if (rule.atoms.sourceHash !== this.atomsHashOf(rule)) {
+            this.logger.warn({
+                message:
+                    '[kody-rule-atoms] stale atoms (sourceHash mismatch) — falling back to summary/full text',
+                context: KodyRuleSummaryService.name,
+                metadata: {
+                    ruleUuid: rule.uuid,
+                    ruleTitle: rule.title,
+                    atomsGeneratedAt: rule.atoms.generatedAt,
+                },
+            });
+            return [this.resolveForReview(rule)];
+        }
+        return rule.atoms.items.map((atom) => ({
+            ...rule,
+            title: atom.title,
+            rule: atom.spec,
+            examples: atom.examples ?? [],
+            // Parent's summary/atoms are irrelevant on the expanded unit; the
+            // detector must be the ATOM's (or absent) — inheriting a parent
+            // detector would multiply T0 hits.
+            summary: undefined,
+            atoms: undefined,
+            detector: atom.detector,
+        }));
+    }
+
+    /**
+     * Single review-path entry point: lazy-backfill atoms, then expand every
+     * rule into its judgment units (atoms > summary > full text).
+     */
+    async prepareForReview(
+        rules: Partial<IKodyRule>[],
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<Partial<IKodyRule>[]> {
+        const withAtoms = await this.ensureAtoms(rules, organizationAndTeamData);
+        return withAtoms.flatMap((r) => this.expandForReview(r));
     }
 }

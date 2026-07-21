@@ -281,13 +281,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             return rules;
         }
         try {
-            const withSummaries =
-                await this.kodyRuleSummaryService.ensureSummaries(
-                    rules,
-                    context.organizationAndTeamData,
-                );
-            return withSummaries.map((rule) =>
-                this.kodyRuleSummaryService!.resolveForReview(rule),
+            // Judgment units: atoms > summary > full text (see
+            // KodyRuleSummaryService.prepareForReview). Long rules are lazily
+            // decomposed into atomic requirements carrying the parent uuid.
+            return await this.kodyRuleSummaryService.prepareForReview(
+                rules,
+                context.organizationAndTeamData,
             );
         } catch (error) {
             this.logger.warn({

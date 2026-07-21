@@ -150,7 +150,7 @@ export class KodyRulesService implements IKodyRulesService {
      * Detached from the request (setImmediate + captured plain values — no
      * request-scoped references, see the finish-onboarding 504 postmortem) so
      * writes never wait on an LLM. Short rules never reach generation;
-     * ensureSummaries also no-ops when a valid summary already exists.
+     * ensureAtoms also no-ops when a fresh decomposition already exists.
      */
     private scheduleSummaryGeneration(
         organizationAndTeamData: OrganizationAndTeamData,
@@ -166,7 +166,7 @@ export class KodyRulesService implements IKodyRulesService {
         };
         const snapshot: Partial<IKodyRule> = { ...rule };
         setImmediate(() => {
-            summaryService.ensureSummaries([snapshot], orgData).catch((error) =>
+            summaryService.ensureAtoms([snapshot], orgData).catch((error) =>
                 this.logger.warn({
                     message:
                         '[kody-rule-summary] background generation failed after rule write',
@@ -585,9 +585,16 @@ export class KodyRulesService implements IKodyRulesService {
         // which must not keep a summary of its former long text. A long new
         // text gets a fresh summary scheduled below.
         const ruleTextChanged =
-            kodyRule.rule !== undefined && kodyRule.rule !== existingRule.rule;
+            (kodyRule.rule !== undefined &&
+                kodyRule.rule !== existingRule.rule) ||
+            // examples gate the atom detectors (atoms sourceHash covers them),
+            // so an examples edit also invalidates the decomposition.
+            (kodyRule.examples !== undefined &&
+                JSON.stringify(kodyRule.examples) !==
+                    JSON.stringify(existingRule.examples));
         if (ruleTextChanged) {
             delete (updatedRule as Partial<IKodyRule>).summary;
+            delete (updatedRule as Partial<IKodyRule>).atoms;
         }
 
         const updatedKodyRules = await this.updateRule(
@@ -890,9 +897,16 @@ export class KodyRulesService implements IKodyRulesService {
         // Same stale-summary treatment as createOrUpdate: text changed →
         // drop the carried-over summary and schedule a fresh one below.
         const ruleTextChanged =
-            kodyRule.rule !== undefined && kodyRule.rule !== existingRule.rule;
+            (kodyRule.rule !== undefined &&
+                kodyRule.rule !== existingRule.rule) ||
+            // examples gate the atom detectors (atoms sourceHash covers them),
+            // so an examples edit also invalidates the decomposition.
+            (kodyRule.examples !== undefined &&
+                JSON.stringify(kodyRule.examples) !==
+                    JSON.stringify(existingRule.examples));
         if (ruleTextChanged) {
             delete (updatedRule as Partial<IKodyRule>).summary;
+            delete (updatedRule as Partial<IKodyRule>).atoms;
         }
 
         const updatedKodyRules = await this.updateRule(
