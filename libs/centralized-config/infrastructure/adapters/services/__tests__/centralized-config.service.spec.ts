@@ -782,6 +782,24 @@ describe('CentralizedConfigService', () => {
             ).rejects.toThrow();
         });
 
+        it('discoverConfigFiles THROWS (not []) when the repositories mapping cannot be loaded', async () => {
+            // Twin of discoverKodyRulesFiles — both go through scanRepositoryTree,
+            // and both feed removeStale*, so both must fail loudly on a read error.
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([
+                { type: 'file', path: 'my-repo/kodus-config.yml' },
+            ]);
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                null,
+            );
+
+            await expect(
+                service.discoverConfigFiles({
+                    organizationAndTeamData,
+                    repository: { name: 'config-repo', id: 'repo-1' },
+                }),
+            ).rejects.toThrow();
+        });
+
         it('removeStaleKodyRules does NOT delete centralized rules when discovery is empty', async () => {
             const ruleFiles: any[] = []; // empty discovery
 

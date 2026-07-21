@@ -308,4 +308,50 @@ describe('CentralizedConfigSyncUseCase', () => {
             }),
         );
     });
+
+    it('aborts before ANY deletion when discovery fails (issue #1518 safety net)', async () => {
+        const centralizedConfigService = {
+            validateCentralizedConfig: jest
+                .fn()
+                .mockResolvedValue({ success: true, message: 'ok' }),
+            getCentralizedConfigRepository: jest
+                .fn()
+                .mockResolvedValue({ id: 'central-repo-id', name: 'kodus' }),
+            discoverConfigFiles: jest.fn().mockResolvedValue([]),
+            // A transient read failure now THROWS (scanRepositoryTree) instead
+            // of returning [] — the use-case must abort before any removeStale
+            // runs, or it would wipe every rule + the org's global config.
+            discoverKodyRulesFiles: jest
+                .fn()
+                .mockRejectedValue(
+                    new Error(
+                        'repositories integration config unavailable',
+                    ),
+                ),
+            synchronizeConfigs: jest.fn(),
+            synchronizeKodyRules: jest.fn(),
+            removeStaleConfigs: jest.fn(),
+            removeStaleKodyRules: jest.fn(),
+        };
+
+        const useCase = new CentralizedConfigSyncUseCase(
+            centralizedConfigService as any,
+        );
+
+        const result = await useCase.execute({
+            organizationAndTeamData,
+        } as any);
+
+        expect(result.success).toBe(false);
+        // The critical safety property: nothing destructive ran.
+        expect(
+            centralizedConfigService.removeStaleKodyRules,
+        ).not.toHaveBeenCalled();
+        expect(
+            centralizedConfigService.removeStaleConfigs,
+        ).not.toHaveBeenCalled();
+        expect(
+            centralizedConfigService.synchronizeKodyRules,
+        ).not.toHaveBeenCalled();
+    });
 });
