@@ -73,6 +73,21 @@ export interface IKodyRule {
      * schema migration is needed).
      */
     detector?: IKodyRuleDetector;
+    /**
+     * Structured validation summary for LONG rules (> 1000 chars), generated
+     * once by an LLM ("WHAT TO VALIDATE / HOW TO VALIDATE" bullets) and reused
+     * on every review — measured to nearly double occurrence-recall on terse
+     * models without regressing strong ones (docs/plans/
+     * kody-rules-summary-productization.md).
+     *
+     * Consumed EXCLUSIVELY by the code-review path (the shard prompt swaps
+     * `rule` for `summary.content` when `sourceHash` matches the current rule
+     * text). UI, sync and export always use the full `rule`. A stale summary
+     * (hash mismatch after an edit some write path missed) is ignored and
+     * logged, never used. Stored inline on the embedded rule (the Mongo
+     * `rules` array is a plain Array, so no schema migration is needed).
+     */
+    summary?: IKodyRuleSummary;
     repositoryId: string;
     origin?: KodyRulesOrigin;
     createdAt?: Date;
@@ -139,6 +154,16 @@ export interface IKodyRulesExtendedContext {
 export interface IKodyRulesExample {
     snippet: string;
     isCorrect: boolean;
+}
+
+export interface IKodyRuleSummary {
+    /** "WHAT TO VALIDATE / HOW TO VALIDATE" bullets, English, plain text. */
+    content: string;
+    /** sha256 of the exact `rule` text the summary was generated from. */
+    sourceHash: string;
+    generatedAt: Date;
+    /** Model id that generated it (BYOK main or managed default). */
+    model: string;
 }
 
 /**
