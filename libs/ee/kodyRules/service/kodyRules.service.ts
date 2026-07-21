@@ -585,15 +585,19 @@ export class KodyRulesService implements IKodyRulesService {
         // which must not keep a summary of its former long text. A long new
         // text gets a fresh summary scheduled below.
         const ruleTextChanged =
-            (kodyRule.rule !== undefined &&
-                kodyRule.rule !== existingRule.rule) ||
-            // examples gate the atom detectors (atoms sourceHash covers them),
-            // so an examples edit also invalidates the decomposition.
-            (kodyRule.examples !== undefined &&
-                JSON.stringify(kodyRule.examples) !==
-                    JSON.stringify(existingRule.examples));
+            kodyRule.rule !== undefined && kodyRule.rule !== existingRule.rule;
+        // Examples gate the atom detectors (atoms sourceHash covers them), so
+        // an examples-only edit invalidates the DECOMPOSITION — but not the
+        // summary, whose hash covers the rule text alone and stays valid as
+        // the fallback while fresh atoms are regenerated.
+        const examplesChanged =
+            kodyRule.examples !== undefined &&
+            JSON.stringify(kodyRule.examples) !==
+                JSON.stringify(existingRule.examples);
         if (ruleTextChanged) {
             delete (updatedRule as Partial<IKodyRule>).summary;
+            delete (updatedRule as Partial<IKodyRule>).atoms;
+        } else if (examplesChanged) {
             delete (updatedRule as Partial<IKodyRule>).atoms;
         }
 
@@ -603,7 +607,7 @@ export class KodyRulesService implements IKodyRulesService {
             updatedRule,
         );
 
-        if (updatedKodyRules && ruleTextChanged) {
+        if (updatedKodyRules && (ruleTextChanged || examplesChanged)) {
             this.scheduleSummaryGeneration(
                 organizationAndTeamData,
                 updatedRule,
@@ -897,15 +901,19 @@ export class KodyRulesService implements IKodyRulesService {
         // Same stale-summary treatment as createOrUpdate: text changed →
         // drop the carried-over summary and schedule a fresh one below.
         const ruleTextChanged =
-            (kodyRule.rule !== undefined &&
-                kodyRule.rule !== existingRule.rule) ||
-            // examples gate the atom detectors (atoms sourceHash covers them),
-            // so an examples edit also invalidates the decomposition.
-            (kodyRule.examples !== undefined &&
-                JSON.stringify(kodyRule.examples) !==
-                    JSON.stringify(existingRule.examples));
+            kodyRule.rule !== undefined && kodyRule.rule !== existingRule.rule;
+        // Examples gate the atom detectors (atoms sourceHash covers them), so
+        // an examples-only edit invalidates the DECOMPOSITION — but not the
+        // summary, whose hash covers the rule text alone and stays valid as
+        // the fallback while fresh atoms are regenerated.
+        const examplesChanged =
+            kodyRule.examples !== undefined &&
+            JSON.stringify(kodyRule.examples) !==
+                JSON.stringify(existingRule.examples);
         if (ruleTextChanged) {
             delete (updatedRule as Partial<IKodyRule>).summary;
+            delete (updatedRule as Partial<IKodyRule>).atoms;
+        } else if (examplesChanged) {
             delete (updatedRule as Partial<IKodyRule>).atoms;
         }
 
@@ -915,7 +923,7 @@ export class KodyRulesService implements IKodyRulesService {
             updatedRule,
         );
 
-        if (updatedKodyRules && ruleTextChanged) {
+        if (updatedKodyRules && (ruleTextChanged || examplesChanged)) {
             this.scheduleSummaryGeneration(
                 organizationAndTeamData,
                 updatedRule,

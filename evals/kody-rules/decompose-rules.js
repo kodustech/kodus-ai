@@ -11,6 +11,9 @@
 // runner rep/model reuses the same decomposition — mirrors the once-per-rule
 // product design. Delete the cache to force regeneration.
 //
+// NOTE: eval harness — runs LOCALLY with env keys only (never customer
+// BYOK, never in prod). Bare/stubbed LLM calls here are intentional; the
+// PRODUCT path (KodyRuleSummaryService) is fully usage-span wrapped.
 //   node evals/kody-rules/decompose-rules.js [--model=gpt-5.4-mini]
 const fs = require('fs');
 const esbuild = require('esbuild');

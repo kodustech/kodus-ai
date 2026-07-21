@@ -4,6 +4,9 @@
 // verify) — i.e. BOTH phases, identical to prod. Contrast with
 // run-convention-cases.js, which drives only the raw judge (phase 1).
 //
+// NOTE: eval harness — runs LOCALLY with env keys only (never customer
+// BYOK, never in prod). Bare/stubbed LLM calls here are intentional; the
+// PRODUCT path (KodyRuleSummaryService) is fully usage-span wrapped.
 //   node evals/kody-rules/run-full-pipeline.js --model=glm-5.2 \
 //     --base-url=https://code.verboo.ai/router/v1 --dataset=rails-convention-cases-all
 const fs = require('fs');
