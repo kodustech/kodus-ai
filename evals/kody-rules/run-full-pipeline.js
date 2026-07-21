@@ -94,7 +94,13 @@ async function main() {
     // the provider's real T0 sweep; the rest are judged as individual numbered
     // rules by the shard.
     if (args.atoms) {
-        const atomsCache = require('./.atoms-cache.json');
+        // Local .atoms-cache.json (regenerable via decompose-rules.js) wins for
+        // iteration; CI uses the FROZEN committed fixture so runs are
+        // deterministic and need no generation calls. To refresh the fixture:
+        // rm .atoms-cache.json && node decompose-rules.js && cp .atoms-cache.json rails-convention-atoms.json
+        const atomsCache = fs.existsSync(path.join(__dirname, '.atoms-cache.json'))
+            ? require('./.atoms-cache.json')
+            : require('./rails-convention-atoms.json');
         prepareRules = async (rules) => {
             const out = [];
             let nAtoms = 0, nT0 = 0;
