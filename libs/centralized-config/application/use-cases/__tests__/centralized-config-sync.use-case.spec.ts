@@ -354,4 +354,47 @@ describe('CentralizedConfigSyncUseCase', () => {
             centralizedConfigService.synchronizeKodyRules,
         ).not.toHaveBeenCalled();
     });
+
+    it('surfaces a partial Kody-rules sync as a failure and skips stale removal (#1518)', async () => {
+        const centralizedConfigService = {
+            validateCentralizedConfig: jest
+                .fn()
+                .mockResolvedValue({ success: true, message: 'ok' }),
+            getCentralizedConfigRepository: jest
+                .fn()
+                .mockResolvedValue({ id: 'r', name: 'kodus' }),
+            discoverConfigFiles: jest.fn().mockResolvedValue([]),
+            discoverKodyRulesFiles: jest
+                .fn()
+                .mockResolvedValue([{ path: 'a.yml' }]),
+            synchronizeConfigs: jest
+                .fn()
+                .mockResolvedValue({ success: true, message: 'ok' }),
+            // 27 of 61 materialized, the rest failed — must NOT be success.
+            synchronizeKodyRules: jest.fn().mockResolvedValue({
+                success: false,
+                message: 'Kody rules sync incomplete — synced 27, failed 34',
+            }),
+            removeStaleConfigs: jest.fn(),
+            removeStaleKodyRules: jest.fn(),
+        };
+
+        const useCase = new CentralizedConfigSyncUseCase(
+            centralizedConfigService as any,
+        );
+
+        const result = await useCase.execute({
+            organizationAndTeamData,
+        } as any);
+
+        expect(result.success).toBe(false);
+        expect(result.message).toContain('incomplete');
+        // A partial materialization must not trigger stale deletion.
+        expect(
+            centralizedConfigService.removeStaleKodyRules,
+        ).not.toHaveBeenCalled();
+        expect(
+            centralizedConfigService.removeStaleConfigs,
+        ).not.toHaveBeenCalled();
+    });
 });

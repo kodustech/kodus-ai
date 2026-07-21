@@ -887,6 +887,139 @@ describe('CentralizedConfigService', () => {
         });
     });
 
+    // Backfill for the four methods that had no direct unit test — the gap
+    // that let #1518 through (methods only exercised via mocks in the use-case
+    // spec, never their own logic).
+    describe('untested method coverage', () => {
+        describe('validateCentralizedConfig', () => {
+            it('fails when centralized config is not enabled', async () => {
+                mockParametersService.findByKey.mockResolvedValue({
+                    configValue: { enabled: false },
+                });
+                const r = await service.validateCentralizedConfig({
+                    organizationAndTeamData,
+                });
+                expect(r.success).toBe(false);
+                expect(r.message).toContain('not enabled');
+            });
+
+            it('fails when enabled but no repository is configured', async () => {
+                mockParametersService.findByKey.mockResolvedValue({
+                    configValue: { enabled: true, repository: {} },
+                });
+                const r = await service.validateCentralizedConfig({
+                    organizationAndTeamData,
+                });
+                expect(r.success).toBe(false);
+                expect(r.message).toContain('no repository');
+            });
+
+            it('succeeds when enabled and a repository is configured', async () => {
+                mockParametersService.findByKey.mockResolvedValue({
+                    configValue: {
+                        enabled: true,
+                        repository: { id: 'r1', name: 'kodus' },
+                    },
+                });
+                const r = await service.validateCentralizedConfig({
+                    organizationAndTeamData,
+                });
+                expect(r.success).toBe(true);
+            });
+        });
+
+        describe('getCentralizedConfigRepository', () => {
+            it('returns the configured repository', async () => {
+                mockParametersService.findByKey.mockResolvedValue({
+                    configValue: { repository: { id: 'r1', name: 'kodus' } },
+                });
+                const repo =
+                    await service.getCentralizedConfigRepository(
+                        organizationAndTeamData,
+                    );
+                expect(repo).toEqual({ id: 'r1', name: 'kodus' });
+            });
+
+            it('throws when no repository is configured', async () => {
+                mockParametersService.findByKey.mockResolvedValue({
+                    configValue: {},
+                });
+                await expect(
+                    service.getCentralizedConfigRepository(
+                        organizationAndTeamData,
+                    ),
+                ).rejects.toThrow(
+                    'Centralized config repository not configured',
+                );
+            });
+        });
+
+        describe('fetchConfigFile', () => {
+            it('returns the config file on success', async () => {
+                mockCodeBaseConfigService.getKodusConfigFile.mockResolvedValue({
+                    version: 2,
+                });
+                const file = await service.fetchConfigFile({
+                    organizationAndTeamData,
+                    repository: { name: 'r', id: 'r1' },
+                });
+                expect(file).toEqual({ version: 2 });
+            });
+
+            it('returns null (does not throw) when the read fails', async () => {
+                mockCodeBaseConfigService.getKodusConfigFile.mockRejectedValue(
+                    new Error('boom'),
+                );
+                const file = await service.fetchConfigFile({
+                    organizationAndTeamData,
+                    repository: { name: 'r', id: 'r1' },
+                });
+                expect(file).toBeNull();
+            });
+        });
+
+        describe('fetchKodyRuleFile', () => {
+            it('returns null when the file has no content', async () => {
+                mockCodeManagementService.getDefaultBranch.mockResolvedValue(
+                    'main',
+                );
+                mockCodeManagementService.getRepositoryContentFile.mockResolvedValue(
+                    { data: {} },
+                );
+                const rule = await service.fetchKodyRuleFile({
+                    organizationAndTeamData,
+                    repository: { name: 'r', id: 'r1' },
+                    filePath: '.kody-rules/review/a.yml',
+                });
+                expect(rule).toBeNull();
+            });
+
+            it('decodes and parses a base64 YAML rule file', async () => {
+                mockCodeManagementService.getDefaultBranch.mockResolvedValue(
+                    'main',
+                );
+                const yamlContent = 'title: My rule\nrule: do the thing\n';
+                mockCodeManagementService.getRepositoryContentFile.mockResolvedValue(
+                    {
+                        data: {
+                            content: Buffer.from(
+                                yamlContent,
+                                'utf-8',
+                            ).toString('base64'),
+                            encoding: 'base64',
+                        },
+                    },
+                );
+                const rule = await service.fetchKodyRuleFile({
+                    organizationAndTeamData,
+                    repository: { name: 'r', id: 'r1' },
+                    filePath: '.kody-rules/review/a.yml',
+                });
+                expect(rule).toMatchObject({ title: 'My rule' });
+            });
+        });
+    });
+
     describe('discoverKodyRulesFiles', () => {
         it('should discover Kody rule files from centralized repository', async () => {
             const mockRepoTree = [
@@ -1373,7 +1506,10 @@ describe('CentralizedConfigService', () => {
                 actor,
             });
 
-            expect(result.success).toBe(true);
+            // #1518: a per-file failure must NOT be reported as an overall
+            // success — the sync is incomplete and the caller has to know.
+            expect(result.success).toBe(false);
+            expect(result.message).toContain('incomplete');
             expect(result.failureDetails).toHaveLength(1);
             expect(result.failureDetails![0].file).toBe(
                 '.kody-rules/memories/invalid.yml',

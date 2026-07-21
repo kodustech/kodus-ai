@@ -2038,7 +2038,10 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 }
             }
 
-            const message = `Kody rules synchronized successfully. Synced: ${syncedCount}, Failed: ${failureDetails.length}`;
+            const hasFailures = failureDetails.length > 0;
+            const message = hasFailures
+                ? `Kody rules sync incomplete — synced ${syncedCount}, failed ${failureDetails.length}`
+                : `Kody rules synchronized successfully. Synced: ${syncedCount}, Failed: 0`;
 
             if (failureDetails.length > 0) {
                 this.logger.warn({
@@ -2063,11 +2066,14 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             }
 
             return {
-                success: true,
+                // #1518: a partial sync must NOT report success — the use-case
+                // surfaces this so the caller sees the real state (not a
+                // success-shaped result), and removeStale* does not run on an
+                // incomplete materialization.
+                success: !hasFailures,
                 message,
                 syncedRuleCount: syncedCount,
-                failureDetails:
-                    failureDetails.length > 0 ? failureDetails : undefined,
+                failureDetails: hasFailures ? failureDetails : undefined,
             };
         } catch (error) {
             this.logger.error({
