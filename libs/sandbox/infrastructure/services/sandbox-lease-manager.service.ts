@@ -3,6 +3,7 @@ import {
     AcquireResult,
     assertValidPrKey,
     ISandboxLeaseManager,
+    SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import {
     CreateSandboxParams,
@@ -180,6 +181,12 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         // (doc will be deleted), then retry acquire from scratch. Prevents
         // attaching to a doc that's being cleaned up.
         if (doc.cleanupStatus === SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS) {
+            // upsertAcquire() already incremented leaseCount on this doc. Undo
+            // it BEFORE waiting: cleanup's claim requires leaseCount <= 0, so
+            // holding the increment while we poll would deadlock the very
+            // cleanup we're waiting on (and each retry would inflate the count
+            // further). Mirrors the FAILED/INVALIDATED branches below.
+            await this.leaseRepo.decrementLease(prKey);
             this.logger.log({
                 message: `SandboxLeaseManager: cleanup in progress, waiting for completion prKey="${prKey}"`,
                 context: SandboxLeaseManager.name,
@@ -215,9 +222,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 context: SandboxLeaseManager.name,
                 metadata: { prKey, leaseCount: updated?.leaseCount },
             });
-            throw new Error(
-                `SandboxLeaseManager: sandbox invalidated for prKey="${prKey}"`,
-            );
+            throw new SandboxInvalidatedError(prKey);
         }
 
         const leaseId = randomUUID();
@@ -470,10 +475,24 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                         latest.state === 'READY'
                     ) {
                         await this.leaseRepo.markInvalidated(prKey);
+                        this.logger.log({
+                            message: `SandboxLeaseManager: invalidated READY local lease after losing cleanup claim prKey="${prKey}"`,
+                            context: SandboxLeaseManager.name,
+                            metadata: { prKey, sandboxId: doc.sandboxId },
+                        });
                     }
                 }
             } else {
                 await this.leaseRepo.markInvalidated(prKey);
+                this.logger.log({
+                    message: `SandboxLeaseManager: invalidated active local lease (leaseCount>0) prKey="${prKey}"`,
+                    context: SandboxLeaseManager.name,
+                    metadata: {
+                        prKey,
+                        sandboxId: doc.sandboxId,
+                        leaseCount: doc.leaseCount,
+                    },
+                });
             }
             return;
         }
@@ -563,10 +582,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                             // Finding 4 fix: don't delete the lease doc when
                             // local cleanup fails — keep it so the reaper can
                             // retry the cleanup.
-                            throw new Error(
-                                `SandboxLeaseManager: sandbox invalidated mid-create for prKey="${prKey}"`,
-                                { cause: localErr },
-                            );
+                            throw new SandboxInvalidatedError(prKey, true, {
+                                cause: localErr,
+                            });
                         }
                     } else {
                         const apiKey =
@@ -579,9 +597,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                     }
                 }
                 await this.leaseRepo.delete(prKey);
-                throw new Error(
-                    `SandboxLeaseManager: sandbox invalidated mid-create for prKey="${prKey}"`,
-                );
+                throw new SandboxInvalidatedError(prKey, true);
             }
 
             this.leaseIdToPrKey.set(leaseId, prKey);
@@ -697,9 +713,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             // Finding 2 fix: do NOT delete the sandbox here — active leases
             // may still be using it. The reaper will clean up when all leases
             // release and the TTL expires.
-            throw new Error(
-                `SandboxLeaseManager: sandbox invalidated for prKey="${prKey}"`,
-            );
+            throw new SandboxInvalidatedError(prKey);
         }
 
         if (state === 'READY' && sandboxId) {
@@ -725,9 +739,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             }
 
             if (doc.state === 'INVALIDATED') {
-                throw new Error(
-                    `SandboxLeaseManager: sandbox invalidated for prKey="${prKey}"`,
-                );
+                throw new SandboxInvalidatedError(prKey);
             }
 
             if (doc.state === 'READY' && doc.sandboxId) {

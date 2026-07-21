@@ -1326,6 +1326,56 @@ describe('SandboxLeaseManager', () => {
             // Two upsertAcquire calls: first hit IN_PROGRESS, second succeeded
             expect(leaseRepo.upsertAcquire).toHaveBeenCalledTimes(2);
         });
+
+        it('acquire on IN_PROGRESS undoes the leaseCount increment before waiting', async () => {
+            // Regression: upsertAcquire() increments leaseCount on a doc that is
+            // being cleaned up. The wait path must decrement it immediately —
+            // cleanup's claim requires leaseCount <= 0, so holding the increment
+            // while polling would deadlock the very cleanup we're waiting for.
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:51';
+
+            leaseRepo.upsertAcquire
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 1,
+                    state: 'READY',
+                    cleanupStatus: 'in_progress',
+                    sandboxId: '/tmp/kodus-sandbox-inprogress-undo',
+                    createdAt: new Date(),
+                    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                } as any)
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 1,
+                    state: 'CREATING',
+                    createdAt: new Date(),
+                    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                } as any);
+
+            // Cleanup completes: doc gone on first poll.
+            leaseRepo.findByPrKey.mockResolvedValueOnce(null);
+            // Post-create check for the retry's creator path: READY.
+            leaseRepo.findByPrKey.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: '',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+
+            jest.useFakeTimers();
+            const acquirePromise = manager.acquire(prKey, 'review');
+            await jest.runAllTimersAsync();
+            await acquirePromise;
+            jest.useRealTimers();
+
+            // The IN_PROGRESS branch must have released its increment. The
+            // creator retry (state CREATING, leaseCount 1) does not decrement,
+            // so exactly one decrement — the IN_PROGRESS undo — is expected.
+            expect(leaseRepo.decrementLease).toHaveBeenCalledWith(prKey);
+            expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+        });
     });
 });
 
