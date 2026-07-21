@@ -81,7 +81,7 @@ Constraints:
 - Examples are SHORT (1-4 lines), concrete, in the rule's target language, and must violate/satisfy THIS atom specifically.
 - English output. Do NOT invent requirements that are not in the rule.`;
 
-const decomposeOutputSchema = z.object({
+export const decomposeOutputSchema = z.object({
     atoms: z
         .array(
             z.object({
