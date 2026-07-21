@@ -105,6 +105,9 @@ export function buildOrchestratorInput(
         // Experimental A/B knob (config-driven, default off): objective-first
         // verify (run `tsc` before the LLM judge).
         executableVerify: context.codeReviewConfig?.executableVerify,
+        // Experimental A/B knob (config-driven, default off): progressive
+        // disclosure of memory rules (compact index + getKodyRule tool).
+        progressiveRules: context.codeReviewConfig?.progressiveRules,
         parentSignal: context.parentSignal,
     };
 }

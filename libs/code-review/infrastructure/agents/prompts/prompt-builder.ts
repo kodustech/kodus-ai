@@ -9,6 +9,7 @@
  */
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { formatRulesIndex } from '@libs/code-review/infrastructure/agents/adapters/kody-rule-disclosure';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
 
 import type {
@@ -107,7 +108,7 @@ export function buildSystemPrompt(input: ReviewAgentInput, meta: PromptAgentMeta
         const identity = meta.identity;
         const categoryPrompt = meta.categoryPrompt;
         const overridesSection = formatOverrides(input, meta);
-        const memoryRulesSection = formatMemoryRules(input.memoryRules);
+        const memoryRulesSection = formatMemoryRules(input.memoryRules, input.progressiveRules);
 
         const langLabel = resolveLanguageLabel(input.languageResultPrompt);
         const langSection = langLabel
@@ -226,7 +227,7 @@ export function buildCompactSystemPrompt(input: ReviewAgentInput, meta: PromptAg
         const identity = meta.identity;
         const categoryLabel = meta.categoryLabel;
         const overridesSection = formatOverrides(input, meta);
-        const memoryRulesSection = formatMemoryRules(input.memoryRules);
+        const memoryRulesSection = formatMemoryRules(input.memoryRules, input.progressiveRules);
         const langLabel = resolveLanguageLabel(input.languageResultPrompt);
         const langLine = langLabel
             ? `\n  Write all review output in ${langLabel}.`
@@ -454,7 +455,7 @@ export function buildSelfContainedSystemPrompt(input: ReviewAgentInput, meta: Pr
         const identity = meta.identity;
         const categoryPrompt = meta.categoryPrompt;
         const overridesSection = formatOverrides(input, meta);
-        const memoryRulesSection = formatMemoryRules(input.memoryRules);
+        const memoryRulesSection = formatMemoryRules(input.memoryRules, input.progressiveRules);
 
         const langLabel = resolveLanguageLabel(input.languageResultPrompt);
         const langSection = langLabel
@@ -685,8 +686,16 @@ function formatDiffs(
             .join('\n\n');
     }
 
-function formatMemoryRules(rules?: Partial<IKodyRule>[]): string {
+function formatMemoryRules(
+        rules?: Partial<IKodyRule>[],
+        progressive?: boolean,
+    ): string {
         if (!rules?.length) return '';
+
+        // Gated (default off): carry a compact index of the rules and let the
+        // agent pull a long rule's body on demand via `getKodyRule`, instead of
+        // dumping every full body into the static system prompt.
+        if (progressive) return formatRulesIndex(rules);
 
         const formatted = rules
             .map((r) => `- **${r.title}**: ${r.rule}`)

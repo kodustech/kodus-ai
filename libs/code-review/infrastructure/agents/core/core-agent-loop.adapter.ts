@@ -77,6 +77,8 @@ export async function runAgentLoopViaCore(
         callGraph: input.callGraph,
         outlineFirst: input.outlineFirst,
         boundedResults: input.boundedResults,
+        progressiveRules: input.progressiveRules,
+        memoryRules: input.memoryRules,
     });
 
     const coverageLedger = new DiffCoverageLedger({

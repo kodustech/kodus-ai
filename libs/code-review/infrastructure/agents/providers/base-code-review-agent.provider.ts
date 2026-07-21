@@ -576,6 +576,10 @@ export abstract class BaseCodeReviewAgentProvider {
                     outlineFirst: input.outlineFirst,
                     boundedResults: input.boundedResults,
                     executableVerify: input.executableVerify,
+                    progressiveRules: input.progressiveRules,
+                    // Structured rules forwarded so the getKodyRule tool can serve
+                    // a rule's full body on demand when progressiveRules is on.
+                    memoryRules: input.memoryRules,
                     // Context window is sized against the main model; the
                     // fallback reuses it (usually a comparable model) rather
                     // than re-running the whole preflight/prompt build.

@@ -238,6 +238,10 @@ export interface ReviewAgentInput
     /** Gated A/B knob (default off): forwarded to AgentLoopInput.executableVerify.
      *  Runs `tsc` first in the verify pass (objective-first, LLM for the rest). */
     executableVerify?: boolean;
+    /** Gated A/B knob (default off): forwarded to AgentLoopInput.progressiveRules.
+     *  Carries memory rules as a compact index + getKodyRule tool instead of
+     *  dumping every full rule body into the system prompt. */
+    progressiveRules?: boolean;
     /**
      * Commits that make up this PR (SHA + subject line), oldest→newest. Threaded
      * so commit-hygiene rules ("don't mix mechanical and behavioral changes")
@@ -322,6 +326,14 @@ export interface AgentLoopInput {
      *  sandbox and trust a compiler-confirmed finding, deferring only the
      *  uncertain to the LLM. Off = LLM-only verify (current behavior). */
     executableVerify?: boolean;
+    /** Gated A/B knob (default off): carry memory rules as a compact index in the
+     *  system prompt + a getKodyRule tool to pull a long rule's body on demand,
+     *  instead of dumping every full rule body up front. Off = full dump. */
+    progressiveRules?: boolean;
+    /** Team memory rules — forwarded so the getKodyRule tool (progressiveRules)
+     *  can serve a rule's full body on demand. The system prompt already carries
+     *  the index; this is the structured source the tool reads. */
+    memoryRules?: Partial<IKodyRule>[];
     /** When true, skip ONLY the synthesis-rescue pass while still running
      *  coverage-recovery and coverage-second-chance. Useful for agents
      *  that benefit from re-investigating uncovered files but don't need

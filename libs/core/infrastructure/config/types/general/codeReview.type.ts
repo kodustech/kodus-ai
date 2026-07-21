@@ -393,6 +393,10 @@ export type CodeReviewConfig = {
      *  `tsc` and trust a compiler-confirmed finding, deferring the rest to the
      *  LLM. Threaded to ReviewAgentInput.executableVerify. */
     executableVerify?: boolean;
+    /** Experimental A/B (default off): carry memory rules as a compact index +
+     *  a getKodyRule tool for on-demand full bodies, instead of dumping every
+     *  full rule into the system prompt. Threaded to ReviewAgentInput.progressiveRules. */
+    progressiveRules?: boolean;
     // This is the default branch of the repository, used only during the review process
     // This field is populated dynamically from the API (GitHub/GitLab) and should NOT be saved to the database
     // It represents the repository's default branch (e.g., 'main', 'develop') that comes from the code management platform

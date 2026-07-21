@@ -29,6 +29,8 @@ import {
     makeFetchResultTool,
 } from '@libs/agent-harness/infrastructure/tools/bounded-result.decorator';
 import { OutlineFirstReadTool } from '@libs/code-review/infrastructure/agents/adapters/outline-first-read.decorator';
+import { makeGetKodyRuleTool } from '@libs/code-review/infrastructure/agents/adapters/kody-rule-disclosure';
+import type { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 import {
     buildAgentTools,
@@ -87,6 +89,12 @@ export interface FinderToolRegistryOptions {
      *  an oversized result is stored out-of-band and the model gets a preview +
      *  handle instead of the flood, pulling slices via `fetchResult`. A/B knob. */
     boundedResults?: boolean;
+    /** Gated (default off): expose a `getKodyRule` tool so the finder can pull a
+     *  long memory rule's full body on demand (the system prompt carries only a
+     *  compact index). No-op without `memoryRules`. A/B knob. */
+    progressiveRules?: boolean;
+    /** Team memory rules the getKodyRule tool serves from. */
+    memoryRules?: Partial<IKodyRule>[];
 }
 
 export function buildFinderToolRegistry(
@@ -160,6 +168,14 @@ export function buildFinderToolRegistry(
     // a bounded result by its handle. Not cached (a cheap in-memory lookup).
     if (options.boundedResults) {
         cached.push(makeFetchResultTool(boundedStore));
+    }
+
+    // Progressive rule disclosure: the system prompt carries only a compact
+    // index of the memory rules, so give the model the companion tool to pull a
+    // long rule's full body on demand. No-op without rules. Not cached (a cheap
+    // in-memory lookup over the rule set).
+    if (options.progressiveRules && options.memoryRules?.length) {
+        cached.push(makeGetKodyRuleTool(options.memoryRules));
     }
 
     // Return the cache + bounded store alongside the registry so the caller
