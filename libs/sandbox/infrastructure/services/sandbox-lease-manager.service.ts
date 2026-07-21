@@ -109,6 +109,16 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     private readonly logger = createLogger(SandboxLeaseManager.name);
 
     /**
+     * Lease invariants:
+     * - Only CREATING and READY leases are acquire targets; FAILED and
+     *   INVALIDATED leases are rejected.
+     * - Release/invalidate cleanup requires leaseCount <= 0; expired reaping
+     *   force-cleans because the owning worker is presumed dead.
+     * - Cleanup claims and deletes stay bound to the expected sandboxId and
+     *   cleanup status so a replacement lease cannot remove another sandbox.
+     */
+
+    /**
      * In-memory map from leaseId → prKey.
      *
      * Multi-worker note: leaseId is generated and consumed inside the same
@@ -183,6 +193,13 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             }
             // Retry acquire from scratch
             return this.acquire(prKey, consumer, leaseTtlMs, cloneParams);
+        }
+
+        if (doc.cleanupStatus === SANDBOX_LEASE_CLEANUP_STATUS.FAILED) {
+            await this.leaseRepo.decrementLease(prKey);
+            throw new Error(
+                `SandboxLeaseManager: local cleanup previously failed for prKey="${prKey}"`,
+            );
         }
 
         // Acquire-vs-invalidated race: upsertAcquire() already incremented
@@ -445,6 +462,14 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                             doc.sandboxId,
                             (err as Error).message,
                         );
+                    }
+                } else {
+                    const latest = await this.leaseRepo.findByPrKey(prKey);
+                    if (
+                        latest?.sandboxId === doc.sandboxId &&
+                        latest.state === 'READY'
+                    ) {
+                        await this.leaseRepo.markInvalidated(prKey);
                     }
                 }
             } else {

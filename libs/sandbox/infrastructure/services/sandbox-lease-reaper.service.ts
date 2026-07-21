@@ -80,7 +80,7 @@ export class SandboxLeaseReaperService {
                 CLEANUP_CONCURRENCY,
                 async (lease) => {
                     if (isLocalSandboxPath(lease.sandboxId)) {
-                        await this.cleanupLocalLease(lease);
+                        await this.cleanupLocalLease(lease, false);
                         return;
                     }
                     if (
@@ -167,7 +167,7 @@ export class SandboxLeaseReaperService {
                 CLEANUP_CONCURRENCY,
                 async (lease) => {
                     if (isLocalSandboxPath(lease.sandboxId)) {
-                        await this.cleanupLocalLease(lease);
+                        await this.cleanupLocalLease(lease, true);
                         return;
                     }
                     if (lease.sandboxId && apiKey) {
@@ -218,15 +218,23 @@ export class SandboxLeaseReaperService {
         }
     }
 
-    private async cleanupLocalLease(lease: {
-        _id: string;
-        sandboxId?: string;
-    }): Promise<void> {
+    private async cleanupLocalLease(
+        lease: {
+            _id: string;
+            sandboxId?: string;
+        },
+        requireLeaseCountZero: boolean,
+    ): Promise<void> {
         if (!lease.sandboxId || !isLocalSandboxPath(lease.sandboxId)) return;
 
         // Re-check: a concurrent acquire may have bumped leaseCount
         const current = await this.leaseRepository.findByPrKey(lease._id);
-        if (!current || (current.leaseCount ?? 0) > 0) return;
+        if (
+            !current ||
+            (requireLeaseCountZero && (current.leaseCount ?? 0) > 0)
+        ) {
+            return;
+        }
 
         const staleThreshold = new Date(Date.now() - 5 * 60 * 1000);
         await this.leaseRepository.resetStaleCleanup(lease._id, staleThreshold);
@@ -234,7 +242,7 @@ export class SandboxLeaseReaperService {
         const claimed = await this.leaseRepository.claimCleanup(
             lease._id,
             lease.sandboxId,
-            true,
+            requireLeaseCountZero,
         );
         if (!claimed) return;
 

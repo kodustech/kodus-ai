@@ -1001,6 +1001,35 @@ describe('SandboxLeaseManager', () => {
             expect(leaseRepo.completeCleanup).not.toHaveBeenCalled();
         });
 
+        it('invalidates a READY local lease when cleanup claim loses a race', async () => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:46';
+            const os = require('os');
+            const path = require('path');
+            const localSandboxId = path.join(
+                os.tmpdir(),
+                'kodus-sandbox-invalidate-race',
+            );
+
+            leaseRepo.findByPrKey
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 0,
+                    state: 'READY',
+                    sandboxId: localSandboxId,
+                } as any)
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 1,
+                    state: 'READY',
+                    sandboxId: localSandboxId,
+                } as any);
+            leaseRepo.claimCleanup.mockResolvedValue(null);
+
+            await manager.invalidate(prKey);
+
+            expect(leaseRepo.markInvalidated).toHaveBeenCalledWith(prKey);
+        });
+
         it('creator failure on local sandbox preserves retry marker instead of deleting lease', async () => {
             const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:45';
             const os = require('os');
@@ -1160,6 +1189,36 @@ describe('SandboxLeaseManager', () => {
             expect(leaseRepo.delete).not.toHaveBeenCalled();
             // Must NOT delete the local sandbox — active leases may still use it
             expect(localCleanup.deleteLocalSandbox).not.toHaveBeenCalled();
+        });
+
+        it('acquire rejects a local lease with FAILED cleanup', async () => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:48';
+            const os = require('os');
+            const path = require('path');
+            const localSandboxId = path.join(
+                os.tmpdir(),
+                'kodus-sandbox-failed',
+            );
+
+            leaseRepo.upsertAcquire.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: localSandboxId,
+                cleanupStatus: 'failed',
+            } as any);
+            leaseRepo.decrementLease.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 0,
+                state: 'READY',
+                sandboxId: localSandboxId,
+                cleanupStatus: 'failed',
+            } as any);
+
+            await expect(manager.acquire(prKey, 'review')).rejects.toThrow(
+                /cleanup previously failed/,
+            );
+            expect(leaseRepo.decrementLease).toHaveBeenCalledWith(prKey);
         });
 
         it('mid-create invalidation preserves lease doc when local cleanup fails', async () => {
@@ -1697,7 +1756,7 @@ describe('SandboxLeaseReaperService', () => {
         expect(leaseRepo.delete).toHaveBeenCalledTimes(3);
     });
 
-    it('cleanupLocalLease resets stale in_progress claims before claiming', async () => {
+    it('reaper force-cleans expired local lease with leaked leaseCount', async () => {
         const leaseRepo = makeMockLeaseRepo();
         const configService = makeMockConfigService('test-e2b-key');
         const os = require('os');
@@ -1714,7 +1773,7 @@ describe('SandboxLeaseReaperService', () => {
         leaseRepo.findByPrKey.mockResolvedValue({
             _id: 'org:repo:stale',
             sandboxId: localSandboxId,
-            leaseCount: 0,
+            leaseCount: 1,
             state: 'READY',
         } as any);
         leaseRepo.claimCleanup.mockResolvedValue({
@@ -1746,7 +1805,7 @@ describe('SandboxLeaseReaperService', () => {
         expect(leaseRepo.claimCleanup).toHaveBeenCalledWith(
             'org:repo:stale',
             localSandboxId,
-            true,
+            false,
         );
         expect(leaseRepo.completeCleanup).toHaveBeenCalledWith(
             'org:repo:stale',
@@ -1754,14 +1813,14 @@ describe('SandboxLeaseReaperService', () => {
         );
     });
 
-    it('cleanupLocalLease skips when concurrent acquire bumped leaseCount', async () => {
+    it('idle local cleanup skips when concurrent acquire bumped leaseCount', async () => {
         const leaseRepo = makeMockLeaseRepo();
         const configService = makeMockConfigService('test-e2b-key');
         const os = require('os');
         const path = require('path');
         const localSandboxId = path.join(os.tmpdir(), 'kodus-sandbox-race');
 
-        leaseRepo.findExpired.mockResolvedValue([
+        leaseRepo.findReadyToKill.mockResolvedValue([
             {
                 _id: 'org:repo:race',
                 sandboxId: localSandboxId,
@@ -1787,7 +1846,7 @@ describe('SandboxLeaseReaperService', () => {
             configService,
         );
 
-        await reaper.reapExpiredLeases();
+        await reaper.killIdleSandboxes();
 
         expect(leaseRepo.findByPrKey).toHaveBeenCalledWith('org:repo:race');
         expect(leaseRepo.claimCleanup).not.toHaveBeenCalled();
