@@ -5,6 +5,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
+    SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
@@ -194,6 +195,21 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                 };
             });
         } catch (err) {
+            // A mid-acquire invalidation is a SUPERSEDE, not a failure: the PR
+            // was closed or force-pushed, so this review is moot (a force-push
+            // re-triggers a fresh review on the new head). Log it as such
+            // instead of a false "all retries exhausted" error that pollutes
+            // error rates / alerts. The review still continues self-contained.
+            if (err instanceof SandboxInvalidatedError) {
+                this.logger.warn({
+                    message: `Sandbox lease superseded for ${label} (PR closed or force-pushed) — continuing without it`,
+                    context: this.stageName,
+                    metadata: {
+                        prNumber: context?.pullRequest?.number,
+                    },
+                });
+                return context;
+            }
             this.logger.error({
                 message: `Failed to acquire sandbox lease for ${label} (all retries exhausted), continuing without it`,
                 context: this.stageName,
