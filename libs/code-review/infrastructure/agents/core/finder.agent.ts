@@ -124,8 +124,11 @@ const SUBMIT_RESULT_SCHEMA: JSONSchema = {
 };
 
 /** The done tool. No-op execute: it is a finalize SIGNAL the CompletionGatePolicy
- *  detects by name; its input (the findings) is captured in the RunState. */
-const submitResultTool: AgentTool = {
+ *  detects by name; its input (the findings) is captured in the RunState.
+ *  Exported so the overhead estimator (core-agent-loop.adapter) counts its
+ *  schema — buildFinderAgentSpec always adds it to the model's tool set, so it
+ *  is real per-request overhead. */
+export const submitResultTool: AgentTool = {
     name: FINDER_DONE_TOOL,
     description:
         'Submit your final findings and end the review. Call this once you have investigated the changed code.',

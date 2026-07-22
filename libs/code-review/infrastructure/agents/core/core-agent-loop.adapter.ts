@@ -33,6 +33,7 @@ import {
     buildFinderAgentSpec,
     runFinderWithVerify,
     recoverFindingsFromProse,
+    submitResultTool,
 } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import {
     buildFindingsFromVerify,
@@ -124,8 +125,14 @@ export async function runAgentLoopViaCore(
     // re-sends on EVERY step. Counting it lets the compressor reserve a real
     // budget for the accumulating tool-loop messages instead of over-committing
     // the window — the miss behind the mid-loop overflow (issue #1574).
+    // buildFinderAgentSpec adds submitResultTool to the model's tool set, so its
+    // schema (~210 tokens) is part of the real overhead and must be counted too
+    // — it matters on small windows where the safety margin is tight.
     const overheadTokens = contextWindowTokens
-        ? estimateOverheadTokens(input.systemPrompt, tools.list())
+        ? estimateOverheadTokens(input.systemPrompt, [
+              ...tools.list(),
+              submitResultTool,
+          ])
         : 0;
     // The AgentSpec.modelId is NOT used to resolve the model (the runner's
     // resolver above ignores it and always returns `model`). It IS used to
