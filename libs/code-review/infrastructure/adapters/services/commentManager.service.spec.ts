@@ -64,6 +64,7 @@ jest.mock('@libs/llm/llm-call', () => ({
 }));
 jest.mock('@libs/core/log/langfuse', () => ({
     buildLangfuseTelemetry: () => ({ isEnabled: false, functionId: 'test' }),
+    toAiSdkTelemetryArgs: (cfg: any) => ({ telemetry: cfg }),
 }));
 
 import { getClassification } from '@libs/llm/error-classifier';

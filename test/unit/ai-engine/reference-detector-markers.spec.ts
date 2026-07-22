@@ -111,6 +111,7 @@ jest.mock('@libs/llm/byok-to-vercel', () => ({
 }));
 jest.mock('@libs/core/log/langfuse', () => ({
     buildLangfuseTelemetry: jest.fn().mockReturnValue({}),
+    toAiSdkTelemetryArgs: jest.fn().mockReturnValue({ telemetry: {} }),
 }));
 
 describe('ReferenceDetectorService.detectReferences (LLM path)', () => {

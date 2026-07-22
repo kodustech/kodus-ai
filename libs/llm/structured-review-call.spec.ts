@@ -19,6 +19,9 @@ jest.mock('@libs/llm/llm-call', () => ({
 }));
 jest.mock('@libs/core/log/langfuse', () => ({
     buildLangfuseTelemetry: jest.fn(() => ({ isEnabled: false })),
+    toAiSdkTelemetryArgs: jest.fn(() => ({
+        telemetry: { isEnabled: false },
+    })),
 }));
 jest.mock('@ai-sdk/openai-compatible', () => ({
     createOpenAICompatible: jest.fn(
