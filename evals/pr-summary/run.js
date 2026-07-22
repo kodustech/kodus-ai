@@ -172,13 +172,19 @@ const blockContent = (s) => {
 };
 
 async function runCase(c) {
-    const behaviourEnum = BEHAVIOUR_ENUM[c.behaviour];
-    if (!behaviourEnum) throw new Error(`unknown behaviour '${c.behaviour}' in case ${c.caseId}`);
+    // mode 'open' (first-open, default) drives behaviourForExistingDescription;
+    // mode 'commit' (new push on an already-open PR) drives behaviourForNewCommits.
+    const isCommitRun = c.mode === 'commit';
+    const summaryConfig = { generatePRSummary: true };
+    if (isCommitRun) {
+        // Enum values equal the lowercase strings (replace/concatenate/none).
+        summaryConfig.behaviourForNewCommits = c.behaviour;
+    } else {
+        const behaviourEnum = BEHAVIOUR_ENUM[c.behaviour];
+        if (!behaviourEnum) throw new Error(`unknown behaviour '${c.behaviour}' in case ${c.caseId}`);
+        summaryConfig.behaviourForExistingDescription = behaviourEnum;
+    }
 
-    const summaryConfig = {
-        generatePRSummary: true,
-        behaviourForExistingDescription: behaviourEnum,
-    };
     const posted = { calls: 0, body: null };
     const service = buildService(c.existingBody || '', posted);
     lastPromptSeen = null;
@@ -192,7 +198,7 @@ async function runCase(c) {
         'en-US',
         summaryConfig,
         /* byokConfig */ null,
-        /* isCommitRun */ false,
+        isCommitRun,
         /* prPreview */ false,
         /* externalPromptContext */ undefined,
         PlatformType.GITHUB,
@@ -248,6 +254,16 @@ async function runCase(c) {
     if (exp.staleContentGone && finalDescription.includes(exp.staleContentGone)) {
         failures.push('stale prior summary block was not stripped on re-run');
     }
+    // commit-run CONCATENATE accumulates INSIDE the block: the prior summary
+    // content is kept and the new one appended within the same markers.
+    if (exp.blockAccumulates) {
+        if (!content.includes(exp.blockAccumulates)) {
+            failures.push('CONCATENATE (new commit) dropped the prior summary content instead of accumulating it');
+        }
+        if (content === exp.blockAccumulates) {
+            failures.push('CONCATENATE (new commit) did not append the new summary to the block');
+        }
+    }
 
     // 4) COMPLEMENT must feed the existing description into the model prompt
     if (exp.promptContainsExistingBody) {
@@ -298,6 +314,83 @@ function routingChecks() {
     return failures;
 }
 
+// ── Commit-run gate: drives the REAL pipeline stage (no model — generateSummaryPR
+//    is spied) to assert the generate/post DECISION per (mode × behaviour). This
+//    is where behaviourForNewCommits=NONE lives: the gate that stops regenerating
+//    the summary on a new push, and the incident-class risk that a config flip
+//    silently kills posting. Deterministic → runs in every mode, always gates. ──
+const StageMod = require(
+    '../../libs/code-review/pipeline/stages/finish-comments.stage.ts',
+);
+const { frozenContext } = require(
+    '../../test/fixtures/frozen-pipeline-context.ts',
+);
+const { PullRequestMessageStatus } = require(
+    '../../libs/core/infrastructure/config/types/general/pullRequestMessages.type.ts',
+);
+
+async function commitGateChecks() {
+    const UpdateCommentsAndGenerateSummaryStage =
+        StageMod.UpdateCommentsAndGenerateSummaryStage;
+    const scenarios = [
+        { name: 'open → generate + post', last: undefined, summary: { generatePRSummary: true }, call: true, commit: false },
+        { name: 'open → summary OFF → skip', last: undefined, summary: { generatePRSummary: false }, call: false },
+        { name: 'commit + NONE → no regen/post', last: { id: 'prev' }, summary: { generatePRSummary: true, behaviourForNewCommits: 'none' }, call: false },
+        { name: 'commit + REPLACE → generate + post', last: { id: 'prev' }, summary: { generatePRSummary: true, behaviourForNewCommits: 'replace' }, call: true, commit: true },
+        { name: 'commit + CONCATENATE → generate + post', last: { id: 'prev' }, summary: { generatePRSummary: true, behaviourForNewCommits: 'concatenate' }, call: true, commit: true },
+        { name: 'commit + summary OFF → skip', last: { id: 'prev' }, summary: { generatePRSummary: false, behaviourForNewCommits: 'replace' }, call: false },
+    ];
+
+    const failures = [];
+    for (const s of scenarios) {
+        const spy = { gen: 0, post: 0, isCommit: null };
+        const commentManagerService = {
+            generateSummaryPR: async (...a) => { spy.gen += 1; spy.isCommit = a[7]; return 'GENERATED'; },
+            updateSummarizationInPR: async () => { spy.post += 1; },
+            updateOverallComment: async () => {},
+            processEndReviewMessageTemplate: async () => 'body',
+        };
+        const pullRequestManagerService = { getChangedFilesMetadata: async () => [] };
+        const stage = new UpdateCommentsAndGenerateSummaryStage(
+            commentManagerService,
+            pullRequestManagerService,
+        );
+        const ctx = frozenContext({
+            lastExecution: s.last,
+            errors: [],
+            codeReviewConfig: { languageResultPrompt: 'en-US', summary: s.summary },
+            repository: { id: 'r', name: 'sample' },
+            pullRequest: { number: 7 },
+            organizationAndTeamData: { organizationId: 'o', teamId: 't' },
+            platformType: undefined,
+            initialCommentData: { commentId: 1, noteId: 2, threadId: 3 },
+            changedFiles: [],
+            dryRun: { enabled: false },
+            externalPromptContext: undefined,
+            lineComments: [],
+            // INACTIVE end-review message → stage returns right after the summary
+            // decision, so only the generate/post spies matter here.
+            pullRequestMessagesConfig: {
+                endReviewMessage: { status: PullRequestMessageStatus.INACTIVE },
+            },
+        });
+        try {
+            await stage.executeStage(ctx);
+        } catch (e) {
+            failures.push(`${s.name}: stage threw — ${String(e && e.message).slice(0, 120)}`);
+            continue;
+        }
+        const called = spy.gen > 0;
+        const posted = spy.post > 0;
+        if (called !== s.call) failures.push(`${s.name}: generateSummaryPR called=${called}, expected ${s.call}`);
+        if (posted !== s.call) failures.push(`${s.name}: posted=${posted}, expected ${s.call}`);
+        if (s.call && s.commit !== undefined && spy.isCommit !== s.commit) {
+            failures.push(`${s.name}: isCommitRun=${spy.isCommit}, expected ${s.commit}`);
+        }
+    }
+    return failures;
+}
+
 async function main() {
     const cases = require(`./datasets/${DATASET}.json`).filter(
         (c) => !BEHAVIOUR_FILTER || c.behaviour === BEHAVIOUR_FILTER,
@@ -310,6 +403,11 @@ async function main() {
     const routeFailures = routingChecks();
     console.log(`routing guard: ${routeFailures.length ? '❌ ' + routeFailures.length + ' failure(s)' : '✅ ok'}`);
     for (const f of routeFailures) console.log(`   · ${f}`);
+
+    // Commit-run gate (stage-level generate/post decision, incl. NONE).
+    const gateFailures = await commitGateChecks();
+    console.log(`commit-run gate: ${gateFailures.length ? '❌ ' + gateFailures.length + ' failure(s)' : '✅ ok'}`);
+    for (const f of gateFailures) console.log(`   · ${f}`);
 
     const results = [];
     let errored = 0;
@@ -334,8 +432,9 @@ async function main() {
     const infraCases = results.filter((r) => r.infra);
 
     console.log(`\n════ SUMMARY (${MODEL}) ════`);
-    console.log(`  routing: ${routeFailures.length ? 'FAIL' : 'ok'}`);
-    console.log(`  cases:   ${results.length - caseFailures.length - infraCases.length}/${results.length} clean · ${caseFailures.length} failed · ${infraCases.length} infra`);
+    console.log(`  routing:     ${routeFailures.length ? 'FAIL' : 'ok'}`);
+    console.log(`  commit-gate: ${gateFailures.length ? 'FAIL' : 'ok'}`);
+    console.log(`  cases:       ${results.length - caseFailures.length - infraCases.length}/${results.length} clean · ${caseFailures.length} failed · ${infraCases.length} infra`);
 
     // Every case failing to network in live mode = infra (broken key/model), not a
     // quality result — exit 2 so the suite fails loudly rather than silently green.
@@ -343,13 +442,13 @@ async function main() {
         infra(`all ${cases.length} cases hit infra errors (key/quota/network) — nothing measured`);
     }
 
-    const hardFail = routeFailures.length > 0 || caseFailures.length > 0;
+    const hardFail = routeFailures.length > 0 || gateFailures.length > 0 || caseFailures.length > 0;
     if (hardFail) {
         if (GATE) {
-            console.error(`\n❌ GATE FAILED (${MODEL}): ${routeFailures.length} routing + ${caseFailures.length} case failure(s)`);
+            console.error(`\n❌ GATE FAILED (${MODEL}): ${routeFailures.length} routing + ${gateFailures.length} commit-gate + ${caseFailures.length} case failure(s)`);
             process.exit(1);
         }
-        console.log(`\n⚠️  ${MODEL}: ${routeFailures.length + caseFailures.length} failure(s) — advisory (no --gate)`);
+        console.log(`\n⚠️  ${MODEL}: ${routeFailures.length + gateFailures.length + caseFailures.length} failure(s) — advisory (no --gate)`);
         return;
     }
     console.log(`\n✅ PASS (${MODEL})${infraCases.length ? ` — ${infraCases.length} case(s) skipped on infra` : ''}`);

@@ -25,12 +25,24 @@ behaviour contract.
      never a silent swap to a model nobody chose;
    - self-hosted resolves to exactly the **configured** model (the per-model
      matrix leg: gpt-mini stays gpt-mini, gemini-flash stays gemini-flash).
-4. **Composed** — the first-open behaviour from the client's config:
+4. **Composed (first open)** — the `behaviourForExistingDescription` config:
    - `replace` → only the fresh block; any existing author description dropped;
    - `concatenate` → author description kept, fresh block appended, and a stale
      prior Kody block stripped so it never stacks (issue #1019);
    - `complement` → the existing description is injected into the model prompt so
      the summary complements rather than repeats it.
+5. **Composed (new commit / push on an open PR)** — the `behaviourForNewCommits`
+   config, via `mode: "commit"` cases + a stage-level gate:
+   - `none` → the summary is NOT regenerated or reposted (asserted at the real
+     pipeline stage, since that gate — not `generateSummaryPR` — is where the
+     decision lives; a config flip here silently killing posting is the
+     incident class);
+   - `replace` → the prior Kody block is regenerated in place, author text kept;
+   - `concatenate` → the new summary is appended INSIDE the block, accumulating
+     the prior summary rather than replacing it.
+   The **commit-run gate** drives `UpdateCommentsAndGenerateSummaryStage` with a
+   spied `generateSummaryPR` (no model) and asserts the generate/post decision
+   and the `isCommitRun` flag for every (mode × behaviour) combination.
 
 ## Run it
 

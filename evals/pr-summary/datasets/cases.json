@@ -129,5 +129,82 @@
             "bodyPreserved": false,
             "promptContainsExistingBody": true
         }
+    },
+    {
+        "caseId": "commit-replace-inplace",
+        "description": "New commit on an open PR, behaviourForNewCommits=REPLACE, body has an author note + a prior Kody block → the block is regenerated IN PLACE, author note kept, stale block content gone, still one block.",
+        "mode": "commit",
+        "behaviour": "replace",
+        "existingBody": "Author note: part of the Q3 billing epic.\n\n<!-- kody-pr-summary:start -->\nOLD_COMMIT_SUMMARY_FROM_LAST_PUSH\n<!-- kody-pr-summary:end -->",
+        "pr": {
+            "number": 201,
+            "title": "feat: invoice PDF export",
+            "head": { "ref": "feat/invoice-pdf", "repo": { "fullName": "acme/sample-service" } },
+            "base": { "ref": "main" }
+        },
+        "changedFiles": [
+            {
+                "filename": "src/billing/invoicePdf.ts",
+                "status": "modified",
+                "patch": "@@ -4,3 +4,8 @@ export async function exportInvoice(id: string) {\n-    return renderHtml(id);\n+    const html = renderHtml(id);\n+    const pdf = await htmlToPdf(html);\n+    await storage.put(`invoices/${id}.pdf`, pdf);\n+    return pdf;\n }"
+            }
+        ],
+        "expect": {
+            "postsSummary": true,
+            "exactlyOneBlock": true,
+            "bodyPreserved": true,
+            "staleContentGone": "OLD_COMMIT_SUMMARY_FROM_LAST_PUSH"
+        }
+    },
+    {
+        "caseId": "commit-concatenate-accumulate",
+        "description": "New commit on an open PR, behaviourForNewCommits=CONCATENATE, body has an author note + a prior Kody block → the new summary is appended INSIDE the block, keeping the prior summary, author note kept, still one block.",
+        "mode": "commit",
+        "behaviour": "concatenate",
+        "existingBody": "Author note: incremental delivery, review per commit.\n\n<!-- kody-pr-summary:start -->\nOLD_COMMIT_SUMMARY_FROM_LAST_PUSH\n<!-- kody-pr-summary:end -->",
+        "pr": {
+            "number": 202,
+            "title": "feat: add CSV export alongside PDF",
+            "head": { "ref": "feat/csv-export", "repo": { "fullName": "acme/sample-service" } },
+            "base": { "ref": "main" }
+        },
+        "changedFiles": [
+            {
+                "filename": "src/billing/invoiceCsv.ts",
+                "status": "added",
+                "patch": "@@ -0,0 +1,4 @@\n+export function exportInvoiceCsv(rows: Row[]): string {\n+    const header = 'id,amount,date';\n+    return [header, ...rows.map((r) => `${r.id},${r.amount},${r.date}`)].join('\\n');\n+}"
+            }
+        ],
+        "expect": {
+            "postsSummary": true,
+            "exactlyOneBlock": true,
+            "bodyPreserved": true,
+            "blockAccumulates": "OLD_COMMIT_SUMMARY_FROM_LAST_PUSH"
+        }
+    },
+    {
+        "caseId": "commit-replace-no-prior-block",
+        "description": "New commit on an open PR, behaviourForNewCommits=REPLACE, body has an author note but NO prior Kody block → a fresh block is appended, author note kept, one block.",
+        "mode": "commit",
+        "behaviour": "replace",
+        "existingBody": "Author note: first push had no summary yet.",
+        "pr": {
+            "number": 203,
+            "title": "fix: correct rounding in tax calculation",
+            "head": { "ref": "fix/tax-rounding", "repo": { "fullName": "acme/sample-service" } },
+            "base": { "ref": "main" }
+        },
+        "changedFiles": [
+            {
+                "filename": "src/billing/tax.ts",
+                "status": "modified",
+                "patch": "@@ -2,1 +2,1 @@ export function tax(amount: number, rate: number) {\n-    return amount * rate;\n+    return Math.round(amount * rate * 100) / 100;\n }"
+            }
+        ],
+        "expect": {
+            "postsSummary": true,
+            "exactlyOneBlock": true,
+            "bodyPreserved": true
+        }
     }
 ]
