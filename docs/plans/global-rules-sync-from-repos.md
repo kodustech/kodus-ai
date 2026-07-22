@@ -95,7 +95,18 @@ silêncio em org quieta, que é justo o caso do repo só-de-regras).
 - Client + hooks em `apps/web/src/lib/services/kodyRules/` (fetch.ts, hooks.ts, index.ts)
   para os novos endpoints.
 
+## Skip de code review em repo-fonte
+Repo selecionado só como fonte de Kody Rules globais é repo de config/dados, não
+codebase. Espelha o comportamento do centralized config: em
+`validate-prerequisites.stage.ts`, se o repo do PR está na lista
+`GLOBAL_RULES_SOURCE_REPOSITORIES`, o review é marcado `SKIPPED` (não roda automação).
+Checagem independente da do centralized config; se um repo é os dois, o centralized
+skipa primeiro. Push direto fica fora (só PR-merge dispara, por decisão de escopo).
+
 ## Pontos em aberto / follow-ups (fora do MVP)
+- **Cron diário de resync** (mecanismo primário no plano original; adiado). Só GitHub/
+  Forgejo recebem webhook de push hoje — Azure/Bitbucket/GitLab exigiriam mudar a
+  subscription + re-registrar hooks, então push-como-evento foi descartado por ora.
 - Dedup de contexto quando há overlap repo×global.
 - Status de sync por repo-fonte na tabela (usar `sourceRepositoryId`).
 - Feedback de progresso durante o scan inicial (pode ser demorado para muitos repos).
