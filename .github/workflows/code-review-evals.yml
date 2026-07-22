@@ -339,7 +339,18 @@ jobs:
                   BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
                   BYOK_MOONSHOT_API_KEY: ${{ secrets.BYOK_MOONSHOT_API_KEY }}
                   BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
-              run: node evals/pr-summary/run.js --model=${{ matrix.model }} --gate
+              # exit 2 = infra (absent/invalid key, quota, network) — environmental,
+              # not a quality regression. Warn and pass, matching the finder gate,
+              # so a bad org key or a depleted-credit provider doesn't block merges.
+              # exit 1 (a real generate/post/route/compose regression) still gates.
+              run: |
+                  code=0
+                  node evals/pr-summary/run.js --model=${{ matrix.model }} --gate || code=$?
+                  if [ "$code" -eq 2 ]; then
+                      echo "::warning::${{ matrix.model }}: pr-summary infra (invalid/absent key, quota, network) — not measured, not gating."
+                      exit 0
+                  fi
+                  exit "$code"
 
     # Single rollup status for branch protection: mark ONLY this check required.
     # The per-model jobs stay visible for debugging (expand to see which model
