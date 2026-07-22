@@ -93,7 +93,7 @@ if (!MOCK) {
 let lastPromptSeen = null;
 let lastModelError = null;
 
-const INFRA_RE = /quota|rate.?limit|429|timeout|ETIMEDOUT|ECONNRESET|ENOTFOUND|EAI_AGAIN|socket hang up|api key|unauthorized|forbidden|permission|denied|access|401|403|invalid.*(key|authentication)|overloaded|503|502/i;
+const INFRA_RE = /quota|rate.?limit|429|timeout|ETIMEDOUT|ECONNRESET|ENOTFOUND|EAI_AGAIN|socket hang up|api key|unauthorized|forbidden|permission|denied|access|401|403|invalid.*(key|authentication)|overloaded|503|502|depleted|prepayment|insufficient|exhausted|resource_exhausted|billing|payment required/i;
 // Classify from the whole error, not just .message — provider SDK errors carry
 // the real cause in statusCode / responseBody (e.g. Google's 403 PERMISSION_DENIED
 // puts "denied access" in the body, a generic string in .message).
