@@ -43,6 +43,7 @@ on:
         branches: [main]
         paths:
             - "libs/code-review/**"
+            - "libs/agent-harness/**"
             - "libs/ee/codeReview/**"
             - "libs/ee/kodyRules/**"
             - "libs/kodyRules/**"
@@ -52,6 +53,7 @@ on:
     pull_request:
         paths:
             - "libs/code-review/**"
+            - "libs/agent-harness/**"
             - "libs/ee/codeReview/**"
             - "libs/ee/kodyRules/**"
             - "libs/kodyRules/**"
