@@ -81,6 +81,32 @@ export const useSuspenseGlobalRulesSourceRepositories = (params: {
     );
 };
 
+export type GlobalRulesImportTier = "free" | "trial" | "paid";
+
+export type GlobalRulesImportStatus = {
+    tier: GlobalRulesImportTier;
+    limit: number | null;
+    used: number;
+    remaining: number | null;
+};
+
+export const useSuspenseGlobalRulesImportStatus = (params: {
+    teamId: string;
+}) => {
+    return useSuspenseFetch<GlobalRulesImportStatus>(
+        KODY_RULES_PATHS.GLOBAL_RULES_IMPORT_STATUS,
+        { params },
+        {
+            fallbackData: {
+                tier: "free",
+                limit: 0,
+                used: 0,
+                remaining: 0,
+            },
+        },
+    );
+};
+
 export type PastReviewer = { id: string; name: string };
 
 export const useGetPastReviewers = (

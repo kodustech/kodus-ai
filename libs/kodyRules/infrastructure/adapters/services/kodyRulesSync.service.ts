@@ -46,6 +46,7 @@ import {
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { GLOBAL_RULES_TRIAL_IMPORT_LIMIT } from '@libs/kodyRules/domain/interfaces/global-rules-source.interface';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
@@ -3392,6 +3393,23 @@ export class KodyRulesSyncService {
     }
 
     /**
+     * Count of ACTIVE global-synced rules across the whole org (every source
+     * repo combined). This is the number the trial cap is measured against.
+     */
+    async countGlobalSyncedRules(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<number> {
+        const entity = await this.kodyRulesService.findByOrganizationId(
+            organizationAndTeamData.organizationId,
+        );
+        return ((entity?.rules ?? []) as any[]).filter(
+            (r) =>
+                this.isGlobalSyncedRule(r) &&
+                r?.status === KodyRulesStatus.ACTIVE,
+        ).length;
+    }
+
+    /**
      * Find an existing global-synced rule keyed by (source repository, source
      * file path). Unlike `findRuleBySourcePath`, the key includes
      * `sourceRepositoryId` so two source repos with the same file path (e.g.
@@ -3464,6 +3482,42 @@ export class KodyRulesSyncService {
     async syncRepositoryGlobal(params: SyncTarget): Promise<void> {
         const { organizationAndTeamData, repository } = params;
         try {
+            // Plan gate. Free orgs can't import at all; trial orgs are capped at
+            // GLOBAL_RULES_TRIAL_IMPORT_LIMIT rules TOTAL across every source
+            // repo; paid/self-hosted are unlimited. Resolved here (not just in
+            // the endpoint) so the PR-merge trigger and manual resync honour the
+            // same cap. `budget` is the number of NEW rules still importable;
+            // updates to already-imported rules never consume it.
+            const tier =
+                await this.permissionValidationService.resolveGlobalRulesImportTier(
+                    organizationAndTeamData,
+                    KodyRulesSyncService.name,
+                );
+            if (tier === 'free') {
+                this.logger.log({
+                    message:
+                        '[kody-rules-global-sync] skipped: global rules import is not available on the Free plan',
+                    context: KodyRulesSyncService.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        sourceRepositoryId: repository?.id,
+                    },
+                });
+                return;
+            }
+            const importLimit =
+                tier === 'trial' ? GLOBAL_RULES_TRIAL_IMPORT_LIMIT : null;
+            let budget =
+                importLimit === null
+                    ? Number.POSITIVE_INFINITY
+                    : Math.max(
+                          0,
+                          importLimit -
+                              (await this.countGlobalSyncedRules(
+                                  organizationAndTeamData,
+                              )),
+                      );
+
             const branch = await this.codeManagementService.getDefaultBranch({
                 organizationAndTeamData,
                 repository,
@@ -3485,6 +3539,7 @@ export class KodyRulesSyncService {
                 unchanged: [] as string[],
                 skipped: [] as Array<{ file: string; reason: string }>,
                 removed: [] as string[],
+                limitReached: [] as string[],
             };
 
             for (const file of allFiles) {
@@ -3576,6 +3631,20 @@ export class KodyRulesSyncService {
                     continue;
                 }
 
+                // Trial cap. A NEW rule (nothing imported for this file yet, or
+                // a soft-deleted/rejected one being revived) counts against the
+                // budget; re-importing changed content over an ACTIVE rule does
+                // not. Once the budget is spent, further NEW rules are skipped —
+                // this is what "import only the first N rules found" enforces,
+                // in git-tree order, across every source repo combined.
+                const consumesBudget =
+                    !existing?.uuid ||
+                    existing.status !== KodyRulesStatus.ACTIVE;
+                if (consumesBudget && budget <= 0) {
+                    syncOutcome.limitReached.push(file.path);
+                    continue;
+                }
+
                 const dto: CreateKodyRuleDto = {
                     uuid: existing?.uuid,
                     title: oneRule.title as string,
@@ -3620,6 +3689,9 @@ export class KodyRulesSyncService {
                     this.systemUserInfo,
                 );
 
+                if (consumesBudget) {
+                    budget -= 1;
+                }
                 syncOutcome.imported.push(file.path);
             }
 
@@ -3642,12 +3714,14 @@ export class KodyRulesSyncService {
             }
 
             this.logger.log({
-                message: `[kody-rules-global-sync] summary: ${syncOutcome.imported.length} imported, ${syncOutcome.unchanged.length} unchanged, ${syncOutcome.skipped.length} skipped, ${syncOutcome.removed.length} removed (of ${allFiles.length} candidate file(s))`,
+                message: `[kody-rules-global-sync] summary: ${syncOutcome.imported.length} imported, ${syncOutcome.unchanged.length} unchanged, ${syncOutcome.skipped.length} skipped, ${syncOutcome.removed.length} removed, ${syncOutcome.limitReached.length} over ${tier} limit (of ${allFiles.length} candidate file(s))`,
                 context: KodyRulesSyncService.name,
                 metadata: {
                     organizationAndTeamData,
                     sourceRepositoryId: repository.id,
                     branch,
+                    tier,
+                    importLimit,
                     ...syncOutcome,
                 },
             });

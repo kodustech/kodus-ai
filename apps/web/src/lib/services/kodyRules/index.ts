@@ -48,5 +48,8 @@ export const KODY_RULES_PATHS = {
     GLOBAL_SOURCE_REPOSITORIES: pathToApiUrl(
         "/kody-rules/global-source-repositories",
     ),
+    GLOBAL_RULES_IMPORT_STATUS: pathToApiUrl(
+        "/kody-rules/global-source-repositories/import-status",
+    ),
     RESYNC_GLOBAL_RULES: pathToApiUrl("/kody-rules/resync-global-rules"),
 } as const;

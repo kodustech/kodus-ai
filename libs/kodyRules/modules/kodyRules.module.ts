@@ -57,6 +57,7 @@ import { SyncSelectedRepositoriesKodyRulesUseCase } from '../application/use-cas
 import { GetGlobalRulesSourceRepositoriesUseCase } from '../application/use-cases/get-global-rules-source-repositories.use-case';
 import { UpdateGlobalRulesSourceRepositoriesUseCase } from '../application/use-cases/update-global-rules-source-repositories.use-case';
 import { ResyncGlobalRulesUseCase } from '../application/use-cases/resync-global-rules.use-case';
+import { GetGlobalRulesImportStatusUseCase } from '../application/use-cases/get-global-rules-import-status.use-case';
 import { KODY_RULES_REPOSITORY_TOKEN } from '../domain/contracts/kodyRules.repository.contract';
 import { KODY_RULES_SERVICE_TOKEN } from '../domain/contracts/kodyRules.service.contract';
 import {
@@ -135,6 +136,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         GetGlobalRulesSourceRepositoriesUseCase,
         UpdateGlobalRulesSourceRepositoriesUseCase,
         ResyncGlobalRulesUseCase,
+        GetGlobalRulesImportStatusUseCase,
         KodyRulesValidationService,
         KodyRulesSyncService,
         KodyRuleSummaryService,
@@ -182,6 +184,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         GetGlobalRulesSourceRepositoriesUseCase,
         UpdateGlobalRulesSourceRepositoriesUseCase,
         ResyncGlobalRulesUseCase,
+        GetGlobalRulesImportStatusUseCase,
         AddLibraryKodyRulesUseCase,
         CheckSyncStatusUseCase,
         ListPastReviewersUseCase,

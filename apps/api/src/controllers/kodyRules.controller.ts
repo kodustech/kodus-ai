@@ -27,6 +27,7 @@ import { SyncSelectedRepositoriesKodyRulesUseCase } from '@libs/kodyRules/applic
 import { GetGlobalRulesSourceRepositoriesUseCase } from '@libs/kodyRules/application/use-cases/get-global-rules-source-repositories.use-case';
 import { UpdateGlobalRulesSourceRepositoriesUseCase } from '@libs/kodyRules/application/use-cases/update-global-rules-source-repositories.use-case';
 import { ResyncGlobalRulesUseCase } from '@libs/kodyRules/application/use-cases/resync-global-rules.use-case';
+import { GetGlobalRulesImportStatusUseCase } from '@libs/kodyRules/application/use-cases/get-global-rules-import-status.use-case';
 import { GlobalRulesSourceRepository } from '@libs/kodyRules/domain/interfaces/global-rules-source.interface';
 import { ImportFastKodyRulesDto } from '@libs/kodyRules/dtos/import-fast-kody-rules.dto';
 import { ReviewFastKodyRulesDto } from '../dtos/review-fast-kody-rules.dto';
@@ -124,6 +125,7 @@ export class KodyRulesController {
         private readonly getGlobalRulesSourceRepositoriesUseCase: GetGlobalRulesSourceRepositoriesUseCase,
         private readonly updateGlobalRulesSourceRepositoriesUseCase: UpdateGlobalRulesSourceRepositoriesUseCase,
         private readonly resyncGlobalRulesUseCase: ResyncGlobalRulesUseCase,
+        private readonly getGlobalRulesImportStatusUseCase: GetGlobalRulesImportStatusUseCase,
         private readonly getInheritedRulesKodyRulesUseCase: GetInheritedRulesKodyRulesUseCase,
         private readonly getRulesLimitStatusUseCase: GetRulesLimitStatusUseCase,
         private readonly findSuggestionsByRuleUseCase: FindSuggestionsByRuleUseCase,
@@ -670,6 +672,27 @@ export class KodyRulesController {
         @Query('teamId') teamId: string,
     ) {
         return this.getGlobalRulesSourceRepositoriesUseCase.execute({ teamId });
+    }
+
+    @ApiBearerAuth('jwt')
+    @Get('/global-source-repositories/import-status')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.KodyRules,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Global-rules import quota status',
+        description:
+            'Return the plan tier (free/trial/paid), the import limit, and how many global rules are already imported, so the UI can gate the control.',
+    })
+    @ApiQuery({ name: 'teamId', type: String, required: true })
+    public async getGlobalRulesImportStatus(
+        @Query('teamId') teamId: string,
+    ) {
+        return this.getGlobalRulesImportStatusUseCase.execute({ teamId });
     }
 
     @ApiBearerAuth('jwt')

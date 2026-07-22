@@ -27,16 +27,21 @@ function createService(opts: {
     rules?: any[];
     allFiles?: Array<{ path: string; sha?: string }>;
     fileContent?: string;
+    tier?: 'free' | 'trial' | 'paid';
 }) {
     const rules = opts.rules ?? [];
     const allFiles = opts.allFiles ?? [];
     const fileContent = opts.fileContent ?? 'A global architecture rule.';
+    const tier = opts.tier ?? 'paid';
 
     const kodyRulesService = {
         findByOrganizationId: jest
             .fn()
             .mockResolvedValue({ rules }),
         createOrUpdate: jest.fn().mockResolvedValue({ uuid: 'new-rule' }),
+    };
+    const permissionValidationService = {
+        resolveGlobalRulesImportTier: jest.fn().mockResolvedValue(tier),
     };
     const codeManagementService = {
         getDefaultBranch: jest.fn().mockResolvedValue('main'),
@@ -61,7 +66,7 @@ function createService(opts: {
         {} as any, // createOrUpdateKodyRulesUseCase
         deleteRuleInOrganizationByIdKodyRulesUseCase as any,
         {} as any, // promptRunnerService
-        {} as any, // permissionValidationService
+        permissionValidationService as any,
         {} as any, // observabilityService
         {} as any, // contextReferenceDetectionService
     );
@@ -82,6 +87,7 @@ function createService(opts: {
         kodyRulesService,
         codeManagementService,
         deleteRuleInOrganizationByIdKodyRulesUseCase,
+        permissionValidationService,
     };
 }
 
@@ -276,5 +282,85 @@ describe('KodyRulesSyncService.syncRepositoryGlobal', () => {
 
         const dto = kodyRulesService.createOrUpdate.mock.calls[0][1];
         expect(dto.status).toBe(KodyRulesStatus.ACTIVE);
+    });
+});
+
+describe('KodyRulesSyncService.syncRepositoryGlobal — plan gating', () => {
+    const repository = {
+        id: 'repo-A',
+        name: 'standards',
+        fullName: 'org/standards',
+    };
+
+    const files = (n: number) =>
+        Array.from({ length: n }, (_, i) => ({ path: `rules/r${i}.md` }));
+
+    it('free plan imports nothing (feature blocked)', async () => {
+        const { service, kodyRulesService, deleteRuleInOrganizationByIdKodyRulesUseCase } =
+            createService({ tier: 'free', allFiles: files(3) });
+
+        await service.syncRepositoryGlobal({
+            organizationAndTeamData,
+            repository,
+        });
+
+        expect(kodyRulesService.createOrUpdate).not.toHaveBeenCalled();
+        expect(
+            deleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('trial plan imports only the first 5 rules found and skips the rest', async () => {
+        const { service, kodyRulesService } = createService({
+            tier: 'trial',
+            rules: [], // nothing imported yet → full budget of 5
+            allFiles: files(7),
+        });
+
+        await service.syncRepositoryGlobal({
+            organizationAndTeamData,
+            repository,
+        });
+
+        expect(kodyRulesService.createOrUpdate).toHaveBeenCalledTimes(5);
+    });
+
+    it('trial plan imports nothing more once the 5-rule cap is already used (across repos)', async () => {
+        // Five rules already imported from ANOTHER source repo — they count
+        // toward the org-wide cap but must not be reconciled when syncing repo-A.
+        const rules = Array.from({ length: 5 }, (_, i) =>
+            globalSyncedRule({
+                uuid: `b${i}`,
+                sourceRepositoryId: 'repo-B',
+                sourcePath: `other/r${i}.md`,
+            }),
+        );
+        const { service, kodyRulesService } = createService({
+            tier: 'trial',
+            rules,
+            allFiles: files(2), // two new files in repo-A
+        });
+
+        await service.syncRepositoryGlobal({
+            organizationAndTeamData,
+            repository,
+        });
+
+        expect(kodyRulesService.createOrUpdate).not.toHaveBeenCalled();
+    });
+
+    it('paid plan imports every rule found (no cap)', async () => {
+        const { service, kodyRulesService } = createService({
+            tier: 'paid',
+            rules: [],
+            allFiles: files(7),
+        });
+
+        await service.syncRepositoryGlobal({
+            organizationAndTeamData,
+            repository,
+        });
+
+        expect(kodyRulesService.createOrUpdate).toHaveBeenCalledTimes(7);
     });
 });

@@ -1,7 +1,8 @@
 import { createLogger } from '@libs/core/log/logger';
-import { Injectable, Inject } from '@nestjs/common';
+import { ForbiddenException, Injectable, Inject } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Request } from 'express';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -27,6 +28,7 @@ export class UpdateGlobalRulesSourceRepositoriesUseCase {
         private readonly organizationParametersService: IOrganizationParametersService,
         private readonly codeManagementService: CodeManagementService,
         private readonly kodyRulesSyncService: KodyRulesSyncService,
+        private readonly permissionValidationService: PermissionValidationService,
         @Inject(REQUEST)
         private readonly request: Request & {
             user: { organization: { uuid: string } };
@@ -53,6 +55,21 @@ export class UpdateGlobalRulesSourceRepositoriesUseCase {
                 params.organizationId ?? this.request.user?.organization?.uuid,
             teamId: params.teamId,
         };
+
+        // Plan gate. Free orgs cannot use the feature at all — block the mutation
+        // outright (the UI also grays the control out, but never trust the
+        // client). Trial/paid proceed; the per-rule trial cap is enforced during
+        // the actual import in KodyRulesSyncService.syncRepositoryGlobal.
+        const tier =
+            await this.permissionValidationService.resolveGlobalRulesImportTier(
+                organizationAndTeamData,
+                UpdateGlobalRulesSourceRepositoriesUseCase.name,
+            );
+        if (tier === 'free') {
+            throw new ForbiddenException(
+                'Importing global Kody Rules is not available on the Free plan. Upgrade to enable it.',
+            );
+        }
 
         // Resolve the requested ids against the org's repositories SELECTED in
         // git settings (the ones with a webhook installed). This keeps a single

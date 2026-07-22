@@ -769,4 +769,70 @@ export class PermissionValidationService {
             return undefined;
         }
     }
+
+    /**
+     * Access tier for the global Kody Rules import feature:
+     *   - `free`  → blocked (no valid cloud license, or an explicit Free plan);
+     *   - `trial` → capped (see GLOBAL_RULES_TRIAL_IMPORT_LIMIT);
+     *   - `paid`  → unlimited (any other valid cloud plan, and all self-hosted).
+     *
+     * The sync engine and the web UI both resolve access through this single
+     * method so enforcement and the on-screen state can never disagree.
+     * Self-hosted installs are always `paid`: the feature itself is OSS and the
+     * tiering is a cloud-only monetization concern. Fails closed to `free` on a
+     * license lookup error.
+     */
+    async resolveGlobalRulesImportTier(
+        organizationAndTeamData: OrganizationAndTeamData,
+        contextName?: string,
+    ): Promise<'free' | 'trial' | 'paid'> {
+        // Dev-only override so the free/trial/paid UI can be exercised locally
+        // (where isCloud is false and the tier would otherwise always be paid).
+        // Never honored outside development mode.
+        if (this.isDevelopment) {
+            const override = process.env.GLOBAL_RULES_IMPORT_TIER_OVERRIDE;
+            if (
+                override === 'free' ||
+                override === 'trial' ||
+                override === 'paid'
+            ) {
+                return override;
+            }
+        }
+
+        // Self-hosted (CE or licensed) gets the full feature — no cloud plan.
+        if (!this.isCloud) {
+            return 'paid';
+        }
+
+        try {
+            const validation =
+                await this.licenseService.validateOrganizationLicense(
+                    organizationAndTeamData,
+                );
+
+            if (!validation?.valid) {
+                return 'free';
+            }
+
+            if (validation.subscriptionStatus === 'trial') {
+                return 'trial';
+            }
+
+            if (this.identifyPlanType(validation.planType) === PlanType.FREE) {
+                return 'free';
+            }
+
+            return 'paid';
+        } catch (error) {
+            this.logger.error({
+                message:
+                    'Failed to resolve global rules import tier; defaulting to free',
+                context: contextName || PermissionValidationService.name,
+                error,
+                metadata: { organizationAndTeamData },
+            });
+            return 'free';
+        }
+    }
 }
