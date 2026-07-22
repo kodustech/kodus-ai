@@ -66,6 +66,7 @@ import { BulkActionToolbar } from "./bulk-action-toolbar";
 import { BulkDeleteConfirmationModal } from "./bulk-delete-confirmation-modal";
 import { KodyRulesEmptyState } from "./empty";
 import { KodyKnowledgeApprovalSetting } from "./knowledge-approval";
+import { GlobalRulesSourceSetting } from "./global-rules-source-setting";
 import { KodyRulesList } from "./list";
 import { KodyRulesNoMatches } from "./no-matches";
 import { OrphanRulesChip } from "./orphan-rules-chip";
@@ -1164,6 +1165,13 @@ const KodyRulesPageContent = () => {
                                 <Suspense
                                     fallback={<Skeleton className="h-15" />}>
                                     <GenerateRulesOptions />
+                                </Suspense>
+                            )}
+
+                            {isGlobalView && (
+                                <Suspense
+                                    fallback={<Skeleton className="h-15" />}>
+                                    <GlobalRulesSourceSetting />
                                 </Suspense>
                             )}
                         </div>

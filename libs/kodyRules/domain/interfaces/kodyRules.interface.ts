@@ -95,6 +95,23 @@ export interface IKodyRule {
      */
     atoms?: IKodyRuleAtoms;
     repositoryId: string;
+    /**
+     * For rules synced into the global scope (`repositoryId="global"`,
+     * `origin=GLOBAL_REPO_FILE_SYNC`), the id of the source repository the file
+     * was imported from. Undefined for every other kind of rule. Required to
+     * (a) route incremental updates from that repo's merged PRs, (b) soft-delete
+     * only this repo's global rules when it's removed as a source (never touching
+     * user-authored global rules), and (c) key the upsert as
+     * (`"global"`, `sourceRepositoryId`, `sourcePath`) so two source repos with
+     * the same file path (e.g. `CLAUDE.md`) don't collide.
+     */
+    sourceRepositoryId?: string;
+    /**
+     * Git blob SHA of the source file at the last successful sync. Enables the
+     * cheap short-circuit on manual resync: skip re-converting files whose SHA
+     * is unchanged. Populated by the global sync flow.
+     */
+    lastContentHash?: string;
     origin?: KodyRulesOrigin;
     createdAt?: Date;
     updatedAt?: Date;
@@ -261,6 +278,15 @@ export enum KodyRulesOrigin {
     LIBRARY = 'library',
     PAST_REVIEWS = 'past_reviews',
     REPO_FILE_SYNC = 'repo_file_sync',
+    /**
+     * Global Kody Rule imported by syncing rule files from a repository the user
+     * selected as a global-rules source (distinct from the per-repo
+     * `REPO_FILE_SYNC`). Stored under `repositoryId="global"` alongside
+     * user-authored global rules and the onboarding fast-sync scratch, so this
+     * origin (together with `sourceRepositoryId`) is what distinguishes these
+     * rules for filtering, cleanup on deselect, and the UI badge.
+     */
+    GLOBAL_REPO_FILE_SYNC = 'global_repo_file_sync',
     ONBOARDING_REPO_ANALYSIS = 'onboarding_repo_analysis',
     MCP_AGENT = 'mcp_agent',
     CLI = 'cli',
@@ -433,6 +459,8 @@ export const kodyRuleSchema = z.object({
     extendedContext: kodyRulesExtendedContextSchema.optional(),
     examples: z.array(kodyRulesExampleSchema).optional(),
     repositoryId: z.string(),
+    sourceRepositoryId: z.string().optional(),
+    lastContentHash: z.string().optional(),
     origin: kodyRulesOriginSchema.optional(),
     createdAt: z.date().optional(),
     updatedAt: z.date().optional(),

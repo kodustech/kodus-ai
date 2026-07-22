@@ -31,6 +31,9 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
         const parametersService = {
             findByKey: jest.fn().mockResolvedValue(null),
         };
+        const organizationParametersService = {
+            findByKey: jest.fn().mockResolvedValue(null),
+        };
 
         const dataSource = {
             // CREATE TABLE / DELETE sweep return [], the INSERT claim wins
@@ -49,6 +52,7 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
         const listener = new KodyRulesSyncListener(
             kodyRulesSyncService as any,
             parametersService as any,
+            organizationParametersService as any,
             dataSource as any,
         );
 

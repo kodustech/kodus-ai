@@ -65,6 +65,22 @@ export const useSuspenseKodyRulesCheckSyncStatus = (params: {
     }>(KODY_RULES_PATHS.CHECK_SYNC_STATUS, { params });
 };
 
+export type GlobalRulesSourceRepository = {
+    id: string;
+    name: string;
+    fullName?: string;
+};
+
+export const useSuspenseGlobalRulesSourceRepositories = (params: {
+    teamId: string;
+}) => {
+    return useSuspenseFetch<Array<GlobalRulesSourceRepository>>(
+        KODY_RULES_PATHS.GLOBAL_SOURCE_REPOSITORIES,
+        { params },
+        { fallbackData: [] },
+    );
+};
+
 export type PastReviewer = { id: string; name: string };
 
 export const useGetPastReviewers = (
