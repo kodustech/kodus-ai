@@ -93,8 +93,15 @@ if (!MOCK) {
 let lastPromptSeen = null;
 let lastModelError = null;
 
-const INFRA_RE = /quota|rate.?limit|429|timeout|ETIMEDOUT|ECONNRESET|ENOTFOUND|EAI_AGAIN|socket hang up|api key|unauthorized|401|403|invalid.*(key|authentication)|overloaded|503|502/i;
-const isInfraMsg = (msg) => INFRA_RE.test(String(msg || ''));
+const INFRA_RE = /quota|rate.?limit|429|timeout|ETIMEDOUT|ECONNRESET|ENOTFOUND|EAI_AGAIN|socket hang up|api key|unauthorized|forbidden|permission|denied|access|401|403|invalid.*(key|authentication)|overloaded|503|502/i;
+// Classify from the whole error, not just .message — provider SDK errors carry
+// the real cause in statusCode / responseBody (e.g. Google's 403 PERMISSION_DENIED
+// puts "denied access" in the body, a generic string in .message).
+const isInfraErr = (e) => {
+    if (!e) return false;
+    const parts = [e.message, e.statusCode, e.responseBody, e.data && JSON.stringify(e.data)];
+    return INFRA_RE.test(parts.filter(Boolean).join(' '));
+};
 
 const { CommentManagerService } = require(
     '../../libs/code-review/infrastructure/adapters/services/commentManager.service.ts',
@@ -216,17 +223,19 @@ async function runCase(c) {
     const exp = c.expect || {};
     const failures = [];
 
-    // 1) generated + non-empty
+    // 1) generated + non-empty. Empty ⇒ return NOW — every later assertion
+    // dereferences finalDescription, which is null here.
     const content = blockContent(finalDescription || '');
     if (!finalDescription || !content) {
-        // Empty summary from a swallowed model error that looks transient is
-        // INFRA (bad key / quota / network), not a quality regression — don't
-        // turn eval-runner noise into a red gate. A genuine empty result (no
+        // Empty summary from a swallowed model error that looks transient/env is
+        // INFRA (bad key / quota / network / access), not a quality regression —
+        // don't turn eval-env noise into a red gate. A genuine empty result (no
         // model error, or a non-infra crash) stays a real failure.
-        if (!MOCK && lastModelError && isInfraMsg(lastModelError.message)) {
+        if (!MOCK && lastModelError && isInfraErr(lastModelError)) {
             return { caseId: c.caseId, behaviour: c.behaviour, contentLen: 0, failures: [`infra: ${String(lastModelError.message).slice(0, 120)}`], infra: true };
         }
-        failures.push('summary block empty / not generated');
+        failures.push(`summary block empty / not generated${lastModelError ? ` (model error: ${String(lastModelError.message).slice(0, 120)})` : ''}`);
+        return { caseId: c.caseId, behaviour: c.behaviour, contentLen: 0, failures };
     }
 
     // 2) posted to the PR (adapter received a non-empty body)
@@ -421,7 +430,7 @@ async function main() {
         } catch (e) {
             errored += 1;
             const msg = String(e && e.message ? e.message : e);
-            const isInfra = isInfraMsg(msg);
+            const isInfra = isInfraErr(e);
             console.log(`${isInfra ? '⚠️ ' : '❌'} ${c.caseId.padEnd(26)} [${c.behaviour}] ${isInfra ? 'INFRA' : 'ERROR'}: ${msg.slice(0, 160)}`);
             results.push({ caseId: c.caseId, behaviour: c.behaviour, failures: [msg], infra: isInfra });
         }
