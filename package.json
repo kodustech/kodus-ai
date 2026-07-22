@@ -282,6 +282,7 @@
         "@langfuse/langchain": "^5.9.1",
         "@langfuse/otel": "^5.9.1",
         "@langfuse/tracing": "^5.9.1",
+        "@langfuse/vercel-ai-sdk": "^5.9.1",
         "@llamaduck/forgejo-ts": "15.0.3",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@morphllm/morphsdk": "^0.2.189",

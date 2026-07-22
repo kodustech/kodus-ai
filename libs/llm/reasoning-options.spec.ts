@@ -370,4 +370,31 @@ describe('buildLangfuseTelemetry', () => {
         const result = buildLangfuseTelemetry('my-run');
         expect(result.metadata).toBeUndefined();
     });
+
+    it('toAiSdkTelemetryArgs maps metadata into runtimeContext', () => {
+        process.env.LANGFUSE_TRACING = 'true';
+        process.env.LANGFUSE_PUBLIC_KEY = 'pk-test';
+        process.env.LANGFUSE_SECRET_KEY = 'sk-test';
+        jest.resetModules();
+         
+        const {
+            buildLangfuseTelemetry,
+            toAiSdkTelemetryArgs,
+        } = require('@libs/core/log/langfuse');
+        const args = toAiSdkTelemetryArgs(
+            buildLangfuseTelemetry('my-run', {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            }),
+        );
+        expect(args.telemetry.functionId).toBe('my-run');
+        expect(args.telemetry.includeRuntimeContext).toEqual({
+            organizationId: true,
+            teamId: true,
+        });
+        expect(args.runtimeContext).toMatchObject({
+            organizationId: 'org-1',
+            teamId: 'team-1',
+        });
+    });
 });

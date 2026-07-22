@@ -108,6 +108,9 @@ importers:
       '@langfuse/tracing':
         specifier: ^5.9.1
         version: 5.9.1(@opentelemetry/api@1.9.1)
+      '@langfuse/vercel-ai-sdk':
+        specifier: ^5.9.1
+        version: 5.9.1(@opentelemetry/api@1.9.1)(ai@7.0.16(zod@4.4.3))(zod@4.4.3)
       '@llamaduck/forgejo-ts':
         specifier: 15.0.3
         version: 15.0.3
@@ -595,6 +598,12 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/gateway@4.0.2':
+    resolution: {integrity: sha512-Jz1BiiTSvhDsCBJrkFRSqLHDRMVjFtYk9GdbSi3UOqY+/epza+oIESMDzfN4m+YHT/1IYmNEmxaMfjXOvxKDjQ==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/google-vertex@5.0.11':
     resolution: {integrity: sha512-+UUYbO8syQRmfmCiLTEcUijJXCz3c2Ekx04z08PnHousFnspdy8L6zhK0UoQLTZ8oO+mc/clCDVK2VOYmLcXLA==}
     engines: {node: '>=22'}
@@ -619,11 +628,25 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/otel@1.0.2':
+    resolution: {integrity: sha512-vmuuwOxJ5OuwMYDktABTLb9V33hwR2k77QIDPZ8mSHSo04seT88IXCmzZwLjTskHfIa5C9IRizzNy6sr2qOQWQ==}
+    engines: {node: '>=22'}
+
+  '@ai-sdk/provider-utils@5.0.0':
+    resolution: {integrity: sha512-zj66M02jc6ASYwIgWZowsooDUwaVngeNZQ3H10GwcPMZ+KR6gHMhcUuKl6tkai+JPXTKDyHY1pnszuxRtw2D4A==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider-utils@5.0.5':
     resolution: {integrity: sha512-oI0t3dvCoqWNV1I8o1Rybi2DXDvHES5r/TrwtJW90tuFLVepgJlftPxrcjh8vaSvjqC2diTuA2vXyjKAyHJm4A==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider@4.0.0':
+    resolution: {integrity: sha512-fr9Gs89prDWiuox/T+kCA+i2cJkHpxU5S+tr4megjTzRC27ZsvFhwjU/+XrqqMbvBUlfmXxTOYWy8ng45dsjIg==}
+    engines: {node: '>=22'}
 
   '@ai-sdk/provider@4.0.2':
     resolution: {integrity: sha512-pfPoy9J1B1xV7cqJ8MYHOsDYrMv5tR3+EMNfI249OhkD2uRakvav3Fo7XpD2luuN/YNCBY7KfEQc7vEV7KEtyw==}
@@ -2434,6 +2457,13 @@ packages:
     engines: {node: '>=20'}
     peerDependencies:
       '@opentelemetry/api': ^1.9.0
+
+  '@langfuse/vercel-ai-sdk@5.9.1':
+    resolution: {integrity: sha512-gZPZJ3JXYTkT7W61VhbNHXgn/88+laoAQGMc082ESeXBwfuMVVPKDueZzM0xy6s0BTtPLW5WmbJ5NkLNCtR3Nw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@opentelemetry/api': ^1.9.0
+      ai: '>=7.0.0 <8'
 
   '@llamaduck/forgejo-ts@15.0.3':
     resolution: {integrity: sha512-bwJknz4Wlp+N6iv5IHQ3ZR8gtQUuEW+zp5+LRafEDyP/cy/peL15woK6Adn/NhcgBx8lbJeNl/0Yw3V/MvuL1w==}
@@ -4494,6 +4524,12 @@ packages:
 
   ai@7.0.16:
     resolution: {integrity: sha512-OuA+uz6ZUVId+SVeB5bThi25Ofee/FmLvffAA368tlgqYCe2qAhqZUpfHL0dd9QC/iPiszdvCQYENJavSo/0gw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  ai@7.0.2:
+    resolution: {integrity: sha512-VMU08jHIDJnnKDrbC9AFa5ZsPpOTfAPRLvTRHtJk4FGAoeldmJROMxvZ2ak5lCjEJ2GP2OLPQbMRyEK8w0+S4A==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -9570,6 +9606,13 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 4.4.3
 
+  '@ai-sdk/gateway@4.0.2(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.0
+      '@ai-sdk/provider-utils': 5.0.0(zod@4.4.3)
+      '@vercel/oidc': 3.2.0
+      zod: 4.4.3
+
   '@ai-sdk/google-vertex@5.0.11(zod@4.4.3)':
     dependencies:
       '@ai-sdk/anthropic': 4.0.8(zod@4.4.3)
@@ -9600,6 +9643,22 @@ snapshots:
       '@ai-sdk/provider-utils': 5.0.5(zod@4.4.3)
       zod: 4.4.3
 
+  '@ai-sdk/otel@1.0.2(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.0
+      '@opentelemetry/api': 1.9.1
+      ai: 7.0.2(zod@4.4.3)
+    transitivePeerDependencies:
+      - zod
+
+  '@ai-sdk/provider-utils@5.0.0(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.0
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.0.8
+      zod: 4.4.3
+
   '@ai-sdk/provider-utils@5.0.5(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 4.0.2
@@ -9607,6 +9666,10 @@ snapshots:
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.0.8
       zod: 4.4.3
+
+  '@ai-sdk/provider@4.0.0':
+    dependencies:
+      json-schema: 0.4.0
 
   '@ai-sdk/provider@4.0.2':
     dependencies:
@@ -11204,6 +11267,15 @@ snapshots:
     dependencies:
       '@langfuse/core': 5.9.1(@opentelemetry/api@1.9.1)
       '@opentelemetry/api': 1.9.1
+
+  '@langfuse/vercel-ai-sdk@5.9.1(@opentelemetry/api@1.9.1)(ai@7.0.16(zod@4.4.3))(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/otel': 1.0.2(zod@4.4.3)
+      '@langfuse/core': 5.9.1(@opentelemetry/api@1.9.1)
+      '@opentelemetry/api': 1.9.1
+      ai: 7.0.16(zod@4.4.3)
+    transitivePeerDependencies:
+      - zod
 
   '@llamaduck/forgejo-ts@15.0.3':
     dependencies:
@@ -13791,6 +13863,13 @@ snapshots:
       '@ai-sdk/gateway': 4.0.12(zod@4.4.3)
       '@ai-sdk/provider': 4.0.2
       '@ai-sdk/provider-utils': 5.0.5(zod@4.4.3)
+      zod: 4.4.3
+
+  ai@7.0.2(zod@4.4.3):
+    dependencies:
+      '@ai-sdk/gateway': 4.0.2(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.0
+      '@ai-sdk/provider-utils': 5.0.0(zod@4.4.3)
       zod: 4.4.3
 
   ajv-draft-04@1.0.0(ajv@8.20.0):

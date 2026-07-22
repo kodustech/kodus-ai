@@ -102,7 +102,7 @@ export interface FetcherRunResult {
  *
  * The result is the LAST assistant step's text — matching the legacy fetcher
  * contract of returning a JSON string the capabilities parse. Langfuse parity
- * is via `input.telemetry` (forwarded to `experimental_telemetry`); Mongo
+ * is via `input.telemetry` (forwarded as AI SDK `telemetry`); Mongo
  * billing is emitted by the caller from `state.usage`.
  */
 export async function runMcpFetcherAgent(params: {
@@ -179,6 +179,9 @@ export async function runMcpFetcherAgent(params: {
         { runId: params.runId, signal: params.signal },
     );
 
+    // `state.usage` is harness TokenUsage (AiSdkAgentRunner already maps
+    // ai@7 `outputTokenDetails.reasoningTokens` / `inputTokenDetails.cacheReadTokens`
+    // via readAiSdkUsage) — not raw LanguageModelUsage.
     const inputTokens = state.usage?.inputTokens;
     const outputTokens = state.usage?.outputTokens;
 

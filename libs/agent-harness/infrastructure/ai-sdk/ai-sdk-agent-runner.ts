@@ -148,10 +148,12 @@ export class AiSdkAgentRunner implements AgentRunner {
                 ...(spec.providerOptions
                     ? { providerOptions: spec.providerOptions as any }
                     : {}),
-                // Opaque per-run telemetry (e.g. Langfuse experimental_telemetry)
-                // — domain-built, forwarded verbatim. Self-disables when off.
+                // Opaque per-run telemetry → AI SDK 7 `telemetry` (+ optional
+                // `runtimeContext` when the payload includes `metadata`).
+                // Domain builds the shape (e.g. buildLangfuseTelemetry); the
+                // harness only forwards / remaps, never interprets.
                 ...(input.telemetry
-                    ? { experimental_telemetry: input.telemetry as any }
+                    ? expandAiSdkTelemetry(input.telemetry)
                     : {}),
                 // shouldStop seam: stop if ANY policy says so; hard fail-open at maxSteps.
                 stopWhen: [
@@ -495,6 +497,35 @@ function readAiSdkUsage(usage: any): TokenUsage {
         cacheReadTokens:
             usage?.inputTokenDetails?.cacheReadTokens ??
             usage?.cachedInputTokens,
+    };
+}
+
+/**
+ * Map opaque domain telemetry into AI SDK 7 call options.
+ * `metadata` (Langfuse-style) becomes `runtimeContext` + `includeRuntimeContext`
+ * so observation attributes still attach after the AI SDK 7 telemetry redesign.
+ */
+function expandAiSdkTelemetry(
+    raw: Readonly<Record<string, unknown>>,
+): {
+    telemetry: Record<string, unknown>;
+    runtimeContext?: Record<string, unknown>;
+} {
+    const { metadata, ...telemetry } = raw as {
+        metadata?: Record<string, unknown>;
+        [key: string]: unknown;
+    };
+    if (!metadata || Object.keys(metadata).length === 0) {
+        return { telemetry };
+    }
+    return {
+        telemetry: {
+            ...telemetry,
+            includeRuntimeContext: Object.fromEntries(
+                Object.keys(metadata).map((k) => [k, true]),
+            ),
+        },
+        runtimeContext: metadata,
     };
 }
 

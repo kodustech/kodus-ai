@@ -47,7 +47,10 @@ import {
     classifyLLMError,
 } from '@libs/llm/error-classifier';
 import { tracedGenerateText } from '@libs/llm/llm-call';
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
+import {
+    buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
+} from '@libs/core/log/langfuse';
 import {
     getTranslationsForLanguageByCategory,
     TranslationsCategory,
@@ -143,9 +146,8 @@ export class CommentManagerService implements ICommentManagerService {
                     ...(configuredTemperature !== undefined
                         ? { temperature: configuredTemperature }
                         : {}),
-                    experimental_telemetry: buildLangfuseTelemetry(
-                        runName,
-                        metadata,
+                    ...toAiSdkTelemetryArgs(
+                        buildLangfuseTelemetry(runName, metadata),
                     ),
                 });
             },

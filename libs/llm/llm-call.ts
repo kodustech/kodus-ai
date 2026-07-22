@@ -5,7 +5,7 @@
  * ignore AbortSignal and hang forever; `hardTimeout` is the safety net that
  * guarantees every model call has a maximum wall-clock time. `tracedGenerateText`
  * is the AI SDK `generateText` with that net applied — Langfuse tracing is
- * consumed via `experimental_telemetry` on each call by the caller.
+ * consumed via `telemetry` on each call by the caller.
  */
 import { generateText as _aiSdkGenerateText } from 'ai';
 
@@ -66,7 +66,10 @@ const generateText: typeof _aiSdkGenerateText = (async (
         (opts?.abortSignal
             ? LLM_CALL_TIMEOUT_MS // secondary calls already set timeoutSignal
             : AGENT_TIMEOUT_MS); // main call uses agent-level timeout
-    const label = opts?.experimental_telemetry?.functionId || 'generateText';
+    const label =
+        opts?.telemetry?.functionId ||
+        opts?.experimental_telemetry?.functionId ||
+        'generateText';
     return hardTimeout(_aiSdkGenerateText(...args), ms, label);
 }) as typeof _aiSdkGenerateText;
 
