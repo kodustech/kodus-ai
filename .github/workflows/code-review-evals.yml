@@ -292,6 +292,55 @@ jobs:
               # threshold is set from a measured baseline.
               run: node evals/anchoring/anchor-eval.js --model=gpt-5.4 --limit=3
 
+    # PR-summary matrix: drives the REAL generateSummaryPR + updateSummarizationInPR
+    # end-to-end and gates on the properties a prod incident violated (summary
+    # generated, POSTED to the PR, correct model routing, replace/concatenate/
+    # complement composed right). Runs on THREE models so a per-model regression
+    # can't hide behind a healthy one — the incident was one model degrading while
+    # others worked. Each case is a single model call (not a tool loop), so kimi
+    # and gemini are fast enough for a PR gate here (unlike the finder legs).
+    #
+    # GATING (--gate): the asserted properties are binary and word-independent
+    # (does a non-empty summary come back and get posted, is it composed per the
+    # client's behaviour, does the configured model actually route) — so a real
+    # model can't make this flake. Infra errors (bad key/quota) exit 2 and fail
+    # loudly; an all-cases-infra run is treated as "not measured", not a pass.
+    pr-summary-gate:
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
+        needs: harness
+        name: "PR pr-summary · ${{ matrix.model }}"
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        strategy:
+            fail-fast: false
+            matrix:
+                model:
+                    - gpt-5.4-mini
+                    - kimi-k2.7-code
+                    - gemini-3-flash-preview
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+            - name: Install deps
+              run: pnpm install --frozen-lockfile
+            - name: Create environment.ts (gitignored EE config)
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+            - name: Run pr-summary eval
+              env:
+                  BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  BYOK_MOONSHOT_API_KEY: ${{ secrets.BYOK_MOONSHOT_API_KEY }}
+                  BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
+              run: node evals/pr-summary/run.js --model=${{ matrix.model }} --gate
+
     # Single rollup status for branch protection: mark ONLY this check required.
     # The per-model jobs stay visible for debugging (expand to see which model
     # regressed), but the PR gates on one clean pass/fail. `always()` so it runs
@@ -299,7 +348,7 @@ jobs:
     # only a real failure/cancel trips it.
     pr-evals-gate:
         if: always() && github.event_name == 'pull_request'
-        needs: [harness, pr-finder-gate, pr-kody-rules-gate, pr-anchoring-canary]
+        needs: [harness, pr-finder-gate, pr-kody-rules-gate, pr-anchoring-canary, pr-summary-gate]
         name: "PR evals gate"
         runs-on: ubuntu-latest
         timeout-minutes: 2
@@ -310,10 +359,11 @@ jobs:
                   R_FINDER: ${{ needs.pr-finder-gate.result }}
                   R_KODY: ${{ needs.pr-kody-rules-gate.result }}
                   R_ANCHOR: ${{ needs.pr-anchoring-canary.result }}
+                  R_SUMMARY: ${{ needs.pr-summary-gate.result }}
               run: |
-                  echo "harness=$R_HARNESS finder=$R_FINDER kody=$R_KODY anchoring=$R_ANCHOR"
+                  echo "harness=$R_HARNESS finder=$R_FINDER kody=$R_KODY anchoring=$R_ANCHOR summary=$R_SUMMARY"
                   failed=0
-                  for r in "$R_HARNESS" "$R_FINDER" "$R_KODY" "$R_ANCHOR"; do
+                  for r in "$R_HARNESS" "$R_FINDER" "$R_KODY" "$R_ANCHOR" "$R_SUMMARY"; do
                       if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
                           failed=1
                       fi

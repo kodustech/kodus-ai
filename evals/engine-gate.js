@@ -130,6 +130,8 @@ function preflight({ strictCoverage }) {
         'evals/kody-rules/real-agent.js',
         'evals/kody-rules/github-cases.json',
         'evals/anchoring/anchor-eval.js',
+        'evals/pr-summary/run.js',
+        'evals/pr-summary/datasets/cases.json',
         'evals/dedup/run.js',
         'evals/dedup/dedup-runner.js',
         'libs/code-review/infrastructure/agents/providers/generalist-agent.provider.ts',
@@ -166,6 +168,23 @@ function preflight({ strictCoverage }) {
             else fatal.push('kody-rules github-cases.json is empty or not an array');
         } catch (error) {
             fatal.push(`kody-rules github-cases.json is invalid JSON: ${error.message}`);
+        }
+    }
+
+    const summaryCasesFile = path.join(ROOT, 'evals/pr-summary/datasets/cases.json');
+    if (fs.existsSync(summaryCasesFile)) {
+        try {
+            const cases = readJson(summaryCasesFile);
+            const behaviours = new Set((cases || []).map((c) => c.behaviour));
+            if (!Array.isArray(cases) || cases.length === 0) {
+                fatal.push('pr-summary cases.json is empty or not an array');
+            } else if (!['replace', 'concatenate', 'complement'].every((b) => behaviours.has(b))) {
+                fatal.push('pr-summary cases.json must cover replace, concatenate and complement');
+            } else {
+                ok.push(`pr-summary cases=${cases.length}`);
+            }
+        } catch (error) {
+            fatal.push(`pr-summary cases.json is invalid JSON: ${error.message}`);
         }
     }
 

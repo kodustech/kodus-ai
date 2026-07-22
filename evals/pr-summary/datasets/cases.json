@@ -1,0 +1,133 @@
+[
+    {
+        "caseId": "replace-fresh",
+        "description": "First-open, REPLACE, no existing description → fresh summary block, nothing to preserve.",
+        "behaviour": "replace",
+        "existingBody": "",
+        "pr": {
+            "number": 101,
+            "title": "feat: add token-bucket rate limiter to the public API",
+            "head": { "ref": "feat/rate-limiter", "repo": { "fullName": "acme/sample-service" } },
+            "base": { "ref": "main" }
+        },
+        "changedFiles": [
+            {
+                "filename": "src/middleware/rateLimiter.ts",
+                "status": "added",
+                "patch": "@@ -0,0 +1,18 @@\n+export interface RateLimitOptions {\n+    capacity: number;\n+    refillPerSecond: number;\n+}\n+\n+export function createRateLimiter(opts: RateLimitOptions) {\n+    let tokens = opts.capacity;\n+    let last = Date.now();\n+    return function allow(): boolean {\n+        const now = Date.now();\n+        tokens = Math.min(opts.capacity, tokens + ((now - last) / 1000) * opts.refillPerSecond);\n+        last = now;\n+        if (tokens < 1) return false;\n+        tokens -= 1;\n+        return true;\n+    };\n+}"
+            }
+        ],
+        "expect": {
+            "postsSummary": true,
+            "exactlyOneBlock": true,
+            "bodyPreserved": false,
+            "promptContainsExistingBody": false
+        }
+    },
+    {
+        "caseId": "replace-over-existing",
+        "description": "First-open, REPLACE, an author-written description exists → it is dropped, only the fresh block remains.",
+        "behaviour": "replace",
+        "existingBody": "This PR does some stuff. TODO: describe it better.",
+        "pr": {
+            "number": 102,
+            "title": "fix: prevent double charge on retried checkout",
+            "head": { "ref": "fix/double-charge", "repo": { "fullName": "acme/sample-service" } },
+            "base": { "ref": "main" }
+        },
+        "changedFiles": [
+            {
+                "filename": "src/billing/checkout.ts",
+                "status": "modified",
+                "patch": "@@ -12,6 +12,10 @@ export async function checkout(cart: Cart, idempotencyKey: string) {\n-    const charge = await gateway.charge(cart.total);\n+    const existing = await charges.findByKey(idempotencyKey);\n+    if (existing) return existing;\n+    const charge = await gateway.charge(cart.total, { idempotencyKey });\n+    await charges.save(idempotencyKey, charge);\n     return charge;\n }"
+            }
+        ],
+        "expect": {
+            "postsSummary": true,
+            "exactlyOneBlock": true,
+            "bodyPreserved": false,
+            "promptContainsExistingBody": false
+        }
+    },
+    {
+        "caseId": "concatenate-existing",
+        "description": "First-open, CONCATENATE, an author-written description exists → author text is kept and the fresh block is appended after a separator.",
+        "behaviour": "concatenate",
+        "existingBody": "Author notes: closes ACME-4521. Please review the migration carefully.",
+        "pr": {
+            "number": 103,
+            "title": "feat: add soft-delete to the users table",
+            "head": { "ref": "feat/user-soft-delete", "repo": { "fullName": "acme/sample-service" } },
+            "base": { "ref": "main" }
+        },
+        "changedFiles": [
+            {
+                "filename": "src/db/migrations/2026_add_deleted_at.sql",
+                "status": "added",
+                "patch": "@@ -0,0 +1,2 @@\n+ALTER TABLE users ADD COLUMN deleted_at TIMESTAMPTZ NULL;\n+CREATE INDEX idx_users_active ON users (id) WHERE deleted_at IS NULL;"
+            },
+            {
+                "filename": "src/repositories/userRepository.ts",
+                "status": "modified",
+                "patch": "@@ -30,3 +30,7 @@ export class UserRepository {\n-    async find(id: string) { return this.db.users.findById(id); }\n+    async find(id: string) {\n+        return this.db.users.findOne({ id, deleted_at: null });\n+    }\n+    async softDelete(id: string) {\n+        return this.db.users.update({ id }, { deleted_at: new Date() });\n+    }"
+            }
+        ],
+        "expect": {
+            "postsSummary": true,
+            "exactlyOneBlock": true,
+            "bodyPreserved": true,
+            "promptContainsExistingBody": false
+        }
+    },
+    {
+        "caseId": "concatenate-rerun-dedup",
+        "description": "Re-run with CONCATENATE where the body already holds a previous kody summary block → old block is stripped, exactly one block survives (issue #1019).",
+        "behaviour": "concatenate",
+        "existingBody": "Author notes: refactor only, no behaviour change.\n\n---\n\n<!-- kody-pr-summary:start -->\nOLD STALE SUMMARY FROM A PRIOR RUN\n<!-- kody-pr-summary:end -->",
+        "pr": {
+            "number": 104,
+            "title": "refactor: extract email templating into its own module",
+            "head": { "ref": "refactor/email-templates", "repo": { "fullName": "acme/sample-service" } },
+            "base": { "ref": "main" }
+        },
+        "changedFiles": [
+            {
+                "filename": "src/email/templates.ts",
+                "status": "added",
+                "patch": "@@ -0,0 +1,6 @@\n+export function renderWelcome(name: string): string {\n+    return `<h1>Welcome, ${name}</h1>`;\n+}\n+export function renderReset(link: string): string {\n+    return `<a href=\"${link}\">Reset your password</a>`;\n+}"
+            }
+        ],
+        "expect": {
+            "postsSummary": true,
+            "exactlyOneBlock": true,
+            "bodyPreserved": true,
+            "promptContainsExistingBody": false,
+            "staleContentGone": "OLD STALE SUMMARY FROM A PRIOR RUN"
+        }
+    },
+    {
+        "caseId": "complement-existing",
+        "description": "First-open, COMPLEMENT, an author-written description exists → the existing body is injected into the model prompt so the summary complements (rather than repeats) it.",
+        "behaviour": "complement",
+        "existingBody": "This adds retry logic to the webhook dispatcher. It does not change the payload format.",
+        "pr": {
+            "number": 105,
+            "title": "feat: exponential backoff for webhook delivery",
+            "head": { "ref": "feat/webhook-backoff", "repo": { "fullName": "acme/sample-service" } },
+            "base": { "ref": "main" }
+        },
+        "changedFiles": [
+            {
+                "filename": "src/webhooks/dispatcher.ts",
+                "status": "modified",
+                "patch": "@@ -18,7 +18,12 @@ export async function dispatch(event: Event, url: string) {\n-    await post(url, event);\n+    let delay = 250;\n+    for (let attempt = 0; attempt < 5; attempt++) {\n+        try { return await post(url, event); }\n+        catch (err) {\n+            if (attempt === 4) throw err;\n+            await sleep(delay);\n+            delay *= 2;\n+        }\n+    }"
+            }
+        ],
+        "expect": {
+            "postsSummary": true,
+            "exactlyOneBlock": true,
+            "bodyPreserved": false,
+            "promptContainsExistingBody": true
+        }
+    }
+]
