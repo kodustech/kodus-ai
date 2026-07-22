@@ -65,6 +65,24 @@ const OUTBOX_BACKOFF: BackoffOptions = {
 const DEFAULT_OUTBOX_MAX_ATTEMPTS = 10;
 const DEFAULT_OUTBOX_PUBLISH_TIMEOUT_MS = 15000;
 
+// A job orphaned in PROCESSING beyond this is unrecoverable: the worker
+// that owned it died without a terminal update. Must sit above every
+// legitimate recovery window — the 105-min job abort timeout
+// (job-processor-router.service.ts) and the 150-min inbox claim timeout —
+// so an actively running or reclaimable job is never reaped.
+const DEFAULT_STALE_JOB_TIMEOUT_MINUTES = 180;
+
+// Above this many orphans reaped in a single pass, fire the incident
+// heartbeat — a spike means workers are crash-looping.
+const STALE_JOB_HIGH_REAP_THRESHOLD = 5;
+
+// Cadence of the stale-job reaper. Overridable for ops/testing; the
+// threshold (WORKFLOW_STALE_JOB_TIMEOUT_MINUTES) still bounds eligibility,
+// so a faster cadence only means quicker detection, never earlier reaping.
+const STALE_JOB_REAPER_CRON =
+    process.env.WORKFLOW_STALE_JOB_REAPER_CRON ||
+    CronExpression.EVERY_10_MINUTES;
+
 export const INBOX_REAPER_CONSUMER_TIMEOUTS = {
     'workflow-job-consumer.webhook': 20 * 60 * 1000,
     'workflow-job-consumer.check_implementation': 20 * 60 * 1000,
@@ -105,6 +123,10 @@ export class OutboxRelayService
     private readonly publishTimeoutMs = parsePositiveIntEnv(
         'WORKFLOW_OUTBOX_PUBLISH_TIMEOUT_MS',
         DEFAULT_OUTBOX_PUBLISH_TIMEOUT_MS,
+    );
+    private readonly staleJobTimeoutMinutes = parsePositiveIntEnv(
+        'WORKFLOW_STALE_JOB_TIMEOUT_MINUTES',
+        DEFAULT_STALE_JOB_TIMEOUT_MINUTES,
     );
 
     private readonly BATCH_SIZE = 50;
@@ -456,6 +478,110 @@ export class OutboxRelayService
                 'workflow.operation': 'reclaim_inbox',
             },
         );
+    }
+
+    /**
+     * Reaper for workflow jobs orphaned in PROCESSING.
+     *
+     * A worker SIGKILLed mid-job (OOM / node eviction / /tmp overflow) never
+     * runs the consumer's catch/finally, so its workflow_jobs row is left at
+     * PROCESSING forever: the inbox reaper frees the message lock, but the
+     * requeued RabbitMQ message is rejected as "already claimed" and DLQ'd
+     * (the DLX has no consumer) long before the 150-min claim can be
+     * reclaimed — so the job is never reprocessed and no other path resets
+     * its status. This flips such rows to FAILED so they stop reporting as
+     * running, are observable, and can be re-driven by a new review.
+     *
+     * The UI "in progress" badge is reaped separately by the automation
+     * execution watchdog (staleReviewWatchdog.cron); this closes the job
+     * layer, which also covers workflow types that have no automation
+     * execution row (check_implementation, AST graph builds).
+     */
+    @Cron(STALE_JOB_REAPER_CRON, { name: 'workflow-stale-job-reaper' })
+    async reapStaleProcessingJobs(): Promise<void> {
+        const lock = await this.acquireCronLock(
+            'CRON:WORKFLOW:STALE_JOB_REAPER',
+            4 * 60 * 1000,
+        );
+        if (!lock) {
+            return;
+        }
+
+        try {
+            const olderThan = new Date(
+                Date.now() - this.staleJobTimeoutMinutes * 60 * 1000,
+            );
+
+            const reaped = await this.jobRepository.failStaleProcessing?.({
+                olderThan,
+                lastError: `Orphaned: worker crashed/evicted while job was PROCESSING (no terminal update within ${this.staleJobTimeoutMinutes}min). Reaped by stale-job watchdog.`,
+                errorClassification: ErrorClassification.PERMANENT,
+            });
+
+            const reapedCount = reaped?.length ?? 0;
+            if (reapedCount === 0) {
+                return;
+            }
+
+            this.logger.warn({
+                message: `Reaped ${reapedCount} stale PROCESSING workflow jobs`,
+                context: OutboxRelayService.name,
+                metadata: {
+                    reapedCount,
+                    staleTimeoutMinutes: this.staleJobTimeoutMinutes,
+                    olderThan: olderThan.toISOString(),
+                    jobs: reaped.map((job) => ({
+                        jobId: job.uuid,
+                        workflowType: job.workflowType,
+                        organizationId: job.organizationId,
+                        startedAt: job.startedAt,
+                    })),
+                },
+            });
+
+            if (reapedCount > STALE_JOB_HIGH_REAP_THRESHOLD) {
+                this.logger.error({
+                    message: `HIGH REAP RATE: ${reapedCount} workflow jobs orphaned in PROCESSING!`,
+                    context: OutboxRelayService.name,
+                    metadata: {
+                        reapedCount,
+                        possibleCause:
+                            'Worker crashes/evictions (OOM, node pressure, restarts)',
+                    },
+                });
+
+                this.incidentManager
+                    ?.failHeartbeat(
+                        'API_BETTERSTACK_HEARTBEAT_OUTBOX_URL',
+                        `High stale-job reap rate: ${reapedCount} workflow jobs orphaned in PROCESSING. Possible cause: worker crashes/evictions (OOM, node pressure, restarts). ${this.formatContext(
+                            {
+                                monitor: 'stale_job_reap_rate',
+                                reapedCount,
+                            },
+                        )}`,
+                    )
+                    .catch((err) => {
+                        this.logger.error({
+                            message:
+                                'Failed to report stale-job reap heartbeat failure',
+                            context: OutboxRelayService.name,
+                            error: err instanceof Error ? err : undefined,
+                            metadata: { reapedCount },
+                        });
+                    });
+            }
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to reap stale PROCESSING workflow jobs',
+                context: OutboxRelayService.name,
+                error: error instanceof Error ? error : undefined,
+            });
+        } finally {
+            await this.releaseCronLock(
+                lock,
+                'Failed to release stale-job reaper lock',
+            );
+        }
     }
 
     /**
