@@ -114,6 +114,8 @@
         "eval:kody-rules:atoms": "node evals/kody-rules/run-full-pipeline.js --dataset=rails-convention-cases-all --only=digest --atoms --model=gpt-5.4-mini",
         "eval:anchoring": "node evals/anchoring/anchor-eval.js --limit=25",
         "eval:anchoring:gate": "node evals/anchoring/anchor-eval.js --limit=25 --gate",
+        "eval:pr-summary": "node evals/pr-summary/run.js --model=gpt-5.4-mini --gate",
+        "eval:pr-summary:mock": "node evals/pr-summary/run.js --mock --gate",
         "eval:suite": "node evals/run-suite.js",
         "eval:engine:preflight": "node evals/engine-gate.js --profile=harness",
         "eval:engine:local": "node evals/engine-gate.js --profile=local",
