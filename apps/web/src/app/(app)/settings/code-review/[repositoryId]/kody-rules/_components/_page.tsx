@@ -241,27 +241,32 @@ const KodyRulesPageContent = () => {
     // Push filter state into the URL whenever it changes so refresh / share
     // restores it. Skips the very first run (before initial URL was parsed)
     // to avoid clobbering deep-link params during mount.
+    //
+    // Uses history.replaceState instead of router.replace: router.replace
+    // triggers an App Router navigation (RSC refetch + subtree re-render) on
+    // every keystroke, which steals focus from the search input — you'd have
+    // to click back into the field for each letter. history.replaceState
+    // updates the URL silently, so filters still survive refresh / share
+    // without remounting the input. We read the live URL (not the
+    // useSearchParams snapshot, which history.replaceState doesn't update) so
+    // the no-op guard stays accurate and unrelated params are preserved.
     useEffect(() => {
         if (!hasReadUrl) return;
-        const next = new URLSearchParams(searchParams?.toString() ?? "");
+        const currentStr = window.location.search.replace(/^\?/, "");
+        const next = new URLSearchParams(currentStr);
         applyFiltersToParams(next, {
             query: filterQuery,
             listFilters,
             onlyOrphans: onlyIdeSynced,
         });
         const nextStr = next.toString();
-        const currentStr = searchParams?.toString() ?? "";
         if (nextStr === currentStr) return;
-        router.replace(nextStr ? pathname + "?" + nextStr : pathname);
-    }, [
-        hasReadUrl,
-        filterQuery,
-        listFilters,
-        onlyIdeSynced,
-        pathname,
-        router,
-        searchParams,
-    ]);
+        window.history.replaceState(
+            null,
+            "",
+            nextStr ? pathname + "?" + nextStr : pathname,
+        );
+    }, [hasReadUrl, filterQuery, listFilters, onlyIdeSynced, pathname]);
 
     const ideRulesSyncEnabledForRepo =
         !isGlobalView &&
@@ -762,7 +767,13 @@ const KodyRulesPageContent = () => {
             return;
         }
 
-        const params = new URLSearchParams(searchParams.toString());
+        // Base off the live URL, not the useSearchParams snapshot: the filter
+        // sync writes with history.replaceState (see above), which doesn't
+        // refresh that snapshot, so reading it here would drop the current
+        // filter params when switching tabs.
+        const params = new URLSearchParams(
+            window.location.search.replace(/^\?/, ""),
+        );
         if (tab === DEFAULT_TAB) {
             params.delete(TAB_QUERY_PARAM);
         } else {
