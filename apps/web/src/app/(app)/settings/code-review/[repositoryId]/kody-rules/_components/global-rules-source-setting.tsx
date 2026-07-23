@@ -52,23 +52,35 @@ export const GlobalRulesSourceSetting = () => {
     const [pickerOpen, setPickerOpen] = useState(false);
     const [selected, setSelected] = useState<Repository[]>([]);
     const [confirmOpen, setConfirmOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<Repository | null>(null);
 
-    // Seed the local selection from the persisted sources once the repository
-    // list is available (the picker compares by id, so we resolve full
-    // Repository objects from the fetched list).
+    const savedIds = useMemo(
+        () => new Set(savedSources.map((r) => String(r.id))),
+        [savedSources],
+    );
+
+    // Seed the local selection from the persisted sources, preserving any
+    // pending additions the user picked but hasn't saved yet — a delete
+    // persists immediately and refetches `savedSources`, and we must not drop
+    // in-progress additions when that happens.
     useEffect(() => {
         if (!repositories.length) return;
-        const savedIds = new Set(savedSources.map((r) => String(r.id)));
-        setSelected(repositories.filter((r) => savedIds.has(String(r.id))));
+        const ids = new Set(savedSources.map((r) => String(r.id)));
+        setSelected((prev) => {
+            const saved = repositories.filter((r) => ids.has(String(r.id)));
+            const pendingAdditions = prev.filter(
+                (r) => !ids.has(String(r.id)),
+            );
+            return [...saved, ...pendingAdditions];
+        });
     }, [repositories, savedSources]);
 
-    const isDirty = useMemo(() => {
-        const a = new Set(selected.map((r) => String(r.id)));
-        const b = new Set(savedSources.map((r) => String(r.id)));
-        if (a.size !== b.size) return true;
-        for (const id of a) if (!b.has(id)) return true;
-        return false;
-    }, [selected, savedSources]);
+    // Removals are persisted immediately (with confirmation), so "Save" only
+    // ever commits ADDITIONS — repos selected that aren't saved yet.
+    const hasPendingAdditions = useMemo(
+        () => selected.some((r) => !savedIds.has(String(r.id))),
+        [selected, savedIds],
+    );
 
     const refreshSources = () => {
         invalidateQueries({
@@ -125,6 +137,46 @@ export const GlobalRulesSourceSetting = () => {
         }
     });
 
+    // Persist a removal on its own (not via Save): drops the repo from the
+    // saved list, which the backend reconciles by soft-deleting that repo's
+    // global rules. Pending additions in `selected` are intentionally NOT sent,
+    // so a delete never triggers an import.
+    const [handleDeleteConfirmed, { loading: isDeleting }] = useAsyncAction(
+        async () => {
+            if (!deleteTarget) return;
+            const targetId = String(deleteTarget.id);
+            try {
+                await setGlobalSourceRepositories({
+                    teamId,
+                    repositories: savedSources
+                        .filter((r) => String(r.id) !== targetId)
+                        .map((r) => ({
+                            id: String(r.id),
+                            name: r.name,
+                            fullName: r.fullName,
+                        })),
+                });
+                await refreshSources();
+                setSelected((prev) =>
+                    prev.filter((r) => String(r.id) !== targetId),
+                );
+                toast({
+                    variant: "success",
+                    title: "Repository removed",
+                    description:
+                        "Its imported global rules have been deleted.",
+                });
+            } catch {
+                toast({
+                    variant: "danger",
+                    title: "Could not remove repository",
+                });
+            } finally {
+                setDeleteTarget(null);
+            }
+        },
+    );
+
     // Trial: confirm the cap before importing. Paid: save directly.
     const onSaveClick = () => {
         if (isTrial) {
@@ -134,8 +186,17 @@ export const GlobalRulesSourceSetting = () => {
         handleSave();
     };
 
-    const removeFromSelection = (id: string) =>
-        setSelected((prev) => prev.filter((r) => String(r.id) !== String(id)));
+    // Trash: a saved repo needs delete confirmation (its rules get purged); a
+    // not-yet-saved pending addition is just dropped from the local selection.
+    const onTrashClick = (repo: Repository) => {
+        if (savedIds.has(String(repo.id))) {
+            setDeleteTarget(repo);
+        } else {
+            setSelected((prev) =>
+                prev.filter((r) => String(r.id) !== String(repo.id)),
+            );
+        }
+    };
 
     const header = (
         <Section.Header>
@@ -260,28 +321,38 @@ export const GlobalRulesSourceSetting = () => {
 
                         {selected.length > 0 && (
                             <div className="divide-border flex flex-col divide-y rounded-md border">
-                                {selected.map((repo) => (
-                                    <div
-                                        key={repo.id}
-                                        className="flex items-center justify-between px-3 py-2">
-                                        <span className="text-text-primary text-sm">
-                                            {repo.full_name || repo.name}
-                                        </span>
-                                        {canEdit && (
-                                            <Button
-                                                size="icon-sm"
-                                                variant="cancel"
-                                                aria-label={`Remove ${repo.name}`}
-                                                onClick={() =>
-                                                    removeFromSelection(
-                                                        String(repo.id),
-                                                    )
-                                                }>
-                                                <Trash2 className="size-4" />
-                                            </Button>
-                                        )}
-                                    </div>
-                                ))}
+                                {selected.map((repo) => {
+                                    const isPending = !savedIds.has(
+                                        String(repo.id),
+                                    );
+                                    return (
+                                        <div
+                                            key={repo.id}
+                                            className="flex items-center justify-between px-3 py-2">
+                                            <span className="flex items-center gap-2 text-sm">
+                                                <span className="text-text-primary">
+                                                    {repo.full_name || repo.name}
+                                                </span>
+                                                {isPending && (
+                                                    <span className="text-warning border-warning/40 rounded border px-1.5 py-0.5 text-[11px]">
+                                                        Not imported yet
+                                                    </span>
+                                                )}
+                                            </span>
+                                            {canEdit && (
+                                                <Button
+                                                    size="icon-sm"
+                                                    variant="cancel"
+                                                    aria-label={`Remove ${repo.name}`}
+                                                    onClick={() =>
+                                                        onTrashClick(repo)
+                                                    }>
+                                                    <Trash2 className="size-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
 
@@ -290,9 +361,9 @@ export const GlobalRulesSourceSetting = () => {
                                 size="md"
                                 variant="primary"
                                 loading={isSaving}
-                                disabled={!canEdit || !isDirty}
+                                disabled={!canEdit || !hasPendingAdditions}
                                 onClick={onSaveClick}>
-                                Save changes
+                                Import selected
                             </Button>
                             <Button
                                 size="md"
@@ -328,6 +399,22 @@ export const GlobalRulesSourceSetting = () => {
                     handleSave();
                 }}
                 onCancel={() => setConfirmOpen(false)}
+            />
+
+            <ConfirmModal
+                open={deleteTarget !== null}
+                title="Remove global rule source?"
+                description={
+                    `The global Kody Rules imported from ` +
+                    `"${deleteTarget?.full_name || deleteTarget?.name}" will be ` +
+                    `deleted and will no longer apply during code review. This ` +
+                    `cannot be undone.`
+                }
+                confirmText="Remove and delete rules"
+                variant="tertiary"
+                loading={isDeleting}
+                onConfirm={handleDeleteConfirmed}
+                onCancel={() => setDeleteTarget(null)}
             />
         </Card>
     );
