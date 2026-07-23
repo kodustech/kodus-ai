@@ -655,7 +655,7 @@ export class KodyRulesController {
 
     @ApiBearerAuth('jwt')
     @Get('/global-source-repositories')
-    @UseGuards(PolicyGuard)
+    @UseGuards(PolicyGuard, KodyRulesTenantGuard)
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -676,7 +676,7 @@ export class KodyRulesController {
 
     @ApiBearerAuth('jwt')
     @Get('/global-source-repositories/import-status')
-    @UseGuards(PolicyGuard)
+    @UseGuards(PolicyGuard, KodyRulesTenantGuard)
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -697,7 +697,7 @@ export class KodyRulesController {
 
     @ApiBearerAuth('jwt')
     @Post('/global-source-repositories')
-    @UseGuards(PolicyGuard)
+    @UseGuards(PolicyGuard, KodyRulesTenantGuard)
     @CheckPolicies(
         checkPermissions({
             action: Action.Create,
@@ -724,7 +724,7 @@ export class KodyRulesController {
 
     @ApiBearerAuth('jwt')
     @Post('/resync-global-rules')
-    @UseGuards(PolicyGuard)
+    @UseGuards(PolicyGuard, KodyRulesTenantGuard)
     @CheckPolicies(
         checkPermissions({
             action: Action.Create,

@@ -57,7 +57,10 @@ export class KodyRulesSyncListener {
                 message: 'Failed to check global-rules source membership',
                 context: KodyRulesSyncListener.name,
                 error,
-                metadata: { repositoryId: event.repository?.id },
+                metadata: {
+                    organizationAndTeamData: event.organizationAndTeamData,
+                    repositoryId: event.repository?.id,
+                },
             });
             return false;
         }

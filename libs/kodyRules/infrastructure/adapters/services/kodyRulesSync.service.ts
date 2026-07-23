@@ -3392,17 +3392,9 @@ export class KodyRulesSyncService {
         return true;
     }
 
-    /**
-     * Count of ACTIVE global-synced rules across the whole org (every source
-     * repo combined). This is the number the trial cap is measured against.
-     */
-    async countGlobalSyncedRules(
-        organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<number> {
-        const entity = await this.kodyRulesService.findByOrganizationId(
-            organizationAndTeamData.organizationId,
-        );
-        return ((entity?.rules ?? []) as any[]).filter(
+    /** Count of ACTIVE global-synced rules in an already-loaded rules array. */
+    private countActiveGlobalSyncedRulesIn(rules: any[]): number {
+        return (rules ?? []).filter(
             (r) =>
                 this.isGlobalSyncedRule(r) &&
                 r?.status === KodyRulesStatus.ACTIVE,
@@ -3410,63 +3402,66 @@ export class KodyRulesSyncService {
     }
 
     /**
-     * Find an existing global-synced rule keyed by (source repository, source
-     * file path). Unlike `findRuleBySourcePath`, the key includes
+     * Count of ACTIVE global-synced rules across the whole org (every source
+     * repo combined). This is the number the trial cap is measured against.
+     * Loads the org's rules; callers that already hold the rules array (e.g. the
+     * sync loop) should use `countActiveGlobalSyncedRulesIn` instead.
+     */
+    async countGlobalSyncedRules(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<number> {
+        const entity = await this.kodyRulesService.findByOrganizationId(
+            organizationAndTeamData.organizationId,
+        );
+        return this.countActiveGlobalSyncedRulesIn(
+            (entity?.rules ?? []) as any[],
+        );
+    }
+
+    /**
+     * Find an existing global-synced rule in an already-loaded rules array,
+     * keyed by (source repository, source file path). The key includes
      * `sourceRepositoryId` so two source repos with the same file path (e.g.
      * both shipping a `CLAUDE.md`) don't collide in the shared `"global"` bucket.
+     * Pure/in-memory so the sync loop can reuse a single org-rules load instead
+     * of re-querying per file.
      */
-    private async findGlobalRuleBySource(params: {
-        organizationAndTeamData: OrganizationAndTeamData;
-        sourceRepositoryId: string;
-        sourcePath: string;
-    }): Promise<Partial<{
+    private selectGlobalRuleFromList(
+        rules: any[],
+        sourceRepositoryId: string,
+        sourcePath: string,
+    ): Partial<{
         uuid: string;
         status: KodyRulesStatus;
         lastContentHash: string;
-    }> | null> {
-        try {
-            const { organizationAndTeamData, sourceRepositoryId, sourcePath } =
-                params;
-            const existing = await this.kodyRulesService.findByOrganizationId(
-                organizationAndTeamData.organizationId,
-            );
-            const matches =
-                existing?.rules?.filter(
-                    (r: any) =>
-                        this.isGlobalSyncedRule(r, sourceRepositoryId) &&
-                        (r?.sourcePath || '').split('#')[0] === sourcePath,
-                ) ?? [];
-            if (!matches.length) return null;
+    }> | null {
+        const matches =
+            (rules ?? []).filter(
+                (r: any) =>
+                    this.isGlobalSyncedRule(r, sourceRepositoryId) &&
+                    (r?.sourcePath || '').split('#')[0] === sourcePath,
+            ) ?? [];
+        if (!matches.length) return null;
 
-            const toTime = (value: unknown): number => {
-                const t = new Date((value as any) ?? 0).getTime();
-                return Number.isFinite(t) ? t : 0;
-            };
-            const newestFirst = [...matches].sort(
-                (a: any, b: any) =>
-                    toTime(b?.createdAt) - toTime(a?.createdAt),
-            );
-            const found =
-                newestFirst.find(
-                    (r: any) => r?.status !== KodyRulesStatus.DELETED,
-                ) ?? newestFirst[0];
+        const toTime = (value: unknown): number => {
+            const t = new Date((value as any) ?? 0).getTime();
+            return Number.isFinite(t) ? t : 0;
+        };
+        const newestFirst = [...matches].sort(
+            (a: any, b: any) => toTime(b?.createdAt) - toTime(a?.createdAt),
+        );
+        const found =
+            newestFirst.find(
+                (r: any) => r?.status !== KodyRulesStatus.DELETED,
+            ) ?? newestFirst[0];
 
-            return found
-                ? {
-                      uuid: found.uuid,
-                      status: found.status,
-                      lastContentHash: (found as any).lastContentHash,
-                  }
-                : null;
-        } catch (error) {
-            this.logger.error({
-                message: 'Failed to find global rule by source',
-                context: KodyRulesSyncService.name,
-                error,
-                metadata: params,
-            });
-            return null;
-        }
+        return found
+            ? {
+                  uuid: found.uuid,
+                  status: found.status,
+                  lastContentHash: (found as any).lastContentHash,
+              }
+            : null;
     }
 
     /**
@@ -3505,6 +3500,18 @@ export class KodyRulesSyncService {
                 });
                 return;
             }
+            // Load the org's rules ONCE and reuse the array for the budget
+            // count, every per-file lookup, and the deletion reconciliation.
+            // The rules array only grows by distinct source paths during this
+            // run (each handled once), so an in-memory snapshot stays correct
+            // for lookups; reconciliation is driven by `seenSourcePaths`, not by
+            // whether a just-created rule is in the snapshot.
+            const orgRules = ((
+                await this.kodyRulesService.findByOrganizationId(
+                    organizationAndTeamData.organizationId,
+                )
+            )?.rules ?? []) as any[];
+
             const importLimit =
                 tier === 'trial' ? GLOBAL_RULES_TRIAL_IMPORT_LIMIT : null;
             let budget =
@@ -3513,9 +3520,7 @@ export class KodyRulesSyncService {
                     : Math.max(
                           0,
                           importLimit -
-                              (await this.countGlobalSyncedRules(
-                                  organizationAndTeamData,
-                              )),
+                              this.countActiveGlobalSyncedRulesIn(orgRules),
                       );
 
             const branch = await this.codeManagementService.getDefaultBranch({
@@ -3545,11 +3550,11 @@ export class KodyRulesSyncService {
             for (const file of allFiles) {
                 seenSourcePaths.add(file.path);
 
-                const existing = await this.findGlobalRuleBySource({
-                    organizationAndTeamData,
-                    sourceRepositoryId: repository.id,
-                    sourcePath: file.path,
-                });
+                const existing = this.selectGlobalRuleFromList(
+                    orgRules,
+                    repository.id,
+                    file.path,
+                );
 
                 // SHA short-circuit: unchanged file with a live rule → skip the
                 // content download + LLM conversion entirely.
@@ -3696,11 +3701,11 @@ export class KodyRulesSyncService {
             }
 
             // Deletion reconciliation: soft-delete global rules from this source
-            // repo whose file no longer exists at HEAD.
-            const entity = await this.kodyRulesService.findByOrganizationId(
-                organizationAndTeamData.organizationId,
-            );
-            for (const rule of (entity?.rules ?? []) as any[]) {
+            // repo whose file no longer exists at HEAD. Reuses the snapshot
+            // loaded at the top — a rule created during this run is never a
+            // deletion candidate (its path is in `seenSourcePaths`), so the
+            // snapshot missing it is harmless.
+            for (const rule of orgRules) {
                 if (!this.isGlobalSyncedRule(rule, repository.id)) continue;
                 if (rule?.status === KodyRulesStatus.DELETED) continue;
                 const sp = (rule?.sourcePath || '').split('#')[0];
