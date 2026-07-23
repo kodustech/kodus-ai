@@ -66,6 +66,7 @@
                                             "how_to_use/en/code_review/configs/rules_inheritance",
                                             "how_to_use/en/code_review/configs/rules_file_detection",
                                             "how_to_use/en/code_review/configs/repository_rules",
+                                            "how_to_use/en/code_review/configs/global_rule_sources",
                                             "how_to_use/en/code_review/learning/kody_rules_generation"
                                         ]
                                     },

@@ -19,6 +19,7 @@ import { UserModule } from '@libs/identity/modules/user.module';
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
 import { IntegrationModule } from '@libs/integrations/modules/integrations.module';
 import { OrganizationModule } from '@libs/organization/modules/organization.module';
+import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
 import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { PlatformCoreModule } from '@libs/platform/modules/platform-core.module';
 import { AddLibraryKodyRulesUseCase } from '../application/use-cases/add-library-kody-rules.use-case';
@@ -53,6 +54,10 @@ import { RemoveRuleLikeUseCase } from '../application/use-cases/rule-like/remove
 import { SetRuleLikeUseCase } from '../application/use-cases/rule-like/set-rule-like.use-case';
 import { SendRulesNotificationUseCase } from '../application/use-cases/send-rules-notification.use-case';
 import { SyncSelectedRepositoriesKodyRulesUseCase } from '../application/use-cases/sync-selected-repositories.use-case';
+import { GetGlobalRulesSourceRepositoriesUseCase } from '../application/use-cases/get-global-rules-source-repositories.use-case';
+import { UpdateGlobalRulesSourceRepositoriesUseCase } from '../application/use-cases/update-global-rules-source-repositories.use-case';
+import { ResyncGlobalRulesUseCase } from '../application/use-cases/resync-global-rules.use-case';
+import { GetGlobalRulesImportStatusUseCase } from '../application/use-cases/get-global-rules-import-status.use-case';
 import { KODY_RULES_REPOSITORY_TOKEN } from '../domain/contracts/kodyRules.repository.contract';
 import { KODY_RULES_SERVICE_TOKEN } from '../domain/contracts/kodyRules.service.contract';
 import {
@@ -86,6 +91,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         forwardRef(() => ParametersModule),
         forwardRef(() => UserModule),
         forwardRef(() => OrganizationModule),
+        forwardRef(() => OrganizationParametersModule),
         forwardRef(() => RuleLikeModule),
         forwardRef(() => LicenseModule),
         forwardRef(() => PullRequestsModule),
@@ -127,6 +133,10 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         KodyRuleDetectorSweepService,
         SendRulesNotificationUseCase,
         SyncSelectedRepositoriesKodyRulesUseCase,
+        GetGlobalRulesSourceRepositoriesUseCase,
+        UpdateGlobalRulesSourceRepositoriesUseCase,
+        ResyncGlobalRulesUseCase,
+        GetGlobalRulesImportStatusUseCase,
         KodyRulesValidationService,
         KodyRulesSyncService,
         KodyRuleSummaryService,
@@ -171,6 +181,10 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         KodyRuleSummaryService,
         ExternalReferenceLoaderService,
         SyncSelectedRepositoriesKodyRulesUseCase,
+        GetGlobalRulesSourceRepositoriesUseCase,
+        UpdateGlobalRulesSourceRepositoriesUseCase,
+        ResyncGlobalRulesUseCase,
+        GetGlobalRulesImportStatusUseCase,
         AddLibraryKodyRulesUseCase,
         CheckSyncStatusUseCase,
         ListPastReviewersUseCase,

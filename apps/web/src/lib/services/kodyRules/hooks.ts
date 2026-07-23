@@ -65,6 +65,48 @@ export const useSuspenseKodyRulesCheckSyncStatus = (params: {
     }>(KODY_RULES_PATHS.CHECK_SYNC_STATUS, { params });
 };
 
+export type GlobalRulesSourceRepository = {
+    id: string;
+    name: string;
+    fullName?: string;
+};
+
+export const useSuspenseGlobalRulesSourceRepositories = (params: {
+    teamId: string;
+}) => {
+    return useSuspenseFetch<Array<GlobalRulesSourceRepository>>(
+        KODY_RULES_PATHS.GLOBAL_SOURCE_REPOSITORIES,
+        { params },
+        { fallbackData: [] },
+    );
+};
+
+export type GlobalRulesImportTier = "free" | "trial" | "paid";
+
+export type GlobalRulesImportStatus = {
+    tier: GlobalRulesImportTier;
+    limit: number | null;
+    used: number;
+    remaining: number | null;
+};
+
+export const useSuspenseGlobalRulesImportStatus = (params: {
+    teamId: string;
+}) => {
+    return useSuspenseFetch<GlobalRulesImportStatus>(
+        KODY_RULES_PATHS.GLOBAL_RULES_IMPORT_STATUS,
+        { params },
+        {
+            fallbackData: {
+                tier: "free",
+                limit: 0,
+                used: 0,
+                remaining: 0,
+            },
+        },
+    );
+};
+
 export type PastReviewer = { id: string; name: string };
 
 export const useGetPastReviewers = (

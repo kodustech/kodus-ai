@@ -292,6 +292,42 @@ export const syncIDERules = (params: {
     axiosAuthorized.post(KODY_RULES_PATHS.SYNC_IDE_RULES, params);
 };
 
+export type GlobalRulesSourceRepository = {
+    id: string;
+    name: string;
+    fullName?: string;
+};
+
+export const getGlobalSourceRepositories = async (params: {
+    teamId: string;
+}): Promise<GlobalRulesSourceRepository[]> => {
+    const url = `${KODY_RULES_PATHS.GLOBAL_SOURCE_REPOSITORIES}?teamId=${encodeURIComponent(params.teamId)}`;
+    const result = await authorizedFetch<GlobalRulesSourceRepository[]>(url);
+    return result ?? [];
+};
+
+export const setGlobalSourceRepositories = async (params: {
+    teamId: string;
+    repositories: GlobalRulesSourceRepository[];
+}): Promise<GlobalRulesSourceRepository[]> => {
+    const response =
+        await axiosAuthorized.post<GlobalRulesSourceRepository[]>(
+            KODY_RULES_PATHS.GLOBAL_SOURCE_REPOSITORIES,
+            params,
+        );
+    return response;
+};
+
+export const resyncGlobalRules = async (params: {
+    teamId: string;
+}): Promise<{ repositories: number }> => {
+    const response = await axiosAuthorized.post<{ repositories: number }>(
+        KODY_RULES_PATHS.RESYNC_GLOBAL_RULES,
+        params,
+    );
+    return response;
+};
+
 export const reviewFastIDERules = async (
     payload: ReviewFastIDERulesPayload,
 ): Promise<ReviewFastIDERulesResponse> => {

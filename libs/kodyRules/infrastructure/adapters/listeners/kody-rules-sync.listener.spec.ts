@@ -7,6 +7,10 @@ import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import {
+    IOrganizationParametersService,
+    ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { KodyRulesSyncService } from '../services/kodyRulesSync.service';
 import { KodyRulesSyncListener } from './kody-rules-sync.listener';
 
@@ -23,6 +27,14 @@ describe('KodyRulesSyncListener', () => {
         findByKey: jest.fn(),
     };
 
+    // Global-rules source lookup: default to "no sources configured" so the
+    // PR-merge global fan-out stays off in these centralized-config tests.
+    const organizationParametersServiceMock: jest.Mocked<
+        Pick<IOrganizationParametersService, 'findByKey'>
+    > = {
+        findByKey: jest.fn().mockResolvedValue(null),
+    };
+
     beforeEach(async () => {
         jest.clearAllMocks();
 
@@ -36,6 +48,10 @@ describe('KodyRulesSyncListener', () => {
                 {
                     provide: PARAMETERS_SERVICE_TOKEN,
                     useValue: parametersServiceMock,
+                },
+                {
+                    provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+                    useValue: organizationParametersServiceMock,
                 },
                 {
                     provide: getDataSourceToken(),
