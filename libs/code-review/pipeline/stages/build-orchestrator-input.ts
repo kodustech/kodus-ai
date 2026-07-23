@@ -111,6 +111,9 @@ export function buildOrchestratorInput(
         // Gated (config-driven, default off): dispatch the additive test-gen
         // agent (proposes a unit test for an under-tested changed function).
         testGen: context.codeReviewConfig?.testGen,
+        // Experimental A/B knob (config-driven, default off): two-pass finder task
+        // (PASS 1 local diff review, PASS 2 cross-file impact via the call graph).
+        twoPassImpact: context.codeReviewConfig?.twoPassImpact,
         parentSignal: context.parentSignal,
     };
 }

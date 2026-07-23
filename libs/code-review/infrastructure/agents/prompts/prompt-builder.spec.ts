@@ -78,4 +78,33 @@ describe('buildUserPrompt', () => {
         const user = buildUserPrompt(baseInput(), mixedMeta);
         expect(user).toContain('bug, security, performance');
     });
+
+    it('single-pass by default: no PASS 1/PASS 2 framing', () => {
+        const user = buildUserPrompt(
+            baseInput({ callGraph: '<CallGraph>...</CallGraph>' }),
+            meta,
+        );
+        expect(user).not.toContain('PASS 1 — LOCAL');
+        expect(user).not.toContain('PASS 2 — IMPACT');
+    });
+
+    it('twoPassImpact structures the task into local then cross-file passes', () => {
+        const user = buildUserPrompt(
+            baseInput({
+                twoPassImpact: true,
+                callGraph: '<CallGraph>...</CallGraph>',
+            }),
+            meta,
+        );
+        expect(user).toContain('PASS 1 — LOCAL');
+        expect(user).toContain('PASS 2 — IMPACT');
+        // PASS 2 must point at the coupling section produced by kodus-graph.
+        expect(user).toContain('REVIEW TOGETHER');
+    });
+
+    it('twoPassImpact falls back to single-pass when there is no call graph', () => {
+        // Nothing cross-file to exploit → the two-pass framing would be empty ceremony.
+        const user = buildUserPrompt(baseInput({ twoPassImpact: true }), meta);
+        expect(user).not.toContain('PASS 1 — LOCAL');
+    });
 });

@@ -246,6 +246,11 @@ export interface ReviewAgentInput
      *  the test-gen agent, which PROPOSES (does not run) a unit test for a new or
      *  changed under-tested function. Additive — off leaves the review untouched. */
     testGen?: boolean;
+    /** Gated A/B knob (default off): when on, the finder's user prompt is
+     *  structured as two explicit passes — PASS 1 reviews the diff in isolation
+     *  for local defects, PASS 2 consults the call-graph/coupling context ONLY
+     *  for cross-file impact. Prompt-only; no extra agent run. */
+    twoPassImpact?: boolean;
     /**
      * Commits that make up this PR (SHA + subject line), oldest→newest. Threaded
      * so commit-hygiene rules ("don't mix mechanical and behavioral changes")

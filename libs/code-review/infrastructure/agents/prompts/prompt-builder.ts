@@ -314,6 +314,32 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
                 : (taskDescriptions[categoryLabel] ??
                   'issues introduced by these changes');
 
+        // Two-pass framing (gated, default off): separate LOCAL diff review from
+        // CROSS-FILE impact. PASS 1 finds defects provable from the changed lines
+        // alone (no call-graph distraction); PASS 2 then uses the call-graph /
+        // REVIEW TOGETHER / hierarchy context only for what the diff can't show —
+        // broken caller/callee contracts and sibling-class contract divergence.
+        // An internal ablation credited this separation for more real cross-file
+        // findings without losing local recall. Falls back to the single-pass task
+        // when the knob is off (default) or there is no call-graph to exploit.
+        const impactSource = input.callGraph
+            ? 'the CallGraph and REVIEW TOGETHER sections above'
+            : 'the callers/callees you find with the tools';
+        const taskBody =
+            input.twoPassImpact && input.callGraph
+                ? `    Review this Pull Request for ${taskDescription}, in two explicit passes.
+
+    PASS 1 — LOCAL (the diff in isolation): Ignore the call graph for now. Read only the changed hunks and just enough of the immediate file to judge them. Report defects provable from the changed lines themselves — wrong output, crash, broken local branch or logic, lost side effect, unhandled input. Anchor each to a changed line.
+
+    PASS 2 — IMPACT (cross-file): NOW use ${impactSource}. Look ONLY for issues the local pass cannot see from the diff alone: a changed contract that breaks a caller, a changed callee assumption, a sibling implementation in REVIEW TOGETHER whose contract now diverges from the one you changed, or coupled code that must change together but didn't. Grep/read to confirm before reporting; anchor every finding to a changed line and name the other site to check.
+
+    Promote a finding when the changed code gives you a code-backed suspicion of a defect. You don't need to fully prove the failure — anchor it to a specific changed line and let the verifier filter unsupported claims.
+    Dismiss only what you can explain WHY it cannot fail; when in doubt, report rather than self-censor.`
+                : `    Review this Pull Request for ${taskDescription}.
+    For each changed function: grep callers → read context → challenge with adversarial questions.${input.callGraph ? '\n    Use the call graph above as a fast map of production callers/callees, but still verify with tools before reporting.' : ''}
+    Promote a finding when the changed code gives you a code-backed suspicion of a defect. You don't need to fully prove the failure — anchor it to a specific changed line and let the verifier filter unsupported claims.
+    Dismiss only what you can explain WHY it cannot fail; when in doubt, report rather than self-censor.`;
+
         return (
             `<ReviewTask>${formatReviewFocus(input.reviewDirective)}
   ${prContextSection}
@@ -324,10 +350,7 @@ ${diffsSection}
 ${callGraphSection}
 
   <Task>
-    Review this Pull Request for ${taskDescription}.
-    For each changed function: grep callers → read context → challenge with adversarial questions.${input.callGraph ? '\n    Use the call graph above as a fast map of production callers/callees, but still verify with tools before reporting.' : ''}
-    Promote a finding when the changed code gives you a code-backed suspicion of a defect. You don't need to fully prove the failure — anchor it to a specific changed line and let the verifier filter unsupported claims.
-    Dismiss only what you can explain WHY it cannot fail; when in doubt, report rather than self-censor.
+${taskBody}
 ${mixedLabelTaskGuidance}
   </Task>
 

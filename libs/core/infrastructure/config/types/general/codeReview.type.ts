@@ -401,6 +401,12 @@ export type CodeReviewConfig = {
      *  (does not run) a unit test for an under-tested changed function. Additive.
      *  Threaded to ReviewAgentInput.testGen. */
     testGen?: boolean;
+    /** Experimental A/B (default off): structure the finder's task as two explicit
+     *  passes — PASS 1 reviews the diff in isolation for local defects, PASS 2 then
+     *  consults the call-graph/coupling context ONLY for cross-file impact. Separating
+     *  local from impact is what an internal ablation credited for more real cross-file
+     *  findings without losing local recall. Threaded to ReviewAgentInput.twoPassImpact. */
+    twoPassImpact?: boolean;
     // This is the default branch of the repository, used only during the review process
     // This field is populated dynamically from the API (GitHub/GitLab) and should NOT be saved to the database
     // It represents the repository's default branch (e.g., 'main', 'develop') that comes from the code management platform
