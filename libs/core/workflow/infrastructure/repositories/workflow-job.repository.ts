@@ -3,10 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, Repository, EntityManager } from 'typeorm';
 
 import { createLogger } from '@libs/core/log/logger';
-import { IWorkflowJobRepository } from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
+import {
+    IWorkflowJobRepository,
+    StaleWorkflowJobReapResult,
+} from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
 import { IWorkflowJob } from '@libs/core/workflow/domain/interfaces/workflow-job.interface';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { IJobExecutionHistory } from '@libs/core/workflow/domain/interfaces/job-execution-history.interface';
 
 import { WorkflowJobModel } from './schemas/workflow-job.model';
@@ -173,6 +177,54 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 context: WorkflowJobRepository.name,
                 error,
                 metadata: { query },
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Reaps jobs orphaned in PROCESSING by a crashed/evicted worker.
+     *
+     * Only `PROCESSING` rows are eligible (never `PENDING` or the
+     * legitimately-paused `WAITING_FOR_EVENT`), and only those whose
+     * `updatedAt` predates the cutoff — a job still making progress bumps
+     * `updatedAt` (currentStage/pipelineState updates) and is left alone.
+     * Single UPDATE ... RETURNING so the selection and mutation are atomic.
+     */
+    async failStaleProcessing(params: {
+        olderThan: Date;
+        lastError: string;
+        errorClassification: ErrorClassification;
+    }): Promise<StaleWorkflowJobReapResult[]> {
+        try {
+            const result = await this.repository
+                .createQueryBuilder()
+                .update(WorkflowJobModel)
+                .set({
+                    status: JobStatus.FAILED,
+                    errorClassification: params.errorClassification,
+                    lastError: params.lastError,
+                    completedAt: () => 'NOW()',
+                })
+                .where('status = :status', { status: JobStatus.PROCESSING })
+                .andWhere('"updatedAt" < :olderThan', {
+                    olderThan: params.olderThan,
+                })
+                .returning([
+                    'uuid',
+                    'workflowType',
+                    'organizationId',
+                    'startedAt',
+                ])
+                .execute();
+
+            return (result.raw ?? []) as StaleWorkflowJobReapResult[];
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to reap stale PROCESSING workflow jobs',
+                context: WorkflowJobRepository.name,
+                error,
+                metadata: { olderThan: params.olderThan },
             });
             throw error;
         }
