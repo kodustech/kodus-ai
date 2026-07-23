@@ -70,8 +70,6 @@ export const ByokManualModelInput = () => <ModelInput />;
 
 const ModelInput = ({ onBackToSelect }: { onBackToSelect?: () => void }) => {
     const form = useFormContext<EditKeyForm>();
-    const provider = form.watch("provider");
-    const baseURL = form.watch("baseURL");
 
     return (
         <Controller
@@ -90,14 +88,7 @@ const ModelInput = ({ onBackToSelect }: { onBackToSelect?: () => void }) => {
                             id={field.name}
                             className="w-full justify-between"
                             placeholder="Type a model name"
-                            onChange={(ev) => {
-                                form.reset({
-                                    model: ev.target.value,
-                                    provider,
-                                    apiKey: "",
-                                    baseURL: baseURL,
-                                });
-                            }}
+                            onChange={field.onChange}
                         />
                     </FormControl.Input>
 
@@ -204,10 +195,8 @@ const ModelSelect = ({ onUseManual }: { onUseManual?: () => void }) => {
                                         value={r.id}
                                         onSelect={(v) => {
                                             form.reset({
+                                                ...form.getValues(),
                                                 model: v,
-                                                provider,
-                                                apiKey: "",
-                                                baseURL: null,
                                             });
 
                                             resetErrorBoundary();
