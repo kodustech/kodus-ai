@@ -177,7 +177,37 @@ export class PipelineExecutor<TContext extends PipelineContext> {
             }
 
             try {
+                // Suggestion funnel (observability): capture the finding count
+                // before/after each stage so a "0 comments shipped" outcome is a
+                // per-stage trace instead of a guess. Generic optional read — only
+                // code-review contexts carry `validSuggestions`; other pipelines
+                // simply never log it. Emitted only on a DELTA to stay low-noise,
+                // and tagged [FUNNEL] so `docker logs | grep FUNNEL` shows exactly
+                // which stage gains or drops findings.
+                const suggBefore = (context as any)?.validSuggestions?.length;
                 context = await stage.execute(context);
+                const suggAfter = (context as any)?.validSuggestions?.length;
+
+                if (
+                    typeof suggBefore === 'number' &&
+                    typeof suggAfter === 'number' &&
+                    suggAfter !== suggBefore
+                ) {
+                    this.logger.log({
+                        message: `[FUNNEL] stage='${stage.stageName}' validSuggestions ${suggBefore}→${suggAfter}${
+                            suggAfter < suggBefore
+                                ? ` (dropped ${suggBefore - suggAfter})`
+                                : ''
+                        }`,
+                        context: PipelineExecutor.name,
+                        serviceName: PipelineExecutor.name,
+                        metadata: {
+                            stage: stage.stageName,
+                            before: suggBefore,
+                            after: suggAfter,
+                        },
+                    });
+                }
 
                 if (!stage.silent) {
                     await this.notifyStageCompletion(

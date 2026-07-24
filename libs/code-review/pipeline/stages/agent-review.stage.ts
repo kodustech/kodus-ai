@@ -875,6 +875,26 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 ...kodyRulesWithSeverity,
             ];
 
+            // Recall funnel — found gate (G0). The raw count of suggestions
+            // entering the stage from ALL agents, before any dedup/severity
+            // filtering. ALWAYS emitted and tagged [FUNNEL] so a review that
+            // produces 0 findings (finder returned nothing, or every agent
+            // errored) is VISIBLE as `gate=found in=0` instead of vanishing
+            // with no line at all — the exact black hole an auth-failed run
+            // fell into. Zero behaviour change: pure telemetry.
+            this.logger.log({
+                message: `[FUNNEL] gate=found PR#${prNumber}: in=${severityNormalized.length} (kodyRules=${kodyRulesWithSeverity.length} other=${severityNormalizedNonRules.length})`,
+                context: this.stageName,
+                serviceName: this.stageName,
+                metadata: {
+                    gate: 'found',
+                    prNumber,
+                    in: severityNormalized.length,
+                    kodyRules: kodyRulesWithSeverity.length,
+                    other: severityNormalizedNonRules.length,
+                },
+            });
+
             // Deduplicate Kody Rules deterministically by ruleUuid.
             // No LLM call needed — the ruleUuid unambiguously identifies
             // which rule each finding belongs to, so same-rule findings
@@ -1046,12 +1066,24 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         priorityStatus: PriorityStatus.DISCARDED_BY_SEVERITY,
                     });
                 }
-                if (deduped.length < before) {
-                    this.logger.log({
-                        message: `[AGENT] Post-classification severity filter: ${before - deduped.length} suggestions below ${severityFilter} threshold removed (applyFiltersToKodyRules=${applyFiltersToKodyRules})`,
-                        context: this.stageName,
-                    });
-                }
+                // Recall funnel — severity gate (G3). ALWAYS emitted (even when
+                // nothing is cut) and tagged [FUNNEL] so `grep FUNNEL` shows the
+                // full G0→G3 path in one pass. Mirrors the dedup gate (G1) line.
+                // Pure telemetry — the filtering above is unchanged.
+                this.logger.log({
+                    message: `[FUNNEL] gate=severity PR#${prNumber}: in=${before} out=${deduped.length} cut=${before - deduped.length} threshold=${severityFilter} applyToKodyRules=${applyFiltersToKodyRules}`,
+                    context: this.stageName,
+                    serviceName: this.stageName,
+                    metadata: {
+                        gate: 'severity',
+                        prNumber,
+                        in: before,
+                        out: deduped.length,
+                        cut: before - deduped.length,
+                        threshold: severityFilter,
+                        applyFiltersToKodyRules,
+                    },
+                });
             }
 
             // Clean up suggestion text: remove WHAT/WHY/HOW labels, merge into natural prose
@@ -1769,12 +1801,24 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
 
             const totalRemoved = suggestions.length - result.length;
-            if (totalRemoved > 0) {
-                this.logger.log({
-                    message: `[DEDUP] PR#${prNumber}: ${suggestions.length} → ${result.length} (removed ${totalRemoved} duplicates, ${groups.length} groups merged)`,
-                    context: this.stageName,
-                });
-            }
+            // Recall funnel — dedup gate (G1). ALWAYS emitted (not only on a
+            // drop) and tagged [FUNNEL] so `grep FUNNEL` shows the full G0→G3
+            // path. This is the line that makes a non-empty input collapsing to
+            // 0 VISIBLE — the "6 findings → 0 shipped" that used to vanish here
+            // with no attributable event. Zero behaviour change: pure telemetry.
+            this.logger.log({
+                message: `[FUNNEL] gate=dedup PR#${prNumber}: in=${suggestions.length} out=${result.length} removed=${totalRemoved} groups=${groups.length}`,
+                context: this.stageName,
+                serviceName: this.stageName,
+                metadata: {
+                    gate: 'dedup',
+                    prNumber,
+                    in: suggestions.length,
+                    out: result.length,
+                    removed: totalRemoved,
+                    groups: groups.length,
+                },
+            });
 
             return {
                 suggestions: result,

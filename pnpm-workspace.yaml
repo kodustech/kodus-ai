@@ -64,18 +64,18 @@ overrides:
 
 minimumReleaseAgeExclude:
   - e2b@2.30.4 || 2.30.5
-  - posthog-node@5.38.2 || 5.38.3 || 5.38.4
+  - posthog-node@5.38.2 || 5.38.3 || 5.38.4 || 5.46.1
   - '@langchain/openai@1.5.2 || 1.5.3'
-  - '@ai-sdk/gateway@3.0.134 || 4.0.11'
-  - '@anthropic-ai/sdk@0.104.2'
+  - '@ai-sdk/gateway@3.0.134 || 4.0.11 || 4.0.28'
+  - '@anthropic-ai/sdk@0.104.2 || 0.114.0'
   - '@nestjs/typeorm@11.0.2'
-  - '@sentry/core@10.60.0'
-  - '@sentry/nestjs@10.60.0'
-  - '@sentry/node-core@10.60.0'
-  - '@sentry/node@10.60.0'
-  - '@sentry/opentelemetry@10.60.0'
+  - '@sentry/core@10.60.0 || 10.68.0'
+  - '@sentry/nestjs@10.60.0 || 10.68.0'
+  - '@sentry/node-core@10.60.0 || 10.68.0'
+  - '@sentry/node@10.60.0 || 10.68.0'
+  - '@sentry/opentelemetry@10.60.0 || 10.68.0'
   - '@sentry/profiling-node@10.60.0'
-  - '@sentry/server-utils@10.60.0'
+  - '@sentry/server-utils@10.60.0 || 10.68.0'
   - '@typescript-eslint/eslint-plugin@8.61.1'
   - '@typescript-eslint/parser@8.61.1'
   - '@typescript-eslint/project-service@8.61.1'
@@ -86,16 +86,16 @@ minimumReleaseAgeExclude:
   - '@typescript-eslint/typescript-estree@8.61.1'
   - '@typescript-eslint/utils@8.61.1'
   - '@typescript-eslint/visitor-keys@8.61.1'
-  - ai@6.0.209 || 7.0.14
+  - ai@6.0.209 || 7.0.14 || 7.0.37
   - typescript-eslint@8.61.1
   - '@morphllm/morphsdk@0.2.183'
-  - '@posthog/core@1.37.0 || 1.37.1'
+  - '@posthog/core@1.37.0 || 1.37.1 || 1.45.1'
   - '@posthog/types@1.391.0'
   - '@types/ramda@0.32.0'
   - uuid@14.0.1
-  - '@ai-sdk/amazon-bedrock@4.0.120 || 4.0.121 || 5.0.10'
-  - '@ai-sdk/google-vertex@4.0.148 || 4.0.149 || 5.0.10'
-  - '@ai-sdk/openai@3.0.74 || 4.0.7'
+  - '@ai-sdk/amazon-bedrock@4.0.120 || 4.0.121 || 5.0.10 || 5.0.30'
+  - '@ai-sdk/google-vertex@4.0.148 || 4.0.149 || 5.0.10 || 5.0.28'
+  - '@ai-sdk/openai@3.0.74 || 4.0.7 || 4.0.20'
   - smol-toml@1.7.0
   - ts-loader@9.6.2
   - '@langchain/anthropic@1.5.1'
@@ -103,14 +103,14 @@ minimumReleaseAgeExclude:
   - '@langfuse/client@5.6.0 || 5.7.0'
   - '@langfuse/core@5.6.0 || 5.7.0'
   - '@langfuse/tracing@5.6.0 || 5.7.0'
-  - '@react-email/ui@6.6.4 || 6.6.6'
-  - react-email@6.6.4 || 6.6.6
+  - '@react-email/ui@6.6.4 || 6.6.6 || 6.9.1'
+  - react-email@6.6.4 || 6.6.6 || 6.9.1
   - '@langfuse/langchain@5.6.0 || 5.7.0'
   - '@langfuse/otel@5.6.0 || 5.7.0'
-  - '@ai-sdk/anthropic@3.0.86 || 3.0.91 || 4.0.7'
+  - '@ai-sdk/anthropic@3.0.86 || 3.0.91 || 4.0.7 || 4.0.19'
   - '@ai-sdk/provider-utils@4.0.34 || 5.0.5'
   - '@ai-sdk/provider@3.0.13 || 4.0.2'
-  - '@ai-sdk/google@4.0.8'
+  - '@ai-sdk/google@4.0.8 || 4.0.23'
   - '@ai-sdk/openai-compatible@3.0.5'
   - '@opentelemetry/context-async-hooks@2.9.0'
   - '@opentelemetry/core@2.9.0'
@@ -121,3 +121,6 @@ minimumReleaseAgeExclude:
   - '@react-email/render@2.0.10'
   - immer@11.1.11
   - resend@6.17.0
+  - webpack@5.109.0
+  - js-yaml@5.2.2
+  - openai@6.49.0
