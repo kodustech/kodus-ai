@@ -82,12 +82,6 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
                 },
             } as any,
             centralizedConfigPrService as any,
-            {
-                findOneIntegrationConfigWithIntegrations: jest
-                    .fn()
-                    .mockResolvedValue(null),
-                createOrUpdateConfig: jest.fn(),
-            } as any,
         );
 
         const result = await useCase.execute({
@@ -255,12 +249,6 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
                 },
             } as any,
             centralizedConfigPrService as any,
-            {
-                findOneIntegrationConfigWithIntegrations: jest
-                    .fn()
-                    .mockResolvedValue(null),
-                createOrUpdateConfig: jest.fn(),
-            } as any,
         );
 
         const result = await useCase.execute({
@@ -373,12 +361,6 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
                 buildCentralizedPath: jest.fn(),
                 sanitizeFileName: jest.fn(),
             } as any,
-            {
-                findOneIntegrationConfigWithIntegrations: jest
-                    .fn()
-                    .mockResolvedValue(null),
-                createOrUpdateConfig: jest.fn(),
-            } as any,
         );
 
         await expect(
@@ -463,12 +445,6 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
                 buildCentralizedPath: jest.fn(),
                 sanitizeFileName: jest.fn(),
             } as any,
-            {
-                findOneIntegrationConfigWithIntegrations: jest
-                    .fn()
-                    .mockResolvedValue(null),
-                createOrUpdateConfig: jest.fn(),
-            } as any,
         );
 
         await expect(
@@ -487,262 +463,6 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
         ).resolves.toBe(true);
 
         expect(createMutationPullRequestIfEnabled).not.toHaveBeenCalled();
-        expect(createOrUpdateParametersUseCase.execute).toHaveBeenCalled();
-    });
-
-    it('removes repository from integration config when deleting repository config', async () => {
-        const createOrUpdateParametersUseCase = {
-            execute: jest.fn().mockResolvedValue(true),
-        };
-
-        const createOrUpdateConfig = jest.fn();
-        const findOneIntegrationConfigWithIntegrations = jest
-            .fn()
-            .mockResolvedValue({
-                uuid: 'config-1',
-                configValue: [
-                    { id: 'repo-1', name: 'repo-1-name' },
-                    { id: 'repo-2', name: 'repo-2-name' },
-                ],
-                integration: { uuid: 'integration-1' },
-            });
-
-        const useCase = new DeleteRepositoryCodeReviewParameterUseCase(
-            {
-                findByKey: jest.fn().mockResolvedValue({
-                    configValue: {
-                        repositories: [
-                            {
-                                id: 'repo-1',
-                                name: 'repo-1-name',
-                                isSelected: true,
-                                configs: { automatedReviewActive: true },
-                                directories: [],
-                            },
-                        ],
-                    },
-                }),
-            } as any,
-            createOrUpdateParametersUseCase as any,
-            {
-                emit: jest.fn(),
-            } as any,
-            {
-                execute: jest.fn(),
-            } as any,
-            {
-                find: jest.fn().mockResolvedValue([]),
-                updateRulesStatusByFilter: jest.fn(),
-            } as any,
-            {
-                user: {
-                    organization: { uuid: 'org-1' },
-                    uuid: 'user-1',
-                    email: 'dev@kodus.io',
-                },
-            } as any,
-            {
-                createMutationPullRequestIfEnabled: jest.fn(),
-                buildCentralizedPath: jest.fn(),
-                sanitizeFileName: jest.fn(),
-            } as any,
-            {
-                findOneIntegrationConfigWithIntegrations,
-                createOrUpdateConfig,
-            } as any,
-        );
-
-        await useCase.execute({
-            organizationAndTeamData: {
-                organizationId: 'org-1',
-                teamId: 'team-1',
-            },
-            repositoryId: 'repo-1',
-            actor: {
-                source: 'web',
-                organizationId: 'org-1',
-            },
-        } as any);
-
-        expect(findOneIntegrationConfigWithIntegrations).toHaveBeenCalled();
-        expect(createOrUpdateConfig).toHaveBeenCalledWith(
-            expect.any(String),
-            [{ id: 'repo-2', name: 'repo-2-name' }],
-            'integration-1',
-            expect.objectContaining({
-                organizationId: 'org-1',
-                teamId: 'team-1',
-            }),
-            'replace',
-        );
-    });
-
-    it('does not remove from integration config when deleting directory config', async () => {
-        const createOrUpdateParametersUseCase = {
-            execute: jest.fn().mockResolvedValue(true),
-        };
-
-        const createOrUpdateConfig = jest.fn();
-        const findOneIntegrationConfigWithIntegrations = jest
-            .fn()
-            .mockResolvedValue({
-                uuid: 'config-1',
-                configValue: [
-                    { id: 'repo-1', name: 'repo-1-name' },
-                    { id: 'repo-2', name: 'repo-2-name' },
-                ],
-                integration: { uuid: 'integration-1' },
-            });
-
-        const useCase = new DeleteRepositoryCodeReviewParameterUseCase(
-            {
-                findByKey: jest.fn().mockResolvedValue({
-                    configValue: {
-                        repositories: [
-                            {
-                                id: 'repo-1',
-                                name: 'repo-1-name',
-                                isSelected: true,
-                                configs: { automatedReviewActive: true },
-                                directories: [
-                                    {
-                                        id: 'dir-1',
-                                        name: 'api',
-                                        isSelected: true,
-                                        configs: {
-                                            automatedReviewActive: true,
-                                        },
-                                        folders: [
-                                            {
-                                                id: 'folder-1',
-                                                name: 'api',
-                                                path: 'src/api',
-                                            },
-                                        ],
-                                    },
-                                ],
-                            },
-                        ],
-                    },
-                }),
-            } as any,
-            createOrUpdateParametersUseCase as any,
-            {
-                emit: jest.fn(),
-            } as any,
-            {
-                execute: jest.fn(),
-            } as any,
-            {
-                find: jest.fn().mockResolvedValue([]),
-                updateRulesStatusByFilter: jest.fn(),
-            } as any,
-            {
-                user: {
-                    organization: { uuid: 'org-1' },
-                    uuid: 'user-1',
-                    email: 'dev@kodus.io',
-                },
-            } as any,
-            {
-                createMutationPullRequestIfEnabled: jest.fn(),
-                buildCentralizedPath: jest.fn(),
-                sanitizeFileName: jest.fn(),
-            } as any,
-            {
-                findOneIntegrationConfigWithIntegrations,
-                createOrUpdateConfig,
-            } as any,
-        );
-
-        await useCase.execute({
-            organizationAndTeamData: {
-                organizationId: 'org-1',
-                teamId: 'team-1',
-            },
-            repositoryId: 'repo-1',
-            directoryId: 'dir-1',
-            actor: {
-                source: 'web',
-                organizationId: 'org-1',
-            },
-        } as any);
-
-        expect(findOneIntegrationConfigWithIntegrations).not.toHaveBeenCalled();
-        expect(createOrUpdateConfig).not.toHaveBeenCalled();
-    });
-
-    it('gracefully handles integration config update failure', async () => {
-        const createOrUpdateParametersUseCase = {
-            execute: jest.fn().mockResolvedValue(true),
-        };
-
-        const createOrUpdateConfig = jest.fn();
-        const findOneIntegrationConfigWithIntegrations = jest
-            .fn()
-            .mockRejectedValue(new Error('Integration config error'));
-
-        const useCase = new DeleteRepositoryCodeReviewParameterUseCase(
-            {
-                findByKey: jest.fn().mockResolvedValue({
-                    configValue: {
-                        repositories: [
-                            {
-                                id: 'repo-1',
-                                name: 'repo-1-name',
-                                isSelected: true,
-                                configs: { automatedReviewActive: true },
-                                directories: [],
-                            },
-                        ],
-                    },
-                }),
-            } as any,
-            createOrUpdateParametersUseCase as any,
-            {
-                emit: jest.fn(),
-            } as any,
-            {
-                execute: jest.fn(),
-            } as any,
-            {
-                find: jest.fn().mockResolvedValue([]),
-                updateRulesStatusByFilter: jest.fn(),
-            } as any,
-            {
-                user: {
-                    organization: { uuid: 'org-1' },
-                    uuid: 'user-1',
-                    email: 'dev@kodus.io',
-                },
-            } as any,
-            {
-                createMutationPullRequestIfEnabled: jest.fn(),
-                buildCentralizedPath: jest.fn(),
-                sanitizeFileName: jest.fn(),
-            } as any,
-            {
-                findOneIntegrationConfigWithIntegrations,
-                createOrUpdateConfig,
-            } as any,
-        );
-
-        // Should not throw even if integration config update fails
-        await expect(
-            useCase.execute({
-                organizationAndTeamData: {
-                    organizationId: 'org-1',
-                    teamId: 'team-1',
-                },
-                repositoryId: 'repo-1',
-                actor: {
-                    source: 'web',
-                    organizationId: 'org-1',
-                },
-            } as any),
-        ).resolves.toBeDefined();
-
-        // Code review config should still be deleted
         expect(createOrUpdateParametersUseCase.execute).toHaveBeenCalled();
     });
 });

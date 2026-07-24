@@ -12,7 +12,7 @@ import { DeleteByRepositoryOrDirectoryPullRequestMessagesUseCase } from '@libs/c
 import { buildKodyRuleCentralizedFilePath } from '@libs/centralized-config/utils/kody-rules-centralized-pr.builder';
 import { buildKodusConfigCentralizedMutationRequest } from '@libs/centralized-config/utils/kodus-config-centralized-pr.builder';
 import { buildGroupFolderName } from '@libs/centralized-config/utils/path-encoder';
-import { IntegrationConfigKey, ParametersKey } from '@libs/core/domain/enums';
+import { ParametersKey } from '@libs/core/domain/enums';
 import { CodeReviewParameter } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 import { ActionType } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -34,10 +34,6 @@ import {
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { ParametersEntity } from '@libs/organization/domain/parameters/entities/parameters.entity';
 import { DeleteRepositoryCodeReviewParameterDto } from '@libs/organization/dtos/delete-repository-code-review-parameter.dto';
-import {
-    IIntegrationConfigService,
-    INTEGRATION_CONFIG_SERVICE_TOKEN,
-} from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
@@ -62,9 +58,6 @@ export class DeleteRepositoryCodeReviewParameterUseCase {
         private readonly request: UserRequest,
 
         private readonly centralizedConfigPrService: CentralizedConfigPrService,
-
-        @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
-        private readonly integrationConfigService: IIntegrationConfigService,
     ) {}
 
     async execute(
@@ -455,11 +448,6 @@ export class DeleteRepositoryCodeReviewParameterUseCase {
             metadata: { repositoryId, organizationAndTeamData },
         });
 
-        await this.removeRepositoryFromIntegrationConfig(
-            organizationAndTeamData,
-            repositoryId,
-        );
-
         await this.handleRepositorySideEffects(
             organizationAndTeamData,
             repositoryToRemove,
@@ -643,60 +631,6 @@ export class DeleteRepositoryCodeReviewParameterUseCase {
             repository,
             actionType: ActionType.DELETE,
         });
-    }
-
-    private async removeRepositoryFromIntegrationConfig(
-        organizationAndTeamData: OrganizationAndTeamData,
-        repositoryId: string,
-    ): Promise<void> {
-        try {
-            const integrationConfig =
-                await this.integrationConfigService.findOneIntegrationConfigWithIntegrations(
-                    IntegrationConfigKey.REPOSITORIES,
-                    organizationAndTeamData,
-                );
-
-            if (
-                !integrationConfig?.configValue ||
-                !Array.isArray(integrationConfig.configValue)
-            ) {
-                return;
-            }
-
-            const repos = integrationConfig.configValue;
-            const filteredRepos = repos.filter(
-                (repo: { id: string }) => repo.id !== repositoryId,
-            );
-
-            if (filteredRepos.length === repos.length) {
-                return;
-            }
-
-            await this.integrationConfigService.createOrUpdateConfig(
-                IntegrationConfigKey.REPOSITORIES,
-                filteredRepos,
-                integrationConfig.integration?.uuid,
-                organizationAndTeamData,
-                'replace',
-            );
-
-            this.logger.log({
-                message:
-                    'Repository removed from integration config successfully',
-                context:
-                    DeleteRepositoryCodeReviewParameterUseCase.name,
-                metadata: { repositoryId, organizationAndTeamData },
-            });
-        } catch (error) {
-            this.logger.warn({
-                message:
-                    'Failed to remove repository from integration config; code review config was still deleted',
-                context:
-                    DeleteRepositoryCodeReviewParameterUseCase.name,
-                error: this.normalizeError(error),
-                metadata: { repositoryId, organizationAndTeamData },
-            });
-        }
     }
 
     private async handleDirectorySideEffects(

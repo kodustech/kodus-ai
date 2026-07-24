@@ -23,12 +23,9 @@ import {
     isCentralizedPrResponse,
     ParametersConfigKey,
 } from "@services/parameters/types";
-import { INTEGRATION_CONFIG } from "@services/integrations/integrationConfig";
 import { TrashIcon } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
-import { IntegrationCategory } from "src/core/types";
 import { generateQueryKey } from "src/core/utils/reactQuery";
-import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
 import type { CodeReviewRepositoryConfig } from "../../code-review/_types";
 import { getCentralizedPrToastPayload } from "../../code-review/_utils/centralized-pr-feedback";
@@ -84,19 +81,6 @@ export const DeleteRepoConfigModal = ({
                         },
                     ),
                 }),
-                invalidateQueries({
-                    queryKey: generateQueryKey(
-                        INTEGRATION_CONFIG.GET_INTEGRATION_CONFIG_BY_CATEGORY,
-                        {
-                            params: {
-                                teamId,
-                                integrationCategory:
-                                    IntegrationCategory.CODE_MANAGEMENT,
-                            },
-                        },
-                    ),
-                }),
-                revalidateServerSidePath("/settings/git"),
             ]);
 
             if (isCentralizedPr) {
