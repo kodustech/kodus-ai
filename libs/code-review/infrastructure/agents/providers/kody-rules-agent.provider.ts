@@ -225,9 +225,14 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             // (surfaced by execution health) instead of silently reporting a
             // healthy, rule-free review. A partial shard failure still
             // degrades to the surviving shards' findings, as before.
+            // The message reaches the PR logs UI and the check text, so it
+            // states what happened and what to do — the reasoning above is for
+            // whoever reads this code, and the diagnostic breadcrumbs
+            // (wire-schema 400 / provider outage / model unavailability) are in
+            // the shard warn logs.
             if (shardsRun > 0 && shardsErrored === shardsRun) {
                 throw new Error(
-                    `[kody-rules] all ${shardsRun} judge shard(s) failed for PR#${input.prNumber} — every semantic kody-rule verdict was lost. Reporting 0 findings would green-wash a review that evaluated nothing; failing loudly so the execution is marked degraded. Check the shard warn logs (wire-schema 400 / provider outage / model unavailability).`,
+                    `Kody Rules could not be evaluated: all ${shardsRun} rule check(s) failed to run. Your semantic Kody Rules were not applied to this PR.`,
                 );
             }
 

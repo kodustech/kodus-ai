@@ -99,6 +99,8 @@ export interface ProviderRunResult {
     finishReason?: string;
     errorMessage?: string;
     errorName?: string;
+    errorStatus?: number;
+    errorResponseBody?: string;
 }
 
 /**
@@ -123,6 +125,19 @@ export function providerErrorFromResult(
     );
     if (result.errorName) {
         error.name = result.errorName;
+    }
+    // Re-attach the upstream status/body under the property names
+    // `classifyLLMError` reads. Without them a 404 reconstructed here looks
+    // like a bare Error("Not Found"), which matches no rule and degrades to
+    // UNKNOWN — the user then sees "Unexpected error while running the code
+    // review" instead of "verify the model name in your settings" (#1568).
+    if (result.errorStatus !== undefined) {
+        (error as Error & { statusCode?: number }).statusCode =
+            result.errorStatus;
+    }
+    if (result.errorResponseBody) {
+        (error as Error & { responseBody?: string }).responseBody =
+            result.errorResponseBody;
     }
     return error;
 }

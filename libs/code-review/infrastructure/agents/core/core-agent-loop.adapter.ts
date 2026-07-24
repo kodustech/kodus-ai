@@ -313,6 +313,9 @@ export async function runAgentLoopViaCore(
         ...(errorEvent && {
             errorMessage: (errorEvent.detail?.message as string) || undefined,
             errorName: (errorEvent.detail?.name as string) || undefined,
+            errorStatus: (errorEvent.detail?.status as number) ?? undefined,
+            errorResponseBody:
+                (errorEvent.detail?.responseBody as string) || undefined,
         }),
         source: r.kept.length || r.reasoning ? 'json-parse' : 'empty',
         usage: {

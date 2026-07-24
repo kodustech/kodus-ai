@@ -413,6 +413,7 @@ describe('AgentReviewStage', () => {
                     },
                 ],
                 failures: [],
+                incomplete: [],
                 totalDurationMs: 1000,
                 warnings: [],
             });
@@ -530,6 +531,140 @@ describe('AgentReviewStage', () => {
             expect(result.fileAnalysisResults[0].validSuggestionsToAnalyze).toHaveLength(1);
         });
 
+    });
+
+    /**
+     * The stage returns rather than throwing, so nothing downstream sees a
+     * thrown error — everything it knows about a bad run has to be in
+     * `context.errors`. An empty errors array on a run that produced no
+     * suggestions is read downstream as "the code is clean" and auto-approves
+     * the PR, which is how a dead LLM provider shipped as a green review
+     * (#1568).
+     */
+    describe('failure reporting', () => {
+        const contextWithFiles = () =>
+            createBaseContext({
+                changedFiles: [{ filename: 'src/index.ts' } as any],
+            });
+
+        it('records a critical error when the orchestrator throws', async () => {
+            mockOrchestrator.execute.mockRejectedValue(
+                Object.assign(new Error('Path not found: /chat/completions'), {
+                    name: 'AI_APICallError',
+                    statusCode: 404,
+                }),
+            );
+
+            const result = await (stage as any).executeStage(
+                contextWithFiles(),
+            );
+
+            expect(result.errors).toHaveLength(1);
+            expect(result.errors[0].severity).toBe('critical');
+        });
+
+        it('records a critical error when post-orchestrator processing throws', async () => {
+            mockOrchestrator.execute.mockResolvedValue({
+                get suggestions(): any {
+                    throw new Error('boom while mapping results');
+                },
+                agentResults: [],
+                failures: [],
+                incomplete: [],
+                totalDurationMs: 10,
+                warnings: [],
+            } as any);
+
+            const result = await (stage as any).executeStage(
+                contextWithFiles(),
+            );
+
+            expect(result.errors).toHaveLength(1);
+            expect(result.errors[0].severity).toBe('critical');
+        });
+
+        it('classifies the failure so the PR comment can name the cause', async () => {
+            mockOrchestrator.execute.mockRejectedValue(
+                Object.assign(new Error('model not found'), {
+                    statusCode: 404,
+                }),
+            );
+
+            const result = await (stage as any).executeStage(
+                contextWithFiles(),
+            );
+
+            expect(result.lastReviewError?.friendlyMessage).toBeTruthy();
+        });
+
+        it('records a partial error when a core agent hit its budget ceiling', async () => {
+            mockOrchestrator.execute.mockResolvedValue({
+                suggestions: [],
+                agentResults: [],
+                failures: [],
+                incomplete: [
+                    {
+                        agentName: 'generalist',
+                        category: 'generalist',
+                        finishReason: 'timeout',
+                        suggestionsFound: 0,
+                        durationMs: 1_800_000,
+                    },
+                ],
+                totalDurationMs: 1_800_000,
+                warnings: [],
+            } as any);
+
+            const result = await (stage as any).executeStage(
+                contextWithFiles(),
+            );
+
+            expect(result.errors).toHaveLength(1);
+            expect(result.errors[0].severity).toBe('partial');
+            expect(result.errors[0].metadata.finishReason).toBe('timeout');
+        });
+
+        it('ignores a truncated kody-rules agent — auxiliary, not review-gating', async () => {
+            mockOrchestrator.execute.mockResolvedValue({
+                suggestions: [],
+                agentResults: [],
+                failures: [],
+                incomplete: [
+                    {
+                        agentName: 'kody-rules',
+                        category: 'kody_rules',
+                        finishReason: 'max-steps',
+                        suggestionsFound: 0,
+                        durationMs: 1000,
+                    },
+                ],
+                totalDurationMs: 1000,
+                warnings: [],
+            } as any);
+
+            const result = await (stage as any).executeStage(
+                contextWithFiles(),
+            );
+
+            expect(result.errors ?? []).toHaveLength(0);
+        });
+
+        it('records nothing on a clean run that genuinely found no issues', async () => {
+            mockOrchestrator.execute.mockResolvedValue({
+                suggestions: [],
+                agentResults: [],
+                failures: [],
+                incomplete: [],
+                totalDurationMs: 1000,
+                warnings: [],
+            } as any);
+
+            const result = await (stage as any).executeStage(
+                contextWithFiles(),
+            );
+
+            expect(result.errors ?? []).toHaveLength(0);
+        });
     });
 
     describe('writeAgentTrace - race condition (Bug 2)', () => {

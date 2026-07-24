@@ -66,6 +66,9 @@ jest.mock('@libs/core/log/langfuse', () => ({
     buildLangfuseTelemetry: () => ({ isEnabled: false, functionId: 'test' }),
 }));
 
+import { getClassification } from '@libs/llm/error-classifier';
+import { tracedGenerateText } from '@libs/llm/llm-call';
+
 import { CommentManagerService } from './commentManager.service';
 
 describe('CommentManagerService.generateSummaryPR', () => {
@@ -96,6 +99,20 @@ describe('CommentManagerService.generateSummaryPR', () => {
 
     beforeEach(() => {
         capturedPrompts.length = 0;
+
+        // Restore the happy-path LLM stub — the failure tests below swap it
+        // for a rejection and must not leak into the prompt-shape tests.
+        (tracedGenerateText as jest.Mock).mockImplementation(
+            async ({ system, prompt }: { system?: string; prompt?: string }) => {
+                if (system) {
+                    capturedPrompts.push({ prompt: system, role: 'system' });
+                }
+                if (prompt) {
+                    capturedPrompts.push({ prompt, role: 'user' });
+                }
+                return { text: NEW_SUMMARY_TEXT };
+            },
+        );
 
         codeManagementService = { getPullRequestByNumber: jest.fn() };
 
@@ -330,6 +347,72 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 capturedPrompts.map((p) => p.prompt).join('\n');
 
             expect(systemPrompt).not.toContain('Length Constraint');
+        });
+    });
+
+    // A provider failure and a deliberate skip must not share a return value.
+    // `null` means "we chose not to generate one" (summary disabled, license
+    // denied, diff too large) — callers treat it as a non-event. When the LLM
+    // itself is unreachable the caller has to be able to tell, or the review is
+    // reported as clean and the PR auto-approved without any analysis (#1568).
+    describe('provider failure is thrown, not returned as null', () => {
+        const providerError = Object.assign(
+            new Error('Path not found: /chat/completions'),
+            { name: 'AI_APICallError', statusCode: 404 },
+        );
+
+        it('throws after exhausting its retries when the LLM call keeps failing', async () => {
+            codeManagementService.getPullRequestByNumber.mockResolvedValue({
+                body: '',
+            });
+            (tracedGenerateText as jest.Mock).mockRejectedValue(providerError);
+
+            await expect(
+                service.generateSummaryPR(
+                    stubPR,
+                    stubRepository,
+                    [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                    stubOrg,
+                    'en-US',
+                    summaryConfig,
+                    null,
+                ),
+            ).rejects.toThrow('Path not found: /chat/completions');
+        });
+
+        it('classifies the thrown error so the PR comment can name the cause', async () => {
+            codeManagementService.getPullRequestByNumber.mockResolvedValue({
+                body: '',
+            });
+            (tracedGenerateText as jest.Mock).mockRejectedValue(providerError);
+
+            const thrown = await service
+                .generateSummaryPR(
+                    stubPR,
+                    stubRepository,
+                    [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                    stubOrg,
+                    'en-US',
+                    summaryConfig,
+                    null,
+                )
+                .catch((e) => e);
+
+            expect(getClassification(thrown)).toBeDefined();
+        });
+
+        it('still returns null for the deliberate skip (summary disabled)', async () => {
+            const result = await service.generateSummaryPR(
+                stubPR,
+                stubRepository,
+                [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                stubOrg,
+                'en-US',
+                { ...summaryConfig, generatePRSummary: false } as any,
+                null,
+            );
+
+            expect(result).toBeNull();
         });
     });
 
