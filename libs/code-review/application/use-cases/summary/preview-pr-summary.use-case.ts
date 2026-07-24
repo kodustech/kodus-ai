@@ -10,7 +10,16 @@ import {
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { PreviewPrSummaryDto } from '@libs/organization/dtos/preview-pr-summary.dto';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+    classifyLLMError,
+    getClassification,
+} from '@libs/llm/error-classifier';
+import {
+    BadGatewayException,
+    Inject,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
 
 @Injectable()
 export class PreviewPrSummaryUseCase {
@@ -87,20 +96,31 @@ export class PreviewPrSummaryUseCase {
                 organizationAndTeamData,
             );
 
-        const prSummary = await this.commentManagerService.generateSummaryPR(
-            pullRequest,
-            repository,
-            files,
-            organizationAndTeamData,
-            languageResultPrompt?.configValue ?? 'en-US',
-            summaryConfig,
-            null,
-            false,
-            true,
-            undefined,
-            platformType ?? undefined,
-        );
+        try {
+            return await this.commentManagerService.generateSummaryPR(
+                pullRequest,
+                repository,
+                files,
+                organizationAndTeamData,
+                languageResultPrompt?.configValue ?? 'en-US',
+                summaryConfig,
+                null,
+                false,
+                true,
+                undefined,
+                platformType ?? undefined,
+            );
+        } catch (error) {
+            // generateSummaryPR throws on provider failure (it used to swallow
+            // it into a null that rendered as a blank preview). Translate it
+            // into a 502 carrying the classified reason so the settings screen
+            // can tell the user their model config is broken.
+            const { friendlyMessage } =
+                getClassification(error) ?? classifyLLMError(error);
 
-        return prSummary;
+            throw new BadGatewayException(
+                `Could not generate the summary preview: ${friendlyMessage}`,
+            );
+        }
     }
 }

@@ -15,6 +15,7 @@ import {
     ReviewStatusReaction,
 } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
+import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -249,23 +250,36 @@ export class CodeReviewHandlerService {
                 (e) => e.severity === 'partial',
             );
 
+            // Why the run failed, in the user's words. `classifiedStatus.message`
+            // is NOT a usable fallback here: stages that fail without throwing
+            // never update it, so it still holds whatever the pipeline set at
+            // startup — which is how a failed review ended up reported as
+            // "Kody Review Finished / Error / Pipeline started" (#1568).
+            const failureReason =
+                result.lastReviewError?.friendlyMessage ||
+                describePipelineError(
+                    collectedErrors.find(
+                        (e) => (e.severity ?? 'critical') === 'critical',
+                    ) ?? collectedErrors[0],
+                ).text;
+
             let classifiedStatus = result.statusInfo;
             if (classifiedStatus.status === AutomationStatus.IN_PROGRESS) {
                 if (hasCriticalError) {
                     classifiedStatus = {
                         ...classifiedStatus,
                         status: AutomationStatus.ERROR,
-                        message:
-                            classifiedStatus.message ||
-                            'Code review failed: one or more critical stages did not complete.',
+                        message: failureReason
+                            ? `Code review failed: ${failureReason}`
+                            : 'Code review failed: one or more critical stages did not complete.',
                     };
                 } else if (hasPartialError) {
                     classifiedStatus = {
                         ...classifiedStatus,
                         status: AutomationStatus.PARTIAL_ERROR,
-                        message:
-                            classifiedStatus.message ||
-                            'Code review completed with warnings: one or more auxiliary stages failed.',
+                        message: failureReason
+                            ? `Code review completed with issues: ${failureReason}`
+                            : 'Code review completed with warnings: one or more auxiliary stages failed.',
                     };
                 } else {
                     classifiedStatus = {

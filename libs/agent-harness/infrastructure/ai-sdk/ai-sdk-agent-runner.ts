@@ -250,9 +250,31 @@ export class AiSdkAgentRunner implements AgentRunner {
             // exception the caller has to reconstruct from a stack trace.
             const message = err instanceof Error ? err.message : String(err);
             const name = err instanceof Error ? err.name : undefined;
+            // Carry the HTTP status and response body too. The AI SDK sets
+            // `message` to a terse status phrase ("Not Found") and puts the
+            // actionable detail in the body, so a {message, name} trace is not
+            // enough for the caller to classify the failure — it degrades to
+            // "Unexpected error" in the PR comment and the UI (#1568).
+            const detail = err as Record<string, unknown> | undefined;
+            const status =
+                typeof detail?.statusCode === 'number'
+                    ? detail.statusCode
+                    : typeof detail?.status === 'number'
+                      ? detail.status
+                      : undefined;
+            const responseBody =
+                typeof detail?.responseBody === 'string'
+                    ? detail.responseBody
+                    : undefined;
             emit('runner', {
                 kind: 'error',
-                detail: { message, name, step: steps.length },
+                detail: {
+                    message,
+                    name,
+                    step: steps.length,
+                    ...(status !== undefined && { status }),
+                    ...(responseBody && { responseBody }),
+                },
             });
             const errView = buildView(steps.length, messages, allToolNames);
 

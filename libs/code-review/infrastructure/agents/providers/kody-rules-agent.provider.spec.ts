@@ -539,7 +539,10 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
                     ],
                 }) as any,
             ),
-        ).rejects.toThrow(/all 1 judge shard\(s\) failed/i);
+            // The message reaches the PR logs UI and the check text, so it
+            // reads as user-facing copy — the internal rationale for failing
+            // loudly lives in a comment at the throw site, not in the string.
+        ).rejects.toThrow(/Kody Rules could not be evaluated: all 1 rule/i);
     });
 
     // A PARTIAL shard failure must NOT escalate — the surviving shard's finding

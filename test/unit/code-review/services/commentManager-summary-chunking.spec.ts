@@ -616,7 +616,12 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
     });
 
     describe('with maxInputTokens, all chunks return empty', () => {
-        it('should return null after retry exhaustion', async () => {
+        // Used to resolve to null here. `null` is also what a DELIBERATE skip
+        // returns (summary disabled, diff too large), so the caller couldn't
+        // tell "the model gave us nothing" from "we chose not to ask" — it
+        // recorded no pipeline error and the review was reported clean and
+        // auto-approved (#1568). Every-chunk-empty is a failure; it throws.
+        it('should throw after retry exhaustion', async () => {
             // All chunk calls return empty
             mockObservabilityService.runAiSdkLLMInSpan.mockImplementation(
                 async () => {
@@ -638,18 +643,20 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
 
             // generateSummaryPR has retry logic (maxRetries=2), and throws
             // when all chunks return empty, which gets caught and retried
-            const result = await service.generateSummaryPR(
-                mockPullRequest,
-                mockRepository,
-                files,
-                mockOrganizationAndTeamData as any,
-                'en-US',
-                defaultSummaryConfig as any,
-                byokConfig as any,
-            );
+            await expect(
+                service.generateSummaryPR(
+                    mockPullRequest,
+                    mockRepository,
+                    files,
+                    mockOrganizationAndTeamData as any,
+                    'en-US',
+                    defaultSummaryConfig as any,
+                    byokConfig as any,
+                ),
+            ).rejects.toThrow('No result returned from generateSummaryPR');
 
-            // After all retries exhausted, returns null
-            expect(result).toBeNull();
+            // Both attempts ran before giving up: 2 chunks × 2 retries.
+            expect(llmCallCount).toBe(4);
         });
     });
 });

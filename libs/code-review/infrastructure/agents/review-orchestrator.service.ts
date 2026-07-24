@@ -32,10 +32,26 @@ export interface OrchestratorAgentFailure {
     durationMs: number;
 }
 
+/**
+ * An agent that returned, but was cut short by its time or step budget rather
+ * than finishing its investigation. Not a failure (it may still have produced
+ * findings) — but its silence is not evidence of clean code, so the pipeline
+ * must not read it as one.
+ */
+export interface OrchestratorAgentIncomplete {
+    agentName: string;
+    category: string;
+    finishReason: 'timeout' | 'max-steps';
+    suggestionsFound: number;
+    durationMs: number;
+}
+
 export interface OrchestratorOutput {
     suggestions: Partial<CodeSuggestion>[];
     agentResults: ReviewAgentOutput[];
     failures: OrchestratorAgentFailure[];
+    /** Agents that ran to their budget ceiling instead of to completion. */
+    incomplete: OrchestratorAgentIncomplete[];
     totalDurationMs: number;
     /** Fidelity warnings collected across all per-agent fan-out, deduped
      *  by (kind, modelName, contextWindowTokens). Empty array when no
@@ -149,6 +165,7 @@ export class ReviewOrchestratorService {
                 suggestions: [],
                 agentResults: [],
                 failures: [],
+                incomplete: [],
                 totalDurationMs: Date.now() - startTime,
                 warnings: [],
             };
@@ -207,6 +224,7 @@ export class ReviewOrchestratorService {
         const agentResults: ReviewAgentOutput[] = [];
         const allSuggestions: Partial<CodeSuggestion>[] = [];
         const failures: OrchestratorAgentFailure[] = [];
+        const incomplete: OrchestratorAgentIncomplete[] = [];
 
         for (let i = 0; i < results.length; i++) {
             const result = results[i];
@@ -215,6 +233,30 @@ export class ReviewOrchestratorService {
             if (result.status === 'fulfilled') {
                 agentResults.push(result.value);
                 allSuggestions.push(...result.value.suggestions);
+
+                if (result.value.hitHardLimit) {
+                    incomplete.push({
+                        agentName,
+                        category: result.value.agentCategory ?? agentName,
+                        finishReason:
+                            result.value.finishReason === 'timeout'
+                                ? 'timeout'
+                                : 'max-steps',
+                        suggestionsFound: result.value.suggestions.length,
+                        durationMs: result.value.durationMs,
+                    });
+
+                    this.logger.warn({
+                        message: `[AGENT] ${agentName} stopped at its ${result.value.finishReason} limit for PR#${agentInput.prNumber} with ${result.value.suggestions.length} suggestions — review is incomplete`,
+                        context: ReviewOrchestratorService.name,
+                        metadata: {
+                            agent: agentName,
+                            prNumber: agentInput.prNumber,
+                            finishReason: result.value.finishReason,
+                            durationMs: result.value.durationMs,
+                        },
+                    });
+                }
 
                 this.logger.log({
                     message: `[AGENT] ${agentName} returned ${result.value.suggestions.length} suggestions in ${result.value.durationMs}ms`,
@@ -243,7 +285,7 @@ export class ReviewOrchestratorService {
         const totalDurationMs = Date.now() - startTime;
 
         this.logger.log({
-            message: `[AGENT] Orchestrator completed for PR#${agentInput.prNumber}: ${allSuggestions.length} suggestions, ${failures.length} failures in ${totalDurationMs}ms`,
+            message: `[AGENT] Orchestrator completed for PR#${agentInput.prNumber}: ${allSuggestions.length} suggestions, ${failures.length} failures, ${incomplete.length} incomplete in ${totalDurationMs}ms`,
             context: ReviewOrchestratorService.name,
             metadata: {
                 prNumber: agentInput.prNumber,
@@ -251,6 +293,7 @@ export class ReviewOrchestratorService {
                 totalDurationMs,
                 failureCount: failures.length,
                 failedAgents: failures.map((f) => f.agentName),
+                incompleteAgents: incomplete.map((a) => a.agentName),
             },
         });
 
@@ -262,6 +305,7 @@ export class ReviewOrchestratorService {
             suggestions: allSuggestions,
             agentResults,
             failures,
+            incomplete,
             totalDurationMs,
             warnings,
         };

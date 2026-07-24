@@ -13,6 +13,10 @@ import {
     BehaviourForNewCommits,
     FileChange,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    classifyLLMError,
+    getClassification,
+} from '@libs/llm/error-classifier';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
@@ -60,13 +64,22 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         // skipped — otherwise the user sees "review completed" + no
         // approval and assumes auto-approve is broken. Default severity
         // for a pushed error is 'critical' per PipelineErrorSeverity docs.
-        const errors = context.errors ?? [];
-        const reviewFailed = errors.some(
-            (e) => (e?.severity ?? 'critical') === 'critical',
-        );
-        const reviewHasPartialErrors =
-            !reviewFailed && errors.some((e) => e?.severity === 'partial');
-        const reviewErrorMessage = context.lastReviewError?.friendlyMessage;
+        // Computed as a closure, not a snapshot: the summary block below can
+        // add an error of its own, and the end-review comment must reflect it.
+        // Reading these once at stage entry meant a failed summary still
+        // rendered "review completed" (#1568).
+        const classifyErrors = (ctx: CodeReviewPipelineContext) => {
+            const errors = ctx.errors ?? [];
+            const reviewFailed = errors.some(
+                (e) => (e?.severity ?? 'critical') === 'critical',
+            );
+            return {
+                reviewFailed,
+                reviewHasPartialErrors:
+                    !reviewFailed &&
+                    errors.some((e) => e?.severity === 'partial'),
+            };
+        };
 
         // Optional team-authored guidance appended below Kody's default error
         // comment (issue #1452). Honored whenever the review failed and the
@@ -77,7 +90,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         // pullRequestMessagesConfig upstream).
         const errorReviewMessageConfig =
             context.pullRequestMessagesConfig?.errorReviewMessage;
-        const reviewErrorCustomMessage =
+        const customMessageFor = (reviewFailed: boolean) =>
             reviewFailed && errorReviewMessageConfig?.content?.trim()
                 ? errorReviewMessageConfig.content.trim()
                 : undefined;
@@ -173,17 +186,37 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     error,
                 });
 
+                const summaryError =
+                    error instanceof Error ? error : new Error(String(error));
+
+                // 'partial', not the 'critical' default: the review itself
+                // still ran and its comments are on the PR — only the summary
+                // is missing. Partial is enough to block auto-approve and to
+                // land the check on NEUTRAL, which is the honest signal for
+                // "degraded, not absent".
                 const pipelineError: PipelineError = {
                     stage: this.stageName,
-                    error:
-                        error instanceof Error
-                            ? error
-                            : new Error(String(error)),
+                    error: summaryError,
+                    severity: 'partial',
                     metadata: {
                         message: 'Failed to generate summary',
                         reason: 'summary_generation_failed',
                     },
                 };
+
+                // Name the real cause in the PR comment ("provider returned
+                // 404") instead of the generic "unexpected error" fallback.
+                // Only fills the slot when no agent failure already claimed it
+                // — a core-agent failure is the more important thing to report.
+                const classification =
+                    getClassification(summaryError) ??
+                    classifyLLMError(
+                        summaryError,
+                        typeof codeReviewConfig?.byokConfig?.main?.provider ===
+                            'string'
+                            ? codeReviewConfig.byokConfig.main.provider
+                            : undefined,
+                    );
 
                 // The pipeline context is Immer-frozen once an earlier stage
                 // (e.g. agent-review) ran updateContext, so a direct
@@ -198,9 +231,23 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                         draft.errors = [];
                     }
                     draft.errors.push(pipelineError);
+
+                    if (!draft.lastReviewError) {
+                        draft.lastReviewError = {
+                            category: classification.category,
+                            provider: classification.provider,
+                            friendlyMessage: classification.friendlyMessage,
+                            occurredAt: new Date(),
+                        };
+                    }
                 });
             }
         }
+
+        const { reviewFailed, reviewHasPartialErrors } =
+            classifyErrors(context);
+        const reviewErrorMessage = context.lastReviewError?.friendlyMessage;
+        const reviewErrorCustomMessage = customMessageFor(reviewFailed);
 
         const startReviewMessage =
             context.pullRequestMessagesConfig?.startReviewMessage;

@@ -190,4 +190,43 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
             'summary_generation_failed',
         );
     });
+
+    // The recorded error has to reach BOTH downstream readers, or a failed
+    // summary is indistinguishable from a clean review: the approve gate
+    // (which reads errors[].severity) and the end-review comment (which is
+    // rendered by this same stage, AFTER the summary attempt).
+    it('marks the summary failure as partial so the approve gate holds back', async () => {
+        const { stage } = makeStage();
+
+        const result = await (stage as any).executeStage(summaryFailContext());
+
+        expect(result.errors[0].severity).toBe('partial');
+    });
+
+    it('records lastReviewError so the PR comment can name the provider failure', async () => {
+        const { stage, commentManagerService } = makeStage();
+        commentManagerService.generateSummaryPR.mockRejectedValue(
+            Object.assign(new Error('Path not found: /chat/completions'), {
+                name: 'AI_APICallError',
+                statusCode: 404,
+            }),
+        );
+
+        const result = await (stage as any).executeStage(summaryFailContext());
+
+        expect(result.lastReviewError?.friendlyMessage).toBeTruthy();
+    });
+
+    it('tells the end-review comment about a failure recorded by its own summary attempt', async () => {
+        const { stage, commentManagerService } = makeStage();
+
+        await (stage as any).executeStage(summaryFailContext());
+
+        // updateOverallComment(..., reviewFailed, reviewErrorMessage,
+        // reviewHasPartialErrors, reviewErrorCustomMessage). These flags used
+        // to be read once at stage entry — before the summary ran — so a failed
+        // summary still rendered "review completed" (#1568).
+        const args = commentManagerService.updateOverallComment.mock.calls[0];
+        expect(args[13]).toBe(true); // reviewHasPartialErrors
+    });
 });
