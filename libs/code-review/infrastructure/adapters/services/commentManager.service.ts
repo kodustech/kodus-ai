@@ -125,11 +125,20 @@ export class CommentManagerService implements ICommentManagerService {
                     {},
                     'kimi-k2.7-code',
                 );
+                // Only pin temperature when the BYOK config sets one. Forcing 0
+                // broke models that reject a non-default temperature — Moonshot's
+                // kimi-k2.7-code rejects anything but 1 (HTTP 400), so the summary
+                // silently failed for kimi users while reviews kept working. The
+                // finder omits temperature for the same reason (finder.agent.ts),
+                // letting the provider default apply.
+                const configuredTemperature = byokConfig?.main?.temperature;
                 return await tracedGenerateText({
                     model: model as any,
                     system: systemPrompt,
                     prompt: userPrompt,
-                    temperature: byokConfig?.main?.temperature ?? 0,
+                    ...(configuredTemperature !== undefined
+                        ? { temperature: configuredTemperature }
+                        : {}),
                     experimental_telemetry: buildLangfuseTelemetry(
                         runName,
                         metadata,

@@ -72,23 +72,23 @@ function ReviewProgressBar({
                 {attention > 0 ? (
                     <span className="inline-flex items-center gap-1.5 font-medium text-[var(--warn)]">
                         <span className="size-1.5 rounded-full bg-[var(--warn)]" />
-                        {attention} preciso de atenção
+                        {attention} need attention
                     </span>
                 ) : (
                     <span className="inline-flex items-center gap-1.5 font-medium text-[var(--green)]">
                         <span className="size-1.5 rounded-full bg-[var(--green)]" />
-                        nada crítico
+                        nothing critical
                     </span>
                 )}
                 {minor > 0 && (
                     <span className="text-[var(--text-dim)]">
-                        · {minor} menor{minor === 1 ? "" : "es"}
+                        · {minor} minor
                     </span>
                 )}
             </div>
             <div className="flex items-center gap-2.5">
                 <span className="font-mono text-xs text-[var(--text-muted)] tabular-nums">
-                    {viewed} / {total} vistos
+                    {viewed} / {total} viewed
                 </span>
                 <span
                     className="h-1.5 w-24 overflow-hidden rounded-full bg-[var(--bg-4)]"

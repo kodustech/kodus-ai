@@ -3,7 +3,9 @@ import {
     Inject,
     Injectable,
     NotFoundException,
+    Optional,
 } from '@nestjs/common';
+import { KodyRuleSummaryService } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
 import { v4 } from 'uuid';
 import bucketsData from './data/buckets.json';
 import libraryKodyRules from './data/library-kody-rules.json';
@@ -135,7 +137,52 @@ export class KodyRulesService implements IKodyRulesService {
 
         @Inject(forwardRef(() => CODE_BASE_CONFIG_SERVICE_TOKEN))
         private readonly codeBaseConfigService: ICodeBaseConfigService,
+
+        // Optional so existing manual instantiations/specs keep working; when
+        // absent the summary hook is simply skipped (lazy backfill in the
+        // review path covers it).
+        @Optional()
+        private readonly kodyRuleSummaryService?: KodyRuleSummaryService,
     ) {}
+
+    /**
+     * Fire-and-forget summary generation for a just-written LONG rule.
+     * Detached from the request (setImmediate + captured plain values — no
+     * request-scoped references, see the finish-onboarding 504 postmortem) so
+     * writes never wait on an LLM. Short rules never reach generation;
+     * ensureAtoms also no-ops when a fresh decomposition already exists.
+     */
+    private scheduleSummaryGeneration(
+        organizationAndTeamData: OrganizationAndTeamData,
+        rule: Partial<IKodyRule>,
+    ): void {
+        if (!this.kodyRuleSummaryService?.isLong(rule.rule)) {
+            return;
+        }
+        const summaryService = this.kodyRuleSummaryService;
+        const orgData: OrganizationAndTeamData = {
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+        };
+        const snapshot: Partial<IKodyRule> = { ...rule };
+        setImmediate(() => {
+            summaryService.ensureAtoms([snapshot], orgData).catch((error) =>
+                this.logger.warn({
+                    message:
+                        '[kody-rule-summary] background generation failed after rule write',
+                    context: KodyRulesService.name,
+                    metadata: {
+                        organizationId: orgData.organizationId,
+                        ruleUuid: rule.uuid,
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    },
+                }),
+            );
+        });
+    }
 
     // CCP é request-scoped (depende transitivamente de algo
     // request-scoped, provavelmente codeManagementService com token
@@ -345,6 +392,8 @@ export class KodyRulesService implements IKodyRulesService {
                 centralizedConfig: kodyRule?.centralizedConfig,
                 sourceAnchor: kodyRule?.sourceAnchor,
                 repositoryId: kodyRule?.repositoryId,
+                sourceRepositoryId: kodyRule?.sourceRepositoryId,
+                lastContentHash: kodyRule?.lastContentHash,
                 directoryId: kodyRule?.directoryId,
                 examples: kodyRule?.examples,
                 origin: kodyRule?.origin ?? KodyRulesOrigin.MANUAL,
@@ -392,6 +441,8 @@ export class KodyRulesService implements IKodyRulesService {
                 newRule,
             );
 
+            this.scheduleSummaryGeneration(organizationAndTeamData, newRule);
+
             return newKodyRules.rules[0];
         }
 
@@ -427,6 +478,8 @@ export class KodyRulesService implements IKodyRulesService {
                 status: resolvedStatus,
                 lockedByPlan,
                 repositoryId: kodyRule?.repositoryId,
+                sourceRepositoryId: kodyRule?.sourceRepositoryId,
+                lastContentHash: kodyRule?.lastContentHash,
                 directoryId: kodyRule?.directoryId,
                 examples: kodyRule?.examples,
                 origin: kodyRule?.origin ?? KodyRulesOrigin.MANUAL,
@@ -469,6 +522,8 @@ export class KodyRulesService implements IKodyRulesService {
                 organizationAndTeamData,
                 newRule,
             );
+
+            this.scheduleSummaryGeneration(organizationAndTeamData, newRule);
 
             return updatedKodyRules.rules.find(
                 (rule) => rule.uuid === newRule.uuid,
@@ -528,11 +583,40 @@ export class KodyRulesService implements IKodyRulesService {
             updatedAt: new Date(),
         };
 
+        // The spread above carries the OLD summary. If the rule text changed
+        // it is stale (would also fail the sourceHash guard at review time):
+        // drop it — this also covers a long rule edited down to a short one,
+        // which must not keep a summary of its former long text. A long new
+        // text gets a fresh summary scheduled below.
+        const ruleTextChanged =
+            kodyRule.rule !== undefined && kodyRule.rule !== existingRule.rule;
+        // Examples gate the atom detectors (atoms sourceHash covers them), so
+        // an examples-only edit invalidates the DECOMPOSITION — but not the
+        // summary, whose hash covers the rule text alone and stays valid as
+        // the fallback while fresh atoms are regenerated.
+        const examplesChanged =
+            kodyRule.examples !== undefined &&
+            JSON.stringify(kodyRule.examples) !==
+                JSON.stringify(existingRule.examples);
+        if (ruleTextChanged) {
+            delete (updatedRule as Partial<IKodyRule>).summary;
+            delete (updatedRule as Partial<IKodyRule>).atoms;
+        } else if (examplesChanged) {
+            delete (updatedRule as Partial<IKodyRule>).atoms;
+        }
+
         const updatedKodyRules = await this.updateRule(
             existing.uuid,
             kodyRule.uuid,
             updatedRule,
         );
+
+        if (updatedKodyRules && (ruleTextChanged || examplesChanged)) {
+            this.scheduleSummaryGeneration(
+                organizationAndTeamData,
+                updatedRule,
+            );
+        }
 
         this.eventEmitter.emit(AuditLogEvents.KODY_RULES, {
             organizationAndTeamData,
@@ -818,11 +902,37 @@ export class KodyRulesService implements IKodyRulesService {
             updatedAt: new Date(),
         };
 
+        // Same stale-summary treatment as createOrUpdate: text changed →
+        // drop the carried-over summary and schedule a fresh one below.
+        const ruleTextChanged =
+            kodyRule.rule !== undefined && kodyRule.rule !== existingRule.rule;
+        // Examples gate the atom detectors (atoms sourceHash covers them), so
+        // an examples-only edit invalidates the DECOMPOSITION — but not the
+        // summary, whose hash covers the rule text alone and stays valid as
+        // the fallback while fresh atoms are regenerated.
+        const examplesChanged =
+            kodyRule.examples !== undefined &&
+            JSON.stringify(kodyRule.examples) !==
+                JSON.stringify(existingRule.examples);
+        if (ruleTextChanged) {
+            delete (updatedRule as Partial<IKodyRule>).summary;
+            delete (updatedRule as Partial<IKodyRule>).atoms;
+        } else if (examplesChanged) {
+            delete (updatedRule as Partial<IKodyRule>).atoms;
+        }
+
         const updatedKodyRules = await this.updateRule(
             existing.uuid,
             kodyRule.uuid,
             updatedRule,
         );
+
+        if (updatedKodyRules && (ruleTextChanged || examplesChanged)) {
+            this.scheduleSummaryGeneration(
+                organizationAndTeamData,
+                updatedRule,
+            );
+        }
 
         this.eventEmitter.emit(AuditLogEvents.KODY_RULES, {
             organizationAndTeamData,

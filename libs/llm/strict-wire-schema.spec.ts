@@ -6,6 +6,7 @@ import { kodyRulesIDEGeneratorSchema } from '@libs/common/utils/langchainCommon/
 import { kodyMemoryResolutionSchema } from '@libs/common/utils/langchainCommon/prompts/kodyMemoryResolution';
 import { kodyRulesRecommendationSchema } from '@libs/common/utils/langchainCommon/prompts/kodyRulesRecommendation';
 import { compilerOutputSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
+import { decomposeOutputSchema } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
 import { shardViolationsWireSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
 
 // OpenAI strict structured outputs impose TWO rules on every object node, and
@@ -49,6 +50,7 @@ describe('zodToStrictWireSchema', () => {
         ['kodyMemoryResolutionSchema', kodyMemoryResolutionSchema],
         ['compilerOutputSchema (detector compiler)', compilerOutputSchema],
         ['kodyRulesRecommendationSchema (rule recommendation)', kodyRulesRecommendationSchema],
+        ['decomposeOutputSchema (atom decomposition)', decomposeOutputSchema],
     ];
 
     it.each(realSchemas)(
@@ -156,6 +158,7 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/ee/kodyRules/service/kodyRules.service.ts', // kodyRulesRecommendationSchema, kodyMemoryResolutionSchema
         'libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts', // shardViolationsWireSchema
         'libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.service.ts', // kodyRulesIDEGeneratorSchema
+        'libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service.ts', // decomposeOutputSchema (+ compilerOutputSchema, already covered)
     ]);
 
     it('every runStructuredReviewCall call site is registered (schema is under test)', () => {

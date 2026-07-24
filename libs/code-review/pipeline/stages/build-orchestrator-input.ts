@@ -21,7 +21,13 @@ export type OrchestratorInputComputed = Pick<
     // release check) rather than read straight off the context, so the alpha
     // gate is applied in exactly one place.
     | 'heavy'
->;
+> & {
+    // Review-ready kody rules computed by the stage: long rules swapped for
+    // their validated summaries (KodyRuleSummaryService). Optional so callers
+    // without the service (specs, degraded paths) fall back to the raw config
+    // rules — the context itself is never mutated (it is frozen).
+    kodyRules?: OrchestratorInput['kodyRules'];
+};
 
 /**
  * Maps the pipeline context (+ stage-computed locals) into the agent
@@ -65,7 +71,7 @@ export function buildOrchestratorInput(
         })),
         // Free-text steering directive from `@kody review <directive>`.
         reviewDirective: context.reviewDirective,
-        kodyRules: context.codeReviewConfig?.kodyRules,
+        kodyRules: computed.kodyRules ?? context.codeReviewConfig?.kodyRules,
         reviewOptions: computed.reviewOptions,
         onAgentProgress: computed.onAgentProgress,
         gitHubToken: computed.gitHubToken,

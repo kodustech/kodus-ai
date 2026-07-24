@@ -803,6 +803,28 @@
     }
   },
   {
+    "key": "kodyRules.controller.ts#getGlobalRulesImportStatus",
+    "httpMethod": "GET",
+    "urlPath": "/kody-rules/global-source-repositories/import-status",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "kodyRules.controller.ts#getGlobalSourceRepositories",
+    "httpMethod": "GET",
+    "urlPath": "/kody-rules/global-source-repositories",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "kodyRules.controller.ts#getInheritedRules",
     "httpMethod": "GET",
     "urlPath": "/kody-rules/inherited-rules",
@@ -880,6 +902,17 @@
     }
   },
   {
+    "key": "kodyRules.controller.ts#resyncGlobalRules",
+    "httpMethod": "POST",
+    "urlPath": "/kody-rules/resync-global-rules",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "kodyRules.controller.ts#resyncIdeRules",
     "httpMethod": "POST",
     "urlPath": "/kody-rules/resync-ide-rules",
@@ -894,6 +927,17 @@
     "key": "kodyRules.controller.ts#reviewFastIdeRules",
     "httpMethod": "POST",
     "urlPath": "/kody-rules/review-fast-ide-rules",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "kodyRules.controller.ts#setGlobalSourceRepositories",
+    "httpMethod": "POST",
+    "urlPath": "/kody-rules/global-source-repositories",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",

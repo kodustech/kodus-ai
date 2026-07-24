@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 
 import { createLogger } from '@libs/core/log/logger';
 import { Output, jsonSchema } from 'ai';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { tracedGenerateText } from '@libs/llm/llm-call';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
@@ -53,9 +53,11 @@ import {
 } from '@libs/code-review/domain/contracts/RepositoryService.contract';
 import { AstGraphStatus } from '@libs/code-review/infrastructure/adapters/repositories/schemas/repository.model';
 import {
+    IKodyRule,
     resolveKodyRuleSeverityLevel,
     SeverityLevel,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { KodyRuleSummaryService } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
 import {
     CodeReviewPipelineContext,
     DedupTraceGroupSummary,
@@ -255,8 +257,51 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         private readonly featureGate: FeatureGateService,
         @Inject(ORGANIZATION_SERVICE_TOKEN)
         private readonly organizationService: IOrganizationService,
+        // Optional: specs construct the stage manually; when absent the
+        // review simply runs on the full rule texts.
+        @Optional()
+        private readonly kodyRuleSummaryService?: KodyRuleSummaryService,
     ) {
         super();
+    }
+
+    /**
+     * Review-ready kody rules: lazy-backfill summaries for long rules that
+     * lack a valid one (covers rules created before the summary feature), then
+     * swap each long rule's text for its summary (sourceHash-guarded — see
+     * KodyRuleSummaryService). Any failure falls back to the raw config rules:
+     * the review never blocks on summarization. The frozen context is never
+     * mutated — callers pass the result via OrchestratorInputComputed.
+     */
+    private async prepareKodyRulesForReview(
+        context: CodeReviewPipelineContext,
+    ): Promise<Partial<IKodyRule>[] | undefined> {
+        const rules = context.codeReviewConfig?.kodyRules;
+        if (!rules?.length || !this.kodyRuleSummaryService) {
+            return rules;
+        }
+        try {
+            // Judgment units: atoms > summary > full text (see
+            // KodyRuleSummaryService.prepareForReview). Long rules are lazily
+            // decomposed into atomic requirements carrying the parent uuid.
+            return await this.kodyRuleSummaryService.prepareForReview(
+                rules,
+                context.organizationAndTeamData,
+            );
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    '[kody-rule-summary] prepare failed — reviewing with full rule texts',
+                context: AgentReviewStage.name,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                },
+            });
+            return rules;
+        }
     }
 
     /**
@@ -543,6 +588,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     callGraph,
                     adaptiveProfile,
                     heavy: resolvedHeavy,
+                    kodyRules: await this.prepareKodyRulesForReview(context),
                 }),
             );
 

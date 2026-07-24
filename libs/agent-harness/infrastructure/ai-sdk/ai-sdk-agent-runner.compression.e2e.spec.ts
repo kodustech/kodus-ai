@@ -30,7 +30,12 @@ import { AiSdkAgentRunner } from './ai-sdk-agent-runner';
 
 // A tool result big enough (well above the compressor's 3_000-char "recent"
 // cap) that compression actually truncates it and reports real token savings.
-const BIG_RESULT = 'x'.repeat(8_000);
+// Varied tokens (not a single repeated char, which tiktoken would collapse to
+// a handful of tokens) so the token estimate reflects realistic dense content.
+const BIG_RESULT = Array.from(
+    { length: 1_600 },
+    (_, i) => `const value${i} = compute(${i}, "path/to/file${i}.ts");`,
+).join('\n');
 
 // Scripted model: step 0 -> call readFile (produces a large `tool` message),
 // step 1 -> call submitResult (finalize). Deterministic, no real LLM.
@@ -62,6 +67,34 @@ function scriptedModel() {
 const resolver: ModelResolver<any> = {
     resolve: () => scriptedModel() as any,
 };
+
+// Scripted model that runs `readSteps` readFile calls (each returns a big
+// result that piles into the window) before finalizing. Drives the tool-loop
+// accumulation that overflows the window in issue #1574.
+function accumulatingModel(readSteps: number) {
+    let call = 0;
+    const doGenerate = (async () => {
+        call += 1;
+        const tc =
+            call <= readSteps
+                ? { id: `c${call}`, name: 'readFile', input: { path: `f${call}.ts` } }
+                : { id: 'done', name: 'submitResult', input: { findings: [] } };
+        return {
+            content: [
+                {
+                    type: 'tool-call',
+                    toolCallId: tc.id,
+                    toolName: tc.name,
+                    input: JSON.stringify(tc.input),
+                },
+            ],
+            finishReason: 'tool-calls',
+            usage: { inputTokens: 10, outputTokens: 5 },
+            warnings: [],
+        };
+    }) as any;
+    return new MockLanguageModelV3({ doGenerate });
+}
 
 const readFileTool: AgentTool = {
     name: 'readFile',
@@ -96,7 +129,10 @@ function noCriticalLedger(): ProgressLedger {
 
 const ctx: ToolContext = { runId: 'compress-e2e-1' };
 
-function specWithContextWindow(contextWindowTokens: number): AgentSpec {
+function specWithContextWindow(
+    contextWindowTokens: number,
+    overheadTokens = 0,
+): AgentSpec {
     return {
         id: 'generalist',
         systemPrompt: 'review the diff',
@@ -104,13 +140,15 @@ function specWithContextWindow(contextWindowTokens: number): AgentSpec {
         tools: new InMemoryToolRegistry([readFileTool, doneTool]),
         policies: [
             new CompressionPolicy(
-                new ContextWindowCompressor(contextWindowTokens),
+                new ContextWindowCompressor(contextWindowTokens, {
+                    overheadTokens,
+                }),
             ),
             new CompletionGatePolicy(noCriticalLedger(), {
                 doneToolName: 'submitResult',
             }),
         ],
-        maxSteps: 10,
+        maxSteps: 20,
         resultToolName: 'submitResult',
     };
 }
@@ -178,5 +216,37 @@ describe('AiSdkAgentRunner + CompressionPolicy (context compression e2e)', () =>
             type: 'submitResult',
             payload: { findings: [] },
         });
+    });
+
+    // REGRESSION (issue #1574): a tool loop that accumulates far more than the
+    // window of tool results must be clamped every step and finish, instead of
+    // shipping an oversized request. Realistic window + overhead so the real
+    // budget (window − overhead − margin) is what the clamp must respect.
+    it('clamps an accumulating tool loop that would otherwise overflow the window', async () => {
+        const accResolver: ModelResolver<any> = {
+            resolve: () => accumulatingModel(12) as any,
+        };
+        const runner = new AiSdkAgentRunner(accResolver);
+
+        // 12 readFile steps × 8_000-char results ≈ well over a 40K-token window.
+        const state = await runner.run(
+            specWithContextWindow(40_000, 12_000),
+            { prompt: 'go' },
+            ctx,
+        );
+
+        // Compression must have fired (the loop overflowed and was clamped)...
+        expect(
+            state.trace.some((e) => e.kind === 'context.compress'),
+        ).toBe(true);
+        // ...and the run finished cleanly (no provider CONTEXT_OVERFLOW throw,
+        // no content.filter crash).
+        expect(state.status).not.toBe('error');
+        expect(
+            state.trace.some((e) => e.kind === 'error'),
+        ).toBe(false);
+        // Findings still produced — the review completes rather than failing.
+        expect(state.artifacts).toHaveLength(1);
+        expect(state.artifacts[0]).toMatchObject({ type: 'submitResult' });
     });
 });

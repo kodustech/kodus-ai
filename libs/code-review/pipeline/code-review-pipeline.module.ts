@@ -40,6 +40,7 @@ import { KodyFineTuningStage } from '@libs/ee/codeReview/stages/kody-fine-tuning
 import { LicenseModule } from '@libs/ee/license/license.module';
 import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
 import { KodyFineTuningContextModule } from '@libs/kodyFineTuning/kodyFineTuningContext.module';
+import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
 import { OrganizationModule } from '@libs/organization/modules/organization.module';
 import { FeatureGateModule } from '@libs/feature-gate';
 import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
@@ -107,6 +108,10 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         forwardRef(() => ForgejoModule),
         forwardRef(() => PermissionValidationModule),
         forwardRef(() => LicenseModule),
+        // AgentReviewStage injects KodyRuleSummaryService (long-rule summary
+        // swap for the shard judge). forwardRef: the kodyRules module reaches
+        // back into code-review via CODE_BASE_CONFIG_SERVICE_TOKEN.
+        forwardRef(() => KodyRulesModule),
         AstGraphModule,
         forwardRef(() => McpCoreModule),
         WorkflowCoreModule,

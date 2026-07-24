@@ -126,10 +126,20 @@ export const KodyRuleLibraryItemModal = ({
                 newRule.path = `${(directory?.folders?.[0]?.path ?? '').slice(1)}/**`;
             }
 
+            // Global already applies to every repository through inheritance,
+            // so if it comes selected alongside specific repos we import into
+            // Global only — otherwise the rule is duplicated in each repo (one
+            // inherited-from-global copy plus a directly-added copy).
+            const importsGlobally = selectedRepositoriesIds.includes("global");
+            const repositoriesIds = importsGlobally
+                ? ["global"]
+                : selectedRepositoriesIds;
+            const directoriesIds = importsGlobally ? [] : selectedDirectoriesIds;
+
             const addedKodyRules = await addKodyRuleToRepositories({
                 rule: newRule,
-                repositoriesIds: selectedRepositoriesIds,
-                directoriesIds: selectedDirectoriesIds,
+                repositoriesIds,
+                directoriesIds,
                 teamId,
             });
 
