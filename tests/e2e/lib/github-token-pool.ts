@@ -70,3 +70,123 @@ export function makeGithubTokenPicker(
         return { token: pool[slot], slot: slot + 1, size: pool.length };
     };
 }
+
+// Below this fraction of the primary budget a bot account can't carry a full
+// github cell (~200-270 requests/scenario × several scenarios), so the run is
+// likely to trip mid-cell and cascade into rate-limit SKIPs.
+const LOW_QUOTA_FRACTION = 0.1;
+
+interface RateLimitInfo {
+    slot: number;
+    remaining: number;
+    limit: number;
+    resetIso: string;
+    ok: boolean;
+    note?: string;
+}
+
+/**
+ * Preflight the GitHub bot-account pool: report each account's remaining
+ * primary REST budget BEFORE the cells run, so an already-drained account
+ * (a prior run in the same hour, or one bad/expired token) is visible up
+ * front instead of surfacing as an opaque mid-run 403 cascade.
+ *
+ * GET /rate_limit does NOT itself count against the budget, so this is free.
+ * Best-effort: a network/parse error on one token never poisons the run —
+ * the per-scenario paths still throw their own specific errors.
+ */
+export async function preflightGithubRateLimits(
+    log: { info: (m: string) => void; warn: (m: string) => void },
+    env: NodeJS.ProcessEnv = process.env,
+): Promise<RateLimitInfo[]> {
+    const pool = githubTokenPool(env);
+    if (!pool.length) return [];
+
+    const infos = await Promise.all(
+        pool.map(async (token, idx): Promise<RateLimitInfo> => {
+            const slot = idx + 1;
+            try {
+                const resp = await fetch('https://api.github.com/rate_limit', {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        Accept: 'application/vnd.github+json',
+                        'X-GitHub-Api-Version': '2022-11-28',
+                    },
+                });
+                if (resp.status === 401) {
+                    return {
+                        slot,
+                        remaining: 0,
+                        limit: 0,
+                        resetIso: '',
+                        ok: false,
+                        note: 'token rejected (HTTP 401 — expired/revoked?)',
+                    };
+                }
+                const body = (await resp.json()) as {
+                    resources?: {
+                        core?: {
+                            remaining: number;
+                            limit: number;
+                            reset: number;
+                        };
+                    };
+                };
+                const core = body.resources?.core;
+                if (!core) {
+                    return {
+                        slot,
+                        remaining: 0,
+                        limit: 0,
+                        resetIso: '',
+                        ok: false,
+                        note: `unexpected /rate_limit shape (HTTP ${resp.status})`,
+                    };
+                }
+                return {
+                    slot,
+                    remaining: core.remaining,
+                    limit: core.limit,
+                    resetIso: new Date(core.reset * 1000).toISOString(),
+                    ok: true,
+                };
+            } catch (err) {
+                return {
+                    slot,
+                    remaining: 0,
+                    limit: 0,
+                    resetIso: '',
+                    ok: false,
+                    note: err instanceof Error ? err.message : String(err),
+                };
+            }
+        }),
+    );
+
+    for (const info of infos) {
+        if (!info.ok) {
+            log.warn(
+                `[preflight] github token slot ${info.slot}/${pool.length}: ${info.note}`,
+            );
+            continue;
+        }
+        const line =
+            `[preflight] github token slot ${info.slot}/${pool.length}: ` +
+            `${info.remaining}/${info.limit} core requests remaining ` +
+            `(resets ${info.resetIso})`;
+        if (info.remaining < info.limit * LOW_QUOTA_FRACTION) {
+            log.warn(`${line} — LOW, cell may trip the rate limit`);
+        } else {
+            log.info(line);
+        }
+    }
+
+    if (infos.every((i) => !i.ok || i.remaining < i.limit * LOW_QUOTA_FRACTION)) {
+        log.warn(
+            `[preflight] every github bot account is exhausted or unusable — ` +
+                `github cells will almost certainly SKIP on rate limits this run`,
+        );
+    }
+
+    return infos;
+}

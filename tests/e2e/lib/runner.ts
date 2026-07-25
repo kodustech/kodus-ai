@@ -14,7 +14,10 @@ import type {
 } from "./types.js";
 import { ScenarioSkipError } from "./types.js";
 import { makeProvider } from "../providers/index.js";
-import { makeGithubTokenPicker } from "./github-token-pool.js";
+import {
+    makeGithubTokenPicker,
+    preflightGithubRateLimits,
+} from "./github-token-pool.js";
 import { githubAppToken } from "./github-app-token.js";
 import {
     finishOnboarding,
@@ -445,6 +448,13 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
     // Round-robins GitHub cells across the bot-account token pool so no single
     // account's rate limit caps the run (no-op with a single token).
     const pickGithubToken = makeGithubTokenPicker();
+
+    // Report each bot account's remaining GitHub budget up front (free — GET
+    // /rate_limit doesn't count) so an already-drained or expired token is
+    // visible before the cells run instead of as an opaque mid-run 403 cascade.
+    if (!opts.dryRun && opts.cells.some((c) => c.provider === "github")) {
+        await preflightGithubRateLimits(log);
+    }
 
     for (const cell of opts.cells) {
         if (cell.target !== opts.target) continue;
