@@ -154,7 +154,18 @@ jobs:
 
                   DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
 
+                  # GitHub bot-account token POOL. The runner round-robins
+                  # every github scenario across GH_TEST_TOKEN + GH_TEST_TOKEN_2..N
+                  # (see lib/github-token-pool.ts), so the ~26-scenario
+                  # license-paid cell spreads its polling/content-creation load
+                  # across multiple accounts instead of draining one account's
+                  # 5,000 req/hr primary quota and cascading into ~19 misleading
+                  # rate-limit SKIPs. GH_TEST_TOKEN_2 is a second dedicated bot
+                  # (Admin on the fixture repo). Empty siblings are dropped, so
+                  # this stays a single-token pool — identical to before — until
+                  # the secret is set.
                   GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
+                  GH_TEST_TOKEN_2: ${{ secrets.GH_TEST_TOKEN_FREE }}
                   GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
                   GH_TEST_PR_NUMBER: ${{ secrets.GH_TEST_PR_NUMBER }}
 
