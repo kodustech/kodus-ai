@@ -821,16 +821,25 @@ export class GitHubProvider extends BaseProvider {
     // the product's credential mid-run. Always hand the backend the
     // long-lived base PAT; the assigned token keeps serving the harness's
     // own API calls (clone, PRs, polling).
+    //
+    // Prefer a DEDICATED integration account (GH_INTEGRATION_TOKEN) so the
+    // product's own GitHub calls (read diff/files, post comments, resolve
+    // threads) draw on a separate 5,000 req/hr budget from the harness
+    // driver pool. Without it, the product and the harness both hammer
+    // GH_TEST_TOKEN — that single account's quota was tripping mid-cell and
+    // cascading scenarios into rate-limit SKIPs. Falls back to GH_TEST_TOKEN
+    // when the dedicated secret is unset, so this is a no-op until wired.
     authToken(): string {
         // Installation tokens are prefixed ghs_ and die in ~1h. NOTHING with
         // that prefix may become the stored integration credential — not the
-        // runner-assigned token, and not a misconfigured GH_TEST_TOKEN secret
-        // either (a silent 1h credential in CI config would fail mid-run).
-        const durable = process.env.GH_TEST_TOKEN;
+        // runner-assigned token, and not a misconfigured secret either (a
+        // silent 1h credential in CI config would fail mid-run).
+        const durable =
+            process.env.GH_INTEGRATION_TOKEN || process.env.GH_TEST_TOKEN;
         if (durable) {
             if (durable.startsWith('ghs_')) {
                 throw new Error(
-                    'GH_TEST_TOKEN is a GitHub App installation token (ghs_) — the integration credential must be a durable PAT',
+                    'The GitHub integration credential (GH_INTEGRATION_TOKEN / GH_TEST_TOKEN) is a GitHub App installation token (ghs_) — it must be a durable PAT',
                 );
             }
             return durable;

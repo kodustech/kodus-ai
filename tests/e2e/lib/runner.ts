@@ -476,12 +476,33 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                   opts.runId,
               );
 
+        // Circuit breaker: once a github bot account's quota is exhausted,
+        // every remaining scenario in the cell would either re-hit the 403 or
+        // hang polling for a product action the (also rate-limited) product
+        // can't take — draining the whole 60-min job budget on retries. The
+        // hour-long reset can't clear mid-cell, so short-circuit the rest to a
+        // fast, honest SKIP instead. Resets per cell.
+        let githubRateLimited = false;
+
         for (const scenario of opts.scenarios) {
             const cellLabel = `${scenario.id} × ${cell.target} × ${cell.provider} × ${cell.license}`;
 
             if (!appliesToCell(scenario, cell)) {
                 log.info(`SKIP  ${cellLabel}`);
                 results.push(makeResult(scenario, cell, 'skipped', 0, {}));
+                continue;
+            }
+
+            if (githubRateLimited) {
+                log.err(
+                    `SKIP  ${cellLabel}: GitHub rate limit already tripped this cell — short-circuiting (quota resets hourly, NOT a product pass)`,
+                );
+                results.push(
+                    makeResult(scenario, cell, 'skipped', 0, {
+                        skipReason:
+                            'github-rate-limit: cell circuit breaker (a prior scenario exhausted the account quota)',
+                    }),
+                );
                 continue;
             }
 
@@ -653,6 +674,10 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                     // of failing the release red. Logged loudly so a wall of
                     // these reads as "out of quota / spread load", not a pass.
                     if (isGithubRateLimit(e.message)) {
+                        // Trip the per-cell breaker so the remaining scenarios
+                        // fast-SKIP instead of each re-hitting the 403 or
+                        // hanging on the rate-limited product until timeout.
+                        githubRateLimited = true;
                         log.err(
                             `SKIP  ${cellLabel}: GitHub rate limit — quota exhausted, NOT a product pass (${e.message.slice(0, 160)})`,
                         );
