@@ -166,6 +166,14 @@ jobs:
                   # the secret is set.
                   GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
                   GH_TEST_TOKEN_2: ${{ secrets.GH_TEST_TOKEN_FREE }}
+                  # Dedicated account for the PRODUCT's stored GitHub
+                  # integration credential, separate from the harness driver
+                  # pool above. The self-hosted product uses this for all its
+                  # own GitHub calls (read diff/files, post comments) — pinning
+                  # it to GH_TEST_TOKEN meant product + harness drained one
+                  # account and tripped the rate limit mid-cell. Falls back to
+                  # GH_TEST_TOKEN when unset (see github.ts authToken()).
+                  GH_INTEGRATION_TOKEN: ${{ secrets.GH_INTEGRATION_TOKEN }}
                   GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
                   GH_TEST_PR_NUMBER: ${{ secrets.GH_TEST_PR_NUMBER }}
 
