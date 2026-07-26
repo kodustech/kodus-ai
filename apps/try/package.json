@@ -13,7 +13,7 @@
   "dependencies": {
     "@pierre/diffs": "^1.2.7",
     "lucide-react": "^1.17.0",
-    "next": "15.5.19",
+    "next": "15.5.21",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "react-markdown": "^10.1.0",
