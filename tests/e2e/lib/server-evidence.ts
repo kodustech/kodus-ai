@@ -47,8 +47,15 @@ export async function collectServerEvidence(
         'kodus-worker-prod',
         'kodus-webhooks-prod',
     ];
+    // Covers both kody-rules scenarios and the code-review pipeline: the
+    // review path (webhook received → automation → pipeline stages → comment
+    // posting) is what a code-review-basic timeout needs to explain whether
+    // the product ran at all and where it stopped. Bitbucket/webhook terms
+    // surface a webhook that never arrived vs a pipeline that crashed.
     const grepFilter =
-        'kody-rules-sync|kody-rules-eval|KodyRulesSync|CrossProcess|ERROR|error -|Failed';
+        'kody-rules-sync|kody-rules-eval|KodyRulesSync|CrossProcess|ERROR|error -|Failed|' +
+        'CodeReview|ReviewOrchestrator|CommentManager|CodeReviewPipeline|CodeReviewAgent|' +
+        'Webhook|webhook|Automation|automation|Bitbucket|bitbucket';
 
     for (const container of containers) {
         try {
@@ -62,7 +69,7 @@ export async function collectServerEvidence(
                     '-o',
                     'ConnectTimeout=10',
                     `root@${host}`,
-                    `docker logs --since 20m ${container} 2>&1 | grep -aE "${grepFilter}" | grep -av Mongoose | tail -120; echo '--- tail ---'; docker logs --tail 40 ${container} 2>&1 | grep -av Mongoose`,
+                    `docker logs --since 60m ${container} 2>&1 | grep -aE "${grepFilter}" | grep -av Mongoose | tail -200; echo '--- tail ---'; docker logs --tail 40 ${container} 2>&1 | grep -av Mongoose`,
                 ],
                 { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 },
             );
