@@ -42,11 +42,37 @@ export async function collectServerEvidence(
     const key = process.env.TARGET_SSH_KEY;
     if (!host || !key) return;
 
-    const containers = [
-        'kodus-api',
-        'kodus-worker-prod',
-        'kodus-webhooks-prod',
-    ];
+    // Resolve container names from the droplet instead of hardcoding them —
+    // the API container is NOT named `kodus-api` on the installer compose
+    // (every prior artifact's server-kodus-api-*.log held only "No such
+    // container: kodus-api", which is how the registerRepo-400 runs shipped
+    // with no API log at all). Fall back to the known worker/webhook names
+    // if discovery fails.
+    let containers = ['kodus-worker-prod', 'kodus-webhooks-prod'];
+    try {
+        const { stdout } = await execFileAsync(
+            'ssh',
+            [
+                '-i',
+                key,
+                '-o',
+                'StrictHostKeyChecking=no',
+                '-o',
+                'ConnectTimeout=10',
+                `root@${host}`,
+                `docker ps --format '{{.Names}}' | grep -ai kodus || true`,
+            ],
+            { timeout: 20_000, maxBuffer: 1024 * 1024 },
+        );
+        const found = stdout
+            .split('\n')
+            .map((s) => s.trim())
+            .filter(Boolean);
+        if (found.length) containers = found;
+    } catch {
+        // discovery is best-effort; the fallback list still covers the
+        // worker/webhook logs that have always resolved
+    }
     // Covers both kody-rules scenarios and the code-review pipeline: the
     // review path (webhook received → automation → pipeline stages → comment
     // posting) is what a code-review-basic timeout needs to explain whether
