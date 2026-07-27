@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
+import { resolveGitlabIsDraft } from '@libs/common/utils/webhooks/gitlab';
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
 import { CacheService } from '@libs/core/cache/cache.service';
@@ -4834,7 +4835,7 @@ export class GitlabService implements Omit<
                 name: mergeRequest?.author?.name ?? '',
                 id: mergeRequest?.author?.id?.toString() ?? '',
             },
-            isDraft: mergeRequest?.draft ?? false,
+            isDraft: resolveGitlabIsDraft(mergeRequest),
         };
     }
 

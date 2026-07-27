@@ -13,6 +13,24 @@ import {
 
 import { extractRepoFullName } from './webhooks.utils';
 
+/**
+ * Resolves whether a GitLab merge request is a draft.
+ *
+ * GitLab renamed "WIP" to "Draft" in 13.2. On older self-managed instances a
+ * Draft MR can be returned with `draft: null` and `work_in_progress: true`, so
+ * reading `draft` alone maps such MRs as non-draft. We treat `draft` as
+ * canonical when present (an explicit `draft: false` wins) and only fall back to
+ * the deprecated `work_in_progress` when `draft` is null/undefined.
+ */
+export function resolveGitlabIsDraft(
+    mr:
+        | { draft?: boolean | null; work_in_progress?: boolean | null }
+        | null
+        | undefined,
+): boolean {
+    return Boolean(mr?.draft ?? mr?.work_in_progress ?? false);
+}
+
 export class GitlabMappedPlatform implements IMappedPlatform {
     mapUsers(params: {
         payload: IWebhookGitlabMergeRequestEvent;
@@ -73,10 +91,7 @@ export class GitlabMappedPlatform implements IMappedPlatform {
                 },
                 ref: mergeRequest?.target_branch,
             },
-            isDraft:
-                'draft' in mergeRequest
-                    ? (mergeRequest?.draft ?? false)
-                    : false,
+            isDraft: resolveGitlabIsDraft(mergeRequest),
             tags: mergeRequest?.labels?.map((label) => label.title) ?? [],
         };
     }

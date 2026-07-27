@@ -581,9 +581,7 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
 
         if (
             objectAttributes.action === 'update' &&
-            changes?.draft &&
-            changes.draft.previous === true &&
-            changes.draft.current === false
+            isGitlabDraftToReadyTransition(changes)
         ) {
             return true;
         }
@@ -604,6 +602,25 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
 
         return !!(lastCommitId && oldRev && lastCommitId !== oldRev);
     }
+}
+
+/**
+ * Detects a GitLab MR update that flips the MR from Draft to Ready.
+ *
+ * New GitLab reports this via `changes.draft`; older self-managed instances
+ * (pre-13.2 naming) report it via the deprecated `changes.work_in_progress`.
+ * Either field going `previous: true -> current: false` counts as "marked
+ * ready", which should trigger a review.
+ *
+ * Note: the `changes.work_in_progress` payload shape on old GitLab is assumed,
+ * not confirmed. The check is safe regardless — if the field is absent the
+ * branch never fires, and the result is idempotent (no double-trigger).
+ */
+export function isGitlabDraftToReadyTransition(changes: any): boolean {
+    const wentReady = (change: any): boolean =>
+        change?.previous === true && change?.current === false;
+
+    return wentReady(changes?.draft) || wentReady(changes?.work_in_progress);
 }
 
 /**

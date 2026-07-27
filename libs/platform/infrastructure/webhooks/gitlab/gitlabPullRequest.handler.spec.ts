@@ -1,4 +1,7 @@
-import { extractGitlabHost } from './gitlabPullRequest.handler';
+import {
+    extractGitlabHost,
+    isGitlabDraftToReadyTransition,
+} from './gitlabPullRequest.handler';
 
 describe('extractGitlabHost', () => {
     it('extracts host from project.git_http_url (real Ikatec payload shape)', () => {
@@ -140,5 +143,39 @@ describe('extractGitlabHost', () => {
         // URL.hostname does not include the port — covers the case where a
         // self-hosted GitLab listens on a non-standard port.
         expect(extractGitlabHost(payload)).toBe('gitlab.example.com');
+    });
+});
+
+describe('isGitlabDraftToReadyTransition', () => {
+    it('detects a Draft->Ready flip via changes.draft (modern GitLab)', () => {
+        expect(
+            isGitlabDraftToReadyTransition({
+                draft: { previous: true, current: false },
+            }),
+        ).toBe(true);
+    });
+
+    it('detects a Draft->Ready flip via changes.work_in_progress (old GitLab, issue #1514)', () => {
+        expect(
+            isGitlabDraftToReadyTransition({
+                work_in_progress: { previous: true, current: false },
+            }),
+        ).toBe(true);
+    });
+
+    it('ignores a Ready->Draft flip', () => {
+        expect(
+            isGitlabDraftToReadyTransition({
+                draft: { previous: false, current: true },
+            }),
+        ).toBe(false);
+    });
+
+    it('returns false when no draft/wip change is present', () => {
+        expect(isGitlabDraftToReadyTransition({})).toBe(false);
+    });
+
+    it.each([[null], [undefined]])('returns false for %p changes', (changes) => {
+        expect(isGitlabDraftToReadyTransition(changes)).toBe(false);
     });
 });
