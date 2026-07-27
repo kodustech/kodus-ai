@@ -3179,7 +3179,16 @@ export class BitbucketCloudService implements Omit<
                 params.type,
             );
 
-            this.createWebhook(params.organizationAndTeamData);
+            // Deliberately not awaited (webhook creation must not block the
+            // integration-config save) — but the promise MUST be caught:
+            // createWebhook rethrows on failure (e.g. Bitbucket's 50-hook
+            // per-repo cap rejecting the create), and an orphaned rejection
+            // here escalated to an unhandledRejection that crashed the whole
+            // API process. The failure still gets a loud error log from
+            // createWebhook's own catch; this catch only stops the crash.
+            void this.createWebhook(params.organizationAndTeamData).catch(
+                () => undefined,
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Error to create or update integration config',
