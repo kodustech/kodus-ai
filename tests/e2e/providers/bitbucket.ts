@@ -317,6 +317,57 @@ export class BitbucketProvider extends BaseProvider {
             }
             url = resp.body.next ?? null;
         }
+
+        // Also purge webhooks left behind by prior runs. Every run's
+        // registerRepo makes the product create a webhook pointing at that
+        // run's ephemeral trycloudflare tunnel, and nothing ever deleted
+        // them — the fixture accumulated 50 (Bitbucket's per-repo cap), at
+        // which point the CURRENT run's webhook registration fails
+        // silently, the droplet never receives a single PR event, and the
+        // review never runs (the root cause of the standing bitbucket ×
+        // code-review-basic timeout). Delete every hook aimed at a dead
+        // ephemeral tunnel; leave non-tunnel hooks (e.g. the QA instance)
+        // alone. Requires the app password to carry the
+        // `delete:webhook:bitbucket` scope — without it Bitbucket 403s,
+        // which we surface loudly instead of silently re-hitting the cap.
+        try {
+            const hooksResp = await http<{
+                values?: Array<{ uuid: string; url: string }>;
+            }>(
+                `${this.apiBase}/repositories/${this.workspaceSlug}/hooks?pagelen=100`,
+                { headers: this.headers() },
+            );
+            ensureOk(hooksResp, "bitbucket:cleanupStale:listHooks");
+            const stale = (hooksResp.body.values ?? []).filter(
+                (h) =>
+                    /trycloudflare\.com|localhost|127\.0\.0\.1/.test(
+                        h.url ?? "",
+                    ),
+            );
+            let hooksDeleted = 0;
+            for (const h of stale) {
+                const del = await http(
+                    `${this.apiBase}/repositories/${this.workspaceSlug}/hooks/${encodeURIComponent(h.uuid)}`,
+                    { method: "DELETE", headers: this.headers() },
+                );
+                if (del.status === 403) {
+                    log.warn(
+                        `bitbucket:cleanupStale: cannot delete stale webhook ${h.url} — app password lacks the delete:webhook:bitbucket scope. ` +
+                            `${stale.length} dead tunnel webhook(s) remain; at Bitbucket's 50-hook cap NEW webhook registration fails silently and reviews never trigger.`,
+                    );
+                    break;
+                }
+                if (del.status >= 200 && del.status < 300) hooksDeleted += 1;
+            }
+            if (hooksDeleted > 0) {
+                log.info(
+                    `bitbucket:cleanupStale: deleted ${hooksDeleted} stale tunnel webhook(s)`,
+                );
+            }
+        } catch {
+            // Best-effort — webhook cleanup failing must not block the run;
+            // the loud 403 warn above is the actionable signal.
+        }
         return { closed };
     }
 
