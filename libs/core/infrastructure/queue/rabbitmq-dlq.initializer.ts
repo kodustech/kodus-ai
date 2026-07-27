@@ -257,10 +257,24 @@ export class RabbitMQDLQInitializer implements OnApplicationBootstrap {
 
     private async bindQueuesToDelayedExchange(channel: any): Promise<void> {
         for (const qb of WORKFLOW_JOB_QUEUES) {
-            // Only bind — do NOT assertQueue here because the queues are already
-            // declared by @RabbitSubscribe with specific arguments (x-dead-letter-exchange,
-            // x-queue-type, etc.). Re-declaring with different args closes the channel
-            // with PRECONDITION_FAILED.
+            // Assert the queue with the SAME arguments @RabbitSubscribe uses
+            // (single-sourced in WORKFLOW_JOB_QUEUES) BEFORE binding. A
+            // bind-only call assumes the @RabbitSubscribe consumer already
+            // declared the queue on this channel — but on a fresh RabbitMQ
+            // volume or a reconnect where the consumers haven't re-declared
+            // yet, that race makes bindQueue fail with 404 NOT_FOUND. The
+            // binding is then silently lost (and in the addSetup path the
+            // throw aborts consumer registration), so CODE_REVIEW jobs are
+            // published to an unbound/absent queue and the review never runs.
+            // Because the args match exactly, assertQueue is idempotent — it
+            // creates the queue when missing and is a no-op when the consumer
+            // already made it, WITHOUT the PRECONDITION_FAILED that a
+            // divergent redeclare would cause. This makes the initializer
+            // self-sufficient instead of ordering-dependent.
+            await channel.assertQueue(qb.queue, {
+                durable: true,
+                arguments: qb.queueArgs,
+            });
             await channel.bindQueue(
                 qb.queue,
                 'workflow.exchange.delayed',
