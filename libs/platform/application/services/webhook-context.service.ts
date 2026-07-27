@@ -50,6 +50,7 @@ export class WebhookContextService {
     ): Promise<{
         organizationAndTeamData: OrganizationAndTeamData;
         teamAutomationId: string;
+        botUsername?: string;
     } | null> {
         const configs =
             await this.integrationConfigService.findIntegrationConfigWithTeams(
@@ -103,6 +104,9 @@ export class WebhookContextService {
                         teamId: config.team.uuid,
                     },
                     teamAutomationId: teamAutomations[0].uuid,
+                    botUsername:
+                        config?.integration?.authIntegration?.authDetails
+                            ?.botUsername || undefined,
                 };
             }
         }

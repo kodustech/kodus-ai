@@ -40,6 +40,16 @@ export const hasKodyMarker = (text: string | undefined | null): boolean => {
     return hasPatternMatch;
 };
 
+/** Default bot username used when no custom username is configured */
+const DEFAULT_BOT_USERNAME = 'kody';
+
+/**
+ * Escape special regex characters in a string to use it in a RegExp literal.
+ */
+function escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Patterns for webhook comment command detection
  * Uses (?=\s|$) lookahead to ensure command ends with whitespace or end of string
@@ -75,15 +85,82 @@ export const KODY_HEAVY_REVIEW_COMMAND_PATTERN =
     /^\s*@kody\s+(?:start-review|review)\b[ \t]+(?:[^\n]*\s)?--?heavy\b/i;
 
 /**
+ * Build a review command regex for a given bot username.
+ * Falls back to DEFAULT_BOT_USERNAME when botUsername is empty/undefined.
+ */
+function buildReviewCommandPattern(
+    botUsername?: string | null,
+): RegExp {
+    const name = escapeRegex(botUsername || DEFAULT_BOT_USERNAME);
+    return new RegExp(
+        `^\\s*@${name}\\s+(start-review|review)(?=\\s|$)`,
+        'i',
+    );
+}
+
+/**
+ * Build a force-review command regex for a given bot username.
+ */
+function buildForceReviewCommandPattern(
+    botUsername?: string | null,
+): RegExp {
+    const name = escapeRegex(botUsername || DEFAULT_BOT_USERNAME);
+    return new RegExp(
+        `^\\s*@${name}\\s+(start-review|review)\\s+--?force\\b`,
+        'i',
+    );
+}
+
+/**
+ * Build a heavy-review command regex for a given bot username.
+ */
+function buildHeavyReviewCommandPattern(
+    botUsername?: string | null,
+): RegExp {
+    const name = escapeRegex(botUsername || DEFAULT_BOT_USERNAME);
+    return new RegExp(
+        `^\\s*@${name}\\s+(?:start-review|review)\\b[ \\t]+(?:[^\\n]*\\s)?--?heavy\\b`,
+        'i',
+    );
+}
+
+/**
+ * Build a review command head regex for a given bot username.
+ */
+function buildReviewCommandHeadPattern(
+    botUsername?: string | null,
+): RegExp {
+    const name = escapeRegex(botUsername || DEFAULT_BOT_USERNAME);
+    return new RegExp(
+        `^\\s*@${name}\\s+(?:start-review|review)\\b[ \\t]*(?:(?:--?force|--?heavy)\\b[ \\t]*)*`,
+        'i',
+    );
+}
+
+/**
+ * Build a non-review mention regex for a given bot username.
+ */
+function buildMentionNonReviewPattern(
+    botUsername?: string | null,
+): RegExp {
+    const name = escapeRegex(botUsername || DEFAULT_BOT_USERNAME);
+    return new RegExp(
+        `^\\s*@${name}\\b(?!\\s+(start-review|review)(?=\\s|$))`,
+        'i',
+    );
+}
+
+/**
  * Check if the review command carries the heavy flag (`@kody review --heavy`).
  * Subset of isReviewCommand. Callers set `heavy: true` on the review context so
  * the finder runs the extra critic pass.
  */
 export const isHeavyReviewCommand = (
     text: string | undefined | null,
+    botUsername?: string | null,
 ): boolean => {
     if (!text) return false;
-    return KODY_HEAVY_REVIEW_COMMAND_PATTERN.test(text);
+    return buildHeavyReviewCommandPattern(botUsername).test(text);
 };
 
 /**
@@ -91,10 +168,19 @@ export const isHeavyReviewCommand = (
  * Accepts an optional trailing flag like `--force`, so this still returns
  * true for force runs — callers that need to distinguish use
  * isForceReviewCommand().
+ *
+ * @param botUsername Optional custom bot username. When provided, also matches
+ *                   `@<botUsername> review` in addition to `@kody review`.
  */
-export const isReviewCommand = (text: string | undefined | null): boolean => {
+export const isReviewCommand = (
+    text: string | undefined | null,
+    botUsername?: string | null,
+): boolean => {
     if (!text) return false;
-    return KODY_REVIEW_COMMAND_PATTERN.test(text);
+    if (KODY_REVIEW_COMMAND_PATTERN.test(text)) return true;
+    if (botUsername && buildReviewCommandPattern(botUsername).test(text))
+        return true;
+    return false;
 };
 
 /**
@@ -105,9 +191,13 @@ export const isReviewCommand = (text: string | undefined | null): boolean => {
  */
 export const isForceReviewCommand = (
     text: string | undefined | null,
+    botUsername?: string | null,
 ): boolean => {
     if (!text) return false;
-    return KODY_FORCE_REVIEW_COMMAND_PATTERN.test(text);
+    if (KODY_FORCE_REVIEW_COMMAND_PATTERN.test(text)) return true;
+    if (botUsername && buildForceReviewCommandPattern(botUsername).test(text))
+        return true;
+    return false;
 };
 
 /**
@@ -170,11 +260,15 @@ export const normalizeReviewDirective = (
  */
 export const parseReviewDirective = (
     text: string | undefined | null,
+    botUsername?: string | null,
 ): string | undefined => {
     if (!text) return undefined;
-    if (!KODY_REVIEW_COMMAND_PATTERN.test(text)) return undefined;
+    if (!isReviewCommand(text, botUsername)) return undefined;
 
-    const head = text.match(KODY_REVIEW_COMMAND_HEAD_PATTERN);
+    // Try the hardcoded @kody pattern first, then the custom bot pattern
+    const head =
+        text.match(KODY_REVIEW_COMMAND_HEAD_PATTERN) ||
+        (botUsername ? text.match(buildReviewCommandHeadPattern(botUsername)) : null);
     if (!head) return undefined;
 
     return normalizeReviewDirective(
@@ -206,7 +300,11 @@ export const hasReviewMarker = (text: string | undefined | null): boolean => {
  */
 export const isKodyMentionNonReview = (
     text: string | undefined | null,
+    botUsername?: string | null,
 ): boolean => {
     if (!text) return false;
-    return KODY_MENTION_NON_REVIEW_PATTERN.test(text);
+    if (KODY_MENTION_NON_REVIEW_PATTERN.test(text)) return true;
+    if (botUsername && buildMentionNonReviewPattern(botUsername).test(text))
+        return true;
+    return false;
 };
