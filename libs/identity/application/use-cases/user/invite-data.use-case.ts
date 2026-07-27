@@ -15,6 +15,10 @@ export class InviteDataUserUseCase implements IUseCase {
     ) {}
 
     public async execute(uuid: string): Promise<Partial<IUser>> {
+        if (!uuid) {
+            return {};
+        }
+
         const user = await this.usersService.findOne({
             uuid,
             status: STATUS.PENDING,
