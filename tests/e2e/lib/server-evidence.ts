@@ -69,9 +69,14 @@ export async function collectServerEvidence(
                     '-o',
                     'ConnectTimeout=10',
                     `root@${host}`,
-                    `docker logs --since 60m ${container} 2>&1 | grep -aE "${grepFilter}" | grep -av Mongoose | tail -200; echo '--- tail ---'; docker logs --tail 40 ${container} 2>&1 | grep -av Mongoose`,
+                    // Three sections: (1) grep-filtered highlights, (2) the
+                    // FULL ungrepped window (a review that skips/aborts logs at
+                    // a level the filter misses AND scrolls off a small tail —
+                    // the only way to see the pipeline's actual decision), (3)
+                    // the last 40 lines for the crash-at-exit case.
+                    `docker logs --since 60m ${container} 2>&1 | grep -aE "${grepFilter}" | grep -av Mongoose | tail -200; echo '--- full (ungrepped, since 60m) ---'; docker logs --since 60m ${container} 2>&1 | grep -av Mongoose | tail -6000; echo '--- tail ---'; docker logs --tail 40 ${container} 2>&1 | grep -av Mongoose`,
                 ],
-                { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 },
+                { timeout: 45_000, maxBuffer: 24 * 1024 * 1024 },
             );
             writeFileSync(
                 join(artifactDir, `server-${container}-${label}.log`),
