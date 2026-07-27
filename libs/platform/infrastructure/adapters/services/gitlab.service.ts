@@ -870,9 +870,16 @@ export class GitlabService implements Omit<
                 params.type,
             );
 
-            this.createMergeRequestWebhook({
+            // Deliberately not awaited (webhook creation must not block the
+            // integration-config save) — but the promise MUST be caught:
+            // createMergeRequestWebhook rethrows on failure, and an orphaned
+            // rejection escalates to an unhandledRejection that can crash the
+            // API process (observed on the Bitbucket twin of this call). The
+            // failure still gets a loud error log from the method's own
+            // catch; this catch only stops the crash.
+            void this.createMergeRequestWebhook({
                 organizationAndTeamData: params.organizationAndTeamData,
-            });
+            }).catch(() => undefined);
         } catch (err) {
             throw new BadRequestException(err);
         }

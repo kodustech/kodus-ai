@@ -5350,8 +5350,20 @@ This is an experimental feature that generates committable changes. Review the d
 
         try {
             for (const repo of repositories) {
+                // The hook lives under the REPO's namespace, not the
+                // integration account's. getCorrectOwner resolves personal
+                // PAT integrations to the authenticated user's login, which
+                // 404s ("Not Found - list-repository-webhooks") for every
+                // repo the account merely collaborates on — the whole
+                // registerRepo call then fails. Prefer the owner recorded on
+                // the repository itself; keep getCorrectOwner as a fallback
+                // for legacy configs missing both fields.
+                const repoOwner =
+                    repo.full_name?.split('/')[0] ||
+                    repo.organizationName ||
+                    owner;
                 const { data: webhooks } = await octokit.repos.listWebhooks({
-                    owner: owner,
+                    owner: repoOwner,
                     repo: repo.name,
                 });
 
@@ -5362,14 +5374,14 @@ This is an experimental feature that generates committable changes. Review the d
 
                 if (webhookToDelete) {
                     await octokit.repos.deleteWebhook({
-                        owner: owner,
+                        owner: repoOwner,
                         repo: repo.name,
                         hook_id: webhookToDelete.id,
                     });
                 }
 
                 const response = await octokit.repos.createWebhook({
-                    owner: owner,
+                    owner: repoOwner,
                     repo: repo.name,
                     config: {
                         url: webhookUrl,
@@ -5387,11 +5399,11 @@ This is an experimental feature that generates committable changes. Review the d
                 });
 
                 this.logger.log({
-                    message: `Webhook adicionado ao repositório ${repo.name} (owner: ${owner})`,
+                    message: `Webhook adicionado ao repositório ${repo.name} (owner: ${repoOwner})`,
                     context: GithubService.name,
                     metadata: {
                         ...params,
-                        owner,
+                        owner: repoOwner,
                         repositoryName: repo.name,
                         webhookId: response?.data?.id,
                     },

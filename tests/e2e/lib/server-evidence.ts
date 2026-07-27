@@ -42,13 +42,46 @@ export async function collectServerEvidence(
     const key = process.env.TARGET_SSH_KEY;
     if (!host || !key) return;
 
-    const containers = [
-        'kodus-api',
-        'kodus-worker-prod',
-        'kodus-webhooks-prod',
-    ];
+    // Resolve container names from the droplet instead of hardcoding them —
+    // the API container is NOT named `kodus-api` on the installer compose
+    // (every prior artifact's server-kodus-api-*.log held only "No such
+    // container: kodus-api", which is how the registerRepo-400 runs shipped
+    // with no API log at all). Fall back to the known worker/webhook names
+    // if discovery fails.
+    let containers = ['kodus-worker-prod', 'kodus-webhooks-prod'];
+    try {
+        const { stdout } = await execFileAsync(
+            'ssh',
+            [
+                '-i',
+                key,
+                '-o',
+                'StrictHostKeyChecking=no',
+                '-o',
+                'ConnectTimeout=10',
+                `root@${host}`,
+                `docker ps --format '{{.Names}}' | grep -ai kodus || true`,
+            ],
+            { timeout: 20_000, maxBuffer: 1024 * 1024 },
+        );
+        const found = stdout
+            .split('\n')
+            .map((s) => s.trim())
+            .filter(Boolean);
+        if (found.length) containers = found;
+    } catch {
+        // discovery is best-effort; the fallback list still covers the
+        // worker/webhook logs that have always resolved
+    }
+    // Covers both kody-rules scenarios and the code-review pipeline: the
+    // review path (webhook received → automation → pipeline stages → comment
+    // posting) is what a code-review-basic timeout needs to explain whether
+    // the product ran at all and where it stopped. Bitbucket/webhook terms
+    // surface a webhook that never arrived vs a pipeline that crashed.
     const grepFilter =
-        'kody-rules-sync|kody-rules-eval|KodyRulesSync|CrossProcess|ERROR|error -|Failed';
+        'kody-rules-sync|kody-rules-eval|KodyRulesSync|CrossProcess|ERROR|error -|Failed|' +
+        'CodeReview|ReviewOrchestrator|CommentManager|CodeReviewPipeline|CodeReviewAgent|' +
+        'Webhook|webhook|Automation|automation|Bitbucket|bitbucket';
 
     for (const container of containers) {
         try {
@@ -62,9 +95,14 @@ export async function collectServerEvidence(
                     '-o',
                     'ConnectTimeout=10',
                     `root@${host}`,
-                    `docker logs --since 20m ${container} 2>&1 | grep -aE "${grepFilter}" | grep -av Mongoose | tail -120; echo '--- tail ---'; docker logs --tail 40 ${container} 2>&1 | grep -av Mongoose`,
+                    // Three sections: (1) grep-filtered highlights, (2) the
+                    // FULL ungrepped window (a review that skips/aborts logs at
+                    // a level the filter misses AND scrolls off a small tail —
+                    // the only way to see the pipeline's actual decision), (3)
+                    // the last 40 lines for the crash-at-exit case.
+                    `docker logs --since 60m ${container} 2>&1 | grep -aE "${grepFilter}" | grep -av Mongoose | tail -200; echo '--- full (ungrepped, since 60m) ---'; docker logs --since 60m ${container} 2>&1 | grep -av Mongoose | tail -6000; echo '--- tail ---'; docker logs --tail 40 ${container} 2>&1 | grep -av Mongoose`,
                 ],
-                { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 },
+                { timeout: 45_000, maxBuffer: 24 * 1024 * 1024 },
             );
             writeFileSync(
                 join(artifactDir, `server-${container}-${label}.log`),
