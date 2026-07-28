@@ -1,11 +1,6 @@
-import {
-    BYOKConfig,
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
+import { BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
 import { Inject, Injectable } from '@nestjs/common';
+import { z } from 'zod';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
@@ -26,7 +21,6 @@ import {
     SummaryConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import {
     IParametersService,
@@ -47,6 +41,7 @@ import {
     classifyLLMError,
 } from '@libs/llm/error-classifier';
 import { tracedGenerateText } from '@libs/llm/llm-call';
+import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import {
     buildLangfuseTelemetry,
     toAiSdkTelemetryArgs,
@@ -68,6 +63,26 @@ interface ClusteredSuggestion {
     actionStatement?: string;
 }
 
+/**
+ * Structured-output schema for `repeatedCodeReviewSuggestionClustering`. Mirrors
+ * the JSON shape the `prompt_repeated_suggestion_clustering_system` prompt
+ * already declares in its `<output_format>` block, so migrating the STRING/JSON
+ * parser onto the structured AI-SDK path does not force the model to fabricate
+ * fields. The structured result is re-serialized (JSON.stringify) and fed through
+ * `LLMResponseProcessor.processResponse` exactly as the STRING path did, keeping
+ * the downstream clustering/enrichment mapping byte-for-byte identical.
+ */
+const repeatedClusteringSchema = z.object({
+    codeSuggestions: z.array(
+        z.object({
+            id: z.string(),
+            sameSuggestionsId: z.array(z.string()).optional(),
+            problemDescription: z.string().optional(),
+            actionStatement: z.string().optional(),
+        }),
+    ),
+});
+
 @Injectable()
 export class CommentManagerService implements ICommentManagerService {
     private readonly llmResponseProcessor: LLMResponseProcessor;
@@ -77,7 +92,6 @@ export class CommentManagerService implements ICommentManagerService {
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
         private readonly messageProcessor: MessageTemplateProcessor,
-        private readonly promptRunnerService: PromptRunnerService,
         private readonly observabilityService: ObservabilityService,
         private readonly permissionValidationService: PermissionValidationService,
         private readonly codeManagementService: CodeManagementService,
@@ -1820,61 +1834,33 @@ ${reviewOptions}
 
             const userPrompt = `<codeSuggestionsContext>${JSON.stringify(baseContext?.codeSuggestions) || 'No code suggestions provided'}</codeSuggestionsContext>`;
 
-            const promptRunner = new BYOKPromptRunnerService(
-                this.promptRunnerService,
-                provider,
-                fallbackProvider,
-                byokConfig,
-            );
-
             const runName = 'repeatedCodeReviewSuggestionClustering';
-            const spanName = `${CommentManagerService.name}::${runName}`;
-            const spanAttrs = {
-                type: promptRunner.executeMode,
-                organizationId: organizationAndTeamData?.organizationId,
-                prNumber,
-            };
 
-            const { result } =
-                await this.observabilityService.runLLMInSpan<string>({
-                    spanName,
-                    runName,
-                    attrs: spanAttrs,
-                    byokConfig,
-                    exec: async (callbacks) => {
-                        return await promptRunner
-                            .builder()
-                            .setParser(ParserType.STRING)
-                            .setLLMJsonMode(true)
-                            .setPayload(baseContext)
-                            .addPrompt({
-                                prompt: prompt_repeated_suggestion_clustering_system,
-                                role: PromptRole.SYSTEM,
-                            })
-                            .addPrompt({
-                                prompt: userPrompt,
-                                role: PromptRole.USER,
-                            })
-                            .addMetadata({
-                                organizationId:
-                                    organizationAndTeamData?.organizationId,
-                                teamId: organizationAndTeamData?.teamId,
-                                pullRequestId: prNumber,
-                                provider:
-                                    byokConfig?.main?.provider || provider,
-                                model: byokConfig?.main?.model,
-                                fallbackProvider:
-                                    byokConfig?.fallback?.provider ||
-                                    fallbackProvider,
-                                fallbackModel: byokConfig?.fallback?.model,
-                                runName,
-                            })
-                            .addCallbacks(callbacks)
-                            .setRunName(runName)
-                            .setTemperature(0)
-                            .execute();
-                    },
-                });
+            // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
+            // path (REQ-NOLC-01). Single span via runStructuredReviewCall — the
+            // outer runLLMInSpan wrapper is dropped (Q4). The BYOK org keeps its
+            // own model. The structured result is re-serialized and fed through
+            // LLMResponseProcessor exactly as the STRING/JSON path did, preserving
+            // the downstream clustering/enrichment mapping. `prompt_repeated_*` is
+            // a payload-taking prompt fn (the builder called it with the payload),
+            // so it is invoked explicitly here with the language.
+            const clustered = await runStructuredReviewCall({
+                schema: repeatedClusteringSchema,
+                system: prompt_repeated_suggestion_clustering_system({
+                    language,
+                }),
+                user: userPrompt,
+                runName,
+                organizationId: organizationAndTeamData?.organizationId,
+                observabilityService: this.observabilityService,
+                byokConfig,
+                attrs: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    prNumber,
+                },
+            });
+
+            const result = clustered ? JSON.stringify(clustered) : null;
 
             if (!result) {
                 const message =

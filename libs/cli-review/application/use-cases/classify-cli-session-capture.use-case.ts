@@ -1,13 +1,8 @@
 import { createLogger } from '@libs/core/log/logger';
-import {
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
+import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
+import { ObservabilityService } from '@libs/core/log/observability.service';
 import {
     CliSessionClassifiedDecision,
     CliSessionDecisionOrigin,
@@ -43,7 +38,7 @@ export class ClassifyCliSessionCaptureUseCase {
 
     constructor(
         private readonly cliSessionCaptureRepository: CliSessionCaptureRepository,
-        private readonly promptRunnerService: PromptRunnerService,
+        private readonly observabilityService: ObservabilityService,
     ) {}
 
     async execute(captureId: string): Promise<void> {
@@ -130,6 +125,7 @@ export class ClassifyCliSessionCaptureUseCase {
     }
 
     private async extractWithLLM(capture: {
+        organizationId?: string;
         summary?: string;
         signals?: {
             prompt?: string;
@@ -142,12 +138,6 @@ export class ClassifyCliSessionCaptureUseCase {
             }>;
         };
     }): Promise<CliSessionClassifiedDecision[]> {
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            LLMModelProvider.CEREBRAS_GLM_47,
-            LLMModelProvider.GEMINI_3_FLASH_PREVIEW,
-        );
-
         const prompt = [
             'You are classifying coding session captures into reusable decisions.',
             '',
@@ -183,22 +173,23 @@ export class ClassifyCliSessionCaptureUseCase {
             toolUses: capture.signals?.toolUses || [],
         };
 
-        const result = await promptRunner
-            .builder()
-            .setParser(ParserType.ZOD, LLMDecisionExtractionSchema)
-            .setLLMJsonMode(true)
-            .setTemperature(0)
-            .setPayload(userPayload)
-            .addPrompt({
-                role: PromptRole.SYSTEM,
-                prompt,
-            })
-            .addPrompt({
-                role: PromptRole.USER,
-                prompt: JSON.stringify(userPayload),
-            })
-            .setRunName('classifyCliSessionCapture')
-            .execute();
+        // Migrated off the kodus-common LangChain BYOKPromptRunner path onto the
+        // AI SDK path (REQ-NOLC-01), mirroring the tracer (03-01). byokConfig is
+        // undefined here → runStructuredReviewCall resolves the managed review
+        // default; the previous CEREBRAS_GLM_47/GEMINI_3_FLASH_PREVIEW pin is
+        // intentionally dropped (per-task model routing is Phase 4).
+        // runStructuredReviewCall owns the single observability span path (Q4).
+        // setTemperature(0) is likewise dropped (not threaded by
+        // runStructuredReviewCall). Parity is on the parsed decisions[] mapping.
+        const result = await runStructuredReviewCall({
+            schema: LLMDecisionExtractionSchema,
+            system: prompt,
+            user: JSON.stringify(userPayload),
+            runName: 'ClassifyCliSessionCaptureUseCase::classifyCliSessionCapture',
+            organizationId: capture.organizationId,
+            observabilityService: this.observabilityService,
+            byokConfig: undefined,
+        });
 
         const rawDecisions = result?.decisions ?? [];
         return rawDecisions.map((decision) => {

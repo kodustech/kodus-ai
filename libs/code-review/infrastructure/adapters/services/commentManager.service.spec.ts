@@ -1,6 +1,7 @@
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
     BehaviourForExistingDescription,
+    ClusteringType,
     SummaryConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
@@ -44,6 +45,8 @@ jest.mock(
 // (Bug E) and return a deterministic summary (Bug A).
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     byokToVercelModel: jest.fn(() => ({ __mockModel: true })),
+    // runStructuredReviewCall (clustering path) reads getModelName for the span.
+    getModelName: jest.fn(() => 'test-model'),
 }));
 // `tracedGenerateText` moved to @libs/llm/llm-call (the legacy
 // agents/engine/agent-loop module was removed). requireActual keeps the rest of
@@ -137,7 +140,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
         service = new CommentManagerService(
             parametersService,
             messageProcessor,
-            promptRunnerService,
             observabilityService as any,
             permissionValidationService,
             codeManagementService as any,
@@ -466,5 +468,123 @@ describe('CommentManagerService.generateSummaryPR', () => {
             // so the note renders on separate lines in the PR comment.
             expect(result).toContain('line one  \nline two  \nline three');
         });
+    });
+});
+
+// repeatedCodeReviewSuggestionClustering was migrated from the kodus-common
+// STRING/JSON PromptRunner onto runStructuredReviewCall (REQ-NOLC-01). The
+// structured result is JSON.stringify'd and fed through LLMResponseProcessor
+// exactly as the STRING path did — this suite pins that the downstream
+// clustering/enrichment mapping is byte-for-byte identical. It mocks the
+// tracedGenerateText seam (like structured-review-call.spec.ts), not the
+// LangChain builder that no longer exists on this path.
+describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — structured-call parity', () => {
+    let service: CommentManagerService;
+    let observabilityService: any;
+    let parametersService: any;
+
+    const stubOrg = { organizationId: 'org-1', teamId: 'team-1' };
+
+    beforeEach(() => {
+        // Shared module-level mock — clear accumulated calls from the summary
+        // suite above so the per-test call-count assertion is isolated.
+        (tracedGenerateText as jest.Mock).mockClear();
+        parametersService = {
+            findByKey: jest
+                .fn()
+                .mockResolvedValue({ configValue: 'en-US' }),
+        };
+        observabilityService = {
+            runLLMInSpan: jest.fn(),
+            // runStructuredReviewCall runs its exec inside runAiSdkLLMInSpan and
+            // reads `experimental_output` off the result.
+            runAiSdkLLMInSpan: jest.fn(async ({ exec }: any) => exec()),
+        };
+
+        service = new CommentManagerService(
+            parametersService,
+            {} as any,
+            observabilityService,
+            {} as any,
+            {} as any,
+        );
+    });
+
+    it('re-serializes the structured clustering result and maps it byte-for-byte through enrichment', async () => {
+        const codeSuggestions = [
+            { id: 'a', relevantFile: 'a.ts', suggestionContent: 'A' },
+            { id: 'b', relevantFile: 'b.ts', suggestionContent: 'B' },
+            { id: 'c', relevantFile: 'c.ts', suggestionContent: 'C' },
+        ];
+
+        // The migrated call is runStructuredReviewCall → tracedGenerateText.
+        // Return the structured object the LLM would produce (a and b cluster).
+        (tracedGenerateText as jest.Mock).mockResolvedValueOnce({
+            experimental_output: {
+                codeSuggestions: [
+                    {
+                        id: 'a',
+                        sameSuggestionsId: ['b'],
+                        problemDescription: 'dup issue',
+                        actionStatement: 'Please fix it',
+                    },
+                ],
+            },
+        });
+
+        const result = await service.repeatedCodeReviewSuggestionClustering(
+            stubOrg as any,
+            7,
+            'openai_gpt-4o' as any,
+            codeSuggestions,
+        );
+
+        // c stays non-clustered; a becomes PARENT; b becomes RELATED — the exact
+        // enrichment the STRING path produced from the same JSON payload.
+        expect(result).toEqual([
+            { id: 'c', relevantFile: 'c.ts', suggestionContent: 'C' },
+            {
+                id: 'a',
+                relevantFile: 'a.ts',
+                suggestionContent: 'A',
+                clusteringInformation: {
+                    type: ClusteringType.PARENT,
+                    relatedSuggestionsIds: ['b'],
+                    problemDescription: 'dup issue',
+                    actionStatement: 'Please fix it',
+                },
+            },
+            {
+                id: 'b',
+                relevantFile: 'b.ts',
+                suggestionContent: 'B',
+                clusteringInformation: {
+                    type: ClusteringType.RELATED,
+                    parentSuggestionId: 'a',
+                },
+            },
+        ]);
+
+        // Exactly one structured call — the outer runLLMInSpan wrapper is gone (Q4).
+        expect(tracedGenerateText).toHaveBeenCalledTimes(1);
+        expect(observabilityService.runLLMInSpan).not.toHaveBeenCalled();
+    });
+
+    it('returns the original suggestions unchanged when the model finds no duplicates', async () => {
+        const codeSuggestions = [
+            { id: 'a', relevantFile: 'a.ts', suggestionContent: 'A' },
+        ];
+        (tracedGenerateText as jest.Mock).mockResolvedValueOnce({
+            experimental_output: { codeSuggestions: [] },
+        });
+
+        const result = await service.repeatedCodeReviewSuggestionClustering(
+            stubOrg as any,
+            7,
+            'openai_gpt-4o' as any,
+            codeSuggestions,
+        );
+
+        expect(result).toEqual(codeSuggestions);
     });
 });

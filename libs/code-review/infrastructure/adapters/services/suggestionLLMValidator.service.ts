@@ -1,11 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createLogger } from '@libs/core/log/logger';
-import {
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
+import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import {
     prompt_validateCodeSemantics,
     ValidateCodeSemanticsResult,
@@ -25,7 +20,6 @@ export class SuggestionLLMValidator {
     private readonly logger = createLogger(SuggestionLLMValidator.name);
 
     constructor(
-        private readonly promptRunnerService: PromptRunnerService,
         private readonly observabilityService: ObservabilityService,
     ) {}
 
@@ -39,50 +33,30 @@ export class SuggestionLLMValidator {
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
     ): Promise<ValidateCodeSemanticsResult | null> {
-        const provider = LLMModelProvider.GROQ_GPT_OSS_120B;
-        const fallbackProvider = LLMModelProvider.OPENAI_GPT_4O_MINI;
-        const runName = 'validateWithLLM';
-        const spanName = `${SuggestionLLMValidator.name}::${runName}`;
-
-        const spanAttrs = {
-            organizationId: organizationAndTeamData?.organizationId,
-            prNumber,
-            filePath: payload.filePath,
-        };
+        const runName = `${SuggestionLLMValidator.name}::validateWithLLM`;
 
         try {
-            const { result } = await this.observabilityService.runLLMInSpan({
-                spanName,
+            // Migrated off the kodus-common LangChain PromptRunner path onto the
+            // AI SDK path (REQ-NOLC-01). byokConfig is undefined here →
+            // runStructuredReviewCall resolves the managed review default; the
+            // previous GROQ_GPT_OSS_120B/OPENAI_GPT_4O_MINI provider pin is
+            // intentionally dropped (RESEARCH Pattern 1 — consolidation to the
+            // managed default; per-task routing is Phase 4). The outer LangChain
+            // span wrapper is dropped — runStructuredReviewCall owns the single
+            // span path (Q4). setTemperature(0) is likewise dropped (not threaded).
+            const result = await runStructuredReviewCall({
+                schema: validateCodeSemanticsSchema,
+                system: '',
+                user: prompt_validateCodeSemantics(payload),
                 runName,
-                attrs: spanAttrs,
-                exec: async (callbacks) => {
-                    return await this.promptRunnerService
-                        .builder()
-                        .setProviders({
-                            main: provider,
-                            fallback: fallbackProvider,
-                        })
-                        .setParser(ParserType.ZOD, validateCodeSemanticsSchema)
-                        .setLLMJsonMode(true)
-                        .setPayload(payload)
-                        .addPrompt({
-                            role: PromptRole.USER,
-                            prompt: prompt_validateCodeSemantics,
-                        })
-                        .addCallbacks(callbacks)
-                        .addMetadata({
-                            organizationId:
-                                organizationAndTeamData?.organizationId,
-                            teamId: organizationAndTeamData?.teamId,
-                            pullRequestId: prNumber,
-                            provider,
-                            fallbackProvider,
-                            runName,
-                        })
-                        .setTemperature(0)
-                        .setRunName(runName)
-                        .execute();
+                organizationId: organizationAndTeamData?.organizationId,
+                attrs: {
+                    prNumber,
+                    filePath: payload.filePath,
+                    teamId: organizationAndTeamData?.teamId,
                 },
+                observabilityService: this.observabilityService,
+                byokConfig: undefined,
             });
 
             return result;
@@ -106,61 +80,32 @@ export class SuggestionLLMValidator {
         prNumber: number,
         suggestion: Partial<CodeSuggestion>,
     ): Promise<{ isSimple: boolean; reason?: string }> {
-        const runName = 'checkSuggestionSimplicity';
-        const provider = LLMModelProvider.GEMINI_2_5_FLASH;
-        const fallbackProvider = LLMModelProvider.OPENAI_GPT_4O_MINI;
-
-        const spanName = `${SuggestionLLMValidator.name}::${runName}`;
-        const spanAttrs = {
-            organizationId: organizationAndTeamData?.organizationId,
-            prNumber,
-        };
+        const runName = `${SuggestionLLMValidator.name}::checkSuggestionSimplicity`;
 
         try {
-            const { result } = await this.observabilityService.runLLMInSpan({
-                spanName,
+            // Migrated off the kodus-common LangChain PromptRunner path onto the
+            // AI SDK path (REQ-NOLC-01). byokConfig undefined → managed default;
+            // the previous GEMINI_2_5_FLASH/OPENAI_GPT_4O_MINI provider pin
+            // is intentionally dropped (RESEARCH Pattern 1 — consolidation; routing
+            // is Phase 4). Outer LangChain span wrapper dropped — one span path via
+            // runStructuredReviewCall (Q4). setTemperature(0) dropped (not threaded).
+            const result = await runStructuredReviewCall({
+                schema: checkSuggestionSimplicitySchema,
+                system: prompt_checkSuggestionSimplicity_system(),
+                user: prompt_checkSuggestionSimplicity_user({
+                    language: suggestion.language || 'text',
+                    existingCode: suggestion.existingCode || '',
+                    improvedCode: suggestion.improvedCode || '',
+                }),
                 runName,
-                attrs: spanAttrs,
-                exec: async (callbacks) => {
-                    return await this.promptRunnerService
-                        .builder()
-                        .setProviders({
-                            main: provider,
-                            fallback: fallbackProvider,
-                        })
-                        .setParser(
-                            ParserType.ZOD,
-                            checkSuggestionSimplicitySchema,
-                        )
-                        .setLLMJsonMode(true)
-                        .setTemperature(0)
-                        .setPayload({
-                            language: suggestion.language || 'text',
-                            existingCode: suggestion.existingCode || '',
-                            improvedCode: suggestion.improvedCode || '',
-                        })
-                        .addPrompt({
-                            prompt: prompt_checkSuggestionSimplicity_system,
-                            role: PromptRole.SYSTEM,
-                        })
-                        .addPrompt({
-                            prompt: prompt_checkSuggestionSimplicity_user,
-                            role: PromptRole.USER,
-                        })
-                        .addCallbacks(callbacks)
-                        .addMetadata({
-                            organizationId:
-                                organizationAndTeamData?.organizationId,
-                            teamId: organizationAndTeamData?.teamId,
-                            pullRequestId: prNumber,
-                            provider,
-                            fallbackProvider,
-                            runName,
-                            suggestionId: suggestion.id,
-                        })
-                        .setRunName(runName)
-                        .execute();
+                organizationId: organizationAndTeamData?.organizationId,
+                attrs: {
+                    prNumber,
+                    teamId: organizationAndTeamData?.teamId,
+                    suggestionId: suggestion.id,
                 },
+                observabilityService: this.observabilityService,
+                byokConfig: undefined,
             });
 
             if (!result) {
