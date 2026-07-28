@@ -1072,6 +1072,55 @@ describe('CreateFileCommentsStage', () => {
             expect(discarded.priorityStatus).toBe('discarded-by-code-diff');
         });
 
+        it('does not double-persist a discarded suggestion — it is removed from the prioritized list (no phantom failed)', async () => {
+            const validSuggestions = [
+                // kept: anchor on the added line.
+                { id: 'added', relevantFile: 'Invoice.php', severity: 'high', relevantLinesStart: 1032, relevantLinesEnd: 1032 },
+                // discarded: single context line, no added line in span.
+                { id: 'context', relevantFile: 'Invoice.php', severity: 'high', relevantLinesStart: 1035, relevantLinesEnd: 1035 },
+            ] as any[];
+
+            wireHappyPathMocks();
+            // Passthrough so we can inspect exactly which suggestions reach
+            // persistence as prioritized (the ones that would get a delivery status).
+            mockSuggestionService.verifyIfSuggestionsWereSent.mockImplementation(
+                (_o: any, _pr: any, prioritized: any) => prioritized,
+            );
+
+            const context = createBaseContext({
+                platformType: PlatformType.GITLAB,
+                validSuggestions,
+                changedFiles: [
+                    { filename: 'Invoice.php', status: 'modified', patch: DOCBLOCK_PATCH } as any,
+                ],
+            });
+
+            await (stage as any).executeStage(context);
+
+            const saveArgs =
+                mockPullRequestService.aggregateAndSaveDataStructure.mock
+                    .calls[0];
+            const prioritized = saveArgs[3];
+            const unused = saveArgs[4];
+
+            // The discarded suggestion must NOT be persisted as prioritized
+            // (that path would stamp it FAILED — the duplicate bug).
+            expect(
+                prioritized.some((s: any) => s.id === 'context'),
+            ).toBe(false);
+            // The kept one stays prioritized.
+            expect(prioritized.some((s: any) => s.id === 'added')).toBe(true);
+
+            // It appears exactly once overall, only as discarded-by-code-diff.
+            const contextInUnused = unused.filter(
+                (s: any) => s.id === 'context',
+            );
+            expect(contextInUnused).toHaveLength(1);
+            expect(contextInUnused[0].priorityStatus).toBe(
+                'discarded-by-code-diff',
+            );
+        });
+
         it('leaves GitHub untouched — a context-line comment is still posted as-is', async () => {
             const validSuggestions = [
                 { id: 'context', relevantFile: 'Invoice.php', severity: 'high', relevantLinesStart: 1035, relevantLinesEnd: 1035 },

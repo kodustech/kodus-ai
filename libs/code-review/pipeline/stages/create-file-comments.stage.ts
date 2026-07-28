@@ -460,6 +460,20 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                                 priorityStatus:
                                     PriorityStatus.DISCARDED_BY_CODE_DIFF,
                             });
+                            // Remove it from the prioritized list too, so it isn't
+                            // persisted a second time as a phantom `failed` (it's
+                            // never posted, so verifyIfSuggestionsWereSent would
+                            // otherwise stamp it FAILED). Safe to splice: this array
+                            // is a fresh copy built in finalizeReviewProcessing; we
+                            // drop the entry, we don't mutate the frozen suggestion.
+                            const prioritizedIndex =
+                                sortedPrioritizedSuggestions.indexOf(suggestion);
+                            if (prioritizedIndex !== -1) {
+                                sortedPrioritizedSuggestions.splice(
+                                    prioritizedIndex,
+                                    1,
+                                );
+                            }
                             continue;
                         }
 
