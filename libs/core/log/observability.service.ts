@@ -422,7 +422,7 @@ export class ObservabilityService implements OnModuleInit {
      * span so its token usage lands in `observability_telemetry` — the Mongo
      * billing dataset keyed by org/team/PR. This is the parity bridge for agents
      * migrated off the legacy flow-engine LLM adapter: the AI SDK's
-     * `experimental_telemetry` feeds Langfuse, while this feeds the internal
+     * `telemetry` feeds Langfuse, while this feeds the internal
      * cost pipeline. A span carrying `gen_ai.usage.total_tokens` is treated as
      * billing-critical (synchronously flushed) by the telemetry engine.
      *

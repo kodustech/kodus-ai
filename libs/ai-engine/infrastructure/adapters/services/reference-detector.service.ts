@@ -9,7 +9,10 @@ import {
 } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
+import {
+    buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
+} from '@libs/core/log/langfuse';
 import {
     prompt_detect_external_references_system,
     prompt_detect_external_references_user,
@@ -169,12 +172,11 @@ export class ReferenceDetectorService {
             model,
             system: systemPrompt,
             prompt: userPrompt,
-            experimental_telemetry: buildLangfuseTelemetry(
-                'detectExternalReferences',
-                {
+            ...toAiSdkTelemetryArgs(
+                buildLangfuseTelemetry('detectExternalReferences', {
                     organizationId: organizationAndTeamData.organizationId,
                     teamId: organizationAndTeamData.teamId,
-                },
+                }),
             ),
         });
 

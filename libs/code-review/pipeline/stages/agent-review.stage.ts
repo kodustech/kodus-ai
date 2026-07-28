@@ -24,6 +24,7 @@ import {
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
 import {
     buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
     type LangfuseTelemetryMetadata,
 } from '@libs/core/log/langfuse';
 
@@ -1530,9 +1531,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const runDedup = (model: any) =>
                 tracedGenerateText({
                     model: model as any,
-                    experimental_telemetry: buildLangfuseTelemetry(
-                        'dedup-suggestions',
-                        telemetryMeta,
+                    ...toAiSdkTelemetryArgs(
+                        buildLangfuseTelemetry(
+                            'dedup-suggestions',
+                            telemetryMeta,
+                        ),
                     ),
                     output: Output.object({
                         schema: jsonSchema(DEDUP_SCHEMA as any),

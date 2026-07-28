@@ -13,7 +13,10 @@ import {
     timeoutSignal,
     tracedGenerateText,
 } from '@libs/llm/llm-call';
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
+import {
+    buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
+} from '@libs/core/log/langfuse';
 
 import { SUPPORTED_LANGUAGES } from '@libs/code-review/domain/contracts/SupportedLanguages';
 import { isKodyAuthoredBody } from '@libs/common/utils/kody-identifiers';
@@ -130,11 +133,13 @@ export class CommentAnalysisService {
                     prompt: user,
                     output: Output.object({ schema: schema as any }),
                     abortSignal: timeoutSignal(LLM_CALL_TIMEOUT_MS),
-                    experimental_telemetry: buildLangfuseTelemetry(runName, {
-                        organizationId:
-                            organizationAndTeamData.organizationId,
-                        teamId: organizationAndTeamData.teamId,
-                    }),
+                    ...toAiSdkTelemetryArgs(
+                        buildLangfuseTelemetry(runName, {
+                            organizationId:
+                                organizationAndTeamData.organizationId,
+                            teamId: organizationAndTeamData.teamId,
+                        }),
+                    ),
                 } as any),
         });
 

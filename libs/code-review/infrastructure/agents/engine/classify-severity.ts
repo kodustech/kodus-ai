@@ -13,7 +13,10 @@ import type { BYOKConfig } from '@kodus/kodus-common/llm';
 import type { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { resolveSecondaryPassModel } from './secondary-pass-model';
 import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
+import {
+    buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
+} from '@libs/core/log/langfuse';
 import {
     DEFAULT_SEVERITY_FLAGS,
     buildSeverityPrompt,
@@ -64,8 +67,8 @@ export async function classifySeverity(
         const result: any = await generateText({
             model: model as any,
             abortSignal: controller.signal,
-            experimental_telemetry: buildLangfuseTelemetry(
-                'severity-classifier',
+            ...toAiSdkTelemetryArgs(
+                buildLangfuseTelemetry('severity-classifier'),
             ),
             prompt: buildSeverityPrompt(suggestions, flags),
         });

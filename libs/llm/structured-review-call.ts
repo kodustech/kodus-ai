@@ -26,7 +26,10 @@ import {
     timeoutSignal,
     LLM_CALL_TIMEOUT_MS,
 } from '@libs/llm/llm-call';
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
+import {
+    buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
+} from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
 import { zodToStrictWireSchema } from '@libs/llm/strict-wire-schema';
 import { ObservabilityService } from '@libs/core/log/observability.service';
@@ -148,9 +151,11 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
                         // pipeline slot for the full agent budget. Also feeds the
                         // BYOK limiter cancellation. Matches peer AI-SDK callers.
                         abortSignal: timeoutSignal(LLM_CALL_TIMEOUT_MS),
-                        experimental_telemetry: buildLangfuseTelemetry(runName, {
-                            organizationId,
-                        }),
+                        ...toAiSdkTelemetryArgs(
+                            buildLangfuseTelemetry(runName, {
+                                organizationId,
+                            }),
+                        ),
                     } as any),
             })
             .then(
