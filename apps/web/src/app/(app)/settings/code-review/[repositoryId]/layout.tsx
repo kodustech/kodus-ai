@@ -24,6 +24,7 @@ import {
     useCodeReviewConfig,
     useDefaultCodeReviewConfig,
     useInitialParameter,
+    useInitialTeamId,
 } from "../../_components/context";
 import { useCodeReviewRouteParams } from "../../_hooks";
 import { normalizePromptFormValues } from "./custom-prompts/_utils/custom-prompts-state";
@@ -32,6 +33,7 @@ export default function Layout(props: React.PropsWithChildren) {
     const { teamId } = useSelectedTeamId();
     const config = useCodeReviewConfig();
     const defaultCodeReviewConfig = useDefaultCodeReviewConfig();
+    const bridgeInitialTeamId = useInitialTeamId();
     const initialLanguage = useInitialParameter(ParametersConfigKey.LANGUAGE_CONFIG);
     const { directoryId } = useCodeReviewRouteParams();
     const parameters = useOptionalParameterQuery<LanguageValue>(
@@ -51,7 +53,7 @@ export default function Layout(props: React.PropsWithChildren) {
         repositoryId,
         directoryId,
     );
-    const language = parameters.data?.configValue ?? initialLanguage?.configValue as LanguageValue ?? LanguageValue.ENGLISH;
+    const language = parameters.data?.configValue ?? (teamId === bridgeInitialTeamId ? (initialLanguage?.configValue as LanguageValue) : undefined) ?? LanguageValue.ENGLISH;
     const initialFormValues = useMemo(
         () =>
             normalizePromptFormValues(
@@ -89,28 +91,6 @@ export default function Layout(props: React.PropsWithChildren) {
         dirtyFields,
     } = form.formState;
 
-    // TEMP DEBUG (save-in-setup): logs why the Save button stays disabled.
-    useEffect(() => {
-        // eslint-disable-next-line no-console
-        console.log("[save-debug] formState", {
-            hydrationKey,
-            canEdit,
-            formDisabled: !canEdit,
-            isDirty: formIsDirty,
-            isValid: formIsValid,
-            isSubmitting: formIsSubmitting,
-            dirtyFieldKeys: Object.keys(dirtyFields ?? {}),
-            saveDisabled: !formIsDirty || !formIsValid,
-        });
-    }, [
-        canEdit,
-        dirtyFields,
-        formIsDirty,
-        formIsValid,
-        formIsSubmitting,
-        hydrationKey,
-    ]);
-
     useEffect(() => {
         if (
             !shouldHydrateCodeReviewForm(
@@ -120,14 +100,6 @@ export default function Layout(props: React.PropsWithChildren) {
         ) {
             return;
         }
-
-        // TEMP DEBUG (save-in-setup): a reset here right after an edit would
-        // explain a dirty flag that never sticks.
-        // eslint-disable-next-line no-console
-        console.log("[save-debug] form.reset()", {
-            from: hydratedStateKeyRef.current,
-            to: hydrationKey,
-        });
 
         form.reset(initialFormValues);
         hydratedStateKeyRef.current = hydrationKey;

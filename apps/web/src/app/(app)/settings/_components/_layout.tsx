@@ -148,7 +148,7 @@ export const SettingsLayout = ({
 
     return (
         <CodeReviewModelDataProvider value={initialModelData}>
-            <InitialParametersProvider value={initialParameters}>
+            <InitialParametersProvider value={{ initialTeamId, parameters: initialParameters }}>
                 <SettingsLayoutShell
                     teamId={effectiveTeamId}
                     configValue={liveShellQuery?.configValue ?? initialConfigValue}
