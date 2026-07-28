@@ -8,136 +8,21 @@ import type { LanguageModel } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createVertex } from '@ai-sdk/google-vertex';
-import { createVertexAnthropic } from '@ai-sdk/google-vertex/anthropic';
-import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import {
-    anthropicCompatibleRootURL,
-    BYOKConfig,
-    BYOKProvider,
-} from '@kodus/kodus-common/llm';
+import { BYOKConfig, BYOKProvider } from '@kodus/kodus-common/llm';
 import { decrypt } from '@libs/common/utils/crypto';
-import { shouldEnableJsonSchema } from '@libs/llm/structured-output-gate';
-// Provider registry (Phase 1). The openai module self-registers on import; its
-// OPENAI / OPENAI_COMPATIBLE cases below now resolve through REGISTRY instead of
-// inline construction. The remaining 7 providers stay on the switch until
-// 01-02/01-03 port them. See libs/llm/providers/.
-import { REGISTRY } from '@libs/llm/providers/registry';
-import '@libs/llm/providers/openai.module';
+import { vertexModelFromSaJson } from '@libs/llm/model-builders';
+// Provider registry (Phase 1): every BYOK provider resolves through REGISTRY.
+// Importing the barrel registers all provider modules via side effect. The
+// self-hosted / trial default-model paths below are NOT BYOK ids and still
+// build inline (they use vertexModelFromSaJson from the shared leaf).
+import { REGISTRY } from '@libs/llm/providers';
 
-/**
- * Build a Vercel AI SDK model from a base64-encoded Google Service Account
- * JSON. Mirrors `packages/kodus-common/src/llm/providerAdapters/vertexAdapter.ts`
- * so self-hosted deployments using the same `API_VERTEX_AI_API_KEY` env var
- * format (base64 SA JSON) work on both the v2 engine and the v5 agent.
- *
- * Routes by model id: `claude-*` models on Vertex speak the Anthropic
- * Messages protocol (Vertex MaaS), not the Gemini protocol, so they need
- * `createVertexAnthropic` from `@ai-sdk/google-vertex/anthropic`. Every
- * other model id (Gemini) uses `createVertex`. Using `createVertex` for a
- * Claude model id builds a Gemini-protocol client and fails at call time.
- *
- * Returns null when the value is not a valid base64-encoded JSON with a
- * `project_id` — the caller should fall back to another provider path.
- */
-/**
- * Parse a Google Service Account from either raw JSON or base64-encoded
- * JSON. Users routinely paste the SA JSON file contents directly; base64
- * of a JSON object always starts with `ey` (from `{"`), while raw JSON
- * starts with `{`, so the leading char disambiguates with no ambiguity.
- * Returns null when neither form yields valid JSON.
- */
-function parseSaCredentials(input: string): { project_id?: string } | null {
-    const trimmed = (input || '').trim();
-    if (!trimmed) return null;
-    const jsonText = trimmed.startsWith('{')
-        ? trimmed
-        : Buffer.from(trimmed, 'base64').toString('utf-8');
-    try {
-        return JSON.parse(jsonText) as { project_id?: string };
-    } catch {
-        return null;
-    }
-}
-
-function vertexModelFromSaJson(
-    saJsonOrBase64: string,
-    modelId: string,
-    locationOverride?: string,
-): LanguageModel | null {
-    try {
-        const credentials = parseSaCredentials(saJsonOrBase64);
-        if (!credentials?.project_id) return null;
-        // Keep this helper pure: the caller is responsible for resolving
-        // the region (BYOK config or env var) and passing it as
-        // locationOverride. Default to the GLOBAL endpoint when omitted —
-        // it serves every current Claude and Gemini model on Vertex and
-        // routes dynamically, so users never have to know per-model region
-        // availability. (Regional endpoints like us-central1 don't serve
-        // Claude at all.)
-        const location = locationOverride?.trim() || 'global';
-        const settings = {
-            project: credentials.project_id,
-            location,
-            googleAuthOptions: { credentials: credentials as any },
-        };
-        if (CLAUDE_MODEL_PATTERN.test(modelId)) {
-            return createVertexAnthropic(settings)(modelId);
-        }
-        return createVertex(settings)(modelId);
-    } catch {
-        return null;
-    }
-}
-
+// Model-name protocol patterns, used by the self-hosted / trial default-model
+// resolution below (the BYOK provider builders moved to the provider modules
+// + libs/llm/model-builders.ts in Phase 1).
 const CLAUDE_MODEL_PATTERN = /^claude[-_]/i;
 const GEMINI_MODEL_PATTERN = /^gemini[-_]/i;
-
-/**
- * Build a Vercel AI SDK model for Amazon Bedrock.
- *
- * Two auth paths, in priority order:
- *   1. Bearer API key (recommended) — single-token auth, released by AWS
- *      in 2025. `@ai-sdk/amazon-bedrock` accepts it via `apiKey` prop and
- *      takes precedence over any SigV4 config.
- *   2. Static IAM user credentials (SigV4) — legacy path, kept for teams
- *      that haven't migrated to API keys or that prefer IAM policies.
- *
- * Returns a LanguageModel that will emit a clear auth error at call time
- * when credentials are missing — we don't pre-validate here because the
- * test-byok endpoint already catches empty fields before save.
- */
-function bedrockModelFromCredentials(
-    config: BYOKConfig['main'] | BYOKConfig['fallback'],
-    modelId: string,
-): LanguageModel {
-    const region = config?.awsRegion?.trim() || 'us-east-1';
-
-    if (config?.awsBearerToken?.trim()) {
-        return createAmazonBedrock({
-            region,
-            apiKey: decrypt(config.awsBearerToken),
-        })(modelId);
-    }
-
-    const accessKeyId = config?.awsAccessKeyId
-        ? decrypt(config.awsAccessKeyId)
-        : '';
-    const secretAccessKey = config?.awsSecretAccessKey
-        ? decrypt(config.awsSecretAccessKey)
-        : '';
-    const sessionToken = config?.awsSessionToken
-        ? decrypt(config.awsSessionToken)
-        : undefined;
-
-    return createAmazonBedrock({
-        region,
-        accessKeyId,
-        secretAccessKey,
-        sessionToken,
-    })(modelId);
-}
 
 /**
  * When the user sets `API_OPENAI_FORCE_BASE_URL` to a non-native endpoint
@@ -345,96 +230,16 @@ export function byokToVercelModel(
         );
     }
 
-    const { provider, model, baseURL } = config;
+    const { provider } = config;
     const apiKey = decrypt(config.apiKey);
 
-    switch (provider) {
-        case BYOKProvider.OPENAI:
-            // Registry-routed (Phase 1 tracer). `config` carries the encrypted
-            // key; the module contract expects a DECRYPTED apiKey, so pass the
-            // already-decrypted `apiKey` over the spread.
-            return REGISTRY.get(provider).build({ ...config, apiKey }, options);
-
-        case BYOKProvider.ANTHROPIC:
-            return createAnthropic({
-                apiKey,
-                ...(baseURL ? { baseURL } : {}),
-            })(model);
-
-        case BYOKProvider.ANTHROPIC_COMPATIBLE:
-            // Anthropic-compatible endpoints (Kimi Code, Z.ai, DeepSeek):
-            // @ai-sdk/anthropic appends /messages to the base, so the base
-            // must carry the /v1 suffix — normalize whatever the user pasted.
-            return createAnthropic({
-                apiKey,
-                baseURL: `${anthropicCompatibleRootURL(baseURL || '')}/v1`,
-            })(model);
-
-        case BYOKProvider.GOOGLE_GEMINI:
-            return createGoogleGenerativeAI({
-                apiKey,
-                ...(baseURL ? { baseURL } : {}),
-            })(model);
-
-        case BYOKProvider.OPEN_ROUTER:
-            return createOpenAICompatible({
-                name: 'open-router',
-                apiKey,
-                baseURL: baseURL || 'https://openrouter.ai/api/v1',
-                supportsStructuredOutputs:
-                    options.structuredOutputs === true &&
-                    shouldEnableJsonSchema(provider, model, baseURL),
-            })(model);
-
-        case BYOKProvider.OPENAI_COMPATIBLE:
-            // Registry-routed (Phase 1 tracer) — the openai module serves this
-            // id too (baseURL-driven + the shared json_schema gate).
-            return REGISTRY.get(provider).build({ ...config, apiKey }, options);
-
-        case BYOKProvider.NOVITA:
-            return createOpenAICompatible({
-                name: 'novita',
-                apiKey,
-                baseURL: baseURL || 'https://api.novita.ai/v3/openai',
-                supportsStructuredOutputs:
-                    options.structuredOutputs === true &&
-                    shouldEnableJsonSchema(provider, model, baseURL),
-            })(model);
-
-        case BYOKProvider.GOOGLE_VERTEX: {
-            // BYOK Vertex keys are stored as base64-encoded Service Account
-            // JSON (matching the format used by the v2 VertexAdapter).
-            // Use `@ai-sdk/google-vertex` with the SA credentials; only fall
-            // back to AI Studio if the value isn't a valid SA JSON (e.g. the
-            // user typed a plain AIzaSy... key into the Vertex provider
-            // slot — degraded but still usable).
-            const vertexModel = vertexModelFromSaJson(
-                apiKey,
-                model,
-                config.vertexLocation,
-            );
-            if (vertexModel) return vertexModel;
-            return createGoogleGenerativeAI({ apiKey })(model);
-        }
-
-        case BYOKProvider.AMAZON_BEDROCK: {
-            return bedrockModelFromCredentials(config, model);
-        }
-
-        default:
-            // Unknown provider — try as OpenAI-compatible. Capability
-            // gate is conservative for unknown providers (always false),
-            // so we never silently send json_schema to an upstream we
-            // can't reason about.
-            return createOpenAICompatible({
-                name: String(provider),
-                apiKey,
-                baseURL: baseURL || '',
-                supportsStructuredOutputs:
-                    options.structuredOutputs === true &&
-                    shouldEnableJsonSchema(provider, model, baseURL),
-            })(model);
-    }
+    // Every BYOK provider resolves through the registry (Phase 1 — the
+    // BYOKProvider switch is gone). `config` carries the ENCRYPTED key; the
+    // module contract expects a DECRYPTED apiKey, so pass the already-decrypted
+    // `apiKey` over the spread. An unknown provider id throws a clear
+    // per-provider error (replacing the old switch's silent openai-compatible
+    // default) — unreachable for the closed BYOKProvider enum, but fail-loud.
+    return REGISTRY.get(provider).build({ ...config, apiKey }, options);
 }
 
 /**

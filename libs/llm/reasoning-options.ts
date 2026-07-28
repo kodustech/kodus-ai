@@ -9,6 +9,8 @@
 import { BYOKProvider } from '@kodus/kodus-common/llm';
 import { createLogger } from '@libs/core/log/logger';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
+import { REGISTRY } from '@libs/llm/providers';
+import type { ProviderBuildConfig } from '@libs/llm/providers/types';
 
 const logger = createLogger('ReasoningOptions');
 
@@ -203,103 +205,15 @@ export function buildReasoningProviderOptions(
 ): Record<string, any> {
     if (!effort || effort === 'none' || !provider) return {};
 
-    switch (provider) {
-        case BYOKProvider.ANTHROPIC: {
-            // Models that support adaptive thinking (type: "adaptive" + effort):
-            //   - Opus 4.6+, Opus 4.7+, Sonnet 4.6+, Sonnet 4.7+, mythos
-            // Models that use enabled thinking (type: "enabled" + budget_tokens):
-            //   - Sonnet 4.5, Sonnet 4.0, Opus 4.0, Sonnet 3.7
-            const isAdaptiveCapable =
-                modelName &&
-                (/claude-(opus|sonnet)-4-[6-9]/i.test(modelName) ||
-                    /claude-(opus|sonnet)-4-\d{2,}/i.test(modelName) ||
-                    modelName.includes('mythos'));
-
-            if (isAdaptiveCapable) {
-                return {
-                    anthropic: {
-                        thinking: { type: 'adaptive' },
-                        effort,
-                    },
-                };
-            }
-
-            return {
-                anthropic: {
-                    thinking: {
-                        type: 'enabled',
-                        budgetTokens: EFFORT_TO_BUDGET[effort],
-                    },
-                },
-            };
-        }
-
-        case BYOKProvider.GOOGLE_GEMINI:
-        case BYOKProvider.GOOGLE_VERTEX: {
-            // Gemini 3+: thinkingLevel (minimal/low/medium/high)
-            // Gemini 2.5: thinkingBudget (number)
-            // Cannot disable thinking on Gemini 3.1 Pro.
-            const isGemini3 =
-                modelName &&
-                (modelName.includes('gemini-3') ||
-                    modelName.includes('gemini3'));
-
-            if (isGemini3) {
-                return {
-                    google: {
-                        thinkingConfig: { thinkingLevel: effort },
-                    },
-                };
-            }
-
-            return {
-                google: {
-                    thinkingConfig: {
-                        thinkingBudget: EFFORT_TO_BUDGET[effort],
-                    },
-                },
-            };
-        }
-
-        case BYOKProvider.OPENAI:
-            // o-series and GPT-5: reasoningEffort (low/medium/high)
-            return {
-                openai: { reasoningEffort: effort },
-            };
-
-        case BYOKProvider.OPEN_ROUTER:
-            // OpenRouter normalizes across all providers
-            return {
-                openrouter: { reasoning: { effort } },
-            };
-
-        case BYOKProvider.OPENAI_COMPATIBLE: {
-            // Kimi K2.5: thinking ON by default, only need to send disable
-            // GLM-5/5.1: thinking.type = enabled/disabled
-            // For compatible providers that support thinking, send the
-            // standard OpenAI-compatible thinking param
-            return {
-                openaiCompatible: {
-                    thinking: { type: 'enabled' },
-                },
-            };
-        }
-
-        case BYOKProvider.ANTHROPIC_COMPATIBLE:
-            // Anthropic-protocol endpoints from other vendors (Kimi Code,
-            // Z.ai, DeepSeek). They speak the classic thinking shape
-            // (enabled + budget_tokens); none of them implement Anthropic's
-            // newer adaptive thinking, so always use the budget form.
-            return {
-                anthropic: {
-                    thinking: {
-                        type: 'enabled',
-                        budgetTokens: EFFORT_TO_BUDGET[effort],
-                    },
-                },
-            };
-
-        default:
-            return {};
-    }
+    // Delegate the effort→native mapping to the provider module's reasoning()
+    // (Phase 1 — this switch is gone; the modules are the single source). An
+    // unknown or reasoning-less provider (novita, bedrock) yields {}.
+    const id = String(provider);
+    if (!REGISTRY.has(id)) return {};
+    const providerModule = REGISTRY.get(id);
+    if (!providerModule.reasoning) return {};
+    return providerModule.reasoning(
+        { provider: id, model: modelName ?? '', apiKey: '' } as ProviderBuildConfig,
+        effort,
+    );
 }
