@@ -81,6 +81,29 @@ export class GitHubProvider extends BaseProvider {
         };
     }
 
+    // Headers for writes that establish AUTHORSHIP of a product-visible
+    // event (creating a PR, posting a trigger comment). When the harness
+    // runs on a GitHub App installation token (cloud cells, for quota), the
+    // author of those events becomes the App's `[bot]` account — and the
+    // product correctly skips reviews for bot authors ("User is ignored,
+    // skipping automation"), which silently zeroed the whole cloud matrix
+    // since the App secrets landed. Route authorship writes through the
+    // durable PAT (a human-typed account) and keep every read/poll on the
+    // App token's own quota. On PAT-only runs this is identical to
+    // headers().
+    private authorHeaders(): Record<string, string> {
+        const pat = process.env.GH_TEST_TOKEN;
+        const token =
+            this.token.startsWith('ghs_') && pat && !pat.startsWith('ghs_')
+                ? pat
+                : this.token;
+        return {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+        };
+    }
+
     private cloneUrl(): string {
         return `https://x-access-token:${this.token}@github.com/${this.repoFullName}.git`;
     }
@@ -170,7 +193,7 @@ export class GitHubProvider extends BaseProvider {
                 `${this.apiBase}/repos/${this.repoFullName}/pulls`,
                 {
                     method: 'POST',
-                    headers: this.headers(),
+                    headers: this.authorHeaders(),
                     body: {
                         title: args.title,
                         body: args.body,
@@ -271,7 +294,7 @@ export class GitHubProvider extends BaseProvider {
             `${this.apiBase}/repos/${this.repoFullName}/pulls`,
             {
                 method: 'POST',
-                headers: this.headers(),
+                headers: this.authorHeaders(),
                 body: {
                     title: args.title,
                     body: args.body,
@@ -371,7 +394,7 @@ export class GitHubProvider extends BaseProvider {
             `${this.apiBase}/repos/${this.repoFullName}/issues/${target}/comments`,
             {
                 method: 'POST',
-                headers: this.headers(),
+                headers: this.authorHeaders(),
                 body: { body: '@kody review' },
             },
         );
@@ -676,7 +699,7 @@ export class GitHubProvider extends BaseProvider {
             `${this.apiBase}/repos/${this.repoFullName}/issues/${prNumber}/comments`,
             {
                 method: 'POST',
-                headers: this.headers(),
+                headers: this.authorHeaders(),
                 body: { body },
             },
         );
