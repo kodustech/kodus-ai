@@ -15,10 +15,10 @@ import type { LanguageModel } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { z } from 'zod';
-import type { ModelCapabilities } from '@kodus/kodus-common/llm';
 import { shouldEnableJsonSchema } from '@libs/llm/structured-output-gate';
 import { registerProvider } from './registry';
 import type {
+    ModelCapabilities,
     ModelResult,
     NormalizedUsage,
     ProviderBuildConfig,
@@ -58,9 +58,14 @@ export const openaiModule: ProviderModule = {
             supportsTemperature: !reasoner,
             supportsReasoning: !!reasoningConfig,
             reasoningConfig,
-            // NOTE(01-04): maxInputTokens / structuredOutput / toolCalling /
-            // usageGranularity / streaming / promptCaching are added to
-            // ModelCapabilities and filled here in plan 01-04.
+            // Provider-level execution capabilities (01-04; per-model refinement
+            // is a follow-up — note capabilities(model) can't see openai vs
+            // openai_compatible, so these describe native OpenAI).
+            structuredOutput: 'json_schema',
+            toolCalling: 'native',
+            usageGranularity: reasoner ? 'reasoning_split' : 'output_only',
+            streaming: true,
+            promptCaching: true,
         };
     },
 

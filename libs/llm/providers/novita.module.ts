@@ -8,10 +8,10 @@
 import type { LanguageModel } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { z } from 'zod';
-import type { ModelCapabilities } from '@kodus/kodus-common/llm';
 import { shouldEnableJsonSchema } from '@libs/llm/structured-output-gate';
 import { registerProvider } from './registry';
 import type {
+    ModelCapabilities,
     ModelResult,
     NormalizedUsage,
     ProviderBuildConfig,
@@ -27,7 +27,15 @@ export const novitaModule: ProviderModule = {
 
     capabilities(_model: string): ModelCapabilities {
         // Reasoning is too upstream-dependent to advertise by default.
-        return { supportsTemperature: true, supportsReasoning: false };
+        return {
+            supportsTemperature: true,
+            supportsReasoning: false,
+            structuredOutput: 'json_object',
+            toolCalling: 'native',
+            usageGranularity: 'output_only',
+            streaming: true,
+            promptCaching: false,
+        };
     },
 
     build(cfg: ProviderBuildConfig, opts?: ProviderBuildOptions): LanguageModel {

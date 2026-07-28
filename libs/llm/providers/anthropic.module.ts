@@ -7,10 +7,10 @@
 import type { LanguageModel } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
-import type { ModelCapabilities } from '@kodus/kodus-common/llm';
 import { anthropicCompatibleRootURL } from '@libs/llm/model-builders';
 import { registerProvider } from './registry';
 import type {
+    ModelCapabilities,
     ModelResult,
     NormalizedUsage,
     ProviderBuildConfig,
@@ -54,6 +54,13 @@ export const anthropicModule: ProviderModule = {
             supportsTemperature: true,
             supportsReasoning: !!reasoningConfig,
             reasoningConfig,
+            // Anthropic does structured output via tool use, not a native
+            // response_format json_schema → 'none' at this tier.
+            structuredOutput: 'none',
+            toolCalling: 'native',
+            usageGranularity: 'reasoning_split',
+            streaming: true,
+            promptCaching: true,
         };
     },
 

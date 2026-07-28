@@ -8,10 +8,10 @@
 import type { LanguageModel } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
-import type { ModelCapabilities } from '@kodus/kodus-common/llm';
 import { vertexModelFromSaJson } from '@libs/llm/model-builders';
 import { registerProvider } from './registry';
 import type {
+    ModelCapabilities,
     ModelResult,
     NormalizedUsage,
     ProviderBuildConfig,
@@ -43,6 +43,11 @@ export const vertexModule: ProviderModule = {
             supportsTemperature: true,
             supportsReasoning: !!reasoningConfig,
             reasoningConfig,
+            structuredOutput: 'json_schema',
+            toolCalling: 'native',
+            usageGranularity: 'reasoning_split',
+            streaming: true,
+            promptCaching: true,
         };
     },
 

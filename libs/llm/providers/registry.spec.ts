@@ -81,6 +81,16 @@ export function runStaticConformance(
             );
             expect(caps.supportsReasoning).toBe(true);
         }
+        // Extended execution capabilities (01-04) — every module populates them.
+        expect(['json_schema', 'json_object', 'none']).toContain(
+            caps.structuredOutput,
+        );
+        expect(['native', 'none']).toContain(caps.toolCalling);
+        expect(['reasoning_split', 'output_only']).toContain(
+            caps.usageGranularity,
+        );
+        expect(typeof caps.streaming).toBe('boolean');
+        expect(typeof caps.promptCaching).toBe('boolean');
     });
 
     it(`${module.id}: reasoning() maps every effort tier; 'none' → off`, () => {

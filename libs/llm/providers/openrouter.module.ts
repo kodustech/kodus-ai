@@ -8,10 +8,10 @@
 import type { LanguageModel } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { z } from 'zod';
-import type { ModelCapabilities } from '@kodus/kodus-common/llm';
 import { shouldEnableJsonSchema } from '@libs/llm/structured-output-gate';
 import { registerProvider } from './registry';
 import type {
+    ModelCapabilities,
     ModelResult,
     NormalizedUsage,
     ProviderBuildConfig,
@@ -40,6 +40,13 @@ export const openRouterModule: ProviderModule = {
             supportsTemperature: true,
             supportsReasoning: true,
             reasoningConfig: { type: 'level', options: ['low', 'medium', 'high'] },
+            // Upstream-dependent; strict json_schema only for allowlisted models
+            // (see structured-output-gate), so 'json_object' as the safe default.
+            structuredOutput: 'json_object',
+            toolCalling: 'native',
+            usageGranularity: 'output_only',
+            streaming: true,
+            promptCaching: false,
         };
     },
 

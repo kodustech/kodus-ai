@@ -7,10 +7,10 @@
  */
 import type { LanguageModel } from 'ai';
 import { z } from 'zod';
-import type { ModelCapabilities } from '@kodus/kodus-common/llm';
 import { bedrockModelFromCredentials } from '@libs/llm/model-builders';
 import { registerProvider } from './registry';
 import type {
+    ModelCapabilities,
     ModelResult,
     NormalizedUsage,
     ProviderBuildConfig,
@@ -32,7 +32,15 @@ export const bedrockModule: ProviderModule = {
     capabilities(_model: string): ModelCapabilities {
         // Bedrock hosts many families; reasoning support is model-specific and
         // not advertised generically at this tier. Refined in 01-04.
-        return { supportsTemperature: true, supportsReasoning: false };
+        return {
+            supportsTemperature: true,
+            supportsReasoning: false,
+            structuredOutput: 'none',
+            toolCalling: 'native',
+            usageGranularity: 'output_only',
+            streaming: true,
+            promptCaching: false,
+        };
     },
 
     build(cfg: ProviderBuildConfig): LanguageModel {

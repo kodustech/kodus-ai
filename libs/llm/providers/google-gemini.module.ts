@@ -6,9 +6,9 @@
 import type { LanguageModel } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
-import type { ModelCapabilities } from '@kodus/kodus-common/llm';
 import { registerProvider } from './registry';
 import type {
+    ModelCapabilities,
     ModelResult,
     NormalizedUsage,
     ProviderBuildConfig,
@@ -42,7 +42,11 @@ export const googleGeminiModule: ProviderModule = {
             supportsTemperature: true,
             supportsReasoning: !!reasoningConfig,
             reasoningConfig,
-            // NOTE(01-04): extended capability fields folded here.
+            structuredOutput: 'json_schema', // Gemini responseSchema
+            toolCalling: 'native',
+            usageGranularity: 'reasoning_split',
+            streaming: true,
+            promptCaching: true,
         };
     },
 

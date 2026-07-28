@@ -14,7 +14,32 @@ import type { LanguageModel } from 'ai';
 import type { z } from 'zod';
 // Type-only imports (erased at runtime — no runtime dependency on kodus-common,
 // per REQ-NOLC-01). 01-05 relocates these type homes into libs/llm.
-import type { BYOKConfig, ModelCapabilities } from '@kodus/kodus-common/llm';
+import type {
+    BYOKConfig,
+    ModelCapabilities as BaseModelCapabilities,
+} from '@kodus/kodus-common/llm';
+
+/**
+ * Provider capability descriptor. Extends kodus-common's reasoning-only
+ * `ModelCapabilities` with execution fields (Phase 1, plan 01-04). Defined here
+ * in libs/llm — NOT in kodus-common — so the extension needs no package rebuild
+ * and has no runtime kodus-common dependency; 01-05 relocates the base too.
+ * All new fields are optional so existing base callers are unaffected.
+ */
+export interface ModelCapabilities extends BaseModelCapabilities {
+    /** Max input/context window in tokens, when known. */
+    maxInputTokens?: number;
+    /** Native structured-output mode the provider honors. */
+    structuredOutput?: 'json_schema' | 'json_object' | 'none';
+    /** Native tool/function calling support. */
+    toolCalling?: 'native' | 'none';
+    /** Whether usage reports reasoning tokens separately from output. */
+    usageGranularity?: 'reasoning_split' | 'output_only';
+    /** Whether the provider supports streaming responses. */
+    streaming?: boolean;
+    /** Whether the provider supports prompt caching. */
+    promptCaching?: boolean;
+}
 
 /**
  * The build config for one model = a BYOK `main`/`fallback` entry. `apiKey` is
