@@ -1359,6 +1359,13 @@ export class GithubService
         });
     }
 
+    // `User.suspendedAt` only exists on GitHub Enterprise schemas — on
+    // github.com every batch fails with "Field 'suspendedAt' doesn't exist"
+    // and we were re-issuing (and error-logging) the doomed query on every
+    // member listing. Remember the schema verdict per process and skip
+    // straight to the all-active fallback afterwards.
+    private suspendedAtUnsupported = false;
+
     private async getSuspendedStatusBatch(
         octokit: Octokit,
         logins: string[],
@@ -1367,6 +1374,12 @@ export class GithubService
         if (logins.length === 0) return new Map();
 
         const statusMap = new Map<string, boolean>();
+
+        if (this.suspendedAtUnsupported) {
+            logins.forEach((login) => statusMap.set(login, true));
+            return statusMap;
+        }
+
         let aliasCounter = 0;
 
         for (let i = 0; i < logins.length; i += batchSize) {
@@ -1394,6 +1407,18 @@ export class GithubService
                     statusMap.set(login, userData?.suspendedAt === null);
                 });
             } catch (error) {
+                const message =
+                    error instanceof Error ? error.message : String(error);
+                if (/'suspendedAt' doesn't exist/.test(message)) {
+                    this.suspendedAtUnsupported = true;
+                    this.logger.warn({
+                        message:
+                            "GraphQL schema has no User.suspendedAt (github.com) — treating all members as active and skipping future suspended-status batches",
+                        context: GithubService.name,
+                    });
+                    logins.forEach((login) => statusMap.set(login, true));
+                    return statusMap;
+                }
                 this.logger.error({
                     message: 'GraphQL batch query failed for suspended status',
                     context: GithubService.name,
