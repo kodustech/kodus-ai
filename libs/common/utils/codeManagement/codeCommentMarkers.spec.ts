@@ -206,9 +206,9 @@ describe('custom bot username support', () => {
             );
         });
 
-        it('does not match @kody when custom bot username is set', () => {
+        it('preserves @kody as fallback when custom bot username is set', () => {
             expect(isHeavyReviewCommand('@kody review --heavy', 'mybot')).toBe(
-                false,
+                true,
             );
         });
     });

@@ -160,7 +160,10 @@ export const isHeavyReviewCommand = (
     botUsername?: string | null,
 ): boolean => {
     if (!text) return false;
-    return buildHeavyReviewCommandPattern(botUsername).test(text);
+    if (KODY_HEAVY_REVIEW_COMMAND_PATTERN.test(text)) return true;
+    if (botUsername && buildHeavyReviewCommandPattern(botUsername).test(text))
+        return true;
+    return false;
 };
 
 /**
