@@ -1362,9 +1362,18 @@ export class GithubService
     // `User.suspendedAt` only exists on GitHub Enterprise schemas — on
     // github.com every batch fails with "Field 'suspendedAt' doesn't exist"
     // and we were re-issuing (and error-logging) the doomed query on every
-    // member listing. Remember the schema verdict per process and skip
-    // straight to the all-active fallback afterwards.
-    private suspendedAtUnsupported = false;
+    // member listing. Remember the schema verdict PER API BASE URL: the
+    // schema is a property of the GitHub instance, and a process-wide flag
+    // would let a github.com org disable the (real) suspension check for a
+    // GHE org served by the same service instance.
+    private suspendedAtUnsupportedByBaseUrl = new Map<string, boolean>();
+
+    private graphqlBaseUrlOf(octokit: Octokit): string {
+        return (
+            (octokit as any)?.request?.endpoint?.DEFAULTS?.baseUrl ??
+            'https://api.github.com'
+        );
+    }
 
     private async getSuspendedStatusBatch(
         octokit: Octokit,
@@ -1375,7 +1384,8 @@ export class GithubService
 
         const statusMap = new Map<string, boolean>();
 
-        if (this.suspendedAtUnsupported) {
+        const baseUrl = this.graphqlBaseUrlOf(octokit);
+        if (this.suspendedAtUnsupportedByBaseUrl.get(baseUrl)) {
             logins.forEach((login) => statusMap.set(login, true));
             return statusMap;
         }
@@ -1410,11 +1420,12 @@ export class GithubService
                 const message =
                     error instanceof Error ? error.message : String(error);
                 if (/'suspendedAt' doesn't exist/.test(message)) {
-                    this.suspendedAtUnsupported = true;
+                    this.suspendedAtUnsupportedByBaseUrl.set(baseUrl, true);
                     this.logger.warn({
                         message:
-                            "GraphQL schema has no User.suspendedAt (github.com) — treating all members as active and skipping future suspended-status batches",
+                            "GraphQL schema has no User.suspendedAt (github.com) — treating all members as active and skipping future suspended-status batches for this API base URL",
                         context: GithubService.name,
+                        metadata: { baseUrl },
                     });
                     logins.forEach((login) => statusMap.set(login, true));
                     return statusMap;
