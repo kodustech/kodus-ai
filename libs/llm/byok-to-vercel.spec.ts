@@ -25,13 +25,33 @@ jest.mock('@ai-sdk/google-vertex/anthropic', () => ({
 }));
 // decrypt is identity in tests: the apiKey we pass IS the base64 SA JSON.
 jest.mock('@libs/common/utils/crypto', () => ({ decrypt: (v: string) => v }));
+// Tag the OpenAI SDK factories so we can assert the registry-routed openai /
+// openai_compatible cases reproduce the old inline construction (Phase 1 tracer).
+jest.mock('@ai-sdk/openai', () => ({
+    createOpenAI: jest.fn((settings: unknown) =>
+        jest.fn((modelId: string) => ({ sdk: 'openai', modelId, settings })),
+    ),
+}));
+jest.mock('@ai-sdk/openai-compatible', () => ({
+    createOpenAICompatible: jest.fn((settings: unknown) =>
+        jest.fn((modelId: string) => ({
+            sdk: 'openai-compatible',
+            modelId,
+            settings,
+        })),
+    ),
+}));
 
 import { createVertex } from '@ai-sdk/google-vertex';
 import { createVertexAnthropic } from '@ai-sdk/google-vertex/anthropic';
+import { createOpenAI } from '@ai-sdk/openai';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { byokToVercelModel } from './byok-to-vercel';
 
 const createVertexMock = createVertex as unknown as jest.Mock;
 const createVertexAnthropicMock = createVertexAnthropic as unknown as jest.Mock;
+const createOpenAIMock = createOpenAI as unknown as jest.Mock;
+const createOpenAICompatibleMock = createOpenAICompatible as unknown as jest.Mock;
 
 const SA_JSON_B64 = Buffer.from(
     JSON.stringify({
@@ -110,6 +130,79 @@ describe('byokToVercelModel — Google Vertex protocol routing', () => {
                 project: 'my-proj',
                 location: 'global',
             }),
+        );
+    });
+});
+
+// Phase 1 tracer: OPENAI + OPENAI_COMPATIBLE now resolve through the provider
+// REGISTRY (libs/llm/providers/openai.module). These assert the registry-routed
+// build reproduces the OLD inline construction exactly (same factory, same args,
+// same json_schema gate) — the no-regression guarantee for the ported provider.
+describe('byokToVercelModel — OpenAI registry routing (Phase 1 tracer)', () => {
+    beforeEach(() => {
+        createOpenAIMock.mockClear();
+        createOpenAICompatibleMock.mockClear();
+    });
+
+    it('routes provider "openai" through createOpenAI with the decrypted key and no baseURL', () => {
+        const result: any = byokToVercelModel({
+            main: {
+                provider: BYOKProvider.OPENAI,
+                apiKey: 'sk-plain',
+                model: 'gpt-4o',
+            },
+        } as BYOKConfig);
+
+        expect(createOpenAIMock).toHaveBeenCalledTimes(1);
+        expect(createOpenAICompatibleMock).not.toHaveBeenCalled();
+        expect(result.sdk).toBe('openai');
+        expect(result.modelId).toBe('gpt-4o');
+        expect(createOpenAIMock).toHaveBeenCalledWith(
+            expect.objectContaining({ apiKey: 'sk-plain' }),
+        );
+        // No baseURL key when the config omits it (native SDK default).
+        expect(createOpenAIMock.mock.calls[0][0]).not.toHaveProperty('baseURL');
+    });
+
+    it('routes "openai_compatible" through createOpenAICompatible; the :8000 gate enables structured outputs when opted in', () => {
+        const result: any = byokToVercelModel(
+            {
+                main: {
+                    provider: BYOKProvider.OPENAI_COMPATIBLE,
+                    apiKey: 'sk-compat',
+                    model: 'kimi-k2.7-code',
+                    baseURL: 'https://host:8000/v1',
+                },
+            } as BYOKConfig,
+            'main',
+            { structuredOutputs: true },
+        );
+
+        expect(createOpenAICompatibleMock).toHaveBeenCalledTimes(1);
+        expect(result.sdk).toBe('openai-compatible');
+        expect(result.modelId).toBe('kimi-k2.7-code');
+        expect(createOpenAICompatibleMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                name: 'openai-compatible',
+                apiKey: 'sk-compat',
+                baseURL: 'https://host:8000/v1',
+                supportsStructuredOutputs: true,
+            }),
+        );
+    });
+
+    it('openai_compatible: structured outputs stay OFF without the per-call opt-in, even on a :8000 base', () => {
+        byokToVercelModel({
+            main: {
+                provider: BYOKProvider.OPENAI_COMPATIBLE,
+                apiKey: 'sk-compat',
+                model: 'kimi-k2.7-code',
+                baseURL: 'https://host:8000/v1',
+            },
+        } as BYOKConfig);
+
+        expect(createOpenAICompatibleMock).toHaveBeenCalledWith(
+            expect.objectContaining({ supportsStructuredOutputs: false }),
         );
     });
 });

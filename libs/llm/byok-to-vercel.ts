@@ -18,6 +18,13 @@ import {
     BYOKProvider,
 } from '@kodus/kodus-common/llm';
 import { decrypt } from '@libs/common/utils/crypto';
+import { shouldEnableJsonSchema } from '@libs/llm/structured-output-gate';
+// Provider registry (Phase 1). The openai module self-registers on import; its
+// OPENAI / OPENAI_COMPATIBLE cases below now resolve through REGISTRY instead of
+// inline construction. The remaining 7 providers stay on the switch until
+// 01-02/01-03 port them. See libs/llm/providers/.
+import { REGISTRY } from '@libs/llm/providers/registry';
+import '@libs/llm/providers/openai.module';
 
 /**
  * Build a Vercel AI SDK model from a base64-encoded Google Service Account
@@ -196,56 +203,6 @@ export type ByokModelOptions = {
     structuredOutputs?: boolean;
 };
 
-const OPENROUTER_JSON_SCHEMA_PREFIXES = [
-    'openai/',
-    'anthropic/',
-    'google/',
-    'moonshotai/',
-];
-
-/**
- * Conservative capability gate for `supportsStructuredOutputs: true` on
- * `@ai-sdk/openai-compatible` providers. Returns true only when we have
- * strong evidence the upstream honors strict `response_format: json_schema`.
- * Anything else returns false so the SDK falls back to `json_object` and
- * the upstream sees the same request shape it always saw.
- *
- * Self-hosted env mode (`API_LLM_PROVIDER_MODEL`) is handled by its own
- * branch in `byokToVercelModel`/`getInternalModel` — it's an explicit
- * customer-controlled deployment, so we trust the caller's opt-in there.
- */
-function shouldEnableJsonSchema(
-    provider: BYOKProvider,
-    model: string,
-    baseURL?: string,
-): boolean {
-    if (provider === BYOKProvider.OPEN_ROUTER) {
-        return OPENROUTER_JSON_SCHEMA_PREFIXES.some((p) =>
-            model.toLowerCase().startsWith(p),
-        );
-    }
-    if (provider === BYOKProvider.OPENAI_COMPATIBLE) {
-        if (!baseURL) return false;
-        // vLLM defaults to port 8000 and the issue's target case.
-        if (/:8000(\/|$)/.test(baseURL)) return true;
-        // Opt-in comma-separated allowlist of substrings, e.g.
-        // "vllm.internal,my-llm-proxy.example.com". Set by ops when
-        // running behind a non-vLLM but schema-capable proxy.
-        const allowList = process.env.API_TRUST_JSON_SCHEMA_BASE_URLS;
-        if (allowList) {
-            const needles = allowList
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean);
-            if (needles.some((needle) => baseURL.includes(needle))) return true;
-        }
-        return false;
-    }
-    // NOVITA varies wildly by upstream — too risky to enable by default.
-    // Unknown / fallback openai-compatible: same.
-    return false;
-}
-
 export function byokToVercelModel(
     byokConfig?: BYOKConfig,
     role: 'main' | 'fallback' = 'main',
@@ -393,10 +350,10 @@ export function byokToVercelModel(
 
     switch (provider) {
         case BYOKProvider.OPENAI:
-            return createOpenAI({
-                apiKey,
-                ...(baseURL ? { baseURL } : {}),
-            })(model);
+            // Registry-routed (Phase 1 tracer). `config` carries the encrypted
+            // key; the module contract expects a DECRYPTED apiKey, so pass the
+            // already-decrypted `apiKey` over the spread.
+            return REGISTRY.get(provider).build({ ...config, apiKey }, options);
 
         case BYOKProvider.ANTHROPIC:
             return createAnthropic({
@@ -430,14 +387,9 @@ export function byokToVercelModel(
             })(model);
 
         case BYOKProvider.OPENAI_COMPATIBLE:
-            return createOpenAICompatible({
-                name: 'openai-compatible',
-                apiKey,
-                baseURL: baseURL || '',
-                supportsStructuredOutputs:
-                    options.structuredOutputs === true &&
-                    shouldEnableJsonSchema(provider, model, baseURL),
-            })(model);
+            // Registry-routed (Phase 1 tracer) — the openai module serves this
+            // id too (baseURL-driven + the shared json_schema gate).
+            return REGISTRY.get(provider).build({ ...config, apiKey }, options);
 
         case BYOKProvider.NOVITA:
             return createOpenAICompatible({
