@@ -12,6 +12,10 @@ import {
     ITeamService,
     TEAM_SERVICE_TOKEN,
 } from '@libs/organization/domain/team/contracts/team.service.contract';
+import {
+    IOrganizationService,
+    ORGANIZATION_SERVICE_TOKEN,
+} from '@libs/organization/domain/organization/contracts/organization.service.contract';
 
 import { CreatePRCodeReviewUseCase } from './create-prs-code-review.use-case';
 import { SyncSelectedRepositoriesKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/sync-selected-repositories.use-case';
@@ -34,6 +38,8 @@ export class FinishOnboardingUseCase {
         private readonly parametersService: IParametersService,
         @Inject(TEAM_SERVICE_TOKEN)
         private readonly teamService: ITeamService,
+        @Inject(ORGANIZATION_SERVICE_TOKEN)
+        private readonly organizationService: IOrganizationService,
         private readonly reviewPRUseCase: CreatePRCodeReviewUseCase,
         @Inject(REQUEST)
         private readonly request: Request & {
@@ -258,10 +264,20 @@ export class FinishOnboardingUseCase {
                     orgMemberCount = Array.isArray(members)
                         ? members.length
                         : undefined;
+
+                    if (orgMemberCount !== undefined) {
+                        await this.organizationService.update(
+                            { uuid: organizationId },
+                            {
+                                codeHostMemberCount: orgMemberCount,
+                                codeHostMemberCountUpdatedAt: new Date(),
+                            },
+                        );
+                    }
                 } catch (error) {
                     this.logger.warn({
                         message:
-                            'Failed to resolve org member count for onboarding telemetry',
+                            'Failed to resolve or persist org member count during onboarding',
                         context: FinishOnboardingUseCase.name,
                         metadata: {
                             teamId,
