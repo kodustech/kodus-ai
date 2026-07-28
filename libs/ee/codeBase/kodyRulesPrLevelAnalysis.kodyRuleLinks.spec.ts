@@ -26,7 +26,6 @@ describe('KodyRulesPrLevelAnalysisService — Kody Rule link generation', () => 
             {} as any, // promptRunnerService
             {} as any, // observabilityService
             {} as any, // externalReferenceLoaderService
-            {} as any, // fileContextAugmentationService
         );
     });
 

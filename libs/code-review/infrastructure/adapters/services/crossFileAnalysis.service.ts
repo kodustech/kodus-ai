@@ -1,11 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import {
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-    TokenUsage,
-} from '@kodus/kodus-common/llm';
+import { LLMModelProvider, type TokenUsage } from '@kodus/kodus-common/llm';
 import { Injectable } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -24,7 +18,7 @@ import {
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { TokenChunkingService } from '@libs/core/infrastructure/services/tokenChunking/tokenChunking.service';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
+import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 
 //#region Interfaces
@@ -67,7 +61,6 @@ export class CrossFileAnalysisService {
 
     constructor(
         private readonly tokenChunkingService: TokenChunkingService,
-        private readonly promptRunnerService: PromptRunnerService,
         private readonly observabilityService: ObservabilityService,
     ) {}
 
@@ -475,77 +468,25 @@ export class CrossFileAnalysisService {
                 context?.externalPromptContext?.generation?.main?.error,
         };
 
-        const fallbackProvider = LLMModelProvider.GEMINI_2_5_FLASH;
         const runName = 'crossFileAnalyzeCodeWithAI';
-
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            provider,
-            fallbackProvider,
-            context?.codeReviewConfig?.byokConfig,
-        );
-
-        const spanName = `${CrossFileAnalysisService.name}::${runName}`;
-        const spanAttrs = {
-            organizationId: organizationAndTeamData?.organizationId,
-            prNumber,
-            analysisType,
-            chunkIndex,
-            type: promptRunner.executeMode,
-        };
+        const byokConfig = context?.codeReviewConfig?.byokConfig;
 
         try {
-            const analysisBuilder = promptRunner
-                .builder()
-                .setParser(ParserType.ZOD, CrossFileAnalysisSchema)
-                .setLLMJsonMode(true)
-                .setPayload(payload)
-                .addPrompt({
-                    prompt: prompt_codereview_cross_file_analysis,
-                    role: PromptRole.SYSTEM,
-                })
-                .addPrompt({
-                    prompt: 'Please analyze the provided information and return the response in the specified format.',
-                    role: PromptRole.USER,
-                })
-                .setTemperature(0)
-                .addTags([
-                    ...this.buildTags(provider, 'primary', analysisType),
-                    ...this.buildTags(
-                        fallbackProvider,
-                        'fallback',
-                        analysisType,
-                    ),
-                ])
-                .setRunName(runName)
-                .setMaxReasoningTokens(5000)
-                .addMetadata({
-                    organizationAndTeamData,
-                    prNumber,
-                    provider:
-                        context?.codeReviewConfig?.byokConfig?.main?.provider ||
-                        provider,
-                    model: context?.codeReviewConfig?.byokConfig?.main?.model,
-                    fallbackProvider:
-                        context?.codeReviewConfig?.byokConfig?.fallback
-                            ?.provider || fallbackProvider,
-                    fallbackModel:
-                        context?.codeReviewConfig?.byokConfig?.fallback?.model,
-                    analysisType,
-                    runName,
-                });
-
-            const byokConfigRef = context?.codeReviewConfig?.byokConfig;
-
-            const { result: analysis } =
-                await this.observabilityService.runLLMInSpan({
-                    spanName,
-                    runName,
-                    attrs: spanAttrs,
-                    byokConfig: byokConfigRef,
-                    exec: (callbacks) =>
-                        analysisBuilder.addCallbacks(callbacks).execute(),
-                });
+            // Single structured call on the AI SDK path (BYOK-first). The org's
+            // BYOK model runs main; the fallback / latency policy lives inside
+            // runStructuredReviewCall. One span per call (Q4) — no outer
+            // runLLMInSpan wrapper — and no LangChain parser-repair reach
+            // (D-03 / REQ-SEC-01).
+            const analysis = await runStructuredReviewCall({
+                byokConfig,
+                schema: CrossFileAnalysisSchema,
+                system: prompt_codereview_cross_file_analysis(payload),
+                user: 'Please analyze the provided information and return the response in the specified format.',
+                runName: `${CrossFileAnalysisService.name}::${runName}`,
+                organizationId: organizationAndTeamData?.organizationId,
+                attrs: { prNumber, analysisType, chunkIndex, fallback: false },
+                observabilityService: this.observabilityService,
+            });
 
             if (!analysis) {
                 const message = `Empty response from LLM for ${analysisType} on chunk ${chunkIndex + 1}`;
@@ -703,7 +644,7 @@ export class CrossFileAnalysisService {
      */
     private convertFilesToFileChangeContext(
         preparedFiles: PreparedFileData[],
-    ): Partial<CrossFileAnalysisPayload['files']> {
+    ): CrossFileAnalysisPayload['files'] {
         return preparedFiles.map((preparedFile) => ({
             file: {
                 filename: preparedFile.filename,

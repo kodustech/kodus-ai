@@ -1,14 +1,9 @@
 import { type ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { createLogger } from '@libs/core/log/logger';
-import {
-    BYOKConfig,
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
+import { BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
+import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 
 import {
     getAugmentationsFromPack,
@@ -41,12 +36,67 @@ import {
     ReviewModeResponse,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { SafeguardPipelineService } from './safeguardPipeline.service';
 
 export const LLM_ANALYSIS_SERVICE_TOKEN = Symbol.for('LLMAnalysisService');
+
+/**
+ * Structured-output schema for the code-review analyzers. Mirrors the shape the
+ * `prompt_codereview_*` prompts already declare in their Output Format section,
+ * so migrating from the STRING/JSON parser to a structured call does not force
+ * the model to fabricate fields. Optional fields match the prompt's optional
+ * output (id/severity/rankScore/oneSentenceSummary/lines/llmPrompt).
+ */
+const codeReviewAnalysisSchema = z.object({
+    codeSuggestions: z.array(
+        z.object({
+            id: z.string().optional(),
+            relevantFile: z.string(),
+            language: z.string(),
+            suggestionContent: z.string(),
+            existingCode: z.string().optional(),
+            improvedCode: z.string(),
+            oneSentenceSummary: z.string().optional(),
+            relevantLinesStart: z.coerce.number().int().positive().optional(),
+            relevantLinesEnd: z.coerce.number().int().positive().optional(),
+            label: z.string(),
+            severity: z.string().optional(),
+            rankScore: z.number().optional(),
+            llmPrompt: z.string().optional(),
+        }),
+    ),
+});
+
+/**
+ * Severity analyzer output — the `prompt_severity_analysis_user` prompt returns
+ * ONLY `{ id, severity }` per suggestion, so the schema is deliberately narrow.
+ * The result is re-serialized and fed through `LLMResponseProcessor` unchanged,
+ * preserving the exact downstream mapping.
+ */
+const severityAnalysisSchema = z.object({
+    codeSuggestions: z.array(
+        z.object({
+            id: z.string(),
+            severity: z.string(),
+        }),
+    ),
+});
+
+/**
+ * Validate-implemented output — `prompt_validateImplementedSuggestions` returns
+ * `{ id, relevantFile, implementationStatus }` per suggestion.
+ */
+const validateImplementedSchema = z.object({
+    codeSuggestions: z.array(
+        z.object({
+            id: z.string(),
+            relevantFile: z.string(),
+            implementationStatus: z.string(),
+        }),
+    ),
+});
 
 @Injectable()
 export class LLMAnalysisService implements IAIAnalysisService {
@@ -54,7 +104,6 @@ export class LLMAnalysisService implements IAIAnalysisService {
     private readonly llmResponseProcessor: LLMResponseProcessor;
 
     constructor(
-        private readonly promptRunnerService: PromptRunnerService,
         private readonly observability: ObservabilityService,
         private readonly safeguardPipeline: SafeguardPipelineService,
     ) {
@@ -73,65 +122,33 @@ export class LLMAnalysisService implements IAIAnalysisService {
         context: AnalysisContext,
     ): Promise<AIAnalysisResult> {
         const provider = LLMModelProvider.GEMINI_2_5_PRO;
-        const fallbackProvider = LLMModelProvider.NOVITA_DEEPSEEK_V3;
         const runName = 'analyzeCodeWithAI';
-
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            provider,
-            fallbackProvider,
-            context?.codeReviewConfig?.byokConfig,
-        );
 
         const baseContext = await this.prepareAnalysisContext(
             fileContext,
             context,
         );
-        const spanName = `${LLMAnalysisService.name}::${runName}`;
         const byokConfigRef = context?.codeReviewConfig?.byokConfig;
-        const spanAttrs = {
-            type: promptRunner.executeMode,
-            organizationId: organizationAndTeamData?.organizationId,
-            prNumber,
-            file: { filePath: fileContext?.file?.filename },
-        };
 
         try {
-            const { result: analysis } = await this.observability.runLLMInSpan({
-                spanName,
+            // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
+            // path (REQ-NOLC-01). Single span via runStructuredReviewCall — the
+            // outer runLLMInSpan wrapper is dropped (Q4). The BYOK org keeps its
+            // own model. The structured result is re-serialized and fed through
+            // LLMResponseProcessor exactly as the STRING/JSON path did, preserving
+            // the downstream codeSuggestions mapping.
+            const analysis = await runStructuredReviewCall({
+                schema: codeReviewAnalysisSchema,
+                system: prompt_codereview_system_gemini(baseContext),
+                user: prompt_codereview_user_gemini(baseContext),
                 runName,
-                attrs: spanAttrs,
+                organizationId: organizationAndTeamData?.organizationId,
+                observabilityService: this.observability,
                 byokConfig: byokConfigRef,
-                exec: async (callbacks) => {
-                    return await promptRunner
-                        .builder()
-                        .setParser(ParserType.STRING)
-                        .setLLMJsonMode(true)
-                        .setPayload(baseContext)
-                        .addPrompt({
-                            prompt: prompt_codereview_system_gemini,
-                            role: PromptRole.SYSTEM,
-                        })
-                        .addPrompt({
-                            prompt: prompt_codereview_user_gemini,
-                            role: PromptRole.USER,
-                        })
-                        .setTemperature(0)
-                        .addCallbacks(callbacks)
-                        .addMetadata({
-                            organizationId:
-                                baseContext?.organizationAndTeamData
-                                    ?.organizationId,
-                            teamId: baseContext?.organizationAndTeamData
-                                ?.teamId,
-                            pullRequestId: baseContext?.pullRequest?.number,
-                            provider,
-                            fallbackProvider,
-                            reviewMode: reviewModeResponse,
-                            runName,
-                        })
-                        .setRunName(runName)
-                        .execute();
+                attrs: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    prNumber,
+                    file: { filePath: fileContext?.file?.filename },
                 },
             });
 
@@ -152,7 +169,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
             const analysisResult = this.llmResponseProcessor.processResponse(
                 organizationAndTeamData,
                 prNumber,
-                analysis,
+                JSON.stringify(analysis),
             );
 
             if (!analysisResult) {
@@ -187,102 +204,35 @@ export class LLMAnalysisService implements IAIAnalysisService {
         byokConfig: BYOKConfig,
     ): Promise<AIAnalysisResult> {
         const defaultProvider = LLMModelProvider.GEMINI_2_5_PRO;
-        const defaultFallback = LLMModelProvider.NOVITA_DEEPSEEK_V3;
         const runName = 'analyzeCodeWithAI_v2';
-
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            defaultProvider,
-            defaultFallback,
-            byokConfig,
-        );
 
         const baseContext = await this.prepareAnalysisContext(
             fileContext,
             context,
         );
-        const spanName = `${LLMAnalysisService.name}::${runName}`;
-        const spanAttrs = {
-            type: promptRunner.executeMode,
-            organizationId: organizationAndTeamData?.organizationId,
-            prNumber,
-            file: { filePath: fileContext?.file?.filename },
-        };
 
         try {
-            const { result: analysis } = await this.observability.runLLMInSpan({
-                spanName,
+            // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
+            // path (REQ-NOLC-01). Single span via runStructuredReviewCall — the
+            // outer runLLMInSpan wrapper is dropped (Q4). The BYOK org keeps its
+            // own model; the structured `codeSuggestions` map through unchanged.
+            // The previous ZOD parser-correction provider (OPENAI_GPT_4O_MINI /
+            // GPT_4O) is intentionally dropped — that was the LangChain parser
+            // repair path (D-03/REQ-SEC-01). `setTemperature(0)` /
+            // `setMaxReasoningTokens(3000)` are not threaded by
+            // runStructuredReviewCall (per the phase's tracer decision).
+            const analysis = await runStructuredReviewCall({
+                schema: codeReviewAnalysisSchema,
+                system: prompt_codereview_system_gemini_v2(baseContext),
+                user: prompt_codereview_user_gemini_v2(baseContext),
                 runName,
-                attrs: spanAttrs,
+                organizationId: organizationAndTeamData?.organizationId,
+                observabilityService: this.observability,
                 byokConfig,
-                exec: async (callbacks) => {
-                    const schema = z.object({
-                        codeSuggestions: z.array(
-                            z.object({
-                                id: z.string().optional(),
-                                relevantFile: z.string(),
-                                language: z.string(),
-                                suggestionContent: z.string(),
-                                existingCode: z.string().optional(),
-                                improvedCode: z.string(),
-                                oneSentenceSummary: z.string().optional(),
-                                relevantLinesStart: z.coerce
-                                    .number()
-                                    .int()
-                                    .positive()
-                                    .optional(),
-                                relevantLinesEnd: z.coerce
-                                    .number()
-                                    .int()
-                                    .positive()
-                                    .optional(),
-                                label: z.string(),
-                                severity: z.string().optional(),
-                                rankScore: z.number().optional(),
-                                llmPrompt: z.string().optional(),
-                            }),
-                        ),
-                    });
-
-                    return await promptRunner
-                        .builder()
-                        .setParser(ParserType.ZOD, schema, {
-                            provider: LLMModelProvider.OPENAI_GPT_4O_MINI,
-                            fallbackProvider: LLMModelProvider.OPENAI_GPT_4O,
-                        })
-                        .setLLMJsonMode(true)
-                        .setPayload(baseContext)
-                        .addPrompt({
-                            prompt: prompt_codereview_system_gemini_v2,
-                            role: PromptRole.SYSTEM,
-                        })
-                        .addPrompt({
-                            prompt: prompt_codereview_user_gemini_v2,
-                            role: PromptRole.USER,
-                        })
-                        .setTemperature(0)
-                        .addCallbacks(callbacks)
-                        .addMetadata({
-                            hasRelevantContent: baseContext?.hasRelevantContent,
-                            organizationId:
-                                baseContext?.organizationAndTeamData
-                                    ?.organizationId,
-                            teamId: baseContext?.organizationAndTeamData
-                                ?.teamId,
-                            pullRequestId: baseContext?.pullRequest?.number,
-                            provider:
-                                byokConfig?.main?.provider || defaultProvider,
-                            model: byokConfig?.main?.model,
-                            fallbackProvider:
-                                byokConfig?.fallback?.provider ||
-                                defaultFallback,
-                            fallbackModel: byokConfig?.fallback?.model,
-                            reviewMode: reviewModeResponse,
-                            runName,
-                        })
-                        .setRunName(runName)
-                        .setMaxReasoningTokens(3000)
-                        .execute();
+                attrs: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    prNumber,
+                    file: { filePath: fileContext?.file?.filename },
                 },
             });
 
@@ -379,60 +329,31 @@ export class LLMAnalysisService implements IAIAnalysisService {
         parameters: any,
         reviewMode: ReviewModeResponse = ReviewModeResponse.HEAVY_MODE,
     ) {
-        const provider =
-            parameters.llmProvider || LLMModelProvider.GEMINI_2_5_PRO;
-        const fallbackProvider =
-            provider === LLMModelProvider.OPENAI_GPT_4O
-                ? LLMModelProvider.GEMINI_2_5_PRO
-                : LLMModelProvider.OPENAI_GPT_4O;
         const runName = 'generateCodeSuggestions';
 
-        const spanName = `${LLMAnalysisService.name}::${runName}`;
-        const spanAttrs = {
-            type: 'system',
-            organizationId: organizationAndTeamData?.organizationId,
-            sessionId,
-        };
-
         try {
-            const { result } = await this.observability.runLLMInSpan({
-                spanName,
+            // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
+            // path (REQ-NOLC-01), single span (Q4). This is a system-provider path
+            // (no BYOK): per the phase's tracer decision the previous
+            // GEMINI_2_5_PRO/OPENAI_GPT_4O pin is dropped in favour of the managed
+            // review default; per-task model routing is deferred to Phase 4. The
+            // structured result is re-serialized so the string return contract is
+            // preserved for any legacy caller.
+            const structured = await runStructuredReviewCall({
+                schema: codeReviewAnalysisSchema,
+                system: prompt_codereview_system_gemini({}),
+                user: `${prompt_codereview_user_gemini({})}\n\n## Question\n${question ?? ''}`,
                 runName,
-                attrs: spanAttrs,
-                exec: async (callbacks) => {
-                    return await this.promptRunnerService
-                        .builder()
-                        .setProviders({
-                            main: provider,
-                            fallback: fallbackProvider,
-                        })
-                        .setParser(ParserType.STRING)
-                        .setLLMJsonMode(true)
-                        .setPayload({ question })
-                        .addPrompt({
-                            prompt: () => prompt_codereview_system_gemini({}),
-                            role: PromptRole.SYSTEM,
-                        })
-                        .addPrompt({
-                            prompt: () => prompt_codereview_user_gemini({}),
-                            role: PromptRole.USER,
-                        })
-                        .addMetadata({
-                            organizationId:
-                                organizationAndTeamData?.organizationId,
-                            teamId: organizationAndTeamData?.teamId,
-                            sessionId,
-                            provider,
-                            fallbackProvider,
-                            reviewMode,
-                            runName,
-                        })
-                        .addCallbacks(callbacks)
-                        .setRunName(runName)
-                        .setTemperature(0)
-                        .execute();
+                organizationId: organizationAndTeamData?.organizationId,
+                observabilityService: this.observability,
+                byokConfig: undefined,
+                attrs: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    sessionId,
                 },
             });
+
+            const result = structured ? JSON.stringify(structured) : null;
 
             if (!result) {
                 const message = `No code suggestions generated for session ${sessionId}`;
@@ -469,59 +390,25 @@ export class LLMAnalysisService implements IAIAnalysisService {
         codeSuggestions: CodeSuggestion[],
         byokConfig: BYOKConfig,
     ): Promise<Partial<CodeSuggestion>[]> {
-        const fallbackProvider =
-            provider === LLMModelProvider.OPENAI_GPT_4O
-                ? LLMModelProvider.NOVITA_DEEPSEEK_V3_0324
-                : LLMModelProvider.OPENAI_GPT_4O;
         const runName = 'severityAnalysis';
 
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            provider,
-            fallbackProvider,
-            byokConfig,
-        );
-
-        const spanName = `${LLMAnalysisService.name}::${runName}`;
-        const spanAttrs = {
-            type: promptRunner.executeMode,
-            organizationId: organizationAndTeamData?.organizationId,
-            prNumber,
-        };
-
         try {
-            const { result } = await this.observability.runLLMInSpan({
-                spanName,
+            // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
+            // path (REQ-NOLC-01), single span (Q4). BYOK org keeps its own model.
+            // The severity prompt returns `{ id, severity }` per suggestion; the
+            // structured result is re-serialized and fed through LLMResponseProcessor
+            // exactly as the STRING/JSON path did, preserving the downstream mapping.
+            const result = await runStructuredReviewCall({
+                schema: severityAnalysisSchema,
+                system: '',
+                user: prompt_severity_analysis_user(codeSuggestions),
                 runName,
-                attrs: spanAttrs,
+                organizationId: organizationAndTeamData?.organizationId,
+                observabilityService: this.observability,
                 byokConfig,
-                exec: async (callbacks) => {
-                    return await promptRunner
-                        .builder()
-                        .setParser(ParserType.STRING)
-                        .setLLMJsonMode(true)
-                        .setPayload(codeSuggestions)
-                        .addPrompt({
-                            prompt: prompt_severity_analysis_user,
-                            role: PromptRole.USER,
-                        })
-                        .addCallbacks(callbacks)
-                        .addMetadata({
-                            organizationId:
-                                organizationAndTeamData?.organizationId,
-                            teamId: organizationAndTeamData?.teamId,
-                            pullRequestId: prNumber,
-                            provider: byokConfig?.main?.provider || provider,
-                            model: byokConfig?.main?.model,
-                            fallbackProvider:
-                                byokConfig?.fallback?.provider ||
-                                fallbackProvider,
-                            fallbackModel: byokConfig?.fallback?.model,
-                            runName,
-                        })
-                        .setRunName(runName)
-                        .setTemperature(0)
-                        .execute();
+                attrs: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    prNumber,
                 },
             });
 
@@ -542,7 +429,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
                 this.llmResponseProcessor.processResponse(
                     organizationAndTeamData,
                     prNumber,
-                    result,
+                    JSON.stringify(result),
                 );
 
             const suggestionsWithSeverity =
@@ -641,52 +528,30 @@ export class LLMAnalysisService implements IAIAnalysisService {
         codePatch: string,
         codeSuggestions: Partial<CodeSuggestion>[],
     ): Promise<Partial<CodeSuggestion>[]> {
-        const fallbackProvider =
-            provider === LLMModelProvider.OPENAI_GPT_4O
-                ? LLMModelProvider.NOVITA_DEEPSEEK_V3_0324
-                : LLMModelProvider.OPENAI_GPT_4O;
         const runName = 'validateImplementedSuggestions';
 
         const payload = { codePatch, codeSuggestions };
-        const spanName = `${LLMAnalysisService.name}::${runName}`;
-        const spanAttrs = {
-            type: 'system',
-            organizationId: organizationAndTeamData?.organizationId,
-            prNumber,
-        };
 
         try {
-            const { result } = await this.observability.runLLMInSpan({
-                spanName,
+            // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
+            // path (REQ-NOLC-01), single span (Q4). System-provider path (no BYOK):
+            // per the phase's tracer decision the previous provider/fallback pin is
+            // dropped in favour of the managed review default; per-task model routing
+            // is deferred to Phase 4. The prompt returns
+            // `{ id, relevantFile, implementationStatus }` per suggestion; the
+            // structured result is re-serialized and fed through LLMResponseProcessor
+            // exactly as the STRING/JSON path did, preserving the downstream mapping.
+            const result = await runStructuredReviewCall({
+                schema: validateImplementedSchema,
+                system: '',
+                user: prompt_validateImplementedSuggestions(payload),
                 runName,
-                attrs: spanAttrs,
-                exec: async (callbacks) => {
-                    return await this.promptRunnerService
-                        .builder()
-                        .setProviders({
-                            main: provider,
-                            fallback: fallbackProvider,
-                        })
-                        .setParser(ParserType.STRING)
-                        .setLLMJsonMode(true)
-                        .setTemperature(0)
-                        .setPayload(payload)
-                        .addPrompt({
-                            prompt: prompt_validateImplementedSuggestions,
-                            role: PromptRole.USER,
-                        })
-                        .addMetadata({
-                            organizationId:
-                                organizationAndTeamData?.organizationId,
-                            teamId: organizationAndTeamData?.teamId,
-                            pullRequestId: prNumber,
-                            provider,
-                            fallbackProvider,
-                            runName,
-                        })
-                        .addCallbacks(callbacks)
-                        .setRunName(runName)
-                        .execute();
+                organizationId: organizationAndTeamData?.organizationId,
+                observabilityService: this.observability,
+                byokConfig: undefined,
+                attrs: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    prNumber,
                 },
             });
 
@@ -708,7 +573,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
                 this.llmResponseProcessor.processResponse(
                     organizationAndTeamData,
                     prNumber,
-                    result,
+                    JSON.stringify(result),
                 );
 
             const implementedSuggestions =

@@ -1,11 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import {
-    BYOKConfig,
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
+import { type BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -22,7 +16,7 @@ import {
 } from '@libs/common/utils/langchainCommon/prompts/codeReviewCrossFileContextSufficiency';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
+import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { TokenChunkingService } from '@libs/core/infrastructure/services/tokenChunking/tokenChunking.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import {
@@ -111,7 +105,6 @@ export class CollectCrossFileContextsService {
     );
 
     constructor(
-        private readonly promptRunnerService: PromptRunnerService,
         private readonly observabilityService: ObservabilityService,
         private readonly tokenChunkingService: TokenChunkingService,
         private readonly configService: ConfigService,
@@ -418,52 +411,20 @@ export class CollectCrossFileContextsService {
     ): Promise<CrossFileContextPlannerSchemaType['queries']> {
         const payload = { diffSummary, changedFilenames, language };
 
-        const provider = LLMModelProvider.GEMINI_3_FLASH_PREVIEW;
-        const fallbackProvider = LLMModelProvider.GEMINI_2_5_FLASH;
-
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            provider,
-            fallbackProvider,
-            byokConfig,
-        );
-
         const runName = 'crossFileContextPlanner';
-        const spanName = `${CollectCrossFileContextsService.name}::${runName}`;
-        const spanAttrs = {
-            organizationId: organizationAndTeamData?.organizationId,
-            prNumber,
-            type: promptRunner.executeMode,
-        };
 
-        const builder = promptRunner
-            .builder()
-            .setParser(ParserType.ZOD, CrossFileContextPlannerSchema as any)
-            .setLLMJsonMode(true)
-            .setPayload(payload)
-            .addPrompt({
-                prompt: prompt_cross_file_context_planner,
-                role: PromptRole.SYSTEM,
-            })
-            .addPrompt({
-                prompt: 'Analyze the diff and generate search queries. Return the response in the specified JSON format.',
-                role: PromptRole.USER,
-            })
-            .setTemperature(0)
-            .addTags(['crossFileContextPlanner', `model:${provider}`])
-            .setRunName(runName)
-            .addMetadata({
-                organizationAndTeamData,
-                prNumber,
-                runName,
-            });
-
-        const { result } = await this.observabilityService.runLLMInSpan({
-            spanName,
-            runName,
-            attrs: spanAttrs,
+        // Single structured call on the AI SDK path (BYOK-first). One span per
+        // call (Q4) — no outer runLLMInSpan wrapper — and no LangChain
+        // parser-repair reach (D-03 / REQ-SEC-01).
+        const result = await runStructuredReviewCall({
             byokConfig,
-            exec: (callbacks) => builder.addCallbacks(callbacks).execute(),
+            schema: CrossFileContextPlannerSchema as any,
+            system: prompt_cross_file_context_planner(payload),
+            user: 'Analyze the diff and generate search queries. Return the response in the specified JSON format.',
+            runName: `${CollectCrossFileContextsService.name}::${runName}`,
+            organizationId: organizationAndTeamData?.organizationId,
+            attrs: { prNumber, fallback: false },
+            observabilityService: this.observabilityService,
         });
 
         return (result as CrossFileContextPlannerSchemaType)?.queries ?? [];
@@ -1179,55 +1140,20 @@ export class CollectCrossFileContextsService {
                 })),
             };
 
-            const provider = LLMModelProvider.CEREBRAS_GPT_OSS_120B;
-            const fallbackProvider = LLMModelProvider.GEMINI_3_FLASH_PREVIEW;
-
-            const promptRunner = new BYOKPromptRunnerService(
-                this.promptRunnerService,
-                provider,
-                fallbackProvider,
-                byokConfig,
-            );
-
             const runName = 'crossFileContextSufficiency';
-            const spanName = `${CollectCrossFileContextsService.name}::${runName}`;
-            const spanAttrs = {
-                organizationId: organizationAndTeamData?.organizationId,
-                prNumber,
-                type: promptRunner.executeMode,
-            };
 
-            const builder = promptRunner
-                .builder()
-                .setParser(
-                    ParserType.ZOD,
-                    CrossFileContextSufficiencySchema as any,
-                )
-                .setLLMJsonMode(true)
-                .setPayload(payload)
-                .addPrompt({
-                    prompt: prompt_cross_file_context_sufficiency,
-                    role: PromptRole.SYSTEM,
-                })
-                .addPrompt({
-                    prompt: 'Evaluate whether the collected cross-file context is sufficient. Return the response in the specified JSON format.',
-                    role: PromptRole.USER,
-                })
-                .setTemperature(0)
-                .addTags(['crossFileContextSufficiency', `model:${provider}`])
-                .setRunName(runName)
-                .addMetadata({
-                    organizationAndTeamData,
-                    prNumber,
-                    runName,
-                });
-
-            const { result } = await this.observabilityService.runLLMInSpan({
-                spanName,
-                runName,
-                attrs: spanAttrs,
+            // Single structured call on the AI SDK path (BYOK-first). One span
+            // per call (Q4) — no outer runLLMInSpan wrapper — and no LangChain
+            // parser-repair reach (D-03 / REQ-SEC-01).
+            const result = await runStructuredReviewCall({
                 byokConfig,
-                exec: (callbacks) => builder.addCallbacks(callbacks).execute(),
+                schema: CrossFileContextSufficiencySchema as any,
+                system: prompt_cross_file_context_sufficiency(payload),
+                user: 'Evaluate whether the collected cross-file context is sufficient. Return the response in the specified JSON format.',
+                runName: `${CollectCrossFileContextsService.name}::${runName}`,
+                organizationId: organizationAndTeamData?.organizationId,
+                attrs: { prNumber, fallback: false },
+                observabilityService: this.observabilityService,
             });
 
             return (result as CrossFileContextSufficiencySchemaType) ?? null;

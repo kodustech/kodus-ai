@@ -214,22 +214,24 @@ For each violation, identify:
 
 ## Output Format
 
-Return a JSON array containing only rules that have violations:
+Return a JSON object with a "rules" array containing only rules that have violations:
 
 \`\`\`json
-[
-  {
-    "ruleId": "rule-uuid-here",
-    "violations": [
-      {
-        "violatedFileSha": ["file-sha-1", "file-sha-2"], // The file/files that violated the rule
-        "relatedFileSha": ["file-sha-3", "file-sha-5"], // The file/files that are related to the violation
-        "oneSentenceSummary": "Concise summary of what needs to be done",
-        "suggestionContent": "Detailed explanation of the violation and specific steps to fix it. Always end with: Kody Rule violation: rule-id-here"
-      }
-    ]
-  }
-]
+{
+  "rules": [
+    {
+      "ruleId": "rule-uuid-here",
+      "violations": [
+        {
+          "violatedFileSha": ["file-sha-1", "file-sha-2"], // The file/files that violated the rule
+          "relatedFileSha": ["file-sha-3", "file-sha-5"], // The file/files that are related to the violation
+          "oneSentenceSummary": "Concise summary of what needs to be done",
+          "suggestionContent": "Detailed explanation of the violation and specific steps to fix it. Always end with: Kody Rule violation: rule-id-here"
+        }
+      ]
+    }
+  ]
+}
 \`\`\`
 
 ## Examples
@@ -253,19 +255,21 @@ Return a JSON array containing only rules that have violations:
 ### Example 2: PR Level Rule
 **Scenario**: PR missing description
 \`\`\`json
-[
-  {
-    "ruleId": "rule-uuid",
-    "violations": [
-      {
-        "violatedFileSha": null,
-        "relatedFileSha": [],
-        "oneSentenceSummary": "Add a description to the pull request",
-        "suggestionContent": "Pull request description is empty but is required for all PRs. Kody Rule violation: pr-description-required"
-      }
-    ]
-  }
-]
+{
+  "rules": [
+    {
+      "ruleId": "rule-uuid",
+      "violations": [
+        {
+          "violatedFileSha": null,
+          "relatedFileSha": [],
+          "oneSentenceSummary": "Add a description to the pull request",
+          "suggestionContent": "Pull request description is empty but is required for all PRs. Kody Rule violation: pr-description-required"
+        }
+      ]
+    }
+  ]
+}
 \`\`\`
 
 ### Example 3: Business Logic Separation
@@ -285,7 +289,7 @@ Return a JSON array containing only rules that have violations:
 \`\`\`
 
 ## Key Reminders
-- **Empty output is valid** - if no cross-file rules are violated, return \`[]\`
+- **Empty output is valid** - if no cross-file rules are violated, return \`{ "rules": [] }\`
 - **Don't invent violations** - only flag actual rule violations based on the provided rules and PR changes
 - **Consider file relationships** - a rule might reference files not in the PR (include them in relatedFileIds)
 - **Be specific in reasons** - explain exactly what was expected vs what was found

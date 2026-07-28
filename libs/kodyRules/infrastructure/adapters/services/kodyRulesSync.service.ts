@@ -6,12 +6,7 @@ import {
 import { requiresKnowledgeApproval } from '@libs/common/utils/kody-rules/knowledge-approval';
 import * as path from 'path';
 
-import {
-    PromptRunnerService,
-    ParserType,
-    PromptRole,
-    LLMModelProvider,
-} from '@kodus/kodus-common/llm';
+import type { LLMModelProvider } from '@kodus/kodus-common/llm';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { UserInfo } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
 import {
@@ -63,7 +58,6 @@ import {
     kodyRulesIDEGeneratorSchemaOnboarding,
     kodyRulesManifestGeneratorSchemaOnboarding,
 } from '@libs/common/utils/langchainCommon/prompts/kodyRules';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
 import { PromptSourceType } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
 import { createLogger } from '@libs/core/log/logger';
 import { UpdateOrCreateCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/update-or-create-code-review-parameter-use-case';
@@ -149,7 +143,6 @@ export class KodyRulesSyncService {
         private readonly updateOrCreateCodeReviewParameterUseCase: UpdateOrCreateCodeReviewParameterUseCase,
         private readonly createOrUpdateKodyRulesUseCase: CreateOrUpdateKodyRulesUseCase,
         private readonly deleteRuleInOrganizationByIdKodyRulesUseCase: DeleteRuleInOrganizationByIdKodyRulesUseCase,
-        private readonly promptRunnerService: PromptRunnerService,
         private readonly permissionValidationService: PermissionValidationService,
         private readonly observabilityService: ObservabilityService,
         private readonly contextReferenceDetectionService: ContextReferenceDetectionService,
@@ -2430,16 +2423,7 @@ export class KodyRulesSyncService {
                 params.organizationAndTeamData,
             );
 
-        const mainProvider = LLMModelProvider.CEREBRAS_GLM_47;
-        const mainFallback = LLMModelProvider.GROQ_MOONSHOTAI_KIMI_K2_;
         const mainRun = 'kodyRulesFilesToRulesFastBatch';
-
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            mainProvider,
-            mainFallback,
-            byokConfigValue,
-        );
 
         const userPrompt = params.files
             .map(
@@ -2449,59 +2433,33 @@ export class KodyRulesSyncService {
             .join('\n\n');
 
         try {
-            const { result } = await this.observabilityService.runLLMInSpan({
-                spanName: `${KodyRulesSyncService.name}::${mainRun}`,
-                runName: mainRun,
+            const result = await runStructuredReviewCall({
+                byokConfig: byokConfigValue ?? undefined,
+                schema: kodyRulesIDEGeneratorSchemaOnboarding,
+                organizationId:
+                    params.organizationAndTeamData?.organizationId,
+                runName: `${KodyRulesSyncService.name}::${mainRun}`,
                 attrs: {
                     repositoryId: params.repositoryId,
                     filesCount: params.files.length,
-                    type: promptRunner.executeMode,
                     fallback: false,
                 },
-                byokConfig: byokConfigValue,
-                exec: async (callbacks) => {
-                    return await promptRunner
-                        .builder()
-                        .setParser(
-                            ParserType.ZOD,
-                            kodyRulesIDEGeneratorSchemaOnboarding,
-                            {
-                                provider: LLMModelProvider.GEMINI_2_5_FLASH,
-                                fallbackProvider:
-                                    LLMModelProvider.OPENAI_GPT_4O,
-                            },
-                        )
-                        .setLLMJsonMode(true)
-                        .setPayload({
-                            repositoryId: params.repositoryId,
-                            filesCount: params.files.length,
-                        })
-                        .addPrompt({
-                            role: PromptRole.SYSTEM,
-                            prompt: [
-                                'You will receive multiple repository rule files. Return ONLY a JSON object { "rules": [...] } (no code fences) with up to 3 MOST IMPORTANT Kody Rules across all files (prioritize critical/high impact, security/compliance, or broad applicability). If none, return { "rules": [] }.',
-                                'Each rule must include: title, rule, path, sourcePath, severity ("low"|"medium"|"high"|"critical"), optional scope ("file"|"pull-request"), examples: [{ "snippet": string, "isCorrect": boolean }], and optional sourceSnippet.',
-                                'For each file, if multiple candidate rules exist, merge them into one comprehensive rule for that file, then select only the top rules overall.',
-                                'sourcePath MUST be the file path from input. Use the same for path unless the file declares specific globs.',
-                                'If a file has zero rules, skip it (do not emit placeholder).',
-                                'If a file is a dependency manifest (package.json, requirements.txt, pyproject.toml, go.mod, Cargo.toml, pom.xml, build.gradle(.kts), csproj, Gemfile, mix.exs, etc.), infer up to 3 high-impact rules for that stack (security, auth, logging, testing, linting, secrets) based on dependencies/frameworks present.',
-                                'Severity map: must/required/security/blocker → "high"/"critical"; should/warn → "medium"; tip/info/optional → "low".',
-                                'Scope: "file" for code/content; "pull-request" for PR titles/descriptions/commits/reviewers/labels.',
-                                'Include sourceSnippet when you can copy an exact excerpt that triggered the rule.',
-                                'Always return the rule text in English, even if the source file is in another language. Do NOT mirror the source language.',
-                                'Do NOT include extra keys (repositoryId, origin, uuid, timestamps).',
-                                'Be exhaustive: preserve specific APIs, steps, anti-patterns, and examples from each file.',
-                            ].join(' '),
-                        })
-                        .addPrompt({
-                            role: PromptRole.USER,
-                            prompt: `Repository: ${params.repositoryId}\nFiles:\n\n${JSON.stringify(userPrompt)}`,
-                        })
-                        .addCallbacks(callbacks)
-                        .addMetadata({ runName: mainRun })
-                        .setRunName(mainRun)
-                        .execute();
-                },
+                observabilityService: this.observabilityService,
+                system: [
+                    'You will receive multiple repository rule files. Return ONLY a JSON object { "rules": [...] } (no code fences) with up to 3 MOST IMPORTANT Kody Rules across all files (prioritize critical/high impact, security/compliance, or broad applicability). If none, return { "rules": [] }.',
+                    'Each rule must include: title, rule, path, sourcePath, severity ("low"|"medium"|"high"|"critical"), optional scope ("file"|"pull-request"), examples: [{ "snippet": string, "isCorrect": boolean }], and optional sourceSnippet.',
+                    'For each file, if multiple candidate rules exist, merge them into one comprehensive rule for that file, then select only the top rules overall.',
+                    'sourcePath MUST be the file path from input. Use the same for path unless the file declares specific globs.',
+                    'If a file has zero rules, skip it (do not emit placeholder).',
+                    'If a file is a dependency manifest (package.json, requirements.txt, pyproject.toml, go.mod, Cargo.toml, pom.xml, build.gradle(.kts), csproj, Gemfile, mix.exs, etc.), infer up to 3 high-impact rules for that stack (security, auth, logging, testing, linting, secrets) based on dependencies/frameworks present.',
+                    'Severity map: must/required/security/blocker → "high"/"critical"; should/warn → "medium"; tip/info/optional → "low".',
+                    'Scope: "file" for code/content; "pull-request" for PR titles/descriptions/commits/reviewers/labels.',
+                    'Include sourceSnippet when you can copy an exact excerpt that triggered the rule.',
+                    'Always return the rule text in English, even if the source file is in another language. Do NOT mirror the source language.',
+                    'Do NOT include extra keys (repositoryId, origin, uuid, timestamps).',
+                    'Be exhaustive: preserve specific APIs, steps, anti-patterns, and examples from each file.',
+                ].join(' '),
+                user: `Repository: ${params.repositoryId}\nFiles:\n\n${JSON.stringify(userPrompt)}`,
             });
 
             if (!result?.rules || result.rules.length === 0) return [];
@@ -2517,47 +2475,38 @@ export class KodyRulesSyncService {
         } catch {
             const fbRun = `${mainRun}Raw`;
             try {
-                const promptRunner = new BYOKPromptRunnerService(
-                    this.promptRunnerService,
-                    mainProvider,
-                    mainFallback,
-                    byokConfigValue,
+                const rawModel = wrapByokModel(
+                    byokToVercelModel(byokConfigValue ?? undefined, 'main', {}),
+                    {
+                        byokConfig: byokConfigValue ?? undefined,
+                        organizationId:
+                            params.organizationAndTeamData?.organizationId,
+                        role: 'main',
+                    },
                 );
 
-                const { result: raw } =
-                    await this.observabilityService.runLLMInSpan({
+                const { text: raw } =
+                    await this.observabilityService.runAiSdkLLMInSpan<any>({
                         spanName: `${KodyRulesSyncService.name}::${fbRun}`,
                         runName: fbRun,
+                        model: getModelName(byokConfigValue ?? undefined),
                         attrs: {
                             repositoryId: params.repositoryId,
                             filesCount: params.files.length,
-                            type: promptRunner.executeMode,
                             fallback: true,
                         },
-                        byokConfig: byokConfigValue,
-                        exec: async (callbacks) => {
-                            return await promptRunner
-                                .builder()
-                                .setParser(ParserType.STRING)
-                                .addPrompt({
-                                    role: PromptRole.SYSTEM,
-                                    prompt: [
-                                        'Return ONLY a JSON object { "rules": [...] } (no code fences, no text), capped at 3 rules.',
-                                        'Each rule must include: title, rule, path, sourcePath, severity ("low"|"medium"|"high"|"critical"), optional scope ("file"|"pull-request"), examples: [{ "snippet": string, "isCorrect": boolean }], and optional sourceSnippet.',
-                                        'Always respond in English, even if the source file uses another language.',
-                                        'If a file is a dependency manifest (package.json, requirements.txt, pyproject.toml, go.mod, Cargo.toml, pom.xml, build.gradle(.kts), csproj, Gemfile, mix.exs, etc.), infer rules for that stack based on dependencies (security, auth, logging, testing, linting, secrets).',
-                                        'Do NOT include extra keys (repositoryId, origin, uuid, timestamps).',
-                                    ].join(' '),
-                                })
-                                .addPrompt({
-                                    role: PromptRole.USER,
-                                    prompt: `Repository: ${params.repositoryId}\nFiles:\n\n${userPrompt}`,
-                                })
-                                .addCallbacks(callbacks)
-                                .addMetadata({ runName: fbRun })
-                                .setRunName(fbRun)
-                                .execute();
-                        },
+                        exec: () =>
+                            tracedGenerateText({
+                                model: rawModel as any,
+                                system: [
+                                    'Return ONLY a JSON object { "rules": [...] } (no code fences, no text), capped at 3 rules.',
+                                    'Each rule must include: title, rule, path, sourcePath, severity ("low"|"medium"|"high"|"critical"), optional scope ("file"|"pull-request"), examples: [{ "snippet": string, "isCorrect": boolean }], and optional sourceSnippet.',
+                                    'Always respond in English, even if the source file uses another language.',
+                                    'If a file is a dependency manifest (package.json, requirements.txt, pyproject.toml, go.mod, Cargo.toml, pom.xml, build.gradle(.kts), csproj, Gemfile, mix.exs, etc.), infer rules for that stack based on dependencies (security, auth, logging, testing, linting, secrets).',
+                                    'Do NOT include extra keys (repositoryId, origin, uuid, timestamps).',
+                                ].join(' '),
+                                prompt: `Repository: ${params.repositoryId}\nFiles:\n\n${userPrompt}`,
+                            } as any),
                     });
 
                 const parsed = this.extractJsonArray(raw);
@@ -2599,16 +2548,7 @@ export class KodyRulesSyncService {
                 params.organizationAndTeamData,
             );
 
-        const mainProvider = LLMModelProvider.CEREBRAS_GLM_47;
-        const mainFallback = LLMModelProvider.GROQ_MOONSHOTAI_KIMI_K2_;
         const mainRun = 'kodyRulesManifestsToRulesFastBatch';
-
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            mainProvider,
-            mainFallback,
-            byokConfigValue,
-        );
 
         const userPrompt = params.files
             .map(
@@ -2618,54 +2558,28 @@ export class KodyRulesSyncService {
             .join('\n\n');
 
         try {
-            const { result } = await this.observabilityService.runLLMInSpan({
-                spanName: `${KodyRulesSyncService.name}::${mainRun}`,
-                runName: mainRun,
+            const result = await runStructuredReviewCall({
+                byokConfig: byokConfigValue ?? undefined,
+                schema: kodyRulesManifestGeneratorSchemaOnboarding,
+                organizationId:
+                    params.organizationAndTeamData?.organizationId,
+                runName: `${KodyRulesSyncService.name}::${mainRun}`,
                 attrs: {
                     repositoryId: params.repositoryId,
                     filesCount: params.files.length,
-                    type: promptRunner.executeMode,
                     fallback: false,
                 },
-                byokConfig: byokConfigValue,
-                exec: async (callbacks) => {
-                    return await promptRunner
-                        .builder()
-                        .setParser(
-                            ParserType.ZOD,
-                            kodyRulesManifestGeneratorSchemaOnboarding,
-                            {
-                                provider: LLMModelProvider.GEMINI_2_5_FLASH,
-                                fallbackProvider:
-                                    LLMModelProvider.OPENAI_GPT_4O,
-                            },
-                        )
-                        .setLLMJsonMode(true)
-                        .setPayload({
-                            repositoryId: params.repositoryId,
-                            filesCount: params.files.length,
-                        })
-                        .addPrompt({
-                            role: PromptRole.SYSTEM,
-                            prompt: [
-                                'You will receive dependency manifests (package.json, requirements.txt, pyproject.toml, go.mod, Cargo.toml, pom.xml, build.gradle(.kts), csproj, Gemfile, mix.exs, etc.). Use them ONLY to infer stack, frameworks, and tooling.',
-                                'Produce up to 3 HIGH-IMPACT Kody Rules tailored to this stack. Prioritize security/auth, secrets handling, logging/observability, testing/linting/type-check, dependency hygiene. Avoid generic style nits.',
-                                'Do NOT propose rules that depend on CI/CD, bots, or specific version pinning/patch enforcement. Rules must be actionable via code/config only.',
-                                'Return ONLY a JSON object { "rules": [...] } with no code fences. If none, return { "rules": [] }.',
-                                'Each rule must include: title, rule, path (use the manifest path or glob inferred from it), severity ("low"|"medium"|"high"|"critical"), optional scope ("file"|"pull-request"), and examples: [{ "snippet": string, "isCorrect": boolean }].',
-                                'Always respond in English, even if the manifest uses another language.',
-                                'Do NOT include extra keys such as repositoryId, sourcePath, origin, uuid, or timestamps.',
-                            ].join(' '),
-                        })
-                        .addPrompt({
-                            role: PromptRole.USER,
-                            prompt: `Repository: ${params.repositoryId}\nManifests:\n\n${userPrompt}`,
-                        })
-                        .addCallbacks(callbacks)
-                        .addMetadata({ runName: mainRun })
-                        .setRunName(mainRun)
-                        .execute();
-                },
+                observabilityService: this.observabilityService,
+                system: [
+                    'You will receive dependency manifests (package.json, requirements.txt, pyproject.toml, go.mod, Cargo.toml, pom.xml, build.gradle(.kts), csproj, Gemfile, mix.exs, etc.). Use them ONLY to infer stack, frameworks, and tooling.',
+                    'Produce up to 3 HIGH-IMPACT Kody Rules tailored to this stack. Prioritize security/auth, secrets handling, logging/observability, testing/linting/type-check, dependency hygiene. Avoid generic style nits.',
+                    'Do NOT propose rules that depend on CI/CD, bots, or specific version pinning/patch enforcement. Rules must be actionable via code/config only.',
+                    'Return ONLY a JSON object { "rules": [...] } with no code fences. If none, return { "rules": [] }.',
+                    'Each rule must include: title, rule, path (use the manifest path or glob inferred from it), severity ("low"|"medium"|"high"|"critical"), optional scope ("file"|"pull-request"), and examples: [{ "snippet": string, "isCorrect": boolean }].',
+                    'Always respond in English, even if the manifest uses another language.',
+                    'Do NOT include extra keys such as repositoryId, sourcePath, origin, uuid, or timestamps.',
+                ].join(' '),
+                user: `Repository: ${params.repositoryId}\nManifests:\n\n${userPrompt}`,
             });
 
             if (!result?.rules || result.rules.length === 0) return [];
@@ -2681,47 +2595,38 @@ export class KodyRulesSyncService {
         } catch {
             const fbRun = `${mainRun}Raw`;
             try {
-                const promptRunner = new BYOKPromptRunnerService(
-                    this.promptRunnerService,
-                    mainProvider,
-                    mainFallback,
-                    byokConfigValue,
+                const rawModel = wrapByokModel(
+                    byokToVercelModel(byokConfigValue ?? undefined, 'main', {}),
+                    {
+                        byokConfig: byokConfigValue ?? undefined,
+                        organizationId:
+                            params.organizationAndTeamData?.organizationId,
+                        role: 'main',
+                    },
                 );
 
-                const { result: raw } =
-                    await this.observabilityService.runLLMInSpan({
+                const { text: raw } =
+                    await this.observabilityService.runAiSdkLLMInSpan<any>({
                         spanName: `${KodyRulesSyncService.name}::${fbRun}`,
                         runName: fbRun,
+                        model: getModelName(byokConfigValue ?? undefined),
                         attrs: {
                             repositoryId: params.repositoryId,
                             filesCount: params.files.length,
-                            type: promptRunner.executeMode,
                             fallback: true,
                         },
-                        byokConfig: byokConfigValue,
-                        exec: async (callbacks) => {
-                            return await promptRunner
-                                .builder()
-                                .setParser(ParserType.STRING)
-                                .addPrompt({
-                                    role: PromptRole.SYSTEM,
-                                    prompt: [
-                                        'Return ONLY a JSON object { "rules": [...] } (no code fences, no text), capped at 3 rules.',
-                                        'Rules must be HIGH-IMPACT and actionable in code/config only (security/auth, secrets handling, logging/observability, testing/linting/type-check, dependency hygiene). Avoid generic style nits.',
-                                        'Do NOT propose rules that depend on CI/CD, bots, or pinning/enforcing specific library versions/patches.',
-                                        'Each rule must include: title, rule, path (manifest path or derived glob), severity ("low"|"medium"|"high"|"critical"), optional scope ("file"|"pull-request"), and examples: [{ "snippet": string, "isCorrect": boolean }]. Always respond in English, even if the manifest uses another language.',
-                                        'Do NOT include repositoryId, sourcePath, origin, uuid, or timestamps.',
-                                    ].join(' '),
-                                })
-                                .addPrompt({
-                                    role: PromptRole.USER,
-                                    prompt: `Repository: ${params.repositoryId}\nManifests:\n\n${userPrompt}`,
-                                })
-                                .addCallbacks(callbacks)
-                                .addMetadata({ runName: fbRun })
-                                .setRunName(fbRun)
-                                .execute();
-                        },
+                        exec: () =>
+                            tracedGenerateText({
+                                model: rawModel as any,
+                                system: [
+                                    'Return ONLY a JSON object { "rules": [...] } (no code fences, no text), capped at 3 rules.',
+                                    'Rules must be HIGH-IMPACT and actionable in code/config only (security/auth, secrets handling, logging/observability, testing/linting/type-check, dependency hygiene). Avoid generic style nits.',
+                                    'Do NOT propose rules that depend on CI/CD, bots, or pinning/enforcing specific library versions/patches.',
+                                    'Each rule must include: title, rule, path (manifest path or derived glob), severity ("low"|"medium"|"high"|"critical"), optional scope ("file"|"pull-request"), and examples: [{ "snippet": string, "isCorrect": boolean }]. Always respond in English, even if the manifest uses another language.',
+                                    'Do NOT include repositoryId, sourcePath, origin, uuid, or timestamps.',
+                                ].join(' '),
+                                prompt: `Repository: ${params.repositoryId}\nManifests:\n\n${userPrompt}`,
+                            } as any),
                     });
 
                 const parsed = this.extractJsonArray(raw);

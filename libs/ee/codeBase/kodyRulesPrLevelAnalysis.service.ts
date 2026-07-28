@@ -2,13 +2,12 @@ import { createLogger } from '@libs/core/log/logger';
 import {
     BYOKConfig,
     LLMModelProvider,
-    ParserType,
-    PromptRole,
     PromptRunnerService,
     TokenUsage,
 } from '@kodus/kodus-common/llm';
 import { Inject, Injectable } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
+import { z } from 'zod';
 
 import { IKodyRulesAnalysisService } from '@libs/code-review/domain/contracts/KodyRulesAnalysisService.contract';
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
@@ -19,7 +18,7 @@ import {
     prompt_kodyrules_prlevel_analyzer,
     prompt_kodyrules_prlevel_group_rules,
 } from '@libs/common/utils/langchainCommon/prompts/kodyRulesPrLevel';
-import { tryParseJSONObject } from '@libs/common/utils/transforms/json';
+import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import {
     AIAnalysisResult,
     AIAnalysisResultPrLevel,
@@ -30,7 +29,6 @@ import {
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { TokenChunkingService } from '@libs/core/infrastructure/services/tokenChunking/tokenChunking.service';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import {
     IKodyRulesService,
@@ -44,12 +42,48 @@ import { ExternalReferenceLoaderService } from '@libs/kodyRules/infrastructure/a
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
+//#region Structured-output schemas
+// A file-sha field may arrive as an array OR a bare string (the analyzer prompt
+// examples show both) and may be `null`/absent — mirror the old lenient
+// STRING-parser behavior. `.optional()` (not `.nullable()`) is required by the
+// strict-wire-schema invariant, which normalizes provider `null` → absent.
+const fileShaField = z
+    .union([z.array(z.string()), z.string()])
+    .optional();
+
+const prLevelViolationSchema = z.object({
+    violatedFileSha: fileShaField,
+    relatedFileSha: fileShaField,
+    oneSentenceSummary: z.string().optional(),
+    suggestionContent: z.string().optional(),
+});
+
+// Analyzer output — the prompt returns `{ "rules": [ { ruleId, violations } ] }`
+// (wrapped in an object for OpenAI-strict structured-output compatibility,
+// mirroring kodyRulesSync.service.ts:2225).
+const prLevelAnalyzerSchema = z.object({
+    rules: z.array(
+        z.object({
+            ruleId: z.string().optional(),
+            violations: z.array(prLevelViolationSchema).optional(),
+        }),
+    ),
+});
+
+// Grouping output — the prompt returns a single object `{ ruleId, violations }`.
+const prLevelGroupSchema = z.object({
+    ruleId: z.string().optional(),
+    violations: z.array(prLevelViolationSchema).optional(),
+});
+//#endregion
+
 //#region Interfaces
-// Interface for analyzer response
+// Interface for analyzer response — matches the analyzer prompt output shape.
 interface AnalyzerViolation {
-    violatedFileSha: string[] | null;
-    relatedFileIds: string[];
-    reason: string;
+    violatedFileSha?: string[] | string | null;
+    relatedFileSha?: string[] | string | null;
+    oneSentenceSummary?: string;
+    suggestionContent?: string;
 }
 
 // Interface for violations with suggestions already generated
@@ -290,74 +324,17 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         }
     }
 
-    private processLLMResponse(response: string): any {
-        try {
-            if (!response) {
-                return null;
-            }
-
-            let cleanResponse = response;
-            if (response?.startsWith('```')) {
-                cleanResponse = response
-                    .replace(/^```json\n/, '')
-                    .replace(/\n```(\n)?$/, '')
-                    .trim();
-            }
-
-            const parsedResponse: AnalyzerRuleResult[] =
-                tryParseJSONObject(cleanResponse);
-
-            return parsedResponse;
-        } catch (error) {
-            this.logger.error({
-                message: 'Error processing LLM response',
-                error,
-                context: KodyRulesPrLevelAnalysisService.name,
-                metadata: {
-                    response,
-                },
-            });
-            return null;
-        }
-    }
-
     private processAnalyzerResponse(
         kodyRulesPrLevel: Array<Partial<IKodyRule>>,
-        response: string,
+        rules: AnalyzerRuleResult[] | null | undefined,
         files: FileChange[],
         prNumber: number,
         organizationAndTeamData: OrganizationAndTeamData,
     ): ExtendedKodyRule[] | null {
         try {
-            if (!response) {
-                this.logger.warn({
-                    message: 'Empty response from LLM analyzer',
-                    context: KodyRulesPrLevelAnalysisService.name,
-                    metadata: {
-                        prNumber,
-                        organizationAndTeamData,
-                        filesCount: files.length,
-                    },
-                });
-                return null;
-            }
-
-            const parse = this.processLLMResponse(response);
-            const parsedResponse = Array.isArray(parse) ? parse : [parse];
-
-            if (!parsedResponse) {
-                this.logger.warn({
-                    message:
-                        'Failed to parse LLM response - continuing without violations',
-                    context: KodyRulesPrLevelAnalysisService.name,
-                    metadata: {
-                        prNumber,
-                        organizationAndTeamData,
-                        responseLength: response.length,
-                    },
-                });
-                return null;
-            }
+            // runStructuredReviewCall already parsed/validated the structured
+            // output; `rules` is the analyzer's rule-result array.
+            const parsedResponse = Array.isArray(rules) ? rules : [];
 
             if (!Array.isArray(parsedResponse) || parsedResponse.length === 0) {
                 this.logger.log({
@@ -450,7 +427,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
                 metadata: {
                     prNumber,
                     organizationAndTeamData,
-                    responseLength: response?.length || 0,
                 },
             });
             return null;
@@ -1000,85 +976,31 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
             memories: context?.codeReviewConfig?.kodyMemoryRules || [],
         };
 
-        const fallbackProvider = LLMModelProvider.NOVITA_DEEPSEEK_V3;
-
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            provider,
-            fallbackProvider,
-            context?.codeReviewConfig?.byokConfig,
-        );
-
         const runName = 'prLevelKodyRulesAnalyzer';
-        const spanName = `${KodyRulesPrLevelAnalysisService.name}::${runName}`;
-        const spanAttrs = {
-            type: promptRunner.executeMode,
-            organizationId: organizationAndTeamData.organizationId,
-            prNumber,
-            chunkIndex,
-            filesCount: filesChunk.length,
-            provider:
-                context?.codeReviewConfig?.byokConfig?.main?.provider ??
-                provider,
-            fallbackProvider:
-                context?.codeReviewConfig?.byokConfig?.fallback?.provider ??
-                fallbackProvider,
-            model: context?.codeReviewConfig?.byokConfig?.main?.model,
-            fallbackModel:
-                context?.codeReviewConfig?.byokConfig?.fallback?.model,
-        };
-
         const byokConfigRef = context?.codeReviewConfig?.byokConfig;
 
         try {
-            const { result: analysis } =
-                await this.observabilityService.runLLMInSpan({
-                    spanName,
-                    runName,
-                    attrs: spanAttrs,
-                    byokConfig: byokConfigRef,
-                    exec: async (callbacks) => {
-                        return await promptRunner
-                            .builder()
-                            .setParser(ParserType.STRING)
-                            .setLLMJsonMode(true)
-                            .setPayload(analyzerPayload)
-                            .addPrompt({
-                                prompt: prompt_kodyrules_prlevel_analyzer,
-                                role: PromptRole.SYSTEM,
-                            })
-                            .addPrompt({
-                                prompt: 'Please analyze the provided information and return the response in the specified format',
-                                role: PromptRole.USER,
-                            })
-                            .addMetadata({
-                                organizationAndTeamData,
-                                prNumber,
-                                provider:
-                                    context?.codeReviewConfig?.byokConfig?.main
-                                        ?.provider ?? provider,
-                                fallbackProvider:
-                                    context?.codeReviewConfig?.byokConfig
-                                        ?.fallback?.provider ??
-                                    fallbackProvider,
-                                model: context?.codeReviewConfig?.byokConfig
-                                    ?.main?.model,
-                                fallbackModel:
-                                    context?.codeReviewConfig?.byokConfig
-                                        ?.fallback?.model,
-                                chunkIndex,
-                                runName,
-                            })
-                            .addTags([
-                                ...this.buildTags(provider, 'primary'),
-                                ...this.buildTags(fallbackProvider, 'fallback'),
-                            ])
-                            .addCallbacks(callbacks)
-                            .setRunName(runName)
-                            .setTemperature(0)
-                            .execute();
-                    },
-                });
+            // BYOK-first single-shot structured call on the AI SDK path. The
+            // outer runLLMInSpan wrapper is intentionally dropped (Q4): the
+            // span is emitted once, inside runStructuredReviewCall.
+            const analysis = await runStructuredReviewCall({
+                byokConfig: byokConfigRef ?? undefined,
+                schema: prLevelAnalyzerSchema,
+                system: prompt_kodyrules_prlevel_analyzer(analyzerPayload),
+                user: 'Please analyze the provided information and return the response in the specified format',
+                runName: `${KodyRulesPrLevelAnalysisService.name}::${runName}`,
+                organizationId: organizationAndTeamData.organizationId,
+                attrs: {
+                    prNumber,
+                    chunkIndex,
+                    filesCount: filesChunk.length,
+                    provider:
+                        context?.codeReviewConfig?.byokConfig?.main?.provider ??
+                        provider,
+                    fallback: false,
+                },
+                observabilityService: this.observabilityService,
+            });
 
             if (!analysis) {
                 const message = `No response from LLM for chunk ${chunkIndex + 1} for PR#${prNumber}`;
@@ -1098,13 +1020,12 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
             // processa resposta do chunk
             return this.processAnalyzerResponse(
                 kodyRulesPrLevel,
-                analysis,
+                analysis.rules as AnalyzerRuleResult[],
                 filesChunk,
                 prNumber,
                 organizationAndTeamData,
             );
         } catch (error) {
-            // runLLMInSpan já marca status/exception no span; aqui só logamos e propagamos
             this.logger.error({
                 message: `Error processing chunk ${chunkIndex + 1} for PR#${prNumber}`,
                 context: KodyRulesPrLevelAnalysisService.name,
@@ -1360,24 +1281,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
             };
         }
 
-        const provider = LLMModelProvider.GEMINI_2_5_PRO;
-        const fallbackProvider = LLMModelProvider.NOVITA_DEEPSEEK_V3;
-
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            provider,
-            fallbackProvider,
-            byokConfig,
-        );
-
         const runName = 'prLevelKodyRulesGrouper';
-        const spanName = `${KodyRulesPrLevelAnalysisService.name}::${runName}`;
-        const spanAttrs = {
-            type: promptRunner.executeMode,
-            organizationId: organizationAndTeamData?.organizationId,
-            prNumber,
-            ruleId: rule?.uuid,
-        };
 
         const groupingPayload = {
             rule: {
@@ -1393,51 +1297,22 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         };
 
         try {
-            const { result: grouping } =
-                await this.observabilityService.runLLMInSpan({
-                    spanName,
-                    runName,
-                    attrs: spanAttrs,
-                    byokConfig,
-                    exec: async (callbacks) => {
-                        return await promptRunner
-                            .builder()
-                            .setParser(ParserType.STRING)
-                            .setLLMJsonMode(true)
-                            .setPayload(groupingPayload)
-                            .addPrompt({
-                                prompt: prompt_kodyrules_prlevel_group_rules,
-                                role: PromptRole.SYSTEM,
-                            })
-                            .addPrompt({
-                                prompt: 'Please consolidate the provided violations into a single coherent comment following the instructions.',
-                                role: PromptRole.USER,
-                            })
-                            .addMetadata({
-                                organizationId:
-                                    organizationAndTeamData?.organizationId,
-                                teamId: organizationAndTeamData?.teamId,
-                                pullRequestId: prNumber,
-                                ruleId: rule?.uuid,
-                                provider:
-                                    byokConfig?.main?.provider || provider,
-                                model: byokConfig?.main?.model,
-                                fallbackProvider:
-                                    byokConfig?.fallback?.provider ||
-                                    fallbackProvider,
-                                fallbackModel: byokConfig?.fallback?.model,
-                                runName,
-                            })
-                            .addTags([
-                                ...this.buildTags(provider, 'primary'),
-                                ...this.buildTags(fallbackProvider, 'fallback'),
-                            ])
-                            .addCallbacks(callbacks) // captura usage por provedor
-                            .setRunName(runName)
-                            .setTemperature(0)
-                            .execute();
-                    },
-                });
+            // BYOK-first single-shot structured call on the AI SDK path; outer
+            // runLLMInSpan wrapper intentionally dropped (Q4).
+            const grouping = await runStructuredReviewCall({
+                byokConfig: byokConfig ?? undefined,
+                schema: prLevelGroupSchema,
+                system: prompt_kodyrules_prlevel_group_rules(groupingPayload),
+                user: 'Please consolidate the provided violations into a single coherent comment following the instructions.',
+                runName: `${KodyRulesPrLevelAnalysisService.name}::${runName}`,
+                organizationId: organizationAndTeamData?.organizationId,
+                attrs: {
+                    prNumber,
+                    ruleId: rule?.uuid,
+                    fallback: false,
+                },
+                observabilityService: this.observabilityService,
+            });
 
             if (!grouping) {
                 const message = 'No response from LLM for grouping suggestions';
@@ -1453,7 +1328,8 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
                 throw new Error(message);
             }
 
-            const groupedContent = this.processLLMResponse(grouping);
+            // runStructuredReviewCall already parsed/validated the object.
+            const groupedContent = grouping;
 
             // Validação de segurança do resultado
             if (!groupedContent?.violations?.[0]) {
@@ -1499,8 +1375,12 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
                 deliveryStatus: baseSuggestion.deliveryStatus,
                 severity: baseSuggestion.severity,
                 files: {
-                    violatedFileSha: firstViolation?.violatedFileSha || [],
-                    relatedFileSha: firstViolation?.relatedFileSha || [],
+                    violatedFileSha: this.normalizeShaList(
+                        firstViolation?.violatedFileSha,
+                    ),
+                    relatedFileSha: this.normalizeShaList(
+                        firstViolation?.relatedFileSha,
+                    ),
                 },
             };
 
@@ -1663,11 +1543,18 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         return allSuggestions;
     }
 
-    private buildTags(
-        provider: LLMModelProvider,
-        tier: 'primary' | 'fallback',
-    ) {
-        return [`model:${provider}`, `tier:${tier}`, 'kodyRules', 'prLevel'];
+    /**
+     * Structured-output file-sha fields may arrive as an array, a bare string,
+     * or be absent/null (the analyzer prompt examples show all three).
+     * Normalize to the `string[]` shape the suggestion/files model expects.
+     */
+    private normalizeShaList(
+        value: string[] | string | null | undefined,
+    ): string[] {
+        if (Array.isArray(value)) {
+            return value;
+        }
+        return value ? [value] : [];
     }
     //#endregion
 }
