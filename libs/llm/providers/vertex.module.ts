@@ -73,11 +73,29 @@ export const vertexModule: ProviderModule = {
             : { google: { thinkingConfig: { thinkingBudget: EFFORT_TO_BUDGET[effort] } } };
     },
 
-    normalizeUsage(_raw: unknown): NormalizedUsage {
-        return { input: 0, output: 0, reasoning: 0 };
+    // ── Phase 3: real usage extraction (D-01 / Q4) ──────────────────────────
+    // Consumes the ai@7 generateText result's high-level LanguageModelUsage. A1
+    // (code-verified): @ai-sdk/google-vertex reuses the @ai-sdk/google usage mapping
+    // (thoughtsTokenCount -> outputTokens.reasoning) for Gemini-on-Vertex; Claude-on-
+    // Vertex folds thinking into output like native anthropic (no separate split).
+    // generateText flattens outputTokens.reasoning -> usage.outputTokenDetails
+    // .reasoningTokens, so the generic reader splits reasoning for a Gemini thinking
+    // call and yields 0 otherwise. output is the FULL completion count and is NEVER
+    // reduced by reasoning (Q4 double-count trap).
+    normalizeUsage(raw: unknown): NormalizedUsage {
+        const u =
+            (raw as { usage?: Record<string, any> } | undefined)?.usage ?? {};
+        return {
+            input: u.inputTokens ?? 0,
+            output: u.outputTokens ?? 0,
+            reasoning:
+                u.outputTokenDetails?.reasoningTokens ??
+                u.reasoningTokens ??
+                0,
+        };
     },
     normalize(raw: unknown): ModelResult {
-        return { usage: { input: 0, output: 0, reasoning: 0 }, raw };
+        return { usage: this.normalizeUsage(raw), raw };
     },
 
     uiFields: [

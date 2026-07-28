@@ -73,11 +73,28 @@ export const googleGeminiModule: ProviderModule = {
               };
     },
 
-    normalizeUsage(_raw: unknown): NormalizedUsage {
-        return { input: 0, output: 0, reasoning: 0 };
+    // ── Phase 3: real usage extraction (D-01 / Q4) ──────────────────────────
+    // Consumes the ai@7 generateText result's high-level LanguageModelUsage. A1
+    // (code-verified): @ai-sdk/google maps thoughtsTokenCount -> outputTokens.reasoning
+    // and candidatesTokenCount -> outputTokens.text, with outputTokens.total already
+    // INCLUDING thoughts; generateText flattens that to
+    // usage.outputTokenDetails.reasoningTokens. So the generic reader below splits
+    // reasoning correctly for a Gemini thinking call and yields 0 for a plain one.
+    // output is the FULL completion count and is NEVER reduced by reasoning (Q4).
+    normalizeUsage(raw: unknown): NormalizedUsage {
+        const u =
+            (raw as { usage?: Record<string, any> } | undefined)?.usage ?? {};
+        return {
+            input: u.inputTokens ?? 0,
+            output: u.outputTokens ?? 0,
+            reasoning:
+                u.outputTokenDetails?.reasoningTokens ??
+                u.reasoningTokens ??
+                0,
+        };
     },
     normalize(raw: unknown): ModelResult {
-        return { usage: { input: 0, output: 0, reasoning: 0 }, raw };
+        return { usage: this.normalizeUsage(raw), raw };
     },
 
     uiFields: [

@@ -51,11 +51,28 @@ export const novitaModule: ProviderModule = {
 
     // No reasoning() — Novita has no native thinking mapping (default: off).
 
-    normalizeUsage(_raw: unknown): NormalizedUsage {
-        return { input: 0, output: 0, reasoning: 0 };
+    // ── Phase 3: real usage extraction (D-01 / Q4) ──────────────────────────
+    // Novita is OpenAI-compatible, so @ai-sdk/openai-compatible maps its
+    // { prompt_tokens, completion_tokens } onto the high-level ai@7
+    // LanguageModelUsage shape — the same extraction openai.module uses applies.
+    // ai@7 nests reasoning under `outputTokenDetails.reasoningTokens`; the
+    // top-level `reasoningTokens` is the ai@6 flat fallback (0 when a Novita
+    // upstream reports no split). Reasoning is a detail-OF output — `output` is
+    // the FULL completion count and is NEVER reduced by reasoning (Q4 trap).
+    normalizeUsage(raw: unknown): NormalizedUsage {
+        const u =
+            (raw as { usage?: Record<string, any> } | undefined)?.usage ?? {};
+        return {
+            input: u.inputTokens ?? 0,
+            output: u.outputTokens ?? 0,
+            reasoning:
+                u.outputTokenDetails?.reasoningTokens ??
+                u.reasoningTokens ??
+                0,
+        };
     },
     normalize(raw: unknown): ModelResult {
-        return { usage: { input: 0, output: 0, reasoning: 0 }, raw };
+        return { usage: this.normalizeUsage(raw), raw };
     },
 
     uiFields: [

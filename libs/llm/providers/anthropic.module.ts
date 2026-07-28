@@ -58,7 +58,14 @@ export const anthropicModule: ProviderModule = {
             // response_format json_schema → 'none' at this tier.
             structuredOutput: 'none',
             toolCalling: 'native',
-            usageGranularity: 'reasoning_split',
+            // A1 (code-verified, 03-10): @ai-sdk/anthropic sets
+            // outputTokens.reasoning = void 0 — Anthropic's Messages API `usage`
+            // reports NO separate thinking-token count (thinking is billed INTO
+            // output_tokens). So usage is 'output_only' even for extended-thinking
+            // models; supportsReasoning (above) is about REQUESTING thinking, which
+            // is a different axis from how usage is REPORTED. The D-05 conformance
+            // asserts this match against the captured fixture.
+            usageGranularity: 'output_only',
             streaming: true,
             promptCaching: true,
         };
@@ -98,11 +105,30 @@ export const anthropicModule: ProviderModule = {
         };
     },
 
-    normalizeUsage(_raw: unknown): NormalizedUsage {
-        return { input: 0, output: 0, reasoning: 0 };
+    // ── Phase 3: real usage extraction (D-01 / Q4) ──────────────────────────
+    // Consumes the ai@7 generateText result's high-level LanguageModelUsage (the
+    // same shape observability.service.ts reads): inputTokens/outputTokens are
+    // numbers, reasoning is nested under outputTokenDetails.reasoningTokens (ai@7)
+    // with a flat reasoningTokens fallback (ai@6). A1 (code-verified): the
+    // @ai-sdk/anthropic adapter never populates reasoning (outputTokens.reasoning =
+    // void 0), so this reads 0 for native anthropic — the generic reader is kept so
+    // an anthropic-compatible upstream that DOES surface a split still works. output
+    // is the FULL completion count and is NEVER reduced by reasoning (Q4 double-count
+    // trap: reasoning is additive info only).
+    normalizeUsage(raw: unknown): NormalizedUsage {
+        const u =
+            (raw as { usage?: Record<string, any> } | undefined)?.usage ?? {};
+        return {
+            input: u.inputTokens ?? 0,
+            output: u.outputTokens ?? 0,
+            reasoning:
+                u.outputTokenDetails?.reasoningTokens ??
+                u.reasoningTokens ??
+                0,
+        };
     },
     normalize(raw: unknown): ModelResult {
-        return { usage: { input: 0, output: 0, reasoning: 0 }, raw };
+        return { usage: this.normalizeUsage(raw), raw };
     },
 
     uiFields: [
