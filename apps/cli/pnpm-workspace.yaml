@@ -12,3 +12,13 @@ confirmModulesPurge: false
 # user-agent, não executa o binário do pacote. Evita baixar ~90MB à toa.
 allowBuilds:
   bun: false
+
+# Security bumps (Dependabot):
+# - diff: patch the vulnerable 8.0.x line only (the ancient diff@0/1 majors
+#   pulled elsewhere are outside the range and left untouched).
+# - jimp: 1.6.0 pinned file-type@^16 (CVE); 1.6.1 moved to file-type@^21.3.3,
+#   so bumping the jimp matrix to 1.6.1 patches file-type through the parent
+#   instead of force-mismatching an old @jimp/core with a newer file-type.
+overrides:
+  'diff@>=6.0.0 <8.0.3': '8.0.3'
+  jimp: '1.6.1'

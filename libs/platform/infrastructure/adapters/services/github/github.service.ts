@@ -1359,6 +1359,22 @@ export class GithubService
         });
     }
 
+    // `User.suspendedAt` only exists on GitHub Enterprise schemas — on
+    // github.com every batch fails with "Field 'suspendedAt' doesn't exist"
+    // and we were re-issuing (and error-logging) the doomed query on every
+    // member listing. Remember the schema verdict PER API BASE URL: the
+    // schema is a property of the GitHub instance, and a process-wide flag
+    // would let a github.com org disable the (real) suspension check for a
+    // GHE org served by the same service instance.
+    private suspendedAtUnsupportedByBaseUrl = new Map<string, boolean>();
+
+    private graphqlBaseUrlOf(octokit: Octokit): string {
+        return (
+            (octokit as any)?.request?.endpoint?.DEFAULTS?.baseUrl ??
+            'https://api.github.com'
+        );
+    }
+
     private async getSuspendedStatusBatch(
         octokit: Octokit,
         logins: string[],
@@ -1367,6 +1383,13 @@ export class GithubService
         if (logins.length === 0) return new Map();
 
         const statusMap = new Map<string, boolean>();
+
+        const baseUrl = this.graphqlBaseUrlOf(octokit);
+        if (this.suspendedAtUnsupportedByBaseUrl.get(baseUrl)) {
+            logins.forEach((login) => statusMap.set(login, true));
+            return statusMap;
+        }
+
         let aliasCounter = 0;
 
         for (let i = 0; i < logins.length; i += batchSize) {
@@ -1394,6 +1417,19 @@ export class GithubService
                     statusMap.set(login, userData?.suspendedAt === null);
                 });
             } catch (error) {
+                const message =
+                    error instanceof Error ? error.message : String(error);
+                if (/'suspendedAt' doesn't exist/.test(message)) {
+                    this.suspendedAtUnsupportedByBaseUrl.set(baseUrl, true);
+                    this.logger.warn({
+                        message:
+                            "GraphQL schema has no User.suspendedAt (github.com) — treating all members as active and skipping future suspended-status batches for this API base URL",
+                        context: GithubService.name,
+                        metadata: { baseUrl },
+                    });
+                    logins.forEach((login) => statusMap.set(login, true));
+                    return statusMap;
+                }
                 this.logger.error({
                     message: 'GraphQL batch query failed for suspended status',
                     context: GithubService.name,
@@ -5350,8 +5386,20 @@ This is an experimental feature that generates committable changes. Review the d
 
         try {
             for (const repo of repositories) {
+                // The hook lives under the REPO's namespace, not the
+                // integration account's. getCorrectOwner resolves personal
+                // PAT integrations to the authenticated user's login, which
+                // 404s ("Not Found - list-repository-webhooks") for every
+                // repo the account merely collaborates on — the whole
+                // registerRepo call then fails. Prefer the owner recorded on
+                // the repository itself; keep getCorrectOwner as a fallback
+                // for legacy configs missing both fields.
+                const repoOwner =
+                    repo.full_name?.split('/')[0] ||
+                    repo.organizationName ||
+                    owner;
                 const { data: webhooks } = await octokit.repos.listWebhooks({
-                    owner: owner,
+                    owner: repoOwner,
                     repo: repo.name,
                 });
 
@@ -5362,14 +5410,14 @@ This is an experimental feature that generates committable changes. Review the d
 
                 if (webhookToDelete) {
                     await octokit.repos.deleteWebhook({
-                        owner: owner,
+                        owner: repoOwner,
                         repo: repo.name,
                         hook_id: webhookToDelete.id,
                     });
                 }
 
                 const response = await octokit.repos.createWebhook({
-                    owner: owner,
+                    owner: repoOwner,
                     repo: repo.name,
                     config: {
                         url: webhookUrl,
@@ -5387,11 +5435,11 @@ This is an experimental feature that generates committable changes. Review the d
                 });
 
                 this.logger.log({
-                    message: `Webhook adicionado ao repositório ${repo.name} (owner: ${owner})`,
+                    message: `Webhook adicionado ao repositório ${repo.name} (owner: ${repoOwner})`,
                     context: GithubService.name,
                     metadata: {
                         ...params,
-                        owner,
+                        owner: repoOwner,
                         repositoryName: repo.name,
                         webhookId: response?.data?.id,
                     },

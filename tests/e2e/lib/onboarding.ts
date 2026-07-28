@@ -5,13 +5,109 @@ import type {
     TargetContext,
     TenantCredentials,
 } from "./types.js";
-import { ensureOk, http, type HttpResponse } from "./http.js";
+import {
+    ensureOk,
+    http,
+    registerSessionCookie,
+    type HttpResponse,
+} from "./http.js";
 import { logger } from "./log.js";
+import { settle } from "../providers/base.js";
 
 const log = logger("onboarding");
 
 interface LoginEnvelope {
-    data?: { accessToken?: string };
+    data?: { accessToken?: string; refreshToken?: string };
+}
+
+/**
+ * Establish a NextAuth session cookie for the cloud web-proxy path.
+ *
+ * Cloud cells reach the API through `${webBaseUrl}/api/proxy/api`, whose route
+ * ignores a client-sent `Authorization` header and derives the upstream Bearer
+ * from the NextAuth session cookie (deleting the Authorization when there's no
+ * session — the exact reason every authenticated matrix cell 401'd once the
+ * web app started injecting the bearer in the proxy). We already hold the
+ * `{accessToken, refreshToken}` from `/auth/login`; exchange them for a session
+ * cookie via the SSO credentials provider (auth.ts: `AuthProviders.SSO`), then
+ * register it so `http()` attaches it to every call carrying this bearer.
+ *
+ * Returns the `name=value; …` cookie string, or undefined if the handshake
+ * didn't yield a session token (caller logs and proceeds — the subsequent
+ * listTeams call surfaces the auth failure loudly rather than here).
+ */
+async function establishWebSession(
+    webBaseUrl: string,
+    accessToken: string,
+    refreshToken: string,
+): Promise<string | undefined> {
+    const base = webBaseUrl.replace(/\/$/, "");
+
+    // NextAuth's double-submit CSRF: token in the body must match the cookie.
+    const csrf = await http<{ csrfToken?: string }>(
+        `${base}/api/auth/csrf`,
+        { timeoutMs: 20_000 },
+    );
+    const csrfToken = csrf.body?.csrfToken;
+    const csrfCookie = cookiePairs(csrf.headers.getSetCookie());
+    if (!csrfToken || !csrfCookie) {
+        log.warn(
+            `NextAuth CSRF handshake incomplete at ${base} (token=${!!csrfToken}, cookie=${!!csrfCookie})`,
+        );
+        return undefined;
+    }
+
+    // SSO credentials sign-in: swaps the API tokens for a session cookie.
+    const form = new URLSearchParams({
+        csrfToken,
+        accessToken,
+        refreshToken,
+        callbackUrl: base,
+        json: "true",
+    });
+    const cb = await http(`${base}/api/auth/callback/sso`, {
+        method: "POST",
+        headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            cookie: csrfCookie,
+        },
+        body: form.toString(),
+        redirect: "manual",
+        timeoutMs: 20_000,
+    });
+
+    const sessionCookie = cookiePairs(cb.headers.getSetCookie());
+    const all = [csrfCookie, sessionCookie].filter(Boolean).join("; ");
+    if (!/session-token/.test(all)) {
+        log.warn(
+            `SSO sign-in returned no session-token cookie (HTTP ${cb.status}) — cloud proxy auth will fail`,
+        );
+        return undefined;
+    }
+    return all;
+}
+
+/**
+ * Reduce Set-Cookie header lines to a request `name=value; …` cookie string,
+ * de-duped by cookie NAME keeping the LAST occurrence.
+ *
+ * NextAuth's middleware `auth()` wrapper AND the csrf route each emit an
+ * `authjs.csrf-token` on `GET /api/auth/csrf`, but only the LAST matches the
+ * `csrfToken` returned in the JSON body — and Auth.js reads the FIRST cookie
+ * of a repeated name, so forwarding both fails the double-submit check with
+ * `MissingCSRF`. Last-wins keeps the authoritative token. Chunked session
+ * cookies (`…session-token.0/.1` for large JWTs) have distinct names, so
+ * they're all preserved.
+ */
+function cookiePairs(setCookies: string[]): string {
+    const jar = new Map<string, string>();
+    for (const c of setCookies) {
+        const pair = c.split(";")[0].trim();
+        const eq = pair.indexOf("=");
+        if (eq <= 0) continue;
+        jar.set(pair.slice(0, eq), pair.slice(eq + 1));
+    }
+    return [...jar.entries()].map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
 function decodeJwtPayload(jwt: string): Record<string, unknown> {
@@ -99,6 +195,37 @@ export async function login(
     if (!organizationId) {
         throw new Error("JWT payload missing organizationId");
     }
+
+    // Cloud reaches the API through the web app's `/api/proxy/api`, which
+    // derives the upstream Bearer from the NextAuth session cookie and strips
+    // a client-sent Authorization. A raw Bearer never survives the proxy, so
+    // exchange the API tokens for a session cookie and register it; `http()`
+    // then carries it on every call made with this bearer. Direct
+    // (self-hosted / local) targets skip this — they hit the API without a
+    // proxy and the Bearer works as-is.
+    const refreshToken = resp.body.data?.refreshToken;
+    if (target.apiBaseUrl.includes("/api/proxy/") && refreshToken) {
+        try {
+            const cookie = await establishWebSession(
+                target.webBaseUrl,
+                accessToken,
+                refreshToken,
+            );
+            if (cookie) {
+                // Scope the cookie to the API host (the proxy lives on the web
+                // host, e.g. qa.web.kodus.io, which is also apiBaseUrl's host).
+                const host = new URL(target.apiBaseUrl).host;
+                registerSessionCookie(accessToken, cookie, host);
+            }
+        } catch (err) {
+            log.warn(
+                `Failed to establish NextAuth session for cloud proxy (${target.webBaseUrl}): ${
+                    err instanceof Error ? err.message : String(err)
+                }`,
+            );
+        }
+    }
+
     // 30s envelope: under cloud QA load /team/ can hit the proxy
     // read-timeout window and abort with "This operation was aborted"
     // even though the underlying request would have completed in <1s.
@@ -574,7 +701,7 @@ export async function finishOnboarding(
         // observed case. See task #84 for the corresponding server-
         // side fix (validate-prerequisites should retry with backoff
         // when no automation is found).
-        await new Promise((r) => setTimeout(r, 10_000));
+        await settle(10_000);
         await resetCodeReviewConfig(target, session);
         return;
     }

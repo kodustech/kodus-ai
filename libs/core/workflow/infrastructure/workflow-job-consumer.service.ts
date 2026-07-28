@@ -24,6 +24,7 @@ import {
 } from '@libs/core/workflow/domain/contracts/inbox-message.repository.contract';
 import { InboxStatus } from './repositories/schemas/inbox-message.model';
 import { createRabbitMQErrorHandlerWithFallback } from '@libs/core/infrastructure/queue/rabbitmq-error.handler';
+import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from './workflow-queue-arguments';
 import { runWithBoundedTimeout } from './run-with-bounded-timeout';
 import {
     ITaskProtectionService,
@@ -70,11 +71,8 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         ),
         queueOptions: {
             channel: 'channel-webhook',
-            arguments: {
-                'x-queue-type': 'quorum',
-                'x-dead-letter-exchange': 'workflow.exchange.dlx',
-                'x-dead-letter-routing-key': 'workflow.job.failed',
-            },
+            arguments:
+                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.webhook.queue'],
         },
     })
     async handleWebhookProcessingJob(
@@ -103,11 +101,8 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         ),
         queueOptions: {
             channel: 'channel-code-review',
-            arguments: {
-                'x-queue-type': 'quorum',
-                'x-dead-letter-exchange': 'workflow.exchange.dlx',
-                'x-dead-letter-routing-key': 'workflow.job.failed',
-            },
+            arguments:
+                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.code_review.queue'],
         },
     })
     async handleCodeReviewJob(
@@ -137,11 +132,8 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         ),
         queueOptions: {
             channel: 'channel-cli-code-review',
-            arguments: {
-                'x-queue-type': 'quorum',
-                'x-dead-letter-exchange': 'workflow.exchange.dlx',
-                'x-dead-letter-routing-key': 'workflow.job.failed',
-            },
+            arguments:
+                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.cli_code_review.queue'],
         },
     })
     async handleCliCodeReviewJob(
@@ -170,11 +162,8 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         ),
         queueOptions: {
             channel: 'channel-check-implementation',
-            arguments: {
-                'x-queue-type': 'quorum',
-                'x-dead-letter-exchange': 'workflow.exchange.dlx',
-                'x-dead-letter-routing-key': 'workflow.job.failed',
-            },
+            arguments:
+                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.check_implementation.queue'],
         },
     })
     async handleImplementationCheckJob(
@@ -221,13 +210,8 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         ),
         queueOptions: {
             channel: 'channel-ast-graph-build',
-            arguments: {
-                'x-queue-type': 'quorum',
-                'x-single-active-consumer': true,
-                'x-consumer-timeout': 25 * 60 * 1000,
-                'x-dead-letter-exchange': 'workflow.exchange.dlx',
-                'x-dead-letter-routing-key': 'workflow.job.failed',
-            },
+            arguments:
+                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.ast_graph_build.queue'],
         },
     })
     async handleAstGraphBuildJob(
@@ -262,13 +246,8 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         ),
         queueOptions: {
             channel: 'channel-ast-graph-incremental',
-            arguments: {
-                'x-queue-type': 'quorum',
-                'x-single-active-consumer': true,
-                'x-consumer-timeout': 15 * 60 * 1000,
-                'x-dead-letter-exchange': 'workflow.exchange.dlx',
-                'x-dead-letter-routing-key': 'workflow.job.failed',
-            },
+            arguments:
+                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.ast_graph_incremental.queue'],
         },
     })
     async handleAstGraphIncrementalJob(

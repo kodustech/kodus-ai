@@ -100,7 +100,13 @@ export class AuthService implements IAuthService {
 
             return refreshTokenAuth;
         } catch (error) {
-            console.log(error);
+            // Never log the refresh token itself (it's a bearer secret) —
+            // only the failure, via the structured logger with redaction.
+            this.logger.error({
+                message: 'Failed to invalidate refresh token on logout',
+                context: AuthService.name,
+                error,
+            });
         }
     }
 
@@ -331,7 +337,21 @@ export class AuthService implements IAuthService {
                 ...tokenEntity,
             });
         } catch (error) {
-            console.log(error);
+            // Do NOT rethrow: the caller already holds valid tokens and login
+            // should still succeed. But this MUST be visible — a failed
+            // persist means the refresh token was never stored, so the user's
+            // NEXT refresh will fail (forcing a re-login). Surface it loudly
+            // instead of swallowing to stdout. Log identity, never the token.
+            this.logger.error({
+                message:
+                    'Failed to persist refresh token after login — token issued but not stored; subsequent refresh will fail',
+                context: AuthService.name,
+                metadata: {
+                    userUuid: userEntity?.uuid,
+                    authProvider,
+                },
+                error,
+            });
         }
     }
 
@@ -341,7 +361,12 @@ export class AuthService implements IAuthService {
                 secret: this.jwtConfig.refreshSecret,
             });
         } catch (e) {
-            console.log(e);
+            // Token value is a secret — log only the verification failure.
+            this.logger.error({
+                message: 'Refresh token verification failed',
+                context: AuthService.name,
+                error: e,
+            });
             throw new UnauthorizedException(
                 'Refresh token is invalid or has expired',
             );

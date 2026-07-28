@@ -59,7 +59,7 @@ jobs:
               working-directory: tests/e2e
               run: ./node_modules/.bin/tsc --noEmit
 
-            - name: Unit + integration tests (43 tests)
+            - name: Unit + integration tests
               working-directory: tests/e2e
               run: node --import tsx --test lib/__tests__/*.test.ts
 

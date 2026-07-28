@@ -1,3 +1,4 @@
+import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
@@ -59,8 +60,12 @@ describe('ValidatePrerequisitesStage', () => {
         createResponseToComment: jest.Mock;
     };
 
-    const makeContext = (): CodeReviewPipelineContext =>
-        ({
+    // Frozen by DEFAULT — production hands every stage after the first
+    // produce() a deep-frozen context. See test/fixtures/frozen-pipeline-context.ts.
+    const makeContext = (
+        over: Record<string, unknown> = {},
+    ): CodeReviewPipelineContext =>
+        frozenContext({
             organizationAndTeamData: {
                 organizationId: 'org-1',
                 teamId: 'team-1',
@@ -93,6 +98,7 @@ describe('ValidatePrerequisitesStage', () => {
                 message: 'started',
             },
             pipelineVersion: '1.0.0',
+            ...over,
         }) as CodeReviewPipelineContext;
 
     beforeEach(async () => {
@@ -340,8 +346,10 @@ describe('ValidatePrerequisitesStage', () => {
     });
 
     it('should skip review for centralized config repository when centralized config is enabled', async () => {
-        const context = makeContext();
-        context.repository.id = 'centralized-config-repo';
+        // Override at build time: the context is frozen, like production.
+        const context = makeContext({
+            repository: { id: 'centralized-config-repo', name: 'repo-1' },
+        });
 
         mockParametersService.findByKey.mockImplementation((key: string) => {
             if (key === ParametersKey.CENTRALIZED_CONFIG) {
@@ -368,8 +376,10 @@ describe('ValidatePrerequisitesStage', () => {
     });
 
     it('should not skip review for non-centralized config repository when centralized config is enabled', async () => {
-        const context = makeContext();
-        context.repository.id = 'non-centralized-config-repo';
+        // Override at build time: the context is frozen, like production.
+        const context = makeContext({
+            repository: { id: 'non-centralized-config-repo', name: 'repo-1' },
+        });
 
         mockParametersService.findByKey.mockImplementation((key: string) => {
             if (key === ParametersKey.CENTRALIZED_CONFIG) {

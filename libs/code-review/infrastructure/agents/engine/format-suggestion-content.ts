@@ -1,7 +1,10 @@
 import { createLogger } from '@libs/core/log/logger';
 import { BYOKConfig } from '@kodus/kodus-common/llm';
 import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
+import {
+    buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
+} from '@libs/core/log/langfuse';
 import { resolveSecondaryPassModel } from './secondary-pass-model';
 import {
     buildFormatPrompt,
@@ -71,8 +74,8 @@ export async function formatSuggestionContent(
         const result: any = await generateText({
             model: model as any,
             abortSignal: controller.signal,
-            experimental_telemetry: buildLangfuseTelemetry(
-                'suggestion-formatter',
+            ...toAiSdkTelemetryArgs(
+                buildLangfuseTelemetry('suggestion-formatter'),
             ),
             prompt: buildFormatPrompt(suggestions, {
                 customWritingGuidelines: options?.customWritingGuidelines,

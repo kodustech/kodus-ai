@@ -46,6 +46,8 @@ const SUITE = [
       cmd: ['node', 'evals/kody-rules/real-agent.js', '--dataset=github-cases', '--gate', `--model=${MODEL}`, `--runs=${RUNS}`, `--limit=${PRS}`] },
     { name: 'anchoring', kind: 'gate',
       cmd: ['node', 'evals/anchoring/anchor-eval.js', '--gate', `--model=${MODEL}`, `--limit=${PRS}`] },
+    { name: 'pr-summary', kind: 'gate',
+      cmd: ['node', 'evals/pr-summary/run.js', `--model=${MODEL}`, '--gate'] },
     { name: 'finder-recall', kind: 'gate',
       cmd: ['node', 'evals/investigation/run-recall.js', '--set=pr', '--gate', `--model=${MODEL}`] },
     { name: 'promotion', kind: 'report',

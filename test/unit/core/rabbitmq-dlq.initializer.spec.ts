@@ -3,11 +3,15 @@ import { RabbitMQDLQInitializer } from "@libs/core/infrastructure/queue/rabbitmq
 /**
  * Guards against the race-condition fix in rabbitmq-dlq.initializer.ts:
  * - Must implement `onApplicationBootstrap` (runs AFTER every module's
- *   onModuleInit, so the @RabbitSubscribe consumers have already
- *   declared workflow.jobs.*.queue).
+ *   onModuleInit).
  * - Must NOT implement `onModuleInit` (used to, which caused bind
  *   attempts on queues that didn't exist yet — silently dropping
  *   delayed retries on first boot with a fresh rabbit volume).
+ * - Must assertQueue each workflow.jobs.*.queue (with the same args as
+ *   @RabbitSubscribe) BEFORE binding it. Bind-only raced the consumers
+ *   and failed with 404 NOT_FOUND on a fresh volume / reconnect, silently
+ *   dropping the binding so CODE_REVIEW jobs were published to a queue no
+ *   one consumed and the review never ran.
  */
 
 describe("RabbitMQDLQInitializer lifecycle", () => {
@@ -41,7 +45,7 @@ describe("RabbitMQDLQInitializer lifecycle", () => {
             });
 
         const amqp = {
-            channel: { assertExchange, bindQueue },
+            channel: { assertExchange, bindQueue, assertQueue },
             managedChannel: { addSetup },
         } as any;
 
@@ -85,24 +89,45 @@ describe("RabbitMQDLQInitializer lifecycle", () => {
         expect(addSetup).toHaveBeenCalledTimes(1);
     });
 
-    it("does not assertQueue for workflow.jobs.*.queue (they come from @RabbitSubscribe)", async () => {
+    it("assertQueues each workflow.jobs.*.queue before binding, with @RabbitSubscribe's args", async () => {
         const assertExchange = jest.fn().mockResolvedValue(undefined);
         const bindQueue = jest.fn().mockResolvedValue(undefined);
         const assertQueue = jest.fn().mockResolvedValue(undefined);
         const addSetup = jest.fn();
         const amqp = {
-            channel: { assertExchange, bindQueue },
+            channel: { assertExchange, bindQueue, assertQueue },
             managedChannel: { addSetup },
         } as any;
 
         const instance = new RabbitMQDLQInitializer(amqp);
         await instance.onApplicationBootstrap();
 
+        // Each workflow job queue is asserted (so bind never races a
+        // not-yet-declared queue into a 404) with the SAME args as the
+        // @RabbitSubscribe consumer — otherwise a divergent redeclare would
+        // close the channel with PRECONDITION_FAILED.
         const assertedQueues = assertQueue.mock.calls.map((c) => c[0]);
-        expect(assertedQueues).not.toContain(
+        expect(assertedQueues).toContain("workflow.jobs.code_review.queue");
+        expect(assertedQueues).toContain("workflow.jobs.webhook.queue");
+        expect(assertQueue).toHaveBeenCalledWith(
             "workflow.jobs.code_review.queue",
+            expect.objectContaining({
+                durable: true,
+                arguments: expect.objectContaining({
+                    "x-queue-type": "quorum",
+                    "x-dead-letter-exchange": "workflow.exchange.dlx",
+                    "x-dead-letter-routing-key": "workflow.job.failed",
+                }),
+            }),
         );
-        expect(assertedQueues).not.toContain("workflow.jobs.webhook.queue");
+
+        // assertQueue must precede bindQueue for the same queue.
+        const firstAssert = assertQueue.mock.invocationCallOrder[0];
+        const firstBind = bindQueue.mock.invocationCallOrder.find(
+            (_, i) =>
+                bindQueue.mock.calls[i][0] === "workflow.jobs.code_review.queue",
+        );
+        expect(firstAssert).toBeLessThan(firstBind as number);
     });
 
     // Regression: `this.amqpConnection.channel` is a getter that throws

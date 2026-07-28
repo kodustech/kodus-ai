@@ -197,9 +197,12 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
             directoryId: pullRequestMessages.directoryId,
             startReviewMessage: pullRequestMessages.startReviewMessage,
             endReviewMessage: pullRequestMessages.endReviewMessage,
+            errorReviewMessage: pullRequestMessages.errorReviewMessage,
             existingStartMessage:
                 existingPullRequestMessage?.startReviewMessage,
             existingEndMessage: existingPullRequestMessage?.endReviewMessage,
+            existingErrorMessage:
+                existingPullRequestMessage?.errorReviewMessage,
             globalSettings: pullRequestMessages.globalSettings,
             existingGlobalSettings: existingPullRequestMessage?.globalSettings,
             directoryPath:
@@ -249,6 +252,7 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
             {
                 startReviewMessage: pullRequestMessages.startReviewMessage,
                 endReviewMessage: pullRequestMessages.endReviewMessage,
+                errorReviewMessage: pullRequestMessages.errorReviewMessage,
                 globalSettings: pullRequestMessages.globalSettings,
             },
         );
@@ -270,6 +274,7 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
             customMessagesDelta &&
             (customMessagesDelta.startReviewMessage ||
                 customMessagesDelta.endReviewMessage ||
+                customMessagesDelta.errorReviewMessage ||
                 customMessagesDelta.globalSettings)
         ) {
             configFileContent.customMessages = customMessagesDelta;
@@ -350,6 +355,7 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
     ): {
         startReviewMessage?: IPullRequestMessages['startReviewMessage'];
         endReviewMessage?: IPullRequestMessages['endReviewMessage'];
+        errorReviewMessage?: IPullRequestMessages['errorReviewMessage'];
         globalSettings?: Partial<
             NonNullable<IPullRequestMessages['globalSettings']>
         >;
@@ -357,6 +363,7 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
         const delta: {
             startReviewMessage?: IPullRequestMessages['startReviewMessage'];
             endReviewMessage?: IPullRequestMessages['endReviewMessage'];
+            errorReviewMessage?: IPullRequestMessages['errorReviewMessage'];
             globalSettings?: Partial<
                 NonNullable<IPullRequestMessages['globalSettings']>
             >;
@@ -378,6 +385,15 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
             )
         ) {
             delta.endReviewMessage = nextConfig.endReviewMessage;
+        }
+
+        if (
+            !this.areMessagesEqual(
+                nextConfig.errorReviewMessage,
+                parentConfig.errorReviewMessage,
+            )
+        ) {
+            delta.errorReviewMessage = nextConfig.errorReviewMessage;
         }
 
         const globalSettingsDelta: Partial<
@@ -582,6 +598,9 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
                 baseConfig.startReviewMessage,
             endReviewMessage:
                 overrideConfig.endReviewMessage || baseConfig.endReviewMessage,
+            errorReviewMessage:
+                overrideConfig.errorReviewMessage ||
+                baseConfig.errorReviewMessage,
             globalSettings: {
                 hideComments:
                     overrideConfig.globalSettings?.hideComments ??
@@ -599,6 +618,7 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
         return {
             startReviewMessage: config.startReviewMessage,
             endReviewMessage: config.endReviewMessage,
+            errorReviewMessage: config.errorReviewMessage,
             globalSettings: config.globalSettings || {
                 hideComments: false,
                 suggestionCopyPrompt: true,
@@ -615,6 +635,7 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
         return {
             startReviewMessage: json?.startReviewMessage,
             endReviewMessage: json?.endReviewMessage,
+            errorReviewMessage: json?.errorReviewMessage,
             globalSettings: json?.globalSettings,
         };
     }
@@ -638,6 +659,16 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
             !this.areMessagesEqual(
                 config1.endReviewMessage,
                 config2.endReviewMessage,
+            )
+        ) {
+            return false;
+        }
+
+        // Compare errorReviewMessage
+        if (
+            !this.areMessagesEqual(
+                config1.errorReviewMessage,
+                config2.errorReviewMessage,
             )
         ) {
             return false;

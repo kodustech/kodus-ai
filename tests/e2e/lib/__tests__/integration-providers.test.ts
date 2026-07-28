@@ -61,6 +61,15 @@ async function runScenarioAgainstMocks(opts: {
         process.env.TARGET_TUNNEL_URL = "https://dummy.trycloudflare.com";
         process.env.SH_TENANT_EMAIL = "test@kodus.test";
         process.env.SH_TENANT_PASSWORD = "secret123";
+        // Collapse the production waits — the mocks answer instantly, so every
+        // second spent here is dead time. Without these this file alone ran
+        // 13min (three providers × a 120s persistence poll + a 120s retry
+        // settle each) against a 5min job budget, and CI killed the job before
+        // Bitbucket and Azure ever reported. Same knobs the sibling
+        // integration tests already use; production sets none of them.
+        process.env.E2E_POLL_INTERVAL_OVERRIDE_SEC = "0.05";
+        process.env.E2E_POLL_TIMEOUT_OVERRIDE_SEC = "3";
+        process.env.E2E_SETTLE_OVERRIDE_SEC = "0";
         for (const [k, v] of Object.entries(opts.providerEnv)) {
             process.env[k] = v;
         }

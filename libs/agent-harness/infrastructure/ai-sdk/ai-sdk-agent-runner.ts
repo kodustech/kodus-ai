@@ -148,10 +148,12 @@ export class AiSdkAgentRunner implements AgentRunner {
                 ...(spec.providerOptions
                     ? { providerOptions: spec.providerOptions as any }
                     : {}),
-                // Opaque per-run telemetry (e.g. Langfuse experimental_telemetry)
-                // — domain-built, forwarded verbatim. Self-disables when off.
+                // Opaque per-run telemetry → AI SDK 7 `telemetry` (+ optional
+                // `runtimeContext` when the payload includes `metadata`).
+                // Domain builds the shape (e.g. buildLangfuseTelemetry); the
+                // harness only forwards / remaps, never interprets.
                 ...(input.telemetry
-                    ? { experimental_telemetry: input.telemetry as any }
+                    ? expandAiSdkTelemetry(input.telemetry)
                     : {}),
                 // shouldStop seam: stop if ANY policy says so; hard fail-open at maxSteps.
                 stopWhen: [
@@ -223,13 +225,7 @@ export class AiSdkAgentRunner implements AgentRunner {
                         index: steps.length,
                         message: eventToMessage(event),
                         usage: event?.usage
-                            ? {
-                                  inputTokens: event.usage.inputTokens,
-                                  outputTokens: event.usage.outputTokens,
-                                  reasoningTokens: event.usage.reasoningTokens,
-                                  cacheReadTokens:
-                                      event.usage.cachedInputTokens,
-                              }
+                            ? readAiSdkUsage(event.usage)
                             : undefined,
                     };
                     steps.push(step);
@@ -250,9 +246,31 @@ export class AiSdkAgentRunner implements AgentRunner {
             // exception the caller has to reconstruct from a stack trace.
             const message = err instanceof Error ? err.message : String(err);
             const name = err instanceof Error ? err.name : undefined;
+            // Carry the HTTP status and response body too. The AI SDK sets
+            // `message` to a terse status phrase ("Not Found") and puts the
+            // actionable detail in the body, so a {message, name} trace is not
+            // enough for the caller to classify the failure — it degrades to
+            // "Unexpected error" in the PR comment and the UI (#1568).
+            const detail = err as Record<string, unknown> | undefined;
+            const status =
+                typeof detail?.statusCode === 'number'
+                    ? detail.statusCode
+                    : typeof detail?.status === 'number'
+                      ? detail.status
+                      : undefined;
+            const responseBody =
+                typeof detail?.responseBody === 'string'
+                    ? detail.responseBody
+                    : undefined;
             emit('runner', {
                 kind: 'error',
-                detail: { message, name, step: steps.length },
+                detail: {
+                    message,
+                    name,
+                    step: steps.length,
+                    ...(status !== undefined && { status }),
+                    ...(responseBody && { responseBody }),
+                },
             });
             const errView = buildView(steps.length, messages, allToolNames);
 
@@ -306,14 +324,7 @@ export class AiSdkAgentRunner implements AgentRunner {
                 stopReason ?? 'result',
             ),
             stopReason,
-            usage: {
-                inputTokens: result.usage?.inputTokens,
-                outputTokens: result.usage?.outputTokens,
-                reasoningTokens: result.usage?.reasoningTokens,
-                cacheReadTokens: (
-                    result.usage as { cachedInputTokens?: number } | undefined
-                )?.cachedInputTokens,
-            },
+            usage: readAiSdkUsage(result.usage),
             trace,
         };
     }
@@ -468,26 +479,81 @@ function parseArtifactInput(input: unknown): unknown {
     return input;
 }
 
+/**
+ * Map AI SDK `LanguageModelUsage` onto our TokenUsage.
+ *
+ * ai@7 removed top-level `cachedInputTokens` / `reasoningTokens` in favour of
+ * `inputTokenDetails.cacheReadTokens` / `outputTokenDetails.reasoningTokens`.
+ * Keep the ai@6 field names as fallbacks so mixed-version / vendor shims still
+ * report cache hits.
+ */
+function readAiSdkUsage(usage: any): TokenUsage {
+    return {
+        inputTokens: usage?.inputTokens,
+        outputTokens: usage?.outputTokens,
+        reasoningTokens:
+            usage?.outputTokenDetails?.reasoningTokens ??
+            usage?.reasoningTokens,
+        cacheReadTokens:
+            usage?.inputTokenDetails?.cacheReadTokens ??
+            usage?.cachedInputTokens,
+    };
+}
+
+/**
+ * Map opaque domain telemetry into AI SDK 7 call options.
+ * `metadata` (Langfuse-style) becomes `runtimeContext` + `includeRuntimeContext`
+ * so observation attributes still attach after the AI SDK 7 telemetry redesign.
+ */
+function expandAiSdkTelemetry(
+    raw: Readonly<Record<string, unknown>>,
+): {
+    telemetry: Record<string, unknown>;
+    runtimeContext?: Record<string, unknown>;
+} {
+    const { metadata, ...telemetry } = raw as {
+        metadata?: Record<string, unknown>;
+        [key: string]: unknown;
+    };
+    if (!metadata || Object.keys(metadata).length === 0) {
+        return { telemetry };
+    }
+    return {
+        telemetry: {
+            ...telemetry,
+            includeRuntimeContext: Object.fromEntries(
+                Object.keys(metadata).map((k) => [k, true]),
+            ),
+        },
+        runtimeContext: metadata,
+    };
+}
+
 /** Best-effort token usage from the steps collected before a failure —
  *  the error path has no provider-level total to read. */
 function aggregateUsage(steps: readonly RunStep[]): TokenUsage {
     let inputTokens = 0;
     let outputTokens = 0;
+    let reasoningTokens = 0;
+    let cacheReadTokens = 0;
     for (const s of steps) {
         inputTokens += s.usage?.inputTokens ?? 0;
         outputTokens += s.usage?.outputTokens ?? 0;
+        reasoningTokens += s.usage?.reasoningTokens ?? 0;
+        cacheReadTokens += s.usage?.cacheReadTokens ?? 0;
     }
-    return { inputTokens, outputTokens };
+    return { inputTokens, outputTokens, reasoningTokens, cacheReadTokens };
 }
 
 // --- mappers (AI SDK <-> core contracts) ---
 function toAgentMessage(m: ModelMessage): AgentMessage {
+    // Preserve structured content (tool-result / tool-call / text parts) as-is.
+    // Stringifying a `tool` turn here is what made the compressed window crash
+    // the SDK on `content.filter` at the next step; keeping the array intact
+    // lets it round-trip back to generateText unchanged.
     return {
         role: m.role as AgentMessage['role'],
-        content:
-            typeof m.content === 'string'
-                ? m.content
-                : JSON.stringify(m.content),
+        content: m.content,
     };
 }
 function toModelMessage(m: AgentMessage): ModelMessage {

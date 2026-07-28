@@ -42,7 +42,9 @@ export class GitHubProvider extends BaseProvider {
     readonly integrationType = 'GITHUB';
     readonly webhookPath = '/github/webhook';
 
-    protected readonly token: string;
+    // Not readonly: refreshInstallationTokenIfNeeded() swaps in a re-minted
+    // GitHub App installation token when a long poll outlives the ~1h expiry.
+    protected token: string;
     protected readonly repoFullName: string;
     protected readonly apiBase = 'https://api.github.com';
     protected readonly existingPrNumber?: number;
@@ -74,6 +76,29 @@ export class GitHubProvider extends BaseProvider {
     private headers(): Record<string, string> {
         return {
             'Authorization': `Bearer ${this.token}`,
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+        };
+    }
+
+    // Headers for writes that establish AUTHORSHIP of a product-visible
+    // event (creating a PR, posting a trigger comment). When the harness
+    // runs on a GitHub App installation token (cloud cells, for quota), the
+    // author of those events becomes the App's `[bot]` account — and the
+    // product correctly skips reviews for bot authors ("User is ignored,
+    // skipping automation"), which silently zeroed the whole cloud matrix
+    // since the App secrets landed. Route authorship writes through the
+    // durable PAT (a human-typed account) and keep every read/poll on the
+    // App token's own quota. On PAT-only runs this is identical to
+    // headers().
+    private authorHeaders(): Record<string, string> {
+        const pat = process.env.GH_TEST_TOKEN;
+        const token =
+            this.token.startsWith('ghs_') && pat && !pat.startsWith('ghs_')
+                ? pat
+                : this.token;
+        return {
+            'Authorization': `Bearer ${token}`,
             'Accept': 'application/vnd.github+json',
             'X-GitHub-Api-Version': '2022-11-28',
         };
@@ -168,7 +193,7 @@ export class GitHubProvider extends BaseProvider {
                 `${this.apiBase}/repos/${this.repoFullName}/pulls`,
                 {
                     method: 'POST',
-                    headers: this.headers(),
+                    headers: this.authorHeaders(),
                     body: {
                         title: args.title,
                         body: args.body,
@@ -269,7 +294,7 @@ export class GitHubProvider extends BaseProvider {
             `${this.apiBase}/repos/${this.repoFullName}/pulls`,
             {
                 method: 'POST',
-                headers: this.headers(),
+                headers: this.authorHeaders(),
                 body: {
                     title: args.title,
                     body: args.body,
@@ -369,7 +394,7 @@ export class GitHubProvider extends BaseProvider {
             `${this.apiBase}/repos/${this.repoFullName}/issues/${target}/comments`,
             {
                 method: 'POST',
-                headers: this.headers(),
+                headers: this.authorHeaders(),
                 body: { body: '@kody review' },
             },
         );
@@ -378,6 +403,26 @@ export class GitHubProvider extends BaseProvider {
             triggerId: String(resp.body.id),
             sinceIso: resp.body.created_at,
         };
+    }
+
+    // GitHub App installation tokens (ghs_) expire after ~1h. The runner
+    // mints one per SCENARIO, but a scenario with two 25-min polls plus a
+    // retry settle outlives it — observed on the cloud matrix as an opaque
+    // HTTP 401 mid-poll after ~50min. githubAppToken() keeps a cache with a
+    // 30-min refresh margin, so re-resolving here is free until a re-mint is
+    // actually due. PATs (ghp_/github_pat_) never take this path.
+    private async refreshInstallationTokenIfNeeded(): Promise<void> {
+        if (!this.token.startsWith('ghs_')) return;
+        try {
+            const { githubAppToken } = await import(
+                '../lib/github-app-token.js'
+            );
+            const fresh = await githubAppToken();
+            if (fresh) this.token = fresh;
+        } catch {
+            // keep the current token — if it is truly expired the next
+            // request 401s loudly, which is the pre-existing behaviour
+        }
     }
 
     // Conditional GET with an ETag cache. GitHub serves 304 Not Modified
@@ -452,6 +497,7 @@ export class GitHubProvider extends BaseProvider {
         const since = encodeURIComponent(opts.sinceIso);
         const result = await pollUntil(
             async () => {
+                await this.refreshInstallationTokenIfNeeded();
                 const [reviewComments, issueComments, reviews] =
                     await Promise.all([
                         this.conditionalGet<{ id: number; body: string }[]>(
@@ -622,6 +668,7 @@ export class GitHubProvider extends BaseProvider {
         const since = encodeURIComponent(opts.sinceIso);
         const result = await pollUntil<{ startedAt: string; sample: string }>(
             async () => {
+                await this.refreshInstallationTokenIfNeeded();
                 const resp = await this.conditionalGet<
                     { id: number; body: string; created_at: string }[]
                 >(
@@ -652,7 +699,7 @@ export class GitHubProvider extends BaseProvider {
             `${this.apiBase}/repos/${this.repoFullName}/issues/${prNumber}/comments`,
             {
                 method: 'POST',
-                headers: this.headers(),
+                headers: this.authorHeaders(),
                 body: { body },
             },
         );
@@ -821,16 +868,25 @@ export class GitHubProvider extends BaseProvider {
     // the product's credential mid-run. Always hand the backend the
     // long-lived base PAT; the assigned token keeps serving the harness's
     // own API calls (clone, PRs, polling).
+    //
+    // Prefer a DEDICATED integration account (GH_INTEGRATION_TOKEN) so the
+    // product's own GitHub calls (read diff/files, post comments, resolve
+    // threads) draw on a separate 5,000 req/hr budget from the harness
+    // driver pool. Without it, the product and the harness both hammer
+    // GH_TEST_TOKEN — that single account's quota was tripping mid-cell and
+    // cascading scenarios into rate-limit SKIPs. Falls back to GH_TEST_TOKEN
+    // when the dedicated secret is unset, so this is a no-op until wired.
     authToken(): string {
         // Installation tokens are prefixed ghs_ and die in ~1h. NOTHING with
         // that prefix may become the stored integration credential — not the
-        // runner-assigned token, and not a misconfigured GH_TEST_TOKEN secret
-        // either (a silent 1h credential in CI config would fail mid-run).
-        const durable = process.env.GH_TEST_TOKEN;
+        // runner-assigned token, and not a misconfigured secret either (a
+        // silent 1h credential in CI config would fail mid-run).
+        const durable =
+            process.env.GH_INTEGRATION_TOKEN || process.env.GH_TEST_TOKEN;
         if (durable) {
             if (durable.startsWith('ghs_')) {
                 throw new Error(
-                    'GH_TEST_TOKEN is a GitHub App installation token (ghs_) — the integration credential must be a durable PAT',
+                    'The GitHub integration credential (GH_INTEGRATION_TOKEN / GH_TEST_TOKEN) is a GitHub App installation token (ghs_) — it must be a durable PAT',
                 );
             }
             return durable;

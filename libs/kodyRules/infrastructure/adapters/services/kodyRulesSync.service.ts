@@ -46,6 +46,7 @@ import {
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { GLOBAL_RULES_TRIAL_IMPORT_LIMIT } from '@libs/kodyRules/domain/interfaces/global-rules-source.interface';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
@@ -3362,5 +3363,446 @@ export class KodyRulesSyncService {
             }
         }
         return counts;
+    }
+
+    // ---------------------------------------------------------------------
+    // Global rules synced from selected source repositories
+    //
+    // Rules imported here live under `repositoryId="global"` (the org-wide
+    // scope) but are tagged with `origin=GLOBAL_REPO_FILE_SYNC` and
+    // `sourceRepositoryId`, which is what separates them from user-authored
+    // global rules and from the onboarding fast-sync scratch that also share
+    // the `"global"` bucket. `directoryId` is intentionally left undefined —
+    // a source-repo directoryId would make the enforcement filter drop the
+    // rule in every other repo's review.
+    // ---------------------------------------------------------------------
+
+    private readonly GLOBAL_SCOPE_ID = 'global';
+
+    /** True for a global rule that this feature owns (safe to reconcile/purge). */
+    private isGlobalSyncedRule(rule: any, sourceRepositoryId?: string): boolean {
+        if (rule?.repositoryId !== this.GLOBAL_SCOPE_ID) return false;
+        if (rule?.origin !== KodyRulesOrigin.GLOBAL_REPO_FILE_SYNC) return false;
+        if (
+            sourceRepositoryId !== undefined &&
+            rule?.sourceRepositoryId !== sourceRepositoryId
+        ) {
+            return false;
+        }
+        return true;
+    }
+
+    /** Count of ACTIVE global-synced rules in an already-loaded rules array. */
+    private countActiveGlobalSyncedRulesIn(rules: any[]): number {
+        return (rules ?? []).filter(
+            (r) =>
+                this.isGlobalSyncedRule(r) &&
+                r?.status === KodyRulesStatus.ACTIVE,
+        ).length;
+    }
+
+    /**
+     * Count of ACTIVE global-synced rules across the whole org (every source
+     * repo combined). This is the number the trial cap is measured against.
+     * Loads the org's rules; callers that already hold the rules array (e.g. the
+     * sync loop) should use `countActiveGlobalSyncedRulesIn` instead.
+     */
+    async countGlobalSyncedRules(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<number> {
+        const entity = await this.kodyRulesService.findByOrganizationId(
+            organizationAndTeamData.organizationId,
+        );
+        return this.countActiveGlobalSyncedRulesIn(
+            (entity?.rules ?? []) as any[],
+        );
+    }
+
+    /**
+     * Find an existing global-synced rule in an already-loaded rules array,
+     * keyed by (source repository, source file path). The key includes
+     * `sourceRepositoryId` so two source repos with the same file path (e.g.
+     * both shipping a `CLAUDE.md`) don't collide in the shared `"global"` bucket.
+     * Pure/in-memory so the sync loop can reuse a single org-rules load instead
+     * of re-querying per file.
+     */
+    private selectGlobalRuleFromList(
+        rules: any[],
+        sourceRepositoryId: string,
+        sourcePath: string,
+    ): Partial<{
+        uuid: string;
+        status: KodyRulesStatus;
+        lastContentHash: string;
+    }> | null {
+        const matches =
+            (rules ?? []).filter(
+                (r: any) =>
+                    this.isGlobalSyncedRule(r, sourceRepositoryId) &&
+                    (r?.sourcePath || '').split('#')[0] === sourcePath,
+            ) ?? [];
+        if (!matches.length) return null;
+
+        const toTime = (value: unknown): number => {
+            const t = new Date((value as any) ?? 0).getTime();
+            return Number.isFinite(t) ? t : 0;
+        };
+        const newestFirst = [...matches].sort(
+            (a: any, b: any) => toTime(b?.createdAt) - toTime(a?.createdAt),
+        );
+        const found =
+            newestFirst.find(
+                (r: any) => r?.status !== KodyRulesStatus.DELETED,
+            ) ?? newestFirst[0];
+
+        return found
+            ? {
+                  uuid: found.uuid,
+                  status: found.status,
+                  lastContentHash: (found as any).lastContentHash,
+              }
+            : null;
+    }
+
+    /**
+     * Full scan of a source repository, importing every discovered rule file
+     * into the global scope. Used both by the manual "resync global" action and
+     * by the PR-merge trigger (the git-tree listing is a single cheap call and
+     * the per-file SHA short-circuit skips unchanged files, so re-running on
+     * every merged PR is acceptable).
+     *
+     * Reconciles deletions: any previously-synced global rule from this source
+     * repo whose file no longer exists at HEAD is soft-deleted.
+     */
+    async syncRepositoryGlobal(params: SyncTarget): Promise<void> {
+        const { organizationAndTeamData, repository } = params;
+        try {
+            // Plan gate. Free orgs can't import at all; trial orgs are capped at
+            // GLOBAL_RULES_TRIAL_IMPORT_LIMIT rules TOTAL across every source
+            // repo; paid/self-hosted are unlimited. Resolved here (not just in
+            // the endpoint) so the PR-merge trigger and manual resync honour the
+            // same cap. `budget` is the number of NEW rules still importable;
+            // updates to already-imported rules never consume it.
+            const tier =
+                await this.permissionValidationService.resolveGlobalRulesImportTier(
+                    organizationAndTeamData,
+                    KodyRulesSyncService.name,
+                );
+            if (tier === 'free') {
+                this.logger.log({
+                    message:
+                        '[kody-rules-global-sync] skipped: global rules import is not available on the Free plan',
+                    context: KodyRulesSyncService.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        sourceRepositoryId: repository?.id,
+                    },
+                });
+                return;
+            }
+            // Load the org's rules ONCE and reuse the array for the budget
+            // count, every per-file lookup, and the deletion reconciliation.
+            // The rules array only grows by distinct source paths during this
+            // run (each handled once), so an in-memory snapshot stays correct
+            // for lookups; reconciliation is driven by `seenSourcePaths`, not by
+            // whether a just-created rule is in the snapshot.
+            const orgRules = ((
+                await this.kodyRulesService.findByOrganizationId(
+                    organizationAndTeamData.organizationId,
+                )
+            )?.rules ?? []) as any[];
+
+            const importLimit =
+                tier === 'trial' ? GLOBAL_RULES_TRIAL_IMPORT_LIMIT : null;
+            let budget =
+                importLimit === null
+                    ? Number.POSITIVE_INFINITY
+                    : Math.max(
+                          0,
+                          importLimit -
+                              this.countActiveGlobalSyncedRulesIn(orgRules),
+                      );
+
+            const branch = await this.codeManagementService.getDefaultBranch({
+                organizationAndTeamData,
+                repository,
+            });
+
+            const allFiles =
+                await this.codeManagementService.getRepositoryAllFiles({
+                    organizationAndTeamData,
+                    repository: { id: repository.id, name: repository.name },
+                    filters: {
+                        branch,
+                        filePatterns: [...RULE_FILE_DISCOVERY_PATTERNS],
+                    },
+                });
+
+            const seenSourcePaths = new Set<string>();
+            const syncOutcome = {
+                imported: [] as string[],
+                unchanged: [] as string[],
+                skipped: [] as Array<{ file: string; reason: string }>,
+                removed: [] as string[],
+                limitReached: [] as string[],
+            };
+
+            for (const file of allFiles) {
+                seenSourcePaths.add(file.path);
+
+                const existing = this.selectGlobalRuleFromList(
+                    orgRules,
+                    repository.id,
+                    file.path,
+                );
+
+                // SHA short-circuit: unchanged file with a live rule → skip the
+                // content download + LLM conversion entirely.
+                const currentSha = (file as any)?.sha as string | undefined;
+                if (
+                    existing &&
+                    existing.status !== KodyRulesStatus.DELETED &&
+                    currentSha &&
+                    existing.lastContentHash === currentSha
+                ) {
+                    syncOutcome.unchanged.push(file.path);
+                    continue;
+                }
+
+                const contentResp =
+                    await this.codeManagementService.getRepositoryContentFile({
+                        organizationAndTeamData,
+                        repository: {
+                            id: repository.id,
+                            name: repository.name,
+                        },
+                        file: { filename: file.path },
+                        pullRequest: {
+                            head: { ref: branch },
+                            base: { ref: branch },
+                        },
+                    });
+
+                const rawContent = contentResp?.data?.content;
+                if (!rawContent) {
+                    syncOutcome.skipped.push({
+                        file: file.path,
+                        reason: 'empty or unfetchable content',
+                    });
+                    continue;
+                }
+
+                const decoded =
+                    contentResp?.data?.encoding === 'base64'
+                        ? Buffer.from(rawContent, 'base64').toString('utf-8')
+                        : rawContent;
+
+                // @kody-ignore still applies: remove any existing global rule
+                // for this file.
+                if (this.shouldIgnoreFile(decoded)) {
+                    if (existing?.uuid) {
+                        await this.deleteGlobalRuleByUuid({
+                            organizationAndTeamData,
+                            uuid: existing.uuid,
+                        });
+                        syncOutcome.removed.push(file.path);
+                    }
+                    continue;
+                }
+
+                const rules = await this.convertFileToKodyRules({
+                    filePath: file.path,
+                    repositoryId: this.GLOBAL_SCOPE_ID,
+                    content: decoded,
+                    organizationAndTeamData,
+                    fileRef: {
+                        repository: {
+                            id: repository.id,
+                            name: repository.name,
+                        },
+                        branch,
+                    },
+                });
+
+                const oneRule = rules?.find(
+                    (r) => r && typeof r === 'object' && r.title && r.rule,
+                );
+
+                if (!oneRule) {
+                    syncOutcome.skipped.push({
+                        file: file.path,
+                        reason: 'no rule extracted (disabled template, empty content, or LLM returned none)',
+                    });
+                    continue;
+                }
+
+                // Trial cap. A NEW rule (nothing imported for this file yet, or
+                // a soft-deleted/rejected one being revived) counts against the
+                // budget; re-importing changed content over an ACTIVE rule does
+                // not. Once the budget is spent, further NEW rules are skipped —
+                // this is what "import only the first N rules found" enforces,
+                // in git-tree order, across every source repo combined.
+                const consumesBudget =
+                    !existing?.uuid ||
+                    existing.status !== KodyRulesStatus.ACTIVE;
+                if (consumesBudget && budget <= 0) {
+                    syncOutcome.limitReached.push(file.path);
+                    continue;
+                }
+
+                const dto: CreateKodyRuleDto = {
+                    uuid: existing?.uuid,
+                    title: oneRule.title as string,
+                    rule: oneRule.rule as string,
+                    path: validateAndScopeIdeRulePath({
+                        llmPath: oneRule.path as string,
+                        sourceFilePath: file.path,
+                        pathSource: (oneRule as any)?.pathSource,
+                    }).path,
+                    sourcePath: file.path,
+                    severity:
+                        ((
+                            oneRule.severity as any
+                        )?.toLowerCase?.() as KodyRuleSeverity) ||
+                        KodyRuleSeverity.MEDIUM,
+                    // Global scope: the org-wide bucket, no source directoryId
+                    // (see the note above this section).
+                    repositoryId: this.GLOBAL_SCOPE_ID,
+                    sourceRepositoryId: repository.id,
+                    lastContentHash: currentSha,
+                    origin: KodyRulesOrigin.GLOBAL_REPO_FILE_SYNC,
+                    status: oneRule.status as any,
+                    scope:
+                        (oneRule.scope as KodyRulesScope) ||
+                        KodyRulesScope.FILE,
+                    examples: Array.isArray(oneRule.examples)
+                        ? (oneRule.examples as any)
+                        : [],
+                } as CreateKodyRuleDto;
+
+                // Re-syncing changed content over a previously REJECTED rule
+                // reactivates it (mirrors the per-repo force-sync behaviour):
+                // selecting the repo as a global source IS the source-of-truth
+                // signal, so a stale UI rejection must not block re-import.
+                if (existing?.status === KodyRulesStatus.REJECTED) {
+                    (dto as any).status = KodyRulesStatus.ACTIVE;
+                }
+
+                await this.kodyRulesService.createOrUpdate(
+                    organizationAndTeamData,
+                    dto,
+                    this.systemUserInfo,
+                );
+
+                if (consumesBudget) {
+                    budget -= 1;
+                }
+                syncOutcome.imported.push(file.path);
+            }
+
+            // Deletion reconciliation: soft-delete global rules from this source
+            // repo whose file no longer exists at HEAD. Reuses the snapshot
+            // loaded at the top — a rule created during this run is never a
+            // deletion candidate (its path is in `seenSourcePaths`), so the
+            // snapshot missing it is harmless.
+            for (const rule of orgRules) {
+                if (!this.isGlobalSyncedRule(rule, repository.id)) continue;
+                if (rule?.status === KodyRulesStatus.DELETED) continue;
+                const sp = (rule?.sourcePath || '').split('#')[0];
+                if (sp && !seenSourcePaths.has(sp) && rule?.uuid) {
+                    await this.deleteGlobalRuleByUuid({
+                        organizationAndTeamData,
+                        uuid: rule.uuid,
+                    });
+                    syncOutcome.removed.push(sp);
+                }
+            }
+
+            this.logger.log({
+                message: `[kody-rules-global-sync] summary: ${syncOutcome.imported.length} imported, ${syncOutcome.unchanged.length} unchanged, ${syncOutcome.skipped.length} skipped, ${syncOutcome.removed.length} removed, ${syncOutcome.limitReached.length} over ${tier} limit (of ${allFiles.length} candidate file(s))`,
+                context: KodyRulesSyncService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    sourceRepositoryId: repository.id,
+                    branch,
+                    tier,
+                    importLimit,
+                    ...syncOutcome,
+                },
+            });
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to sync global rules from source repository',
+                context: KodyRulesSyncService.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    sourceRepositoryId: repository?.id,
+                },
+            });
+        }
+    }
+
+    /** Soft-delete a single global-synced rule via the centralized-aware path. */
+    private async deleteGlobalRuleByUuid(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        uuid: string;
+    }): Promise<void> {
+        const { organizationAndTeamData, uuid } = params;
+        await this.deleteRuleInOrganizationByIdKodyRulesUseCase.execute(uuid, {
+            source: 'web',
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+            userId: this.systemUserInfo.userId,
+            userEmail: this.systemUserInfo.userEmail,
+        });
+    }
+
+    /**
+     * Soft-delete every global rule imported from a given source repository.
+     * Called when the user removes that repo from the global-rules source list.
+     *
+     * CRITICAL: scoped by `origin=GLOBAL_REPO_FILE_SYNC` + `sourceRepositoryId`
+     * (via `isGlobalSyncedRule`) so it never touches user-authored global rules
+     * or another source repo's rules that share the `"global"` bucket.
+     */
+    async purgeGlobalRulesForSourceRepository(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        sourceRepositoryId: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, sourceRepositoryId } = params;
+        try {
+            const entity = await this.kodyRulesService.findByOrganizationId(
+                organizationAndTeamData.organizationId,
+            );
+            if (!entity?.rules) return 0;
+
+            let removed = 0;
+            for (const rule of entity.rules as any[]) {
+                if (!this.isGlobalSyncedRule(rule, sourceRepositoryId)) continue;
+                if (rule?.status === KodyRulesStatus.DELETED) continue;
+                if (!rule?.uuid) continue;
+                await this.deleteGlobalRuleByUuid({
+                    organizationAndTeamData,
+                    uuid: rule.uuid,
+                });
+                removed += 1;
+            }
+
+            this.logger.log({
+                message: `[kody-rules-global-sync] purged ${removed} global rule(s) for removed source repository`,
+                context: KodyRulesSyncService.name,
+                metadata: { organizationAndTeamData, sourceRepositoryId },
+            });
+            return removed;
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to purge global rules for source repository',
+                context: KodyRulesSyncService.name,
+                error,
+                metadata: params,
+            });
+            return 0;
+        }
     }
 }

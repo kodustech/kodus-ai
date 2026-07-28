@@ -238,6 +238,11 @@ test("integration: code-review-basic runs end-to-end against mocked Kodus + GitH
         process.env.TARGET_TUNNEL_URL = "https://dummy.trycloudflare.com";
         process.env.SH_TENANT_EMAIL = "test@kodus.test";
         process.env.SH_TENANT_PASSWORD = "secret123";
+        // Mocks answer instantly — collapse the production polls and settles
+        // rather than sleeping through them. See providers/base.ts settle().
+        process.env.E2E_POLL_INTERVAL_OVERRIDE_SEC = "0.05";
+        process.env.E2E_POLL_TIMEOUT_OVERRIDE_SEC = "3";
+        process.env.E2E_SETTLE_OVERRIDE_SEC = "0";
         process.env.GH_TEST_TOKEN = "fake-token";
         process.env.GH_TEST_REPO = TEST_REPO;
         process.env.GH_TEST_PR_NUMBER = String(TEST_PR_NUMBER);
@@ -459,6 +464,11 @@ test("integration: scenario fails clearly when Kody does NOT respond", async () 
         process.env.TARGET_TUNNEL_URL = "https://dummy.trycloudflare.com";
         process.env.SH_TENANT_EMAIL = "test@kodus.test";
         process.env.SH_TENANT_PASSWORD = "secret123";
+        // Mocks answer instantly — collapse the production polls and settles
+        // rather than sleeping through them. See providers/base.ts settle().
+        process.env.E2E_POLL_INTERVAL_OVERRIDE_SEC = "0.05";
+        process.env.E2E_POLL_TIMEOUT_OVERRIDE_SEC = "3";
+        process.env.E2E_SETTLE_OVERRIDE_SEC = "0";
         process.env.GH_TEST_TOKEN = "fake-token";
         process.env.GH_TEST_REPO = TEST_REPO;
         process.env.GH_TEST_PR_NUMBER = String(TEST_PR_NUMBER);

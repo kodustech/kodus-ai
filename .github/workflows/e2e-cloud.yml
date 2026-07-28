@@ -235,6 +235,14 @@ jobs:
 
             - name: Run cloud matrix
               id: matrix
+              # Deliberately BELOW the job's timeout-minutes. When the JOB
+              # times out, GitHub CANCELS it: `failure()` is false, so every
+              # notify below is skipped and the run dies silently — the worse
+              # the breakage, the longer the burn, the likelier the timeout,
+              # the more certain the silence. Failing the STEP instead keeps
+              # the job alive to run the digest + notify path. 135 leaves 15min
+              # for evidence upload and Discord.
+              timeout-minutes: 135
               env:
                   # target.sh expects TARGET_BASE_URL + TARGET_WEB_URL.
                   # vars.CLOUD_QA_* canonicalise the URLs; the matrix
@@ -263,6 +271,16 @@ jobs:
                   GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
                   GH_TEST_REPO_CLOUD: ${{ secrets.GH_TEST_REPO_CLOUD }}
                   GH_TEST_PR_NUMBER: ${{ secrets.GH_TEST_PR_NUMBER }}
+
+                  # LLM key for the run-start tenant BYOK refresh (see
+                  # refreshCloudTenantByok in lib/runner.ts): persistent QA
+                  # tenants store their BYOK key at seed time, so a key
+                  # rotation strands them on the revoked key and every paid
+                  # cell dies with `partial_error: Incorrect API key`. Same
+                  # secret + model the self-hosted matrix injects, so both
+                  # targets review with one debuggable configuration.
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  API_LLM_PROVIDER_MODEL: gpt-5.4-mini
                   # Org-Administration token (QA environment secret) used ONLY
                   # by trial-managed-review to create/delete its throwaway repo
                   # per run. Absent → that scenario is SKIPPED, not failed
@@ -365,9 +383,24 @@ jobs:
                       Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
                       Trigger: ${{ github.event_name }}${{ github.event_name == 'schedule' && ' (nightly catch-all)' || '' }}
 
-            # Case 2 — the matrix ran and a P0 (gating) failure happened.
+            # Case 2 — the matrix ran, wrote a digest, and exited non-zero.
+            #
+            # Gate on the STEP outcome, not on gating_count. run-matrix exits 1
+            # for THREE reasons (`gating.length > 0 || summary.blocked > 0 ||
+            # targetCrashed`) and only the first surfaces as gating_count, so a
+            # digest-only guard goes quiet on a fully-blocked or crashed target
+            # — trading silence-on-timeout for silence-on-blocked.
+            #
+            # This is safe now only because the matrix step carries its own
+            # timeout-minutes (above): a timed-out STEP fails, so `failure()`
+            # holds. Previously a job-level timeout CANCELLED the step,
+            # `failure()` was false, and this notify was skipped exactly when it
+            # mattered most — the inversion that hid a broken QA github cell for
+            # 6 days (last green 2026-07-08).
             - name: Notify Discord — gating failures
-              if: failure() && steps.matrix.outcome == 'failure'
+              if: >-
+                  failure() && steps.matrix.outcome == 'failure' &&
+                  steps.digest.outputs.found == 'true'
               uses: ./.github/actions/discord-notify
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
@@ -375,6 +408,33 @@ jobs:
                   title: "❌ E2E cloud matrix: ${{ steps.digest.outputs.headline || 'failed (no digest)' }}"
                   description: |
                       ${{ steps.digest.outputs.details || 'No notify.json produced — see the run log.' }}
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+                      Trigger: ${{ github.event_name }}${{ github.event_name == 'schedule' && ' (nightly catch-all)' || '' }}
+
+            # Case 2b — the matrix ran but produced no digest at all: it hit
+            # its step timeout (or died) before writing notify.json, which
+            # runMatrix only emits at the very end. Without this the run is
+            # indistinguishable from silence, which is how a broken QA github
+            # cell went unreported for 6 days (last green 2026-07-08) while
+            # every run burned its budget on scenarios polling for a review
+            # that never came.
+            #
+            # Guarded by failure(), NOT always(): a concurrency cancel
+            # (`group: qa-gitops, cancel-in-progress: true` — any push to main
+            # supersedes the running deploy) leaves the job CANCELLED, and a
+            # superseded run is not news. Only a genuine failure reports.
+            - name: Notify Discord — matrix produced no result (timed out)
+              if: >-
+                  failure() && steps.readiness.outcome == 'success' &&
+                  steps.digest.outputs.found != 'true'
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: failure
+                  title: '⏱️ E2E cloud matrix: ended with no result'
+                  description: |
+                      QA was reachable and the matrix started, but it never wrote a result — it ran out of time (step cap: 135min) before finishing. A cell whose reviews never arrive burns its full poll window on every scenario (600–1500s each, then one retry), so a single broken provider can eat the whole budget and starve the cells behind it.
+                      Start with the FIRST failing cell in the log, not the last: later cells are usually collateral.
                       Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
                       Trigger: ${{ github.event_name }}${{ github.event_name == 'schedule' && ' (nightly catch-all)' || '' }}
 

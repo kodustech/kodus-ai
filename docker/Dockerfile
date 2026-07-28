@@ -149,7 +149,7 @@ ENV NODE_ENV=production
 # Redeclare ARGs to make them available in this stage
 ARG API_CLOUD_MODE=false
 ARG RELEASE_VERSION=local
-ARG KODUS_GRAPH_VERSION=0.2.19
+ARG KODUS_GRAPH_VERSION=0.3.0
 
 # Set ENVs for runtime
 ENV API_CLOUD_MODE=${API_CLOUD_MODE}

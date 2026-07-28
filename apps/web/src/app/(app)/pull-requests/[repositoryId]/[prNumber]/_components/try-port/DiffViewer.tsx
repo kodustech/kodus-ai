@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { PatchDiff } from "@pierre/diffs/react";
 import { ErrorBoundary } from "react-error-boundary";
 import type { DiffFile, PrInfo, PromptContext, ReviewIssue } from "./types";
@@ -58,6 +58,17 @@ function LazyDiff({
     // so we don't auto-mount it — the user opts in with a click.
     const isLarge = lineCount > 1500;
 
+    // Stable options identity so PatchDiff doesn't re-tokenize whenever an
+    // ancestor re-renders (only diffStyle actually changes the render).
+    const patchOptions = useMemo(
+        () => ({
+            theme: "pierre-dark" as const,
+            diffStyle,
+            overflow: "scroll" as const,
+        }),
+        [diffStyle],
+    );
+
     // Rough height guess (~18px/line) so the placeholder reserves space and
     // the page doesn't jump as blocks mount. Capped so giant files don't
     // reserve absurd amounts of empty scroll.
@@ -95,14 +106,7 @@ function LazyDiff({
                 <ErrorBoundary
                     fallback={<RawPatch patch={patch} />}
                     resetKeys={[patch]}>
-                    <PatchDiff
-                        patch={patch}
-                        options={{
-                            theme: "pierre-dark",
-                            diffStyle,
-                            overflow: "scroll",
-                        }}
-                    />
+                    <PatchDiff patch={patch} options={patchOptions} />
                 </ErrorBoundary>
             ) : isLarge ? (
                 <div className="flex flex-col items-center justify-center gap-2 p-6 text-center">
@@ -159,12 +163,16 @@ export function DiffViewer({
      *  accent ring. */
     highlightIssueId?: string;
 }) {
-    const promptCtx: PromptContext = pr
-        ? {
-              prRef: `${pr.owner}/${pr.repo}#${pr.prNumber}`,
-              htmlUrl: pr.htmlUrl,
-          }
-        : {};
+    const promptCtx: PromptContext = useMemo(
+        () =>
+            pr
+                ? {
+                      prRef: `${pr.owner}/${pr.repo}#${pr.prNumber}`,
+                      htmlUrl: pr.htmlUrl,
+                  }
+                : {},
+        [pr],
+    );
 
     const patchByPath = useMemo(() => {
         const map = new Map<string, string>();
@@ -196,27 +204,32 @@ export function DiffViewer({
             {files.map((file, idx) => {
                 const patch = patchByPath.get(file.path);
                 if (!patch) return null;
+                const fileIssues = issuesByFile.get(file.path) ?? [];
+                // Only the block that actually owns the highlighted finding
+                // receives the id — so changing the target re-renders just the
+                // old and new owners, not every FileBlock on the page.
+                const ownsHighlight =
+                    highlightIssueId != null &&
+                    fileIssues.some((i) => i.id === highlightIssueId);
                 return (
                     <FileBlock
                         key={file.path}
                         index={idx + 1}
                         file={file}
                         patch={patch}
-                        issues={issuesByFile.get(file.path) ?? []}
+                        issues={fileIssues}
                         pr={pr}
                         promptCtx={promptCtx}
                         viewed={!!viewed[file.path]}
-                        onToggleViewed={(v) => onToggleViewed(file.path, v)}
+                        onToggleViewed={onToggleViewed}
                         diffStyle={diffStyle}
                         hideHighlights={hideHighlights}
                         collapsed={!!collapsed?.[file.path]}
-                        onToggleCollapsed={
-                            onToggleCollapsed
-                                ? () => onToggleCollapsed(file.path)
-                                : undefined
-                        }
+                        onToggleCollapsed={onToggleCollapsed}
                         isReviewing={isReviewing}
-                        highlightIssueId={highlightIssueId}
+                        highlightIssueId={
+                            ownsHighlight ? highlightIssueId : undefined
+                        }
                     />
                 );
             })}
@@ -224,7 +237,7 @@ export function DiffViewer({
     );
 }
 
-function FileBlock({
+const FileBlock = memo(function FileBlock({
     index,
     file,
     patch,
@@ -247,30 +260,34 @@ function FileBlock({
     pr?: PrInfo;
     promptCtx: PromptContext;
     viewed: boolean;
-    onToggleViewed: (viewed: boolean) => void;
+    onToggleViewed: (path: string, viewed: boolean) => void;
     diffStyle: "split" | "unified";
     hideHighlights: boolean;
     collapsed: boolean;
-    onToggleCollapsed?: () => void;
+    onToggleCollapsed?: (path: string) => void;
     isReviewing: boolean;
     highlightIssueId?: string;
 }) {
     return (
         <article
             id={`file-${file.path}`}
-            className={`rounded-lg border bg-[var(--bg-elevated)] overflow-hidden transition-opacity ${
+            className={`rounded-lg border transition-opacity ${
                 viewed
                     ? "border-[var(--border)] opacity-70"
                     : "border-[var(--border)]"
             }`}>
+            {/* Sticky so the file's identity (path + stats + Viewed) stays
+                pinned while you scroll a long diff — the "where am I" the raw
+                file list never gives. The article dropped overflow-hidden
+                (which would trap the sticky inside its own box). */}
             <header
-                className={`flex items-center justify-between gap-4 px-4 py-3 ${
-                    collapsed ? "" : "border-b"
+                className={`sticky top-0 z-20 flex items-center justify-between gap-4 rounded-t-lg px-4 py-3 ${
+                    collapsed ? "rounded-b-lg" : "border-b"
                 } border-[var(--border)] bg-[var(--bg)]`}>
                 <div className="flex items-center gap-3 min-w-0">
                     {onToggleCollapsed && (
                         <button
-                            onClick={onToggleCollapsed}
+                            onClick={() => onToggleCollapsed(file.path)}
                             aria-label={
                                 collapsed ? "Expand file" : "Collapse file"
                             }
@@ -318,7 +335,7 @@ function FileBlock({
                     </span>
                     <ViewedToggle
                         viewed={viewed}
-                        onToggleViewed={onToggleViewed}
+                        onToggleViewed={(v) => onToggleViewed(file.path, v)}
                     />
                 </div>
             </header>
@@ -360,7 +377,7 @@ function FileBlock({
             )}
         </article>
     );
-}
+});
 
 function FileStatusBadge({ status }: { status: DiffFile["status"] }) {
     const label =

@@ -66,6 +66,88 @@ export async function assertHealthyExecution(
 }
 
 /**
+ * PERSISTENCE assertion: after a review that produced findings, at least one
+ * suggestion must be PERSISTED (readable back from the enriched executions
+ * listing's `suggestionsCount.sent`, which is derived from the stored PR
+ * record — not the provider comments).
+ *
+ * Why this exists on top of the output + health asserts: the Immer
+ * frozen-object regression (#1522/#1523) posted the review comments on the
+ * provider while the mutation that preceded the Mongo write threw and was
+ * swallowed — so EVERY review for ~2 days completed "successfully", comments
+ * visible, yet nothing was ever persisted. Neither the findings-count assert
+ * (reads provider comments) nor the health assert (reads execution status)
+ * sees that; only reading persisted suggestions back does. Use on scenarios
+ * whose fixture guarantees ≥1 finding (a legit 0-finding review would 0 here).
+ */
+export async function assertPersistedSuggestions(
+    ctx: RunContext,
+    session: KodusSession,
+    prNumber: number,
+): Promise<number> {
+    const sent = await pollUntil<number>(
+        async () => {
+            const resp = await http<any>(
+                `${ctx.target.apiBaseUrl}/pull-requests/executions?pullRequestNumber=${prNumber}&teamId=${encodeURIComponent(session.teamId)}&limit=5`,
+                {
+                    headers: { Authorization: `Bearer ${session.accessToken}` },
+                    timeoutMs: 30_000,
+                },
+            );
+            ensureOk(resp, 'executions:list');
+            const count = findSuggestionsSent(resp.body, prNumber);
+            // suggestionsCount is written alongside the execution row; it can
+            // lag the completion comment briefly, so keep polling while it is
+            // still absent rather than reading a premature 0.
+            return count === null ? null : count;
+        },
+        { intervalSec: 5, timeoutSec: 120 },
+    );
+
+    ctx.assert(
+        sent !== null,
+        `No suggestionsCount surfaced for PR #${prNumber} within 120s — cannot verify persistence`,
+    );
+    ctx.assert(
+        (sent ?? 0) >= 1,
+        `Review of PR #${prNumber} posted findings but PERSISTED 0 suggestions ` +
+            `(suggestionsCount.sent=${sent}). The comments exist on the provider but ` +
+            `nothing reached the store — the Immer frozen-object persistence class ` +
+            `(#1522/#1523), where the Mongo write threw after comments were posted ` +
+            `and the error was swallowed. Check the create-file-comments stage.`,
+    );
+    return sent ?? 0;
+}
+
+/** Defensive walk: find `suggestionsCount.sent` for the PR number. */
+function findSuggestionsSent(node: unknown, prNumber: number): number | null {
+    const hits: number[] = [];
+    const walk = (n: unknown): void => {
+        if (Array.isArray(n)) {
+            for (const item of n) walk(item);
+            return;
+        }
+        if (n && typeof n === 'object') {
+            const obj = n as Record<string, unknown>;
+            const num = obj.prNumber ?? obj.pullRequestNumber ?? obj.number;
+            if (Number(num) === prNumber) {
+                const sc = obj.suggestionsCount as
+                    | Record<string, unknown>
+                    | undefined;
+                if (sc && typeof sc.sent === 'number') {
+                    hits.push(sc.sent);
+                }
+            }
+            for (const v of Object.values(obj)) walk(v);
+        }
+    };
+    walk(node);
+    if (!hits.length) return null;
+    // Prefer the highest sent across any duplicate execution rows for the PR.
+    return Math.max(...hits);
+}
+
+/**
  * AutomationStatus values an execution row can carry. The enriched listing's
  * top-level item ALSO has a `status` field — but that one is the PULL
  * REQUEST state ("open"/"merged"/"closed"), with the execution status nested

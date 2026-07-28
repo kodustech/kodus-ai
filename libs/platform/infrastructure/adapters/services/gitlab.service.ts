@@ -14,6 +14,7 @@ import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/code
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
+import { resolveGitlabDraftStatus } from '@libs/common/utils/webhooks/gitlab-draft.utils';
 import { CacheService } from '@libs/core/cache/cache.service';
 import {
     CreateAuthIntegrationStatus,
@@ -870,9 +871,16 @@ export class GitlabService implements Omit<
                 params.type,
             );
 
-            this.createMergeRequestWebhook({
+            // Deliberately not awaited (webhook creation must not block the
+            // integration-config save) — but the promise MUST be caught:
+            // createMergeRequestWebhook rethrows on failure, and an orphaned
+            // rejection escalates to an unhandledRejection that can crash the
+            // API process (observed on the Bitbucket twin of this call). The
+            // failure still gets a loud error log from the method's own
+            // catch; this catch only stops the crash.
+            void this.createMergeRequestWebhook({
                 organizationAndTeamData: params.organizationAndTeamData,
-            });
+            }).catch(() => undefined);
         } catch (err) {
             throw new BadRequestException(err);
         }
@@ -2814,7 +2822,7 @@ export class GitlabService implements Omit<
                 const existingHooks = await gitlabAPI.ProjectHooks.all(repo.id);
 
                 const hookExists = existingHooks.some(
-                    (hook) => hook.url === webhookUrl,
+                    (hook) => hook?.url === webhookUrl,
                 );
 
                 if (!hookExists) {
@@ -4247,7 +4255,7 @@ export class GitlabService implements Omit<
                         );
 
                         const webhookToDelete = webhooks.find(
-                            (webhook) => webhook.url === webhookUrl,
+                            (webhook) => webhook?.url === webhookUrl,
                         );
 
                         if (webhookToDelete) {
@@ -4834,7 +4842,7 @@ export class GitlabService implements Omit<
                 name: mergeRequest?.author?.name ?? '',
                 id: mergeRequest?.author?.id?.toString() ?? '',
             },
-            isDraft: mergeRequest?.draft ?? false,
+            isDraft: resolveGitlabDraftStatus(mergeRequest),
         };
     }
 

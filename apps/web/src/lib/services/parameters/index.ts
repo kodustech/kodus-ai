@@ -25,9 +25,6 @@ export const PARAMETERS_PATHS = {
     GET_CODE_REVIEW_PARAMETER: pathToApiUrl(
         "/parameters/code-review-parameter",
     ),
-    APPLY_CODE_REVIEW_PRESET: pathToApiUrl(
-        "/parameters/apply-code-review-preset",
-    ),
     CENTRALIZED_CONFIG_SYNC: pathToApiUrl(
         "/parameters/centralized-config-sync",
     ),

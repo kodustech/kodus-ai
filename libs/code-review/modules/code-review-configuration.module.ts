@@ -11,7 +11,6 @@ import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { Module, forwardRef } from '@nestjs/common';
 
-import { ApplyCodeReviewPresetUseCase } from '../application/use-cases/configuration/apply-code-review-preset.use-case';
 import { DeleteRepositoryCodeReviewParameterUseCase } from '../application/use-cases/configuration/delete-repository-code-review-parameter.use-case';
 import { GenerateKodusConfigFileUseCase } from '../application/use-cases/configuration/generate-kodus-config-file.use-case';
 import { GetCliRepositorySettingsUseCase } from '../application/use-cases/configuration/get-cli-repository-settings.use-case';
@@ -40,7 +39,6 @@ import { CentralizedConfigModule } from '@libs/centralized-config/modules/centra
         forwardRef(() => PermissionValidationModule),
     ],
     providers: [
-        ApplyCodeReviewPresetUseCase,
         DeleteRepositoryCodeReviewParameterUseCase,
         GenerateKodusConfigFileUseCase,
         GetCliRepositorySettingsUseCase,
@@ -53,7 +51,6 @@ import { CentralizedConfigModule } from '@libs/centralized-config/modules/centra
         PreviewPrSummaryUseCase, // Added
     ],
     exports: [
-        ApplyCodeReviewPresetUseCase,
         DeleteRepositoryCodeReviewParameterUseCase,
         GenerateKodusConfigFileUseCase,
         GetCliRepositorySettingsUseCase,

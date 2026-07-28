@@ -232,7 +232,14 @@ export const kodyRulesCreateAndApply: Scenario = {
                             ? resp.body.data.length
                             : 0;
                         return c > 0 ? c : null;
-                    }, { intervalSec: 3, timeoutSec: 60 })) ?? 0;
+                        // 150s, not 60s: the suggestion row is persisted
+                        // asynchronously AFTER the completion comment posts —
+                        // observed ~80s after MR open on bitbucket (the slowest
+                        // provider). Now that persistence (not the comment) is
+                        // the pass signal, the poll window must comfortably
+                        // clear that lag so "persisted slowly" is never mistaken
+                        // for "never persisted" (the Mongo frozen-object bug).
+                    }, { intervalSec: 3, timeoutSec: 150 })) ?? 0;
                 return { review, count };
             };
 
@@ -276,25 +283,31 @@ export const kodyRulesCreateAndApply: Scenario = {
                 ));
             }
 
-            // The scenario proves "a created rule is APPLIED to a fresh PR".
-            // Two independent signals confirm that; either suffices:
-            //   1. suggestionsCount>0 — a suggestion links back to OUR ruleId
-            //      (the strict signal; reliable now that sweepStaleE2ERules
-            //      guarantees no duplicate rule can absorb the blame).
-            //   2. the review visibly flagged the marker — the completion
-            //      comment names our rule or the TODO_REMOVE_ME substring.
-            // Relying on #1 alone made this brittle: when a duplicate rule
-            // existed the engine attributed the finding to the OTHER uuid, so
-            // the exact-id query returned 0 while the rule had plainly fired
-            // (gitlab, 2026-06-04). #2 catches that case deterministically.
+            // The scenario proves "a created rule is APPLIED to a fresh PR"
+            // and that the finding is PERSISTED — the strict signal is a
+            // suggestion linked back to OUR ruleId (suggestionsCount>0),
+            // reliable now that sweepStaleE2ERules guarantees no duplicate rule
+            // can absorb the blame (the old reason a fired rule could show 0).
+            //
+            // A visible marker in the completion comment is captured as a
+            // DIAGNOSTIC only — deliberately NOT part of the pass condition.
+            // It used to be OR'd in ("suggestionsCount>0 || markerFlagged"),
+            // but that masked the class of bug where Kody posts the comment
+            // (marker flagged) while nothing lands in Mongo — the Immer
+            // frozen-object regression (#1522/#1523) that silently dropped
+            // EVERY persisted suggestion for ~2 days. Requiring persistence
+            // here makes the matrix catch that outcome instead of green-washing
+            // "commented but stored nothing". Slow-but-eventual persistence is
+            // covered by the 150s suggestion poll above (~80s worst case), so a
+            // 0 that survives the poll means "never persisted" — the bug.
             const sampleText = (review.sample ?? "").toLowerCase();
             const reviewFlaggedMarker =
                 sampleText.includes(ruleName.toLowerCase()) ||
                 sampleText.includes("todo_remove_me");
 
             ctx.assert(
-                suggestionsCount > 0 || reviewFlaggedMarker,
-                `Rule ${ruleName} was not applied to PR ${opened.url}: 0 suggestions linked to its ruleId AND the review comment never flagged TODO_REMOVE_ME, even after a re-triggered review — the fixture branch contains explicit TODO_REMOVE_ME occurrences, so the rule pipeline ignored an active rule (real regression, not a propagation race). reviewSample(head)=${(review.sample ?? "").slice(0, 200)}`,
+                suggestionsCount > 0,
+                `Rule ${ruleName} produced no PERSISTED suggestion for PR ${opened.url}: 0 suggestions linked to its ruleId after the 150s persistence poll and a re-triggered review, even though the fixture branch contains explicit TODO_REMOVE_ME occurrences. This is either a rule-pipeline miss or a persistence regression (comment posted but nothing stored — the Immer frozen-object class). Diagnostic: the review comment ${reviewFlaggedMarker ? "DID" : "did NOT"} visibly flag the rule/marker${reviewFlaggedMarker ? " — comment posted but suggestion never persisted, which points at the persistence path, not the finder" : ""}. reviewSample(head)=${(review.sample ?? "").slice(0, 200)}`,
             );
 
             // Informational only — captured as evidence, not asserted on.

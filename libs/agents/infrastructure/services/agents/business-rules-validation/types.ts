@@ -47,6 +47,7 @@ export interface BusinessRulesPrepareContext extends Record<string, unknown> {
         id?: string | number;
         name?: string;
         owner?: string;
+        fullName?: string;
         defaultBranch?: string;
     };
     pullRequest?: {

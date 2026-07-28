@@ -18,7 +18,7 @@ import { KodyLearningStatus } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { EyeIcon, RotateCcwIcon, Save } from "lucide-react";
-import { Controller, useFormContext } from "react-hook-form";
+import { Controller, useFormContext, useFormState } from "react-hook-form";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
 
@@ -150,7 +150,7 @@ export default function PRSummary(props: AutomationCodeReviewConfigPageProps) {
         isDirty: formIsDirty,
         isValid: formIsValid,
         isSubmitting: formIsSubmitting,
-    } = form.formState;
+    } = useFormState({ control: form.control });
 
     if (
         platformConfig.kodyLearningStatus ===

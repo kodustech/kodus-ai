@@ -42,8 +42,15 @@ import { ObservabilityService } from '@libs/core/log/observability.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import {
+    attachClassification,
+    classifyLLMError,
+} from '@libs/llm/error-classifier';
 import { tracedGenerateText } from '@libs/llm/llm-call';
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
+import {
+    buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
+} from '@libs/core/log/langfuse';
 import {
     getTranslationsForLanguageByCategory,
     TranslationsCategory,
@@ -125,14 +132,22 @@ export class CommentManagerService implements ICommentManagerService {
                     {},
                     'kimi-k2.7-code',
                 );
+                // Only pin temperature when the BYOK config sets one. Forcing 0
+                // broke models that reject a non-default temperature — Moonshot's
+                // kimi-k2.7-code rejects anything but 1 (HTTP 400), so the summary
+                // silently failed for kimi users while reviews kept working. The
+                // finder omits temperature for the same reason (finder.agent.ts),
+                // letting the provider default apply.
+                const configuredTemperature = byokConfig?.main?.temperature;
                 return await tracedGenerateText({
                     model: model as any,
                     system: systemPrompt,
                     prompt: userPrompt,
-                    temperature: byokConfig?.main?.temperature ?? 0,
-                    experimental_telemetry: buildLangfuseTelemetry(
-                        runName,
-                        metadata,
+                    ...(configuredTemperature !== undefined
+                        ? { temperature: configuredTemperature }
+                        : {}),
+                    ...toAiSdkTelemetryArgs(
+                        buildLangfuseTelemetry(runName, metadata),
                     ),
                 });
             },
@@ -601,7 +616,23 @@ You must always respond in ${languageResultPrompt}.`;
                         error,
                         metadata: { organizationAndTeamData, pullRequest },
                     });
-                    return null;
+                    // Throw, don't `return null`. `null` is the return value for
+                    // the DELIBERATE skips above (summary disabled, license
+                    // denied, diff too large), so returning it here made a dead
+                    // provider indistinguishable from a config decision — the
+                    // caller recorded no pipeline error and the review was
+                    // auto-approved as if the code were clean (#1568).
+                    throw attachClassification(
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error)),
+                        classifyLLMError(
+                            error,
+                            byokConfigValue?.main?.provider as
+                                | string
+                                | undefined,
+                        ),
+                    );
                 }
             }
         }
@@ -844,6 +875,7 @@ You must always respond in ${languageResultPrompt}.`;
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
+        reviewErrorCustomMessage?: string,
     ): Promise<void> {
         try {
             // When the review failed, we cannot honor a customer-configured
@@ -863,6 +895,7 @@ You must always respond in ${languageResultPrompt}.`;
                     reviewFailed,
                     reviewErrorMessage,
                     reviewHasPartialErrors,
+                    reviewErrorCustomMessage,
                 );
             } else if (reviewHasPartialErrors) {
                 // Custom end-review template is rendering — the default
@@ -933,6 +966,7 @@ You must always respond in ${languageResultPrompt}.`;
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
+        reviewErrorCustomMessage?: string,
     ): Promise<string> {
         let commentBody = await this.generatePullRequestFinishSummaryMarkdown(
             organizationAndTeamData,
@@ -943,6 +977,7 @@ You must always respond in ${languageResultPrompt}.`;
             reviewFailed,
             reviewErrorMessage,
             reviewHasPartialErrors,
+            reviewErrorCustomMessage,
         );
 
         commentBody = this.sanitizeBitbucketMarkdown(commentBody, platformType);
@@ -1506,6 +1541,7 @@ You must always respond in ${languageResultPrompt}.`;
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
+        reviewErrorCustomMessage?: string,
     ): Promise<string> {
         try {
             const language =
@@ -1555,6 +1591,21 @@ You must always respond in ${languageResultPrompt}.`;
                         /\{\{errorMessage\}\}/g,
                         errorMessage,
                     );
+
+                    // Optional team-authored note appended below Kody's default
+                    // error comment (issue #1452). The technical reason above is
+                    // always preserved; this is only the org-specific next step
+                    // (e.g. "reach out to #devops"). Single newlines collapse in
+                    // Markdown, so we convert each to a hard break (two trailing
+                    // spaces) — what the author typed is what renders in the PR.
+                    const customError = reviewErrorCustomMessage?.trim();
+                    if (customError) {
+                        const withLineBreaks = customError.replace(
+                            /\n/g,
+                            '  \n',
+                        );
+                        resultText = `${resultText}\n\n${withLineBreaks}`;
+                    }
                 }
             }
 
@@ -2384,6 +2435,7 @@ ${reviewOptions}
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
+        reviewErrorCustomMessage?: string,
     ): Promise<void> {
         let commentBody: string;
 
@@ -2433,6 +2485,7 @@ ${reviewOptions}
                 reviewFailed,
                 reviewErrorMessage,
                 reviewHasPartialErrors,
+                reviewErrorCustomMessage,
             );
         }
 

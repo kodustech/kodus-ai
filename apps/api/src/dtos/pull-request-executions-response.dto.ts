@@ -157,68 +157,6 @@ export class PullRequestExecutionsResponseDto extends ApiResponseBaseDto {
     data: PullRequestExecutionsDataDto;
 }
 
-export class PullRequestOnboardingMetricsDto {
-    @ApiProperty()
-    hotfixPct: number;
-
-    @ApiProperty()
-    bugfixPct: number;
-
-    @ApiProperty()
-    securityPct: number;
-
-    @ApiProperty()
-    perfPct: number;
-
-    @ApiProperty()
-    sensitiveTouchPct: number;
-
-    @ApiProperty()
-    medianLines: number;
-
-    @ApiProperty()
-    p90Lines: number;
-
-    @ApiProperty()
-    mergesPerWeek: number;
-
-    @ApiProperty()
-    commentsPerPR: number;
-
-    @ApiProperty()
-    qualityPct: number;
-
-    @ApiProperty()
-    nitPct: number;
-}
-
-export class PullRequestOnboardingRecommendationDto {
-    @ApiProperty()
-    mode: string;
-
-    @ApiProperty({ type: String, isArray: true })
-    reasons: string[];
-}
-
-export class PullRequestOnboardingSignalDto {
-    @ApiProperty()
-    repositoryId: string;
-
-    @ApiProperty()
-    sampleSize: number;
-
-    @ApiProperty({ type: PullRequestOnboardingMetricsDto })
-    metrics: PullRequestOnboardingMetricsDto;
-
-    @ApiProperty({ type: PullRequestOnboardingRecommendationDto })
-    recommendation: PullRequestOnboardingRecommendationDto;
-}
-
-export class PullRequestOnboardingSignalsResponseDto extends ApiResponseBaseDto {
-    @ApiProperty({ type: PullRequestOnboardingSignalDto, isArray: true })
-    data: PullRequestOnboardingSignalDto[];
-}
-
 export class PullRequestBackfillDataDto {
     @ApiProperty()
     success: boolean;

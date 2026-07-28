@@ -22,6 +22,10 @@ Referencia: <a href="https://www.figma.com/board/ZZJcIJMJWGuyzRGMh3w5di/Kodus-Co
 - El PR supera el límite de archivos configurado
 - Configuración inválida o faltante
 
+<Note>
+  Para anular una omisión y forzar un nuevo análisis — por ejemplo tras "sin nuevos commits" — comenta `@kody review --force`.
+</Note>
+
 ## Qué Hace Kody
 
 - Resuelve qué configuración aplica (global → repo → directorio) y la valida
@@ -99,7 +103,7 @@ Kody usa reacciones con emojis para mostrar el estado en vivo de tu revisión de
 **Vi 👀 pero quería una revisión**
 
 - Probablemente omitido: sin nuevos commits, solo merge, archivos ignorados o límite de archivos
-- Solución: comenta `@kody start-review`
+- Solución: comenta `@kody review --force` — un `start-review` simple volverá a omitirse si no hay commits nuevos
 
 **Vi 👎**
 

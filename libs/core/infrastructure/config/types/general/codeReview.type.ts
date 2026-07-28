@@ -27,7 +27,6 @@ import {
     ReviewCadenceType,
     ReviewModeConfig,
     ReviewModeResponse,
-    ReviewPreset,
     SuggestionType,
 } from '@libs/core/domain/enums/code-review.enum';
 import { IClusterizedSuggestion } from '@libs/kodyFineTuning/domain/interfaces/kodyFineTuning.interface';
@@ -47,7 +46,6 @@ export {
     ReviewCadenceType,
     ReviewModeConfig,
     ReviewModeResponse,
-    ReviewPreset,
     SuggestionType,
 };
 
@@ -413,7 +411,10 @@ export type KodusConfigFile = DeepPartial<
     version: string;
     customMessages?: Pick<
         IPullRequestMessages,
-        'startReviewMessage' | 'endReviewMessage' | 'globalSettings'
+        | 'startReviewMessage'
+        | 'endReviewMessage'
+        | 'errorReviewMessage'
+        | 'globalSettings'
     >;
 };
 

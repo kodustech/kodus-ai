@@ -61,6 +61,44 @@ export function wafBypassHeader(url: string): Record<string, string> {
     return {};
 }
 
+// Session-cookie jar, keyed by the bearer access token.
+//
+// The cloud matrix reaches the API through the web app's `/api/proxy/api`
+// route, which is the SINGLE authority on the upstream `Authorization`
+// header: it derives the Bearer from the NextAuth SESSION COOKIE and DELETES
+// any client-sent Authorization when there's no session (see
+// apps/web/.../api/proxy/api/[...path]/route.ts). A raw `Authorization:
+// Bearer <token>` therefore never reaches the backend through the proxy —
+// requests must carry the NextAuth session cookie instead. The cloud login
+// flow establishes that cookie (see establishWebSession in onboarding.ts) and
+// registers it here against the access token; every request that carries that
+// exact bearer then also gets the cookie, with no per-call-site changes.
+// Keyed by access token so concurrent cloud tenants on the SAME host don't
+// cross-contaminate cookies. Direct (local / self-hosted) targets never
+// register anything, so this is a no-op there.
+const sessionCookieJar = new Map<string, { cookie: string; host: string }>();
+
+export function registerSessionCookie(
+    accessToken: string,
+    cookie: string,
+    host: string,
+): void {
+    sessionCookieJar.set(accessToken, { cookie, host });
+}
+
+function bearerToken(
+    headers: Record<string, string> | undefined,
+): string | undefined {
+    if (!headers) return undefined;
+    for (const [k, v] of Object.entries(headers)) {
+        if (k.toLowerCase() === "authorization") {
+            const m = /^Bearer\s+(.+)$/i.exec(v);
+            return m?.[1];
+        }
+    }
+    return undefined;
+}
+
 // Internal: one attempt of the actual fetch. Extracted so the retry
 // branch below can re-issue without duplicating the (mildly tedious)
 // AbortController + body-encoding + content-type ceremony.
@@ -72,9 +110,36 @@ async function attempt<T>(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+    const headers: Record<string, string> = {
+        ...(opts.headers ?? {}),
+        ...wafBypassHeader(url),
+    };
+    // Attach the NextAuth session cookie for the registered bearer so proxied
+    // cloud calls authenticate (the proxy reads the cookie, not the Bearer).
+    // Host-scoped: the cookie is a credential for the web host that issued it
+    // and must NEVER ride along to a different host (e.g. a github.com /
+    // gitlab.com provider call that happens to reuse a bearer) — same
+    // defensive posture as wafBypassHeader.
+    const token = bearerToken(opts.headers);
+    const entry = token ? sessionCookieJar.get(token) : undefined;
+    if (entry) {
+        let sameHost = false;
+        try {
+            sameHost = new URL(url).host === entry.host;
+        } catch {
+            sameHost = false;
+        }
+        if (sameHost) {
+            const existing = headers.Cookie ?? headers.cookie;
+            headers.Cookie = existing
+                ? `${existing}; ${entry.cookie}`
+                : entry.cookie;
+        }
+    }
+
     const init: RequestInit = {
         method: opts.method ?? "GET",
-        headers: { ...(opts.headers ?? {}), ...wafBypassHeader(url) },
+        headers,
         signal: controller.signal,
         ...(opts.redirect ? { redirect: opts.redirect } : {}),
     };

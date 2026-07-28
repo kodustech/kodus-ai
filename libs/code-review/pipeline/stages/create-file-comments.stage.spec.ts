@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { produce } from 'immer';
+import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { CreateFileCommentsStage } from './create-file-comments.stage';
 import { COMMENT_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/CommentManagerService.contract';
 import { SUGGESTION_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/SuggestionService.contract';
@@ -23,8 +23,10 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
     let mockSuggestionService: any;
     let mockDryRunService: any;
 
+    // Frozen by DEFAULT: that is the shape production hands every stage after
+    // the first produce(). See test/fixtures/frozen-pipeline-context.ts.
     const baseContext = (overrides: Partial<CodeReviewPipelineContext> = {}) =>
-        ({
+        frozenContext({
             organizationAndTeamData: {
                 organizationId: 'org-A',
                 teamId: 'team-1',
@@ -47,6 +49,7 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
             dryRun: { enabled: false },
             ...overrides,
         }) as any as CodeReviewPipelineContext;
+
 
     beforeEach(async () => {
         mockCommentManagerService = {};
@@ -128,12 +131,9 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
         // posted, but no suggestion was ever persisted (found live in QA,
         // broken env-wide since the heavy-mode rollout). Same failure class
         // as the context.heavy write fixed in agent-review.stage (#1522).
-        const frozenCtx = produce(
-            baseContext({ heavy: true } as any),
-            () => {},
-        );
-
-        await stage.execute(frozenCtx);
+        // baseContext() is frozen now, so this reads like every other test —
+        // which is the point: the guard is the default, not this one case.
+        await stage.execute(baseContext({ heavy: true } as any));
 
         expect(
             mockPullRequestService.aggregateAndSaveDataStructure,

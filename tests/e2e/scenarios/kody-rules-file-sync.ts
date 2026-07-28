@@ -233,8 +233,14 @@ export const kodyRulesFileSync: Scenario = {
                                 ? resp.body.data.length
                                 : 0;
                             return c > 0 ? c : null;
+                            // 150s (was 60s): the suggestion row persists
+                            // asynchronously after the completion comment posts
+                            // (~80s worst case on bitbucket). Persistence is now
+                            // the pass signal, so the poll must clear that lag —
+                            // a 0 that survives means "never persisted", not
+                            // "persisted slowly".
                         },
-                        { intervalSec: 3, timeoutSec: 60 },
+                        { intervalSec: 3, timeoutSec: 150 },
                     )) ?? 0;
                 return { review, count };
             };
@@ -258,13 +264,18 @@ export const kodyRulesFileSync: Scenario = {
                 ));
             }
 
+            // Persistence is the pass signal (suggestionsCount>0). A flagged
+            // marker is DIAGNOSTIC only, never OR'd into the pass condition:
+            // OR-ing it masked "comment posted but nothing stored" (the Immer
+            // frozen-object persistence regression). The 150s poll above covers
+            // slow-but-eventual persistence, so a surviving 0 is the bug.
             const sampleText = (review.sample ?? '').toLowerCase();
             const reviewFlaggedMarker =
                 sampleText.includes(MARKER.toLowerCase()) ||
                 sampleText.includes(ruleTitle.toLowerCase());
             ctx.assert(
-                suggestionsCount > 0 || reviewFlaggedMarker,
-                `Synced rule ${ruleTitle} (${syncedRuleId}) was NOT enforced on PR ${violationPr.url}: 0 suggestions linked to it AND the review never flagged ${MARKER}. The violation file matches the rule's SECOND glob — this is the multi-glob (comma-joined path) regression the scenario exists to catch. reviewSample(head)=${(review.sample ?? '').slice(0, 200)}`,
+                suggestionsCount > 0,
+                `Synced rule ${ruleTitle} (${syncedRuleId}) produced no PERSISTED suggestion on PR ${violationPr.url}: 0 suggestions linked to it after the 150s persistence poll and a re-triggered review. The violation file matches the rule's SECOND glob — either the multi-glob (comma-joined path) regression this scenario exists to catch, or a persistence regression (comment posted, nothing stored). Diagnostic: the review ${reviewFlaggedMarker ? `DID flag ${MARKER} — so the rule fired but the suggestion never persisted (persistence path, not the finder)` : `did NOT flag ${MARKER}`}. reviewSample(head)=${(review.sample ?? '').slice(0, 200)}`,
             );
 
             writeFileSync(

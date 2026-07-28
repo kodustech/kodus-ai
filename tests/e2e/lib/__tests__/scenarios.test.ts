@@ -13,6 +13,7 @@ test("allScenarios: includes the registered release-gate scenarios", () => {
         "command-review-focus",
         "conversation-anthropic-byok",
         "conversation-vertex-byok",
+        "finish-onboarding-slo",
         "kody-rules-coverage",
         "kody-rules-create-and-apply",
         "kody-rules-file-sync",

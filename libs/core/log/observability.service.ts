@@ -422,7 +422,7 @@ export class ObservabilityService implements OnModuleInit {
      * span so its token usage lands in `observability_telemetry` — the Mongo
      * billing dataset keyed by org/team/PR. This is the parity bridge for agents
      * migrated off the legacy flow-engine LLM adapter: the AI SDK's
-     * `experimental_telemetry` feeds Langfuse, while this feeds the internal
+     * `telemetry` feeds Langfuse, while this feeds the internal
      * cost pipeline. A span carrying `gen_ai.usage.total_tokens` is treated as
      * billing-critical (synchronously flushed) by the telemetry engine.
      *
@@ -465,12 +465,35 @@ export class ObservabilityService implements OnModuleInit {
                             inputTokens: usage?.inputTokens,
                             outputTokens: usage?.outputTokens,
                             totalTokens: usage?.totalTokens,
-                            reasoningTokens: usage?.reasoningTokens,
-                            cacheReadTokens: (
-                                usage as
-                                    | { cachedInputTokens?: number }
-                                    | undefined
-                            )?.cachedInputTokens,
+                            // ai@7: nested details; ai@6: top-level fields.
+                            reasoningTokens:
+                                (
+                                    usage as
+                                        | {
+                                              outputTokenDetails?: {
+                                                  reasoningTokens?: number;
+                                              };
+                                              reasoningTokens?: number;
+                                          }
+                                        | undefined
+                                )?.outputTokenDetails?.reasoningTokens ??
+                                usage?.reasoningTokens,
+                            cacheReadTokens:
+                                (
+                                    usage as
+                                        | {
+                                              inputTokenDetails?: {
+                                                  cacheReadTokens?: number;
+                                              };
+                                              cachedInputTokens?: number;
+                                          }
+                                        | undefined
+                                )?.inputTokenDetails?.cacheReadTokens ??
+                                (
+                                    usage as
+                                        | { cachedInputTokens?: number }
+                                        | undefined
+                                )?.cachedInputTokens,
                         },
                     }),
                 );

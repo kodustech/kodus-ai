@@ -22,6 +22,18 @@ import {
 } from '@libs/automation/domain/teamAutomation/contracts/team-automation.service';
 import { ITeamAutomation } from '@libs/automation/domain/teamAutomation/interfaces/team-automation.interface';
 import { CodeReviewHandlerService } from '@libs/code-review/infrastructure/adapters/services/codeReviewHandlerService.service';
+import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
+
+/**
+ * Messages the pipeline sets before it knows the outcome. Reporting one of
+ * these on a FAILED run tells the user nothing about what went wrong — a
+ * failed review used to be labelled "Pipeline started" (#1568).
+ */
+const STALE_STARTUP_MESSAGES = new Set([
+    'pipeline started',
+    'code review started',
+    'reviewing file level',
+]);
 import {
     DistributedLock,
     DistributedLockService,
@@ -448,8 +460,7 @@ export class AutomationCodeReviewService implements Omit<
         }
 
         const finalStatus = this.deriveFinalStatus(result);
-        const finalMessage =
-            result.statusInfo?.message || 'Automation completed successfully.';
+        const finalMessage = this.buildFinalMessage(result, finalStatus);
         const newData = this._buildExecutionData(payload, result);
 
         await this.updateAutomationExecution(
@@ -493,6 +504,52 @@ export class AutomationCodeReviewService implements Omit<
      * matches PipelineErrorSeverity's documented default and the
      * observer's behavior.
      */
+    /**
+     * The message shown on the final "Kody Review Finished" row.
+     *
+     * `statusInfo.message` is only meaningful for a SKIPPED run — the stages
+     * that fail without throwing never update it, so it still holds whatever
+     * the pipeline set at startup. Using it verbatim rendered a failed review
+     * as "Kody Review Finished / Error / Pipeline started" (#1568). For a
+     * failed run, report the actual reason instead.
+     */
+    private buildFinalMessage(
+        result: any,
+        finalStatus: AutomationStatus,
+    ): string {
+        if (
+            finalStatus === AutomationStatus.ERROR ||
+            finalStatus === AutomationStatus.PARTIAL_ERROR
+        ) {
+            // CodeReviewHandlerService already replaced the stale startup
+            // message with the real reason, but only for a run that reached
+            // its classification step. Guard against the leftover here too, so
+            // a run that failed earlier can't surface "Pipeline started".
+            const message = result?.statusInfo?.message?.trim();
+            if (message && !STALE_STARTUP_MESSAGES.has(message.toLowerCase())) {
+                return message;
+            }
+
+            const reason = describePipelineError(
+                (Array.isArray(result?.errors) ? result.errors : []).find(
+                    (e: any) => (e?.severity ?? 'critical') === 'critical',
+                ) ?? result?.errors?.[0],
+            ).text;
+
+            if (reason) {
+                return finalStatus === AutomationStatus.PARTIAL_ERROR
+                    ? `Code review completed with issues: ${reason}`
+                    : `Code review failed: ${reason}`;
+            }
+
+            return finalStatus === AutomationStatus.PARTIAL_ERROR
+                ? 'Code review completed with issues.'
+                : 'Code review failed.';
+        }
+
+        return result?.statusInfo?.message || 'Automation completed successfully.';
+    }
+
     private deriveFinalStatus(result: any): AutomationStatus {
         const statusInfoStatus = result?.statusInfo?.status as
             | AutomationStatus

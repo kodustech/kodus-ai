@@ -1,4 +1,8 @@
-import { ReferenceDetectorService } from '@libs/ai-engine/infrastructure/adapters/services/reference-detector.service';
+import {
+    ReferenceDetectorService,
+    escapeRegExp,
+    stripControlMarkers,
+} from '@libs/ai-engine/infrastructure/adapters/services/reference-detector.service';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -8,6 +12,50 @@ jest.mock('@libs/core/log/logger', () => ({
         debug: jest.fn(),
     }),
 }));
+
+// Guards the CodeQL js/incomplete-sanitization fix (#890): the marker escape
+// must cover ALL regex metacharacters, and the refactor into
+// stripControlMarkers must preserve the previous behavior exactly.
+describe('escapeRegExp', () => {
+    it('escapes every regex metacharacter so the value matches literally', () => {
+        const raw = 'a.b*c+d?(e)[f]{g}^h$i|j\\k';
+        const re = new RegExp(escapeRegExp(raw));
+
+        // The escaped pattern matches the literal string...
+        expect(re.test(raw)).toBe(true);
+        // ...and does NOT match a string where a metachar acted as a wildcard.
+        expect(re.test('aXb*c+d?(e)[f]{g}^h$i|j\\k')).toBe(false);
+    });
+
+    it('leaves the current control markers intact (no behavior change)', () => {
+        expect(escapeRegExp('@kody-sync')).toBe('@kody-sync');
+        expect(escapeRegExp('@kody-ignore')).toBe('@kody-ignore');
+    });
+});
+
+describe('stripControlMarkers', () => {
+    it('removes @kody-sync / @kody-ignore case-insensitively, every occurrence', () => {
+        expect(
+            stripControlMarkers(
+                'start @kody-sync middle @KODY-IGNORE end @kody-sync',
+            ),
+        ).toBe('start  middle  end ');
+    });
+
+    it('does not mangle text that contains regex-special characters', () => {
+        // Regression guard: the old escape ignored `.` etc.; a complete escape
+        // must still treat surrounding content as literal and untouched.
+        const text = 'version 1.2.3 (stable) and cost is $5 @kody-sync';
+        expect(stripControlMarkers(text)).toBe(
+            'version 1.2.3 (stable) and cost is $5 ',
+        );
+    });
+
+    it('returns the text unchanged when there is no marker', () => {
+        const text = 'See @AGENTS.md and @docs/standards.md';
+        expect(stripControlMarkers(text)).toBe(text);
+    });
+});
 
 describe('ReferenceDetectorService.extractMarkers', () => {
     const service = Object.create(
@@ -63,6 +111,7 @@ jest.mock('@libs/llm/byok-to-vercel', () => ({
 }));
 jest.mock('@libs/core/log/langfuse', () => ({
     buildLangfuseTelemetry: jest.fn().mockReturnValue({}),
+    toAiSdkTelemetryArgs: jest.fn().mockReturnValue({ telemetry: {} }),
 }));
 
 describe('ReferenceDetectorService.detectReferences (LLM path)', () => {

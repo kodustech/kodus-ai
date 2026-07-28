@@ -14,7 +14,10 @@ import type {
 } from "./types.js";
 import { ScenarioSkipError } from "./types.js";
 import { makeProvider } from "../providers/index.js";
-import { makeGithubTokenPicker } from "./github-token-pool.js";
+import {
+    makeGithubTokenPicker,
+    preflightGithubRateLimits,
+} from "./github-token-pool.js";
 import { githubAppToken } from "./github-app-token.js";
 import {
     finishOnboarding,
@@ -24,6 +27,8 @@ import {
     signUp,
 } from './onboarding.js';
 import { randomBytes } from 'node:crypto';
+import { http } from './http.js';
+import { settle } from '../providers/base.js';
 import { registryRepoFor } from './cloud-tenant-registry.js';
 import { logger } from './log.js';
 import { collectServerEvidence, isTargetReachable } from './server-evidence.js';
@@ -171,6 +176,73 @@ function readCloudTenantsFile(): CloudTenantEntry[] {
         return Array.isArray(parsed) ? (parsed as CloudTenantEntry[]) : [];
     } catch {
         return [];
+    }
+}
+
+// Re-apply the CURRENT env LLM key to every registry tenant's byok_config.
+// Cloud tenants are seeded once (setup-tenants) and keep their BYOK key in
+// the tenant itself, so a key rotation strands them on the revoked key and
+// every review dies with `partial_error: Incorrect API key` — which zeroed
+// all paid cloud cells after the 2026-07-24 rotation. One login + one POST
+// per unique tenant, idempotent (same create-or-update endpoint the seeder
+// uses), best-effort per tenant, and skipped when no env key is configured.
+async function refreshCloudTenantByok(log: {
+    info: (m: string) => void;
+    warn: (m: string) => void;
+}): Promise<void> {
+    const apiKey = process.env.API_OPEN_AI_API_KEY;
+    if (!apiKey) {
+        log.info(
+            '[byok-refresh] API_OPEN_AI_API_KEY unset — tenants keep their seeded BYOK key',
+        );
+        return;
+    }
+    const entries = readCloudTenantsFile();
+    if (!entries.length) return;
+
+    const target = envForTarget('cloud');
+    const provider = process.env.API_LLM_PROVIDER ?? 'openai';
+    const baseURL =
+        process.env.API_OPENAI_FORCE_BASE_URL ?? 'https://api.openai.com/v1';
+    const model = process.env.API_LLM_PROVIDER_MODEL ?? 'gpt-5.4-mini';
+
+    const seen = new Set<string>();
+    for (const entry of entries) {
+        if (seen.has(entry.email)) continue;
+        seen.add(entry.email);
+        try {
+            const session = await login(target, {
+                email: entry.email,
+                password: entry.password,
+            });
+            const resp = await http(
+                `${target.apiBaseUrl}/organization-parameters/create-or-update`,
+                {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${session.accessToken}` },
+                    body: {
+                        key: 'byok_config',
+                        configValue: {
+                            main: { provider, apiKey, baseURL, model },
+                        },
+                    },
+                    timeoutMs: 30_000,
+                },
+            );
+            if (resp.status >= 200 && resp.status < 300) {
+                log.info(
+                    `[byok-refresh] ${entry.provider}/${entry.license}: byok_config updated`,
+                );
+            } else {
+                log.warn(
+                    `[byok-refresh] ${entry.provider}/${entry.license}: HTTP ${resp.status} — tenant keeps its stored key`,
+                );
+            }
+        } catch (err) {
+            log.warn(
+                `[byok-refresh] ${entry.provider}/${entry.license}: ${(err as Error).message.slice(0, 120)} — continuing`,
+            );
+        }
     }
 }
 
@@ -445,6 +517,24 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
     // account's rate limit caps the run (no-op with a single token).
     const pickGithubToken = makeGithubTokenPicker();
 
+    // Report each bot account's remaining GitHub budget up front (free — GET
+    // /rate_limit doesn't count) so an already-drained or expired token is
+    // visible before the cells run instead of as an opaque mid-run 403 cascade.
+    if (!opts.dryRun && opts.cells.some((c) => c.provider === "github")) {
+        await preflightGithubRateLimits(log);
+    }
+
+    // Cloud tenants are seeded ONCE (setup-tenants) and persist their BYOK
+    // key in the tenant's byok_config — so an LLM key rotation silently
+    // strands every persistent QA tenant on the revoked key, and each review
+    // dies with `partial_error: Incorrect API key` (observed 2026-07-28,
+    // every paid cell red since the 07-24 rotation). Re-apply the CURRENT
+    // env key to each registry tenant at run start: one login + one POST per
+    // tenant, idempotent, skipped entirely when the env key is absent.
+    if (!opts.dryRun && opts.target === 'cloud') {
+        await refreshCloudTenantByok(log);
+    }
+
     for (const cell of opts.cells) {
         if (cell.target !== opts.target) continue;
 
@@ -465,12 +555,33 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                   opts.runId,
               );
 
+        // Circuit breaker: once a github bot account's quota is exhausted,
+        // every remaining scenario in the cell would either re-hit the 403 or
+        // hang polling for a product action the (also rate-limited) product
+        // can't take — draining the whole 60-min job budget on retries. The
+        // hour-long reset can't clear mid-cell, so short-circuit the rest to a
+        // fast, honest SKIP instead. Resets per cell.
+        let githubRateLimited = false;
+
         for (const scenario of opts.scenarios) {
             const cellLabel = `${scenario.id} × ${cell.target} × ${cell.provider} × ${cell.license}`;
 
             if (!appliesToCell(scenario, cell)) {
                 log.info(`SKIP  ${cellLabel}`);
                 results.push(makeResult(scenario, cell, 'skipped', 0, {}));
+                continue;
+            }
+
+            if (githubRateLimited) {
+                log.err(
+                    `SKIP  ${cellLabel}: GitHub rate limit already tripped this cell — short-circuiting (quota resets hourly, NOT a product pass)`,
+                );
+                results.push(
+                    makeResult(scenario, cell, 'skipped', 0, {
+                        skipReason:
+                            'github-rate-limit: cell circuit breaker (a prior scenario exhausted the account quota)',
+                    }),
+                );
                 continue;
             }
 
@@ -642,6 +753,10 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                     // of failing the release red. Logged loudly so a wall of
                     // these reads as "out of quota / spread load", not a pass.
                     if (isGithubRateLimit(e.message)) {
+                        // Trip the per-cell breaker so the remaining scenarios
+                        // fast-SKIP instead of each re-hitting the 403 or
+                        // hanging on the rate-limited product until timeout.
+                        githubRateLimited = true;
                         log.err(
                             `SKIP  ${cellLabel}: GitHub rate limit — quota exhausted, NOT a product pass (${e.message.slice(0, 160)})`,
                         );
@@ -663,7 +778,7 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                             `RETRY ${cellLabel}: transient failure shape, re-running once${settleMs ? ` after a ${settleMs / 1000}s settle (absence shape — likely a deploy/worker rollout window)` : ''} (${e.message.slice(0, 160)})`,
                         );
                         if (settleMs) {
-                            await new Promise((r) => setTimeout(r, settleMs));
+                            await settle(settleMs);
                         }
                         continue;
                     }

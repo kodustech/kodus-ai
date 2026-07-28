@@ -78,4 +78,25 @@ describe('buildOrchestratorInput — context→agent wiring', () => {
         expect(input.callGraph).toBe('<CallGraph>x</CallGraph>');
         expect(input.prNumber).toBe(42);
     });
+
+    it('prefers stage-computed kodyRules (summary-swapped) over the raw config rules', () => {
+        const configRules = [{ uuid: 'r1', rule: 'full long text' }];
+        const swappedRules = [
+            { uuid: 'r1', rule: 'WHAT TO VALIDATE:\n- condition' },
+        ];
+        const input = buildOrchestratorInput(
+            makeContext({ codeReviewConfig: { kodyRules: configRules } }),
+            { ...computed, kodyRules: swappedRules as any },
+        );
+        expect(input.kodyRules).toBe(swappedRules);
+    });
+
+    it('falls back to the config kodyRules when the stage computes none', () => {
+        const configRules = [{ uuid: 'r1', rule: 'full long text' }];
+        const input = buildOrchestratorInput(
+            makeContext({ codeReviewConfig: { kodyRules: configRules } }),
+            computed,
+        );
+        expect(input.kodyRules).toBe(configRules);
+    });
 });

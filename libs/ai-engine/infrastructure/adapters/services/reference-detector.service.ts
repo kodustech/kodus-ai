@@ -9,7 +9,10 @@ import {
 } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
+import {
+    buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
+} from '@libs/core/log/langfuse';
 import {
     prompt_detect_external_references_system,
     prompt_detect_external_references_user,
@@ -39,6 +42,31 @@ const TRIAL_MODEL_OVERRIDE = 'kimi-k2.6';
  * via the marker.
  */
 const KODUS_CONTROL_MARKERS = new Set(['@kody-sync', '@kody-ignore']);
+
+/**
+ * Escapes every RegExp metacharacter so an arbitrary string can be embedded in
+ * a `new RegExp(...)` as a literal. The previous inline version escaped only
+ * `-`, `/` and `@` — none of which are special outside a character class —
+ * while leaving the real metacharacters (`.`, `*`, `(`, `)`, `?`, …)
+ * unescaped (CodeQL js/incomplete-sanitization). Harmless for the current
+ * markers, but a foot-gun the moment a marker contains a metacharacter.
+ */
+export function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Removes Kody control markers (@kody-sync/@kody-ignore) from free text so the
+ * reference detector never sees them as content. Case-insensitive, every
+ * occurrence, and safe for markers containing regex metacharacters.
+ */
+export function stripControlMarkers(text: string): string {
+    return [...KODUS_CONTROL_MARKERS].reduce(
+        (acc, marker) =>
+            acc.replace(new RegExp(escapeRegExp(marker), 'gi'), ''),
+        text,
+    );
+}
 
 function isControlMarker(value: unknown): boolean {
     if (typeof value !== 'string') return false;
@@ -125,14 +153,7 @@ export class ReferenceDetectorService {
         // marker as a file but also CONTAMINATED real references with a
         // fabricated "kody-sync/" repo prefix (observed live:
         // "kody-sync/docs/contratos-de-api.md" in the UI error detail).
-        const sanitizedPromptText = [...KODUS_CONTROL_MARKERS].reduce(
-            (text, marker) =>
-                text.replace(
-                    new RegExp(marker.replace(/[-/@]/g, '\\$&'), 'gi'),
-                    '',
-                ),
-            params.promptText,
-        );
+        const sanitizedPromptText = stripControlMarkers(params.promptText);
 
         const isRuleMode = params.detectionMode === 'rule';
         const systemPrompt = isRuleMode
@@ -151,12 +172,11 @@ export class ReferenceDetectorService {
             model,
             system: systemPrompt,
             prompt: userPrompt,
-            experimental_telemetry: buildLangfuseTelemetry(
-                'detectExternalReferences',
-                {
+            ...toAiSdkTelemetryArgs(
+                buildLangfuseTelemetry('detectExternalReferences', {
                     organizationId: organizationAndTeamData.organizationId,
                     teamId: organizationAndTeamData.teamId,
-                },
+                }),
             ),
         });
 

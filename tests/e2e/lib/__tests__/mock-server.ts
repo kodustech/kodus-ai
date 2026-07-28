@@ -191,9 +191,18 @@ export function healthRoute(): RouteHandler {
  * from 2026-07-10). Exported separately because integration.test.ts and
  * integration-license.test.ts carry their own inline route tables.
  * Returns one settled execution (default "success") for any PR queried.
+ *
+ * The SAME trap fired again in #1547: assertPersistedSuggestions was added to
+ * code-review-basic and polls this route for `suggestionsCount.sent`, which the
+ * row did not carry — so it polled its full 120s, failed, and the runner's
+ * retry burned another 120s. That one test alone spent 260s of the job's 5min
+ * budget and turned main red (as a *timeout*, reported as "cancelled") from
+ * 2026-07-14. An assert that reads a field the mock never emits cannot pass:
+ * when adding one, extend this row in the same commit.
  */
 export function executionsRoute(
     status: string = "success",
+    suggestionsSent: number = 1,
 ): RouteHandler {
     return {
         method: "GET",
@@ -216,6 +225,9 @@ export function executionsRoute(
                             status: "open",
                             executionId: "exec-1",
                             automationExecution: { status },
+                            // Read back by assertPersistedSuggestions — the
+                            // store-side counterpart of the posted comments.
+                            suggestionsCount: { sent: suggestionsSent },
                         },
                     ],
                 },

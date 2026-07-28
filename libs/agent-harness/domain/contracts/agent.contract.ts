@@ -66,9 +66,10 @@ export interface AgentRunInput {
     /** Optional seed messages (prior context). */
     readonly seedMessages?: readonly { role: 'user' | 'assistant'; content: string }[];
     /** Opaque per-run telemetry forwarded to the model call as the AI SDK's
-     *  `experimental_telemetry` (the harness does not interpret it). Per-RUN so
-     *  each call — finder, each recall pass, each per-finding verify — can carry
-     *  its own observation name; the domain builds it (e.g. Langfuse). */
+     *  `telemetry` (and optional `runtimeContext` when `metadata` is present).
+     *  The harness does not interpret it. Per-RUN so each call — finder, each
+     *  recall pass, each per-finding verify — can carry its own observation
+     *  name; the domain builds it (e.g. Langfuse). */
     readonly telemetry?: Readonly<Record<string, unknown>>;
 }
 

@@ -64,7 +64,7 @@ API_DATABASE_DISABLE_SSL=true                # 为本地数据库禁用 SSL
 ```
 
 <Tip>
-  如果 `API_PG_DB_PASSWORD` 和 `API_MG_DB_PASSWORD` 留空，`./scripts/install.sh`（通过 `generate-secrets.sh`）会自动生成。只有当安装程序指向外部数据库时才需要手动设置。
+  对于内置数据库，可将 `API_PG_DB_PASSWORD` 和 `API_MG_DB_PASSWORD` 留空并运行 `./scripts/generate-secrets.sh` 来生成，或自行设置。对于外部数据库，请使用现有数据库的密码。
 </Tip>
 
 ### RabbitMQ 配置
@@ -159,9 +159,7 @@ API_MCP_MANAGER_NODE_ENV=development
 API_MCP_MANAGER_DATABASE_ENV=development
 API_MCP_MANAGER_CORS_ORIGINS=*
 API_MCP_MANAGER_JWT_SECRET=
-API_MCP_MANAGER_COMPOSIO_BASE_URL=https://backend.composio.dev/api/v3
-API_MCP_MANAGER_COMPOSIO_API_KEY=
-API_MCP_MANAGER_MCP_PROVIDERS=kodusmcp,composio,custom
+API_MCP_MANAGER_MCP_PROVIDERS=kodusmcp,custom
 API_MCP_MANAGER_REDIRECT_URI=http://localhost:3000/setup/mcp/oauth
 API_MCP_MANAGER_PG_DB_SCHEMA=mcp-manager
 API_MCP_MANAGER_ENCRYPTION_SECRET=

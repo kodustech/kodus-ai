@@ -76,6 +76,11 @@ export interface AgentProgressEvent {
     /** Error class/name when available (e.g. "TypeError", "AbortError",
      *  "HARD-TIMEOUT"). Helps users recognize failure categories. */
     errorName?: string;
+    /** Human-readable, actionable rendering of the failure ("The configured
+     *  model is not available on the provider…"), classified at the throw
+     *  site where the HTTP status is still intact. Prefer this over
+     *  errorMessage for anything a user reads. */
+    errorFriendlyMessage?: string;
     /** How the agent finished — helps surface timeouts and max-steps in the UI */
     finishReason?: 'stop' | 'timeout' | 'max-steps' | 'error';
     /** How findings were obtained — 'json-parse' (normal), 'second-chance', 'generate-object' (fallback LLM), 'empty' */
@@ -266,6 +271,21 @@ export interface ReviewAgentOutput {
      *  forced compact prompt, dropped callGraph, etc). Empty when no
      *  adaptive strategy fired. */
     warnings?: ReviewWarning[];
+    /**
+     * The agent stopped because it ran out of budget (per-agent timeout) or
+     * steps, NOT because it finished investigating. Its `suggestions` are
+     * whatever it happened to have by then — an empty list means "didn't get
+     * far enough to tell", not "the code is clean".
+     *
+     * The distinction has to cross this boundary: without it the orchestrator
+     * sees a fulfilled agent with zero findings and the pipeline auto-approves
+     * a review that never completed (#1568).
+     */
+    hitHardLimit?: boolean;
+    /** Why the agent loop stopped — 'timeout' (budget), 'max-steps', or 'stop'
+     *  (ran to completion). Carried alongside hitHardLimit for telemetry and
+     *  for the user-facing "review was cut short" notice. */
+    finishReason?: 'timeout' | 'max-steps' | 'stop';
 }
 
 // ─── Agent-loop contracts (the low-level harness/agent boundary) ─────────────
@@ -401,6 +421,12 @@ export interface AgentLoopOutput {
      *  friendly reason in the end-review comment. */
     errorMessage?: string;
     errorName?: string;
+    /** Upstream HTTP status and raw response body, when the provider supplied
+     *  them. The AI SDK leaves `errorMessage` as a terse status phrase ("Not
+     *  Found") and stashes the actionable detail here, so classification needs
+     *  both to avoid falling through to "Unexpected error" (#1568). */
+    errorStatus?: number;
+    errorResponseBody?: string;
     /** Whether findings came from direct JSON parse or fallback generateObject */
     source: 'json-parse' | 'generate-object' | 'empty';
     usage: {

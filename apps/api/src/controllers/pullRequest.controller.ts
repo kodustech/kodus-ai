@@ -55,7 +55,6 @@ import { PR_EXECUTION_UPDATED_EVENT } from '@libs/automation/infrastructure/adap
 import { BackfillPRsDto } from '../dtos/backfill-prs.dto';
 import { EnrichedPullRequestsQueryDto } from '@libs/code-review/dtos/dashboard/enriched-pull-requests-query.dto';
 import { PaginatedEnrichedPullRequestsResponse } from '@libs/code-review/dtos/dashboard/paginated-enriched-pull-requests.dto';
-import { OnboardingReviewModeSignalsQueryDto } from '../dtos/onboarding-review-mode-signals-query.dto';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import {
     IPullRequestsService,
@@ -95,7 +94,6 @@ import { PullRequestSuggestionsResponseDto } from '../dtos/pull-request-suggesti
 import {
     PullRequestBackfillResponseDto,
     PullRequestExecutionsResponseDto,
-    PullRequestOnboardingSignalsResponseDto,
 } from '../dtos/pull-request-executions-response.dto';
 
 @ApiTags('Pull Requests')
@@ -684,43 +682,6 @@ export class PullRequestController implements OnApplicationShutdown {
             repositoryId,
             repositoryName,
             prNumber: parseInt(prNumber, 10),
-        });
-    }
-
-    @Get('/onboarding-signals')
-    @ApiBearerAuth('jwt')
-    @UseGuards(PolicyGuard)
-    @CheckPolicies(
-        checkPermissions({
-            action: Action.Read,
-            resource: ResourceType.PullRequests,
-        }),
-    )
-    @ApiOperation({
-        summary: 'Get onboarding review signals',
-        description: 'Return metrics and recommendation for review mode.',
-    })
-    @ApiOkResponse({ type: PullRequestOnboardingSignalsResponseDto })
-    public async getOnboardingSignals(
-        @Query() query: OnboardingReviewModeSignalsQueryDto,
-    ) {
-        const organizationId = this.request.user?.organization?.uuid;
-
-        if (!organizationId) {
-            throw new Error('No organization found in request');
-        }
-
-        const { teamId, repositoryIds, limit } = query;
-
-        const organizationAndTeamData = {
-            organizationId,
-            teamId,
-        };
-
-        return this.pullRequestsService.getOnboardingReviewModeSignals({
-            organizationAndTeamData,
-            repositoryIds,
-            limit,
         });
     }
 

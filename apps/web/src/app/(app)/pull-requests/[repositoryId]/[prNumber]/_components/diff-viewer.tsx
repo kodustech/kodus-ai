@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { PullRequestFile } from "@services/pull-requests";
 import { ColumnsIcon, FileIcon, RowsIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
@@ -35,6 +35,20 @@ export function DiffViewer({
     // purely a diff-pane affordance, so it stays local.
     const viewed = state.viewedFiles;
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+    // Stable identities so the memoized FileBlocks below don't all re-render
+    // (and re-tokenize their diffs) every time this wrapper re-renders — e.g.
+    // on each jump-to-issue. dispatch/setCollapsed are stable across renders.
+    const handleToggleViewed = useCallback(
+        (path: string, v: boolean) =>
+            dispatch({ type: "SET_VIEWED", path, viewed: v }),
+        [dispatch],
+    );
+    const handleToggleCollapsed = useCallback(
+        (path: string) =>
+            setCollapsed((prev) => ({ ...prev, [path]: !prev[path] })),
+        [],
+    );
 
     // Flatten every file's suggestions into one list, honoring the existing
     // severity/category filters from the store so the summary-panel filters
@@ -139,16 +153,9 @@ export function DiffViewer({
                         pr={pr}
                         diffStyle={diffStyle}
                         viewed={viewed}
-                        onToggleViewed={(path, v) =>
-                            dispatch({ type: "SET_VIEWED", path, viewed: v })
-                        }
+                        onToggleViewed={handleToggleViewed}
                         collapsed={collapsed}
-                        onToggleCollapsed={(path) =>
-                            setCollapsed((prev) => ({
-                                ...prev,
-                                [path]: !prev[path],
-                            }))
-                        }
+                        onToggleCollapsed={handleToggleCollapsed}
                         isReviewing={patchesLoading}
                         highlightIssueId={highlightIssueId}
                     />

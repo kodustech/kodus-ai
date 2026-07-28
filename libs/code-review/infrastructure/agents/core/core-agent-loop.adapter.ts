@@ -24,6 +24,7 @@
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 
 import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
+import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compression/token-estimator';
 import { DiffCoverageLedger } from '@libs/code-review/infrastructure/agents/adapters/diff-coverage-ledger.adapter';
 import { buildFinderToolRegistry } from '@libs/code-review/infrastructure/agents/adapters/finder-tools.adapter';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
@@ -32,6 +33,7 @@ import {
     buildFinderAgentSpec,
     runFinderWithVerify,
     recoverFindingsFromProse,
+    submitResultTool,
 } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import {
     buildFindingsFromVerify,
@@ -119,6 +121,19 @@ export async function runAgentLoopViaCore(
     const skipSynthesisRescue = !!input.skipSynthesisRescue;
 
     const contextWindowTokens = input.contextWindowTokens;
+    // Fixed per-request overhead (system prompt + tool schemas) the provider
+    // re-sends on EVERY step. Counting it lets the compressor reserve a real
+    // budget for the accumulating tool-loop messages instead of over-committing
+    // the window — the miss behind the mid-loop overflow (issue #1574).
+    // buildFinderAgentSpec adds submitResultTool to the model's tool set, so its
+    // schema (~210 tokens) is part of the real overhead and must be counted too
+    // — it matters on small windows where the safety margin is tight.
+    const overheadTokens = contextWindowTokens
+        ? estimateOverheadTokens(input.systemPrompt, [
+              ...tools.list(),
+              submitResultTool,
+          ])
+        : 0;
     // The AgentSpec.modelId is NOT used to resolve the model (the runner's
     // resolver above ignores it and always returns `model`). It IS used to
     // decide provider-native strict tool use (supportsStrictTools), so pass the
@@ -132,7 +147,9 @@ export async function runAgentLoopViaCore(
             tools,
             coverageLedger: ledger,
             compressor: contextWindowTokens
-                ? new ContextWindowCompressor(contextWindowTokens)
+                ? new ContextWindowCompressor(contextWindowTokens, {
+                      overheadTokens,
+                  })
                 : undefined,
             maxSteps: input.maxSteps ?? 20,
             providerOptions,
@@ -296,6 +313,9 @@ export async function runAgentLoopViaCore(
         ...(errorEvent && {
             errorMessage: (errorEvent.detail?.message as string) || undefined,
             errorName: (errorEvent.detail?.name as string) || undefined,
+            errorStatus: (errorEvent.detail?.status as number) ?? undefined,
+            errorResponseBody:
+                (errorEvent.detail?.responseBody as string) || undefined,
         }),
         source: r.kept.length || r.reasoning ? 'json-parse' : 'empty',
         usage: {

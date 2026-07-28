@@ -14,6 +14,7 @@ import ruleFileDetection from './rule-file-detection.js';
 import kodyRulesCoverage from './kody-rules-coverage.js';
 import licenseAttribution from './license-attribution.js';
 import onboardingWebhookRegistration from './onboarding-webhook-registration.js';
+import finishOnboardingSlo from './finish-onboarding-slo.js';
 import perSeatLicenseToggle from './per-seat-license-toggle.js';
 import prExecutionSse from './pr-execution-sse.js';
 import publicPrDemo from './public-pr-demo.js';
@@ -30,6 +31,7 @@ import upgradeNMinusOneToN from './upgrade.js';
 
 export const allScenarios: Record<string, Scenario> = {
     [onboardingWebhookRegistration.id]: onboardingWebhookRegistration,
+    [finishOnboardingSlo.id]: finishOnboardingSlo,
     [codeReviewBasic.id]: codeReviewBasic,
     [codeReviewVertexByok.id]: codeReviewVertexByok,
     [conversationVertexByok.id]: conversationVertexByok,
@@ -86,6 +88,7 @@ export {
     kodyRulesCoverage,
     licenseAttribution,
     onboardingWebhookRegistration,
+    finishOnboardingSlo,
     perSeatLicenseToggle,
     prExecutionSse,
     publicPrDemo,

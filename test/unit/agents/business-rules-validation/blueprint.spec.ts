@@ -660,6 +660,134 @@ describe('business-rules blueprint', () => {
         ).toBe(true);
     });
 
+    it('derives repository owner from fullName so KODUS_GET_ISSUE is pre-filled deterministically', async () => {
+        const fetcher = {
+            callTool: jest
+                .fn()
+                .mockImplementation((toolName: string, _args?: unknown) => {
+                    if (toolName === 'KODUS_GET_PULL_REQUEST_DIFF') {
+                        return Promise.resolve({
+                            result: {
+                                result: { success: true, data: 'diff content' },
+                            },
+                        });
+                    }
+
+                    if (toolName === 'KODUS_GET_ISSUE') {
+                        return Promise.resolve({
+                            result: {
+                                result: {
+                                    success: true,
+                                    data: {
+                                        title: 'Add retry with backoff',
+                                        body: 'Description of the change.\n\n## Acceptance Criteria\n- Retried up to 3 times\n- Exponential backoff (1s, 2s, 4s)',
+                                    },
+                                },
+                            },
+                        });
+                    }
+
+                    return Promise.resolve({ result: {} });
+                }),
+            callAgent: jest.fn(),
+            getRegisteredTools: jest
+                .fn()
+                .mockReturnValue([
+                    { name: 'KODUS_GET_PULL_REQUEST_DIFF' },
+                    { name: 'KODUS_GET_ISSUE' },
+                ]),
+            getToolsForLLM: jest.fn().mockReturnValue([
+                {
+                    name: 'KODUS_GET_ISSUE',
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            organizationId: { type: 'string' },
+                            teamId: { type: 'string' },
+                            repository: {
+                                type: 'object',
+                                properties: {
+                                    owner: { type: 'string' },
+                                    name: { type: 'string' },
+                                },
+                                required: ['owner', 'name'],
+                            },
+                            issueNumber: { type: 'number' },
+                        },
+                        required: [
+                            'organizationId',
+                            'teamId',
+                            'repository',
+                            'issueNumber',
+                        ],
+                    },
+                },
+            ]),
+        } as any;
+
+        const hooks = {
+            getCachedTaskContextTools: jest.fn().mockResolvedValue([]),
+            getSeedTaskContextTools: jest
+                .fn()
+                .mockResolvedValue(['KODUS_GET_ISSUE']),
+            resolveTaskContextMode: jest.fn().mockReturnValue('cache_first'),
+            saveCachedTaskContextTools: jest.fn().mockResolvedValue(undefined),
+            resolvePreferredTool: jest.fn().mockResolvedValue(undefined),
+            recordExecution: jest.fn().mockResolvedValue(undefined),
+        };
+
+        const steps = createBusinessRulesBlueprint(
+            fetcher,
+            { ...defaultRuntimeConfig, providerType: 'kodus-github-issues' },
+            hooks,
+        );
+        const deterministicSteps = steps.filter(
+            (step) => step.type === 'deterministic',
+        );
+
+        // The code-review pipeline's repository carries `fullName` ("owner/name")
+        // but no standalone `owner`/`name`. Both must be derived so the
+        // provider-dynamic issue tool is pre-filled with the real tenant context
+        // instead of falling back to the LLM (which hallucinates them).
+        let next = {
+            organizationAndTeamData: {
+                organizationId: 'org-uuid-1',
+                teamId: 'team-uuid-1',
+            },
+            userLanguage: 'en-US',
+            prepareContext: {
+                pullRequestDescription:
+                    'Implements resilient webhook delivery. Closes #972.',
+                repository: {
+                    id: '670345891',
+                    fullName: 'kodustech/kodus-orchestrator',
+                },
+                pullRequest: {
+                    pullRequestNumber: 973,
+                    headRef: 'repro/backoff',
+                },
+                taskContext: '',
+            },
+        } as BusinessRulesContext;
+
+        for (const step of deterministicSteps) {
+            next = await step.fn(next);
+        }
+
+        const issueCall = fetcher.callTool.mock.calls.find(
+            (call: unknown[]) => call[0] === 'KODUS_GET_ISSUE',
+        );
+        expect(issueCall).toBeDefined();
+        expect((issueCall as unknown[])[1]).toEqual(
+            expect.objectContaining({
+                organizationId: 'org-uuid-1',
+                teamId: 'team-uuid-1',
+                repository: { owner: 'kodustech', name: 'kodus-orchestrator' },
+                issueNumber: 972,
+            }),
+        );
+    });
+
     it('uses agentic fallback for task context when no deterministic task tool is registered', async () => {
         const fetcher = {
             callTool: jest.fn().mockResolvedValue({

@@ -22,6 +22,10 @@ Reference: <a href="https://www.figma.com/board/ZZJcIJMJWGuyzRGMh3w5di/Kodus-Cod
 - PR exceeds the configured file limit
 - Invalid or missing configuration
 
+<Note>
+  To override a skip and force a fresh pass — for example after "no new commits" — comment `@kody review --force`.
+</Note>
+
 ## What Kody Does
 
 - Resolves which settings apply (global → repo → directory) and validates them
@@ -99,7 +103,7 @@ Kody uses emoji reactions to show the live status of your code review directly i
 **I saw 👀 but wanted a review**
 
 - Likely skipped: no new commits, merge-only, ignored files, or file limit
-- Fix: comment `@kody start-review`
+- Fix: comment `@kody review --force` — a plain `start-review` will skip again if there are no new commits
 
 **I saw 👎**
 

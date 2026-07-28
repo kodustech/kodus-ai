@@ -1,8 +1,13 @@
-import { ParametersKey } from '@libs/core/domain/enums';
+import { ParametersKey, OrganizationParametersKey } from '@libs/core/domain/enums';
 import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import {
+    IOrganizationParametersService,
+    ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
+import { GlobalRulesSourceConfig } from '@libs/kodyRules/domain/interfaces/global-rules-source.interface';
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
@@ -23,9 +28,43 @@ export class KodyRulesSyncListener {
         private readonly kodyRulesSyncService: KodyRulesSyncService,
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
+        @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
+        private readonly organizationParametersService: IOrganizationParametersService,
         @InjectDataSource()
         private readonly dataSource: DataSource,
     ) {}
+
+    /**
+     * Whether the repo where this PR merged is a configured source of GLOBAL
+     * rules. When true, merged changes to its rule files must also refresh the
+     * org-wide global scope.
+     */
+    private async isGlobalSourceRepo(event: PullRequestClosedEvent): Promise<boolean> {
+        try {
+            const parameter =
+                await this.organizationParametersService.findByKey(
+                    OrganizationParametersKey.GLOBAL_RULES_SOURCE_REPOSITORIES,
+                    event.organizationAndTeamData,
+                );
+            const config = parameter?.configValue as
+                | GlobalRulesSourceConfig
+                | undefined;
+            return (config?.repositories ?? []).some(
+                (r) => String(r.id) === String(event.repository.id),
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to check global-rules source membership',
+                context: KodyRulesSyncListener.name,
+                error,
+                metadata: {
+                    organizationAndTeamData: event.organizationAndTeamData,
+                    repositoryId: event.repository?.id,
+                },
+            });
+            return false;
+        }
+    }
 
     /**
      * Cross-process idempotency claim. The pull-request.closed event reaches
@@ -147,6 +186,16 @@ export class KodyRulesSyncListener {
                 pullRequestNumber: event.pullRequestNumber,
                 files: event.files,
             });
+
+            // If this repo is also a global-rules source, refresh the global
+            // scope. Full scan is fine — the per-file SHA short-circuit skips
+            // unchanged files, so unrelated merges are cheap.
+            if (await this.isGlobalSourceRepo(event)) {
+                await this.kodyRulesSyncService.syncRepositoryGlobal({
+                    organizationAndTeamData: event.organizationAndTeamData,
+                    repository: event.repository,
+                });
+            }
         } catch (error) {
             // Release the claim so a redelivery/retry can sync this merge —
             // a stale claim would turn one transient failure into a

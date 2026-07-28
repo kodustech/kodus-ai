@@ -43,6 +43,10 @@ Usa una directiva para decir *"mira aquí con más atención"* — no *"mira sol
     ```
 
     <Note>
+      `--force` vuelve a ejecutar la review incluso cuando Kody normalmente la omitiría ("sin commits nuevos desde la última review"). Úsalo — con o sin directiva de enfoque — para obtener un nuevo análisis después de corregir lo que hizo fallar la ejecución anterior, o para aplicar configuraciones actualizadas a un PR ya revisado.
+    </Note>
+
+    <Note>
       Solo se usa la **primera línea** después del comando como directiva. Todo lo que esté en líneas posteriores se ignora, así que mantén el enfoque en una sola línea.
     </Note>
 

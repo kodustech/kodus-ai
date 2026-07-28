@@ -25,6 +25,9 @@ overrides:
   '@eslint/eslintrc>minimatch': ^3.1.3
   '@types/react': 19.2.17
   '@types/react-dom': 19.2.3
+  # Security (Dependabot): patch the transitive postcss 8.x line only; the
+  # ancient postcss@4 present elsewhere is a different major left untouched.
+  'postcss@>=8.0.0 <8.5.19': '8.5.19'
 
 # sharp: build permitido — Next usa para otimização de imagem (next/image).
 # unrs-resolver: false — resolver de tooling com binário pré-buildado (napi);

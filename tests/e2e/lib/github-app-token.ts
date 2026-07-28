@@ -25,8 +25,9 @@
  *     logins — an app slug containing those words would make Kody ignore
  *     the harness's own comments. Name the App accordingly (e.g. `e2e-qa-ci`).
  *
- * Tokens live ~1h; we re-mint when <10min of validity remains, so a matrix
- * run of any length stays authenticated (the runner asks per scenario).
+ * Tokens live ~1h; we re-mint when less than REFRESH_MARGIN_MS of validity
+ * remains, so a matrix run of any length stays authenticated (the runner asks
+ * per scenario).
  */
 import { createSign } from "node:crypto";
 import { http, ensureOk } from "./http.js";
@@ -35,7 +36,23 @@ import { logger } from "./log.js";
 const log = logger("github-app");
 
 const API = "https://api.github.com";
-const REFRESH_MARGIN_MS = 10 * 60 * 1000;
+
+/**
+ * Must exceed the LONGEST single scenario, not just "some slack".
+ *
+ * The runner resolves the token once per scenario, so a token handed out with
+ * `margin - 1ms` of validity has to survive that whole scenario. Scenarios
+ * poll for a review that may never come and only give up at their own timeout:
+ * command-review waits 1502s and license-attribution 900s — both longer than
+ * the old 10min margin. When a review failed to arrive, the token then died
+ * mid-poll and the scenario reported `HTTP 401` from GitHub instead of the
+ * real "no review arrived" cause, sending debugging after a credential bug
+ * that did not exist (QA matrix, 2026-07-14).
+ *
+ * 30min: comfortably past the 25min worst case while still using each token
+ * for at most half its life.
+ */
+const REFRESH_MARGIN_MS = 30 * 60 * 1000;
 
 interface CachedToken {
     token: string;

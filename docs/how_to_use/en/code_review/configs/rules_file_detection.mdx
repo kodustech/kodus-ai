@@ -85,6 +85,15 @@ You can sync individual rule files without enabling auto-sync:
 
 This lets you selectively sync rules without enabling automatic synchronization for all files.
 
+### Excluding a file (`@kody-ignore`)
+
+To keep a rule/guidance file in your repository but stop Kody from turning it into Kody Rules, add `@kody-ignore` anywhere in the file:
+
+1. Add `@kody-ignore` anywhere in the rule file (case-insensitive)
+2. Commit the change
+
+On the next sync Kody will **skip** that file **and remove any Kody Rules previously created from it**. The rules come back automatically if you later remove the `@kody-ignore` marker (or add `@kody-sync`). Use this to keep house-style docs like a `CLAUDE.md` or `AGENTS.md` in the repo without them becoming enforced review rules.
+
 <Warning>
 If you manually edit a Kody Rule that was created from an IDE rule file, your changes will be overwritten the next time the corresponding file is modified and synced.
 </Warning>

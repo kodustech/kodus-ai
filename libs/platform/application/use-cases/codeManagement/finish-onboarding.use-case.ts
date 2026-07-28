@@ -225,11 +225,36 @@ export class FinishOnboardingUseCase {
                 // Real engineering team size from the just-connected git org.
                 // Best-effort lead-scoring signal for the onboarding Discord
                 // card — never blocks onboarding if the git lookup fails.
+                //
+                // MUST be time-bounded: the try/catch only covers rejections,
+                // not hangs. When the git provider is rate-limited, octokit's
+                // throttling plugin parks the request until the quota resets
+                // (up to ~1h) — and this await held the entire
+                // finish-onboarding response hostage to a Discord-card member
+                // count (observed live: client retried the POST 6× at ~6min
+                // each while the server "worked" on telemetry). 10s is
+                // generous for a healthy member list; past that, ship the
+                // telemetry without the count.
                 let orgMemberCount: number | undefined;
                 try {
-                    const members = await this.codeManagement.getListMembers({
-                        organizationAndTeamData: { organizationId, teamId },
-                    });
+                    let timeoutHandle: NodeJS.Timeout | undefined;
+                    const members = await Promise.race([
+                        this.codeManagement.getListMembers({
+                            organizationAndTeamData: { organizationId, teamId },
+                        }),
+                        new Promise<never>((_, reject) => {
+                            timeoutHandle = setTimeout(
+                                () =>
+                                    reject(
+                                        new Error(
+                                            'getListMembers timed out after 10s (time-bounded telemetry; likely provider rate-limit throttling)',
+                                        ),
+                                    ),
+                                10_000,
+                            );
+                            timeoutHandle.unref?.();
+                        }),
+                    ]).finally(() => clearTimeout(timeoutHandle));
                     orgMemberCount = Array.isArray(members)
                         ? members.length
                         : undefined;

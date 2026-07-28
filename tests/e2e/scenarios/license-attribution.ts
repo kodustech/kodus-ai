@@ -1,4 +1,5 @@
 import { ensureLicenseSeat } from "../lib/onboarding.js";
+import { assertHealthyExecution } from "../lib/execution-health.js";
 import type { LicenseMode, RunContext, Scenario } from "../lib/types.js";
 
 // Fixture branch pair per provider. Each pair is a persistent head/base
@@ -155,6 +156,11 @@ export const licenseAttribution: Scenario = {
                     !sawLicenseNotice,
                     `License=${ctx.license} should NOT trigger a trial/BYOK notice, but Kody posted one: ${JSON.stringify(review.licenseBlockedNotice)}`,
                 );
+                // Execution HEALTH: a licensed review that posts findings can
+                // still hide a crashed agent/stage (partial_error). Only the
+                // expectReview tier runs the real pipeline, so assert health
+                // here (the blocked tier is gated before any execution row).
+                await assertHealthyExecution(ctx, session, pr.number);
             } else {
                 // Blocked tier — gate must stop the real review pipeline
                 // AND Kody should explain why with a notice on the PR.

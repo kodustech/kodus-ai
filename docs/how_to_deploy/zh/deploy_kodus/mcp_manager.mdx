@@ -13,7 +13,7 @@ Model Context Protocol (MCP) 是一个开放标准，允许 LLM 应用程序通�
 
 MCP Manager 是为 Kodus 中介这些 MCP 连接的后端服务。它跟踪提供商、集成和每个工作区允许的工具，然后将该目录暴露给 Kodus API。
 
-- MCP 提供商的中央注册表（Kodus、Composio 和自定义）
+- MCP 提供商的中央注册表（Kodus 和自定义）
 - 存储集成元数据（连接状态、MCP URL、允许的工具）
 - 处理特定于提供商的身份验证流程和工具发现
 - 公开 Kodus 用于列出和调用 MCP 工具的 API
@@ -23,7 +23,6 @@ graph TD
     A[Kodus] --> B[MCP Manager]
     B --> C[Providers]
     C --> D[Kodus MCPs]
-    C --> E[Composio]
     C --> F[Custom]
 ```
 
@@ -41,11 +40,6 @@ graph TD
 ### Kodus 提供商
 
 Kodus 提供商捆绑了由 Kodus 管理的第一方 MCP，包括 Kodus MCP、Context7 MCP 和 Kodus Docs MCP。
-
-### Composio 提供商
-
-Composio 是一个托管集成平台，拥有大量 SaaS 工具目录。MCP Manager 使用 Composio 进行身份验证并配置 MCP 端点，Kodus 可以调用这些端点。有关设置详情，请参阅官方文档：
-[Composio MCP 文档](https://docs.composio.dev/docs/mcp-providers)
 
 ### 自定义提供商
 

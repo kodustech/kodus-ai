@@ -1,10 +1,13 @@
 import { LangfuseSpanProcessor } from '@langfuse/otel';
+import { LangfuseVercelAiSdkIntegration } from '@langfuse/vercel-ai-sdk';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import type { AttributeValue } from '@opentelemetry/api';
+import { registerTelemetry } from 'ai';
 
 let spanProcessor: LangfuseSpanProcessor | null = null;
 let ownTracerProvider: NodeTracerProvider | null = null;
 let beforeExitInstalled = false;
+let aiSdkTelemetryRegistered = false;
 
 export function shouldTrace(): boolean {
     return (
@@ -86,6 +89,24 @@ export function registerLangfuseStandalone(): void {
     ownTracerProvider.register();
 }
 
+/**
+ * Register Langfuse's AI SDK 7 telemetry integration once at process start.
+ * AI SDK 7 uses a callback-based telemetry registry (`registerTelemetry`);
+ * without this, `telemetry` / `experimental_telemetry` on generateText never
+ * emit OTEL spans — only manual `@langfuse/tracing` observations show up.
+ *
+ * Call after `registerLangfuseStandalone()` (or Sentry OTel wiring) so the
+ * global TracerProvider already has the Langfuse span processor.
+ * Idempotent; no-op when tracing is disabled.
+ */
+export function registerLangfuseAiSdkTelemetry(): void {
+    if (aiSdkTelemetryRegistered) return;
+    if (!shouldTrace()) return;
+
+    registerTelemetry(new LangfuseVercelAiSdkIntegration());
+    aiSdkTelemetryRegistered = true;
+}
+
 export async function flushLangfuse(): Promise<void> {
     if (!spanProcessor) return;
     try {
@@ -115,20 +136,24 @@ export interface LangfuseTelemetryMetadata {
     provider?: string;
 }
 
+export interface LangfuseTelemetryConfig {
+    isEnabled: boolean;
+    functionId: string;
+    /** Carried for AI SDK 7 via `runtimeContext` (see `toAiSdkTelemetryArgs`). */
+    metadata?: Record<string, AttributeValue>;
+}
+
 /**
- * Build the `experimental_telemetry` config for a Vercel AI SDK call.
- * `functionId` sets the observation name in Langfuse; `metadata` shows up
- * in the Metadata tab. Safe to call when tracing is disabled — the AI SDK
- * reads `isEnabled` and skips span emission.
+ * Build Langfuse telemetry knobs for a Vercel AI SDK call.
+ * `functionId` sets the observation name; optional `metadata` is applied as
+ * AI SDK 7 `runtimeContext` via `toAiSdkTelemetryArgs` (not the removed
+ * `telemetry.metadata` field). Safe when tracing is disabled — `isEnabled`
+ * opts the call out.
  */
 export function buildLangfuseTelemetry(
     functionId: string,
     metadata?: LangfuseTelemetryMetadata,
-): {
-    isEnabled: boolean;
-    functionId: string;
-    metadata?: Record<string, AttributeValue>;
-} {
+): LangfuseTelemetryConfig {
     const attrs: Record<string, AttributeValue> = {};
     if (metadata?.organizationId) attrs.organizationId = metadata.organizationId;
     if (metadata?.teamId) attrs.teamId = metadata.teamId;
@@ -140,5 +165,34 @@ export function buildLangfuseTelemetry(
         isEnabled: shouldTrace(),
         functionId,
         ...(Object.keys(attrs).length > 0 && { metadata: attrs }),
+    };
+}
+
+/**
+ * Expand `buildLangfuseTelemetry()` into AI SDK 7 `generateText` fields.
+ * Spreads as `{ telemetry, runtimeContext? }` — metadata keys become
+ * observation metadata via `includeRuntimeContext`.
+ */
+export function toAiSdkTelemetryArgs(config: LangfuseTelemetryConfig): {
+    telemetry: {
+        isEnabled: boolean;
+        functionId: string;
+        includeRuntimeContext?: Record<string, true>;
+    };
+    runtimeContext?: Record<string, AttributeValue>;
+} {
+    const { isEnabled, functionId, metadata } = config;
+    if (!metadata || Object.keys(metadata).length === 0) {
+        return { telemetry: { isEnabled, functionId } };
+    }
+    return {
+        telemetry: {
+            isEnabled,
+            functionId,
+            includeRuntimeContext: Object.fromEntries(
+                Object.keys(metadata).map((k) => [k, true as const]),
+            ),
+        },
+        runtimeContext: metadata,
     };
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import {
@@ -8,6 +9,7 @@ import {
     CollapsibleIndicator,
     CollapsibleTrigger,
 } from "@components/ui/collapsible";
+import { Input } from "@components/ui/input";
 import { magicModal } from "@components/ui/magic-modal";
 import {
     SidebarMenuItem,
@@ -25,7 +27,8 @@ import { KodyLearningStatus } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { useCustomMessagesOverrideCountsByRepository } from "@services/pull-request-messages/hooks";
-import { Plus } from "lucide-react";
+import { ChevronDown, Plus, Search } from "lucide-react";
+import { safeArray } from "src/core/utils/safe-array";
 
 import { useCodeReviewRouteParams } from "../../_hooks";
 import { countConfigOverridesForRoutes } from "../../_utils/count-overrides";
@@ -211,6 +214,9 @@ const RepositoryCollapsibleItem = ({
     );
 };
 
+const REPOS_PAGE_SIZE = 25;
+const SEARCH_MIN_CHARS = 4;
+
 export const PerRepository = ({
     configValue,
     routes,
@@ -225,6 +231,47 @@ export const PerRepository = ({
         Action.Create,
         ResourceType.CodeReviewSettings,
     );
+
+    const [search, setSearch] = useState("");
+    const [visibleCount, setVisibleCount] = useState(REPOS_PAGE_SIZE);
+
+    const configuredRepositories = useMemo(
+        () =>
+            safeArray(configValue?.repositories)
+                .filter(
+                    (repository) =>
+                        repository.isSelected ||
+                        (repository.directories?.length ?? 0) > 0,
+                )
+                .sort((a, b) =>
+                    (a.name ?? "").localeCompare(b.name ?? "", undefined, {
+                        sensitivity: "base",
+                    }),
+                ),
+        [configValue?.repositories],
+    );
+
+    const query = search.trim().toLowerCase();
+    const isSearching = query.length >= SEARCH_MIN_CHARS;
+
+    const filteredRepositories = useMemo(() => {
+        if (!isSearching) return configuredRepositories;
+
+        return configuredRepositories.filter((repository) =>
+            (repository.name ?? "").toLowerCase().includes(query),
+        );
+    }, [configuredRepositories, isSearching, query]);
+
+    // Reset vertical pagination whenever the effective search changes.
+    useEffect(() => {
+        setVisibleCount(REPOS_PAGE_SIZE);
+    }, [query]);
+
+    const visibleRepositories = filteredRepositories.slice(0, visibleCount);
+    const remaining = filteredRepositories.length - visibleRepositories.length;
+    const canCollapse =
+        visibleCount > REPOS_PAGE_SIZE &&
+        filteredRepositories.length > REPOS_PAGE_SIZE;
 
     return (
         <SidebarMenuItem>
@@ -256,25 +303,77 @@ export const PerRepository = ({
                         <Plus />
                     </Button>
                 </div>
+
+                {configuredRepositories.length > 0 && (
+                    <div className="mb-3">
+                        <Input
+                            size="md"
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            leftIcon={<Search />}
+                            placeholder="Search repositories…"
+                        />
+                    </div>
+                )}
             </div>
 
             <div className="flex flex-col gap-1">
-                {configValue.repositories
-                    .filter(
-                        (repository) =>
-                            repository.isSelected ||
-                            (repository.directories?.length ?? 0) > 0,
-                    )
-                    .map((repository) => (
-                        <RepositoryCollapsibleItem
-                            key={repository.id}
-                            repository={repository}
-                            repositoryId={repositoryId}
-                            directoryId={directoryId}
-                            pageName={pageName}
-                            routes={routes}
-                        />
-                    ))}
+                {visibleRepositories.map((repository) => (
+                    <RepositoryCollapsibleItem
+                        key={repository.id}
+                        repository={repository}
+                        repositoryId={repositoryId}
+                        directoryId={directoryId}
+                        pageName={pageName}
+                        routes={routes}
+                    />
+                ))}
+
+                {isSearching && filteredRepositories.length === 0 && (
+                    <div className="text-text-tertiary flex flex-col items-center gap-2 px-2 py-8 text-center">
+                        <Search className="size-5 opacity-60" />
+                        <span className="text-xs">
+                            No repositories match “{search.trim()}”.
+                        </span>
+                    </div>
+                )}
+
+                {(remaining > 0 || canCollapse) && (
+                    <div className="mt-2 flex flex-col gap-1.5 px-2">
+                        {remaining > 0 && (
+                            <Button
+                                size="sm"
+                                variant="helper"
+                                className="w-full justify-center"
+                                rightIcon={<ChevronDown />}
+                                onClick={() =>
+                                    setVisibleCount(
+                                        (count) => count + REPOS_PAGE_SIZE,
+                                    )
+                                }>
+                                Show {Math.min(remaining, REPOS_PAGE_SIZE)} more
+                            </Button>
+                        )}
+
+                        <div className="flex items-center justify-between">
+                            <span className="text-text-tertiary text-[11px]">
+                                {visibleRepositories.length} of{" "}
+                                {filteredRepositories.length}
+                            </span>
+
+                            {canCollapse && (
+                                <Button
+                                    size="xs"
+                                    variant="cancel"
+                                    onClick={() =>
+                                        setVisibleCount(REPOS_PAGE_SIZE)
+                                    }>
+                                    Show less
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
         </SidebarMenuItem>
     );

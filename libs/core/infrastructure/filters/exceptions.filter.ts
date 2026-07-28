@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { StatusCodes, getReasonPhrase } from 'http-status-codes';
 import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
 import { reportExceptionToSentry } from '../config/log/sentry';
+import { QueryFailedError } from 'typeorm';
 
 interface ExceptionResponse {
     statusCode?: number;
@@ -37,14 +38,26 @@ export class ExceptionsFilter implements ExceptionFilter {
     catch(exception: unknown, context: ExecutionContext): void {
         const response = context.switchToHttp().getResponse();
         const request = context.switchToHttp().getRequest();
-        const status =
-            exception instanceof HttpException
-                ? exception.getStatus()
-                : StatusCodes.INTERNAL_SERVER_ERROR;
+        // Postgres 22P02 = invalid_text_representation: a malformed uuid / int
+        // / enum reached a query (e.g. an empty or garbage `?teamId=`, a `:id`
+        // that isn't a UUID). That is a client input error, not a server fault,
+        // so map it to 400 — otherwise it surfaces as a 500 (Sentry noise,
+        // error-rate spikes, http_errors_total) for what is simply bad input.
+        const isPgInvalidInput =
+            exception instanceof QueryFailedError &&
+            (exception as { driverError?: { code?: string } }).driverError
+                ?.code === '22P02';
+
+        const status = isPgInvalidInput
+            ? StatusCodes.BAD_REQUEST
+            : exception instanceof HttpException
+              ? exception.getStatus()
+              : StatusCodes.INTERNAL_SERVER_ERROR;
 
         const requestId = request?.requestId || 'unknown-request-id';
         const shouldReportToSentry =
-            !(exception instanceof HttpException) || status >= 500;
+            !isPgInvalidInput &&
+            (!(exception instanceof HttpException) || status >= 500);
 
         if (shouldReportToSentry) {
             void reportExceptionToSentry(exception, {
@@ -65,7 +78,9 @@ export class ExceptionsFilter implements ExceptionFilter {
 
         const errorResponse =
             exception instanceof HttpException ? exception.getResponse() : {};
-        let message = 'An unexpected error occurred';
+        let message = isPgInvalidInput
+            ? 'Invalid parameter format'
+            : 'An unexpected error occurred';
         let error_key: string | undefined;
         let code: string | undefined;
         let details: unknown | undefined;
@@ -87,11 +102,11 @@ export class ExceptionsFilter implements ExceptionFilter {
         }
 
         const error =
-            exception instanceof HttpException
+            exception instanceof HttpException || isPgInvalidInput
                 ? getReasonPhrase(status)
                 : 'Internal Server Error';
 
-        this.loggerService.error({
+        this.loggerService[isPgInvalidInput ? 'warn' : 'error']({
             message: `[${status}] ${error}: ${message}`,
             context: 'ExceptionsFilter',
             serviceName: 'ExceptionsFilter',

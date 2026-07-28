@@ -64,7 +64,7 @@ diferentes — **verify não é policy.**
 - **Tools**: 2 caminhos — `AgentTool → aiTool()`, ou passthrough nativo via `AiSdkToolRegistry`.
 - **System prompt**: string, ou com `systemProviderOptions` (cache Anthropic).
 - **Config de chamada**: `temperature`, `maxOutputTokens`, `providerOptions`.
-- **Telemetria**: `input.telemetry` → `experimental_telemetry` (Langfuse).
+- **Telemetria**: `input.telemetry` → AI SDK `telemetry` (+ `runtimeContext` when metadata is present; Langfuse).
 - **Cancelamento**: `ctx.signal` → `abortSignal`.
 - **Parada**: `policy.shouldStop` (OR) + `stepCountIs(maxSteps)` fail-open.
 - **Steer por step**: diretivas de `policy.prepareStep` mescladas; `sanitizeNoSystem`.

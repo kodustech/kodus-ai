@@ -15,6 +15,7 @@ export interface IPullRequestMessages {
     repositoryId?: string;
     startReviewMessage?: IPullRequestMessageContent;
     endReviewMessage?: IPullRequestMessageContent;
+    errorReviewMessage?: IPullRequestMessageContent;
     directoryId?: string;
     globalSettings?: {
         hideComments?: boolean;

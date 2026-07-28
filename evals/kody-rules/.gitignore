@@ -1,1 +1,4 @@
 bench-cases.json
+.summary-cache.json
+.atoms-cache.json
+.atoms-audit.txt

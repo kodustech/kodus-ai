@@ -1,3 +1,4 @@
+import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
@@ -47,8 +48,12 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
     let permissionValidationService: { validateExecutionPermissions: jest.Mock };
     let autoAssignLicenseUseCase: { execute: jest.Mock };
 
-    const makeContext = (): CodeReviewPipelineContext =>
-        ({
+    // Frozen by DEFAULT — production hands every stage after the first
+    // produce() a deep-frozen context. See test/fixtures/frozen-pipeline-context.ts.
+    const makeContext = (
+        over: Record<string, unknown> = {},
+    ): CodeReviewPipelineContext =>
+        frozenContext({
             organizationAndTeamData: {
                 organizationId: 'org-1',
                 teamId: 'team-1',
@@ -77,6 +82,7 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
             pipelineMetadata: {},
             statusInfo: { status: 'in_progress' as any, message: 'started' },
             pipelineVersion: '1.0.0',
+            ...over,
         }) as CodeReviewPipelineContext;
 
     beforeEach(async () => {
@@ -209,8 +215,11 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
                 { email: 'owner@acme.com' } as any,
             ]);
 
-            const context = makeContext();
-            (context.pullRequest as any).user = user;
+            // Built frozen, so the author shape is an override, not a
+            // post-hoc mutation.
+            const context = makeContext({
+                pullRequest: { number: 42, state: 'open', locked: false, user },
+            });
 
             await stage.execute(context);
 

@@ -257,33 +257,3 @@ export class CodeReviewParameterResponseDto extends ApiResponseBaseDto {
     @ApiProperty({ type: CodeReviewParameterDto })
     data: CodeReviewParameterDto;
 }
-
-export class CodeReviewPresetDataDto {
-    @ApiProperty()
-    id: string;
-
-    @ApiProperty()
-    name: string;
-
-    @ApiProperty({
-        type: Object,
-        description: 'Preset configuration map (schema varies by key).',
-        additionalProperties: true,
-    })
-    configs: Record<string, unknown>;
-
-    @ApiProperty()
-    isSelected: boolean;
-
-    @ApiProperty({
-        type: Object,
-        isArray: true,
-        description: 'Repository bindings for this preset.',
-    })
-    repositories: Record<string, unknown>[];
-}
-
-export class CodeReviewPresetResponseDto extends ApiResponseBaseDto {
-    @ApiProperty({ type: CodeReviewPresetDataDto })
-    data: CodeReviewPresetDataDto;
-}

@@ -1,4 +1,4 @@
-import { createLogger } from '@libs/core/log/logger';
+import { createLogger, SimpleLogger } from '@libs/core/log/logger';
 import { PlatformType } from '@libs/core/domain/enums';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -34,6 +34,160 @@ const TIMEOUTS = {
     COMMAND_LONG_MS: 30_000,
     COMMAND_SHORT_MS: 10_000,
 };
+
+export interface BuildE2BRemoteCommandsOptions {
+    /** Logger for the [SANDBOX-READ] empty-read warning (optional). */
+    logger?: SimpleLogger;
+    /** `context` field on the warning (e.g. the calling service name). */
+    logContext?: string;
+    /** Extra structured metadata merged into the warning (e.g. { prKey }). */
+    logMetadata?: Record<string, unknown>;
+}
+
+/**
+ * Resolve a repo-relative path against REPO_DIR, rejecting absolute paths and
+ * '..' traversal. Shared by every RemoteCommands implementation so the
+ * path-isolation contract cannot silently diverge.
+ */
+function resolveRepoPath(path: string): string {
+    if (path.startsWith('/')) {
+        throw new Error('Absolute paths are not allowed');
+    }
+    if (path.includes('..')) {
+        throw new Error('Path traversal using ".." is not allowed');
+    }
+    return `${REPO_DIR}/${path}`;
+}
+
+/**
+ * Build the read-only RemoteCommands (grep/read/listDir/exec) backed by an E2B
+ * sandbox. SINGLE SOURCE OF TRUTH: used by BOTH E2BSandboxService (creator) and
+ * SandboxLeaseManager (reconnect/joiner) so the two paths cannot drift — an
+ * earlier inline duplicate in the reconnect path ran commands from the wrong
+ * CWD and swallowed errors, silently blinding reconnected review passes.
+ *
+ * All relative paths resolve against REPO_DIR (the repo lives at
+ * /home/user/repo, NOT the sandbox CWD /home/user). Errors surface instead of
+ * being swallowed, and empty reads emit a [SANDBOX-READ] warning.
+ */
+export function buildE2BRemoteCommands(
+    sandbox: Sandbox,
+    opts: BuildE2BRemoteCommandsOptions = {},
+): RemoteCommands {
+    const { logger, logContext, logMetadata } = opts;
+
+    // E2B's commands.run THROWS a CommandExitError on any non-zero exit. Normalize
+    // it back to a result so read-only tools can inspect exitCode/stderr instead
+    // of treating "no matches" (rg exit 1) or a missing file as a broken tool.
+    const runCmd = async (
+        cmd: string,
+        runOpts?: { timeoutMs?: number },
+    ): Promise<{ stdout: string; stderr: string; exitCode: number }> => {
+        try {
+            return await sandbox.commands.run(cmd, runOpts);
+        } catch (err) {
+            if (err instanceof CommandExitError) {
+                return {
+                    stdout: err.stdout,
+                    stderr: err.stderr,
+                    exitCode: err.exitCode,
+                };
+            }
+            throw err;
+        }
+    };
+
+    return {
+        grep: async (
+            pattern: string,
+            path: string,
+            glob?: string,
+        ): Promise<string> => {
+            // Validate path (throws on '..' / absolute). rg then runs the ORIGINAL
+            // relative path inside REPO_DIR via `cd`, so only the throw is used.
+            resolveRepoPath(path);
+            const globArg = glob
+                ? ` --glob '${glob.replace(/'/g, "'\\''")}'`
+                : '';
+            const escapedPattern = pattern.replace(/'/g, "'\\''");
+            const safeRelativePath = path.replace(/'/g, "'\\''");
+            const result = await runCmd(
+                `cd ${REPO_DIR} && rg --no-heading -n '${escapedPattern}' '${safeRelativePath}'${globArg}`,
+                { timeoutMs: TIMEOUTS.COMMAND_LONG_MS },
+            );
+            // rg exit 1 = "no matches" (valid); exit >= 2 with stderr = real error.
+            if (!result.stdout && result.exitCode >= 2 && result.stderr) {
+                return `Error: ${result.stderr}`;
+            }
+            if (!result.stdout) {
+                return 'No matches found.';
+            }
+            return result.stdout;
+        },
+
+        read: async (
+            path: string,
+            start: number,
+            end: number,
+        ): Promise<string> => {
+            const escapedPath = resolveRepoPath(path).replace(/'/g, "'\\''");
+            // GNU sed rejects address 0, so start=end=0 means "whole file" (cat).
+            const cmd =
+                start === 0 && end === 0
+                    ? `cat '${escapedPath}'`
+                    : `sed -n '${start < 1 ? 1 : start},${end}p' '${escapedPath}'`;
+            const result = await runCmd(cmd, {
+                timeoutMs: TIMEOUTS.COMMAND_SHORT_MS,
+            });
+            if (!result.stdout) {
+                logger?.warn({
+                    message: `[SANDBOX-READ] Empty result for ${path}: exitCode=${result.exitCode} stderr=${(result.stderr || '').substring(0, 200)} cmd=${cmd}`,
+                    context: logContext,
+                    metadata: {
+                        ...logMetadata,
+                        path,
+                        exitCode: result.exitCode,
+                        stderr: (result.stderr || '').substring(0, 200),
+                    },
+                });
+            }
+            // THROW (not return a string) when the read failed — empty stdout +
+            // stderr means "No such file" / permission denied. Returning the error
+            // as content bypassed the readFile tool's catch block.
+            if (!result.stdout && result.stderr) {
+                throw new Error(result.stderr.trim());
+            }
+            return result.stdout;
+        },
+
+        listDir: async (
+            path: string,
+            maxDepth: number,
+        ): Promise<string> => {
+            const escapedPath = resolveRepoPath(path).replace(/'/g, "'\\''");
+            const result = await runCmd(
+                `find '${escapedPath}' -maxdepth ${maxDepth} -type f`,
+                { timeoutMs: TIMEOUTS.COMMAND_LONG_MS },
+            );
+            return result.stdout;
+        },
+
+        exec: async (
+            command: string,
+        ): Promise<{ stdout: string; stderr: string; exitCode: number }> => {
+            const result = await runCmd(`cd ${REPO_DIR} && ${command}`, {
+                timeoutMs: TIMEOUTS.COMMAND_LONG_MS,
+            });
+            // stdout and stderr kept SEPARATE — merging let a subprocess error
+            // masquerade as command output. Tools that want diagnostics use 2>&1.
+            return {
+                stdout: result.stdout,
+                stderr: result.stderr || '',
+                exitCode: result.exitCode,
+            };
+        },
+    };
+}
 
 @Injectable()
 export class E2BSandboxService implements ISandboxProvider {
@@ -634,153 +788,12 @@ export class E2BSandboxService implements ISandboxProvider {
     }
 
     private buildRemoteCommands(sandbox: Sandbox): RemoteCommands {
-        // E2B's `commands.run` THROWS a CommandExitError on any non-zero exit.
-        // That is wrong for the agent's read-only tools: ripgrep exits 1 on
-        // "no matches" (a legitimate, informative result — "no caller found"
-        // is evidence, not a failure), `cat`/`sed` exit 1 on a missing file,
-        // etc. If we let the throw propagate, the model receives a generic
-        // "Error" and treats the tool as broken, triggering retry cascades and
-        // discarding valid negative evidence. This helper normalizes the throw
-        // back into a CommandResult so each tool can inspect exitCode/stderr and
-        // decide for itself what is an error vs. an empty-but-valid result.
-        const runCmd = async (
-            cmd: string,
-            opts?: { timeoutMs?: number },
-        ): Promise<{ stdout: string; stderr: string; exitCode: number }> => {
-            try {
-                return await sandbox.commands.run(cmd, opts);
-            } catch (err) {
-                if (err instanceof CommandExitError) {
-                    return {
-                        stdout: err.stdout,
-                        stderr: err.stderr,
-                        exitCode: err.exitCode,
-                    };
-                }
-                throw err;
-            }
-        };
-
-        return {
-            grep: async (
-                pattern: string,
-                path: string,
-                glob?: string,
-            ): Promise<string> => {
-                // Validate path with the same security checks
-                const fullPath = this.resolvePath(path);
-                const escapedPath = fullPath.replace(/'/g, "'\\''");
-                const globArg = glob
-                    ? ` --glob '${glob.replace(/'/g, "'\\''")}'`
-                    : '';
-                // Use single quotes to prevent bash from interpreting
-                // regex escape sequences (e.g. \b as backspace).
-                const escapedPattern = pattern.replace(/'/g, "'\\''");
-
-                // Run inside REPO_DIR so rg outputs relative paths (e.g. "./src/foo.ts")
-                // instead of absolute ones. We pass the original `path` parameter instead of `fullPath`
-                // because `resolvePath` already validated that `path` is safe (no .. or /).
-                const safeRelativePath = path.replace(/'/g, "'\\''");
-
-                const result = await runCmd(
-                    `cd ${REPO_DIR} && rg --no-heading -n '${escapedPattern}' '${safeRelativePath}'${globArg}`,
-                    { timeoutMs: TIMEOUTS.COMMAND_LONG_MS },
-                );
-                // rg returns exit code 1 for "no matches" (not an error)
-                // but stderr may contain actual errors like "permission denied".
-                // exitCode >= 2 is a real ripgrep error; exit 1 with empty
-                // stdout means simply "no matches", which we surface as such so
-                // the model reads it as valid evidence rather than a failure.
-                if (!result.stdout && result.exitCode >= 2 && result.stderr) {
-                    return `Error: ${result.stderr}`;
-                }
-                if (!result.stdout) {
-                    return 'No matches found.';
-                }
-                return result.stdout;
-            },
-
-            read: async (
-                path: string,
-                start: number,
-                end: number,
-            ): Promise<string> => {
-                const fullPath = this.resolvePath(path);
-                const escapedPath = fullPath.replace(/'/g, "'\\''");
-                // When start=0 and end=0, read the entire file (cat).
-                // GNU sed rejects address 0 so we must avoid `sed -n '0,0p'`.
-                const cmd =
-                    start === 0 && end === 0
-                        ? `cat '${escapedPath}'`
-                        : // sed is 1-indexed; a start address of 0 is invalid in GNU sed.
-                          `sed -n '${start < 1 ? 1 : start},${end}p' '${escapedPath}'`;
-                const result = await runCmd(cmd, {
-                    timeoutMs: TIMEOUTS.COMMAND_SHORT_MS,
-                });
-                // Debug: log when read returns empty
-                if (!result.stdout) {
-                    this.logger.warn({
-                        message: `[SANDBOX-READ] Empty result for ${path}: exitCode=${result.exitCode} stderr=${(result.stderr || '').substring(0, 200)} cmd=${cmd}`,
-                        context: E2BSandboxService.name,
-                    });
-                }
-                // THROW (not return a string) when the read failed — empty
-                // stdout + stderr means "No such file or directory" / permission
-                // denied. Returning the error as if it were file content
-                // bypassed the readFile tool's catch block (which runs the
-                // near-miss path suggestion) and caused retry cascades.
-                if (!result.stdout && result.stderr) {
-                    throw new Error(result.stderr.trim());
-                }
-                return result.stdout;
-            },
-
-            listDir: async (
-                path: string,
-                maxDepth: number,
-            ): Promise<string> => {
-                const fullPath = this.resolvePath(path);
-                const escapedPath = fullPath.replace(/'/g, "'\\''");
-                const result = await runCmd(
-                    `find '${escapedPath}' -maxdepth ${maxDepth} -type f`,
-                    { timeoutMs: TIMEOUTS.COMMAND_LONG_MS },
-                );
-                return result.stdout;
-            },
-
-            exec: async (
-                command: string,
-            ): Promise<{ stdout: string; stderr: string; exitCode: number }> => {
-                const result = await runCmd(
-                    `cd ${REPO_DIR} && ${command}`,
-                    { timeoutMs: TIMEOUTS.COMMAND_LONG_MS },
-                );
-                // With runCmd, a non-zero exit no longer throws: the model now
-                // receives the real exitCode plus stderr. stdout and stderr are
-                // kept SEPARATE — merging them let a subprocess error (e.g.
-                // "fd: command not found") masquerade as command output in the
-                // tools. Tools that want compiler diagnostics already redirect
-                // with `2>&1` at the shell, so nothing they need is lost.
-                return {
-                    stdout: result.stdout,
-                    stderr: result.stderr || '',
-                    exitCode: result.exitCode,
-                };
-            },
-        };
-    }
-
-    private resolvePath(path: string): string {
-        // Security: Prevent path traversal by disallowing absolute paths
-        if (path.startsWith('/')) {
-            throw new Error('Absolute paths are not allowed');
-        }
-        // Security: Prevent path traversal by disallowing '..' segments
-        if (path.includes('..')) {
-            throw new Error('Path traversal using ".." is not allowed');
-        }
-        // Resolve relative paths against the repo directory
-        return `${REPO_DIR}/${path}`;
+        // Delegates to the single shared implementation so the creator and the
+        // SandboxLeaseManager reconnect path can never drift again.
+        return buildE2BRemoteCommands(sandbox, {
+            logger: this.logger,
+            logContext: E2BSandboxService.name,
+        });
     }
 }
 // sandbox-test

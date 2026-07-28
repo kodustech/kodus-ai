@@ -21,7 +21,10 @@ export const CustomMessagesOptionsDropdown = (props: {
     value: FormattedConfig<CustomMessageConfig["startReviewMessage"]>;
     onChange: (value: CustomMessageConfig["startReviewMessage"]) => void;
     canEdit: boolean;
-    messageType: "startReviewMessage" | "endReviewMessage";
+    messageType:
+        | "startReviewMessage"
+        | "endReviewMessage"
+        | "errorReviewMessage";
 }) => {
     // Some placeholders (e.g. the consolidated LLM prompt) depend on data that
     // only exists after the review runs, so they're offered on the End message

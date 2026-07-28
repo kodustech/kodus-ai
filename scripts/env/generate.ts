@@ -47,6 +47,14 @@ const INSTALLER_SCHEMA_VARS_OUT_ARG = process.argv.find((a) =>
 const INSTALLER_SCHEMA_VARS_OUT = INSTALLER_SCHEMA_VARS_OUT_ARG
     ? INSTALLER_SCHEMA_VARS_OUT_ARG.replace('--installer-schema-vars-out=', '')
     : join(REPO_ROOT, '..', 'kodus-installer', 'scripts', 'schema-vars.sh');
+const INSTALLER_HELM_VALUES_OUT_ARG = process.argv.find((a) =>
+    a.startsWith('--installer-helm-values-out='),
+);
+// Anti-drift source of truth for the Helm chart. Ships next to the chart in the
+// installer repo; CI there validates the chart against it.
+const INSTALLER_HELM_VALUES_OUT = INSTALLER_HELM_VALUES_OUT_ARG
+    ? INSTALLER_HELM_VALUES_OUT_ARG.replace('--installer-helm-values-out=', '')
+    : join(REPO_ROOT, '..', 'kodus-installer', 'charts', 'kodus', 'schema.generated.yaml');
 const POC_DIR = join(REPO_ROOT, '.env-preview');
 
 const TARGETS = APPLY
@@ -62,6 +70,9 @@ const TARGETS = APPLY
           installerSchemaVars: APPLY_INSTALLER
               ? INSTALLER_SCHEMA_VARS_OUT
               : join(POC_DIR, 'kodus-installer.schema-vars.sh'),
+          installerHelmValues: APPLY_INSTALLER
+              ? INSTALLER_HELM_VALUES_OUT
+              : join(POC_DIR, 'kodus-installer.schema.generated.yaml'),
           // docs lives inside this repo now (was a sister repo before).
           docsSnippet: join(
               REPO_ROOT,
@@ -75,6 +86,10 @@ const TARGETS = APPLY
           envTemplate: join(POC_DIR, 'kodus-ai.env.template'),
           installerEnv: join(POC_DIR, 'kodus-installer.env.example'),
           installerSchemaVars: join(POC_DIR, 'kodus-installer.schema-vars.sh'),
+          installerHelmValues: join(
+              POC_DIR,
+              'kodus-installer.schema.generated.yaml',
+          ),
           docsSnippet: join(POC_DIR, 'env-vars-generated.mdx'),
       };
 
@@ -271,6 +286,68 @@ function renderInstallerSchemaVars(sections: SchemaSection[]): string {
     return lines.join('\n');
 }
 
+function yamlScalar(v: string): string {
+    if (v === '') return '""';
+    // Quote anything that isn't an obviously-safe bare scalar.
+    if (
+        /[\s:#"'{}[\],&*?|<>=!%@`]/.test(v) ||
+        /^[-?:,[\]{}#&*!|>'"%@` ]/.test(v) ||
+        /^(true|false|null|yes|no|on|off|~)$/i.test(v) ||
+        /^[+-]?(\d|\.\d)/.test(v)
+    ) {
+        return `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+    }
+    return v;
+}
+
+// Anti-drift manifest for the Kodus Helm chart: the config keys (ConfigMap) and
+// secret keys (Secret) the chart must expose, derived from the same schema that
+// produces .env.example / schema-vars.sh. The installer CI validates the chart
+// against this so the two can never drift (the class of bug that broke the
+// community charts — wrong secret names / hex-vs-base64 formats).
+function renderHelmValues(sections: SchemaSection[]): string {
+    const items = flatten(sections);
+    const selfHosted = items.filter((it) => includesAudience(it, 'self-hosted'));
+    const config = selfHosted.filter(
+        (it) => !it.sensitive && !it.installerComment,
+    );
+    const sensitive = selfHosted.filter((it) => it.sensitive);
+    const required = sensitive
+        .filter((it) => it.required && !it.installerComment)
+        .map((it) => it.name);
+    const optional = sensitive
+        .filter((it) => !(it.required && !it.installerComment))
+        .map((it) => it.name);
+    const autogen = selfHosted.filter((it) => it.autogen);
+
+    const lines: string[] = [];
+    lines.push('# AUTO-GENERATED from kodus-ai/.env.schema. Do NOT edit by hand.');
+    lines.push('# Anti-drift source of truth for the Kodus Helm chart. The installer CI');
+    lines.push('# (scripts/validate-chart-schema.sh) validates the chart against this file so');
+    lines.push('# the chart can never fall out of sync with the schema.');
+    lines.push('# Regenerate: `pnpm run env:generate --apply --installer` in kodus-ai.');
+    lines.push('');
+    lines.push('# Non-sensitive self-hosted vars (ConfigMap keys) with installer defaults.');
+    lines.push('config:');
+    for (const it of config) {
+        const def = it.installerDefault ?? it.value;
+        lines.push(`  ${it.name}: ${yamlScalar(def)}`);
+    }
+    lines.push('');
+    lines.push('# Secret keys the app consumes.');
+    lines.push('secrets:');
+    lines.push('  required:');
+    for (const n of required) lines.push(`    - ${n}`);
+    lines.push('  optional:');
+    for (const n of optional) lines.push(`    - ${n}`);
+    lines.push('  # Method to mint each secret unattended. hex32 MUST stay hex — the app');
+    lines.push('  # parses API_CRYPTO_KEY/CODE_MANAGEMENT_SECRET with Buffer.from(x,"hex").');
+    lines.push('  autogen:');
+    for (const it of autogen) lines.push(`    ${it.name}: ${it.autogen}`);
+    lines.push('');
+    return lines.join('\n');
+}
+
 function renderDocsSnippet(sections: SchemaSection[]): string {
     const out: string[] = [];
     out.push('{/* AUTO-GENERATED from kodus-ai/.env.schema. Do NOT edit. */}');
@@ -315,18 +392,21 @@ function main(): void {
     const envTemplate = renderEnvTemplate(sections);
     const installerEnv = renderInstallerEnv(sections);
     const installerSchemaVars = renderInstallerSchemaVars(sections);
+    const installerHelmValues = renderHelmValues(sections);
     const docs = renderDocsSnippet(sections);
 
     ensureDir(TARGETS.envExample);
     ensureDir(TARGETS.envTemplate);
     ensureDir(TARGETS.installerEnv);
     ensureDir(TARGETS.installerSchemaVars);
+    ensureDir(TARGETS.installerHelmValues);
     ensureDir(TARGETS.docsSnippet);
 
     writeFileSync(TARGETS.envExample, envExample);
     writeFileSync(TARGETS.envTemplate, envTemplate);
     writeFileSync(TARGETS.installerEnv, installerEnv);
     writeFileSync(TARGETS.installerSchemaVars, installerSchemaVars);
+    writeFileSync(TARGETS.installerHelmValues, installerHelmValues);
     writeFileSync(TARGETS.docsSnippet, docs);
 
     const cloudCount = items.filter((it) => includesAudience(it, 'cloud')).length;
@@ -346,6 +426,7 @@ function main(): void {
     console.log(`  ${TARGETS.envTemplate}`);
     console.log(`  ${TARGETS.installerEnv}`);
     console.log(`  ${TARGETS.installerSchemaVars}`);
+    console.log(`  ${TARGETS.installerHelmValues}`);
     console.log(`  ${TARGETS.docsSnippet}`);
 }
 

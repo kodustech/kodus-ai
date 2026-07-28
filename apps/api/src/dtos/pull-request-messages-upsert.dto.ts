@@ -95,6 +95,12 @@ export class PullRequestMessagesUpsertDto {
     @Type(() => PullRequestMessageContentUpsertDto)
     endReviewMessage?: PullRequestMessageContentUpsertDto;
 
+    @ApiPropertyOptional({ type: PullRequestMessageContentUpsertDto })
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => PullRequestMessageContentUpsertDto)
+    errorReviewMessage?: PullRequestMessageContentUpsertDto;
+
     @ApiPropertyOptional({ type: PullRequestMessagesGlobalSettingsUpsertDto })
     @IsOptional()
     @ValidateNested()

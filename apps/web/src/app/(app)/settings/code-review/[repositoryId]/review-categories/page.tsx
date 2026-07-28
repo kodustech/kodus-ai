@@ -7,7 +7,7 @@ import { toast } from "@components/ui/toaster/use-toast";
 import { useGetCodeReviewLabels } from "@services/parameters/hooks";
 import { KodyLearningStatus } from "@services/parameters/types";
 import { RotateCcwIcon, SaveIcon } from "lucide-react";
-import { useFormContext } from "react-hook-form";
+import { useFormContext, useFormState } from "react-hook-form";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
 
@@ -97,7 +97,7 @@ export default function ReviewCategories() {
         isDirty: formIsDirty,
         isValid: formIsValid,
         isSubmitting: formIsSubmitting,
-    } = form.formState;
+    } = useFormState({ control: form.control });
 
     if (
         platformConfig.kodyLearningStatus ===

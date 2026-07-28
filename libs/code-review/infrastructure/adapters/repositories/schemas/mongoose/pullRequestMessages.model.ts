@@ -52,6 +52,23 @@ export class PullRequestMessagesModel extends CoreDocument {
         status: PullRequestMessageStatus;
     };
 
+    @Prop({
+        type: {
+            content: { type: String, required: false },
+            status: {
+                type: String,
+                required: true,
+                enum: PullRequestMessageStatus,
+            },
+        },
+        _id: false,
+        required: false,
+    })
+    errorReviewMessage: {
+        content: string;
+        status: PullRequestMessageStatus;
+    };
+
     @Prop({ type: String, required: false })
     directoryId: string;
 

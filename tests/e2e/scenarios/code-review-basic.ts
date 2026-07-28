@@ -1,5 +1,8 @@
 import { ensureLicenseSeat } from '../lib/onboarding.js';
-import { assertHealthyExecution } from '../lib/execution-health.js';
+import {
+    assertHealthyExecution,
+    assertPersistedSuggestions,
+} from '../lib/execution-health.js';
 import type { RunContext, Scenario } from '../lib/types.js';
 
 // Fixture branch pairs per provider. Each entry maps to two branches that
@@ -207,6 +210,18 @@ export const codeReviewBasic: Scenario = {
                 pr.number,
             );
 
+            // PERSISTENCE, not just posting: the fixture has deliberate bugs so
+            // the review posts ≥1 finding — assert ≥1 suggestion actually
+            // reached the store. The Immer frozen-object regression
+            // (#1522/#1523) posted comments while the Mongo write threw and was
+            // swallowed, so every review looked green with nothing persisted;
+            // only reading suggestions back catches that.
+            const persistedSuggestions = await assertPersistedSuggestions(
+                ctx,
+                session,
+                pr.number,
+            );
+
             return {
                 prNumber: pr.number,
                 prUrl: pr.url,
@@ -216,6 +231,7 @@ export const codeReviewBasic: Scenario = {
                 sinceIso,
                 review,
                 executionStatus,
+                persistedSuggestions,
             };
         } finally {
             try {

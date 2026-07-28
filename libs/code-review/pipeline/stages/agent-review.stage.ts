@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 
 import { createLogger } from '@libs/core/log/logger';
 import { Output, jsonSchema } from 'ai';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { tracedGenerateText } from '@libs/llm/llm-call';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
@@ -24,6 +24,7 @@ import {
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
 import {
     buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
     type LangfuseTelemetryMetadata,
 } from '@libs/core/log/langfuse';
 
@@ -53,9 +54,11 @@ import {
 } from '@libs/code-review/domain/contracts/RepositoryService.contract';
 import { AstGraphStatus } from '@libs/code-review/infrastructure/adapters/repositories/schemas/repository.model';
 import {
+    IKodyRule,
     resolveKodyRuleSeverityLevel,
     SeverityLevel,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { KodyRuleSummaryService } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
 import {
     CodeReviewPipelineContext,
     DedupTraceGroupSummary,
@@ -255,8 +258,51 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         private readonly featureGate: FeatureGateService,
         @Inject(ORGANIZATION_SERVICE_TOKEN)
         private readonly organizationService: IOrganizationService,
+        // Optional: specs construct the stage manually; when absent the
+        // review simply runs on the full rule texts.
+        @Optional()
+        private readonly kodyRuleSummaryService?: KodyRuleSummaryService,
     ) {
         super();
+    }
+
+    /**
+     * Review-ready kody rules: lazy-backfill summaries for long rules that
+     * lack a valid one (covers rules created before the summary feature), then
+     * swap each long rule's text for its summary (sourceHash-guarded — see
+     * KodyRuleSummaryService). Any failure falls back to the raw config rules:
+     * the review never blocks on summarization. The frozen context is never
+     * mutated — callers pass the result via OrchestratorInputComputed.
+     */
+    private async prepareKodyRulesForReview(
+        context: CodeReviewPipelineContext,
+    ): Promise<Partial<IKodyRule>[] | undefined> {
+        const rules = context.codeReviewConfig?.kodyRules;
+        if (!rules?.length || !this.kodyRuleSummaryService) {
+            return rules;
+        }
+        try {
+            // Judgment units: atoms > summary > full text (see
+            // KodyRuleSummaryService.prepareForReview). Long rules are lazily
+            // decomposed into atomic requirements carrying the parent uuid.
+            return await this.kodyRuleSummaryService.prepareForReview(
+                rules,
+                context.organizationAndTeamData,
+            );
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    '[kody-rule-summary] prepare failed — reviewing with full rule texts',
+                context: AgentReviewStage.name,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                },
+            });
+            return rules;
+        }
     }
 
     /**
@@ -543,6 +589,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     callGraph,
                     adaptiveProfile,
                     heavy: resolvedHeavy,
+                    kodyRules: await this.prepareKodyRulesForReview(context),
                 }),
             );
 
@@ -612,6 +659,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     : 'partial';
 
                 context = this.updateContext(context, (draft) => {
+                    if (!draft.errors) {
+                        draft.errors = [];
+                    }
                     draft.errors.push({
                         pipelineId: context.pipelineMetadata?.pipelineId,
                         stage: this.stageName,
@@ -621,6 +671,41 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         metadata: {
                             agentName: failure.agentName,
                             category: failure.category,
+                            prNumber,
+                        },
+                    });
+                });
+            }
+
+            // An agent that ran out of time or steps did NOT clear the code —
+            // it stopped looking. Record it as 'partial' so auto-approve is
+            // held back and the check lands on NEUTRAL: degraded, not clean.
+            // 'partial' rather than 'critical' because the agent may still have
+            // produced real findings before the ceiling; what we can't claim is
+            // completeness. Core agents only — kody-rules is auxiliary and its
+            // truncation shouldn't gate the whole review.
+            for (const cut of result.incomplete || []) {
+                if (!CRITICAL_AGENTS.has(cut.agentName)) {
+                    continue;
+                }
+
+                context = this.updateContext(context, (draft) => {
+                    if (!draft.errors) {
+                        draft.errors = [];
+                    }
+                    draft.errors.push({
+                        pipelineId: context.pipelineMetadata?.pipelineId,
+                        stage: this.stageName,
+                        substage: `agent:${cut.agentName}`,
+                        error: new Error(
+                            `Agent "${cut.agentName}" stopped at its ${cut.finishReason} limit after ${cut.durationMs}ms — the review did not complete`,
+                        ),
+                        severity: 'partial',
+                        metadata: {
+                            agentName: cut.agentName,
+                            category: cut.category,
+                            finishReason: cut.finishReason,
+                            suggestionsFound: cut.suggestionsFound,
                             prNumber,
                         },
                     });
@@ -1260,9 +1345,46 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 },
             });
 
-            // Non-fatal: return context with empty results
+            const stageError =
+                error instanceof Error ? error : new Error(String(error));
+            const classification =
+                getClassification(stageError) ??
+                classifyLLMError(
+                    stageError,
+                    typeof context.codeReviewConfig?.byokConfig?.main
+                        ?.provider === 'string'
+                        ? context.codeReviewConfig.byokConfig.main.provider
+                        : undefined,
+                );
+
+            // Keep going so the end-review comment still gets posted and the
+            // check still finalizes — but record the failure as CRITICAL. This
+            // catch used to return empty results silently, which downstream
+            // read as "the agent found nothing", auto-approving the PR and
+            // reporting SUCCESS on a review that never happened (#1568). The
+            // per-agent failures the orchestrator reports are recorded above;
+            // this covers everything that throws before or after that point.
             return this.updateContext(context, (draft) => {
                 draft.fileAnalysisResults = [];
+                if (!draft.errors) {
+                    draft.errors = [];
+                }
+                draft.errors.push({
+                    pipelineId: context.pipelineMetadata?.pipelineId,
+                    stage: this.stageName,
+                    error: stageError,
+                    severity: 'critical',
+                    metadata: { prNumber, durationMs },
+                });
+
+                if (!draft.lastReviewError) {
+                    draft.lastReviewError = {
+                        category: classification.category,
+                        provider: classification.provider,
+                        friendlyMessage: classification.friendlyMessage,
+                        occurredAt: new Date(),
+                    };
+                }
             });
         }
     }
@@ -1409,9 +1531,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const runDedup = (model: any) =>
                 tracedGenerateText({
                     model: model as any,
-                    experimental_telemetry: buildLangfuseTelemetry(
-                        'dedup-suggestions',
-                        telemetryMeta,
+                    ...toAiSdkTelemetryArgs(
+                        buildLangfuseTelemetry(
+                            'dedup-suggestions',
+                            telemetryMeta,
+                        ),
                     ),
                     output: Output.object({
                         schema: jsonSchema(DEDUP_SCHEMA as any),
@@ -1906,17 +2030,18 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 if (event.finishReason === 'max-steps') {
                     return `${icon} Agent${replicaSuffix}${batchSuffix} — hit step limit (${event.step ?? 0} steps, no findings)`;
                 }
-                // Surface the actual error so users can self-diagnose from
-                // the PR logs instead of digging through docker logs.
-                // Truncate to keep the label readable — full message is
-                // also available via the observer's stage metadata.
-                const errSummary = event.errorMessage
-                    ? `: ${event.errorMessage.substring(0, 180)}${event.errorMessage.length > 180 ? '…' : ''}`
-                    : '';
-                const errNameLabel = event.errorName
-                    ? ` (${event.errorName})`
-                    : '';
-                return `${icon} Agent${replicaSuffix}${batchSuffix} — failed ${duration}${errNameLabel}${errSummary}`;
+                // Prefer the classified sentence ("The configured model is not
+                // available on the provider…") over the raw provider string,
+                // which is often a bare status phrase like "Not Found" that
+                // tells the user nothing. Class name and raw text stay in the
+                // stage metadata for whoever needs to debug.
+                const reason =
+                    event.errorFriendlyMessage ||
+                    (event.errorMessage
+                        ? `${event.errorName ? `${event.errorName}: ` : ''}${event.errorMessage.substring(0, 180)}${event.errorMessage.length > 180 ? '…' : ''}`
+                        : '');
+                const errSummary = reason ? ` — ${reason}` : '';
+                return `${icon} Agent${replicaSuffix}${batchSuffix} — failed ${duration}${errSummary}`;
             }
             default:
                 return `${icon} Agent${replicaSuffix}`;

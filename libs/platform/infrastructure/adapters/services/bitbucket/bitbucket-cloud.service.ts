@@ -1015,9 +1015,25 @@ export class BitbucketCloudService implements Omit<
             fields: '+values.participants,+values.reviewers,+values.draft',
         });
 
+        // PRs come back sorted `-created_on` (newest first), so once a page's
+        // oldest PR predates startDate every later page is older still — stop
+        // paging there instead of walking the entire PR history. The boundary
+        // page still mixes in- and out-of-window PRs, so startDate is also
+        // enforced in the filter below.
         const pullRequests = await this.getPaginatedResults(
             bitbucketAPI,
             response,
+            {
+                stopAfterPage: (page) => {
+                    if (!startDate || !page.length) {
+                        return false;
+                    }
+                    const oldest = page[page.length - 1];
+                    return oldest?.created_on
+                        ? new Date(oldest.created_on) < startDate
+                        : false;
+                },
+            },
         );
 
         return pullRequests.filter((pr) => {
@@ -1104,10 +1120,10 @@ export class BitbucketCloudService implements Omit<
         });
 
         // Use the limited pagination method
-        const pullRequests = await this.getPaginatedResultsWithLimit(
+        const pullRequests = await this.getPaginatedResults(
             bitbucketAPI,
             response,
-            limit,
+            { limit },
         );
 
         return pullRequests.filter((pr) => {
@@ -3163,7 +3179,16 @@ export class BitbucketCloudService implements Omit<
                 params.type,
             );
 
-            this.createWebhook(params.organizationAndTeamData);
+            // Deliberately not awaited (webhook creation must not block the
+            // integration-config save) — but the promise MUST be caught:
+            // createWebhook rethrows on failure (e.g. Bitbucket's 50-hook
+            // per-repo cap rejecting the create), and an orphaned rejection
+            // here escalated to an unhandledRejection that crashed the whole
+            // API process. The failure still gets a loud error log from
+            // createWebhook's own catch; this catch only stops the crash.
+            void this.createWebhook(params.organizationAndTeamData).catch(
+                () => undefined,
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Error to create or update integration config',
@@ -3209,7 +3234,7 @@ export class BitbucketCloudService implements Omit<
                     .then((res) => this.getPaginatedResults(bitbucketAPI, res));
 
                 const hookExists = existingHooks.some(
-                    (hook) => hook.url === webhookUrl,
+                    (hook) => hook?.url === webhookUrl,
                 );
 
                 if (!hookExists) {
@@ -4335,11 +4360,9 @@ export class BitbucketCloudService implements Omit<
             const pullRequests = await bitbucketAPI.pullrequests
                 .list(listParams)
                 .then((res) => {
-                    return this.getPaginatedResultsWithLimit(
-                        bitbucketAPI,
-                        res,
-                        100,
-                    );
+                    return this.getPaginatedResults(bitbucketAPI, res, {
+                        limit: 100,
+                    });
                 });
 
             return pullRequests.map((pr) =>
@@ -4506,69 +4529,54 @@ export class BitbucketCloudService implements Omit<
     this can be inferred from the response type and there's no need to specify it
     manually, but in some cases it might be necessary to specify it manually
     (e.g `getPaginatedResults<Schema.Diffstat>(bitbucketAPI, res)`)
+
+    pass `options` to stop paging early instead of walking the whole history:
+    - `limit`: cap the total number of items (also slices the result).
+    - `stopAfterPage`: stop once a page satisfies the predicate. Useful for
+      results sorted by date — e.g. stop when a page's oldest item predates a
+      startDate, since every later page is older still. The predicate receives
+      the just-fetched page and the accumulated results so far.
     */
     private async getPaginatedResults<T>(
         bitbucketAPI: APIClient,
         response: BitbucketResponse<{ values?: T[] }>,
+        options?: {
+            limit?: number;
+            stopAfterPage?: (page: T[], all: T[]) => boolean;
+        },
     ): Promise<T[]> {
         if (!response.data.values || !Array.isArray(response.data.values)) {
             return [];
         }
 
-        let allResults = [...response.data.values];
-        let currentResults = response.data;
-
-        while (bitbucketAPI.hasNextPage(currentResults)) {
-            currentResults = (await bitbucketAPI.getNextPage(currentResults))
-                .data;
-
-            if (currentResults.values && Array.isArray(currentResults.values)) {
-                allResults = allResults.concat(currentResults.values);
-            }
-        }
-
-        return allResults;
-    }
-
-    /**
-     * Retrieves paginated results with a limit for optimization.
-     * Used specifically for scenarios where we only need recent data (like authors).
-     * @param bitbucketAPI - The Bitbucket API client.
-     * @param response - The initial response from the API.
-     * @param limit - Maximum number of items to fetch.
-     * @returns A promise that resolves to an array of items (limited).
-     */
-    private async getPaginatedResultsWithLimit<T>(
-        bitbucketAPI: APIClient,
-        response: BitbucketResponse<{ values?: T[] }>,
-        limit: number = 100,
-    ): Promise<T[]> {
-        if (!response.data.values || !Array.isArray(response.data.values)) {
-            return [];
-        }
+        const { limit, stopAfterPage } = options ?? {};
 
         let allResults = [...response.data.values];
         let currentResults = response.data;
 
-        // Early termination if we already have enough results
-        if (allResults.length >= limit) {
-            return allResults.slice(0, limit);
-        }
+        const shouldStop = (page: T[]): boolean =>
+            (limit !== undefined && allResults.length >= limit) ||
+            !!stopAfterPage?.(page, allResults);
 
-        while (
-            bitbucketAPI.hasNextPage(currentResults) &&
-            allResults.length < limit
-        ) {
-            currentResults = (await bitbucketAPI.getNextPage(currentResults))
-                .data;
+        if (!shouldStop(response.data.values)) {
+            while (bitbucketAPI.hasNextPage(currentResults)) {
+                currentResults = (
+                    await bitbucketAPI.getNextPage(currentResults)
+                ).data;
 
-            if (currentResults.values && Array.isArray(currentResults.values)) {
-                allResults = allResults.concat(currentResults.values);
+                if (
+                    currentResults.values &&
+                    Array.isArray(currentResults.values)
+                ) {
+                    allResults = allResults.concat(currentResults.values);
+                    if (shouldStop(currentResults.values)) {
+                        break;
+                    }
+                }
             }
         }
 
-        // Return only up to the limit
-        return allResults.slice(0, limit);
+        return limit !== undefined ? allResults.slice(0, limit) : allResults;
     }
 
     /** Bitbucket's API returns IDs with curly braces around them (e.g. "{123}").
@@ -4715,7 +4723,7 @@ export class BitbucketCloudService implements Omit<
                             );
 
                         const webhook = existingHooks.find(
-                            (hook) => hook.url === webhookUrl,
+                            (hook) => hook?.url === webhookUrl,
                         );
 
                         if (webhook) {

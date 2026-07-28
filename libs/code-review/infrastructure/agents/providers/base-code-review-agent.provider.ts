@@ -1,4 +1,9 @@
 import { createLogger } from '@libs/core/log/logger';
+import {
+    attachClassification,
+    classifyLLMError,
+    getClassification,
+} from '@libs/llm/error-classifier';
 import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { Injectable, Optional } from '@nestjs/common';
 import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
@@ -749,6 +754,12 @@ export abstract class BaseCodeReviewAgentProvider {
                 agentResult.finishReason === 'timeout' ||
                 (agentResult.source === 'empty' &&
                     agentResult.finishReason === 'tool-calls');
+            const stopReason: ReviewAgentOutput['finishReason'] =
+                agentResult.finishReason === 'timeout'
+                    ? 'timeout'
+                    : hitHardLimit
+                      ? 'max-steps'
+                      : 'stop';
 
             progress.send({
                 status: hitHardLimit ? 'error' : 'completed',
@@ -756,12 +767,7 @@ export abstract class BaseCodeReviewAgentProvider {
                 durationMs,
                 totalTokens: agentResult.usage.totalTokens,
                 step: agentResult.steps,
-                finishReason:
-                    agentResult.finishReason === 'timeout'
-                        ? 'timeout'
-                        : hitHardLimit
-                          ? 'max-steps'
-                          : 'stop',
+                finishReason: stopReason,
                 source: agentResult.source,
                 coverage: agentResult.coverage,
                 verification: agentResult.verification,
@@ -832,17 +838,40 @@ export abstract class BaseCodeReviewAgentProvider {
                 // loop's warnings: [] is the PR1 placeholder) with the
                 // strategy warnings emitted in this provider above.
                 warnings: [...agentWarnings, ...(agentResult.warnings ?? [])],
+                // Carry the cut-short signal out of the provider. It used to
+                // stop at `progress.send` (UI only), so the pipeline had no way
+                // to tell "found nothing" from "never finished looking".
+                hitHardLimit,
+                finishReason: stopReason,
             };
         } catch (error) {
             const durationMs = Date.now() - startTime;
             const errMsg =
                 error instanceof Error ? error.message : String(error);
             const errName = error instanceof Error ? error.name : undefined;
+
+            // Classify HERE, while the error still carries its status and
+            // response body, and attach the result so every downstream reader
+            // (orchestrator, stage, PR comment, UI label) shares one actionable
+            // sentence instead of re-deriving from a lossy copy.
+            const classification =
+                getClassification(error) ??
+                classifyLLMError(
+                    error,
+                    typeof byokConfig?.main?.provider === 'string'
+                        ? byokConfig.main.provider
+                        : undefined,
+                );
+            if (error instanceof Error) {
+                attachClassification(error, classification);
+            }
+
             progress.send({
                 status: 'error',
                 durationMs,
                 errorMessage: errMsg.substring(0, 500),
                 errorName: errName,
+                errorFriendlyMessage: classification.friendlyMessage,
             });
             this.agentLogger.error({
                 message: `[AGENT] ${identity.name} failed for PR#${input.prNumber} after ${durationMs}ms: ${errMsg}`,

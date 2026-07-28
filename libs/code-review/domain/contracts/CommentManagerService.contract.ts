@@ -72,6 +72,7 @@ export interface ICommentManagerService {
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
+        reviewErrorCustomMessage?: string,
     ): Promise<void>;
 
     updateSummarizationInPR(
@@ -149,5 +150,6 @@ export interface ICommentManagerService {
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
+        reviewErrorCustomMessage?: string,
     ): Promise<void>;
 }

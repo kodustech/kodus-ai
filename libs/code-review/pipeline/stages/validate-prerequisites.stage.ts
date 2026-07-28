@@ -211,6 +211,35 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             });
         }
 
+        const globalRulesSourceDisablesReviewForRepository =
+            await this.isGlobalRulesSourceRepositoryReviewDisabled(
+                organizationAndTeamData,
+                context.repository,
+            );
+
+        if (globalRulesSourceDisablesReviewForRepository) {
+            this.logger.log({
+                message:
+                    'Repository is a global Kody Rules source, skipping automation',
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryName: context.repository?.name,
+                    repositoryId: context.repository?.id,
+                    prNumber: pullRequest?.number,
+                },
+            });
+
+            return this.updateContext(context, (draft) => {
+                applyShowStatusFeedbackMetadata(draft);
+                draft.statusInfo = {
+                    status: AutomationStatus.SKIPPED,
+                    message:
+                        'Code reviews are disabled for the global Kody Rules source repository',
+                };
+            });
+        }
+
         // Centralized permission validation
         const validationOptions = {
             consumeTrialReviewCredit: true,
@@ -684,6 +713,67 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             this.logger.warn({
                 message:
                     'Error resolving centralized config repository review exclusion',
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository?.id,
+                    repositoryName: repository?.name,
+                },
+            });
+        }
+
+        return false;
+    }
+
+    /**
+     * A repository selected purely as a source of GLOBAL Kody Rules is a
+     * config/data repository, not a codebase to review — mirror the
+     * centralized-config behaviour and skip the automation for its PRs.
+     */
+    private async isGlobalRulesSourceRepositoryReviewDisabled(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository?: { id?: string; name?: string },
+    ): Promise<boolean> {
+        try {
+            if (!repository?.id) {
+                return false;
+            }
+
+            const globalRulesSourceParameter =
+                await this.organizationParametersService.findByKey(
+                    OrganizationParametersKey.GLOBAL_RULES_SOURCE_REPOSITORIES,
+                    organizationAndTeamData,
+                );
+
+            const repositories =
+                globalRulesSourceParameter?.configValue?.repositories;
+
+            if (!Array.isArray(repositories) || repositories.length === 0) {
+                return false;
+            }
+
+            const isSource = repositories.some(
+                (r) => String(r?.id) === String(repository.id),
+            );
+
+            if (isSource) {
+                this.logger.log({
+                    message: 'Global Kody Rules source repository identified',
+                    context: this.stageName,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryName: repository.name,
+                        repositoryId: repository.id,
+                    },
+                });
+            }
+
+            return isSource;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Error resolving global Kody Rules source repository review exclusion',
                 context: this.stageName,
                 error,
                 metadata: {

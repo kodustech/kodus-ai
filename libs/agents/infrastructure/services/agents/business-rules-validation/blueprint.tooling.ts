@@ -356,12 +356,45 @@ function resolveRepositoryId(ctx: BusinessRulesContext): string | undefined {
 
 function resolveRepositoryName(ctx: BusinessRulesContext): string | undefined {
     const repositoryName = ctx.prepareContext?.repository?.name;
-    return typeof repositoryName === 'string' ? repositoryName : undefined;
+    if (typeof repositoryName === 'string' && repositoryName.trim().length > 0) {
+        return repositoryName;
+    }
+    return splitRepositoryFullName(ctx.prepareContext?.repository?.fullName)
+        .name;
 }
 
 function resolveRepositoryOwner(ctx: BusinessRulesContext): string | undefined {
     const repositoryOwner = ctx.prepareContext?.repository?.owner;
-    return typeof repositoryOwner === 'string' ? repositoryOwner : undefined;
+    if (
+        typeof repositoryOwner === 'string' &&
+        repositoryOwner.trim().length > 0
+    ) {
+        return repositoryOwner;
+    }
+    // The code-review pipeline's Repository carries `fullName` ("owner/name")
+    // but no standalone `owner`, so provider-dynamic issue tools (which require
+    // repository.owner) can't be pre-filled deterministically without this.
+    return splitRepositoryFullName(ctx.prepareContext?.repository?.fullName)
+        .owner;
+}
+
+/** Split a "owner/name" full name; owner is everything before the last slash. */
+function splitRepositoryFullName(fullName: unknown): {
+    owner?: string;
+    name?: string;
+} {
+    if (typeof fullName !== 'string') {
+        return {};
+    }
+    const trimmed = fullName.trim();
+    const lastSlash = trimmed.lastIndexOf('/');
+    if (lastSlash <= 0 || lastSlash === trimmed.length - 1) {
+        return {};
+    }
+    return {
+        owner: trimmed.slice(0, lastSlash),
+        name: trimmed.slice(lastSlash + 1),
+    };
 }
 
 function resolvePullRequestHeadRef(

@@ -1,3 +1,4 @@
+import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
@@ -31,8 +32,12 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
     let notificationService: jest.Mocked<Pick<NotificationService, 'emit'>>;
     let prAuthorResolver: jest.Mocked<Pick<PrAuthorRecipientResolver, 'resolve'>>;
 
-    const makeContext = (): CodeReviewPipelineContext =>
-        ({
+    // Frozen by DEFAULT — production hands every stage after the first
+    // produce() a deep-frozen context. See test/fixtures/frozen-pipeline-context.ts.
+    const makeContext = (
+        over: Record<string, unknown> = {},
+    ): CodeReviewPipelineContext =>
+        frozenContext({
             organizationAndTeamData: {
                 organizationId: 'org-1',
                 teamId: 'team-1',
@@ -48,6 +53,7 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
                 pullRequestApprovalActive: true,
                 isRequestChangesActive: false,
             } as any,
+            ...over,
         }) as CodeReviewPipelineContext;
 
     beforeEach(async () => {
@@ -113,8 +119,8 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
     });
 
     it('does not emit when approval is skipped due to existing line comments', async () => {
-        const ctx = makeContext();
-        ctx.lineComments = [{}] as any; // any comment short-circuits approval
+        // any comment short-circuits approval
+        const ctx = makeContext({ lineComments: [{}] as any });
 
         await stage.execute(ctx);
 
@@ -157,14 +163,14 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         // critical errors[] entries mean the main agent / a structural
         // stage failed — 0 line comments here is not a clean PR, it's
         // an unanalyzed one. The stage must refuse to approve.
-        const ctx = makeContext();
-        ctx.errors = [
+        const ctx = makeContext({
+            errors: [
             {
                 stage: 'AgentReviewStage',
                 error: new Error('byok auth failed'),
                 severity: 'critical',
-            } as any,
-        ];
+            } as any,            ] as any,
+        });
 
         await stage.execute(ctx);
 
@@ -175,14 +181,14 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
     it('does not approve on any partial failure (regardless of which stage)', async () => {
         // Any partial-severity entry means some part of the review didn't
         // run cleanly; auto-approve must wait for the user to decide.
-        const ctx = makeContext();
-        ctx.errors = [
+        const ctx = makeContext({
+            errors: [
             {
                 stage: 'ValidateSuggestionsStage',
                 error: new Error('validator timed out'),
                 severity: 'partial',
-            } as any,
-        ];
+            } as any,            ] as any,
+        });
 
         await stage.execute(ctx);
 

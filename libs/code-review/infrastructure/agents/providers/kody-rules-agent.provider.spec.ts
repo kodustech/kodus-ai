@@ -509,4 +509,149 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
             .sort();
         expect(ids).toEqual(['no-any', 'no-console']);
     });
+
+    // ── total shard failure escalates (matrix-gaps item 10) ──────────────────
+    // When EVERY judge shard errors (e.g. an OpenAI-strict wire-schema 400 that
+    // 400s every shard identically), the review used to complete "successfully"
+    // with 0 findings and only warn logs — a green review that evaluated none
+    // of its semantic rules (§2.1 of the retro). The provider now throws so the
+    // orchestrator's allSettled marks it PARTIAL_ERROR.
+    it('throws when ALL judge shards fail (no silent 0-finding review)', async () => {
+        const { provider } = makeProvider([]);
+        // Every shard call rejects → shardsErrored === shardsRun.
+        mockRunStructuredReviewCall.mockReset();
+        mockRunStructuredReviewCall.mockRejectedValue(
+            new Error('HTTP 400 structured outputs: required mismatch'),
+        );
+
+        await expect(
+            provider.execute(
+                input({
+                    kodyRules: [
+                        {
+                            uuid: 'no-any',
+                            title: 'no any',
+                            rule: 'do not use any',
+                            status: 'active',
+                            severity: 'high',
+                            path: '**/*.ts',
+                        },
+                    ],
+                }) as any,
+            ),
+            // The message reaches the PR logs UI and the check text, so it
+            // reads as user-facing copy — the internal rationale for failing
+            // loudly lives in a comment at the throw site, not in the string.
+        ).rejects.toThrow(/Kody Rules could not be evaluated: all 1 rule/i);
+    });
+
+    // A PARTIAL shard failure must NOT escalate — the surviving shard's finding
+    // still ships. Guards against over-aggressively failing a mostly-fine review.
+    // It must ALSO be observable: a silent partial degrade is the exact "one
+    // shard dead while the other posts" shape of the wire-schema regression
+    // (matrix-gaps item 8), so the provider emits a structured WARN with the
+    // shard counts — assert both the survival AND the alert here.
+    it('does NOT throw but WARNS with shard counts when only some shards fail (degrades to survivors, observably)', async () => {
+        const { provider } = makeProvider([]);
+        // Spy the shard logger so we can assert the partial degrade is surfaced,
+        // not swallowed into an info line.
+        const warnSpy = jest
+            .spyOn((provider as any).shardLogger, 'warn')
+            .mockImplementation(() => undefined);
+
+        let call = 0;
+        mockRunStructuredReviewCall.mockReset();
+        // Two files → two file shards. First rejects, second returns a finding.
+        mockRunStructuredReviewCall.mockImplementation(async () => {
+            call++;
+            if (call === 1) throw new Error('one shard down');
+            return {
+                violations: [
+                    {
+                        ruleId: 1,
+                        relevantLinesStart: 11,
+                        suggestionContent: 'avoid any',
+                        oneSentenceSummary: 'no any',
+                    },
+                ],
+            };
+        });
+
+        const out = await provider.execute(
+            input({
+                changedFiles: [
+                    { filename: 'src/a.ts', patch: '11 +const x: any = 2' },
+                    { filename: 'src/b.ts', patch: '11 +const y: any = 3' },
+                ],
+                kodyRules: [
+                    {
+                        uuid: 'no-any',
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+            }) as any,
+        );
+
+        // Survived: the second shard's finding shipped, no throw.
+        expect(out.suggestions.length).toBeGreaterThanOrEqual(1);
+
+        // Observable: exactly one PARTIAL-degrade warn carrying the shard
+        // accounting so it's alertable per-execution (not buried in the info
+        // done-line). The judge also warns per failed shard about the root
+        // cause — filter to the provider's aggregate PARTIAL signal.
+        const partialWarns = warnSpy.mock.calls.filter((c) =>
+            /PARTIAL judge-shard failure/i.test((c[0] as any)?.message ?? ''),
+        );
+        expect(partialWarns).toHaveLength(1);
+        const warnArg = partialWarns[0][0] as any;
+        expect(warnArg.metadata).toMatchObject({
+            shardsRun: 2,
+            shardsErrored: 1,
+            shardsSucceeded: 1,
+        });
+    });
+
+    // The healthy path must stay quiet: no partial-degrade warn when every
+    // shard succeeds (guards against a noisy false alert on green reviews).
+    it('does NOT warn about partial failure when all shards succeed', async () => {
+        const { provider } = makeProvider([
+            {
+                violations: [
+                    {
+                        ruleId: 1,
+                        relevantLinesStart: 11,
+                        suggestionContent: 'avoid any',
+                        oneSentenceSummary: 'no any',
+                    },
+                ],
+            },
+        ]);
+        const warnSpy = jest
+            .spyOn((provider as any).shardLogger, 'warn')
+            .mockImplementation(() => undefined);
+
+        await provider.execute(
+            input({
+                kodyRules: [
+                    {
+                        uuid: 'no-any',
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+            }) as any,
+        );
+
+        const partialWarns = warnSpy.mock.calls.filter((c) =>
+            /PARTIAL judge-shard failure/i.test((c[0] as any)?.message ?? ''),
+        );
+        expect(partialWarns).toHaveLength(0);
+    });
 });

@@ -43,6 +43,10 @@ Use a directive to say *"look here hardest"* — not *"only look here."*
     ```
 
     <Note>
+      `--force` re-runs the review even when Kody would normally skip it ("no new commits since the last review"). Use it — with or without a focus directive — to get a fresh pass after fixing whatever made the previous run fail, or to apply updated settings to an already-reviewed PR.
+    </Note>
+
+    <Note>
       Only the **first line** after the command is used as the directive. Everything on later lines is ignored, so keep your focus to a single line.
     </Note>
 

@@ -118,23 +118,6 @@ export const PULL_REQUEST_API = {
             `/pull-requests/authors${queryString ? `?${queryString}` : ""}`,
         );
     },
-    GET_ONBOARDING_SIGNALS: (filters: {
-        teamId: string;
-        repositoryIds: string[];
-        limit?: number;
-    }) => {
-        const params = new URLSearchParams();
-        if (filters.teamId) params.append("teamId", filters.teamId);
-        (filters.repositoryIds || []).forEach((id) =>
-            params.append("repositoryIds", id),
-        );
-        if (filters.limit) params.append("limit", String(filters.limit));
-
-        const queryString = params.toString();
-        return pathToApiUrl(
-            `/pull-requests/onboarding-signals${queryString ? `?${queryString}` : ""}`,
-        );
-    },
     GET_SUGGESTIONS: (params: {
         repositoryId: string;
         prNumber: number;

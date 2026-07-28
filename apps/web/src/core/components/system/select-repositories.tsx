@@ -27,9 +27,24 @@ export const SelectRepositories = (props: {
     onChangeSelectedRepositories: (repositories: Repository[]) => void;
     onFinishLoading?: (hasRepositories: boolean) => void;
     teamId: string;
+    /**
+     * Optional predicate to narrow which repositories are OFFERED as choices
+     * (e.g. only those selected in git settings). Already-selected repositories
+     * passed via `selectedRepositories` are always shown regardless, so a
+     * previously-picked repo never silently disappears from the list.
+     */
+    filterRepository?: (repository: Repository) => boolean;
 }) => {
-    const { data: repositories = [], isLoading } = useGetRepositories(
+    const { data: allRepositories = [], isLoading } = useGetRepositories(
         props.teamId,
+    );
+
+    const repositories = useMemo(
+        () =>
+            props.filterRepository
+                ? allRepositories.filter(props.filterRepository)
+                : allRepositories,
+        [allRepositories, props.filterRepository],
     );
 
     useEffect(() => {

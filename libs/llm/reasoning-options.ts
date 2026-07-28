@@ -26,7 +26,7 @@ export const EFFORT_TO_BUDGET: Record<ReasoningEffort, number> = {
 /**
  * Build provider-specific reasoning `providerOptions` for a generateText call.
  * Telemetry metadata is no longer merged here — callers pass
- * `experimental_telemetry: buildLangfuseTelemetry(runName, meta)` separately.
+ * `telemetry: buildLangfuseTelemetry(runName, meta)` separately.
  */
 export function buildProviderOptions(
     runName: string,

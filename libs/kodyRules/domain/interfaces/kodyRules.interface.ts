@@ -73,7 +73,45 @@ export interface IKodyRule {
      * schema migration is needed).
      */
     detector?: IKodyRuleDetector;
+    /**
+     * Structured validation summary for LONG rules (> 1000 chars), generated
+     * once by an LLM ("WHAT TO VALIDATE / HOW TO VALIDATE" bullets) and reused
+     * on every review — measured to nearly double occurrence-recall on terse
+     * models without regressing strong ones (docs/plans/
+     * kody-rules-summary-productization.md).
+     *
+     * Consumed EXCLUSIVELY by the code-review path (the shard prompt swaps
+     * `rule` for `summary.content` when `sourceHash` matches the current rule
+     * text). UI, sync and export always use the full `rule`. A stale summary
+     * (hash mismatch after an edit some write path missed) is ignored and
+     * logged, never used. Stored inline on the embedded rule (the Mongo
+     * `rules` array is a plain Array, so no schema migration is needed).
+     */
+    summary?: IKodyRuleSummary;
+    /**
+     * Atomic decomposition (see IKodyRuleAtoms). Review-path only, like
+     * `summary`; stored inline on the embedded rule (plain Array in Mongo,
+     * no migration).
+     */
+    atoms?: IKodyRuleAtoms;
     repositoryId: string;
+    /**
+     * For rules synced into the global scope (`repositoryId="global"`,
+     * `origin=GLOBAL_REPO_FILE_SYNC`), the id of the source repository the file
+     * was imported from. Undefined for every other kind of rule. Required to
+     * (a) route incremental updates from that repo's merged PRs, (b) soft-delete
+     * only this repo's global rules when it's removed as a source (never touching
+     * user-authored global rules), and (c) key the upsert as
+     * (`"global"`, `sourceRepositoryId`, `sourcePath`) so two source repos with
+     * the same file path (e.g. `CLAUDE.md`) don't collide.
+     */
+    sourceRepositoryId?: string;
+    /**
+     * Git blob SHA of the source file at the last successful sync. Enables the
+     * cheap short-circuit on manual resync: skip re-converting files whose SHA
+     * is unchanged. Populated by the global sync flow.
+     */
+    lastContentHash?: string;
     origin?: KodyRulesOrigin;
     createdAt?: Date;
     updatedAt?: Date;
@@ -141,6 +179,58 @@ export interface IKodyRulesExample {
     isCorrect: boolean;
 }
 
+export interface IKodyRuleSummary {
+    /** "WHAT TO VALIDATE / HOW TO VALIDATE" bullets, English, plain text. */
+    content: string;
+    /** sha256 of the exact `rule` text the summary was generated from. */
+    sourceHash: string;
+    generatedAt: Date;
+    /** Model id that generated it (BYOK main or managed default). */
+    model: string;
+}
+
+/**
+ * One atomic requirement decomposed from a LONG compound rule. Atoms are the
+ * review-time unit of judgment: each is fed to the shard judge as its own
+ * numbered item (or, when `detector` compiled, checked by the T0 regex sweep
+ * with zero LLM). Suggestions always map back to the PARENT rule's uuid — the
+ * customer only ever sees their own rule cited.
+ */
+export interface IKodyRuleAtom {
+    /** Stable id: `${parentUuid}-atom-${n}`. */
+    id: string;
+    /** Short imperative label for the single condition. */
+    title: string;
+    /** One-condition "WHAT / HOW" validation spec, English. */
+    spec: string;
+    /** Atom-specific bad/good snippets — also the compile gate's material. */
+    examples?: IKodyRulesExample[];
+    /** Present when the atom compiled into a T0 regex (deterministic path). */
+    detector?: IKodyRuleDetector;
+    /** Audit: why the compiler kept this atom on the LLM path. */
+    declineReason?: string;
+}
+
+/**
+ * Atomic decomposition of a long rule (> threshold), generated once and
+ * reused on every review. Replaces `summary` as the primary review-time
+ * artifact when present and fresh; `summary` remains the fallback.
+ * Validated on the Rails convention analog eval (2 reps/model, deliverable
+ * recall): glm 76%→92%, gpt-5.4-mini 79%→84%, kimi flat — and the compound
+ * -rule blind spots (requirements buried among ~18 siblings) broke.
+ */
+export interface IKodyRuleAtoms {
+    items: IKodyRuleAtom[];
+    /**
+     * sha256 over `rule` text AND serialized `examples`: examples gate the
+     * atom detectors, so an example edit must invalidate the decomposition
+     * (unlike `summary.sourceHash`, which covers the rule text only).
+     */
+    sourceHash: string;
+    generatedAt: Date;
+    model: string;
+}
+
 /**
  * A compiled, deterministic detector for a mechanical rule (T0, issue #1449).
  * Currently a single regex applied to added-line CONTENT; the multi-clause DSL
@@ -188,6 +278,15 @@ export enum KodyRulesOrigin {
     LIBRARY = 'library',
     PAST_REVIEWS = 'past_reviews',
     REPO_FILE_SYNC = 'repo_file_sync',
+    /**
+     * Global Kody Rule imported by syncing rule files from a repository the user
+     * selected as a global-rules source (distinct from the per-repo
+     * `REPO_FILE_SYNC`). Stored under `repositoryId="global"` alongside
+     * user-authored global rules and the onboarding fast-sync scratch, so this
+     * origin (together with `sourceRepositoryId`) is what distinguishes these
+     * rules for filtering, cleanup on deselect, and the UI badge.
+     */
+    GLOBAL_REPO_FILE_SYNC = 'global_repo_file_sync',
     ONBOARDING_REPO_ANALYSIS = 'onboarding_repo_analysis',
     MCP_AGENT = 'mcp_agent',
     CLI = 'cli',
@@ -360,6 +459,8 @@ export const kodyRuleSchema = z.object({
     extendedContext: kodyRulesExtendedContextSchema.optional(),
     examples: z.array(kodyRulesExampleSchema).optional(),
     repositoryId: z.string(),
+    sourceRepositoryId: z.string().optional(),
+    lastContentHash: z.string().optional(),
     origin: kodyRulesOriginSchema.optional(),
     createdAt: z.date().optional(),
     updatedAt: z.date().optional(),

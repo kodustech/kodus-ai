@@ -13,4 +13,5 @@ export enum OrganizationParametersKey {
     LICENSE_ASSIGNED_USERS = 'license_assigned_users',
     FIRST_REVIEW_AT = 'first_review_at',
     SPEND_LIMIT_CONFIG = 'spend_limit_config',
+    GLOBAL_RULES_SOURCE_REPOSITORIES = 'global_rules_source_repositories',
 }

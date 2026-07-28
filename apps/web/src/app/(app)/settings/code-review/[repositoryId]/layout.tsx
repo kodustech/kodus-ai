@@ -23,6 +23,8 @@ import {
 import {
     useCodeReviewConfig,
     useDefaultCodeReviewConfig,
+    useInitialParameter,
+    useInitialTeamId,
 } from "../../_components/context";
 import { useCodeReviewRouteParams } from "../../_hooks";
 import { normalizePromptFormValues } from "./custom-prompts/_utils/custom-prompts-state";
@@ -31,6 +33,8 @@ export default function Layout(props: React.PropsWithChildren) {
     const { teamId } = useSelectedTeamId();
     const config = useCodeReviewConfig();
     const defaultCodeReviewConfig = useDefaultCodeReviewConfig();
+    const bridgeInitialTeamId = useInitialTeamId();
+    const initialLanguage = useInitialParameter(ParametersConfigKey.LANGUAGE_CONFIG);
     const { directoryId } = useCodeReviewRouteParams();
     const parameters = useOptionalParameterQuery<LanguageValue>(
         ParametersConfigKey.LANGUAGE_CONFIG,
@@ -49,7 +53,7 @@ export default function Layout(props: React.PropsWithChildren) {
         repositoryId,
         directoryId,
     );
-    const language = parameters.data?.configValue ?? LanguageValue.ENGLISH;
+    const language = parameters.data?.configValue ?? (teamId === bridgeInitialTeamId ? (initialLanguage?.configValue as LanguageValue) : undefined) ?? LanguageValue.ENGLISH;
     const initialFormValues = useMemo(
         () =>
             normalizePromptFormValues(
@@ -82,6 +86,8 @@ export default function Layout(props: React.PropsWithChildren) {
     });
     const {
         isSubmitting: formIsSubmitting,
+        isDirty: formIsDirty,
+        isValid: formIsValid,
         dirtyFields,
     } = form.formState;
 

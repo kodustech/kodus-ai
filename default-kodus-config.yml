@@ -34,7 +34,7 @@ reviewOptions:
 # suggestion control
 suggestionControl:
     applyFiltersToKodyRules: false
-    severityLevelFilter: 'high' # low | medium | high | critical
+    severityLevelFilter: 'medium' # low | medium | high | critical
 
 # PR summary
 summary:
@@ -55,6 +55,13 @@ customMessages:
     globalSettings:
         hideComments: false # github only
         suggestionCopyPrompt: true # not available for bitbucket
+
+    # Optional team-authored text appended below Kody's default error comment
+    # when a review fails (e.g. no BYOK provider configured). Empty content
+    # keeps the default error message unchanged.
+    errorReviewMessage:
+        status: 'off' # off | active
+        content: ''
 
     startReviewMessage:
         status: 'every_push' # every_push | only_when_opened | off

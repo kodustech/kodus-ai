@@ -289,17 +289,98 @@ jobs:
     # the nightly cron there is the catch-all so a quiet day still gets
     # one signal.
     #
-    # NOTE: this fires AS SOON AS the infra PR is opened, but the actual
-    # rollout depends on the auto-apply label + atlantis run in the infra
-    # repo. There's a small race where the matrix may hit the previous
-    # image. In practice the matrix takes longer than the rollout, so by
-    # the time the cells reach review-trigger steps the new image is live.
-    # If that ever becomes a flake source, gate this on a separate
-    # `workflow_run` event from the infra repo instead.
-    e2e-cloud:
-        name: E2E matrix on QA cloud
+    # Waits for the ECS rollout the infra PR triggers, BEFORE the matrix runs.
+    #
+    # This job replaces the assumption that used to live here: "in practice the
+    # matrix takes longer than the rollout, so by the time the cells reach
+    # review-trigger steps the new image is live." CloudWatch says otherwise —
+    # on 2026-07-15 the worker deployment ran 15:03:55→15:25:42 UTC while the
+    # matrix opened its first PR at 15:07 and enqueued another at 15:19. Both
+    # webhooks were accepted (`Webhook enqueued, pull_request`) and then sat
+    # ~10min waiting for a worker to come up. The scenarios give up at 600s, so
+    # the harness closed the PRs before any review could land, and every GitHub
+    # cell failed with "review pipeline likely never started".
+    #
+    # The existing readiness gate in e2e-cloud.yml can't catch this: it polls
+    # the API's /health, which reports `application` + `database` only — not the
+    # worker, not the queue. The API rolls first, the gate goes green, and the
+    # matrix starts firing at a fleet that isn't there yet.
+    #
+    # Why here and not in e2e-cloud.yml: the AWS role already lives in this
+    # workflow. The e2e job carries GitHub/GitLab/Bitbucket/Azure tokens and
+    # cloud tenant credentials — handing it an AWS role to answer "is the
+    # rollout done?" widens the blast radius of a leak for no reason.
+    wait_for_qa_rollout:
+        name: Wait for QA ECS rollout
         needs: build_push_and_open_pr
         if: needs.build_push_and_open_pr.result == 'success'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write # OIDC for configure-aws-credentials
+        # Observed worst case ~22min end-to-end (atlantis apply + rolling
+        # replace of 2 tasks). 35 leaves headroom without letting a stuck
+        # rollout hold the pipeline all day.
+        timeout-minutes: 35
+        steps:
+            - name: Configure AWS Credentials (OIDC)
+              uses: aws-actions/configure-aws-credentials@v6.1.0
+              with:
+                  role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+                  aws-region: ${{ secrets.AWS_REGION }}
+
+            - name: Wait for every QA service to reach steady state
+              env:
+                  CLUSTER: kodus-qa-orchestrator
+              run: |
+                  set -uo pipefail
+                  # worker FIRST: it is the one the reviews actually need, and
+                  # the one that rolls last. api/webhook are cheap to confirm.
+                  SERVICES="kodus-qa-orchestrator-worker kodus-qa-orchestrator-api kodus-qa-orchestrator-webhook"
+                  DEADLINE=$(( $(date +%s) + 30 * 60 ))
+
+                  for SVC in $SERVICES; do
+                      echo "::group::$SVC"
+                      while :; do
+                          read -r STATE DESIRED RUNNING PENDING <<<"$(
+                              aws ecs describe-services --cluster "$CLUSTER" --services "$SVC" \
+                                  --query 'services[0].[deployments[?status==`PRIMARY`]|[0].rolloutState,desiredCount,runningCount,pendingCount]' \
+                                  --output text 2>/dev/null || echo "QUERY_FAILED - - -"
+                          )"
+                          echo "$(date -u +%H:%M:%S) $SVC rollout=$STATE desired=$DESIRED running=$RUNNING pending=$PENDING"
+
+                          # COMPLETED + no pending tasks = the fleet is actually serving.
+                          if [ "$STATE" = "COMPLETED" ] && [ "$PENDING" = "0" ] && [ "$RUNNING" = "$DESIRED" ]; then
+                              echo "$SVC is stable"; break
+                          fi
+                          if [ "$STATE" = "FAILED" ]; then
+                              echo "::error::$SVC rollout FAILED — not starting the matrix against a broken deploy"
+                              exit 1
+                          fi
+                          if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+                              # Don't fail the pipeline on a slow rollout: warn and
+                              # let the matrix run. A red matrix with a real digest
+                              # beats no signal at all — the whole point of this
+                              # change is that silence is the worst outcome.
+                              echo "::warning::$SVC did not stabilise within 30min (rollout=$STATE) — running the matrix anyway; expect deploy-race failures"
+                              break
+                          fi
+                          sleep 20
+                      done
+                      echo "::endgroup::"
+                  done
+
+    e2e-cloud:
+        name: E2E matrix on QA cloud
+        needs: [build_push_and_open_pr, wait_for_qa_rollout]
+        # BOTH results, explicitly: an `if:` overrides the default "skip when a
+        # need failed", so listing wait_for_qa_rollout under `needs` alone would
+        # NOT stop this job from running after a FAILED rollout — the exact case
+        # that job exists to catch. (A stalled rollout still succeeds-with-a-
+        # warning by design; only a FAILED one blocks here.)
+        if: >-
+            needs.build_push_and_open_pr.result == 'success' &&
+            needs.wait_for_qa_rollout.result == 'success'
         permissions:
             contents: read
         uses: ./.github/workflows/e2e-cloud.yml

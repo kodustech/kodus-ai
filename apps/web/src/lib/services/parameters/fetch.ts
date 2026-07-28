@@ -181,22 +181,6 @@ export const deleteRepositoryCodeReviewParameter = async ({
     }
 };
 
-export const applyCodeReviewPreset = async (params: {
-    teamId: string;
-    preset: "speed" | "safety" | "coach";
-}) => {
-    try {
-        const response = await axiosAuthorized.post<any>(
-            PARAMETERS_PATHS.APPLY_CODE_REVIEW_PRESET,
-            params,
-        );
-
-        return response.data;
-    } catch (error: any) {
-        return { error: error.response?.status || "Erro desconhecido" };
-    }
-};
-
 export const centralizedConfigSync = async (teamId: string) => {
     try {
         const response = await axiosAuthorized.post<any>(

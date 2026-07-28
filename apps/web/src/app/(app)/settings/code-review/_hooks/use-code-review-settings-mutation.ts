@@ -110,6 +110,15 @@ export const useCodeReviewSettingsMutation = (params: {
             ),
             refetchType: "all",
         });
+        void queryClient.invalidateQueries({
+            queryKey: generateQueryKey(PARAMETERS_PATHS.GET_BY_KEY, {
+                params: {
+                    key: ParametersConfigKey.LANGUAGE_CONFIG,
+                    teamId,
+                },
+            }),
+            refetchType: "all",
+        });
     };
 
     const saveSettings = async (
