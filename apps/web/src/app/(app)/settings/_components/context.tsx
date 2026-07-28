@@ -172,3 +172,45 @@ export const CodeReviewModelDataProvider = (
 );
 
 export { resolveCodeReviewConfigForScope };
+
+/**
+ * Generic bridge for SSR-seeded parameter values.
+ * Keyed by ParametersConfigKey, so any new parameter only adds a key — no new provider.
+ * Carries `initialTeamId` so consumers can guard: only apply the seed when
+ * the active team matches the one the seed was fetched for (same pattern as
+ * the shell's `effectiveTeamId === initialTeamId` check).
+ */
+type InitialParameterValue = {
+    uuid: string;
+    configKey: string;
+    configValue: string;
+} | null;
+
+type InitialParametersBridge = {
+    initialTeamId: string;
+    parameters: Partial<Record<string, InitialParameterValue>>;
+};
+
+const InitialParametersContext = createContext<InitialParametersBridge>({
+    initialTeamId: "",
+    parameters: {},
+});
+
+export const useInitialTeamId = (): string => {
+    return useContext(InitialParametersContext).initialTeamId;
+};
+
+export const useInitialParameter = (key: string): InitialParameterValue => {
+    const { parameters } = useContext(InitialParametersContext);
+    return parameters[key] ?? null;
+};
+
+export const InitialParametersProvider = (
+    props: React.PropsWithChildren & {
+        value: InitialParametersBridge;
+    },
+) => (
+    <InitialParametersContext.Provider value={props.value}>
+        {props.children}
+    </InitialParametersContext.Provider>
+);

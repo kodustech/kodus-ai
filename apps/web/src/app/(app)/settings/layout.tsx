@@ -8,7 +8,9 @@ import {
     getDefaultCodeReviewParameterNoCache,
     getFormattedCodeReviewParameterNoCache,
     getPlatformConfigParameterNoCache,
+    getTeamParametersNoCache,
 } from "@services/parameters/fetch";
+import { ParametersConfigKey } from "@services/parameters/types";
 import { PageBoundary } from "src/core/components/page-boundary";
 import { Skeleton } from "src/core/components/ui/skeleton";
 
@@ -61,11 +63,20 @@ export default async function Layout({ children }: React.PropsWithChildren) {
         initialShellConfig,
         initialDefaultConfig,
         initialPlatformConfig,
+        initialLanguageConfig,
         initialByokModels,
     ] = await Promise.all([
         getFormattedCodeReviewParameterNoCache(initialTeamId),
         getDefaultCodeReviewParameterNoCache(),
         getPlatformConfigParameterNoCache(initialTeamId),
+        getTeamParametersNoCache<{
+            uuid: string;
+            configKey: string;
+            configValue: string;
+        }>({
+            key: ParametersConfigKey.LANGUAGE_CONFIG,
+            teamId: initialTeamId,
+        }).catch(() => null),
         // Drives the BYOK model selector's catalog. Empty on error / no BYOK.
         byokProvider
             ? getLLMProviderModels(byokProvider).catch(() => [])
@@ -90,6 +101,9 @@ export default async function Layout({ children }: React.PropsWithChildren) {
                 initialConfigValue={initialShellConfig.configValue}
                 initialDefaultConfig={initialDefaultConfig}
                 initialPlatformConfig={initialPlatformConfig}
+                initialParameters={{
+                    [ParametersConfigKey.LANGUAGE_CONFIG]: initialLanguageConfig,
+                }}
                 initialModelData={{
                     llmConfigStatus: initialLLMConfigStatus,
                     byokModels: initialByokModels,
