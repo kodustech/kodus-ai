@@ -42,7 +42,9 @@ export class GitHubProvider extends BaseProvider {
     readonly integrationType = 'GITHUB';
     readonly webhookPath = '/github/webhook';
 
-    protected readonly token: string;
+    // Not readonly: refreshInstallationTokenIfNeeded() swaps in a re-minted
+    // GitHub App installation token when a long poll outlives the ~1h expiry.
+    protected token: string;
     protected readonly repoFullName: string;
     protected readonly apiBase = 'https://api.github.com';
     protected readonly existingPrNumber?: number;
@@ -380,6 +382,26 @@ export class GitHubProvider extends BaseProvider {
         };
     }
 
+    // GitHub App installation tokens (ghs_) expire after ~1h. The runner
+    // mints one per SCENARIO, but a scenario with two 25-min polls plus a
+    // retry settle outlives it — observed on the cloud matrix as an opaque
+    // HTTP 401 mid-poll after ~50min. githubAppToken() keeps a cache with a
+    // 30-min refresh margin, so re-resolving here is free until a re-mint is
+    // actually due. PATs (ghp_/github_pat_) never take this path.
+    private async refreshInstallationTokenIfNeeded(): Promise<void> {
+        if (!this.token.startsWith('ghs_')) return;
+        try {
+            const { githubAppToken } = await import(
+                '../lib/github-app-token.js'
+            );
+            const fresh = await githubAppToken();
+            if (fresh) this.token = fresh;
+        } catch {
+            // keep the current token — if it is truly expired the next
+            // request 401s loudly, which is the pre-existing behaviour
+        }
+    }
+
     // Conditional GET with an ETag cache. GitHub serves 304 Not Modified
     // when the resource didn't change since the cached ETag — and 304s DO
     // NOT count against the per-account rate limit. The poll loops below
@@ -452,6 +474,7 @@ export class GitHubProvider extends BaseProvider {
         const since = encodeURIComponent(opts.sinceIso);
         const result = await pollUntil(
             async () => {
+                await this.refreshInstallationTokenIfNeeded();
                 const [reviewComments, issueComments, reviews] =
                     await Promise.all([
                         this.conditionalGet<{ id: number; body: string }[]>(
@@ -622,6 +645,7 @@ export class GitHubProvider extends BaseProvider {
         const since = encodeURIComponent(opts.sinceIso);
         const result = await pollUntil<{ startedAt: string; sample: string }>(
             async () => {
+                await this.refreshInstallationTokenIfNeeded();
                 const resp = await this.conditionalGet<
                     { id: number; body: string; created_at: string }[]
                 >(
