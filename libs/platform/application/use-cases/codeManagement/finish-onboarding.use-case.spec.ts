@@ -50,6 +50,11 @@ describe('FinishOnboardingUseCase', () => {
         const organizationService = {
             update: jest.fn().mockResolvedValue(undefined),
         };
+        const telemetry = {
+            onboardingCompleted: jest.fn(),
+            onboardingReviewTriggered: jest.fn(),
+            onboardingReviewSkipped: jest.fn(),
+        };
 
         const useCase = new FinishOnboardingUseCase(
             parametersService as any,
@@ -59,7 +64,7 @@ describe('FinishOnboardingUseCase', () => {
             request as any,
             syncSelectedReposKodyRulesUseCase as any,
             createOrUpdateParametersUseCase as any,
-            {} as any, // telemetry
+            telemetry as any,
             codeManagement as any,
             generateKodyRulesUseCase as any,
             licenseService as any,
