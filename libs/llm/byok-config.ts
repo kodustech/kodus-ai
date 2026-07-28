@@ -1,0 +1,121 @@
+/**
+ * BYOK config — v2 shape + the internal normalized shape (Phase 2, plan 02-01).
+ *
+ * The v2 shape (credentials + models + routing) is the persisted format going
+ * forward. `normalizeByokConfig` (02-01 Task 2) maps BOTH v2 AND the legacy
+ * `{main,fallback}` shape to `NormalizedByokConfig` — the internal shape the
+ * resolver family (byok-to-vercel.ts) consumes. That internal shape mirrors the
+ * legacy `{main,fallback}` with an ENCRYPTED apiKey, so byok-to-vercel's existing
+ * `decrypt()` + `.main`/`.fallback` logic works unchanged for both shapes.
+ *
+ * Types live in libs/llm (not kodus-common) — no runtime kodus-common dependency
+ * (REQ-NOLC-01). Provider ids are plain strings matching BYOKProvider values.
+ */
+import type { BYOKProvider } from '@kodus/kodus-common/llm';
+import type { ReasoningEffort } from './providers/types';
+
+// ─── v2 persisted shape ──────────────────────────────────────────────────────
+
+/**
+ * A connected provider credential. Connected once, referenced by many models via
+ * `credentialId` — so rotating a key touches one place and budget scopes are
+ * billing-accurate. Secret fields (apiKey, aws*) are stored as ciphertext.
+ */
+export interface BYOKCredential {
+    id: string;
+    /** Provider id (matches a BYOKProvider value). */
+    provider: string;
+    /** Encrypted key ciphertext. Absent for a managed credential. */
+    apiKey?: string;
+    /** Provider-specific settings (baseURL, vertexLocation, aws*, openrouter*). */
+    settings?: Record<string, unknown>;
+    /** Kodus-managed default (env key). Hidden from the UI; cost type `system`;
+     *  no code branch — it normalizes to the env-default path. */
+    managed?: boolean;
+}
+
+/** A configured model referencing a credential (no inline key). */
+export interface BYOKModelConfig {
+    id: string;
+    credentialId: string;
+    model: string;
+    reasoningEffort?: ReasoningEffort;
+    reasoningConfigOverride?: string;
+    temperature?: number;
+    maxInputTokens?: number;
+    maxOutputTokens?: number;
+    maxConcurrentRequests?: number;
+}
+
+/** LLM task taxonomy for routing (execution is Phase 4; the shape persists now). */
+export type LlmTask = 'codeReview' | 'prSummary' | 'conversation';
+
+/**
+ * Routing policy. Persisted in Phase 2; EXECUTED in Phase 4 (Manual = static
+ * task→model; Auto = the future router). The shape existing now lets Phase 4 wire
+ * it with no re-migration.
+ */
+export interface BYOKRouting {
+    mode?: 'manual' | 'auto';
+    /** Model id per task (Manual policy). */
+    byTask?: Partial<Record<LlmTask, string>>;
+    /** Fallback model id when a task has no explicit assignment. */
+    defaultModelId?: string;
+}
+
+export interface BYOKConfigV2 {
+    version: 2;
+    credentials: BYOKCredential[];
+    models: BYOKModelConfig[];
+    routing?: BYOKRouting;
+}
+
+// ─── Internal normalized shape (what the resolver family consumes) ───────────
+
+/**
+ * One resolved model slot. Mirrors the legacy `BYOKConfig['main']` fields so it
+ * is a drop-in for byok-to-vercel.ts. `apiKey` is ENCRYPTED ciphertext —
+ * byok-to-vercel decrypts downstream; normalize must NOT decrypt.
+ */
+export interface NormalizedModel {
+    /** Provider id. Typed as BYOKProvider so NormalizedModel is a structural
+     *  drop-in for the legacy BYOKConfig['main'] — a normalized config casts to
+     *  BYOKConfig cleanly, so the 25 getBYOKConfig callers need no change. */
+    provider: BYOKProvider;
+    /** Encrypted key ciphertext (decrypted by byok-to-vercel). */
+    apiKey: string;
+    model: string;
+    baseURL?: string;
+    disableReasoning?: boolean;
+    reasoningEffort?: ReasoningEffort;
+    reasoningConfigOverride?: string;
+    temperature?: number;
+    maxInputTokens?: number;
+    maxConcurrentRequests?: number;
+    maxOutputTokens?: number;
+    vertexLocation?: string;
+    awsBearerToken?: string;
+    awsAccessKeyId?: string;
+    awsSecretAccessKey?: string;
+    awsRegion?: string;
+    awsSessionToken?: string;
+}
+
+/**
+ * The internal shape the resolver family reads. `main` is OPTIONAL: a managed /
+ * empty config yields absent `main` so byok-to-vercel's `if (!config)` env-default
+ * branch runs with no call-site branch.
+ */
+export interface NormalizedByokConfig {
+    main?: NormalizedModel;
+    fallback?: NormalizedModel;
+}
+
+/** Narrow an unknown blob to v2 by its discriminant. */
+export function isV2Config(raw: unknown): raw is BYOKConfigV2 {
+    return (
+        !!raw &&
+        typeof raw === 'object' &&
+        (raw as { version?: unknown }).version === 2
+    );
+}

@@ -1,4 +1,5 @@
 import { BYOKConfig } from '@kodus/kodus-common/llm';
+import { normalizeByokConfig } from '@libs/llm/normalize-byok-config';
 import { Injectable, Inject } from '@nestjs/common';
 
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
@@ -741,7 +742,15 @@ export class PermissionValidationService {
             organizationAndTeamData,
         );
 
-        return byokConfig?.configValue || null;
+        // Normalize at the load boundary (Phase 2): a v2 blob is resolved to the
+        // internal {main,fallback} shape HERE, so every caller (byokToVercelModel,
+        // the LangChain PromptRunner, agents, …) reads .main/.fallback identically
+        // regardless of the stored shape. Managed/empty → null so callers fall back
+        // to the default, exactly as with a missing config today.
+        const normalized = normalizeByokConfig(byokConfig?.configValue);
+        return normalized.main
+            ? { main: normalized.main, fallback: normalized.fallback }
+            : null;
     }
 
     /**
