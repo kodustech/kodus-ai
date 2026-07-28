@@ -18,7 +18,6 @@ export class AutoLicense1763741352926 implements MigrationInterface {
                 'byok_config',
                 'cockpit_metrics_visibility',
                 'dry_run_limit',
-                'spend_limit_config',
                 'auto_license_assignment'
             )
         `);
@@ -41,8 +40,7 @@ export class AutoLicense1763741352926 implements MigrationInterface {
                 'auto_join_config',
                 'byok_config',
                 'cockpit_metrics_visibility',
-                'dry_run_limit',
-                'spend_limit_config'
+                'dry_run_limit'
             )
         `);
         await queryRunner.query(`
