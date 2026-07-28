@@ -172,3 +172,31 @@ export const CodeReviewModelDataProvider = (
 );
 
 export { resolveCodeReviewConfigForScope };
+
+/**
+ * Generic bridge for SSR-seeded parameter values.
+ * Keyed by ParametersConfigKey, so any new parameter only adds a key — no new provider.
+ */
+type InitialParameterValue = {
+    uuid: string;
+    configKey: string;
+    configValue: string;
+} | null;
+
+const InitialParametersContext =
+    createContext<Partial<Record<string, InitialParameterValue>>>({});
+
+export const useInitialParameter = (key: string): InitialParameterValue => {
+    const params = useContext(InitialParametersContext);
+    return params[key] ?? null;
+};
+
+export const InitialParametersProvider = (
+    props: React.PropsWithChildren & {
+        value: Partial<Record<string, InitialParameterValue>>;
+    },
+) => (
+    <InitialParametersContext.Provider value={props.value}>
+        {props.children}
+    </InitialParametersContext.Provider>
+);
