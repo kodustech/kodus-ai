@@ -8,6 +8,9 @@ import {
     parseReviewDirective,
     normalizeReviewDirective,
     isReviewCommand,
+    isForceReviewCommand,
+    isHeavyReviewCommand,
+    isKodyMentionNonReview,
 } from './codeCommentMarkers';
 
 describe('parseReviewDirective', () => {
@@ -135,5 +138,135 @@ describe('normalizeReviewDirective (shared by the CLI --focus path)', () => {
         expect(normalizeReviewDirective('the `topCodes` sort logic')).toBe(
             'the `topCodes` sort logic',
         );
+    });
+});
+
+describe('custom bot username support', () => {
+    describe('isReviewCommand', () => {
+        it('matches @kody review by default (no botUsername)', () => {
+            expect(isReviewCommand('@kody review')).toBe(true);
+        });
+
+        it('matches @kody start-review by default', () => {
+            expect(isReviewCommand('@kody start-review')).toBe(true);
+        });
+
+        it('matches custom bot username review', () => {
+            expect(isReviewCommand('@mybot review', 'mybot')).toBe(true);
+        });
+
+        it('matches custom bot username start-review', () => {
+            expect(isReviewCommand('@mybot start-review', 'mybot')).toBe(true);
+        });
+
+        it('preserves @kody as fallback when custom bot username is set', () => {
+            expect(isReviewCommand('@kody review', 'mybot')).toBe(true);
+        });
+
+        it('does not match custom bot when no botUsername is provided', () => {
+            expect(isReviewCommand('@mybot review')).toBe(false);
+        });
+
+        it('handles bot usernames with special regex characters', () => {
+            expect(isReviewCommand('@my.bot review', 'my.bot')).toBe(true);
+            expect(isReviewCommand('@my-bot review', 'my-bot')).toBe(true);
+            expect(isReviewCommand('@my+bot review', 'my+bot')).toBe(true);
+        });
+
+        it('is case-insensitive', () => {
+            expect(isReviewCommand('@MyBot review', 'mybot')).toBe(true);
+            expect(isReviewCommand('@MYBOT REVIEW', 'mybot')).toBe(true);
+        });
+    });
+
+    describe('isForceReviewCommand', () => {
+        it('matches custom bot username with --force flag', () => {
+            expect(isForceReviewCommand('@mybot review --force', 'mybot')).toBe(
+                true,
+            );
+        });
+
+        it('matches custom bot username with -force flag', () => {
+            expect(isForceReviewCommand('@mybot review -force', 'mybot')).toBe(
+                true,
+            );
+        });
+
+        it('preserves @kody as fallback when custom bot username is set', () => {
+            expect(isForceReviewCommand('@kody review --force', 'mybot')).toBe(
+                true,
+            );
+        });
+    });
+
+    describe('isHeavyReviewCommand', () => {
+        it('matches custom bot username with --heavy flag', () => {
+            expect(isHeavyReviewCommand('@mybot review --heavy', 'mybot')).toBe(
+                true,
+            );
+        });
+
+        it('preserves @kody as fallback when custom bot username is set', () => {
+            expect(isHeavyReviewCommand('@kody review --heavy', 'mybot')).toBe(
+                true,
+            );
+        });
+    });
+
+    describe('isKodyMentionNonReview', () => {
+        it('matches custom bot username mention without review command', () => {
+            expect(
+                isKodyMentionNonReview('@mybot what do you think?', 'mybot'),
+            ).toBe(true);
+        });
+
+        it('does not match custom bot username review command', () => {
+            expect(isKodyMentionNonReview('@mybot review', 'mybot')).toBe(false);
+        });
+
+        it('preserves @kody as fallback when custom bot username is set', () => {
+            expect(
+                isKodyMentionNonReview('@kody what do you think?', 'mybot'),
+            ).toBe(true);
+        });
+    });
+
+    describe('parseReviewDirective', () => {
+        it('captures directive with custom bot username', () => {
+            expect(
+                parseReviewDirective(
+                    '@mybot review focus on the auth logic',
+                    'mybot',
+                ),
+            ).toBe('focus on the auth logic');
+        });
+
+        it('captures directive with start-review alias and custom bot', () => {
+            expect(
+                parseReviewDirective(
+                    '@mybot start-review focus on rate limiting',
+                    'mybot',
+                ),
+            ).toBe('focus on rate limiting');
+        });
+
+        it('returns undefined for plain review command with custom bot', () => {
+            expect(parseReviewDirective('@mybot review', 'mybot')).toBeUndefined();
+        });
+
+        it('strips --force flag with custom bot username', () => {
+            expect(
+                parseReviewDirective(
+                    '@mybot review --force focus on security',
+                    'mybot',
+                ),
+            ).toBe('focus on security');
+        });
+
+        it('preserves @kody as fallback when custom bot username is set', () => {
+            expect(
+                parseReviewDirective('@kody review focus on X', 'mybot'),
+            ).toBe('focus on X');
+        });
     });
 });

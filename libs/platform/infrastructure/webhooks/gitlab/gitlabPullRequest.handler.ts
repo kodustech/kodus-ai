@@ -547,8 +547,9 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                     return;
                 }
 
-                const isStartCommand = isReviewCommand(comment.body);
-                const isForceCommand = isForceReviewCommand(comment.body);
+                const botUsername = context.botUsername;
+                const isStartCommand = isReviewCommand(comment.body, botUsername);
+                const isForceCommand = isForceReviewCommand(comment.body, botUsername);
                 const hasMarker = hasReviewMarker(comment.body);
 
                 if (isStartCommand && !hasMarker) {
@@ -567,8 +568,8 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                             action: 'synchronize',
                             origin: isForceCommand ? 'command-force' : 'command',
                             triggerCommentId: comment?.id,
-                            reviewDirective: parseReviewDirective(comment.body),
-                            heavy: isHeavyReviewCommand(comment.body),
+                            reviewDirective: parseReviewDirective(comment.body, botUsername),
+                            heavy: isHeavyReviewCommand(comment.body, botUsername),
                         },
                     };
 
@@ -590,7 +591,7 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                 if (
                     !isStartCommand &&
                     !hasMarker &&
-                    isKodyMentionNonReview(comment.body)
+                    isKodyMentionNonReview(comment.body, botUsername)
                 ) {
                     this.chatWithKodyFromGitUseCase.execute(params);
                     return;
