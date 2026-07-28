@@ -56,6 +56,11 @@ _*
 !libs/common/email/templates/_*
 !scripts/selfhosted/_common.sh
 !test/__mocks__/
+# Provider-module conformance fixtures are committed artifacts (Phase 3 / D-05):
+# recorded doGenerate results the offline gate replays. `_*` above would ignore
+# the `__fixtures__` dir, so un-ignore it (its JSON files don't start with `_`).
+!libs/llm/providers/__fixtures__/
+!libs/llm/providers/__fixtures__/**
 !**/__tests__/
 !scripts/selfhosted/_*.sh
 

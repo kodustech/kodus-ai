@@ -110,12 +110,27 @@ export const openaiModule: ProviderModule = {
         return { openai: { reasoningEffort: effort } };
     },
 
-    // ── Phase 3 stubs (declared for interface-shape stability) ──────────────
-    normalizeUsage(_raw: unknown): NormalizedUsage {
-        return { input: 0, output: 0, reasoning: 0 };
+    // ── Phase 3: real usage extraction (D-01 / Q4) ──────────────────────────
+    // Reads the same fields observability.service.ts:469-480 already reads off the
+    // AI SDK generateText result, so cost projection stays a single source of truth.
+    // ai@7 nests reasoning under `outputTokenDetails.reasoningTokens`; the top-level
+    // `reasoningTokens` is the ai@6 flat fallback. Reasoning is a detail-OF output —
+    // `output` is the FULL completion count and is NEVER reduced by reasoning (Q4
+    // double-count trap: `total` = input+output, reasoning is additive info only).
+    normalizeUsage(raw: unknown): NormalizedUsage {
+        const u =
+            (raw as { usage?: Record<string, any> } | undefined)?.usage ?? {};
+        return {
+            input: u.inputTokens ?? 0,
+            output: u.outputTokens ?? 0,
+            reasoning:
+                u.outputTokenDetails?.reasoningTokens ??
+                u.reasoningTokens ??
+                0,
+        };
     },
     normalize(raw: unknown): ModelResult {
-        return { usage: { input: 0, output: 0, reasoning: 0 }, raw };
+        return { usage: this.normalizeUsage(raw), raw };
     },
 
     uiFields: [
