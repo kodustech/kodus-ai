@@ -104,6 +104,64 @@ describe('openaiModule capability ↔ behavior (D-05)', () => {
     });
 });
 
+describe('openaiModule never-downgrade capability (D-00b, Pitfall 2)', () => {
+    // A direct-Moonshot BYOK config: openai_compatible + api.moonshot.ai baseURL,
+    // which shouldEnableJsonSchema alone would REJECT (not :8000, not allow-listed).
+    const moonshotCfg = {
+        provider: 'openai_compatible',
+        model: 'kimi-k2.7-code',
+        apiKey: 'test-key',
+        baseURL: 'https://api.moonshot.ai/v1',
+    } as any;
+
+    // An unknown openai_compatible upstream with no allow-listed baseURL — must
+    // still defer to shouldEnableJsonSchema (i.e. stay OFF), proving the override
+    // is additive, not a blanket force-on.
+    const unknownCfg = {
+        provider: 'openai_compatible',
+        model: 'llama-3.1-70b-instruct',
+        apiKey: 'test-key',
+        baseURL: 'https://my-unknown-proxy.example.com/v1',
+    } as any;
+
+    it('Kimi/Moonshot openai_compatible build keeps json_schema ON despite api.moonshot.ai baseURL', () => {
+        const model = openaiModule.build(moonshotCfg, {
+            structuredOutputs: true,
+        }) as any;
+        expect(model.supportsStructuredOutputs).toBe(true);
+    });
+
+    it('unknown openai_compatible upstream still defers to shouldEnableJsonSchema (stays OFF)', () => {
+        const model = openaiModule.build(unknownCfg, {
+            structuredOutputs: true,
+        }) as any;
+        expect(model.supportsStructuredOutputs).toBe(false);
+    });
+
+    it('the override is opt-in only: no structuredOutputs opt-in → OFF even for Kimi', () => {
+        const model = openaiModule.build(moonshotCfg, {
+            structuredOutputs: false,
+        }) as any;
+        expect(model.supportsStructuredOutputs).toBe(false);
+    });
+
+    it("capabilities(kimiId).structuredOutput === 'json_schema' (declared never-downgrade signal)", () => {
+        expect(openaiModule.capabilities('kimi-k2.7-code').structuredOutput).toBe(
+            'json_schema',
+        );
+        expect(
+            openaiModule.capabilities('moonshotai/kimi-k2-instruct')
+                .structuredOutput,
+        ).toBe('json_schema');
+    });
+
+    it("capabilities(unknownCompatibleId).structuredOutput is NOT json_schema (only known families claim it)", () => {
+        expect(
+            openaiModule.capabilities('llama-3.1-70b-instruct').structuredOutput,
+        ).not.toBe('json_schema');
+    });
+});
+
 describe('openaiModule offline conformance (real boundary: build → SDK → normalize)', () => {
     it('openai_compatible reasoning fixture: SDK-shaped result splits reasoning, output not reduced', async () => {
         const run = await runConformance(

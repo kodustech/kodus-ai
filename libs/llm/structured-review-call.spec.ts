@@ -120,3 +120,113 @@ describe('runStructuredReviewCall — model & fallback policy', () => {
         expect(modelsUsed()[1]).toEqual({ __model: 'fallback' });
     });
 });
+
+describe('runStructuredReviewCall — minimal latency guard (D-00c: one gated re-issue)', () => {
+    beforeAll(() => {
+        process.env.API_GROQ_API_KEY = 'test-groq-key';
+    });
+
+    beforeEach(() => {
+        mockGenerate.mockReset();
+        observabilityService.runAiSdkLLMInSpan.mockClear();
+    });
+
+    const modelsUsed = () => mockGenerate.mock.calls.map((c) => c[0].model);
+
+    it('transient main failure → exactly ONE same-model re-issue, returns its output before any fallback', async () => {
+        mockGenerate
+            .mockRejectedValueOnce(new Error('fetch failed'))
+            .mockResolvedValueOnce(ok({ violations: ['reissued'] }));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ violations: ['reissued'] });
+        // main fails → one same-model re-issue succeeds; the Groq fallback is never touched.
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(modelsUsed()).toEqual([{ __model: 'main' }, { __model: 'main' }]);
+    });
+
+    it('AbortError → NO re-issue, straight to fallback (re-issuing a slow call just times out again)', async () => {
+        const abortErr: any = new Error('The operation was aborted');
+        abortErr.name = 'AbortError';
+        mockGenerate
+            .mockRejectedValueOnce(abortErr)
+            .mockResolvedValueOnce(ok({ violations: ['fallback'] }));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ violations: ['fallback'] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        // Second call is the Groq fallback — NOT a same-model re-issue.
+        expect(modelsUsed()[1]).toMatchObject({
+            __model: 'groq',
+            modelId: 'openai/gpt-oss-120b',
+        });
+    });
+
+    it('[HARD-TIMEOUT] error → NO re-issue, straight to fallback', async () => {
+        mockGenerate
+            .mockRejectedValueOnce(new Error('[HARD-TIMEOUT] exceeded 600000ms'))
+            .mockResolvedValueOnce(ok({ violations: ['fallback'] }));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ violations: ['fallback'] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(modelsUsed()[1]).toMatchObject({
+            __model: 'groq',
+            modelId: 'openai/gpt-oss-120b',
+        });
+    });
+
+    it('BYOK no-fallback + [HARD-TIMEOUT] → throws without re-issue (single attempt)', async () => {
+        mockGenerate.mockRejectedValueOnce(
+            new Error('[HARD-TIMEOUT] exceeded 600000ms'),
+        );
+
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                byokConfig: { main: { provider: 'openai' } } as any,
+            }),
+        ).rejects.toThrow('[HARD-TIMEOUT]');
+
+        // No re-issue and no managed Groq cascade for a BYOK org — exactly one attempt.
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+    });
+
+    it('non-transient main failure (401 auth) → NO re-issue, straight to fallback', async () => {
+        const authErr: any = new Error('invalid api key');
+        authErr.status = 401;
+        mockGenerate
+            .mockRejectedValueOnce(authErr)
+            .mockResolvedValueOnce(ok({ violations: ['fallback'] }));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ violations: ['fallback'] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(modelsUsed()[1]).toMatchObject({
+            __model: 'groq',
+            modelId: 'openai/gpt-oss-120b',
+        });
+    });
+
+    it('re-issue is capped at ONE: transient twice → single re-issue, then fallback (no retry loop)', async () => {
+        mockGenerate
+            .mockRejectedValueOnce(new Error('socket hang up'))
+            .mockRejectedValueOnce(new Error('socket hang up'))
+            .mockResolvedValueOnce(ok({ violations: ['fallback'] }));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ violations: ['fallback'] });
+        // main + exactly one re-issue + fallback = 3 attempts total.
+        expect(mockGenerate).toHaveBeenCalledTimes(3);
+        expect(modelsUsed()).toEqual([
+            { __model: 'main' },
+            { __model: 'main' },
+            { __model: 'groq', modelId: 'openai/gpt-oss-120b' },
+        ]);
+    });
+});

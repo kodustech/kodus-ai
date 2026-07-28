@@ -32,9 +32,27 @@ import {
 } from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
 import { zodToStrictWireSchema } from '@libs/llm/strict-wire-schema';
+import {
+    classifyLLMError,
+    LlmErrorCategory,
+} from '@libs/llm/error-classifier';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 
 const logger = createLogger('StructuredReviewCall');
+
+/**
+ * classifyLLMError folds AbortError AND `[HARD-TIMEOUT]`/timeout/aborted text
+ * into LlmErrorCategory.TRANSIENT. The latency guard (D-00c) must NOT re-issue
+ * those: re-issuing a genuinely slow / already-timed-out call just burns the
+ * whole timeout budget again (Phase 0 Pitfall 3 — the failure mode is latency,
+ * not fidelity). This explicit gate carves them back out of "transient".
+ */
+function isAbortOrHardTimeout(err: unknown): boolean {
+    if (!err) return false;
+    if ((err as { name?: string }).name === 'AbortError') return true;
+    const text = err instanceof Error ? err.message : String(err ?? '');
+    return /\[HARD-TIMEOUT\]|aborted|timed?\s*out|timeout/i.test(text);
+}
 
 /** Managed trial-only fallback: Groq `openai/gpt-oss-120b`. Null if unconfigured. */
 function buildTrialGroqFallback(): LanguageModel | null {
@@ -166,6 +184,24 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
     try {
         return await call(mainModel, getModelName(byokConfig), false);
     } catch (err) {
+        // D-00c minimal latency guard: exactly ONE same-model re-issue on a
+        // transient (5xx / network) failure BEFORE touching the fallback. The
+        // gate skips AbortError / [HARD-TIMEOUT] because classifyLLMError lumps
+        // them into TRANSIENT, yet re-issuing a slow/timed-out call just times
+        // out again (Phase 0 Pitfall 3). No new AbortController / timeout /
+        // retry loop — the re-issue reuses the same call() closure and its
+        // existing timeoutSignal(LLM_CALL_TIMEOUT_MS)/hardTimeout chain.
+        if (
+            classifyLLMError(err).category === LlmErrorCategory.TRANSIENT &&
+            !isAbortOrHardTimeout(err)
+        ) {
+            try {
+                return await call(mainModel, getModelName(byokConfig), false);
+            } catch {
+                // Re-issue also failed — fall through to the existing fallback
+                // logic unchanged (capped at one re-issue, no loop).
+            }
+        }
         if (!fallbackModel) {
             throw err;
         }

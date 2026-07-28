@@ -33,6 +33,29 @@ function isOpenAiReasoner(model: string): boolean {
     return /^o[134](\b|[-_@])/i.test(model) || /^gpt-5(\b|[-_@])/i.test(model);
 }
 
+/**
+ * Native OpenAI model families that honor strict `response_format: json_schema`
+ * out of the box (the gpt-* / o-series / chatgpt lines). Used only to keep the
+ * provider-blind capabilities() honest: everything else served over
+ * `openai_compatible` is an unknown upstream that must NOT claim json_schema.
+ */
+function isNativeOpenAiModel(model: string): boolean {
+    return isOpenAiReasoner(model) || /^(gpt|chatgpt|o[0-9])/i.test(model);
+}
+
+/**
+ * Kimi / Moonshot (incl. `moonshotai/…`) must NEVER be downgraded to
+ * `json_object`: measured to lose ~50% of structured outputs when forced off
+ * native `json_schema` (Phase 0 D-00b, Pitfall 2). This is encoded as a
+ * provider-module capability the build() honors, so `shouldEnableJsonSchema`
+ * stays the fallback baseURL heuristic for genuinely-unknown upstreams — we do
+ * NOT add api.moonshot.ai to that gate.
+ */
+function isNeverDowngradeModel(model: string): boolean {
+    const m = model.toLowerCase();
+    return m.includes('kimi') || m.includes('moonshot');
+}
+
 export const openaiModule: ProviderModule = {
     id: 'openai',
     aliases: ['openai_compatible'],
@@ -60,8 +83,14 @@ export const openaiModule: ProviderModule = {
             reasoningConfig,
             // Provider-level execution capabilities (01-04; per-model refinement
             // is a follow-up — note capabilities(model) can't see openai vs
-            // openai_compatible, so these describe native OpenAI).
-            structuredOutput: 'json_schema',
+            // openai_compatible). json_schema is claimed only by native OpenAI
+            // families and the never-downgrade Kimi/Moonshot family (D-00b);
+            // any other id served over openai_compatible is an unknown upstream
+            // that defaults to json_object so it isn't over-promised.
+            structuredOutput:
+                isNativeOpenAiModel(model) || isNeverDowngradeModel(model)
+                    ? 'json_schema'
+                    : 'json_object',
             toolCalling: 'native',
             usageGranularity: reasoner ? 'reasoning_split' : 'output_only',
             streaming: true,
@@ -79,13 +108,19 @@ export const openaiModule: ProviderModule = {
                 name: 'openai-compatible',
                 apiKey,
                 baseURL: baseURL || '',
+                // Never-downgrade family wins over the baseURL heuristic: a
+                // direct-Moonshot upstream (api.moonshot.ai) keeps json_schema
+                // ON even though shouldEnableJsonSchema alone would reject it
+                // (D-00b). Unknown upstreams still defer to the heuristic — the
+                // capability is additive, not a blanket force-on.
                 supportsStructuredOutputs:
                     opts?.structuredOutputs === true &&
-                    shouldEnableJsonSchema(
-                        cfg.provider as string,
-                        cfg.model,
-                        baseURL,
-                    ),
+                    (isNeverDowngradeModel(cfg.model) ||
+                        shouldEnableJsonSchema(
+                            cfg.provider as string,
+                            cfg.model,
+                            baseURL,
+                        )),
             })(cfg.model);
         }
 
