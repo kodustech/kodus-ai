@@ -271,6 +271,16 @@ jobs:
                   GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
                   GH_TEST_REPO_CLOUD: ${{ secrets.GH_TEST_REPO_CLOUD }}
                   GH_TEST_PR_NUMBER: ${{ secrets.GH_TEST_PR_NUMBER }}
+
+                  # LLM key for the run-start tenant BYOK refresh (see
+                  # refreshCloudTenantByok in lib/runner.ts): persistent QA
+                  # tenants store their BYOK key at seed time, so a key
+                  # rotation strands them on the revoked key and every paid
+                  # cell dies with `partial_error: Incorrect API key`. Same
+                  # secret + model the self-hosted matrix injects, so both
+                  # targets review with one debuggable configuration.
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  API_LLM_PROVIDER_MODEL: gpt-5.4-mini
                   # Org-Administration token (QA environment secret) used ONLY
                   # by trial-managed-review to create/delete its throwaway repo
                   # per run. Absent → that scenario is SKIPPED, not failed

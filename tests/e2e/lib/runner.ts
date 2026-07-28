@@ -27,6 +27,7 @@ import {
     signUp,
 } from './onboarding.js';
 import { randomBytes } from 'node:crypto';
+import { http } from './http.js';
 import { settle } from '../providers/base.js';
 import { registryRepoFor } from './cloud-tenant-registry.js';
 import { logger } from './log.js';
@@ -175,6 +176,73 @@ function readCloudTenantsFile(): CloudTenantEntry[] {
         return Array.isArray(parsed) ? (parsed as CloudTenantEntry[]) : [];
     } catch {
         return [];
+    }
+}
+
+// Re-apply the CURRENT env LLM key to every registry tenant's byok_config.
+// Cloud tenants are seeded once (setup-tenants) and keep their BYOK key in
+// the tenant itself, so a key rotation strands them on the revoked key and
+// every review dies with `partial_error: Incorrect API key` — which zeroed
+// all paid cloud cells after the 2026-07-24 rotation. One login + one POST
+// per unique tenant, idempotent (same create-or-update endpoint the seeder
+// uses), best-effort per tenant, and skipped when no env key is configured.
+async function refreshCloudTenantByok(log: {
+    info: (m: string) => void;
+    warn: (m: string) => void;
+}): Promise<void> {
+    const apiKey = process.env.API_OPEN_AI_API_KEY;
+    if (!apiKey) {
+        log.info(
+            '[byok-refresh] API_OPEN_AI_API_KEY unset — tenants keep their seeded BYOK key',
+        );
+        return;
+    }
+    const entries = readCloudTenantsFile();
+    if (!entries.length) return;
+
+    const target = envForTarget('cloud');
+    const provider = process.env.API_LLM_PROVIDER ?? 'openai';
+    const baseURL =
+        process.env.API_OPENAI_FORCE_BASE_URL ?? 'https://api.openai.com/v1';
+    const model = process.env.API_LLM_PROVIDER_MODEL ?? 'gpt-5.4-mini';
+
+    const seen = new Set<string>();
+    for (const entry of entries) {
+        if (seen.has(entry.email)) continue;
+        seen.add(entry.email);
+        try {
+            const session = await login(target, {
+                email: entry.email,
+                password: entry.password,
+            });
+            const resp = await http(
+                `${target.apiBaseUrl}/organization-parameters/create-or-update`,
+                {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${session.accessToken}` },
+                    body: {
+                        key: 'byok_config',
+                        configValue: {
+                            main: { provider, apiKey, baseURL, model },
+                        },
+                    },
+                    timeoutMs: 30_000,
+                },
+            );
+            if (resp.status >= 200 && resp.status < 300) {
+                log.info(
+                    `[byok-refresh] ${entry.provider}/${entry.license}: byok_config updated`,
+                );
+            } else {
+                log.warn(
+                    `[byok-refresh] ${entry.provider}/${entry.license}: HTTP ${resp.status} — tenant keeps its stored key`,
+                );
+            }
+        } catch (err) {
+            log.warn(
+                `[byok-refresh] ${entry.provider}/${entry.license}: ${(err as Error).message.slice(0, 120)} — continuing`,
+            );
+        }
     }
 }
 
@@ -454,6 +522,17 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
     // visible before the cells run instead of as an opaque mid-run 403 cascade.
     if (!opts.dryRun && opts.cells.some((c) => c.provider === "github")) {
         await preflightGithubRateLimits(log);
+    }
+
+    // Cloud tenants are seeded ONCE (setup-tenants) and persist their BYOK
+    // key in the tenant's byok_config — so an LLM key rotation silently
+    // strands every persistent QA tenant on the revoked key, and each review
+    // dies with `partial_error: Incorrect API key` (observed 2026-07-28,
+    // every paid cell red since the 07-24 rotation). Re-apply the CURRENT
+    // env key to each registry tenant at run start: one login + one POST per
+    // tenant, idempotent, skipped entirely when the env key is absent.
+    if (!opts.dryRun && opts.target === 'cloud') {
+        await refreshCloudTenantByok(log);
     }
 
     for (const cell of opts.cells) {
