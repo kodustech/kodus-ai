@@ -989,6 +989,115 @@ describe('CreateFileCommentsStage', () => {
             ).toBe(true);
         });
 
+    });
+
+    // Docblock hunk with a single inserted line: added line 1032, context
+    // lines 1030/1031/1033/1034/1035 (mirrors the field report).
+    const DOCBLOCK_PATCH = `@@ -1030,5 +1030,6 @@ class InvoiceRenderer
+      * Render the invoice header.
+      *
++     * @param array $meta additional metadata
+      * @param int $id
+      * @return void
+      */`;
+
+    describe('GitLab added-line anchoring gate', () => {
+        const wireHappyPathMocks = () => {
+            mockCommentManagerService.createLineComments.mockResolvedValue({
+                lastAnalyzedCommit: 'abc123',
+                commentResults: [],
+            });
+            mockSuggestionService.verifyIfSuggestionsWereSent.mockResolvedValue(
+                [],
+            );
+            mockSuggestionService.extractRepriorizedSuggestions.mockImplementation(
+                (_commentResults: any, discarded: any) => ({
+                    repriorizedSuggestions: [],
+                    filteredDiscardedSuggestions: discarded,
+                }),
+            );
+            mockCodeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
+                [{ sha: 'abc123' }],
+            );
+            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
+                { number: 123, files: [] },
+            );
+        };
+
+        it('keeps added-line comments, snaps context-in-span onto the added line, discards context-only', async () => {
+            const validSuggestions = [
+                // anchor already on the added line → kept as-is.
+                { id: 'added', relevantFile: 'Invoice.php', severity: 'high', relevantLinesStart: 1032, relevantLinesEnd: 1032 },
+                // single context line, added line outside its span → discarded.
+                { id: 'context', relevantFile: 'Invoice.php', severity: 'high', relevantLinesStart: 1035, relevantLinesEnd: 1035 },
+                // multi-line span [1030,1034] covering the added line → snapped to 1032.
+                { id: 'snap', relevantFile: 'Invoice.php', severity: 'high', relevantLinesStart: 1030, relevantLinesEnd: 1034 },
+            ] as any[];
+
+            wireHappyPathMocks();
+
+            const context = createBaseContext({
+                platformType: PlatformType.GITLAB,
+                validSuggestions,
+                changedFiles: [
+                    { filename: 'Invoice.php', status: 'modified', patch: DOCBLOCK_PATCH } as any,
+                ],
+            });
+
+            await (stage as any).executeStage(context);
+
+            const posted =
+                mockCommentManagerService.createLineComments.mock.calls[0][3];
+            expect(posted.map((c: any) => c.suggestion.id)).toEqual([
+                'added',
+                'snap',
+            ]);
+
+            const added = posted.find((c: any) => c.suggestion.id === 'added');
+            expect(added.line).toBe(1032);
+            expect(added.start_line).toBeUndefined();
+
+            const snap = posted.find((c: any) => c.suggestion.id === 'snap');
+            expect(snap.line).toBe(1032);
+            expect(snap.start_line).toBeUndefined();
+
+            // The context-only comment reaches Mongo as discarded-by-code-diff.
+            const saveArgs =
+                mockPullRequestService.aggregateAndSaveDataStructure.mock
+                    .calls[0];
+            const unusedSuggestions = saveArgs[4];
+            const discarded = unusedSuggestions.find(
+                (s: any) => s.id === 'context',
+            );
+            expect(discarded.priorityStatus).toBe('discarded-by-code-diff');
+        });
+
+        it('leaves GitHub untouched — a context-line comment is still posted as-is', async () => {
+            const validSuggestions = [
+                { id: 'context', relevantFile: 'Invoice.php', severity: 'high', relevantLinesStart: 1035, relevantLinesEnd: 1035 },
+            ] as any[];
+
+            wireHappyPathMocks();
+
+            const context = createBaseContext({
+                platformType: PlatformType.GITHUB,
+                validSuggestions,
+                changedFiles: [
+                    { filename: 'Invoice.php', status: 'modified', patch: DOCBLOCK_PATCH } as any,
+                ],
+            });
+
+            await (stage as any).executeStage(context);
+
+            const posted =
+                mockCommentManagerService.createLineComments.mock.calls[0][3];
+            expect(posted).toHaveLength(1);
+            expect(posted[0].suggestion.id).toBe('context');
+            expect(posted[0].line).toBe(1035);
+        });
+    });
+
+    describe('saving discarded suggestions to database (extra reasons)', () => {
         it('should save mixed discarded suggestions to database when all are discarded by different reasons', async () => {
             const discardedSuggestions = [
                 {
