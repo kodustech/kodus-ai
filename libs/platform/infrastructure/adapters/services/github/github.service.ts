@@ -1359,6 +1359,22 @@ export class GithubService
         });
     }
 
+    // `User.suspendedAt` only exists on GitHub Enterprise schemas — on
+    // github.com every batch fails with "Field 'suspendedAt' doesn't exist"
+    // and we were re-issuing (and error-logging) the doomed query on every
+    // member listing. Remember the schema verdict PER API BASE URL: the
+    // schema is a property of the GitHub instance, and a process-wide flag
+    // would let a github.com org disable the (real) suspension check for a
+    // GHE org served by the same service instance.
+    private suspendedAtUnsupportedByBaseUrl = new Map<string, boolean>();
+
+    private graphqlBaseUrlOf(octokit: Octokit): string {
+        return (
+            (octokit as any)?.request?.endpoint?.DEFAULTS?.baseUrl ??
+            'https://api.github.com'
+        );
+    }
+
     private async getSuspendedStatusBatch(
         octokit: Octokit,
         logins: string[],
@@ -1367,6 +1383,13 @@ export class GithubService
         if (logins.length === 0) return new Map();
 
         const statusMap = new Map<string, boolean>();
+
+        const baseUrl = this.graphqlBaseUrlOf(octokit);
+        if (this.suspendedAtUnsupportedByBaseUrl.get(baseUrl)) {
+            logins.forEach((login) => statusMap.set(login, true));
+            return statusMap;
+        }
+
         let aliasCounter = 0;
 
         for (let i = 0; i < logins.length; i += batchSize) {
@@ -1394,6 +1417,19 @@ export class GithubService
                     statusMap.set(login, userData?.suspendedAt === null);
                 });
             } catch (error) {
+                const message =
+                    error instanceof Error ? error.message : String(error);
+                if (/'suspendedAt' doesn't exist/.test(message)) {
+                    this.suspendedAtUnsupportedByBaseUrl.set(baseUrl, true);
+                    this.logger.warn({
+                        message:
+                            "GraphQL schema has no User.suspendedAt (github.com) — treating all members as active and skipping future suspended-status batches for this API base URL",
+                        context: GithubService.name,
+                        metadata: { baseUrl },
+                    });
+                    logins.forEach((login) => statusMap.set(login, true));
+                    return statusMap;
+                }
                 this.logger.error({
                     message: 'GraphQL batch query failed for suspended status',
                     context: GithubService.name,
