@@ -223,13 +223,7 @@ export class AiSdkAgentRunner implements AgentRunner {
                         index: steps.length,
                         message: eventToMessage(event),
                         usage: event?.usage
-                            ? {
-                                  inputTokens: event.usage.inputTokens,
-                                  outputTokens: event.usage.outputTokens,
-                                  reasoningTokens: event.usage.reasoningTokens,
-                                  cacheReadTokens:
-                                      event.usage.cachedInputTokens,
-                              }
+                            ? readAiSdkUsage(event.usage)
                             : undefined,
                     };
                     steps.push(step);
@@ -328,14 +322,7 @@ export class AiSdkAgentRunner implements AgentRunner {
                 stopReason ?? 'result',
             ),
             stopReason,
-            usage: {
-                inputTokens: result.usage?.inputTokens,
-                outputTokens: result.usage?.outputTokens,
-                reasoningTokens: result.usage?.reasoningTokens,
-                cacheReadTokens: (
-                    result.usage as { cachedInputTokens?: number } | undefined
-                )?.cachedInputTokens,
-            },
+            usage: readAiSdkUsage(result.usage),
             trace,
         };
     }
@@ -490,16 +477,41 @@ function parseArtifactInput(input: unknown): unknown {
     return input;
 }
 
+/**
+ * Map AI SDK `LanguageModelUsage` onto our TokenUsage.
+ *
+ * ai@7 removed top-level `cachedInputTokens` / `reasoningTokens` in favour of
+ * `inputTokenDetails.cacheReadTokens` / `outputTokenDetails.reasoningTokens`.
+ * Keep the ai@6 field names as fallbacks so mixed-version / vendor shims still
+ * report cache hits.
+ */
+function readAiSdkUsage(usage: any): TokenUsage {
+    return {
+        inputTokens: usage?.inputTokens,
+        outputTokens: usage?.outputTokens,
+        reasoningTokens:
+            usage?.outputTokenDetails?.reasoningTokens ??
+            usage?.reasoningTokens,
+        cacheReadTokens:
+            usage?.inputTokenDetails?.cacheReadTokens ??
+            usage?.cachedInputTokens,
+    };
+}
+
 /** Best-effort token usage from the steps collected before a failure —
  *  the error path has no provider-level total to read. */
 function aggregateUsage(steps: readonly RunStep[]): TokenUsage {
     let inputTokens = 0;
     let outputTokens = 0;
+    let reasoningTokens = 0;
+    let cacheReadTokens = 0;
     for (const s of steps) {
         inputTokens += s.usage?.inputTokens ?? 0;
         outputTokens += s.usage?.outputTokens ?? 0;
+        reasoningTokens += s.usage?.reasoningTokens ?? 0;
+        cacheReadTokens += s.usage?.cacheReadTokens ?? 0;
     }
-    return { inputTokens, outputTokens };
+    return { inputTokens, outputTokens, reasoningTokens, cacheReadTokens };
 }
 
 // --- mappers (AI SDK <-> core contracts) ---
