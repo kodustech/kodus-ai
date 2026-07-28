@@ -20,6 +20,10 @@ import {
     parseReviewDirective,
     isHeavyReviewCommand
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
+import {
+    isGitlabDraftToReadyChange,
+    type GitlabDraftChangesLike,
+} from '@libs/common/utils/webhooks/gitlab-draft.utils';
 import { getMappedPlatform } from '@libs/common/utils/webhooks';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
@@ -33,6 +37,69 @@ import {
 } from '@libs/platform/domain/platformIntegrations/interfaces/webhook-event-handler.interface';
 import { SavePullRequestUseCase } from '@libs/platformData/application/use-cases/pullRequests/save.use-case';
 import { CodeManagementService } from '../../adapters/services/codeManagement.service';
+
+type GitlabCodeReviewTriggerPayload = {
+    readonly object_attributes?: {
+        readonly action?: string;
+        readonly state?: string;
+        readonly last_commit?: { readonly id?: string | null } | null;
+        readonly oldrev?: string | null;
+    } | null;
+    readonly changes?: (GitlabDraftChangesLike & {
+        readonly description?: unknown;
+    }) | null;
+};
+
+export const shouldTriggerGitlabCodeReview = (
+    params: GitlabCodeReviewTriggerPayload,
+): boolean => {
+    const objectAttributes = params?.object_attributes || {};
+    const changes = params?.changes || {};
+
+    // Verify if it's a new MR
+    if (objectAttributes.action === 'open') {
+        return true;
+    }
+
+    // Verify if it's a new commit
+    const lastCommitId = objectAttributes.last_commit?.id;
+    const oldRev = objectAttributes.oldrev;
+
+    if (lastCommitId && oldRev && lastCommitId !== oldRev) {
+        return true;
+    }
+
+    // Verify if it's a merge
+    if (
+        objectAttributes.state === 'merged' ||
+        objectAttributes.action === 'merge'
+    ) {
+        return true;
+    }
+
+    // Verify if the PR is closed.
+    if (
+        objectAttributes.state === 'closed' ||
+        objectAttributes.action === 'close'
+    ) {
+        return true;
+    }
+
+    if (
+        objectAttributes.action === 'update' &&
+        isGitlabDraftToReadyChange(changes)
+    ) {
+        return true;
+    }
+
+    // Ignore if it's an update to the description
+    if (objectAttributes.action === 'update' && changes.description) {
+        return false;
+    }
+
+    // For all other cases, return false
+    return false;
+};
 
 /**
  * Handler for GitLab webhook events.
@@ -541,55 +608,10 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
         }
     }
 
-    private shouldTriggerCodeReviewForGitLab(params: any): boolean {
-        const objectAttributes = params?.object_attributes || {};
-        const changes = params?.changes || {};
-
-        // Verify if it's a new MR
-        if (objectAttributes.action === 'open') {
-            return true;
-        }
-
-        // Verify if it's a new commit
-        const lastCommitId = objectAttributes.last_commit?.id;
-        const oldRev = objectAttributes.oldrev;
-
-        if (lastCommitId && oldRev && lastCommitId !== oldRev) {
-            return true;
-        }
-
-        // Verify if it's a merge
-        if (
-            objectAttributes.state === 'merged' ||
-            objectAttributes.action === 'merge'
-        ) {
-            return true;
-        }
-
-        // Verify if the PR is closed.
-        if (
-            objectAttributes.state === 'closed' ||
-            objectAttributes.action === 'close'
-        ) {
-            return true;
-        }
-
-        // Ignore if it's an update to the description
-        if (objectAttributes.action === 'update' && changes.description) {
-            return false;
-        }
-
-        if (
-            objectAttributes.action === 'update' &&
-            changes?.draft &&
-            changes.draft.previous === true &&
-            changes.draft.current === false
-        ) {
-            return true;
-        }
-
-        // For all other cases, return false
-        return false;
+    private shouldTriggerCodeReviewForGitLab(
+        params: GitlabCodeReviewTriggerPayload,
+    ): boolean {
+        return shouldTriggerGitlabCodeReview(params);
     }
 
     private isNewCommitUpdate(payload: any): boolean {
