@@ -5,8 +5,9 @@ export type ReasoningEffort = "none" | "low" | "medium" | "high";
 // Web-side mirror of the persisted v2 shape in libs/llm/byok-config.ts, kept
 // field-for-field EXCEPT that every secret is a MASKED, display-only string:
 // getBYOK() reads the find-by-key blob, which passes through maskV2ConfigSecrets
-// server-side, so `credential.apiKey` is already `••••` and the client never
-// receives a real key.
+// server-side, so `credential.apiKey` is already a display mask — the
+// `firstTwo...lastThree` shape (e.g. `sk...def`), or `••••` for a short/
+// unreadable value — and the client never receives a real key.
 
 /** LLM task taxonomy for routing (mirror of libs/llm LlmTask). */
 export type LlmTask = "codeReview" | "prSummary" | "conversation";

@@ -280,6 +280,13 @@ const SENSITIVE_KEYS = new Set([
     'clientsecret',
     'privatekey',
     'bearertoken',
+    // Amazon Bedrock BYOK credentials (normalized: lowercased, separators
+    // stripped). These travel under aws* field names inside a v2 credential's
+    // `settings` and must be redacted at any log depth.
+    'awssecretaccesskey',
+    'awsbearertoken',
+    'awsaccesskeyid',
+    'awssessiontoken',
     'jwt',
     'credential',
     'connectionstring',

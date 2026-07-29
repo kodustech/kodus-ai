@@ -171,6 +171,110 @@ describe('FindByKeyOrganizationParametersUseCase — BYOK masking', () => {
         });
     });
 
+    // ─────────────────────────────────────────────────────────────────────
+    // S2 (MEDIUM): a single undecryptable credential must NOT fail the whole
+    // mask open. Before the fix, one throwing decrypt() bubbled to the execute
+    // catch, which returned the RAW entity — dumping every credential's
+    // ciphertext to the caller. The method must NEVER return unmasked ciphertext.
+    // ─────────────────────────────────────────────────────────────────────
+    describe('fail-closed masking (S2 — no raw ciphertext on a bad credential)', () => {
+        it('degrades ONE undecryptable credential to a placeholder, still masks the rest', async () => {
+            const goodPlain = 'sk-good-openai-key-777';
+            const goodCipher = encrypt(goodPlain);
+            const badCipher = 'not-real-ciphertext'; // decrypt() throws on this
+            const useCase = buildUseCase({
+                version: 2,
+                credentials: [
+                    { id: 'c-good', provider: 'openai', apiKey: goodCipher },
+                    { id: 'c-bad', provider: 'anthropic', apiKey: badCipher },
+                ],
+                models: [],
+            });
+
+            const result = await useCase.execute(
+                OrganizationParametersKey.BYOK_CONFIG,
+                orgAndTeam,
+            );
+
+            const cfg = result?.configValue as any;
+            const good = cfg.credentials.find((c: any) => c.id === 'c-good');
+            const bad = cfg.credentials.find((c: any) => c.id === 'c-bad');
+
+            // The good credential is masked normally.
+            expect(good.apiKey).toBe(masked(goodPlain));
+            // The bad credential degrades to a placeholder — NOT its raw ciphertext.
+            expect(bad.apiKey).not.toBe(badCipher);
+            expect(typeof bad.apiKey).toBe('string');
+
+            // Crucially: nothing raw (good ciphertext, good plaintext, or the bad
+            // ciphertext) reaches the caller.
+            const serialized = JSON.stringify(cfg);
+            expect(serialized).not.toContain(goodCipher);
+            expect(serialized).not.toContain(goodPlain);
+            expect(serialized).not.toContain(badCipher);
+        });
+
+        it('degrades a bad aws* secret under settings without exposing ciphertext', async () => {
+            const badCipher = 'not-real-ciphertext';
+            const useCase = buildUseCase({
+                version: 2,
+                credentials: [
+                    {
+                        id: 'c-bedrock',
+                        provider: 'amazon_bedrock',
+                        settings: {
+                            awsSecretAccessKey: badCipher,
+                            awsRegion: 'us-east-1',
+                        },
+                    },
+                ],
+                models: [],
+            });
+
+            const result = await useCase.execute(
+                OrganizationParametersKey.BYOK_CONFIG,
+                orgAndTeam,
+            );
+
+            const cred = (result?.configValue as any).credentials[0];
+            expect(cred.settings.awsSecretAccessKey).not.toBe(badCipher);
+            // Non-secret settings survive.
+            expect(cred.settings.awsRegion).toBe('us-east-1');
+            expect(JSON.stringify(result?.configValue)).not.toContain(badCipher);
+        });
+    });
+
+    // ─────────────────────────────────────────────────────────────────────
+    // S3 (LOW): maskApiKey used to `return apiKey` in full for a decrypted
+    // value <= 6 chars — echoing a short/garbage key verbatim. A short value
+    // must be masked too, never echoed.
+    // ─────────────────────────────────────────────────────────────────────
+    describe('short-key masking (S3 — never echo a full decrypted value)', () => {
+        it('masks a short (<=6 char) decrypted key instead of echoing it', async () => {
+            const shortPlain = 'abc'; // 3 chars — the old code returned this verbatim
+            const cipher = encrypt(shortPlain);
+            const useCase = buildUseCase({
+                version: 2,
+                credentials: [
+                    { id: 'c1', provider: 'openai', apiKey: cipher },
+                ],
+                models: [],
+            });
+
+            const result = await useCase.execute(
+                OrganizationParametersKey.BYOK_CONFIG,
+                orgAndTeam,
+            );
+
+            const cred = (result?.configValue as any).credentials[0];
+            expect(cred.apiKey).not.toBe(shortPlain);
+            expect(cred.apiKey).not.toBe(cipher);
+            expect(JSON.stringify(result?.configValue)).not.toContain(cipher);
+            // The short plaintext must not surface as a standalone echoed value.
+            expect(cred.apiKey).not.toContain(shortPlain);
+        });
+    });
+
     describe('secret hygiene', () => {
         it('never returns a ciphertext or plaintext key to the caller (v2)', async () => {
             const plaintext = 'sk-hygiene-check-9876';

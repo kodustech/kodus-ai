@@ -109,13 +109,34 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
         };
     }
 
+    /** Placeholder for a masked/unreadable secret — never echoes plaintext. */
+    private static readonly MASK_PLACEHOLDER = '••••';
+
     private maskApiKey(apiKey: string): string {
+        // A short/garbage decrypted value must be masked too — echoing it in
+        // full would leak the plaintext key (S3). The `••••` placeholder never
+        // appears in a real key, so a round-tripped write is safely detected as
+        // "unchanged" by create-or-update's isMaskedSecret.
         if (apiKey.length <= 6) {
-            return apiKey;
+            return FindByKeyOrganizationParametersUseCase.MASK_PLACEHOLDER;
         }
         const firstTwo = apiKey.substring(0, 2);
         const lastThree = apiKey.substring(apiKey.length - 3);
         return `${firstTwo}...${lastThree}`;
+    }
+
+    /**
+     * Decrypt + mask a single secret field, degrading to a placeholder when the
+     * ciphertext is undecryptable. One unreadable credential must NEVER abort
+     * the whole mask and fall through to returning RAW ciphertext to the caller
+     * (S2 — fail closed, not open).
+     */
+    private safeMaskSecret(cipher: string): string {
+        try {
+            return this.maskApiKey(decrypt(cipher));
+        } catch {
+            return FindByKeyOrganizationParametersUseCase.MASK_PLACEHOLDER;
+        }
     }
 
     /**
@@ -162,7 +183,7 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
         }
 
         if (typeof cred.apiKey === 'string' && cred.apiKey) {
-            masked.apiKey = this.maskApiKey(decrypt(cred.apiKey));
+            masked.apiKey = this.safeMaskSecret(cred.apiKey);
         }
 
         if (cred.settings && typeof cred.settings === 'object') {
@@ -170,7 +191,7 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
             for (const field of FindByKeyOrganizationParametersUseCase.V2_SECRET_SETTINGS) {
                 const value = settings[field];
                 if (typeof value === 'string' && value) {
-                    settings[field] = this.maskApiKey(decrypt(value));
+                    settings[field] = this.safeMaskSecret(value);
                 }
             }
             masked.settings = settings;

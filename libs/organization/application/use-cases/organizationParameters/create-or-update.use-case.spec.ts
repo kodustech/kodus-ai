@@ -295,4 +295,111 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
             expect(createOrUpdateConfig).not.toHaveBeenCalled();
         });
     });
+
+    // ─────────────────────────────────────────────────────────────────────
+    // S4 (LOW, defense-in-depth): the SERVER display mask is `xx...yyy` (dots),
+    // not the client `••••` bullet. isMaskedSecret only recognized the bullet,
+    // so a round-tripped server mask would be RE-ENCRYPTED as if it were a real
+    // key — silently destroying the stored credential. A server dotted mask must
+    // be treated as "unchanged → keep the prior ciphertext".
+    // ─────────────────────────────────────────────────────────────────────
+    describe('server dotted-mask round-trip (S4 — keep ciphertext, never re-encrypt)', () => {
+        it('keeps the prior ciphertext when the SERVER `xx...yyy` mask is resubmitted', async () => {
+            const priorCipher = encrypt('sk-real-openai-key-abcdef');
+            const existing = v2({
+                credentials: [
+                    { id: 'cred-openai', provider: 'openai', apiKey: priorCipher },
+                ],
+            });
+            // Shape emitted by find-by-key maskApiKey: first2 + '...' + last3.
+            const incoming = v2({
+                credentials: [
+                    { id: 'cred-openai', provider: 'openai', apiKey: 'sk...def' },
+                ],
+            });
+
+            const { useCase, persisted } = buildUseCase(existing);
+            await saveByok(useCase, incoming);
+
+            expect(persisted.value.credentials[0].apiKey).toBe(priorCipher);
+            // the dotted mask literal never became ciphertext
+            expect(persisted.value.credentials[0].apiKey).not.toContain('...');
+        });
+
+        it('keeps a Bedrock aws* secret when its server dotted mask is resubmitted', async () => {
+            const bearerCipher = encrypt('ABSK-real-bearer-token-xyz');
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-bedrock',
+                        provider: BYOKProvider.AMAZON_BEDROCK,
+                        settings: { awsBearerToken: bearerCipher, awsRegion: 'us-east-1' },
+                    },
+                ],
+                models: [
+                    { id: 'model-b', credentialId: 'cred-bedrock', model: 'claude' },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-bedrock',
+                        provider: BYOKProvider.AMAZON_BEDROCK,
+                        settings: { awsBearerToken: 'AB...xyz', awsRegion: 'us-east-1' },
+                    },
+                ],
+                models: [
+                    { id: 'model-b', credentialId: 'cred-bedrock', model: 'claude' },
+                ],
+            });
+
+            const { useCase, persisted } = buildUseCase(existing);
+            await saveByok(useCase, incoming);
+
+            expect(persisted.value.credentials[0].settings.awsBearerToken).toBe(
+                bearerCipher,
+            );
+        });
+    });
+
+    // ─────────────────────────────────────────────────────────────────────
+    // S1b (HIGH, defense-in-depth): the execute() error path logged the raw
+    // `configValue` (the client's credential blob) in the error metadata. Even
+    // with S1's key redaction, the raw blob must never be handed to the logger.
+    // ─────────────────────────────────────────────────────────────────────
+    describe('error logging never carries the raw configValue (S1b)', () => {
+        it('logs only the key + org/team data, NOT configValue, when persist fails', async () => {
+            const { useCase, organizationParametersService } =
+                buildUseCase({ some: 'existing' });
+            // Force the generic (non-BYOK) persist path to throw a plain Error.
+            organizationParametersService.createOrUpdateConfig.mockRejectedValueOnce(
+                new Error('db exploded'),
+            );
+
+            const secretBlob = { apiKey: 'sk-should-never-be-logged' };
+
+            await expect(
+                useCase.execute(
+                    OrganizationParametersKey.TIMEZONE_CONFIG,
+                    secretBlob as any,
+                    orgAndTeam,
+                ),
+            ).rejects.toThrow();
+
+            const errorSpy = (useCase as any).logger.error as jest.Mock;
+            expect(errorSpy).toHaveBeenCalled();
+            const logged = errorSpy.mock.calls[0][0];
+            // configValue must be absent from the metadata …
+            expect(logged.metadata).not.toHaveProperty('configValue');
+            // … while the safe context is still logged.
+            expect(logged.metadata.organizationParametersKey).toBe(
+                OrganizationParametersKey.TIMEZONE_CONFIG,
+            );
+            expect(logged.metadata.organizationAndTeamData).toBe(orgAndTeam);
+            // The secret never reaches the logger in any form.
+            expect(JSON.stringify(logged.metadata)).not.toContain(
+                'sk-should-never-be-logged',
+            );
+        });
+    });
 });

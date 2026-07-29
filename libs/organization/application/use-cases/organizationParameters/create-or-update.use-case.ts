@@ -114,7 +114,10 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
                 error: error,
                 metadata: {
                     organizationParametersKey,
-                    configValue,
+                    // NEVER log the raw configValue: for BYOK it is the client's
+                    // credential blob (apiKey / aws* secrets). Defense-in-depth on
+                    // top of the logger's key redaction — the raw blob must not
+                    // reach the log path at all.
                     organizationAndTeamData,
                 },
             });
@@ -358,11 +361,18 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
     }
 
     /**
-     * The UI masks a stored key with the U+2022 bullet (`••••`) — a character
-     * that never appears in a real provider key. If such a value is submitted
-     * back, treat it as "unchanged" rather than encrypting the mask.
+     * A masked secret echoed back by a client must NEVER be encrypted as if it
+     * were a real key — doing so silently destroys the stored credential. Two
+     * mask shapes exist:
+     *  - the client UI mask: a run of U+2022 bullets (`••••`);
+     *  - the SERVER display mask emitted by find-by-key's maskApiKey:
+     *    `firstTwo...lastThree` (two chars + three dots + three chars, e.g.
+     *    `sk...def`) — a round-tripped read must be treated as "unchanged".
+     * Neither shape appears in a real provider key.
      */
     private isMaskedSecret(value: string): boolean {
-        return value.includes('•');
+        if (value.includes('•')) return true;
+        // Server dotted mask: exactly first2 + '...' + last3 (see maskApiKey).
+        return /^.{2}\.{3}.{3}$/.test(value);
     }
 }
