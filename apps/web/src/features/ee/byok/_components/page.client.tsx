@@ -1,56 +1,29 @@
 "use client";
 
-import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
-import { Button } from "@components/ui/button";
-import { Card, CardContent } from "@components/ui/card";
-import { magicModal } from "@components/ui/magic-modal";
 import { Page } from "@components/ui/page";
-import { toast } from "@components/ui/toaster/use-toast";
 import {
-    createOrUpdateOrganizationParameter,
-    deleteBYOK,
-    type LLMConfigStatus,
-} from "@services/organizationParameters/fetch";
-import { OrganizationParametersConfigKey } from "@services/parameters/types";
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@components/ui/tooltip";
+import { type LLMConfigStatus } from "@services/organizationParameters/fetch";
 import type { ByokModelCost } from "@services/usage/byok-cost";
+import { ExternalLinkIcon, InfoIcon } from "lucide-react";
 import {
-    ExternalLinkIcon,
-    InfoIcon,
-    LayersIcon,
-    PlusIcon,
-    ShieldCheckIcon,
-    TrashIcon,
-} from "lucide-react";
-import { useRouter } from "next/navigation";
-import { ConfirmModal } from "src/core/components/ui/confirm-modal";
-import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from "src/core/components/ui/tabs";
 
-import type { BYOKConfig } from "../_types";
-import { CuratedCatalog } from "./catalog/catalog";
-import { ConfiguredSummary } from "./configured-summary";
+import type { BYOKConfigV2 } from "../_types";
+import { hasVisibleModels } from "../_utils";
 import { ModelOverridesBanner } from "./model-overrides-banner";
-import { SpendLimitSection } from "./spend-limit-section";
-
-type SlotState = "idle" | "editing";
-
-/**
- * Providers represented in the curated catalog at
- * `_data/curated-models.json`. Configs created against any other provider
- * (Bedrock, Vertex, Novita) can't be re-rendered through the catalog UI,
- * so editing them has to skip straight to the manual wizard.
- */
-const CURATED_PROVIDERS = new Set([
-    "anthropic",
-    "openai",
-    "openai_compatible",
-    "anthropic_compatible",
-    "google_gemini",
-    "openrouter",
-]);
-
-const isEditableInCatalog = (config: BYOKConfig | undefined): boolean =>
-    !!config && CURATED_PROVIDERS.has(config.provider);
+import { BudgetTab } from "./tabs/budget-tab";
+import { ModelsTab } from "./tabs/models-tab";
+import { RoutingTab } from "./tabs/routing-tab";
 
 const providerLabel = (providerId?: string) => {
     switch (providerId) {
@@ -127,7 +100,7 @@ const EnvConfigNotice = ({ env }: { env: LLMConfigStatus["env"] }) => {
                 </dl>
 
                 <p className="text-pretty">
-                    The API key is not shown for security. Choosing a model
+                    The API key is not shown for security. Connecting a model
                     below and saving will{" "}
                     <strong className="text-text-primary font-semibold">
                         override
@@ -139,191 +112,60 @@ const EnvConfigNotice = ({ env }: { env: LLMConfigStatus["env"] }) => {
     );
 };
 
-const confirmEnvOverride = (): Promise<boolean> =>
-    new Promise((resolve) => {
-        magicModal.show(() => (
-            <ConfirmModal
-                open
-                title="Override env-based LLM configuration?"
-                description="This will replace the LLM provider currently configured in your .env. Kodus will use the key and model you just entered instead."
-                confirmText="Override env config"
-                variant="primary-dark"
-                onConfirm={() => {
-                    resolve(true);
-                    magicModal.hide();
-                }}
-                onCancel={() => {
-                    resolve(false);
-                    magicModal.hide();
-                }}
-            />
-        ));
-    });
+/**
+ * A tab trigger that, when `disabled` (first-run), shows a "Connect a model
+ * first." tooltip explaining why it's locked (D-UI-FIRSTRUN). A disabled Radix
+ * trigger swallows pointer events, so the tooltip is anchored on a wrapping
+ * span that still receives hover/focus.
+ */
+const GatedTabTrigger = ({
+    value,
+    disabled,
+    children,
+}: {
+    value: string;
+    disabled?: boolean;
+    children: React.ReactNode;
+}) => {
+    if (!disabled) {
+        return <TabsTrigger value={value}>{children}</TabsTrigger>;
+    }
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <span className="inline-flex" tabIndex={0}>
+                    <TabsTrigger value={value} disabled>
+                        {children}
+                    </TabsTrigger>
+                </span>
+            </TooltipTrigger>
+            <TooltipContent>Connect a model first.</TooltipContent>
+        </Tooltip>
+    );
+};
 
 export const ByokPageClient = ({
     config,
     llmConfigStatus,
     teamId,
-    mainCost,
-    fallbackCost,
+    costByModelId,
     periodLabel,
     costRangeQuery,
 }: {
-    config: { main: BYOKConfig; fallback: BYOKConfig } | null | undefined;
+    config: BYOKConfigV2 | null | undefined;
     llmConfigStatus: LLMConfigStatus | null;
     teamId?: string;
-    mainCost?: ByokModelCost;
-    fallbackCost?: ByokModelCost;
+    costByModelId?: Record<string, ByokModelCost>;
     periodLabel?: string;
     costRangeQuery?: string;
 }) => {
-    const router = useRouter();
-    const [mainState, setMainState] = useState<SlotState>(
-        config?.main ? "idle" : "editing",
-    );
-    const [fallbackState, setFallbackState] = useState<SlotState>("idle");
-    const [isDeletingMain, setIsDeletingMain] = useState(false);
-    const [isDeletingFallback, setIsDeletingFallback] = useState(false);
+    // First-run (D-UI-FIRSTRUN): no non-managed credential carries a model yet.
+    // Only the Models tab is interactive until the org connects its own key.
+    const firstRun = !hasVisibleModels(config);
 
-    /**
-     * The catalog UI only knows how to render configs whose provider is in
-     * CURATED_PROVIDERS. For Bedrock/Vertex/Novita configs, going through
-     * the catalog would force the user to hunt for the "Configure manually"
-     * link at the bottom every single edit — bypass it.
-     */
-    const handleEdit = (slot: "main" | "fallback") => {
-        const slotConfig = slot === "main" ? config?.main : config?.fallback;
-        if (slotConfig && !isEditableInCatalog(slotConfig)) {
-            router.push(`/organization/byok/manual?slot=${slot}`);
-            return;
-        }
-        if (slot === "main") {
-            setMainState("editing");
-        } else {
-            setFallbackState("editing");
-        }
-    };
-
-    const envIsActiveSource = llmConfigStatus?.source === "env";
-    const showEnvNotice =
-        !!llmConfigStatus?.env.configured && !config?.main;
-
-    const existingKeyByProvider: Partial<Record<string, string>> = {};
-    if (config?.main) {
-        existingKeyByProvider[config.main.provider] = config.main.apiKey;
-    }
-    if (config?.fallback) {
-        existingKeyByProvider[config.fallback.provider] = config.fallback.apiKey;
-    }
-
-    const onSaveMain = async (newConfig: BYOKConfig) => {
-        if (envIsActiveSource) {
-            const proceed = await confirmEnvOverride();
-            if (!proceed) return;
-        }
-
-        try {
-            await createOrUpdateOrganizationParameter(
-                OrganizationParametersConfigKey.BYOK_CONFIG,
-                { main: newConfig },
-            );
-            toast({ variant: "success", title: "Main model saved" });
-            setMainState("idle");
-            await revalidateServerSidePath("/organization/byok");
-        } catch {
-            toast({ variant: "danger", title: "Couldn't save main model" });
-        }
-    };
-
-    const onSaveFallback = async (newConfig: BYOKConfig) => {
-        try {
-            await createOrUpdateOrganizationParameter(
-                OrganizationParametersConfigKey.BYOK_CONFIG,
-                { fallback: newConfig },
-            );
-            toast({ variant: "success", title: "Fallback model saved" });
-            setFallbackState("idle");
-            await revalidateServerSidePath("/organization/byok");
-        } catch {
-            toast({
-                variant: "danger",
-                title: "Couldn't save fallback model",
-                description:
-                    "Configure a Main model first — fallback needs one to back up.",
-            });
-        }
-    };
-
-    const onDeleteMain = async () => {
-        const ok = await new Promise<boolean>((resolve) => {
-            magicModal.show(() => (
-                <ConfirmModal
-                    open
-                    title="Remove main model?"
-                    description="Kodus will stop using this key immediately. Any fallback model will also be cleared."
-                    confirmText="Remove"
-                    variant="primary-dark"
-                    onConfirm={() => {
-                        resolve(true);
-                        magicModal.hide();
-                    }}
-                    onCancel={() => {
-                        resolve(false);
-                        magicModal.hide();
-                    }}
-                />
-            ));
-        });
-        if (!ok) return;
-
-        setIsDeletingMain(true);
-        try {
-            await deleteBYOK({ configType: "main" });
-            toast({ variant: "success", title: "Main model removed" });
-            await revalidateServerSidePath("/organization/byok");
-        } catch {
-            toast({ variant: "danger", title: "Couldn't remove main model" });
-        } finally {
-            setIsDeletingMain(false);
-        }
-    };
-
-    const onDeleteFallback = async () => {
-        const ok = await new Promise<boolean>((resolve) => {
-            magicModal.show(() => (
-                <ConfirmModal
-                    open
-                    title="Remove fallback model?"
-                    description="Kodus will stop using this fallback immediately. Reviews will rely solely on your main model."
-                    confirmText="Remove"
-                    variant="primary-dark"
-                    onConfirm={() => {
-                        resolve(true);
-                        magicModal.hide();
-                    }}
-                    onCancel={() => {
-                        resolve(false);
-                        magicModal.hide();
-                    }}
-                />
-            ));
-        });
-        if (!ok) return;
-
-        setIsDeletingFallback(true);
-        try {
-            await deleteBYOK({ configType: "fallback" });
-            toast({ variant: "success", title: "Fallback model removed" });
-            await revalidateServerSidePath("/organization/byok");
-        } catch {
-            toast({
-                variant: "danger",
-                title: "Couldn't remove fallback model",
-            });
-        } finally {
-            setIsDeletingFallback(false);
-        }
-    };
+    // Nag about an env-based LLM only when no BYOK model is configured at all.
+    const showEnvNotice = !!llmConfigStatus?.env.configured && firstRun;
 
     return (
         <Page.Root>
@@ -356,132 +198,42 @@ export const ByokPageClient = ({
 
                 <ModelOverridesBanner teamId={teamId} />
 
-                <section className="flex flex-col gap-3">
-                    <SlotHeader
-                        icon={<ShieldCheckIcon size={16} />}
-                        title="Main model"
-                        description="Used for every review."
-                    />
+                <Tabs defaultValue="models">
+                    <TooltipProvider>
+                        <TabsList>
+                            <TabsTrigger value="models">Models</TabsTrigger>
+                            <GatedTabTrigger value="routing" disabled={firstRun}>
+                                Routing
+                            </GatedTabTrigger>
+                            <GatedTabTrigger value="budget" disabled={firstRun}>
+                                Budget & alerts
+                            </GatedTabTrigger>
+                        </TabsList>
+                    </TooltipProvider>
 
-                    {mainState === "idle" && config?.main ? (
-                        <ConfiguredSummary
-                            config={config.main}
-                            cost={mainCost}
+                    <TabsContent value="models">
+                        <ModelsTab
+                            config={config}
+                            costByModelId={costByModelId}
+                            teamId={teamId}
                             periodLabel={periodLabel}
                             costRangeQuery={costRangeQuery}
-                            isDeleting={isDeletingMain}
-                            onChange={() => handleEdit("main")}
-                            onDelete={onDeleteMain}
+                            llmConfigStatus={llmConfigStatus}
                         />
-                    ) : (
-                        <CuratedCatalog
-                            slot="main"
-                            existingConfig={config?.main}
-                            existingKeyByProvider={existingKeyByProvider}
-                            onSave={onSaveMain}
-                            onCancel={
-                                config?.main
-                                    ? () => setMainState("idle")
-                                    : undefined
-                            }
+                    </TabsContent>
+
+                    <TabsContent value="routing">
+                        <RoutingTab
+                            config={config}
+                            llmConfigStatus={llmConfigStatus}
                         />
-                    )}
-                </section>
+                    </TabsContent>
 
-                {config?.main && (
-                    <section className="flex flex-col gap-3">
-                        <SlotHeader
-                            icon={<LayersIcon size={16} />}
-                            title="Fallback model"
-                            description="Optional. Used if the main model fails."
-                        />
-
-                        {fallbackState === "idle" && config?.fallback ? (
-                            <ConfiguredSummary
-                                config={config.fallback}
-                                cost={fallbackCost}
-                                periodLabel={periodLabel}
-                                costRangeQuery={costRangeQuery}
-                                isDeleting={isDeletingFallback}
-                                onChange={() => handleEdit("fallback")}
-                                onDelete={onDeleteFallback}
-                            />
-                        ) : fallbackState === "idle" ? (
-                            <EmptyFallback
-                                onAdd={() => setFallbackState("editing")}
-                            />
-                        ) : (
-                            <CuratedCatalog
-                                slot="fallback"
-                                existingConfig={config?.fallback}
-                                existingKeyByProvider={existingKeyByProvider}
-                                onSave={onSaveFallback}
-                                onCancel={() => setFallbackState("idle")}
-                            />
-                        )}
-
-                        {config?.fallback && fallbackState === "idle" && (
-                            <Button
-                                type="button"
-                                size="xs"
-                                variant="cancel"
-                                className="text-danger self-start [--button-foreground:var(--color-danger)]"
-                                leftIcon={<TrashIcon />}
-                                loading={isDeletingFallback}
-                                onClick={onDeleteFallback}>
-                                Remove fallback
-                            </Button>
-                        )}
-                    </section>
-                )}
-
-                {config?.main && <SpendLimitSection teamId={teamId} />}
+                    <TabsContent value="budget">
+                        <BudgetTab config={config} teamId={teamId} />
+                    </TabsContent>
+                </Tabs>
             </Page.Content>
         </Page.Root>
     );
 };
-
-function SlotHeader({
-    icon,
-    title,
-    description,
-}: {
-    icon: React.ReactNode;
-    title: string;
-    description: string;
-}) {
-    return (
-        <div className="flex items-center gap-2">
-            <span className="text-text-secondary">{icon}</span>
-            <div className="flex flex-col">
-                <h3 className="text-text-primary text-sm font-semibold text-balance">
-                    {title}
-                </h3>
-                <p className="text-text-tertiary text-xs text-pretty">
-                    {description}
-                </p>
-            </div>
-        </div>
-    );
-}
-
-function EmptyFallback({ onAdd }: { onAdd: () => void }) {
-    return (
-        <Card color="lv1" className="border-card-lv2 border-dashed">
-            <CardContent className="flex items-center justify-between gap-4 py-4">
-                <p className="text-text-secondary text-sm text-pretty">
-                    Add a fallback so reviews keep running if your main model
-                    is rate-limited or down.
-                </p>
-                <Button
-                    type="button"
-                    size="sm"
-                    variant="helper"
-                    leftIcon={<PlusIcon />}
-                    onClick={onAdd}>
-                    Add fallback
-                </Button>
-            </CardContent>
-        </Card>
-    );
-}

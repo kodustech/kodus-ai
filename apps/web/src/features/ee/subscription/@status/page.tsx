@@ -1,6 +1,7 @@
 import { authorizedFetch } from "@services/fetch";
 import { getBYOK } from "@services/organizationParameters/fetch";
 import { SETUP_PATHS } from "@services/setup";
+import { hasVisibleModels } from "src/features/ee/byok/_utils";
 import type { TeamMembersResponse } from "@services/setup/types";
 import { auth } from "src/core/config/auth";
 import { publicDomainsSet } from "src/core/utils/email";
@@ -33,7 +34,9 @@ export default async function SubscriptionStatus() {
     // BYOK config lives in the API (org parameters), not in billing — so the
     // billing license never knows a key was connected. Detect it here and use
     // it both as a recalc signal and as the source of truth for `byok`.
-    const hasByok = Boolean(byokConfig?.main);
+    // v2-native presence check: `byokConfig.main` no longer exists (post-04b the
+    // stored blob is the v2 shape), so we test for a connected non-managed model.
+    const hasByok = hasVisibleModels(byokConfig);
 
     const codeHostMembersCount = Array.isArray(organizationMembers)
         ? organizationMembers.length

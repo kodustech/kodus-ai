@@ -8,6 +8,51 @@ import {
 import { hasPermission } from "src/core/utils/permission-map";
 
 import type { OrganizationLicense } from "../subscription/_services/billing/types";
+import type {
+    BYOKConfigV2,
+    BYOKCredential,
+    BYOKModelConfig,
+} from "./_types";
+
+/** Narrow an unknown blob to the v2 shape by its `version` discriminant. */
+const isV2Config = (
+    config: BYOKConfigV2 | null | undefined,
+): config is BYOKConfigV2 =>
+    !!config &&
+    typeof config === "object" &&
+    (config as { version?: unknown }).version === 2;
+
+/**
+ * Group the v2 config's models by NON-managed credential. Returns one group per
+ * real (BYOK) credential — `{ credential, models }` where `models` are the
+ * config.models[] whose `credentialId` matches. Managed credentials (env
+ * defaults) produce NO group and their models are excluded (RFC §4.5 /
+ * UI-SPEC "Managed credential: never rendered"). A null/undefined/non-v2 blob
+ * yields []. An absent routing block is tolerated.
+ */
+export const groupModelsByProvider = (
+    config: BYOKConfigV2 | null | undefined,
+): { credential: BYOKCredential; models: BYOKModelConfig[] }[] => {
+    if (!isV2Config(config)) return [];
+    const models = config.models ?? [];
+    return config.credentials
+        .filter((c) => !c.managed)
+        .map((credential) => ({
+            credential,
+            models: models.filter((m) => m.credentialId === credential.id),
+        }));
+};
+
+/**
+ * First-run check: true when the org has ≥1 NON-managed credential carrying at
+ * least one model. The v2-native replacement for the legacy
+ * `Boolean(byokConfig?.main)` presence check. False for null/undefined, a
+ * non-v2 blob, a managed-only config, or a non-managed credential with no model.
+ */
+export const hasVisibleModels = (
+    config: BYOKConfigV2 | null | undefined,
+): boolean =>
+    groupModelsByProvider(config).some((group) => group.models.length > 0);
 
 export const isBYOKSubscriptionPlan = (license: OrganizationLicense) => {
     if (

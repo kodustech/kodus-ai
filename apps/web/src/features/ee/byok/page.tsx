@@ -2,7 +2,10 @@ import {
     getBYOK,
     getLLMConfigStatus,
 } from "@services/organizationParameters/fetch";
-import { resolveByokModelCost } from "@services/usage/byok-cost";
+import {
+    resolveByokModelCost,
+    type ByokModelCost,
+} from "@services/usage/byok-cost";
 import { getSummaryTokenUsage } from "@services/usage/fetch";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
 import { getSelectedDateRange } from "src/features/ee/cockpit/_helpers/get-selected-date-range";
@@ -34,14 +37,15 @@ export default async function ByokPage() {
         byok: isBYOK,
     }).catch(() => null);
 
-    const mainCost = resolveByokModelCost(
-        byokConfig?.main?.model,
-        summary?.byModel,
-    );
-    const fallbackCost = resolveByokModelCost(
-        byokConfig?.fallback?.model,
-        summary?.byModel,
-    );
+    // Per-model cost keyed by BYOKModelConfig.id — the v2 replacement for the
+    // removed main/fallback cost pair. Resolved per models[].model.
+    const costByModelId: Record<string, ByokModelCost> = {};
+    for (const model of byokConfig?.models ?? []) {
+        costByModelId[model.id] = resolveByokModelCost(
+            model.model,
+            summary?.byModel,
+        );
+    }
 
     // Human label for the window the cost covers (same range as Costs screen).
     const periodDays = Math.max(
@@ -65,8 +69,7 @@ export default async function ByokPage() {
             config={byokConfig}
             llmConfigStatus={llmConfigStatus}
             teamId={teamId ?? undefined}
-            mainCost={mainCost}
-            fallbackCost={fallbackCost}
+            costByModelId={costByModelId}
             periodLabel={periodLabel}
             costRangeQuery={costRangeQuery}
         />

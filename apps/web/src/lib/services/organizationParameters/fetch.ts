@@ -5,7 +5,7 @@ import {
     type OrganizationParametersAutoAssignConfig,
 } from "@services/parameters/types";
 import { axiosAuthorized } from "src/core/utils/axios";
-import type { BYOKConfig } from "src/features/ee/byok/_types";
+import type { BYOKConfigV2 } from "src/features/ee/byok/_types";
 
 import { ORGANIZATION_PARAMETERS_PATHS } from ".";
 
@@ -22,9 +22,11 @@ export const createOrUpdateOrganizationParameter = async (
     );
 };
 
-export const getBYOK = async () => {
+export const getBYOK = async (): Promise<BYOKConfigV2 | undefined> => {
+    // find-by-key returns the RAW v2 blob run through maskV2ConfigSecrets, so
+    // every secret is already `••••` — no new endpoint is needed (open item #5).
     const byokConfig = await getOrganizationParameterByKey<{
-        configValue: { main: BYOKConfig; fallback: BYOKConfig };
+        configValue: BYOKConfigV2;
     }>(
         {
             key: OrganizationParametersConfigKey.BYOK_CONFIG,
@@ -47,9 +49,9 @@ export const getAutoLicenseAssignmentConfig = async () => {
     return config?.configValue;
 };
 
-export const deleteBYOK = async (params: {
-    configType: "main" | "fallback";
-}) => {
+export const deleteBYOK = async (params: { modelId: string }) => {
+    // v2 delete targets a single model slot by id (DELETE
+    // /delete-byok-config?modelId=), replacing the legacy { configType }.
     return await axiosAuthorized.deleted<any>(
         ORGANIZATION_PARAMETERS_PATHS.DELETE_BYOK,
         { params },

@@ -1,6 +1,9 @@
 import { UserRole } from "@enums";
 import { Action, ResourceType } from "@services/permissions/types";
 
+import type { BYOKConfigV2 } from "./_types";
+import { groupModelsByProvider, hasVisibleModels } from "./_utils";
+
 describe("BYOK topbar visibility", () => {
     const activeBYOKLicense = {
         subscriptionStatus: "active",
@@ -192,5 +195,84 @@ describe("BYOK topbar visibility", () => {
                 } as any),
             ).toBe(false);
         }
+    });
+});
+
+/** A v2 config: 2 models on 1 non-managed credential + 1 model on a managed one. */
+const configWithManaged: BYOKConfigV2 = {
+    version: 2,
+    credentials: [
+        { id: "cred-byok", provider: "openai", apiKey: "sk-••••1234" },
+        { id: "cred-managed", provider: "google_gemini", managed: true },
+    ],
+    models: [
+        { id: "m1", credentialId: "cred-byok", model: "gpt-4o" },
+        { id: "m2", credentialId: "cred-byok", model: "gpt-4o-mini" },
+        { id: "m3", credentialId: "cred-managed", model: "gemini-2.5-flash" },
+    ],
+};
+
+describe("groupModelsByProvider", () => {
+    it("returns one group per NON-managed credential with only that credential's models", () => {
+        const groups = groupModelsByProvider(configWithManaged);
+
+        // The managed credential produces NO group.
+        expect(groups).toHaveLength(1);
+        expect(groups[0].credential.id).toBe("cred-byok");
+
+        // Only the 2 models on the non-managed credential are visible; the
+        // model on the managed credential is excluded.
+        expect(groups[0].models.map((m) => m.id)).toEqual(["m1", "m2"]);
+    });
+
+    it("returns [] for null / undefined / a non-v2 blob", () => {
+        expect(groupModelsByProvider(null)).toEqual([]);
+        expect(groupModelsByProvider(undefined)).toEqual([]);
+        // legacy { main, fallback } blob is not v2 → no groups.
+        expect(
+            groupModelsByProvider({ main: {}, fallback: {} } as never),
+        ).toEqual([]);
+    });
+
+    it("tolerates an absent routing block without throwing", () => {
+        const noRouting: BYOKConfigV2 = {
+            version: 2,
+            credentials: [{ id: "c", provider: "openai", apiKey: "sk-••••" }],
+            models: [{ id: "m", credentialId: "c", model: "gpt-4o" }],
+        };
+        expect(() => groupModelsByProvider(noRouting)).not.toThrow();
+        expect(groupModelsByProvider(noRouting)[0].models).toHaveLength(1);
+    });
+});
+
+describe("hasVisibleModels (first-run check)", () => {
+    it("is false for null / undefined / a non-v2 blob", () => {
+        expect(hasVisibleModels(null)).toBe(false);
+        expect(hasVisibleModels(undefined)).toBe(false);
+        expect(hasVisibleModels({ main: {} } as never)).toBe(false);
+    });
+
+    it("is false when the only credential is managed", () => {
+        const managedOnly: BYOKConfigV2 = {
+            version: 2,
+            credentials: [
+                { id: "cm", provider: "google_gemini", managed: true },
+            ],
+            models: [{ id: "m", credentialId: "cm", model: "gemini-2.5-flash" }],
+        };
+        expect(hasVisibleModels(managedOnly)).toBe(false);
+    });
+
+    it("is false when a non-managed credential has no model yet", () => {
+        const noModels: BYOKConfigV2 = {
+            version: 2,
+            credentials: [{ id: "c", provider: "openai", apiKey: "sk-••••" }],
+            models: [],
+        };
+        expect(hasVisibleModels(noModels)).toBe(false);
+    });
+
+    it("is true when ≥1 non-managed credential has a model", () => {
+        expect(hasVisibleModels(configWithManaged)).toBe(true);
     });
 });
