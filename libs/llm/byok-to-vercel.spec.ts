@@ -47,6 +47,23 @@ jest.mock('@ai-sdk/google', () => ({
         jest.fn((modelId: string) => ({ sdk: 'google', modelId, settings })),
     ),
 }));
+// O3: the reliability limiter emits a lightweight structured signal through the
+// repo's createLogger. Mock it so a spy can assert the throttle/cooldown/
+// queue-timeout signals fire with {provider, model, reason, waitMs} and NEVER a
+// key. `mock`-prefixed so jest's hoist allows the factory to reference it.
+const mockLoggerRecord = jest.fn();
+jest.mock('@libs/core/log/logger', () => ({
+    // Defer the spy reference so the factory (run at module-load, before the
+    // `const mockLoggerRecord` initializes) doesn't hit its TDZ. Each method
+    // forwards lazily at call time (test runtime), when the spy exists.
+    createLogger: () => ({
+        log: (...a: unknown[]) => mockLoggerRecord(...a),
+        debug: (...a: unknown[]) => mockLoggerRecord(...a),
+        info: (...a: unknown[]) => mockLoggerRecord(...a),
+        warn: (...a: unknown[]) => mockLoggerRecord(...a),
+        error: (...a: unknown[]) => mockLoggerRecord(...a),
+    }),
+}));
 
 import { createVertex } from '@ai-sdk/google-vertex';
 import { createVertexAnthropic } from '@ai-sdk/google-vertex/anthropic';
@@ -57,6 +74,7 @@ import {
     getModelName,
     runWithBYOKLimiter,
     getLimiterForSlot,
+    __limiterCacheInternals,
 } from './byok-to-vercel';
 
 const createVertexMock = createVertex as unknown as jest.Mock;
@@ -674,6 +692,242 @@ describe('runWithBYOKLimiter — fast path (no rpm + no concurrency)', () => {
         // microtask, so synchronous invocation proves NO limiter was entered.
         expect(calledSync).toBe(true);
         await expect(p).resolves.toBe('R');
+    });
+});
+
+// tpm-carrying slot for reservoir tests. Unique apiKey → unique limiter.
+function tpmSlot(
+    apiKey: string,
+    opts: {
+        tpm?: number;
+        rpm?: number;
+        maxConcurrentRequests?: number;
+    } = {},
+): NormalizedModel {
+    return {
+        provider: BYOKProvider.OPENAI,
+        apiKey,
+        model: 'gpt-4o',
+        ...opts,
+    } as NormalizedModel;
+}
+
+// ─── P1: tpm reservoir credits back FAILED calls (fake timers) ────────────────
+// The admission gate debits the full pre-call estimate. On the success path
+// reconcileReservoir corrects estimate→actual; on the FAILURE path the estimate
+// must be credited back (a 429/timeout/network failure consumed ~0 tokens).
+// Without the credit-back a provider outage of N failing calls permanently
+// drains the reservoir and over-throttles the recovery.
+describe('runWithBYOKLimiter — tpm reservoir credit-back on failure (P1)', () => {
+    beforeEach(() => {
+        jest.useFakeTimers({ now: 0 });
+        __limiterCacheInternals.cache.clear();
+    });
+    afterEach(() => {
+        jest.clearAllTimers();
+        jest.useRealTimers();
+    });
+
+    it('failed calls credit their estimate back — an outage does not drain the reservoir', async () => {
+        // capacity 1000, seeded FULL; each call estimated at 400 tokens.
+        const slot = tpmSlot('cipher-tpm-fail', { tpm: 1000 });
+        const started: number[] = [];
+        const failing = () => {
+            started.push(Date.now());
+            return Promise.reject(new Error('429 upstream outage'));
+        };
+
+        for (let i = 0; i < 3; i++) {
+            runWithBYOKLimiter(
+                { slot, estimatedTokens: 400 },
+                failing,
+            ).catch(() => undefined);
+        }
+        await flushMicrotasks();
+
+        // With credit-back, each failure returns 400 to the reservoir, so all
+        // three admit (the 3rd only after the first failure credits back). WITHOUT
+        // the fix the reservoir sticks at 200 after two debits and the 3rd stalls.
+        expect(started.length).toBe(3);
+
+        // A 4th call must NOT be throttled — the reservoir was restored.
+        let fourthStarted = false;
+        runWithBYOKLimiter({ slot, estimatedTokens: 400 }, () => {
+            fourthStarted = true;
+            return Promise.resolve('ok');
+        }).catch(() => undefined);
+        await flushMicrotasks();
+        expect(fourthStarted).toBe(true);
+    });
+
+    it('a SUCCESSFUL call still reconciles estimate→actual (credit-back does not double count)', async () => {
+        // Regression guard: the reject-path credit must not also run on success.
+        const slot = tpmSlot('cipher-tpm-ok', { tpm: 1000 });
+        const started: number[] = [];
+        // estimate 400, actual 400 → net debit 400 each; two calls leave 200,
+        // so a third (est 400) is throttled until refill (reservoir gates it).
+        const ok = () => {
+            started.push(Date.now());
+            return Promise.resolve({ tokens: 400 });
+        };
+        const getUsageTokens = (r: { tokens: number }) => r.tokens;
+
+        for (let i = 0; i < 2; i++) {
+            void runWithBYOKLimiter(
+                { slot, estimatedTokens: 400, getUsageTokens },
+                ok,
+            );
+        }
+        await flushMicrotasks();
+        expect(started.length).toBe(2); // 1000 → 600 → 200
+
+        void runWithBYOKLimiter(
+            { slot, estimatedTokens: 400, getUsageTokens },
+            ok,
+        );
+        await flushMicrotasks();
+        // reservoir at 200 < 400 → the 3rd is throttled (NOT credited back like a
+        // failure would be); it only starts after enough refill time.
+        expect(started.length).toBe(2);
+    });
+});
+
+// ─── P2: bounded limiter cache (real timers) ─────────────────────────────────
+describe('runWithBYOKLimiter — bounded limiter cache (P2)', () => {
+    const { cache, max } = __limiterCacheInternals;
+
+    afterEach(() => {
+        cache.clear();
+    });
+
+    it('rotating the apiKey past the cap does not grow the cache unbounded', async () => {
+        cache.clear();
+        for (let i = 0; i < max + 50; i++) {
+            const slot = tpmSlot(`rot-key-${i}`, { maxConcurrentRequests: 1 });
+            // each call completes → limiter becomes idle → evictable.
+            await runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
+        }
+        expect(cache.size).toBeLessThanOrEqual(max);
+    });
+
+    it('never evicts an active (in-flight) limiter', async () => {
+        cache.clear();
+        const blocked = deferred<string>();
+        const activeSlot = tpmSlot('active-key', { maxConcurrentRequests: 1 });
+
+        // Start a task that never resolves → activeCount stays 1 (not idle).
+        runWithBYOKLimiter({ slot: activeSlot }, () => blocked.promise).catch(
+            () => undefined,
+        );
+
+        // Rotate many idle keys past the cap.
+        for (let i = 0; i < max + 50; i++) {
+            const slot = tpmSlot(`idle-${i}`, { maxConcurrentRequests: 1 });
+            await runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
+        }
+
+        // The active limiter must survive eviction.
+        expect(getLimiterForSlot({ slot: activeSlot })).not.toBeNull();
+        expect(cache.size).toBeLessThanOrEqual(max);
+
+        blocked.resolve('done');
+    });
+});
+
+// ─── O3: observability signals (fake timers, logger spy) ─────────────────────
+describe('runWithBYOKLimiter — observability signals (O3)', () => {
+    beforeEach(() => {
+        jest.useFakeTimers({ now: 0 });
+        __limiterCacheInternals.cache.clear();
+        mockLoggerRecord.mockClear();
+    });
+    afterEach(() => {
+        jest.clearAllTimers();
+        jest.useRealTimers();
+    });
+
+    const signals = () =>
+        mockLoggerRecord.mock.calls.map((c) => c[0]?.metadata?.reason);
+
+    it('emits an rpm-throttle signal with {provider, model, reason, waitMs}', async () => {
+        const slot = rateSlot('cipher-o3-rpm', { rpm: 60 });
+        void runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
+        void runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
+        await flushMicrotasks();
+
+        expect(signals()).toContain('rpm-throttle');
+        const call = mockLoggerRecord.mock.calls.find(
+            (c) => c[0]?.metadata?.reason === 'rpm-throttle',
+        );
+        expect(call![0].metadata).toEqual(
+            expect.objectContaining({
+                provider: BYOKProvider.OPENAI,
+                model: 'gpt-4o',
+                reason: 'rpm-throttle',
+                waitMs: expect.any(Number),
+            }),
+        );
+    });
+
+    it('emits a tpm-throttle signal when the reservoir cannot admit the head', async () => {
+        const slot = tpmSlot('cipher-o3-tpm', { tpm: 1000 });
+        // Two 600-token calls: first admits (1000→400), second needs 600 > 400.
+        void runWithBYOKLimiter({ slot, estimatedTokens: 600 }, () =>
+            Promise.resolve('ok'),
+        );
+        void runWithBYOKLimiter({ slot, estimatedTokens: 600 }, () =>
+            Promise.resolve('ok'),
+        );
+        await flushMicrotasks();
+        expect(signals()).toContain('tpm-throttle');
+    });
+
+    it('emits a cooldown-arm signal when armCooldown fires', async () => {
+        const slot = cooldownSlot('cipher-o3-cd', { cooldownMs: 1000 });
+        void runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
+        await flushMicrotasks();
+        mockLoggerRecord.mockClear();
+
+        getLimiterForSlot({ slot })!.armCooldown(1000);
+        expect(signals()).toContain('cooldown-arm');
+        const call = mockLoggerRecord.mock.calls.find(
+            (c) => c[0]?.metadata?.reason === 'cooldown-arm',
+        );
+        expect(call![0].metadata.waitMs).toBe(1000);
+    });
+
+    it('emits a queue-timeout signal when a task times out waiting for a slot', async () => {
+        const slot = tpmSlot('cipher-o3-qt', { maxConcurrentRequests: 1 });
+        const blocked = deferred<string>();
+        // First call holds the single slot.
+        void runWithBYOKLimiter({ slot }, () => blocked.promise);
+        await flushMicrotasks();
+        // Second call waits with a 1000ms queue timeout.
+        runWithBYOKLimiter(
+            { slot, queueTimeoutMs: 1000 },
+            () => Promise.resolve('never'),
+        ).catch(() => undefined);
+        await flushMicrotasks();
+
+        jest.advanceTimersByTime(1000);
+        await flushMicrotasks();
+
+        expect(signals()).toContain('queue-timeout');
+        blocked.resolve('done');
+    });
+
+    it('never emits key material in any observability signal', async () => {
+        const secret = 'cipher-o3-secret-must-not-log';
+        const slot = tpmSlot(secret, { rpm: 60, cooldownMs: 1000 });
+        void runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
+        void runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
+        await flushMicrotasks();
+        getLimiterForSlot({ slot })!.armCooldown(1000);
+        await flushMicrotasks();
+
+        for (const call of mockLoggerRecord.mock.calls) {
+            expect(JSON.stringify(call)).not.toContain(secret);
+        }
     });
 });
 

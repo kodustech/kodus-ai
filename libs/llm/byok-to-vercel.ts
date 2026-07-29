@@ -13,6 +13,7 @@ import { BYOKProvider } from '@kodus/kodus-common/llm';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { decrypt } from '@libs/common/utils/crypto';
 import { vertexModelFromSaJson } from '@libs/llm/model-builders';
+import { createLogger } from '@libs/core/log/logger';
 // Provider registry (Phase 1): every BYOK provider resolves through REGISTRY.
 // Importing the barrel registers all provider modules via side effect. The
 // self-hosted / trial default-model paths below are NOT BYOK ids and still
@@ -411,6 +412,13 @@ type QueuedTask<T> = {
 
 const DEFAULT_LIMITER_QUEUE_TIMEOUT_MS = 0;
 
+// O3: lightweight, low-cardinality observability for the reliability limiter so
+// throttle/cooldown/queue-timeout are visible (not silently indistinguishable
+// from latency). Uses the repo's canonical createLogger — NO dependency on
+// observability.service.ts. Signals carry {provider, model, reason, waitMs}
+// ONLY — never a key or ciphertext.
+const limiterLogger = createLogger('BYOKConcurrencyLimiter');
+
 export class BYOKConcurrencyLimiter {
     private readonly queue: Array<QueuedTask<unknown>> = [];
     private activeCount = 0;
@@ -446,10 +454,42 @@ export class BYOKConcurrencyLimiter {
     private cooldownUntil = 0;
     private cooldownTimer?: ReturnType<typeof setTimeout>;
 
-    constructor(concurrency: number, rpm?: number, tpm?: number) {
+    // O3: low-cardinality identity for observability signals. NOT secret
+    // (provider enum + model id); the ciphertext apiKey is NEVER stored here.
+    private readonly provider: string;
+    private readonly model: string;
+
+    constructor(
+        concurrency: number,
+        rpm?: number,
+        tpm?: number,
+        provider = 'unknown',
+        model = 'unknown',
+    ) {
         this.concurrency = concurrency;
+        this.provider = provider;
+        this.model = model;
         this.setRpm(rpm);
         this.setTpm(tpm);
+    }
+
+    /**
+     * O3: emit a lightweight structured throttle/cooldown/queue signal. Fields
+     * are provider + model + reason + waitMs ONLY — never a key or ciphertext.
+     * A debug log is intentionally cheap; it makes the reliability gates
+     * observable without a dependency on observability.service.ts.
+     */
+    private emitThrottleSignal(reason: string, waitMs: number): void {
+        limiterLogger.debug({
+            message: `[BYOK-LIMITER] ${reason}`,
+            context: 'BYOKConcurrencyLimiter',
+            metadata: {
+                provider: this.provider,
+                model: this.model,
+                reason,
+                waitMs: Math.max(0, Math.round(waitMs)),
+            },
+        });
     }
 
     /** Current concurrency ceiling (read by runWithBYOKLimiter for cache reuse). */
@@ -475,6 +515,23 @@ export class BYOKConcurrencyLimiter {
             this.cooldownTimer = undefined;
             this.drain();
         }, this.cooldownUntil - Date.now());
+        this.emitThrottleSignal('cooldown-arm', ms);
+    }
+
+    /**
+     * P2: true when this limiter has NO queued or in-flight work and NO pending
+     * rate/reservoir/cooldown timer — i.e. it is safe to evict from the module
+     * limiter cache. A limiter with live work or a scheduled re-drain is NEVER
+     * idle (evicting it would drop its queue/timers and stall those tasks).
+     */
+    isIdle(): boolean {
+        return (
+            this.queue.length === 0 &&
+            this.activeCount === 0 &&
+            !this.rateTimer &&
+            !this.tpmTimer &&
+            !this.cooldownTimer
+        );
     }
 
     /** True while the cooldown window is still in the future. The retry owner
@@ -667,6 +724,7 @@ export class BYOKConcurrencyLimiter {
                     if (index >= 0) {
                         this.queue.splice(index, 1);
                     }
+                    this.emitThrottleSignal('queue-timeout', queueTimeoutMs);
                     reject(
                         new Error(
                             `[BYOK-QUEUE-TIMEOUT] ${label} waited more than ${Math.round(
@@ -717,6 +775,10 @@ export class BYOKConcurrencyLimiter {
                             this.rateTimer = undefined;
                             this.drain();
                         }, this.minInterval - elapsed);
+                        this.emitThrottleSignal(
+                            'rpm-throttle',
+                            this.minInterval - elapsed,
+                        );
                     }
                     return;
                 }
@@ -735,10 +797,12 @@ export class BYOKConcurrencyLimiter {
                 !this.tryDebitReservoir(estimate)
             ) {
                 if (!this.tpmTimer) {
+                    const waitMs = this.reservoirDelayMs(estimate);
                     this.tpmTimer = setTimeout(() => {
                         this.tpmTimer = undefined;
                         this.drain();
-                    }, this.reservoirDelayMs(estimate));
+                    }, waitMs);
+                    this.emitThrottleSignal('tpm-throttle', waitMs);
                 }
                 return;
             }
@@ -776,7 +840,26 @@ export class BYOKConcurrencyLimiter {
                         }
                         task.resolve(value);
                     },
-                    (error) => task.reject(error),
+                    (error) => {
+                        // P1: the admission gate already DEBITED the full pre-call
+                        // estimate, but a FAILED call (429 / timeout / network)
+                        // consumed ~0 tokens. Credit the un-consumed estimate back
+                        // before rejecting — mirroring the success-path reconcile
+                        // guard — so a provider outage of N failing calls does not
+                        // permanently drain the reservoir and over-throttle the
+                        // recovery. (reconcile(estimate, 0) credits the full
+                        // estimate back, capped at capacity.)
+                        if (
+                            this.tpmCapacity > 0 &&
+                            (task.estimatedTokens ?? 0) > 0
+                        ) {
+                            this.reconcileReservoir(
+                                task.estimatedTokens as number,
+                                0,
+                            );
+                        }
+                        task.reject(error);
+                    },
                 )
                 .finally(() => {
                     this.activeCount = Math.max(0, this.activeCount - 1);
@@ -787,6 +870,31 @@ export class BYOKConcurrencyLimiter {
 }
 
 const limiterCache = new Map<string, BYOKConcurrencyLimiter>();
+
+// P2: the limiter cache is keyed on the (ciphertext) apiKey, so an API-key
+// rotation for the same org/model mints a NEW cache entry and orphans the old
+// limiter (its queue array + any pending rate/reservoir/cooldown timer) forever.
+// Bound the cache: when it exceeds this cap, evict IDLE limiters LRU-style
+// (least-recently-used first). A limiter with queued or in-flight work, or a
+// pending timer, is NEVER evicted.
+const LIMITER_CACHE_MAX = 500;
+
+/**
+ * P2: evict IDLE limiters when the cache exceeds its cap. The Map iterates in
+ * insertion order and `runWithBYOKLimiter` re-inserts on reuse, so the least-
+ * recently-used entries come first (LRU). Only IDLE limiters (empty queue, no
+ * in-flight work, no pending rate/reservoir/cooldown timer) are removed — an
+ * active or throttled limiter is skipped so its queue/timers are never dropped.
+ */
+function evictIdleLimiters(): void {
+    if (limiterCache.size <= LIMITER_CACHE_MAX) return;
+    for (const [key, limiter] of limiterCache) {
+        if (limiterCache.size <= LIMITER_CACHE_MAX) break;
+        if (limiter.isIdle()) {
+            limiterCache.delete(key);
+        }
+    }
+}
 
 function buildLimiterCacheKey(params: {
     slot?: NormalizedModel;
@@ -881,9 +989,22 @@ export function runWithBYOKLimiter<T>(
         params.queueTimeoutMs ?? DEFAULT_LIMITER_QUEUE_TIMEOUT_MS;
     let limiter = limiterCache.get(cacheKey);
     if (!limiter) {
-        limiter = new BYOKConcurrencyLimiter(concurrency, rpm, tpm);
+        limiter = new BYOKConcurrencyLimiter(
+            concurrency,
+            rpm,
+            tpm,
+            params.slot?.provider,
+            params.slot?.model,
+        );
         limiterCache.set(cacheKey, limiter);
+        // P2: bound the cache after inserting a new (rotated-key) limiter.
+        evictIdleLimiters();
     } else {
+        // LRU touch: move the reused limiter to the most-recently-used end so
+        // eviction targets genuinely stale entries first (P2). delete+set
+        // re-inserts at the tail of the Map's insertion order.
+        limiterCache.delete(cacheKey);
+        limiterCache.set(cacheKey, limiter);
         // Re-tune the cached limiter (identity fields unchanged) instead of
         // constructing a new one that would discard in-flight queue/rate/token
         // state (Pitfall 4). A config edit re-tunes; it never resets the throttle
@@ -1052,4 +1173,13 @@ export const __structuredFallbackInternals = {
     cache: noJsonSchemaCache,
     isJsonSchemaUnsupportedError,
     cacheKey: structuredFallbackCacheKey,
+};
+
+// Internal — exported for the bounded-cache tests (P2). Exposes the module
+// limiter cache and its cap so a test can rotate keys past the cap and assert
+// the Map does not grow unbounded. Never surfaces key material beyond the
+// opaque ciphertext already inside the cache keys.
+export const __limiterCacheInternals = {
+    cache: limiterCache,
+    max: LIMITER_CACHE_MAX,
 };
