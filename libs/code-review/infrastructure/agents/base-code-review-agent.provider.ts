@@ -499,7 +499,7 @@ export interface ReviewAgentInput {
      */
     adaptiveProfile?: AdaptiveProfile;
     /** Categories allowed for this run when using a mixed/generalist reviewer. */
-    requestedCategories?: Array<'bug' | 'security' | 'performance'>;
+    requestedCategories?: Array<'bug' | 'security' | 'performance' | 'business_logic' | 'duplicate_logic'>;
     /** Parent (job-level) AbortSignal. Forwarded to runAgentLoop so the
      *  outer router timeout cancels the LLM call instead of leaving it
      *  running ghost in the background. */
@@ -1801,6 +1801,8 @@ export abstract class BaseCodeReviewAgentProvider {
             ? `\n  <Language>Write ALL review comments, summaries, and reasoning in ${langLabel}. This is mandatory — do not fall back to English.</Language>`
             : '';
 
+        const workflowSection = this.getWorkflowPrompt();
+
         return `<CodeReviewAgent>
   <Date>${new Date().toLocaleDateString('en-GB')}</Date>
   <Role>
@@ -1815,7 +1817,30 @@ export abstract class BaseCodeReviewAgentProvider {
     High-recall mode: if the visible code gives you concrete, code-backed suspicion of a defect, emit the finding instead of self-censoring it. A later verifier will filter unsupported claims.
   </Mindset>
 
-  <Workflow>
+${workflowSection}
+
+  <Scope>
+    Root cause must be in lines added or modified by this PR.
+    relevantFile/relevantLinesStart/relevantLinesEnd must point to the changed lines.
+    Trace impact through callers — symptom can appear elsewhere, but the cause must be in the diff.
+  </Scope>
+
+${overridesSection}
+
+${memoryRulesSection}
+
+</CodeReviewAgent>`;
+    }
+
+    protected getWorkflowPrompt(): string {
+        if (
+            this.getCategoryLabel() === 'duplicate_logic' ||
+            this.getIdentity().name.includes('duplicate')
+        ) {
+            return ``;
+        }
+
+        return `<Workflow>
     Your first action must be a tool call — not text.
 
     PHASE 1 — INVESTIGATE (use tools)
@@ -1868,18 +1893,7 @@ export abstract class BaseCodeReviewAgentProvider {
       NEVER claim a variable is unused or a branch is unreachable without tracing the actual code path.
       If you searched and did not find it, say "I searched for X and did not find it" — do not assert "X does not exist".
   </Workflow>
-
-  <Scope>
-    Root cause must be in lines added or modified by this PR.
-    relevantFile/relevantLinesStart/relevantLinesEnd must point to the changed lines.
-    Trace impact through callers — symptom can appear elsewhere, but the cause must be in the diff.
-  </Scope>
-
-${overridesSection}
-
-${memoryRulesSection}
-
-</CodeReviewAgent>`;
+`;
     }
 
     /**

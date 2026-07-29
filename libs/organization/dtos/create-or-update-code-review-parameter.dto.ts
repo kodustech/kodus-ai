@@ -80,6 +80,10 @@ class ReviewOptionsDto {
     @IsOptional()
     @IsBoolean()
     business_logic?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    duplicate_logic?: boolean;
 }
 
 class SummaryConfigDto {

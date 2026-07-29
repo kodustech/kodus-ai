@@ -651,7 +651,7 @@ export function hardTimeout<T>(
 const suggestionSchema = z.object({
     relevantFile: z.string(),
     language: z.string().optional(),
-    label: z.enum(['bug', 'security', 'performance']).optional(),
+    label: z.enum(['bug', 'security', 'performance', 'duplicate_logic']).optional(),
     suggestionContent: z.string(),
     existingCode: z.string(),
     improvedCode: z.string(),
@@ -3394,6 +3394,7 @@ async function verifySingleFindingWithTools(params: {
     const verificationPrompt = buildVerifierPrompt(
         evidenceBundle.bundle,
         index,
+        suggestion,
     );
     const verifierSignal = timeoutSignal(LLM_CALL_TIMEOUT_MS);
 
@@ -3730,12 +3731,35 @@ async function verifySingleFindingWithTools(params: {
 export function buildVerifierPrompt(
     evidenceBundle: string,
     index: number,
+    suggestion?: FindingsOutput['suggestions'][number],
 ): {
     system: string;
     prompt: string;
 } {
-    return {
-        system: `You are a surgical code review verifier.
+    const isDuplicateLogic = suggestion?.label === 'duplicate_logic';
+
+    const systemPrompt = isDuplicateLogic
+        ? `You are a surgical code review verifier specialized in duplicate logic drift.
+
+Your task is to verify ONE candidate duplicate logic finding.
+
+Rules:
+- You may use only a few tool calls. Be surgical.
+- Use tools to confirm or refute the candidate finding.
+- You must NOT create a new finding unrelated to the candidate.
+- Do NOT rewrite the finding text, summary, severity, or suggested fix.
+
+Drop criteria — drop the finding if ANY of these apply:
+- The candidate twin or sibling file mentioned in the finding does NOT exist in the codebase.
+- The logic in the PR changed file and the candidate twin are completely unrelated or dissimilar.
+- The root cause described is factually wrong.
+
+Keep criteria — keep the finding if ALL of these apply:
+- The finding identifies duplicate or cloned logic between the PR changed file and a sibling implementation in the codebase.
+- Modifying only one copy causes logic drift or leaves the sibling un-updated.
+
+Return JSON only at the end.`
+        : `You are a surgical code review verifier.
 
 Your task is to verify ONE candidate finding.
 
@@ -3762,7 +3786,10 @@ Keep criteria — keep the finding only if ALL of these apply:
 
 When in doubt between a speculative concern and a real bug, DROP. Precision matters more than recall at this stage — a downstream reviewer exists.
 
-Return JSON only at the end.`,
+Return JSON only at the end.`;
+
+    return {
+        system: systemPrompt,
         prompt: `${evidenceBundle}
 
 You may use up to 4 tool-call steps.

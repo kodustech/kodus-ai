@@ -271,6 +271,7 @@ export interface ReviewOptions {
     security?: boolean;
     cross_file?: boolean; // Legacy — no longer shown in UI
     business_logic?: boolean;
+    duplicate_logic?: boolean;
 }
 
 export interface SummaryConfig {

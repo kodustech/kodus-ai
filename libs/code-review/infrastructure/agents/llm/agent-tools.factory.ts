@@ -297,7 +297,13 @@ export function buildAgentTools(
                 const endLine = args.endLine || args.end_line || 0;
                 // Strip leading slash — paths are relative to repo root
                 filePath = filePath.replace(/^\/+/, '');
-                if (!filePath) return 'Error: path is required';
+                if (!filePath) {
+                    logger.warn({
+                        message: 'ReadFile failed: path is required',
+                        context: 'AgentTools',
+                    });
+                    return 'Error: path is required';
+                }
                 let result: string;
                 try {
                     result = await remoteCommands.read(
@@ -306,9 +312,21 @@ export function buildAgentTools(
                         endLine,
                     );
                 } catch (err) {
-                    return `Error reading ${filePath}: ${err instanceof Error ? err.message : String(err)}`;
+                    const errMsg = `Error reading ${filePath}: ${err instanceof Error ? err.message : String(err)}`;
+                    logger.error({
+                        message: 'ReadFile failed',
+                        error: err,
+                        context: 'AgentTools',
+                        metadata: { filePath, startLine, endLine },
+                    });
+                    return errMsg;
                 }
                 if (!result && result !== '') {
+                    logger.warn({
+                        message: 'ReadFile failed: returned ${typeof result} for ${filePath}',
+                        context: 'AgentTools',
+                        metadata: { filePath, startLine, endLine },
+                    });
                     return `Error: readFile returned ${typeof result} for ${filePath}`;
                 }
                 const baseLineNumber = startLine > 0 ? startLine : 1;

@@ -42,6 +42,7 @@ export class GraphContextService {
         sandbox: SandboxInstance,
         changedFiles: FileChange[],
         repoId: string,
+        includeDuplicates?: boolean,
     ): Promise<string> {
         if (!sandbox?.run) {
             this.logger.warn({
@@ -106,10 +107,37 @@ export class GraphContextService {
                 context: GraphContextService.name,
                 metadata: { hasDiff: !!diffPath },
             });
-            const prompt = await this.runContext(sandbox, filePaths, {
+            let prompt = await this.runContext(sandbox, filePaths, {
                 graphPath: BASE_GRAPH_PATH,
                 diffPath,
             });
+            if (includeDuplicates) {
+                try {
+                    const graphJsonStr = await sandbox.readFile(BASE_GRAPH_PATH, { timeoutMs: 5000 });
+                    if (graphJsonStr) {
+                        const baseGraph = JSON.parse(graphJsonStr);
+                        const allNodes = baseGraph.nodes || [];
+                        const twins = allNodes.filter((n: any) => n.is_duplicate);
+                        if (twins.length > 0) {
+                            prompt = prompt.replace('</CallGraph>', '');
+                            prompt += '\n  <DuplicateCandidates>\n';
+                            for (const t of twins) {
+                                prompt += `    <Candidate name="${t.name}" file="${t.file_path}" lineStart="${t.line_start}" lineEnd="${t.line_end}" />\n`;
+                            }
+                            prompt += '  </DuplicateCandidates>\n</CallGraph>';
+                        } else {
+                            console.log(`[DEBUG-DUPLICATE] No twins found. Node is_duplicate values: ${JSON.stringify(allNodes.map((n: any) => ({ name: n.name, is_duplicate: n.is_duplicate })))}`);
+                        }
+                    }
+                } catch (error) {
+                    this.logger.warn({
+                        message: 'Failed to inject duplicate candidates into XML',
+                        error,
+                        context: GraphContextService.name,
+                        metadata: { repoId, fileCount: filePaths.length }
+                    });
+                }
+            }
 
             this.logger.log({
                 message: `[KODUS-GRAPH] Context generated with DB baseline: ${prompt.length} chars`,

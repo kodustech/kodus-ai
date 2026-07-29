@@ -1,4 +1,4 @@
-type CategoryPromptKind = 'bug' | 'security' | 'performance';
+type CategoryPromptKind = 'bug' | 'security' | 'performance' | 'duplicate_logic';
 
 type PromptBlock = {
     mission: string;
@@ -133,6 +133,40 @@ const PROMPT_BLOCKS: Record<CategoryPromptKind, PromptBlock> = {
             '2. WHY: one sentence on the real impact with scale context (e.g. "triggers N database queries per request — O(N) growth with user count")',
             '3. HOW: a concrete fix only if the optimized implementation is clear from the code you read — omit if speculative',
             'No filler or conversational phrasing. Avoid vague statements like "this might be slow".',
+        ],
+    },
+    duplicate_logic: {
+        mission:
+            'Detect if any changed function or rule has structurally or semantically similar siblings elsewhere in the codebase, and flag when only one copy is modified.',
+        focus: [
+            'structurally similar functions (same sequence of calls/branches or AST structure)',
+            'semantically identical business/domain rules implemented independently',
+            'near-identical helper/utility functions cloned in sibling files/directories',
+            'partially updated duplicate groups (where one copy is updated in this PR but others remain stale)',
+        ],
+        doNotReport: [
+            'style or formatting differences',
+            'standard boilerplate code (e.g. basic getters/setters)',
+            'legitimate differences in implementation where similarities are purely coincidental',
+            'issues that are already resolved/updated uniformly across all copies in this PR',
+            'CRITICAL: DO NOT REPORT REGULAR BUGS, TYPE ERRORS, OR LOGIC INVERSIONS. Your ONLY job is to find duplicate logic. Ignore all non-duplicate issues.',
+        ],
+        reasoningPolicy: [
+            'When you see a change in a function, your FIRST INSTINCT must be: "Wait, does a clone of this function exist somewhere else in the codebase? If the logic was updated here, the clone is probably now stale and broken!"',
+            'Look at the <CallGraph> XML output. The database has automatically extracted `DuplicateCandidates` for exactly this reason.',
+            'When you see a candidate twin in the graph, you MUST feel a strong urge to investigate it. USE YOUR `readFile` TOOL to fetch its full code body!',
+            'Do not assume they are twins just by name. You must read the file and compare the logic structure: look for similar control flow, method call shapes, and parameter patterns.',
+            'If a sister copy exists and you verified it with `readFile`, check if it was also updated in this PR. If it wasn\'t updated, you have found a drift defect!',
+            'Precision matters: only flag high-confidence structural twins to avoid noise.',
+            'CRITICAL: IGNORE standard logic bugs, missing null checks, or return value inversions. Focus 100% of your effort on investigating the <DuplicateCandidates> in the <CallGraph> output and reporting duplicate logic drift.',
+        ],
+        writingPolicy: [
+            'Each finding must be technical, direct, and verifiable. Structure every suggestionContent as:',
+            '1. WHAT: name the sibling copies and their exact locations (file and line numbers) (e.g., "This logic has an identical sibling in src/utils/pricing.ts")',
+            '2. WHY: state the risk of drift (e.g., "Modifying only this copy makes the other copy stale and causes logic drift")',
+            '3. HOW: explain exactly how to unify them (e.g., "Extract to a shared module/function").',
+            'CRITICAL: In your `relevantFile` field, you MUST specify the file being modified in this PR where the diff is happening. Inline PR comments can only be attached to changed files in the PR diff. Do NOT set `relevantFile` to an unchanged sibling file outside the PR diff, as inline comments cannot be posted on unchanged files.',
+            'CRITICAL: In your `improvedCode` field, you MUST write the actual code for the proposed shared utility function or unified logic, showing exactly what the refactored code should look like. DO NOT just write a code comment saying "extract this".',
         ],
     },
 };

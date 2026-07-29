@@ -378,9 +378,9 @@ export class AstGraphRepository {
 
         const result = await this.dataSource.query(
             `WITH changed_nodes AS (
-                SELECT qualified_name
+                SELECT qualified_name, name
                 FROM ast_nodes
-                WHERE repo_id = $1 AND file_path = ANY($3::text[])
+                WHERE repo_id = $1 AND REPLACE(file_path, '\\', '/') = ANY($3::text[])
             ),
             -- Edges touching changed nodes (direct neighbors)
             touching_edges AS (
@@ -423,10 +423,20 @@ export class AstGraphRepository {
                 UNION
                 SELECT * FROM sibling_edges
             ),
+            duplicate_candidates AS (
+                SELECT n.qualified_name AS qn
+                FROM ast_nodes n
+                JOIN changed_nodes c ON n.repo_id = $1
+                WHERE n.kind IN ('Function', 'Method', 'function', 'method')
+                  AND n.qualified_name != c.qualified_name
+                  AND similarity(n.name, c.name) > 0.15
+            ),
             neighbor_qnames AS (
                 SELECT DISTINCT source_qualified AS qn FROM all_edges
                 UNION
                 SELECT DISTINCT target_qualified AS qn FROM all_edges
+                UNION
+                SELECT qn FROM duplicate_candidates
             ),
             all_relevant_nodes AS (
                 SELECT n.*
@@ -446,6 +456,7 @@ export class AstGraphRepository {
                         'line_end', COALESCE(n.line_end, 0),
                         'language', COALESCE(n.language, ''),
                         'is_test', n.is_test,
+                        'is_duplicate', (n.qualified_name IN (SELECT qn FROM duplicate_candidates)),
                         'parent_name', n.parent_name,
                         'params', n.params,
                         'return_type', n.return_type,

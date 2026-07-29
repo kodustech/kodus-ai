@@ -16,8 +16,9 @@ import { Sandbox } from 'e2b';
 import { randomUUID } from 'crypto';
 
 import { calculateBackoffInterval } from '@libs/common/utils/polling';
-import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
+import { existsSync } from 'fs';
 import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
+import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
 
 /**
  * Default idle timeout applied when the last lease on a sandbox is released.
@@ -116,6 +117,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     constructor(
         @Inject(SANDBOX_PROVIDER_TOKEN)
         private readonly sandboxProvider: ISandboxProvider,
+        @Inject(SandboxLeaseRepository)
         private readonly leaseRepo: SandboxLeaseRepository,
         private readonly configService: ConfigService,
     ) {}
@@ -181,16 +183,19 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         try {
             return await this.handleJoinerPath(prKey, leaseId, consumer, doc.state, doc.sandboxId);
         } catch (err) {
-            if (err instanceof SandboxStaleConnectionError) {
-                // Lease referenced a sandbox that E2B no longer has (idle-
-                // kill timer, reaper, or external termination). The
-                // joiner path already deleted the stale lease — restart
-                // acquire from scratch so this caller becomes the creator.
+            if (
+                err instanceof SandboxStaleConnectionError ||
+                err instanceof SandboxCreateTimeoutError
+            ) {
+                // Lease referenced a sandbox that timed out or is stale.
+                // Delete the stuck lease and restart acquire from scratch
+                // so this caller becomes the creator.
                 this.logger.log({
-                    message: `SandboxLeaseManager: re-acquiring after stale sandbox prKey="${prKey}" consumer="${consumer}"`,
+                    message: `SandboxLeaseManager: re-acquiring after stale/timed-out sandbox prKey="${prKey}" consumer="${consumer}"`,
                     context: SandboxLeaseManager.name,
                     metadata: { prKey, consumer },
                 });
+                await this.leaseRepo.delete(prKey).catch(() => {});
                 return this.acquire(prKey, consumer, leaseTtlMs, cloneParams);
             }
             throw err;
@@ -514,6 +519,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             }
         }
 
+        await this.leaseRepo.delete(prKey).catch(() => {});
         throw new SandboxCreateTimeoutError(prKey);
     }
 
@@ -523,6 +529,23 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         consumer: string,
         sandboxId: string,
     ): Promise<AcquireResult> {
+        const providerAny = this.sandboxProvider as any;
+        if (providerAny?.type === 'local' || typeof providerAny?.buildSandboxInstance === 'function') {
+            if (sandboxId && existsSync(sandboxId)) {
+                this.logger.log({
+                    message: `SandboxLeaseManager: reusing local sandbox sandboxId="${sandboxId}" prKey="${prKey}" consumer="${consumer}"`,
+                    context: SandboxLeaseManager.name,
+                    metadata: { prKey, consumer, sandboxId },
+                });
+                const sandbox = providerAny.buildSandboxInstance(sandboxId);
+                sandbox.cleanup = async () => {
+                    await this.release(leaseId);
+                };
+                this.leaseIdToPrKey.set(leaseId, prKey);
+                return { sandbox, leaseId, sandboxId, wasCreated: false };
+            }
+        }
+
         const apiKey = this.configService.get<string>('API_E2B_KEY');
 
         if (!apiKey) {

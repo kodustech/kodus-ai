@@ -10,6 +10,7 @@ import { BugAgentProvider } from './bug-agent.provider';
 import { SecurityAgentProvider } from './security-agent.provider';
 import { PerformanceAgentProvider } from './performance-agent.provider';
 import { GeneralistAgentProvider } from './generalist-agent.provider';
+import { DuplicateLogicAgentProvider } from './duplicate-logic-agent.provider';
 import { KodyRulesAgentProvider } from './kody-rules-agent.provider';
 import {
     ReviewAgentInput,
@@ -58,6 +59,7 @@ export class ReviewOrchestratorService {
         'bug': 4,
         'security': 3,
         'performance': 3,
+        'duplicate_logic': 4,
         'kody-rules': 4,
     };
     private static readonly NORMAL_MODE_MAX_STEPS: Record<string, number> = {
@@ -65,6 +67,7 @@ export class ReviewOrchestratorService {
         'bug': 20,
         'security': 12,
         'performance': 12,
+        'duplicate_logic': 12,
         'kody-rules': 20,
     };
     private static readonly DEEP_MODE_MAX_STEPS = 100;
@@ -74,6 +77,7 @@ export class ReviewOrchestratorService {
         private readonly securityAgent: SecurityAgentProvider,
         private readonly performanceAgent: PerformanceAgentProvider,
         private readonly generalistAgent: GeneralistAgentProvider,
+        private readonly duplicateLogicAgent: DuplicateLogicAgentProvider,
         @Optional()
         private readonly kodyRulesAgent?: KodyRulesAgentProvider,
     ) {}
@@ -89,10 +93,14 @@ export class ReviewOrchestratorService {
         }> = [];
 
         const enabledCategories = [
-            reviewOptions.bug !== false && 'bug',
-            reviewOptions.security !== false && 'security',
-            reviewOptions.performance !== false && 'performance',
-        ].filter(Boolean) as Array<'bug' | 'security' | 'performance'>;
+            reviewOptions.bug ? 'bug' : null,
+            reviewOptions.security ? 'security' : null,
+            reviewOptions.performance ? 'performance' : null,
+            reviewOptions.duplicate_logic ? 'duplicate_logic' : null,
+        ].filter(Boolean) as Array<'bug' | 'security' | 'performance' | 'duplicate_logic'>;
+console.log({enabledCategories});
+
+        agentInput.reviewMode = 'deep';
 
         if (agentInput.reviewMode === 'deep') {
             if (enabledCategories.includes('bug')) {
@@ -111,6 +119,12 @@ export class ReviewOrchestratorService {
                 agentTasks.push({
                     name: 'performance',
                     provider: this.performanceAgent,
+                });
+            }
+            if (enabledCategories.includes('duplicate_logic')) {
+                agentTasks.push({
+                    name: 'duplicate_logic',
+                    provider: this.duplicateLogicAgent,
                 });
             }
         } else if (enabledCategories.length > 0) {

@@ -13,7 +13,8 @@ import {
     mkdir,
 } from 'fs/promises';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { isAbsolute, join, sep } from 'path';
+import { existsSync } from 'fs';
 import { promisify } from 'util';
 
 import {
@@ -137,116 +138,19 @@ export class LocalSandboxService implements ISandboxProvider {
                 await this.applyLocalDiff(tempDir, unifiedDiff);
             }
 
-            const remoteCommands = this.buildRemoteCommands(tempDir);
-
-            const capturedTempDir = tempDir;
-            const cleanup = async () => {
+            const instance = this.buildSandboxInstance(tempDir);
+            instance.cleanup = async () => {
                 try {
-                    await rm(capturedTempDir, { recursive: true, force: true });
+                    await rm(tempDir, { recursive: true, force: true });
                 } catch (error) {
                     this.logger.warn({
-                        message: `Failed to remove temp dir ${capturedTempDir}`,
+                        message: `Failed to remove temp dir ${tempDir}`,
                         context: LocalSandboxService.name,
                         error,
                     });
                 }
             };
-
-            const capturedRepoDir = tempDir;
-
-            // Privileged shell exec for infrastructure callers (graph build,
-            // AST extraction, sandbox bootstrap). Unlike `remoteCommands.exec`
-            // this does NOT whitelist programs — it runs the command through
-            // /bin/sh so mkdir, pipes, redirections, etc. work. That power
-            // comes with a safety contract: **callers MUST shell-quote any
-            // value that could come (directly or transitively) from user
-            // input** (PR filenames, branch names, commit messages, etc.).
-            //
-            // As a runtime tripwire we reject command substitution (`$(...)`
-            // and backticks) on the raw string. Internal infrastructure
-            // commands have no legitimate need to spawn subshells, and a
-            // leaked `$()` is the most common path from "string concatenation
-            // bug" to RCE. The block is conservative by design — if a real
-            // use case ever needs command substitution, it should opt in
-            // explicitly instead of piggybacking on this entry point.
-            const run = async (
-                command: string,
-                opts?: { timeoutMs?: number },
-            ): Promise<SandboxRunResult> => {
-                if (/`|\$\(/.test(command)) {
-                    this.logger.warn({
-                        message:
-                            'Rejected sandbox.run command containing shell substitution',
-                        context: LocalSandboxService.name,
-                        metadata: {
-                            preview: command.slice(0, 200),
-                        },
-                    });
-                    return {
-                        stdout: '',
-                        stderr: 'Command substitution ($(...) / backticks) is not allowed in sandbox.run',
-                        exitCode: 1,
-                    };
-                }
-
-                const execAsync = promisify(exec);
-                try {
-                    const { stdout, stderr } = await execAsync(command, {
-                        cwd: capturedRepoDir,
-                        timeout: opts?.timeoutMs ?? CMD_TIMEOUT_MS,
-                        maxBuffer: MAX_BUFFER,
-                        env: process.env,
-                    });
-                    return {
-                        stdout: stdout || '',
-                        stderr: stderr || '',
-                        exitCode: 0,
-                    };
-                } catch (error: any) {
-                    return {
-                        stdout: error.stdout || '',
-                        stderr: error.stderr || '',
-                        exitCode: error.code ?? 1,
-                    };
-                }
-            };
-
-            // Path safety: reads go through `resolveSafePath` so absolute
-            // paths, `..` traversals, and symlink escapes are all rejected
-            // at the boundary. Writes can target files that don't exist
-            // yet (so `lstat`/`realpath` don't apply), but we still
-            // normalize and compare against the repo root so the final
-            // target can't escape — `validatePath` plus the prefix check
-            // covers `../..`, `/etc/...`, and embedded traversals.
-            const sandboxReadFile = async (path: string): Promise<string> => {
-                const fullPath = path.startsWith('/')
-                    ? path
-                    : join(capturedRepoDir, path);
-                return readFile(fullPath, 'utf-8');
-            };
-
-            const sandboxWriteFile = async (
-                path: string,
-                content: string,
-            ): Promise<void> => {
-                const fullPath = path.startsWith('/')
-                    ? path
-                    : join(capturedRepoDir, path);
-                const dir = join(fullPath, '..');
-                await mkdir(dir, { recursive: true });
-                await writeFile(fullPath, content, 'utf-8');
-            };
-
-            return {
-                remoteCommands,
-                cleanup,
-                type: 'local' as const,
-                sandboxId: capturedRepoDir,
-                repoDir: capturedRepoDir,
-                run,
-                readFile: sandboxReadFile,
-                writeFile: sandboxWriteFile,
-            };
+            return instance;
         } catch (error) {
             try {
                 await rm(tempDir, { recursive: true, force: true });
@@ -673,7 +577,12 @@ export class LocalSandboxService implements ISandboxProvider {
         // Resolve to real path and verify it's still under repoDir
         const real = await realpath(candidate);
         const repoReal = await realpath(repoDir);
-        if (!real.startsWith(repoReal + '/') && real !== repoReal) {
+        
+        // On Windows, drive letters might have different cases (C: vs c:), so we must compare case-insensitively
+        const realLower = real.toLowerCase();
+        const repoRealLower = repoReal.toLowerCase();
+        
+        if (!realLower.startsWith(repoRealLower + sep) && realLower !== repoRealLower) {
             throw new Error(`Path escapes repo boundary: ${path}`);
         }
 
@@ -738,5 +647,91 @@ export class LocalSandboxService implements ISandboxProvider {
             default:
                 return `refs/pull/${prNumber}/head`;
         }
+    }
+
+    buildSandboxInstance(tempDir: string): SandboxInstance {
+        const capturedRepoDir = tempDir.split('\\').join('/');
+        const remoteCommands = this.buildRemoteCommands(capturedRepoDir);
+
+        const execAsync = promisify(exec);
+        const gitBashPath = 'C:\\Program Files\\Git\\bin\\bash.exe';
+        const bashShell =
+            process.platform === 'win32'
+                ? existsSync(gitBashPath)
+                    ? gitBashPath
+                    : 'bash'
+                : undefined;
+
+        const run = async (
+            command: string,
+            opts?: { timeoutMs?: number },
+        ): Promise<SandboxRunResult> => {
+            if (/`|\$\(/.test(command)) {
+                this.logger.warn({
+                    message:
+                        'Rejected sandbox.run command containing shell substitution',
+                    context: LocalSandboxService.name,
+                    metadata: {
+                        preview: command.slice(0, 200),
+                    },
+                });
+                return {
+                    stdout: '',
+                    stderr: 'Command substitution ($(...) / backticks) is not allowed in sandbox.run',
+                    exitCode: 1,
+                };
+            }
+
+            try {
+                const { stdout, stderr } = await execAsync(command, {
+                    cwd: capturedRepoDir,
+                    timeout: opts?.timeoutMs ?? CMD_TIMEOUT_MS,
+                    maxBuffer: MAX_BUFFER,
+                    env: process.env,
+                    shell: bashShell,
+                });
+                return {
+                    stdout: stdout || '',
+                    stderr: stderr || '',
+                    exitCode: 0,
+                };
+            } catch (error: any) {
+                return {
+                    stdout: error.stdout || '',
+                    stderr: error.stderr || error.message || '',
+                    exitCode: error.code ?? 1,
+                };
+            }
+        };
+
+        const sandboxReadFile = async (path: string): Promise<string> => {
+            const fullPath = isAbsolute(path)
+                ? path
+                : join(capturedRepoDir, path);
+            return readFile(fullPath, 'utf-8');
+        };
+
+        const sandboxWriteFile = async (
+            path: string,
+            content: string,
+        ): Promise<void> => {
+            const fullPath = isAbsolute(path)
+                ? path
+                : join(capturedRepoDir, path);
+            const dir = join(fullPath, '..');
+            await mkdir(dir, { recursive: true });
+            await writeFile(fullPath, content, 'utf-8');
+        };
+
+        return {
+            remoteCommands,
+            cleanup: async () => {},
+            type: 'local' as const,
+            sandboxId: capturedRepoDir,
+            repoDir: capturedRepoDir,
+            run,
+            readFile: sandboxReadFile,
+            writeFile: sandboxWriteFile,
+        };
     }
 }

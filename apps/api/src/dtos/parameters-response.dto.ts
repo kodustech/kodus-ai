@@ -48,6 +48,9 @@ export class CodeReviewOptionsDto {
 
     @ApiProperty({ required: false })
     business_logic?: boolean;
+
+    @ApiProperty({ required: false })
+    duplicate_logic?: boolean;
 }
 
 export class SeverityLimitsDto {
