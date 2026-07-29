@@ -16,13 +16,21 @@ import { byokToVercelModel, getModelName } from '@libs/llm/byok-to-vercel';
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 import type { BYOKConfig } from '@kodus/kodus-common/llm';
 import type { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { resolveModelSlotFromV2 } from '@libs/llm/normalize-byok-config';
+import { StaticTaskStrategy } from '@libs/llm/static-task-strategy';
 
 import type { ReviewAgentInput } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 
 type ModelInput = Pick<
     ReviewAgentInput,
-    'organizationAndTeamData' | 'byokModel' | 'defaultModelOverride'
+    | 'organizationAndTeamData'
+    | 'byokModel'
+    | 'byokModelId'
+    | 'defaultModelOverride'
 >;
+
+// Manual routing policy (Phase 4). Stateless + dependency-free — instantiated once.
+const routingStrategy = new StaticTaskStrategy();
 
 /**
  * A resolved model plus the role-specific knobs the agent loop needs. Bundling
@@ -87,32 +95,91 @@ function buildRoleParams(
 /**
  * Resolve the run's models:
  *  1. org-level BYOK config (scoped locally — no cross-review race)
- *  2. apply the per-repo/directory `byokModel` override onto `main`
+ *  2. a v2 blob is routed through `StaticTaskStrategy` for the `codeReview`
+ *     task (byokModelId id-override first, then the legacy byokModel NAME
+ *     during the window); a legacy `{main,fallback}` blob keeps the exact
+ *     `byokModel`-onto-`main` behavior.
  *  3. build the Vercel model for `main`, and for `fallback` when configured;
  *     `defaultModelOverride` only kicks in when there is no BYOK config
  *     (trial/public-demo).
+ *
+ * The v2 branch sources the FULL config via `getBYOKConfigV2Raw` (not the
+ * collapsed `getBYOKConfig`, which always yields `main`) so routing is by
+ * task, not always main (RESEARCH Pitfall 1).
  */
 export async function resolveAgentModel(
     input: ModelInput,
     permissionService: PermissionValidationService,
 ): Promise<ResolvedAgentModel> {
-    let byokConfig = await permissionService.getBYOKConfig(
+    const rawV2 = await permissionService.getBYOKConfigV2Raw(
         input.organizationAndTeamData,
     );
 
-    const overrideModel = input.byokModel?.trim();
-    if (overrideModel && byokConfig?.main) {
-        byokConfig = {
-            ...byokConfig,
-            main: { ...byokConfig.main, model: overrideModel },
-        };
+    let byokConfig: BYOKConfig | null;
+
+    if (rawV2) {
+        // v2: route the codeReview task. byokModelId (id) wins over the legacy
+        // byokModel NAME; the resolver handles the id-THEN-name match.
+        const overrideRef =
+            input.byokModelId?.trim() || input.byokModel?.trim();
+        const verdict = routingStrategy.resolve(
+            'codeReview',
+            overrideRef ? { override: { modelId: overrideRef } } : {},
+            rawV2,
+        );
+
+        if (verdict.modelId) {
+            const routedMain = resolveModelSlotFromV2(rawV2, verdict.modelId);
+            const main =
+                routedMain && verdict.modelName
+                    ? { ...routedMain, model: verdict.modelName }
+                    : routedMain;
+            if (main) {
+                const fallback = resolveModelSlotFromV2(
+                    rawV2,
+                    rawV2.routing?.fallbackModelId,
+                );
+                byokConfig = {
+                    main,
+                    ...(fallback ? { fallback } : {}),
+                } as BYOKConfig;
+            } else {
+                // Unresolvable routed slot → env/managed default downstream.
+                byokConfig = null;
+            }
+        } else {
+            // BLOCKED verdict → env/managed default downstream (matches a
+            // missing config today; never throws).
+            byokConfig = null;
+        }
+    } else {
+        // Legacy {main,fallback}: exact prior behavior, byte-for-byte.
+        byokConfig = await permissionService.getBYOKConfig(
+            input.organizationAndTeamData,
+        );
+
+        const overrideModel = input.byokModel?.trim();
+        if (overrideModel && byokConfig?.main) {
+            byokConfig = {
+                ...byokConfig,
+                main: { ...byokConfig.main, model: overrideModel },
+            };
+        }
     }
 
     return {
-        byokConfig,
-        main: buildRoleParams(byokConfig, 'main', input.defaultModelOverride),
+        byokConfig: byokConfig ?? undefined,
+        main: buildRoleParams(
+            byokConfig ?? undefined,
+            'main',
+            input.defaultModelOverride,
+        ),
         fallback: byokConfig?.fallback
-            ? buildRoleParams(byokConfig, 'fallback', input.defaultModelOverride)
+            ? buildRoleParams(
+                  byokConfig ?? undefined,
+                  'fallback',
+                  input.defaultModelOverride,
+              )
             : null,
     };
 }

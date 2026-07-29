@@ -37,8 +37,17 @@ export interface SkillExecutionContext<TPrepareContext = unknown> {
      * Per-repository/directory BYOK model override resolved by the code
      * review pipeline (`codeReviewConfig.byokModel`). When set, the skill's
      * LLM calls run on this model instead of the BYOK-settings main model.
+     *
+     * Legacy NAME-based override, kept for the v2 transition window (D-05).
      */
     byokModel?: string;
+    /**
+     * Id-based BYOK model override (Phase 4) from `codeReviewConfig.byokModelId`.
+     * References a v2 `models[]` entry by its stable id; the base provider routes
+     * the `conversation` task to it via `StaticTaskStrategy`. Wins over the
+     * legacy `byokModel` NAME during the window.
+     */
+    byokModelId?: string;
 }
 
 export interface SkillErrorContext<TPrepareContext = unknown> {
@@ -152,7 +161,11 @@ export abstract class AbstractSkillProvider<
 
         this.logExecutionStarted(organizationAndTeamData, userLanguage);
 
-        await this.fetchBYOKConfig(organizationAndTeamData, context.byokModel);
+        await this.fetchBYOKConfig(
+            organizationAndTeamData,
+            context.byokModel,
+            context.byokModelId,
+        );
 
         const fetcherInitialization = await this.initializeFetcherRuntime(
             context,

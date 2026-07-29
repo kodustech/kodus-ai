@@ -201,7 +201,11 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                     prepareContext,
                     thread,
                     // Per-repo/directory model override resolved by ValidateConfigStage.
+                    // byokModel = legacy NAME (window); byokModelId = id-based
+                    // override (Phase 4). The base provider routes the
+                    // conversation task, id-first (D-05).
                     byokModel: context.codeReviewConfig?.byokModel,
+                    byokModelId: context.codeReviewConfig?.byokModelId,
                 });
 
             const result = await Promise.race([agentPromise, timeoutPromise]);

@@ -149,6 +149,7 @@ describe('ValidateConfigStage — v2 routing', () => {
 
     const buildContext = (
         byokModel: string | undefined,
+        byokModelId?: string | undefined,
     ): CodeReviewPipelineContext =>
         ({
             origin: 'command',
@@ -172,6 +173,7 @@ describe('ValidateConfigStage — v2 routing', () => {
                 baseBranches: [],
                 runOnDraft: true,
                 byokModel,
+                byokModelId,
             },
         }) as unknown as CodeReviewPipelineContext;
 
@@ -237,6 +239,33 @@ describe('ValidateConfigStage — v2 routing', () => {
         );
         // Slot carries ciphertext verbatim — the resolver never decrypts.
         expect(result.codeReviewConfig.byokConfig?.main?.apiKey).toBe('enc-oa');
+    });
+
+    it('routes the codeReview task to the byokModelId id-override (top of precedence)', async () => {
+        mockOrganizationParametersService.findByKey.mockResolvedValue({
+            configValue: v2({ defaultModelId: 'm-A' }),
+        });
+
+        // byokModelId 'm-B' is a v2 models[] id → routes straight to that model.
+        const result = await stage.execute(buildContext(undefined, 'm-B'));
+
+        expect(result.codeReviewConfig.byokConfig?.main?.model).toBe(
+            'gpt-5-mini',
+        );
+        expect(result.codeReviewConfig.byokConfig?.main?.apiKey).toBe('enc-oa');
+    });
+
+    it('lets byokModelId (id) win over the legacy byokModel NAME', async () => {
+        mockOrganizationParametersService.findByKey.mockResolvedValue({
+            configValue: v2({ defaultModelId: 'm-A' }),
+        });
+
+        // id 'm-B' (→ gpt-5-mini) wins over the NAME 'gpt-4o'.
+        const result = await stage.execute(buildContext('gpt-4o', 'm-B'));
+
+        expect(result.codeReviewConfig.byokConfig?.main?.model).toBe(
+            'gpt-5-mini',
+        );
     });
 
     it('W1: a legacy byokModel NAME override still resolves on a v2 config', async () => {

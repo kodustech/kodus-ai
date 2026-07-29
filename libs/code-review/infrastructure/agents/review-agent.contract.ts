@@ -161,8 +161,18 @@ export interface ModelConfig {
      * settings) from `codeReviewConfig.byokModel`. When set, it replaces
      * `byokConfig.main.model` for this run so the agent uses the same model
      * the rest of the pipeline does. Empty/undefined means "inherit".
+     *
+     * Legacy NAME-based override, kept for the v2 transition window (D-05).
      */
     byokModel?: string;
+    /**
+     * Id-based BYOK model override (Phase 4) from `codeReviewConfig.byokModelId`.
+     * References a v2 `models[]` entry by its stable id. When set, the model
+     * factory routes the `codeReview` task to this exact model (top of the
+     * routing precedence) via `StaticTaskStrategy`. Takes precedence over the
+     * legacy `byokModel` NAME. Empty/undefined means "inherit".
+     */
+    byokModelId?: string;
     /** Optional per-agent step budget for the main investigation loop. */
     maxSteps?: number;
 }

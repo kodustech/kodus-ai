@@ -396,7 +396,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // the org-level main.model when present — same resolution the agent
         // uses internally (`base-code-review-agent.provider.ts:541-551`).
         const mainByok = context.codeReviewConfig?.byokConfig?.main;
-        const overrideModel = context.codeReviewConfig?.byokModel?.trim();
+        // byokModelId (id) wins over the legacy byokModel NAME (D-05). When a
+        // byokModelId is set, ValidateConfigStage has already routed the
+        // codeReview task to that id-addressed model into byokConfig.main
+        // (same routing the model factory runs), so the legacy NAME re-apply
+        // is skipped here — the id-routed model stands. Only when no id is set
+        // does the legacy NAME window still apply the override onto main.
+        const overrideModel = context.codeReviewConfig?.byokModelId?.trim()
+            ? undefined
+            : context.codeReviewConfig?.byokModel?.trim();
         const byokWithOverride =
             overrideModel && mainByok
                 ? {

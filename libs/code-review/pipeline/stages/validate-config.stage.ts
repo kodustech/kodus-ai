@@ -95,6 +95,12 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
 
             const resolved = byokConfig?.configValue;
             const overrideModel = context.codeReviewConfig.byokModel?.trim();
+            // v2 override precedence: byokModelId (id) wins over the legacy
+            // byokModel NAME (transition window, D-05). The legacy branch below
+            // still applies the NAME only — byokModelId is a v2 id, meaningless
+            // for a legacy {main,fallback} blob.
+            const v2OverrideRef =
+                context.codeReviewConfig.byokModelId?.trim() || overrideModel;
 
             // For a v2 blob, route the codeReview task through the resolver
             // (compute + log the verdict OUTSIDE the Immer producer so the
@@ -106,10 +112,12 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             if (isV2Config(resolved)) {
                 v2Verdict = this.routingStrategy.resolve(
                     'codeReview',
-                    // The legacy byokModel name (a repo/folder override) still
-                    // wins during the read window; the strategy handles the
+                    // byokModelId (id) first, then the legacy byokModel NAME
+                    // during the read window; the strategy handles the
                     // id-THEN-name match (REQ-COMPAT-01).
-                    overrideModel ? { override: { modelId: overrideModel } } : {},
+                    v2OverrideRef
+                        ? { override: { modelId: v2OverrideRef } }
+                        : {},
                     resolved,
                 );
                 if (!v2Verdict.modelId) {

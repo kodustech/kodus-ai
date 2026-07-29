@@ -341,8 +341,21 @@ export type CodeReviewConfig = {
      * Optional override for the BYOK *main* model used to run code reviews.
      * Empty string '' means "inherit": directory -> repository -> the main
      * model defined in the BYOK settings page.
+     *
+     * Legacy NAME-based override, kept during the v2 transition window (D-05).
+     * Superseded by `byokModelId` going forward; the routing resolver reads
+     * `byokModelId` first and only falls back to this NAME when it is absent.
      */
     byokModel?: string;
+    /**
+     * Id-based BYOK model override (Phase 4). References a v2 `models[]` entry
+     * by its stable `id` (BYOKConfigV2.models[].id), so the routing resolver
+     * addresses the exact model regardless of a later rename. This is the top
+     * of the routing precedence chain (folder/repo override > task override >
+     * default). Empty/absent means "inherit"; when both `byokModelId` and the
+     * legacy `byokModel` are set, the id wins.
+     */
+    byokModelId?: string;
     /** @deprecated Reflection/verify was removed — it hurt recall more than it helped precision. */
     enableReflection?: boolean;
     /**

@@ -476,10 +476,22 @@ class CodeReviewConfigWithoutLLMProviderDto {
     /**
      * BYOK main-model override for code reviews. Empty string '' means
      * "inherit" (directory -> repository -> the BYOK-settings main model).
+     *
+     * Legacy NAME-based override; kept for the v2 transition window (D-05).
      */
     @IsOptional()
     @IsString()
     byokModel?: string;
+
+    /**
+     * Id-based BYOK model override (Phase 4). References a v2 `models[]` entry
+     * by its stable id. Additive alongside `byokModel`; the routing resolver
+     * reads this first and falls back to the legacy NAME during the window.
+     * Empty/absent means "inherit".
+     */
+    @IsOptional()
+    @IsString()
+    byokModelId?: string;
 }
 
 export class CreateOrUpdateCodeReviewParameterDto {

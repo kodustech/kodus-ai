@@ -99,7 +99,10 @@ export function buildOrchestratorInput(
                   ? 'gemini-3-flash-preview'
                   : undefined,
         // Per-repo/directory model override resolved by ValidateConfigStage.
+        // byokModel = legacy NAME (window); byokModelId = id-based override
+        // (Phase 4, wins over the name at the model factory's resolver).
         byokModel: context.codeReviewConfig?.byokModel,
+        byokModelId: context.codeReviewConfig?.byokModelId,
         adaptiveProfile: computed.adaptiveProfile,
         skipHeavyPasses: computed.adaptiveProfile.skipHeavyPasses || undefined,
         // Experimental A/B knob (config-driven, default off): outline-first
