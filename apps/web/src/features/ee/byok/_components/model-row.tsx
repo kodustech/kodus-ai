@@ -16,7 +16,8 @@ import Link from "next/link";
 
 import curatedCatalog from "../_data/curated-models.json";
 import type { CuratedModel } from "../_data/curated-models.types";
-import type { BYOKModelConfig, ReasoningEffort } from "../_types";
+import type { BYOKConfigV2, BYOKModelConfig, ReasoningEffort } from "../_types";
+import { DeleteRejectionAlert, useDeleteModel } from "./delete-model-flow";
 
 const formatThinking = (effort?: ReasoningEffort): string | null => {
     if (!effort || effort === "none") return null;
@@ -27,22 +28,26 @@ const formatThinking = (effort?: ReasoningEffort): string | null => {
  * A single model row inside a provider group. Shows the model's display name,
  * benchmark score, thinking/temperature and accumulated cost — but NEVER the
  * key or base URL: those are provider-scoped and live on the group header now
- * (SLICE 2). `onDelete` is rendered here; its behavior is wired in 04-09.
+ * (SLICE 2). [Remove] runs the 04-09 delete flow (confirm → deleteBYOK); when the
+ * backend rejects an in-use model, the reason list renders as a persistent inline
+ * Alert directly beneath THIS row so it sits with the model it blocks.
  */
 export function ModelRow({
     model,
+    config,
     cost,
     periodLabel,
     costRangeQuery,
     onEdit,
-    onDelete,
+    onDeleted,
 }: {
     model: BYOKModelConfig;
+    config?: BYOKConfigV2 | null;
     cost?: ByokModelCost;
     periodLabel?: string;
     costRangeQuery?: string;
     onEdit?: () => void;
-    onDelete?: () => void;
+    onDeleted?: () => void;
 }) {
     const curated = (curatedCatalog.models as CuratedModel[]).find(
         (m) => m.id === model.model,
@@ -50,7 +55,14 @@ export function ModelRow({
     const displayName = curated?.displayName ?? model.model;
     const thinking = formatThinking(model.reasoningEffort);
 
+    const { confirmAndDelete, rejectionReasons } = useDeleteModel({
+        config,
+        model,
+        onDeleted,
+    });
+
     return (
+        <div className="flex flex-col">
         <div className="border-card-lv2 flex items-start justify-between gap-3 rounded-lg border p-3">
             <div className="flex min-w-0 items-start gap-3">
                 <span className="bg-success/15 text-success mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full">
@@ -134,17 +146,23 @@ export function ModelRow({
                         Edit
                     </Button>
                 )}
-                {onDelete && (
+                {onDeleted && (
                     <Button
                         size="xs"
                         variant="cancel"
                         leftIcon={<TrashIcon />}
                         className="text-danger [--button-foreground:var(--color-danger)]"
-                        onClick={onDelete}>
+                        onClick={confirmAndDelete}>
                         Remove
                     </Button>
                 )}
             </div>
+        </div>
+
+            <DeleteRejectionAlert
+                modelName={displayName}
+                reasons={rejectionReasons}
+            />
         </div>
     );
 }

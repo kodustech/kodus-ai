@@ -5,13 +5,11 @@ import { Alert, AlertDescription } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
 import { FormControl } from "@components/ui/form-control";
 import { Input } from "@components/ui/input";
-import { magicModal } from "@components/ui/magic-modal";
 import { Textarea } from "@components/ui/textarea";
 import { toast } from "@components/ui/toaster/use-toast";
 import type { LLMConfigStatus } from "@services/organizationParameters/fetch";
 import {
     createOrUpdateOrganizationParameter,
-    deleteBYOK,
     testBYOK,
     type TestBYOKResult,
 } from "@services/organizationParameters/fetch";
@@ -19,7 +17,6 @@ import { OrganizationParametersConfigKey } from "@services/parameters/types";
 import type { ByokModelCost } from "@services/usage/byok-cost";
 import { PlugIcon, PlusIcon, SettingsIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { ConfirmModal } from "src/core/components/ui/confirm-modal";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
 import curatedCatalog from "../../_data/curated-models.json";
@@ -160,33 +157,12 @@ export const ModelsTab = ({
         await persist(blob, `${displayNameFor(model.model)} updated`);
     };
 
-    // ── delete (basic path; in-use / last-model UX lands in 04-09) ────────────
-    const handleDelete = (model: BYOKModelConfig) => {
-        const name = displayNameFor(model.model);
-        magicModal.show(() => (
-            <ConfirmModal
-                open
-                title={`Remove ${name}?`}
-                description="Kodus will stop using this model immediately."
-                confirmText="Remove"
-                variant="primary-dark"
-                onConfirm={async () => {
-                    magicModal.hide();
-                    try {
-                        await deleteBYOK({ modelId: model.id });
-                        toast({ variant: "success", title: `${name} removed` });
-                        await revalidateServerSidePath("/organization/byok");
-                        router.refresh();
-                    } catch {
-                        toast({
-                            variant: "danger",
-                            title: `Couldn't remove ${name}`,
-                        });
-                    }
-                }}
-                onCancel={() => magicModal.hide()}
-            />
-        ));
+    // ── delete → the 04-09 flow (confirm + in-use reason Alert + last-model
+    //    disconnect) lives in delete-model-flow via ModelRow. The tab only needs
+    //    to refresh the pool once a model is actually removed.
+    const handleDeleted = async () => {
+        await revalidateServerSidePath("/organization/byok");
+        router.refresh();
     };
 
     // ── view: add model / add provider (inline catalog) ───────────────────────
@@ -279,11 +255,12 @@ export const ModelsTab = ({
                             <ModelRow
                                 key={model.id}
                                 model={model}
+                                config={config}
                                 cost={costByModelId?.[model.id]}
                                 periodLabel={periodLabel}
                                 costRangeQuery={costRangeQuery}
                                 onEdit={() => openEdit(model, credential)}
-                                onDelete={() => handleDelete(model)}
+                                onDeleted={handleDeleted}
                             />
                         ))}
                         <div className="flex justify-end">
