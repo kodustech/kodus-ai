@@ -230,28 +230,34 @@ export class OrganizationParametersController {
         }),
     )
     @ApiOperation({
-        summary: 'Delete BYOK config',
-        description: 'Delete main or fallback BYOK configuration.',
+        summary: 'Delete a v2 BYOK model by id',
+        description:
+            'Delete a single v2 BYOK model by its stable id. The domain use-case runs the referential-integrity guard (routing + repo/folder overrides) and rejects an in-use model.',
     })
     @ApiQuery({
-        name: 'configType',
+        name: 'modelId',
         required: true,
-        schema: { type: 'string', enum: ['main', 'fallback'] },
+        schema: { type: 'string' },
     })
     @ApiOkResponse({ type: ApiBooleanResponseDto })
-    public async deleteByokConfig(
-        @Query('configType') configType: 'main' | 'fallback',
-    ) {
+    public async deleteByokConfig(@Query('modelId') modelId: string) {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
             throw new Error('Organization ID is missing from request');
         }
 
-        return await this.deleteByokConfigUseCase.execute(
-            organizationId,
-            configType,
-        );
+        // V5 input validation: reject an empty/whitespace modelId before the
+        // domain guard runs.
+        if (typeof modelId !== 'string' || modelId.trim().length === 0) {
+            throw new BadRequestException(
+                'modelId is required to delete a v2 BYOK model',
+            );
+        }
+
+        return await this.deleteByokConfigUseCase.execute(organizationId, {
+            modelId,
+        });
     }
 
     @Post('/test-byok')
