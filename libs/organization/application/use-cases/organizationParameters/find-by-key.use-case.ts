@@ -1,4 +1,9 @@
 import { decrypt } from '@libs/common/utils/crypto';
+import {
+    isV2Config,
+    type BYOKConfigV2,
+    type BYOKCredential,
+} from '@libs/llm/byok-config';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -46,6 +51,34 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
                 OrganizationParametersKey.BYOK_CONFIG
             ) {
                 const configValue = parameter.configValue;
+
+                // v2 shape: secrets live per-credential (credentials[].apiKey +
+                // aws* under settings), NOT in top-level main/fallback. Mask them
+                // before the blob leaves the server (T-04-04-01), leaving
+                // models[]/routing plaintext. The legacy main/fallback branch
+                // below stays byte-identical.
+                if (isV2Config(configValue)) {
+                    try {
+                        const processedConfig =
+                            this.maskV2ConfigSecrets(configValue);
+
+                        return {
+                            uuid: parameter.uuid,
+                            configKey: parameter.configKey,
+                            configValue: processedConfig,
+                            organization: parameter.organization,
+                        };
+                    } catch (error) {
+                        this.logger.error({
+                            message: 'Error masking v2 BYOK credentials',
+                            context:
+                                FindByKeyOrganizationParametersUseCase.name,
+                            error: error,
+                        });
+                        // Return original value in case of decryption error
+                        return this.getUpdatedParameters(parameter);
+                    }
+                }
 
                 if (
                     configValue &&
@@ -155,6 +188,67 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
                 masked[field] = this.maskApiKey(decrypt(value));
             }
         }
+        return masked;
+    }
+
+    /**
+     * The encrypted secret fields carried inside a v2 credential's `settings`
+     * (Amazon Bedrock auth). Kept in sync with `V2_SECRET_SETTINGS` in
+     * create-or-update.use-case.ts. `awsRegion`, `baseURL`, `vertexLocation`
+     * are plaintext settings and are left untouched.
+     */
+    private static readonly V2_SECRET_SETTINGS = [
+        'awsBearerToken',
+        'awsAccessKeyId',
+        'awsSecretAccessKey',
+        'awsSessionToken',
+    ] as const;
+
+    /**
+     * Mask every credential's secret fields on a v2 config: the top-level
+     * `apiKey` and the aws* fields under `settings`. `models[]`/`routing`/
+     * `version` pass through plaintext. A managed credential (env default,
+     * hidden from the UI) never surfaces a secret — its secret fields are
+     * stripped entirely rather than masked.
+     */
+    private maskV2ConfigSecrets(config: BYOKConfigV2): BYOKConfigV2 {
+        const credentials = (config.credentials ?? []).map((cred) =>
+            this.maskCredentialSecrets(cred),
+        );
+        return { ...config, credentials };
+    }
+
+    private maskCredentialSecrets(cred: BYOKCredential): BYOKCredential {
+        const masked: BYOKCredential = { ...cred };
+
+        // A managed credential must never expose a secret; drop any that exist.
+        if (cred.managed) {
+            delete masked.apiKey;
+            if (cred.settings && typeof cred.settings === 'object') {
+                const settings: Record<string, unknown> = { ...cred.settings };
+                for (const field of FindByKeyOrganizationParametersUseCase.V2_SECRET_SETTINGS) {
+                    delete settings[field];
+                }
+                masked.settings = settings;
+            }
+            return masked;
+        }
+
+        if (typeof cred.apiKey === 'string' && cred.apiKey) {
+            masked.apiKey = this.maskApiKey(decrypt(cred.apiKey));
+        }
+
+        if (cred.settings && typeof cred.settings === 'object') {
+            const settings: Record<string, unknown> = { ...cred.settings };
+            for (const field of FindByKeyOrganizationParametersUseCase.V2_SECRET_SETTINGS) {
+                const value = settings[field];
+                if (typeof value === 'string' && value) {
+                    settings[field] = this.maskApiKey(decrypt(value));
+                }
+            }
+            masked.settings = settings;
+        }
+
         return masked;
     }
 }

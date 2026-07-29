@@ -12,6 +12,7 @@ import { OrganizationParametersEntity } from '@libs/organization/domain/organiza
 import { IOrganizationParameters } from '@libs/organization/domain/organizationParameters/interfaces/organizationParameters.interface';
 import { OrganizationParametersKey } from '@libs/core/domain/enums/organization-parameters-key.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { BYOKConfigV2, isV2Config } from '@libs/llm/byok-config';
 
 @Injectable()
 export class OrganizationParametersService implements IOrganizationParametersService {
@@ -162,6 +163,80 @@ export class OrganizationParametersService implements IOrganizationParametersSer
             delete newConfigValue[configType];
 
             // Update in repository
+            const updatedConfig =
+                await this.organizationParametersRepository.update(
+                    { uuid: currentConfig.uuid },
+                    { configValue: newConfigValue },
+                );
+
+            return !!updatedConfig;
+        } catch (err) {
+            throw new BadRequestException(err);
+        }
+    }
+
+    async deleteByokModel(
+        organizationId: string,
+        modelId: string,
+    ): Promise<boolean> {
+        try {
+            const organizationAndTeamData = { organizationId };
+            const currentConfig = await this.findByKey(
+                OrganizationParametersKey.BYOK_CONFIG,
+                organizationAndTeamData,
+            );
+
+            if (!currentConfig || !currentConfig.configValue) {
+                throw new BadRequestException('BYOK configuration not found');
+            }
+
+            const configValue = currentConfig.configValue;
+
+            if (!isV2Config(configValue)) {
+                throw new BadRequestException(
+                    'Model-level delete requires a v2 BYOK configuration',
+                );
+            }
+
+            const models = configValue.models ?? [];
+            const target = models.find((m) => m?.id === modelId);
+            if (!target) {
+                throw new BadRequestException(`model ${modelId} not found`);
+            }
+
+            const remainingModels = models.filter((m) => m?.id !== modelId);
+
+            // Last-model disconnect: removing the final model tears down the
+            // whole config rather than leaving an empty/invalid pool that would
+            // break resolution (mirrors the legacy "only main → delete entire
+            // config" branch above).
+            if (remainingModels.length === 0) {
+                await this.organizationParametersRepository.delete(
+                    currentConfig.uuid,
+                );
+                return true;
+            }
+
+            // Drop a now-orphan, non-managed credential: one that no remaining
+            // model references. A managed credential is always kept (env-default
+            // path). Retained credentials carry their ciphertext verbatim — we
+            // never touch or re-encrypt apiKey/aws* fields.
+            const credentials = configValue.credentials ?? [];
+            const stillReferenced = new Set(
+                remainingModels
+                    .map((m) => m?.credentialId)
+                    .filter((id): id is string => !!id),
+            );
+            const remainingCredentials = credentials.filter(
+                (c) => c?.managed || (c?.id && stillReferenced.has(c.id)),
+            );
+
+            const newConfigValue: BYOKConfigV2 = {
+                ...configValue,
+                models: remainingModels,
+                credentials: remainingCredentials,
+            };
+
             const updatedConfig =
                 await this.organizationParametersRepository.update(
                     { uuid: currentConfig.uuid },
