@@ -118,16 +118,29 @@ export function is429Error(err: unknown): boolean {
 // while reporting success (observed 2026-07-29, bitbucket cloud cell).
 export function isTransientFetchError(err: unknown): boolean {
     if (!err || typeof err !== 'object') return false;
-    const anyErr = err as { message?: unknown; cause?: unknown };
-    const message =
-        typeof anyErr.message === 'string' ? anyErr.message : '';
-    const causeMessage =
-        anyErr.cause &&
-        typeof (anyErr.cause as { message?: unknown }).message === 'string'
-            ? String((anyErr.cause as { message: string }).message)
-            : '';
-    return /fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang ?up|network error|Recv failure|operation was aborted|UND_ERR/i.test(
-        `${message} ${causeMessage}`,
+    const anyErr = err as {
+        message?: unknown;
+        code?: unknown;
+        cause?: unknown;
+    };
+    const cause = (anyErr.cause ?? {}) as {
+        message?: unknown;
+        code?: unknown;
+    };
+    // Test messages AND codes: undici's timeout errors carry their
+    // UND_ERR_* identifier in `.code` while the message is prose
+    // ("Headers Timeout Error"), and when thrown through fetch() the
+    // useful detail lives on `.cause`.
+    const haystack = [
+        anyErr.message,
+        anyErr.code,
+        cause.message,
+        cause.code,
+    ]
+        .filter((v): v is string => typeof v === 'string')
+        .join(' ');
+    return /fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang ?up|network error|Recv failure|operation was aborted|UND_ERR|HeadersTimeout|BodyTimeout|ConnectTimeout|TimeoutError|Timeout Error/i.test(
+        haystack,
     );
 }
 
