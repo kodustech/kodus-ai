@@ -3,12 +3,10 @@
  *
  * Phase 4 of the provider decomposition. Pulls the "config → model" resolution
  * out of BaseCodeReviewAgentProvider: org BYOK config + per-repo/directory model
- * override + trial default fallback. The permission service is injected.
+ * override + trial default. The permission service is injected.
  *
- * Resolves BOTH roles so the provider can retry a failed `main` provider against
- * the org's configured `fallback` (see model-fallback.ts). The per-repo override
- * only applies to `main`; `fallback` stays exactly as configured (it is a
- * separate provider chosen for resilience, not a model to be overridden).
+ * Resolves ONE model per run (1 model per task — the runtime error-recovery
+ * fallback was dropped in 04b-05). The per-repo override applies to that model.
  */
 import type { LanguageModel } from 'ai';
 
@@ -16,7 +14,6 @@ import { byokToVercelModel, getModelName } from '@libs/llm/byok-to-vercel';
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 import type { BYOKConfig } from '@kodus/kodus-common/llm';
 import type { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
-import { resolveModelSlotFromV2 } from '@libs/llm/normalize-byok-config';
 import { resolveTaskModel } from '@libs/llm/resolve-task-model';
 
 import type { ReviewAgentInput } from '@libs/code-review/infrastructure/agents/review-agent.contract';
@@ -30,11 +27,10 @@ type ModelInput = Pick<
 >;
 
 /**
- * A resolved model plus the role-specific knobs the agent loop needs. Bundling
- * these per role lets the provider swap the whole set atomically when it falls
- * back — the loop must never mix `main`'s reasoning config with `fallback`'s
- * model. `fallback` BYOK configs carry no reasoning/openrouter settings, so
- * those fields are only ever populated for `main`.
+ * A resolved model plus the knobs the agent loop needs. The `role` union still
+ * carries `'fallback'` only for the legacy collaborator typing that dies in the
+ * cleanup wave — the runtime fallback itself was removed in 04b-05, so only
+ * `'main'` is ever produced here.
  */
 export interface AgentModelParams {
     role: 'main' | 'fallback';
@@ -51,33 +47,17 @@ export interface AgentModelParams {
 export interface ResolvedAgentModel {
     byokConfig?: BYOKConfig;
     main: AgentModelParams;
-    /** Populated only when the org configured a fallback provider. */
-    fallback: AgentModelParams | null;
 }
 
 function buildRoleParams(
     byokConfig: BYOKConfig | undefined,
-    role: 'main' | 'fallback',
     defaultModelOverride?: string,
 ): AgentModelParams {
-    const model = byokToVercelModel(byokConfig, role, {}, defaultModelOverride);
-
-    if (role === 'fallback') {
-        const cfg = byokConfig?.fallback; // removed in 04b-05 (runtime fallback)
-        return {
-            role,
-            model,
-            modelName: cfg
-                ? `${cfg.provider}:${cfg.model}`
-                : getModelName(byokConfig, defaultModelOverride),
-            maxInputTokens: cfg?.maxInputTokens,
-            byokProvider: cfg?.provider,
-        };
-    }
+    const model = byokToVercelModel(byokConfig, 'main', {}, defaultModelOverride);
 
     const cfg = byokConfig?.main; // removed in 04b-06 (legacy {main,fallback} branch)
     return {
-        role,
+        role: 'main',
         model,
         modelName: getModelName(byokConfig, defaultModelOverride),
         maxInputTokens: cfg?.maxInputTokens,
@@ -90,15 +70,14 @@ function buildRoleParams(
 }
 
 /**
- * Resolve the run's models:
+ * Resolve the run's ONE model (no runtime fallback — dropped in 04b-05):
  *  1. org-level BYOK config (scoped locally — no cross-review race)
  *  2. a v2 blob is routed through `StaticTaskStrategy` for the `codeReview`
  *     task (byokModelId id-override first, then the legacy byokModel NAME
  *     during the window); a legacy `{main,fallback}` blob keeps the exact
  *     `byokModel`-onto-`main` behavior.
- *  3. build the Vercel model for `main`, and for `fallback` when configured;
- *     `defaultModelOverride` only kicks in when there is no BYOK config
- *     (trial/public-demo).
+ *  3. build the Vercel model for `main`; `defaultModelOverride` only kicks in
+ *     when there is no BYOK config (trial/public-demo).
  *
  * The v2 branch sources the FULL config via `getBYOKConfigV2Raw` (not the
  * collapsed `getBYOKConfig`, which always yields `main`) so routing is by
@@ -140,32 +119,14 @@ export async function resolveAgentModel(
             openrouterAllowFallbacks: (slot as any)?.openrouterAllowFallbacks,
         };
 
-        // Fallback resolution LEFT AS-IS (removed in 04b-05). The runtime
-        // fallback is a separate resilience provider, not the routed task
-        // model — the per-repo override never applies to it.
-        const fallbackSlot = resolveModelSlotFromV2(
-            rawV2,
-            rawV2.routing?.fallbackModelId,
-        );
+        // 1 model per task: no fallback slot is resolved or returned.
         const byokConfig = (
-            slot
-                ? {
-                      main: slot,
-                      ...(fallbackSlot ? { fallback: fallbackSlot } : {}),
-                  }
-                : undefined
+            slot ? { main: slot } : undefined
         ) as BYOKConfig | undefined;
 
         return {
             byokConfig,
             main,
-            fallback: byokConfig?.fallback // removed in 04b-05 (runtime fallback)
-                ? buildRoleParams(
-                      byokConfig,
-                      'fallback',
-                      input.defaultModelOverride,
-                  )
-                : null,
         };
     }
 
@@ -187,15 +148,7 @@ export async function resolveAgentModel(
         byokConfig: byokConfig ?? undefined,
         main: buildRoleParams(
             byokConfig ?? undefined,
-            'main',
             input.defaultModelOverride,
         ),
-        fallback: byokConfig?.fallback // removed in 04b-06 (legacy branch)
-            ? buildRoleParams(
-                  byokConfig ?? undefined,
-                  'fallback',
-                  input.defaultModelOverride,
-              )
-            : null,
     };
 }

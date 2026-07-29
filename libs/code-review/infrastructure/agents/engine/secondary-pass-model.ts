@@ -10,15 +10,15 @@ import type { BYOKConfig } from '@kodus/kodus-common/llm';
  * suggestion formatting) — NOT the main finding-generation pass.
  *
  * Prefer the org's BYOK so secondary cost rides the client key. Platform
- * `gpt-5.4-mini` remains the fallback for trial / no-BYOK.
+ * `gpt-5.4-mini` is the trial / no-BYOK model.
  *
  * Fail-soft is the caller's job: null model → skip pass / keep agent values.
  */
 export const SECONDARY_PASS_MODEL_ID = 'gpt-5.4-mini';
 
-/** True when secondary should bill the client BYOK key. */
+/** True when secondary should bill the client BYOK key (one resolved slot). */
 export function isSecondaryByok(byokConfig?: BYOKConfig | null): boolean {
-    return !!(byokConfig?.main || byokConfig?.fallback);
+    return !!byokConfig?.main;
 }
 
 function platformSecondaryModel(): any | null {
@@ -33,8 +33,8 @@ function platformSecondaryModel(): any | null {
 }
 
 /**
- * Resolve the secondary-pass model:
- *   1. Org BYOK main (else fallback) — when configured
+ * Resolve the ONE secondary-pass model (no main→fallback branch):
+ *   1. Org BYOK resolved slot — when configured
  *   2. Platform OpenAI gpt-5.4-mini — trial / no BYOK
  *   3. getInternalModel — self-hosted env or last resort
  *
@@ -42,12 +42,8 @@ function platformSecondaryModel(): any | null {
  */
 export function resolveSecondaryPassModel(byokConfig?: BYOKConfig): any {
     if (isSecondaryByok(byokConfig)) {
-        // Prefer main so secondary matches the model the client configured for
-        // review. Fallback only when main is missing.
-        if (byokConfig?.main) {
-            return byokToVercelModel(byokConfig, 'main');
-        }
-        return byokToVercelModel(byokConfig, 'fallback');
+        // Secondary matches the model the client configured for review.
+        return byokToVercelModel(byokConfig, 'main');
     }
 
     const platform = platformSecondaryModel();

@@ -374,7 +374,10 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         );
         const provider = new KodyRulesAgentProvider(
             {} as any, // promptRunnerService (unused — local stack)
-            { getBYOKConfig: jest.fn(async () => null) } as any, // permission (system model)
+            {
+                getBYOKConfig: jest.fn(async () => null),
+                getBYOKConfigV2Raw: jest.fn(async () => null),
+            } as any, // permission (system model)
             {} as any, // observability (unused — runStructuredReviewCall mocked)
         );
         return { provider, judge: mockRunStructuredReviewCall };

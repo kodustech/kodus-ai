@@ -165,9 +165,9 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             });
 
             // Single-shot structured call on the LOCAL (Vercel) stack — no tools,
-            // no loop, no kodus-common. Main = the org's BYOK model or our managed
-            // default (kimi-k2.7-code via Moonshot); fallback = the org's own
-            // fallback (BYOK) or, for trial only, our managed Groq gpt-oss-120b.
+            // no loop, no kodus-common. One model = the org's BYOK model or our
+            // managed default (kimi-k2.7-code via Moonshot); there is no 2nd-model
+            // fallback (removed in 04b-05), only the same-model latency guard.
             // See runStructuredReviewCall for the model policy. runAiSdkLLMInSpan
             // (inside the helper) emits the `tu`-stamped LLM-usage span so the
             // sharded path's tokens still reach the user-facing token analytics.

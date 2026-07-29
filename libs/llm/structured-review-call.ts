@@ -2,21 +2,17 @@
  * Structured single-shot LLM call for the review pipeline, on the LOCAL
  * (Vercel AI SDK) stack — no kodus-common PromptRunnerService.
  *
- * Model policy (mirrors the code-review agents):
- *   - main:      the org's BYOK model, or our managed default when no BYOK
- *                (`kimi-k2.7-code` via Moonshot — resolved by byokToVercelModel).
- *   - fallback:  the org's OWN configured fallback (BYOK) if present; otherwise,
- *                ONLY for a trial/no-BYOK org, our managed `openai/gpt-oss-120b`
- *                on Groq. A BYOK org whose main fails does NOT cascade onto our
- *                managed Groq — that would bill us for their inference. A BYOK
- *                org without its own fallback simply fails.
+ * Model policy (1 model per task — no runtime error-recovery fallback):
+ *   - the run resolves ONE model: the org's BYOK model, or our managed default
+ *     when no BYOK (`kimi-k2.7-code` via Moonshot — resolved by byokToVercelModel).
  *
- * The managed Groq fallback is built from the same env the (removed) kodus-common
- * Groq provider used (`API_GROQ_API_KEY` / `API_GROQ_BASE_URL`), so there is no
- * decrypt path and no synthetic BYOK config.
+ * There is NO 2nd-model cascade: no managed Groq for trial orgs, no
+ * `byok-fallback` for BYOK orgs. A model failure/timeout fails the call. The
+ * only retry is the D-00c latency guard below — ONE re-issue of the SAME model
+ * on a transient (5xx/network) blip; it never touches a 2nd model.
+ * (Reliability caveat accepted 2026-07-29; resilience is re-addressed in Phase 5.)
  */
 import { Output, type LanguageModel, type Schema } from 'ai';
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import type { BYOKConfig } from '@kodus/kodus-common/llm';
 import { z } from 'zod';
 import { byokToVercelModel, getModelName } from '@libs/llm/byok-to-vercel';
@@ -54,19 +50,6 @@ function isAbortOrHardTimeout(err: unknown): boolean {
     return /\[HARD-TIMEOUT\]|aborted|timed?\s*out|timeout/i.test(text);
 }
 
-/** Managed trial-only fallback: Groq `openai/gpt-oss-120b`. Null if unconfigured. */
-function buildTrialGroqFallback(): LanguageModel | null {
-    const apiKey = process.env.API_GROQ_API_KEY;
-    if (!apiKey) {
-        return null;
-    }
-    return createOpenAICompatible({
-        name: 'groq',
-        apiKey,
-        baseURL: process.env.API_GROQ_BASE_URL || 'https://api.groq.com/openai/v1',
-    })('openai/gpt-oss-120b') as unknown as LanguageModel;
-}
-
 export interface StructuredReviewCallParams<S extends z.ZodType | Schema> {
     byokConfig?: BYOKConfig;
     /** A zod schema, or an AI-SDK `jsonSchema()` Schema when the caller
@@ -83,9 +66,10 @@ export interface StructuredReviewCallParams<S extends z.ZodType | Schema> {
 }
 
 /**
- * Run a structured-output call on the review default (or BYOK) model, falling
- * back to the org's own fallback / the trial Groq model per the policy above.
- * Returns the parsed object validated against `schema`.
+ * Run a structured-output call on the ONE resolved review model (BYOK or the
+ * managed default). No 2nd-model fallback: a failure/timeout throws (bar the
+ * single same-model latency-guard re-issue). Returns the parsed object validated
+ * against `schema`.
  */
 export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
     params: StructuredReviewCallParams<S>,
@@ -100,8 +84,6 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
         attrs,
         observabilityService,
     } = params;
-
-    const hasByok = !!byokConfig?.main;
 
     // A raw zod schema would go through the AI SDK's zodSchema(), whose
     // INPUT-side conversion drops `.optional()` fields from `required` —
@@ -134,29 +116,14 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
         { byokConfig, organizationId, role: 'main' },
     );
 
-    // Customer BYOK fallback wins; else trial-only managed Groq; else none.
-    const fallbackModel: LanguageModel | null = byokConfig?.fallback
-        ? wrapByokModel(
-              byokToVercelModel(byokConfig, 'fallback', {
-                  structuredOutputs: true,
-              }),
-              { byokConfig, organizationId, role: 'fallback' },
-          )
-        : hasByok
-          ? null
-          : buildTrialGroqFallback();
-
-    const call = (
-        model: LanguageModel,
-        modelName: string,
-        isFallback: boolean,
-    ): Promise<any> =>
+    const call = (model: LanguageModel, modelName: string): Promise<any> =>
         observabilityService
             .runAiSdkLLMInSpan<any>({
                 spanName: runName,
                 runName,
                 model: modelName,
-                attrs: { ...(attrs ?? {}), fallback: isFallback },
+                // No 2nd-model cascade: every attempt is the same resolved model.
+                attrs: { ...(attrs ?? {}), fallback: false },
                 exec: () =>
                     tracedGenerateText({
                         model: model as any,
@@ -182,33 +149,23 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
             );
 
     try {
-        return await call(mainModel, getModelName(byokConfig), false);
+        return await call(mainModel, getModelName(byokConfig));
     } catch (err) {
         // D-00c minimal latency guard: exactly ONE same-model re-issue on a
-        // transient (5xx / network) failure BEFORE touching the fallback. The
-        // gate skips AbortError / [HARD-TIMEOUT] because classifyLLMError lumps
-        // them into TRANSIENT, yet re-issuing a slow/timed-out call just times
-        // out again (Phase 0 Pitfall 3). No new AbortController / timeout /
-        // retry loop — the re-issue reuses the same call() closure and its
-        // existing timeoutSignal(LLM_CALL_TIMEOUT_MS)/hardTimeout chain.
+        // transient (5xx / network) failure. The gate skips AbortError /
+        // [HARD-TIMEOUT] because classifyLLMError lumps them into TRANSIENT, yet
+        // re-issuing a slow/timed-out call just times out again (Phase 0 Pitfall
+        // 3). No new AbortController / timeout / retry loop — the re-issue reuses
+        // the same call() closure and its existing
+        // timeoutSignal(LLM_CALL_TIMEOUT_MS)/hardTimeout chain. This is NOT the
+        // removed model fallback: it re-runs the SAME model, once. If the
+        // re-issue also fails, the error propagates (no 2nd model).
         if (
             classifyLLMError(err).category === LlmErrorCategory.TRANSIENT &&
             !isAbortOrHardTimeout(err)
         ) {
-            try {
-                return await call(mainModel, getModelName(byokConfig), false);
-            } catch {
-                // Re-issue also failed — fall through to the existing fallback
-                // logic unchanged (capped at one re-issue, no loop).
-            }
+            return await call(mainModel, getModelName(byokConfig));
         }
-        if (!fallbackModel) {
-            throw err;
-        }
-        return await call(
-            fallbackModel,
-            hasByok ? 'byok-fallback' : 'groq:openai/gpt-oss-120b',
-            true,
-        );
+        throw err;
     }
 }

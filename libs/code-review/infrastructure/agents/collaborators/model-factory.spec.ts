@@ -1,4 +1,5 @@
-// Legacy {main,fallback} path still builds via byokToVercelModel/getModelName.
+// Legacy {main} path still builds via byokToVercelModel/getModelName. The
+// runtime fallback was removed in 04b-05 — resolveAgentModel resolves ONE model.
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     byokToVercelModel: jest.fn(
         (_cfg: any, role: string) => ({ tag: `model:${role}` }) as any,
@@ -61,13 +62,14 @@ function mainConfigPassedToBuild() {
     return byokToVercelModel.mock.calls.find((c: any[]) => c[1] === 'main')?.[0];
 }
 
-function fallbackConfigPassedToBuild() {
+/** No 2nd model is ever built — byokToVercelModel is never called for 'fallback'. */
+function assertNoFallbackModelBuilt() {
     const {
         byokToVercelModel,
     } = require('@libs/llm/byok-to-vercel') as { byokToVercelModel: jest.Mock };
-    return byokToVercelModel.mock.calls.find(
-        (c: any[]) => c[1] === 'fallback',
-    )?.[0];
+    expect(
+        byokToVercelModel.mock.calls.some((c: any[]) => c[1] === 'fallback'),
+    ).toBe(false);
 }
 
 // A sentinel resolveTaskModel return for a routed openai slot.
@@ -95,8 +97,8 @@ describe('resolveAgentModel', () => {
         jest.clearAllMocks();
     });
 
-    describe('legacy {main,fallback} configs (unchanged behavior)', () => {
-        it('builds only a main bundle when no fallback is configured', async () => {
+    describe('legacy {main} configs (single model — no runtime fallback)', () => {
+        it('builds a main bundle and carries NO fallback field', async () => {
             const svc = permissionServiceReturning({
                 main: {
                     provider: 'openai',
@@ -114,14 +116,17 @@ describe('resolveAgentModel', () => {
             expect(resolved.main.model).toEqual({ tag: 'model:main' });
             expect(resolved.main.reasoningEffort).toBe('high');
             expect(resolved.main.byokProvider).toBe('openai');
-            expect(resolved.fallback).toBeNull();
+            // The runtime fallback is gone: no fallback field, no 2nd model.
+            expect(resolved).not.toHaveProperty('fallback');
+            assertNoFallbackModelBuilt();
             // The v2 seam is never touched on the legacy branch.
             expect(resolveTaskModelMock).not.toHaveBeenCalled();
         });
 
-        it('builds a fallback bundle from the configured fallback provider', async () => {
+        it('ignores a configured fallback provider — resolves main only', async () => {
             const svc = permissionServiceReturning({
                 main: { provider: 'openai', model: 'gpt-main' },
+                // A legacy blob may still carry a `fallback`; it is NOT resolved.
                 fallback: { provider: 'anthropic', model: 'claude-fb' },
             });
 
@@ -130,14 +135,12 @@ describe('resolveAgentModel', () => {
                 svc,
             );
 
-            expect(resolved.fallback).not.toBeNull();
-            expect(resolved.fallback!.role).toBe('fallback');
-            expect(resolved.fallback!.model).toEqual({ tag: 'model:fallback' });
-            expect(resolved.fallback!.modelName).toBe('anthropic:claude-fb');
-            expect(resolved.fallback!.byokProvider).toBe('anthropic');
+            expect(resolved.main.role).toBe('main');
+            expect(resolved).not.toHaveProperty('fallback');
+            assertNoFallbackModelBuilt();
         });
 
-        it('applies the per-repo byokModel override to main only, leaving fallback intact', async () => {
+        it('applies the per-repo byokModel override to main (no fallback build)', async () => {
             const svc = permissionServiceReturning({
                 main: { provider: 'openai', model: 'gpt-main' },
                 fallback: { provider: 'anthropic', model: 'claude-fb' },
@@ -152,9 +155,7 @@ describe('resolveAgentModel', () => {
             );
 
             expect(mainConfigPassedToBuild()?.main.model).toBe('gpt-override');
-            expect(fallbackConfigPassedToBuild()?.fallback.model).toBe(
-                'claude-fb',
-            );
+            assertNoFallbackModelBuilt();
         });
     });
 
@@ -230,7 +231,7 @@ describe('resolveAgentModel', () => {
             expect(resolveTaskModelMock.mock.calls[0][2].ctx).toEqual({});
         });
 
-        it('materializes the fallback slot from routing.fallbackModelId (left as-is)', async () => {
+        it('ignores routing.fallbackModelId — no fallback slot is resolved', async () => {
             resolveTaskModelMock.mockReturnValue(resolvedRouted());
             const svc = permissionServiceReturningV2(
                 v2({ defaultModelId: 'm-A', fallbackModelId: 'm-B' }),
@@ -241,11 +242,8 @@ describe('resolveAgentModel', () => {
                 svc,
             );
 
-            expect(resolved.fallback).not.toBeNull();
-            // fallback is still built via buildRoleParams → byokToVercelModel.
-            expect(fallbackConfigPassedToBuild()?.fallback.model).toBe(
-                'gpt-5-mini',
-            );
+            expect(resolved).not.toHaveProperty('fallback');
+            assertNoFallbackModelBuilt();
         });
 
         it('degrades to the env/managed default (no byokConfig) on a null-slot verdict', async () => {
@@ -269,7 +267,7 @@ describe('resolveAgentModel', () => {
             expect(resolved.byokConfig).toBeUndefined();
             expect(resolved.main.model).toEqual({ tag: 'env-default' });
             expect(resolved.main.byokProvider).toBeUndefined();
-            expect(resolved.fallback).toBeNull();
+            expect(resolved).not.toHaveProperty('fallback');
         });
     });
 });

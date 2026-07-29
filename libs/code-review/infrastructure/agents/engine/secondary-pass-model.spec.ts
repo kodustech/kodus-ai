@@ -65,11 +65,14 @@ describe('resolveSecondaryPassModel — BYOK default', () => {
         expect(isSecondaryByok(byok as any)).toBe(true);
     });
 
-    it('uses BYOK fallback when main is absent', () => {
+    it('does NOT treat a legacy fallback-only blob (no main) as BYOK — degrades to platform', () => {
+        // Single-model policy (04b-05): only the resolved `main` slot counts.
+        // A blob carrying only a legacy `fallback` is not a resolved BYOK slot.
         const onlyFallback = { fallback: byok.fallback };
-        resolveSecondaryPassModel(onlyFallback as any);
-        expect(byokToVercelModel).toHaveBeenCalledWith(onlyFallback, 'fallback');
-        expect(isSecondaryByok(onlyFallback as any)).toBe(true);
+        const model = resolveSecondaryPassModel(onlyFallback as any);
+        expect(isSecondaryByok(onlyFallback as any)).toBe(false);
+        expect(byokToVercelModel).not.toHaveBeenCalled();
+        expect(model).toEqual({ __platform: SECONDARY_PASS_MODEL_ID });
     });
 
     it('uses platform gpt-5.4-mini when no BYOK (trial path)', () => {
