@@ -1,6 +1,6 @@
 {
     "name": "@kodus/cli",
-    "version": "0.4.19",
+    "version": "0.4.20",
     "description": "Kodus CLI - AI-powered code review from your terminal",
     "type": "module",
     "bin": {
