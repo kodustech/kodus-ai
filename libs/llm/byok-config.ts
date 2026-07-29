@@ -124,3 +124,17 @@ export function isV2Config(raw: unknown): raw is BYOKConfigV2 {
         (raw as { version?: unknown }).version === 2
     );
 }
+
+/**
+ * True when a v2 config carries at least one NON-managed (real BYOK) credential
+ * — i.e. the org brought its own key. A managed credential (`managed: true`) is
+ * the Kodus env-default and does NOT count as BYOK. This is the v2-native
+ * replacement for the legacy `Boolean(byokConfig?.main)` has-BYOK presence check
+ * (a managed/env default always produced a `main`, so `.main` presence
+ * over-reported BYOK). A legacy / absent / non-v2 blob is treated as "no BYOK".
+ */
+export function hasNonManagedCredential(
+    config: BYOKConfigV2 | null | undefined,
+): boolean {
+    return isV2Config(config) && config.credentials.some((c) => !c.managed);
+}

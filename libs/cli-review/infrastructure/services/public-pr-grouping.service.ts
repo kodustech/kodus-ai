@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createLogger } from '@libs/core/log/logger';
 import { generateObject } from 'ai';
 import { z } from 'zod';
-import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import { resolveTaskModel } from '@libs/llm/resolve-task-model';
 import type { IPublicPrGroupingService } from '@libs/cli-review/domain/contracts/public-pr-grouping.service.contract';
 import type { PublicPrMetadata } from './github-public-pr.service';
 
@@ -74,12 +74,11 @@ export class PublicPrGroupingService implements IPublicPrGroupingService {
         if (changedFiles.length < 2) return undefined;
 
         try {
-            const model = byokToVercelModel(
-                undefined,
-                'main',
-                {},
-                GROUPING_MODEL,
-            );
+            // Public demo: no BYOK → null slot → the forced cheaper default
+            // (GROUPING_MODEL) via resolveTaskModel's defaultModelOverride.
+            const { model } = resolveTaskModel(undefined, 'prSummary', {
+                defaultModelOverride: GROUPING_MODEL,
+            });
             const truncated = diff.length > MAX_DIFF_CHARS;
 
             const { object } = await generateObject({

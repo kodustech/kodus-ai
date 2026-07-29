@@ -8,16 +8,12 @@ import { Injectable } from '@nestjs/common';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { resolveModelSlotFromV2 } from '@libs/llm/normalize-byok-config';
-import { StaticTaskStrategy } from '@libs/llm/static-task-strategy';
+import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
 
 @Injectable()
 export abstract class BaseAgentProvider {
     protected byokConfig?: BYOKConfig;
     protected organizationAndTeamData?: OrganizationAndTeamData;
-
-    // Manual routing policy (Phase 4). Stateless + dependency-free.
-    private readonly routingStrategy = new StaticTaskStrategy();
 
     protected abstract readonly defaultLLMConfig: {
         llmProvider: LLMModelProvider;
@@ -44,12 +40,12 @@ export abstract class BaseAgentProvider {
     /**
      * Fetches BYOK configuration for the organization.
      *
-     * Skill agents run the `conversation` task. For a v2 blob, the FULL config
-     * is sourced via `getBYOKConfigV2Raw` (not the collapsed `getBYOKConfig`,
-     * which always yields `main`) and routed through `StaticTaskStrategy` for
-     * the `conversation` task, so routing is by task rather than always main
-     * (RESEARCH Pitfall 1). A legacy `{main,fallback}` blob keeps the exact
-     * prior `byokModel`-onto-`main` behavior.
+     * Skill agents run the `conversation` task. The FULL v2 config is sourced
+     * via `getBYOKConfigV2Raw` and routed through `resolveTaskByokConfig` for
+     * the `conversation` task, so routing is by task rather than always the
+     * collapsed main slot (RESEARCH Pitfall 1). A non-v2 / managed / BLOCKED
+     * config resolves to `undefined` → the env/managed default (matches a
+     * missing config today; never throws).
      *
      * `byokModelOverride` is the legacy per-repository/directory model NAME
      * resolved by the code review pipeline (`codeReviewConfig.byokModel`).
@@ -69,57 +65,12 @@ export abstract class BaseAgentProvider {
                 organizationAndTeamData,
             );
 
-        if (rawV2) {
-            // v2: route the conversation task. byokModelId (id) wins over the
-            // legacy byokModel NAME; the strategy handles the id-THEN-name match.
-            const overrideRef =
-                byokModelIdOverride?.trim() || byokModelOverride?.trim();
-            const verdict = this.routingStrategy.resolve(
-                'conversation',
-                overrideRef ? { override: { modelId: overrideRef } } : {},
-                rawV2,
-            );
-
-            if (verdict.modelId) {
-                const routedMain = resolveModelSlotFromV2(
-                    rawV2,
-                    verdict.modelId,
-                );
-                const main =
-                    routedMain && verdict.modelName
-                        ? { ...routedMain, model: verdict.modelName }
-                        : routedMain;
-                if (main) {
-                    const fallback = resolveModelSlotFromV2(
-                        rawV2,
-                        rawV2.routing?.fallbackModelId,
-                    );
-                    this.byokConfig = {
-                        main,
-                        ...(fallback ? { fallback } : {}),
-                    } as BYOKConfig;
-                    return;
-                }
-            }
-            // BLOCKED / unresolvable → env/managed default (matches missing
-            // config today; never throws).
-            this.byokConfig = undefined;
-            return;
-        }
-
-        // Legacy {main,fallback}: exact prior behavior, byte-for-byte.
-        const byokConfig =
-            await this.permissionValidationService.getBYOKConfig(
-                organizationAndTeamData,
-            );
-
-        const overrideModel = byokModelOverride?.trim();
-        this.byokConfig =
-            overrideModel && byokConfig?.main
-                ? {
-                      ...byokConfig,
-                      main: { ...byokConfig.main, model: overrideModel },
-                  }
-                : byokConfig;
+        // byokModelId (id) wins over the legacy byokModel NAME; the strategy
+        // handles the id-THEN-name match inside resolveTaskByokConfig.
+        const overrideRef =
+            byokModelIdOverride?.trim() || byokModelOverride?.trim();
+        this.byokConfig = resolveTaskByokConfig(rawV2, 'conversation', {
+            ctx: overrideRef ? { override: { modelId: overrideRef } } : {},
+        });
     }
 }

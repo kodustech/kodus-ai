@@ -5,6 +5,18 @@ import { GetOrgByokModelsUseCase } from './get-org-byok-models.use-case';
 
 const ORG = { organizationId: 'org-1', teamId: 'team-1' } as any;
 
+/** A v2 BYOK config blob carrying the given model ids (the stored shape). */
+const v2 = (models: string[]) => ({
+    version: 2,
+    credentials: [{ id: 'c1', provider: 'openai' }],
+    models: models.map((model, i) => ({
+        id: `m${i}`,
+        credentialId: 'c1',
+        model,
+    })),
+    routing: {},
+});
+
 describe('GetOrgByokModelsUseCase', () => {
     let useCase: GetOrgByokModelsUseCase;
     let orgParams: { findByKey: jest.Mock };
@@ -19,12 +31,9 @@ describe('GetOrgByokModelsUseCase', () => {
         );
     });
 
-    it('collects BYOK main + fallback plus per-repo/directory overrides, deduped', async () => {
+    it('collects every configured v2 model plus per-repo/directory overrides, deduped', async () => {
         orgParams.findByKey.mockResolvedValue({
-            configValue: {
-                main: { model: 'gpt-main' },
-                fallback: { model: 'claude-fallback' },
-            },
+            configValue: v2(['gpt-main', 'claude-fallback']),
         });
         parameters.findByKey.mockResolvedValue({
             configValue: {
@@ -62,7 +71,7 @@ describe('GetOrgByokModelsUseCase', () => {
 
     it('ignores inherit-marker (empty string) byokModel overrides', async () => {
         orgParams.findByKey.mockResolvedValue({
-            configValue: { main: { model: 'gpt-main' } },
+            configValue: v2(['gpt-main']),
         });
         parameters.findByKey.mockResolvedValue({
             configValue: {
@@ -80,9 +89,9 @@ describe('GetOrgByokModelsUseCase', () => {
         ]);
     });
 
-    it('falls back to main + fallback when there is no code-review config', async () => {
+    it('falls back to the configured v2 models when there is no code-review config', async () => {
         orgParams.findByKey.mockResolvedValue({
-            configValue: { main: { model: 'only-main' } },
+            configValue: v2(['only-main']),
         });
         parameters.findByKey.mockResolvedValue(null);
 

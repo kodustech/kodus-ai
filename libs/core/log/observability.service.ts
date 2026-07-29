@@ -10,62 +10,47 @@ import { ConnectionString } from 'connection-string';
 import { DatabaseConnection } from '@libs/core/infrastructure/config/types';
 
 import { createLogger } from '@libs/core/log/logger';
-import { TokenTrackingHandler, BYOKConfig } from '@kodus/kodus-common/llm';
+import { TokenTrackingHandler } from '@kodus/kodus-common/llm';
 import { CallbackHandler as LangfuseCallbackHandler } from '@langfuse/langchain';
 import { shouldTrace } from './langfuse';
 import { deriveTu } from './token-usage-tu';
 
 /**
- * Narrow projection of BYOKConfig that carries only the fields the
- * observability layer actually needs (provider + model). Everything else —
- * including `apiKey` — is intentionally excluded so that even if a future
- * code change logs the value (span attributes, debug logs, error dumps),
- * customer API keys cannot leak.
+ * Narrow projection of a resolved BYOK slot — just provider + model. The
+ * observability layer receives the resolved slot(s) the run actually used (not
+ * the internal `{main,fallback}` intermediate), and `apiKey` is intentionally
+ * excluded so that even if a future code change logs the value (span
+ * attributes, debug logs, error dumps), customer API keys cannot leak.
  */
-type BYOKConfigSafeView = {
-    main?: { provider: string; model: string };
-    fallback?: { provider: string; model: string };
-};
+type ResolvedModelView = { provider: string; model: string };
 
 /**
- * Strip everything from a BYOKConfig except provider + model on main/fallback.
- * Returns `undefined` when the input is nullish so downstream code can short-
- * circuit exactly as before.
+ * Keep only the resolved slots that carry both provider + model (dropping
+ * everything else, including any `apiKey`). Returns `[]` for a nullish/empty
+ * input so downstream code short-circuits exactly as before.
  */
-function toSafeByokView(
-    byokConfig?: BYOKConfig,
-): BYOKConfigSafeView | undefined {
-    if (!byokConfig) return undefined;
-    const view: BYOKConfigSafeView = {};
-    if (byokConfig.main?.model && byokConfig.main?.provider) {
-        view.main = {
-            provider: byokConfig.main.provider,
-            model: byokConfig.main.model,
-        };
-    }
-    if (byokConfig.fallback?.model && byokConfig.fallback?.provider) {
-        view.fallback = {
-            provider: byokConfig.fallback.provider,
-            model: byokConfig.fallback.model,
-        };
-    }
-    return view.main || view.fallback ? view : undefined;
+function toResolvedModelViews(
+    slots?: Array<{ provider?: string; model?: string } | null | undefined>,
+): ResolvedModelView[] {
+    if (!slots?.length) return [];
+    return slots
+        .filter((s): s is ResolvedModelView =>
+            Boolean(s?.provider && s?.model),
+        )
+        .map((s) => ({ provider: s.provider, model: s.model }));
 }
 
 /**
- * Resolves a raw model name (from LangChain) to include the BYOK provider prefix.
- * Matches against main and fallback configs to pick the correct provider.
+ * Resolves a raw model name (from LangChain) to include the BYOK provider
+ * prefix by matching it against the resolved slot(s) the run used.
  */
 function resolveModelName(
     rawModel: string,
-    byokView?: BYOKConfigSafeView,
+    resolvedModels?: ResolvedModelView[],
 ): string {
-    if (!byokView) return rawModel;
-    if (byokView.main?.model === rawModel)
-        return `${byokView.main.provider}:${rawModel}`;
-    if (byokView.fallback?.model === rawModel)
-        return `${byokView.fallback.provider}:${rawModel}`;
-    return rawModel;
+    if (!resolvedModels?.length) return rawModel;
+    const match = resolvedModels.find((m) => m.model === rawModel);
+    return match ? `${match.provider}:${rawModel}` : rawModel;
 }
 
 export type TokenUsage = {
@@ -599,12 +584,12 @@ export class ObservabilityService implements OnModuleInit {
             metadata,
             runName: explicitName,
             reset,
-            byokConfig: finalizeByokConfig,
+            resolvedModels,
         }: {
             metadata?: Record<string, any>;
             runName?: string;
             reset?: boolean;
-            byokConfig?: BYOKConfigSafeView;
+            resolvedModels?: ResolvedModelView[];
         } = {}) => {
             const obs = this.getObsInstance();
             const span = obs.getCurrentSpan();
@@ -617,12 +602,13 @@ export class ObservabilityService implements OnModuleInit {
 
             const s = this.summarize(usages);
 
-            // Resolve model names with BYOK provider prefix when available.
-            const resolvedModels = s.modelsArr.map((m) =>
-                resolveModelName(m, finalizeByokConfig),
+            // Prefix each raw model name with its BYOK provider by matching
+            // against the resolved slot(s) the run used.
+            const prefixedModels = s.modelsArr.map((m) =>
+                resolveModelName(m, resolvedModels),
             );
-            const resolvedModel = resolvedModels.length
-                ? resolvedModels.join(',')
+            const resolvedModel = prefixedModels.length
+                ? prefixedModels.join(',')
                 : undefined;
 
             if (span) {
@@ -678,17 +664,12 @@ export class ObservabilityService implements OnModuleInit {
         spanName: string;
         runName?: string;
         attrs?: Record<string, any>;
-        byokConfig?: BYOKConfig;
+        /** The resolved slot(s) the run used — provider+model only, never a key. */
+        resolvedModels?: Array<{ provider?: string; model?: string }>;
         exec: (callbacks: any[]) => Promise<T>;
     }): Promise<{ result: T; usage: any }> {
-        const {
-            spanName,
-            runName,
-            attrs,
-            byokConfig: spanByokConfig,
-            exec,
-        } = params;
-        const safeByokView = toSafeByokView(spanByokConfig);
+        const { spanName, runName, attrs, resolvedModels, exec } = params;
+        const resolvedModelViews = toResolvedModelViews(resolvedModels);
         const obs = this.getObsInstance();
         const span = obs.startSpan(spanName);
 
@@ -705,7 +686,7 @@ export class ObservabilityService implements OnModuleInit {
                 const usage = await finalize({
                     metadata: attrs,
                     reset: true,
-                    byokConfig: safeByokView,
+                    resolvedModels: resolvedModelViews,
                 });
                 return { result, usage };
             });

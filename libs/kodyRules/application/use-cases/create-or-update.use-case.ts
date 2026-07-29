@@ -25,6 +25,7 @@ import {
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
 import {
     IKodyRuleDetectorCompiler,
     KODY_RULE_DETECTOR_COMPILER_TOKEN,
@@ -701,14 +702,19 @@ export class CreateOrUpdateKodyRulesUseCase {
                         },
                     ];
 
-                    const [byokConfig, subscriptionStatus] = await Promise.all([
-                        this.permissionValidationService.getBYOKConfig(
+                    const [rawV2, subscriptionStatus] = await Promise.all([
+                        this.permissionValidationService.getBYOKConfigV2Raw(
                             detectionOrgData,
                         ),
                         this.permissionValidationService.getSubscriptionStatus(
                             detectionOrgData,
                         ),
                     ]);
+                    // v2-native carrier for the reference-detection chain.
+                    const byokConfig = resolveTaskByokConfig(
+                        rawV2,
+                        'codeReview',
+                    );
 
                     const contextReferenceId =
                         await this.contextReferenceDetectionService.detectAndSaveReferences(

@@ -24,6 +24,7 @@ import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { resolveAgentModel } from '@libs/llm/agent-model';
+import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
@@ -126,35 +127,39 @@ export class ConversationAgentProvider {
             metadata: { organizationAndTeamData, thread, userLanguage },
         });
 
-        const byokConfig = await this.resolveBYOKConfig(organizationAndTeamData);
+        const resolvedByok =
+            await this.resolveBYOKConfig(organizationAndTeamData);
+        // The resolved slot the conversation task uses — provider/model/params
+        // read off it, never the internal `{main,fallback}` shape.
+        const slot = resolvedByok?.main;
         // Standard model setup (same as every agent): BYOK resolve + concurrency
         // limiter + failure reporter.
-        const model = resolveAgentModel(byokConfig, {
+        const model = resolveAgentModel(resolvedByok, {
             organizationId: organizationAndTeamData.organizationId?.toString(),
-            provider: byokConfig?.main?.provider,
+            provider: slot?.provider,
             reporter: this.byokErrorCounter
                 ? (e) => void this.byokErrorCounter!.record(e)
                 : undefined,
         });
 
-        // Per-call model params come straight from the org's saved BYOK config
+        // Per-call model params come straight from the resolved slot
         // (temperature / maxOutputTokens / reasoningEffort) — NOT hardcoded. The
         // old hardcoded `temperature: 0` overrode the config and broke models
         // that only accept their own value (e.g. kimi-k2.7-code wants 1).
         // `temperature` is passed through only when configured; omitting it lets
         // the provider use its valid default.
-        const temperature = byokConfig?.main?.temperature;
+        const temperature = slot?.temperature;
         const maxOutputTokens =
-            byokConfig?.main?.maxOutputTokens ?? this.defaultLLMConfig.maxTokens;
+            slot?.maxOutputTokens ?? this.defaultLLMConfig.maxTokens;
 
         // Thinking/reasoning budget. `buildProviderOptions` maps an effort tier
         // to the right per-provider shape (Gemini thinkingBudget/thinkingLevel,
         // Anthropic thinking, OpenAI reasoningEffort). The tier also comes from
-        // the BYOK config (the org configured it).
+        // the resolved slot (the org configured it).
         const providerOptions = buildProviderOptions('conversationAgent', undefined, {
-            reasoningEffort: byokConfig?.main?.reasoningEffort ?? 'low',
-            byokProvider: byokConfig?.main?.provider,
-            modelName: byokConfig?.main?.model,
+            reasoningEffort: slot?.reasoningEffort ?? 'low',
+            byokProvider: slot?.provider,
+            modelName: slot?.model,
         });
 
         // Tools: MCP (memory, integrations) + native sandbox tools (grep,
@@ -216,7 +221,7 @@ export class ConversationAgentProvider {
                             organizationAndTeamData.organizationId?.toString(),
                         teamId: organizationAndTeamData.teamId?.toString(),
                         repositoryId: prepareContext?.repository?.id?.toString(),
-                        provider: byokConfig?.main?.provider,
+                        provider: slot?.provider,
                     }),
                 },
                 ctx,
@@ -233,10 +238,10 @@ export class ConversationAgentProvider {
                 phase: 'conversation',
                 spanName: 'ConversationalAgent::conversationAgent',
                 runName: 'conversationAgent',
-                model: byokConfig?.main?.model,
+                model: slot?.model,
                 // Real billing source: a BYOK org runs on its own key -> 'byok'.
                 // (The legacy code hardcoded 'system', misattributing BYOK cost.)
-                isByok: !!byokConfig,
+                isByok: !!resolvedByok,
                 usage: state.usage,
                 organizationId: organizationAndTeamData.organizationId,
                 teamId: organizationAndTeamData.teamId,
@@ -417,16 +422,19 @@ export class ConversationAgentProvider {
     }
 
     /**
-     * Resolve the BYOK config for the org. Mirrors the legacy base provider's
-     * `fetchBYOKConfig` (without the `byokModelOverride`, which the
-     * conversation path never set).
+     * Resolve the BYOK carrier for the org's `conversation` task. v2-native:
+     * source the raw v2 config and route it through `resolveTaskByokConfig`
+     * (StaticTaskStrategy over `models[]`/`routing`), so a non-v2/managed/
+     * BLOCKED config yields `undefined` → the env/managed default.
      */
     private async resolveBYOKConfig(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<BYOKConfig | undefined> {
-        return this.permissionValidationService.getBYOKConfig(
-            organizationAndTeamData,
-        );
+        const rawV2 =
+            await this.permissionValidationService.getBYOKConfigV2Raw(
+                organizationAndTeamData,
+            );
+        return resolveTaskByokConfig(rawV2, 'conversation');
     }
 
     /**

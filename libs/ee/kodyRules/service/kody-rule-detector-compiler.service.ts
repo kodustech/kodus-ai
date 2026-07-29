@@ -14,6 +14,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
+import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
 import { createLogger } from '@libs/core/log/logger';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
@@ -55,18 +56,22 @@ export class KodyRuleDetectorCompilerService
         rule: Partial<IKodyRule>,
     ): Promise<{ compiled: boolean; declineReason?: string }> {
         try {
-            const byokConfig =
-                await this.permissionValidationService.getBYOKConfig(
+            // v2-native: source the raw v2 config and resolve the kody-rules
+            // (codeReview) task to a `{main,fallback}` carrier for
+            // runStructuredReviewCall. A non-v2/managed/BLOCKED config yields
+            // `undefined` → the managed/env default, exactly as before.
+            const rawV2 =
+                await this.permissionValidationService.getBYOKConfigV2Raw(
                     organizationAndTeamData,
                 );
+            const taskByok = resolveTaskByokConfig(rawV2, 'codeReview');
 
-            // Local (Vercel) stack via runStructuredReviewCall — main = the
-            // org's BYOK model or our managed default (kimi-k2.7-code via
-            // Moonshot); fallback = the org's own fallback (BYOK) or, for trial
-            // only, our managed Groq gpt-oss-120b. No kodus-common.
+            // Local (Vercel) stack via runStructuredReviewCall — the org's
+            // resolved BYOK model or our managed default (kimi-k2.7-code via
+            // Moonshot). No kodus-common.
             const runCompiler = makeLLMRunCompiler(async ({ system, user }) => {
                 const parsed = await runStructuredReviewCall({
-                    byokConfig: byokConfig ?? undefined,
+                    byokConfig: taskByok ?? undefined,
                     schema: compilerOutputSchema,
                     system,
                     user,
@@ -80,7 +85,10 @@ export class KodyRuleDetectorCompilerService
             const { detector, declineReason } = await compileRuleDetector(
                 rule,
                 runCompiler,
-                { modelName: byokConfig?.main ? 'byok' : 'system' },
+                // Marker: a resolved non-managed BYOK slot vs the managed/
+                // env-default path (`resolveTaskByokConfig` returns undefined
+                // for a managed/BLOCKED config).
+                { modelName: taskByok ? 'byok' : 'system' },
             );
 
             const orgId = organizationAndTeamData.organizationId;

@@ -65,6 +65,7 @@ import {
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
 import {
     IIntegrationConfigService,
     INTEGRATION_CONFIG_SERVICE_TOKEN,
@@ -1154,14 +1155,16 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             directoryId,
         );
 
-        const [byokConfig, subscriptionStatus] = await Promise.all([
-            this.permissionValidationService.getBYOKConfig(
+        const [rawV2, subscriptionStatus] = await Promise.all([
+            this.permissionValidationService.getBYOKConfigV2Raw(
                 organizationAndTeamData,
             ),
             this.permissionValidationService.getSubscriptionStatus(
                 organizationAndTeamData,
             ),
         ]);
+        // v2-native carrier for the reference-detection chain (codeReview task).
+        const byokConfig = resolveTaskByokConfig(rawV2, 'codeReview');
 
         const contextReferenceId =
             await this.contextReferenceDetectionService.detectAndSaveReferences(

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createLogger } from '@libs/core/log/logger';
 import { generateText } from 'ai';
-import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import { resolveTaskModel } from '@libs/llm/resolve-task-model';
 import type { IPublicPrAiSummaryService } from '@libs/cli-review/domain/contracts/public-pr-ai-summary.service.contract';
 import type { PublicPrMetadata } from './github-public-pr.service';
 
@@ -27,12 +27,11 @@ export class PublicPrAiSummaryService implements IPublicPrAiSummaryService {
         diff: string,
     ): Promise<string | undefined> {
         try {
-            const model = byokToVercelModel(
-                undefined,
-                'main',
-                {},
-                SUMMARY_MODEL,
-            );
+            // Public demo: no BYOK → null slot → the forced cheaper default
+            // (SUMMARY_MODEL) via resolveTaskModel's defaultModelOverride.
+            const { model } = resolveTaskModel(undefined, 'prSummary', {
+                defaultModelOverride: SUMMARY_MODEL,
+            });
 
             const truncatedDiff = diff.slice(0, MAX_DIFF_CHARS);
             const truncated = diff.length > MAX_DIFF_CHARS;

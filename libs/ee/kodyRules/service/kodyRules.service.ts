@@ -41,6 +41,7 @@ import {
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
+import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
 import {
@@ -1417,10 +1418,13 @@ export class KodyRulesService implements IKodyRulesService {
                     severity: rule.severity,
                 }));
 
-            const byokConfigValue =
-                await this.permissionValidationService.getBYOKConfig(
+            // v2-native: resolve the codeReview task to a carrier for
+            // runStructuredReviewCall; non-v2/managed/BLOCKED → env default.
+            const rawV2 =
+                await this.permissionValidationService.getBYOKConfigV2Raw(
                     organizationAndTeamData,
                 );
+            const byokConfigValue = resolveTaskByokConfig(rawV2, 'codeReview');
 
             const mainRun = 'kodyRulesRecommendationFromSuggestions';
 
@@ -1934,10 +1938,13 @@ Analyze the suggestions and recommend the most relevant rules.`;
         memory: IKodyRuleMemory,
         existingMemories: Partial<IKodyRule>[],
     ) {
-        const byokConfigValue =
-            await this.permissionValidationService.getBYOKConfig(
+        // v2-native: resolve the codeReview task to a carrier for
+        // runStructuredReviewCall; non-v2/managed/BLOCKED → env default.
+        const rawV2 =
+            await this.permissionValidationService.getBYOKConfigV2Raw(
                 organizationAndTeamData,
             );
+        const byokConfigValue = resolveTaskByokConfig(rawV2, 'codeReview');
         const runName = 'kodyMemoryResolution';
 
         const incomingMemory = {

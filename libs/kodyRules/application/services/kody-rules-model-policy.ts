@@ -3,6 +3,7 @@ import { BYOKConfig } from '@kodus/kodus-common/llm';
 import { environment } from '@libs/ee/configs/environment';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
 
 /**
  * The Kodus-funded model for Kody Rules generation when there's no BYOK:
@@ -43,9 +44,14 @@ export async function resolveKodyRulesModelPolicy(
     permissionValidationService: PermissionValidationService,
     organizationAndTeamData: OrganizationAndTeamData,
 ): Promise<KodyRulesModelPolicy> {
-    const byokConfig = await permissionValidationService.getBYOKConfig(
+    // v2-native: source the raw v2 config and resolve the Kody Rules
+    // generation (codeReview) task to a `{main,fallback}` carrier. A non-v2 /
+    // managed / BLOCKED config yields `undefined` → fall through to the
+    // self-hosted / trial / skip policy below.
+    const rawV2 = await permissionValidationService.getBYOKConfigV2Raw(
         organizationAndTeamData,
     );
+    const byokConfig = resolveTaskByokConfig(rawV2, 'codeReview');
     if (byokConfig) {
         return { generate: true, byokConfig };
     }

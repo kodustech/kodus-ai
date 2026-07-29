@@ -18,6 +18,7 @@
  * returned field (`modelName`, `slot`, `verdict.reason`) carries key material.
  */
 import type { LanguageModel } from 'ai';
+import type { BYOKConfig } from '@kodus/kodus-common/llm';
 
 import {
     isV2Config,
@@ -90,4 +91,49 @@ export function resolveTaskModel(
         : getModelName(undefined, options.defaultModelOverride);
 
     return { model, modelName, slot, verdict };
+}
+
+/**
+ * Resolve the org's v2 config to the legacy `{main, fallback}` carrier for ONE
+ * task, WITHOUT building a model. This is the v2-native source for the peripheral
+ * consumers that still hand a `{main,fallback}`-shaped `BYOKConfig` to a shared
+ * helper whose own `.main`/`.fallback` reads die in a later cleanup wave
+ * (`runStructuredReviewCall`, `resolveAgentModel`, the reference-detector
+ * carrier): they source `getBYOKConfigV2Raw` and route it through here instead of
+ * `getBYOKConfig`, so the credential/model comes from the v2 `models[]`/routing
+ * rather than the collapsed legacy `main`.
+ *
+ * Mirrors `resolveTaskModel`'s resolution (StaticTaskStrategy → routed slot, with
+ * an id-THEN-name legacy override) plus the org's own routed fallback. Returns
+ * `undefined` for a non-v2 / absent config or a BLOCKED/unresolvable verdict, so
+ * the caller falls back to the managed/env default exactly as with a missing
+ * config. Secret hygiene: the returned slot carries ENCRYPTED apiKey ciphertext
+ * (`resolveModelSlotFromV2` never decrypts); only `buildModelFromSlot` downstream
+ * touches plaintext.
+ */
+export function resolveTaskByokConfig(
+    config: BYOKConfigV2 | null | undefined,
+    task: LlmTask,
+    options: { ctx?: RequestContext } = {},
+): BYOKConfig | undefined {
+    if (!isV2Config(config)) {
+        return undefined;
+    }
+    const verdict = strategy.resolve(task, options.ctx ?? {}, config);
+    if (!verdict.modelId) {
+        return undefined;
+    }
+    const routed = resolveModelSlotFromV2(config, verdict.modelId);
+    const main =
+        routed && verdict.modelName
+            ? { ...routed, model: verdict.modelName }
+            : routed;
+    if (!main) {
+        return undefined;
+    }
+    const fallback = resolveModelSlotFromV2(
+        config,
+        config.routing?.fallbackModelId,
+    );
+    return { main, ...(fallback ? { fallback } : {}) } as BYOKConfig;
 }

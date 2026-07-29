@@ -1,23 +1,22 @@
-/** Minimal shape of a BYOK config slot — just the model id we price-check. */
-interface ByokModelSlots {
-    main?: { model?: string };
-    fallback?: { model?: string };
-}
+import { isV2Config, type BYOKConfigV2 } from '@libs/llm/byok-config';
 
 /**
  * Assemble the distinct, non-blank model ids that a spend limit must be able
- * to price: the BYOK `main` and `fallback` models, plus any extra models the
- * caller supplies (e.g. per-repository / per-directory `byokModel` overrides).
+ * to price: EVERY model the org configured in its v2 `models[]`, plus any extra
+ * models the caller supplies (e.g. per-repository / per-directory `byokModel`
+ * overrides). v2-native — a legacy / absent / non-v2 blob contributes no
+ * configured models (only the caller's extras), so the enumeration reflects the
+ * full v2 model set rather than the two collapsed `{main,fallback}` slots.
  */
 export function collectByokModels(
-    byokConfig?: ByokModelSlots | null,
+    byokConfig?: BYOKConfigV2 | null,
     extraModels: string[] = [],
 ): string[] {
-    const candidates = [
-        byokConfig?.main?.model,
-        byokConfig?.fallback?.model,
-        ...extraModels,
-    ];
+    const configuredModels = isV2Config(byokConfig)
+        ? byokConfig.models.map((m) => m.model)
+        : [];
+
+    const candidates = [...configuredModels, ...extraModels];
 
     return [
         ...new Set(

@@ -33,9 +33,10 @@ function build() {
         findByKey: jest.fn().mockResolvedValue({ configValue: 'en-US' }),
     };
     const permissionValidationService = {
-        getBYOKConfig: jest
-            .fn()
-            .mockResolvedValue({ main: { provider: 'openai', model: 'gpt' } }),
+        // v2-native: no v2 config → resolveTaskByokConfig yields undefined →
+        // the env/managed default. resolveAgentModel is mocked, so the harness
+        // wiring runs regardless of the resolved slot.
+        getBYOKConfigV2Raw: jest.fn().mockResolvedValue(null),
     };
     const observabilityService = { recordAgentRunUsage };
     const mcpManagerService = {

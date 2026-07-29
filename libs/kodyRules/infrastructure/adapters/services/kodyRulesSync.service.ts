@@ -45,7 +45,11 @@ import { GLOBAL_RULES_TRIAL_IMPORT_LIMIT } from '@libs/kodyRules/domain/interfac
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
-import { byokToVercelModel, getModelName } from '@libs/llm/byok-to-vercel';
+import { buildModelFromSlot, getModelName } from '@libs/llm/byok-to-vercel';
+import {
+    resolveTaskByokConfig,
+} from '@libs/llm/resolve-task-model';
+import { hasNonManagedCredential } from '@libs/llm/byok-config';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
 import { tracedGenerateText } from '@libs/llm/llm-call';
 import { ObservabilityService } from '@libs/core/log/observability.service';
@@ -2088,14 +2092,17 @@ export class KodyRulesSyncService {
             return null;
         }
 
-        const [byokConfigValue, subscriptionStatus] = await Promise.all([
-            this.permissionValidationService.getBYOKConfig(
+        const [rawV2, subscriptionStatus] = await Promise.all([
+            this.permissionValidationService.getBYOKConfigV2Raw(
                 params.organizationAndTeamData,
             ),
             this.permissionValidationService.getSubscriptionStatus(
                 params.organizationAndTeamData,
             ),
         ]);
+        // v2-native carrier for the codeReview task (runStructuredReviewCall +
+        // the raw-JSON fallback build); non-v2/managed/BLOCKED → env default.
+        const byokConfigValue = resolveTaskByokConfig(rawV2, 'codeReview');
 
         const effectiveDefaultStatus =
             options?.defaultStatus ??
@@ -2192,7 +2199,8 @@ export class KodyRulesSyncService {
             SubscriptionStatus.CANCELED,
             SubscriptionStatus.EXPIRED,
         ];
-        const hasByok = !!byokConfigValue?.main;
+        // v2-native has-BYOK: the org brought at least one non-managed key.
+        const hasByok = hasNonManagedCredential(rawV2);
         if (
             !hasByok &&
             POST_TRIAL_REQUIRES_BYOK.includes(
@@ -2344,7 +2352,7 @@ export class KodyRulesSyncService {
                 // schema mismatch that broke Output.object still yields something
                 // extractJsonArray can salvage.
                 const rawModel = wrapByokModel(
-                    byokToVercelModel(byokConfigValue ?? undefined, 'main', {}),
+                    buildModelFromSlot(byokConfigValue?.main, {}),
                     {
                         byokConfig: byokConfigValue ?? undefined,
                         organizationId:
@@ -2418,10 +2426,13 @@ export class KodyRulesSyncService {
         repositoryId: string;
         organizationAndTeamData: OrganizationAndTeamData;
     }): Promise<Array<Partial<CreateKodyRuleDto>>> {
-        const byokConfigValue =
-            await this.permissionValidationService.getBYOKConfig(
+        // v2-native carrier for the codeReview task; non-v2/managed/BLOCKED →
+        // env default.
+        const rawV2 =
+            await this.permissionValidationService.getBYOKConfigV2Raw(
                 params.organizationAndTeamData,
             );
+        const byokConfigValue = resolveTaskByokConfig(rawV2, 'codeReview');
 
         const mainRun = 'kodyRulesFilesToRulesFastBatch';
 
@@ -2476,7 +2487,7 @@ export class KodyRulesSyncService {
             const fbRun = `${mainRun}Raw`;
             try {
                 const rawModel = wrapByokModel(
-                    byokToVercelModel(byokConfigValue ?? undefined, 'main', {}),
+                    buildModelFromSlot(byokConfigValue?.main, {}),
                     {
                         byokConfig: byokConfigValue ?? undefined,
                         organizationId:
@@ -2543,10 +2554,13 @@ export class KodyRulesSyncService {
         repositoryId: string;
         organizationAndTeamData: OrganizationAndTeamData;
     }): Promise<Array<Partial<CreateKodyRuleDto>>> {
-        const byokConfigValue =
-            await this.permissionValidationService.getBYOKConfig(
+        // v2-native carrier for the codeReview task; non-v2/managed/BLOCKED →
+        // env default.
+        const rawV2 =
+            await this.permissionValidationService.getBYOKConfigV2Raw(
                 params.organizationAndTeamData,
             );
+        const byokConfigValue = resolveTaskByokConfig(rawV2, 'codeReview');
 
         const mainRun = 'kodyRulesManifestsToRulesFastBatch';
 
@@ -2596,7 +2610,7 @@ export class KodyRulesSyncService {
             const fbRun = `${mainRun}Raw`;
             try {
                 const rawModel = wrapByokModel(
-                    byokToVercelModel(byokConfigValue ?? undefined, 'main', {}),
+                    buildModelFromSlot(byokConfigValue?.main, {}),
                     {
                         byokConfig: byokConfigValue ?? undefined,
                         organizationId:
@@ -2786,12 +2800,16 @@ export class KodyRulesSyncService {
             },
         ];
 
-        const [byokConfig, subscriptionStatus] = await Promise.all([
-            this.permissionValidationService.getBYOKConfig(detectionOrgData),
+        const [rawV2, subscriptionStatus] = await Promise.all([
+            this.permissionValidationService.getBYOKConfigV2Raw(
+                detectionOrgData,
+            ),
             this.permissionValidationService.getSubscriptionStatus(
                 detectionOrgData,
             ),
         ]);
+        // v2-native carrier for the reference-detection chain (codeReview task).
+        const byokConfig = resolveTaskByokConfig(rawV2, 'codeReview');
 
         try {
             const contextReferenceId =

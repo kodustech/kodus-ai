@@ -44,7 +44,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             buildCentralizedConfigPrServiceMock() as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -138,7 +138,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             buildCentralizedConfigPrServiceMock() as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -226,7 +226,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             buildCentralizedConfigPrServiceMock() as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -312,7 +312,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             buildCentralizedConfigPrServiceMock() as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -414,7 +414,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             buildCentralizedConfigPrServiceMock() as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -502,7 +502,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             centralizedConfigPrService as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -577,7 +577,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             buildCentralizedConfigPrServiceMock() as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -670,7 +670,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             centralizedConfigPrService as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -766,7 +766,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             centralizedConfigPrService as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -856,7 +856,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             centralizedConfigPrService as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -944,7 +944,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             centralizedConfigPrService as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -1040,7 +1040,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             centralizedConfigPrService as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -1129,7 +1129,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             buildCentralizedConfigPrServiceMock() as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -1235,7 +1235,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             centralizedConfigPrService as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -1314,7 +1314,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             centralizedConfigPrServiceMock as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -1390,7 +1390,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             centralizedConfigPrServiceMock as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -1452,7 +1452,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             buildCentralizedConfigPrServiceMock() as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
@@ -1521,7 +1521,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
             buildCentralizedConfigPrServiceMock() as any,
             { find: jest.fn().mockResolvedValue([]) } as any,
             {
-                getBYOKConfig: jest.fn(),
+                getBYOKConfigV2Raw: jest.fn(),
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,

@@ -587,8 +587,12 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
     ): Promise<AIAnalysisResultPrLevel> {
         const preparedFiles = this.prepareFilesForPayload(changedFiles);
 
-        const byokMaxInputTokens =
-            context?.codeReviewConfig?.byokConfig?.main?.maxInputTokens;
+        // The resolved slot the run uses (already routed upstream by task).
+        // Read limits off the slot, not the internal `{main,fallback}` shape.
+        const byokSlot = context?.codeReviewConfig?.byokConfig;
+        const resolvedSlot = byokSlot?.main;
+
+        const byokMaxInputTokens = resolvedSlot?.maxInputTokens;
 
         const chunkingResult = this.tokenChunkingService.chunkDataByTokens({
             model: provider,
@@ -616,8 +620,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
             chunkingResult.totalChunks,
         );
 
-        const byokMaxConcurrent =
-            context?.codeReviewConfig?.byokConfig?.main?.maxConcurrentRequests;
+        const byokMaxConcurrent = resolvedSlot?.maxConcurrentRequests;
         if (byokMaxConcurrent && byokMaxConcurrent > 0) {
             batchConfig.maxConcurrentChunks = Math.min(
                 batchConfig.maxConcurrentChunks,
@@ -994,9 +997,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
                     prNumber,
                     chunkIndex,
                     filesCount: filesChunk.length,
-                    provider:
-                        context?.codeReviewConfig?.byokConfig?.main?.provider ??
-                        provider,
+                    provider: byokConfigRef?.main?.provider ?? provider,
                     fallback: false,
                 },
                 observabilityService: this.observabilityService,

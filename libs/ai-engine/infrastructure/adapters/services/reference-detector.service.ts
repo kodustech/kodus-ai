@@ -22,7 +22,7 @@ import {
     prompt_kodyrules_detect_references_user,
 } from '@libs/common/utils/langchainCommon/prompts/kodyRulesExternalReferences';
 import { extractJsonFromResponse } from '@libs/common/utils/prompt-parser.utils';
-import { byokToVercelModel, getModelName } from '@libs/llm/byok-to-vercel';
+import { buildModelFromSlot, getModelName } from '@libs/llm/byok-to-vercel';
 import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
 
 // Trial-only override: while the org is in the 14-day subscription trial
@@ -121,15 +121,14 @@ export class ReferenceDetectorService {
                 ? TRIAL_MODEL_OVERRIDE
                 : undefined;
 
-        const model = byokToVercelModel(
-            params.byokConfig,
-            'main',
-            {},
-            defaultModelOverride,
-        );
+        // The caller passes the already-resolved carrier; build from its slot.
+        const byokCarrier = params.byokConfig;
+        const byokSlot = byokCarrier?.main;
+
+        const model = buildModelFromSlot(byokSlot, {}, defaultModelOverride);
 
         const resolvedModelName = getModelName(
-            params.byokConfig,
+            byokCarrier,
             defaultModelOverride,
         );
         this.logger.log({
@@ -140,9 +139,9 @@ export class ReferenceDetectorService {
                 teamId: organizationAndTeamData.teamId,
                 requirementId: params.requirementId,
                 subscriptionStatus: params.subscriptionStatus,
-                hasByok: !!params.byokConfig,
-                byokMainProvider: params.byokConfig?.main?.provider,
-                byokMainModel: params.byokConfig?.main?.model,
+                hasByok: !!byokCarrier,
+                byokMainProvider: byokSlot?.provider,
+                byokMainModel: byokSlot?.model,
                 defaultModelOverride,
                 resolvedModelName,
             },
