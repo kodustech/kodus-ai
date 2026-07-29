@@ -133,7 +133,16 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
                 runName,
                 model: modelName,
                 // No 2nd-model cascade: every attempt is the same resolved model.
-                attrs: { ...(attrs ?? {}), fallback: false },
+                // Tag BYOK-vs-system so deriveTu attributes the spend correctly
+                // (a resolved main slot = the org's own key; no slot = managed/env
+                // default). Derived from slot presence, never from key material.
+                attrs: {
+                    ...(attrs ?? {}),
+                    fallback: false,
+                    type:
+                        (attrs?.type as string | undefined) ??
+                        (mainSlot ? 'byok' : 'system'),
+                },
                 exec: () =>
                     tracedGenerateText({
                         model: model as any,

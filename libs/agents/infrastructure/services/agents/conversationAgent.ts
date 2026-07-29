@@ -290,6 +290,8 @@ export class ConversationAgentProvider {
                     ctx,
                     temperature,
                     maxOutputTokens,
+                    resolvedByok,
+                    organizationAndTeamData,
                 );
             }
 
@@ -346,6 +348,8 @@ export class ConversationAgentProvider {
         ctx: ToolContext,
         temperature: number | undefined,
         maxOutputTokens: number,
+        resolvedByok: unknown,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<string | null> {
         try {
             const runner = new AiSdkAgentRunner({ resolve: () => model });
@@ -367,6 +371,23 @@ export class ConversationAgentProvider {
                 },
                 ctx,
             );
+
+            // Record the retry's token usage (the main path records at phase
+            // 'conversation'; without this the forceAnswer call was invisible to
+            // billing). Success path only — a thrown retry burned zero tokens.
+            await this.observabilityService.recordAgentRunUsage({
+                agentName: 'ConversationalAgent',
+                phase: 'conversation-retry',
+                spanName: 'ConversationalAgent::conversationAgent',
+                runName: 'conversationAgent',
+                model: (spec as { modelId?: string }).modelId,
+                isByok: !!resolvedByok,
+                usage: state.usage,
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                steps: state.steps.length,
+                finishReason: state.stopReason ?? state.status,
+            });
 
             return normalizeConversationResponse(finalText(state));
         } catch (error) {

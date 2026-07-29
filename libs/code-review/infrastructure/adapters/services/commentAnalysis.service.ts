@@ -123,7 +123,15 @@ export class CommentAnalysisService {
             spanName: `${CommentAnalysisService.name}::${runName}`,
             runName,
             model: resolved.modelName,
-            attrs,
+            // Attribute BYOK-vs-system so this org's comment-analysis spend lands
+            // in its BYOK usage view (a resolved slot = the org's own key).
+            attrs: {
+                ...(attrs ?? {}),
+                type:
+                    ((attrs as Record<string, unknown>)?.type as
+                        | string
+                        | undefined) ?? (resolved.slot ? 'byok' : 'system'),
+            },
             // Structured output via generateText + Output.object (generateObject
             // is deprecated in ai@6). The casts bridge the generic
             // `S extends z.ZodType` to the SDK's schema type while the public

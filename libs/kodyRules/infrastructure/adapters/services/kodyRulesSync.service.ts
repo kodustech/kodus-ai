@@ -2371,6 +2371,8 @@ export class KodyRulesSyncService {
                             repositoryId: params.repositoryId,
                             filePath: params.filePath,
                             fallback: true,
+                            // BYOK-vs-system attribution (resolved slot = own key).
+                            type: mainSlot ? 'byok' : 'system',
                         },
                         exec: () =>
                             tracedGenerateText({
