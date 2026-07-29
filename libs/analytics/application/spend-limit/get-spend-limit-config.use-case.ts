@@ -6,6 +6,7 @@ import {
     ManualPricingOverrides,
     ResolvedModelPricing,
 } from '@libs/analytics/domain/token-usage/types/pricing.types';
+import { SpendLimitScope } from '@libs/analytics/domain/spend-limit/spend-limit.types';
 
 import { GetOrgByokModelsUseCase } from './get-org-byok-models.use-case';
 import { PricingResolver } from '../use-cases/usage/pricing-resolver';
@@ -21,6 +22,9 @@ export interface SpendLimitConfigView {
     models: ResolvedModelPricing[];
     /** True when every configured model is priceable (the enablement gate). */
     priceable: boolean;
+    /** Persisted budget readout scope (readout only — never blocks). Defaults
+     *  to `total` when the stored config carries none. */
+    scope: SpendLimitScope;
 }
 
 /**
@@ -71,6 +75,7 @@ export class GetSpendLimitConfigUseCase {
             modelPricing: config?.modelPricing ?? {},
             models: modelsWithCatalog,
             priceable: resolved.every((r) => r.priced),
+            scope: config?.scope ?? 'total',
         };
     }
 }

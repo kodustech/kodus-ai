@@ -9,8 +9,9 @@ type BudgetTabProps = {
 };
 
 /**
- * Wired skeleton for the Budget & alerts tab: wraps the existing
- * SpendLimitSection verbatim. 04-11 evolves it (per-model budgets, alerts).
+ * The Budget & alerts tab: wraps the evolved SpendLimitSection (rename + scope
+ * readout toggle + run-rate projection + per-scope breakdown + /token-usage
+ * deep-link). Alert-only — no scope ever introduces a hard block (04-11).
  */
 export const BudgetTab = ({ teamId }: BudgetTabProps) => (
     <SpendLimitSection teamId={teamId} />
