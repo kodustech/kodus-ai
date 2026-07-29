@@ -10,6 +10,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { BYOKConfig, BYOKProvider } from '@kodus/kodus-common/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { decrypt } from '@libs/common/utils/crypto';
 import { vertexModelFromSaJson } from '@libs/llm/model-builders';
 // Provider registry (Phase 1): every BYOK provider resolves through REGISTRY.
@@ -88,6 +89,15 @@ export type ByokModelOptions = {
     structuredOutputs?: boolean;
 };
 
+/**
+ * Thin delegating shim over `buildModelFromSlot` (slice 04b, plan 04b-01).
+ *
+ * Picks the `main`/`fallback` slot from the legacy `{main,fallback}` shape and
+ * hands it to the single-slot builder, so every existing caller compiles
+ * unchanged during the v2-native migration. The `role` param and this shim are
+ * removed in 04b-02 / 04b-05 once all consumers migrate to `resolveTaskModel` /
+ * `buildModelFromSlot` directly.
+ */
 export function byokToVercelModel(
     byokConfig?: BYOKConfig,
     role: 'main' | 'fallback' = 'main',
@@ -101,8 +111,36 @@ export function byokToVercelModel(
      */
     defaultModelOverride?: string,
 ): LanguageModel {
-    const config =
-        role === 'fallback' ? byokConfig?.fallback : byokConfig?.main;
+    const slot = role === 'fallback' ? byokConfig?.fallback : byokConfig?.main;
+    return buildModelFromSlot(
+        slot as NormalizedModel | undefined,
+        options,
+        defaultModelOverride,
+    );
+}
+
+/**
+ * Build a Vercel AI SDK LanguageModel from ONE resolved model slot (slice 04b).
+ *
+ * This is the single-slot core extracted VERBATIM from the old
+ * `byokToVercelModel` body: the `if (!slot)` branch is the env/managed/self-host
+ * default path (managed org, no-BYOK, self-hosted `.env`), and the tail is the
+ * BYOK registry build. Keyed on a single `slot` (a `NormalizedModel` carrying
+ * ENCRYPTED apiKey ciphertext) instead of `role`-picking `.main`/`.fallback`.
+ *
+ * Secret hygiene: `slot.apiKey` is ciphertext; `decrypt()` runs only in this
+ * function's local scope and the plaintext is handed straight to the provider
+ * builder — it never surfaces in a return value or a log.
+ *
+ * Do NOT change the env-default logic — the `if (!slot)` branch IS the
+ * managed/no-BYOK/self-host path and MUST stay behaviorally identical.
+ */
+export function buildModelFromSlot(
+    slot?: NormalizedModel,
+    options: ByokModelOptions = {},
+    defaultModelOverride?: string,
+): LanguageModel {
+    const config = slot;
 
     if (!config) {
         const defaultModel = defaultModelOverride || DEFAULT_MODEL.model;

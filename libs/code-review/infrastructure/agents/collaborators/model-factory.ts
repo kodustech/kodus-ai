@@ -17,7 +17,7 @@ import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 import type { BYOKConfig } from '@kodus/kodus-common/llm';
 import type { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { resolveModelSlotFromV2 } from '@libs/llm/normalize-byok-config';
-import { StaticTaskStrategy } from '@libs/llm/static-task-strategy';
+import { resolveTaskModel } from '@libs/llm/resolve-task-model';
 
 import type { ReviewAgentInput } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 
@@ -28,9 +28,6 @@ type ModelInput = Pick<
     | 'byokModelId'
     | 'defaultModelOverride'
 >;
-
-// Manual routing policy (Phase 4). Stateless + dependency-free — instantiated once.
-const routingStrategy = new StaticTaskStrategy();
 
 /**
  * A resolved model plus the role-specific knobs the agent loop needs. Bundling
@@ -115,56 +112,75 @@ export async function resolveAgentModel(
         input.organizationAndTeamData,
     );
 
-    let byokConfig: BYOKConfig | null;
-
     if (rawV2) {
-        // v2: route the codeReview task. byokModelId (id) wins over the legacy
-        // byokModel NAME; the resolver handles the id-THEN-name match.
+        // v2: resolve the codeReview MAIN model through the single task→model
+        // entry point (slice 04b). byokModelId (id) wins over the legacy
+        // byokModel NAME; resolveTaskModel handles the id-THEN-name match, the
+        // capability gate, and the null-slot → env/managed default degrade.
         const overrideRef =
             input.byokModelId?.trim() || input.byokModel?.trim();
-        const verdict = routingStrategy.resolve(
-            'codeReview',
-            overrideRef ? { override: { modelId: overrideRef } } : {},
+        const resolved = resolveTaskModel(rawV2, 'codeReview', {
+            ctx: overrideRef ? { override: { modelId: overrideRef } } : {},
+            defaultModelOverride: input.defaultModelOverride,
+        });
+
+        // Build the MAIN bundle straight from the resolver's return — same
+        // fields buildRoleParams reads off `byokConfig?.main`, sourced from the
+        // routed slot (null on a BLOCKED/managed verdict → env-default model).
+        const slot = resolved.slot;
+        const main: AgentModelParams = {
+            role: 'main',
+            model: resolved.model,
+            modelName: resolved.modelName,
+            maxInputTokens: slot?.maxInputTokens,
+            reasoningEffort: slot?.reasoningEffort,
+            reasoningConfigOverride: slot?.reasoningConfigOverride,
+            byokProvider: slot?.provider,
+            openrouterProviderOrder: (slot as any)?.openrouterProviderOrder,
+            openrouterAllowFallbacks: (slot as any)?.openrouterAllowFallbacks,
+        };
+
+        // Fallback resolution LEFT AS-IS (removed in 04b-05). The runtime
+        // fallback is a separate resilience provider, not the routed task
+        // model — the per-repo override never applies to it.
+        const fallbackSlot = resolveModelSlotFromV2(
             rawV2,
+            rawV2.routing?.fallbackModelId,
         );
+        const byokConfig = (
+            slot
+                ? {
+                      main: slot,
+                      ...(fallbackSlot ? { fallback: fallbackSlot } : {}),
+                  }
+                : undefined
+        ) as BYOKConfig | undefined;
 
-        if (verdict.modelId) {
-            const routedMain = resolveModelSlotFromV2(rawV2, verdict.modelId);
-            const main =
-                routedMain && verdict.modelName
-                    ? { ...routedMain, model: verdict.modelName }
-                    : routedMain;
-            if (main) {
-                const fallback = resolveModelSlotFromV2(
-                    rawV2,
-                    rawV2.routing?.fallbackModelId,
-                );
-                byokConfig = {
-                    main,
-                    ...(fallback ? { fallback } : {}),
-                } as BYOKConfig;
-            } else {
-                // Unresolvable routed slot → env/managed default downstream.
-                byokConfig = null;
-            }
-        } else {
-            // BLOCKED verdict → env/managed default downstream (matches a
-            // missing config today; never throws).
-            byokConfig = null;
-        }
-    } else {
-        // Legacy {main,fallback}: exact prior behavior, byte-for-byte.
-        byokConfig = await permissionService.getBYOKConfig(
-            input.organizationAndTeamData,
-        );
+        return {
+            byokConfig,
+            main,
+            fallback: byokConfig?.fallback
+                ? buildRoleParams(
+                      byokConfig,
+                      'fallback',
+                      input.defaultModelOverride,
+                  )
+                : null,
+        };
+    }
 
-        const overrideModel = input.byokModel?.trim();
-        if (overrideModel && byokConfig?.main) {
-            byokConfig = {
-                ...byokConfig,
-                main: { ...byokConfig.main, model: overrideModel },
-            };
-        }
+    // Legacy {main,fallback}: exact prior behavior, byte-for-byte (else-branch
+    // removed in 04b-06).
+    let byokConfig = await permissionService.getBYOKConfig(
+        input.organizationAndTeamData,
+    );
+
+    const overrideModel = input.byokModel?.trim();
+    if (overrideModel && byokConfig?.main) {
+        byokConfig = {
+            ...byokConfig,
+            main: { ...byokConfig.main, model: overrideModel },
+        };
     }
 
     return {

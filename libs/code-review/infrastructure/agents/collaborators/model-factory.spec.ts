@@ -1,8 +1,18 @@
+// Legacy {main,fallback} path still builds via byokToVercelModel/getModelName.
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     byokToVercelModel: jest.fn(
         (_cfg: any, role: string) => ({ tag: `model:${role}` }) as any,
     ),
     getModelName: jest.fn(() => 'default:model'),
+}));
+
+// v2 path (slice 04b): the codeReview MAIN model resolves through the single
+// task→model entry point. Mock the seam so we assert model-factory delegates the
+// routing decision (and maps the returned slot onto AgentModelParams) rather than
+// re-implementing StaticTaskStrategy here.
+const resolveTaskModelMock = jest.fn();
+jest.mock('@libs/llm/resolve-task-model', () => ({
+    resolveTaskModel: (...args: any[]) => resolveTaskModelMock(...args),
 }));
 
 import { resolveAgentModel } from './model-factory';
@@ -60,6 +70,24 @@ function fallbackConfigPassedToBuild() {
     )?.[0];
 }
 
+// A sentinel resolveTaskModel return for a routed openai slot.
+function resolvedRouted(overrides: any = {}) {
+    return {
+        model: { tag: 'routed-main' },
+        modelName: 'openai:gpt-5-mini',
+        slot: {
+            provider: 'openai',
+            model: 'gpt-5-mini',
+            apiKey: 'enc-oa',
+            maxInputTokens: 4096,
+            reasoningEffort: 'high',
+            reasoningConfigOverride: 'cfg-x',
+        },
+        verdict: { modelId: 'm-B', reason: 'resolved' },
+        ...overrides,
+    };
+}
+
 describe('resolveAgentModel', () => {
     beforeEach(() => {
         // mock.calls accumulates across tests; the override test inspects calls
@@ -87,6 +115,8 @@ describe('resolveAgentModel', () => {
             expect(resolved.main.reasoningEffort).toBe('high');
             expect(resolved.main.byokProvider).toBe('openai');
             expect(resolved.fallback).toBeNull();
+            // The v2 seam is never touched on the legacy branch.
+            expect(resolveTaskModelMock).not.toHaveBeenCalled();
         });
 
         it('builds a fallback bundle from the configured fallback provider', async () => {
@@ -128,30 +158,29 @@ describe('resolveAgentModel', () => {
         });
     });
 
-    describe('v2 configs (routed by task via StaticTaskStrategy)', () => {
-        it('routes the codeReview task to the byokModelId id-override (top of precedence)', async () => {
-            const svc = permissionServiceReturningV2(
-                v2({ defaultModelId: 'm-A' }),
-            );
+    describe('v2 configs (MAIN routed via resolveTaskModel — slice 04b)', () => {
+        it('routes the codeReview task through resolveTaskModel with the id override in ctx', async () => {
+            resolveTaskModelMock.mockReturnValue(resolvedRouted());
+            const cfg = v2({ defaultModelId: 'm-A' });
+            const svc = permissionServiceReturningV2(cfg);
 
             await resolveAgentModel(
                 { organizationAndTeamData: orgTeam, byokModelId: 'm-B' },
                 svc,
             );
 
-            const mainCfg = mainConfigPassedToBuild();
-            // id 'm-B' → gpt-5-mini, openai credential, ciphertext preserved.
-            expect(mainCfg?.main.model).toBe('gpt-5-mini');
-            expect(mainCfg?.main.provider).toBe('openai');
-            expect(mainCfg?.main.apiKey).toBe('enc-oa');
+            expect(resolveTaskModelMock).toHaveBeenCalledTimes(1);
+            const [passedCfg, task, opts] = resolveTaskModelMock.mock.calls[0];
+            expect(passedCfg).toBe(cfg);
+            expect(task).toBe('codeReview');
+            expect(opts.ctx).toEqual({ override: { modelId: 'm-B' } });
             // The collapsed accessor must NOT have been used.
             expect(svc.getBYOKConfig).not.toHaveBeenCalled();
         });
 
-        it('lets byokModelId (id) win over the legacy byokModel NAME', async () => {
-            const svc = permissionServiceReturningV2(
-                v2({ defaultModelId: 'm-A' }),
-            );
+        it('lets byokModelId (id) win over the legacy byokModel NAME in the override ctx', async () => {
+            resolveTaskModelMock.mockReturnValue(resolvedRouted());
+            const svc = permissionServiceReturningV2(v2({ defaultModelId: 'm-A' }));
 
             await resolveAgentModel(
                 {
@@ -162,43 +191,47 @@ describe('resolveAgentModel', () => {
                 svc,
             );
 
-            // id 'm-B' wins → gpt-5-mini, not the NAME 'gpt-4o'.
-            expect(mainConfigPassedToBuild()?.main.model).toBe('gpt-5-mini');
+            expect(resolveTaskModelMock.mock.calls[0][2].ctx).toEqual({
+                override: { modelId: 'm-B' },
+            });
         });
 
-        it('applies the legacy byokModel NAME on a v2 config when no id is set (window)', async () => {
-            const svc = permissionServiceReturningV2(
-                v2({ defaultModelId: 'm-A' }),
-            );
+        it('passes the legacy byokModel NAME as the override when no id is set (window)', async () => {
+            resolveTaskModelMock.mockReturnValue(resolvedRouted());
+            const svc = permissionServiceReturningV2(v2({ defaultModelId: 'm-A' }));
 
             await resolveAgentModel(
                 { organizationAndTeamData: orgTeam, byokModel: 'gpt-5-mini' },
                 svc,
             );
 
-            // NAME applied onto the chosen slot (default m-A, openai credential).
-            const mainCfg = mainConfigPassedToBuild();
-            expect(mainCfg?.main.model).toBe('gpt-5-mini');
-            expect(mainCfg?.main.apiKey).toBe('enc-oa');
+            expect(resolveTaskModelMock.mock.calls[0][2].ctx).toEqual({
+                override: { modelId: 'gpt-5-mini' },
+            });
         });
 
-        it('routes to routing.taskOverrides[codeReview] when no per-run override', async () => {
-            const svc = permissionServiceReturningV2(
-                v2({
-                    taskOverrides: { codeReview: 'm-B' },
-                    defaultModelId: 'm-A',
-                }),
-            );
+        it('builds the MAIN bundle from the resolver return (model, modelName, slot fields)', async () => {
+            resolveTaskModelMock.mockReturnValue(resolvedRouted());
+            const svc = permissionServiceReturningV2(v2({ defaultModelId: 'm-A' }));
 
-            await resolveAgentModel(
+            const resolved = await resolveAgentModel(
                 { organizationAndTeamData: orgTeam },
                 svc,
             );
 
-            expect(mainConfigPassedToBuild()?.main.model).toBe('gpt-5-mini');
+            expect(resolved.main.role).toBe('main');
+            expect(resolved.main.model).toEqual({ tag: 'routed-main' });
+            expect(resolved.main.modelName).toBe('openai:gpt-5-mini');
+            expect(resolved.main.byokProvider).toBe('openai');
+            expect(resolved.main.maxInputTokens).toBe(4096);
+            expect(resolved.main.reasoningEffort).toBe('high');
+            expect(resolved.main.reasoningConfigOverride).toBe('cfg-x');
+            // No per-run override → empty ctx.
+            expect(resolveTaskModelMock.mock.calls[0][2].ctx).toEqual({});
         });
 
-        it('materializes the fallback slot from routing.fallbackModelId', async () => {
+        it('materializes the fallback slot from routing.fallbackModelId (left as-is)', async () => {
+            resolveTaskModelMock.mockReturnValue(resolvedRouted());
             const svc = permissionServiceReturningV2(
                 v2({ defaultModelId: 'm-A', fallbackModelId: 'm-B' }),
             );
@@ -208,20 +241,24 @@ describe('resolveAgentModel', () => {
                 svc,
             );
 
-            expect(mainConfigPassedToBuild()?.main.model).toBe('gpt-4o');
             expect(resolved.fallback).not.toBeNull();
+            // fallback is still built via buildRoleParams → byokToVercelModel.
             expect(fallbackConfigPassedToBuild()?.fallback.model).toBe(
                 'gpt-5-mini',
             );
         });
 
-        it('degrades to the env/managed default (no byokConfig) on a BLOCKED verdict', async () => {
+        it('degrades to the env/managed default (no byokConfig) on a null-slot verdict', async () => {
+            resolveTaskModelMock.mockReturnValue(
+                resolvedRouted({
+                    slot: null,
+                    modelName: 'default:model',
+                    model: { tag: 'env-default' },
+                    verdict: { modelId: null, reason: 'BLOCKED' },
+                }),
+            );
             const svc = permissionServiceReturningV2(
-                v2(
-                    { defaultModelId: 'm-ANT' },
-                    [{ id: 'm-ANT', credentialId: 'c-an', model: 'claude-3-5' }],
-                    [{ id: 'c-an', provider: 'anthropic', apiKey: 'enc-an' }],
-                ),
+                v2({ defaultModelId: 'm-A' }),
             );
 
             const resolved = await resolveAgentModel(
@@ -229,9 +266,9 @@ describe('resolveAgentModel', () => {
                 svc,
             );
 
-            // anthropic → structuredOutput none → ineligible for codeReview, no
-            // fallback → BLOCKED → byokConfig undefined (env/managed default).
             expect(resolved.byokConfig).toBeUndefined();
+            expect(resolved.main.model).toEqual({ tag: 'env-default' });
+            expect(resolved.main.byokProvider).toBeUndefined();
             expect(resolved.fallback).toBeNull();
         });
     });
