@@ -80,13 +80,22 @@ describe('SpendLimitConfigService', () => {
             const modelPricing = {
                 custom: { input: 1e-6, output: 1e-6, cacheRead: 0, cacheWrite: 0 },
             };
-            orgParams.findByKey.mockResolvedValue({
-                configValue: {
-                    enabled: true,
-                    monthlyLimitUsd: 1000,
-                    modelPricing,
-                },
-            });
+            const byokConfig = {
+                version: 2,
+                credentials: [{ id: 'cred-a', provider: 'openai' }],
+                models: [{ id: 'mdl-1', credentialId: 'cred-a', model: 'gpt-4o' }],
+            };
+            orgParams.findByKey.mockImplementation(async (key: string) =>
+                key === OrganizationParametersKey.SPEND_LIMIT_CONFIG
+                    ? {
+                          configValue: {
+                              enabled: true,
+                              monthlyLimitUsd: 1000,
+                              modelPricing,
+                          },
+                      }
+                    : { configValue: byokConfig },
+            );
             const evaluation = { spentUsd: 750, isOverLimit: false };
             monthlySpend.getStatus.mockResolvedValue(evaluation);
 
@@ -96,6 +105,7 @@ describe('SpendLimitConfigService', () => {
                 1000,
                 NOW,
                 modelPricing,
+                byokConfig,
             );
         });
     });
@@ -168,13 +178,48 @@ describe('SpendLimitConfigService', () => {
     });
 
     describe('loadAndEvaluate', () => {
-        it('returns the config alongside the evaluation', async () => {
+        it('returns the config alongside the evaluation, threading the v2 BYOK config', async () => {
             const config = {
                 enabled: true,
                 monthlyLimitUsd: 1000,
                 modelPricing: { m: { input: 1e-6, output: 1e-6, cacheRead: 0, cacheWrite: 0 } },
             };
-            orgParams.findByKey.mockResolvedValue({ configValue: config });
+            const byokConfig = {
+                version: 2,
+                credentials: [{ id: 'cred-a', provider: 'openai' }],
+                models: [{ id: 'mdl-1', credentialId: 'cred-a', model: 'gpt-4o' }],
+            };
+            orgParams.findByKey.mockImplementation(async (key: string) =>
+                key === OrganizationParametersKey.SPEND_LIMIT_CONFIG
+                    ? { configValue: config }
+                    : { configValue: byokConfig },
+            );
+            const evaluation = { spentUsd: 500, periodKey: '2026-06' };
+            monthlySpend.getStatus.mockResolvedValue(evaluation);
+
+            await expect(service.loadAndEvaluate(ORG, NOW)).resolves.toEqual({
+                config,
+                evaluation,
+            });
+            // The v2 BYOK config is passed through so the per-credential readout
+            // can be derived from it.
+            expect(monthlySpend.getStatus).toHaveBeenCalledWith(
+                'org-1',
+                1000,
+                NOW,
+                config.modelPricing,
+                byokConfig,
+            );
+        });
+
+        it('still evaluates when the BYOK config lookup fails (best-effort)', async () => {
+            const config = { enabled: true, monthlyLimitUsd: 1000 };
+            orgParams.findByKey.mockImplementation((key: string) => {
+                if (key === OrganizationParametersKey.SPEND_LIMIT_CONFIG) {
+                    return Promise.resolve({ configValue: config });
+                }
+                return Promise.reject(new Error('byok lookup down'));
+            });
             const evaluation = { spentUsd: 500, periodKey: '2026-06' };
             monthlySpend.getStatus.mockResolvedValue(evaluation);
 
@@ -186,7 +231,8 @@ describe('SpendLimitConfigService', () => {
                 'org-1',
                 1000,
                 NOW,
-                config.modelPricing,
+                undefined,
+                null,
             );
         });
 

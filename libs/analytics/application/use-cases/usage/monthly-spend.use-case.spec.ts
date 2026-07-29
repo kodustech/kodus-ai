@@ -34,11 +34,12 @@ describe('MonthlySpendUseCase', () => {
         it('returns an empty, zeroed result when there is no usage', async () => {
             const result = await useCase.getMonthToDateSpend('org-1', NOW);
 
-            expect(result).toEqual({
+            expect(result).toMatchObject({
                 organizationId: 'org-1',
                 periodKey: '2026-06',
                 spentUsd: 0,
                 byModel: [],
+                byCredential: [],
                 tokenUsage: {
                     inputTokens: 0,
                     outputTokens: 0,
@@ -48,6 +49,10 @@ describe('MonthlySpendUseCase', () => {
                     cacheWriteTokens: 0,
                 },
             });
+            // No spend ⇒ nothing to extrapolate, whatever the elapsed fraction.
+            expect(result.runRate.projectedMonthlyUsd).toBe(0);
+            // 2026-06-15T12:30Z is ~48.4% through a 30-day June.
+            expect(result.runRate.elapsedFraction).toBeCloseTo(0.484, 3);
         });
 
         it('sums per-model spend and aggregates token usage across days', async () => {
@@ -89,6 +94,10 @@ describe('MonthlySpendUseCase', () => {
             expect(result.byModel).toEqual([
                 { model: 'm1', spentUsd: 1.5 },
                 { model: 'm2', spentUsd: 2.25 },
+            ]);
+            // No v2 config supplied ⇒ every model is unattributed, not dropped.
+            expect(result.byCredential).toEqual([
+                { credentialId: 'unattributed', spentUsd: 3.75 },
             ]);
             expect(result.tokenUsage).toEqual({
                 inputTokens: 300,
@@ -140,6 +149,123 @@ describe('MonthlySpendUseCase', () => {
         });
     });
 
+    describe('getMonthToDateSpend — per-credential rollup', () => {
+        const v2Config = {
+            version: 2 as const,
+            credentials: [
+                { id: 'cred-a', provider: 'openai' },
+                { id: 'cred-b', provider: 'anthropic' },
+            ],
+            models: [
+                { id: 'mdl-1', credentialId: 'cred-a', model: 'gpt-4o' },
+                { id: 'mdl-2', credentialId: 'cred-b', model: 'claude' },
+            ],
+        };
+
+        it('rolls per-model spend up to credentials via the v2 config map', async () => {
+            tokenUsageService.getDailyUsage.mockResolvedValue([
+                { input: 1, output: 1, outputReasoning: 0, model: 'gpt-4o' },
+            ]);
+            modelCostCalculator.spendByModel.mockResolvedValue([
+                { model: 'gpt-4o', spentUsd: 4 },
+                { model: 'claude', spentUsd: 6 },
+            ]);
+
+            const result = await useCase.getMonthToDateSpend(
+                'org-1',
+                NOW,
+                undefined,
+                v2Config,
+            );
+
+            expect(result.byCredential).toEqual([
+                { credentialId: 'cred-a', spentUsd: 4 },
+                { credentialId: 'cred-b', spentUsd: 6 },
+            ]);
+            // Total scope is unchanged by the rollup.
+            expect(result.spentUsd).toBe(10);
+        });
+
+        it('routes spend for an unconfigured model to the unattributed bucket', async () => {
+            modelCostCalculator.spendByModel.mockResolvedValue([
+                { model: 'gpt-4o', spentUsd: 4 },
+                { model: 'removed-model', spentUsd: 2.5 },
+            ]);
+
+            const result = await useCase.getMonthToDateSpend(
+                'org-1',
+                NOW,
+                undefined,
+                v2Config,
+            );
+
+            expect(result.byCredential).toEqual([
+                { credentialId: 'cred-a', spentUsd: 4 },
+                { credentialId: 'unattributed', spentUsd: 2.5 },
+            ]);
+        });
+
+        it('attributes a colliding model-name to one credential without throwing (A2 approximation)', async () => {
+            // Two credentials configure the SAME model-name — the config schema
+            // gate (validateByokConfigRefs) does not forbid this, so the rollup
+            // is approximate: all spend for the name lands on the first match.
+            const collidingConfig = {
+                version: 2 as const,
+                credentials: [
+                    { id: 'cred-a', provider: 'openai' },
+                    { id: 'cred-b', provider: 'openai' },
+                ],
+                models: [
+                    { id: 'mdl-1', credentialId: 'cred-a', model: 'gpt-4o' },
+                    { id: 'mdl-2', credentialId: 'cred-b', model: 'gpt-4o' },
+                ],
+            };
+            modelCostCalculator.spendByModel.mockResolvedValue([
+                { model: 'gpt-4o', spentUsd: 9 },
+            ]);
+
+            const result = await useCase.getMonthToDateSpend(
+                'org-1',
+                NOW,
+                undefined,
+                collidingConfig,
+            );
+
+            expect(result.byCredential).toEqual([
+                { credentialId: 'cred-a', spentUsd: 9 },
+            ]);
+        });
+    });
+
+    describe('getMonthToDateSpend — run-rate projection', () => {
+        it('extrapolates spend to a full month at the current pace', async () => {
+            modelCostCalculator.spendByModel.mockResolvedValue([
+                { model: 'm1', spentUsd: 100 },
+            ]);
+
+            const result = await useCase.getMonthToDateSpend('org-1', NOW);
+
+            // ~48.4% through June ⇒ ~100 / 0.484 ≈ 206.6.
+            expect(result.runRate.elapsedFraction).toBeCloseTo(0.484, 3);
+            expect(result.runRate.projectedMonthlyUsd).toBeCloseTo(206.6, 0);
+        });
+
+        it('projects 0 at the first instant of the month (no elapsed time)', async () => {
+            const monthStart = new Date(Date.UTC(2026, 5, 1, 0, 0, 0));
+            modelCostCalculator.spendByModel.mockResolvedValue([
+                { model: 'm1', spentUsd: 100 },
+            ]);
+
+            const result = await useCase.getMonthToDateSpend(
+                'org-1',
+                monthStart,
+            );
+
+            expect(result.runRate.elapsedFraction).toBe(0);
+            expect(result.runRate.projectedMonthlyUsd).toBe(0);
+        });
+    });
+
     describe('getStatus', () => {
         it('evaluates month-to-date spend against the limit (the shared seam)', async () => {
             tokenUsageService.getDailyUsage.mockResolvedValue([
@@ -151,7 +277,7 @@ describe('MonthlySpendUseCase', () => {
 
             const status = await useCase.getStatus('org-1', 100, NOW);
 
-            expect(status).toEqual({
+            expect(status).toMatchObject({
                 organizationId: 'org-1',
                 periodKey: '2026-06',
                 spentUsd: 75,
@@ -161,6 +287,39 @@ describe('MonthlySpendUseCase', () => {
                 crossedThresholds: [50, 75],
                 byModel: [{ model: 'm1', spentUsd: 75 }],
             });
+            // The evaluation carries the scope + run-rate readouts too.
+            expect(status.byCredential).toEqual([
+                { credentialId: 'unattributed', spentUsd: 75 },
+            ]);
+            expect(status.runRate.projectedMonthlyUsd).toBeGreaterThan(0);
+        });
+
+        it('threads the v2 config through to the per-credential readout', async () => {
+            tokenUsageService.getDailyUsage.mockResolvedValue([
+                { input: 1, output: 1, outputReasoning: 0, model: 'gpt-4o' },
+            ]);
+            modelCostCalculator.spendByModel.mockResolvedValue([
+                { model: 'gpt-4o', spentUsd: 75 },
+            ]);
+            const v2Config = {
+                version: 2 as const,
+                credentials: [{ id: 'cred-a', provider: 'openai' }],
+                models: [
+                    { id: 'mdl-1', credentialId: 'cred-a', model: 'gpt-4o' },
+                ],
+            };
+
+            const status = await useCase.getStatus(
+                'org-1',
+                100,
+                NOW,
+                undefined,
+                v2Config,
+            );
+
+            expect(status.byCredential).toEqual([
+                { credentialId: 'cred-a', spentUsd: 75 },
+            ]);
         });
 
         it('flags over-limit when spend meets or exceeds the limit', async () => {
