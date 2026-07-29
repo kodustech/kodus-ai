@@ -308,6 +308,117 @@ describe('GetLLMConfigStatusUseCase', () => {
         });
     });
 
+    // 04-10: each enumerated model additionally carries a read-only `capabilities`
+    // descriptor (structuredOutput / toolCalling) derived from
+    // REGISTRY.get(providerId).capabilities(model) — surfaced so the Routing tab
+    // can render a LIVE pre-save capability warning. It is a static descriptor
+    // (NO secret) and degrades to undefined (never throws) for an unknown provider.
+    describe('v2 per-model capabilities (models[].capabilities)', () => {
+        it('attaches a capabilities descriptor for a registered provider model', async () => {
+            const useCase = buildUseCase({
+                version: 2,
+                credentials: [
+                    {
+                        id: 'cred-anthropic',
+                        provider: BYOKProvider.ANTHROPIC,
+                        apiKey: 'enc(sk-ant)',
+                    },
+                    {
+                        id: 'cred-openai',
+                        provider: BYOKProvider.OPENAI,
+                        apiKey: 'enc(sk-openai)',
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-anthropic',
+                        credentialId: 'cred-anthropic',
+                        model: 'claude-sonnet-4-5-20250929',
+                    },
+                    {
+                        id: 'model-openai',
+                        credentialId: 'cred-openai',
+                        model: 'gpt-4o',
+                    },
+                ],
+                routing: { defaultModelId: 'model-anthropic' },
+            });
+
+            const result = await useCase.execute(orgAndTeam as any);
+
+            // Anthropic does structured output via tool-use → 'none' (so it is
+            // capability-INCOMPATIBLE with codeReview, the LIVE-WARNING case).
+            const anthropic = result.models.find(
+                (m) => m.modelId === 'model-anthropic',
+            );
+            expect(anthropic?.capabilities).toEqual(
+                expect.objectContaining({
+                    structuredOutput: 'none',
+                    toolCalling: 'native',
+                }),
+            );
+
+            // OpenAI: native structured output + tools → compatible with all tasks.
+            const openai = result.models.find(
+                (m) => m.modelId === 'model-openai',
+            );
+            expect(openai?.capabilities?.toolCalling).toBe('native');
+            expect(['json_schema', 'json_object']).toContain(
+                openai?.capabilities?.structuredOutput,
+            );
+        });
+
+        it('leaves capabilities undefined for an unknown/unregistered provider (never throws)', async () => {
+            const useCase = buildUseCase({
+                version: 2,
+                credentials: [
+                    {
+                        id: 'cred-unknown',
+                        provider: 'totally_made_up_provider',
+                        apiKey: 'enc(x)',
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-unknown',
+                        credentialId: 'cred-unknown',
+                        model: 'mystery-model',
+                    },
+                ],
+            });
+
+            const result = await useCase.execute(orgAndTeam as any);
+            expect(result.models[0].capabilities).toBeUndefined();
+        });
+
+        it('carries NO secret via the capabilities field', async () => {
+            const useCase = buildUseCase({
+                version: 2,
+                credentials: [
+                    {
+                        id: 'cred-openai',
+                        provider: BYOKProvider.OPENAI,
+                        apiKey: 'enc(sk-CAPS-SECRET)',
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-openai',
+                        credentialId: 'cred-openai',
+                        model: 'gpt-4o',
+                    },
+                ],
+                routing: { defaultModelId: 'model-openai' },
+            });
+
+            const result = await useCase.execute(orgAndTeam as any);
+            const caps = result.models[0].capabilities;
+            expect(caps).toBeDefined();
+            expect(JSON.stringify(caps)).not.toContain('sk-CAPS-SECRET');
+            expect(JSON.stringify(caps)).not.toContain('apiKey');
+        });
+    });
+
     describe('secret hygiene + self-host safety', () => {
         it('masks every secret — no apiKey / aws* material in the serialized status', async () => {
             const useCase = buildUseCase({

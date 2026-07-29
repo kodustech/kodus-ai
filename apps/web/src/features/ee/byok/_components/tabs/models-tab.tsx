@@ -1,19 +1,51 @@
 "use client";
 
-import { Card, CardContent, CardHeader } from "@components/ui/card";
+import { useState } from "react";
+import { Alert, AlertDescription } from "@components/ui/alert";
+import { Button } from "@components/ui/button";
+import { FormControl } from "@components/ui/form-control";
+import { Input } from "@components/ui/input";
+import { magicModal } from "@components/ui/magic-modal";
+import { Textarea } from "@components/ui/textarea";
+import { toast } from "@components/ui/toaster/use-toast";
 import type { LLMConfigStatus } from "@services/organizationParameters/fetch";
+import {
+    createOrUpdateOrganizationParameter,
+    deleteBYOK,
+    testBYOK,
+    type TestBYOKResult,
+} from "@services/organizationParameters/fetch";
+import { OrganizationParametersConfigKey } from "@services/parameters/types";
 import type { ByokModelCost } from "@services/usage/byok-cost";
-import { KeyRoundIcon } from "lucide-react";
+import { PlugIcon, PlusIcon, SettingsIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ConfirmModal } from "src/core/components/ui/confirm-modal";
+import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
 import curatedCatalog from "../../_data/curated-models.json";
 import type { CuratedModel } from "../../_data/curated-models.types";
-import type { BYOKConfigV2 } from "../../_types";
-import { groupModelsByProvider, maskKey } from "../../_utils";
+import type {
+    BYOKConfig,
+    BYOKConfigV2,
+    BYOKCredential,
+    BYOKModelConfig,
+} from "../../_types";
+import { groupModelsByProvider, hasVisibleModels, maskKey } from "../../_utils";
+import {
+    buildV2Blob,
+    credentialSettingsFromConfig,
+    modelFieldsFromConfig,
+} from "../byok-v2-write";
+import { CuratedCatalog } from "../catalog/catalog";
+import { CuratedConnectPanel } from "../catalog/connect-panel";
 import { PROVIDER_LABELS } from "../catalog/model-card";
+import { FirstRunCard } from "../first-run-card";
+import { ModelRow } from "../model-row";
+import { ProviderGroupHeader } from "../provider-group-header";
 
 type ModelsTabProps = {
     config: BYOKConfigV2 | null | undefined;
-    /** Per-model accumulated cost, keyed by BYOKModelConfig.id (04-08 renders it). */
+    /** Per-model accumulated cost, keyed by BYOKModelConfig.id. */
     costByModelId?: Record<string, ByokModelCost>;
     teamId?: string;
     periodLabel?: string;
@@ -21,59 +53,406 @@ type ModelsTabProps = {
     llmConfigStatus: LLMConfigStatus | null;
 };
 
-/** Curated display name for a model id, falling back to the raw id. */
-const modelDisplayName = (modelId: string): string =>
+/** Providers with curated catalog entries — decides inline edit vs. the manual
+ *  escape hatch (mirrors the legacy isEditableInCatalog split, now keyed by the
+ *  model's underlying credential provider). */
+const CURATED_PROVIDERS = new Set(
+    (curatedCatalog.models as CuratedModel[]).map((m) => m.provider),
+);
+
+const displayNameFor = (modelId: string): string =>
     (curatedCatalog.models as CuratedModel[]).find((m) => m.id === modelId)
         ?.displayName ?? modelId;
 
+type View =
+    | { mode: "list" }
+    | { mode: "add" }
+    | { mode: "rotate"; credential: BYOKCredential }
+    | { mode: "edit"; model: BYOKModelConfig; credential: BYOKCredential };
+
 /**
- * Read-only, provider-grouped pool of the org's configured v2 models. Managed
- * credentials are filtered out by groupModelsByProvider; every rendered key is
- * masked (secret hygiene). The interactive first-run card + add/edit/delete
- * flows land in 04-08 — this tracer only proves the v2 read path.
+ * The interactive Models tab: first-run single-decision card, or the
+ * provider-grouped steady-state pool with add-model (key deduped by provider),
+ * rotate-key, and per-model config edit. Every write builds a v2 BYOKConfigV2
+ * blob (blank-key keep rule) and posts it through create-or-update.
  */
-export const ModelsTab = ({ config }: ModelsTabProps) => {
+export const ModelsTab = ({
+    config,
+    costByModelId,
+    periodLabel,
+    costRangeQuery,
+}: ModelsTabProps) => {
+    const router = useRouter();
+    const [view, setView] = useState<View>({ mode: "list" });
+
     const groups = groupModelsByProvider(config).filter(
         (g) => g.models.length > 0,
     );
+    const firstRun = !hasVisibleModels(config);
 
-    if (groups.length === 0) {
+    const persist = async (blob: BYOKConfigV2, successTitle: string) => {
+        try {
+            await createOrUpdateOrganizationParameter(
+                OrganizationParametersConfigKey.BYOK_CONFIG,
+                blob,
+            );
+            toast({ variant: "success", title: successTitle });
+            await revalidateServerSidePath("/organization/byok");
+            setView({ mode: "list" });
+            router.refresh();
+        } catch {
+            toast({
+                variant: "danger",
+                title: "Couldn't save",
+                description: "Something went wrong. Try again.",
+            });
+        }
+    };
+
+    // ── add model / add provider (dedup key by provider) ──────────────────────
+    const connectedKeyByProvider: Record<string, string> = {};
+    for (const group of groupModelsByProvider(config)) {
+        connectedKeyByProvider[group.credential.provider] =
+            group.credential.apiKey ?? "••••";
+    }
+
+    const saveAdd = async (cfg: BYOKConfig) => {
+        const existingCred = (config?.credentials ?? []).find(
+            (c) => !c.managed && c.provider === cfg.provider,
+        );
+        const name = displayNameFor(cfg.model);
+        const blob = existingCred
+            ? buildV2Blob(config, {
+                  kind: "add-existing-provider",
+                  credentialId: existingCred.id,
+                  model: modelFieldsFromConfig(cfg),
+              })
+            : buildV2Blob(config, {
+                  kind: "add-new-provider",
+                  newCredential: {
+                      provider: cfg.provider,
+                      apiKey: cfg.apiKey,
+                      settings: credentialSettingsFromConfig(cfg),
+                  },
+                  model: modelFieldsFromConfig(cfg),
+              });
+        await persist(blob, `${name} added`);
+    };
+
+    // ── per-model edit (uiFields form) ────────────────────────────────────────
+    const openEdit = (model: BYOKModelConfig, credential: BYOKCredential) => {
+        const curated = (curatedCatalog.models as CuratedModel[]).find(
+            (m) => m.id === model.model,
+        );
+        if (!curated || !CURATED_PROVIDERS.has(credential.provider)) {
+            router.push("/organization/byok/manual");
+            return;
+        }
+        setView({ mode: "edit", model, credential });
+    };
+
+    const saveEdit = async (model: BYOKModelConfig, cfg: BYOKConfig) => {
+        const blob = buildV2Blob(config, {
+            kind: "edit-model",
+            modelId: model.id,
+            model: modelFieldsFromConfig(cfg),
+        });
+        await persist(blob, `${displayNameFor(model.model)} updated`);
+    };
+
+    // ── delete (basic path; in-use / last-model UX lands in 04-09) ────────────
+    const handleDelete = (model: BYOKModelConfig) => {
+        const name = displayNameFor(model.model);
+        magicModal.show(() => (
+            <ConfirmModal
+                open
+                title={`Remove ${name}?`}
+                description="Kodus will stop using this model immediately."
+                confirmText="Remove"
+                variant="primary-dark"
+                onConfirm={async () => {
+                    magicModal.hide();
+                    try {
+                        await deleteBYOK({ modelId: model.id });
+                        toast({ variant: "success", title: `${name} removed` });
+                        await revalidateServerSidePath("/organization/byok");
+                        router.refresh();
+                    } catch {
+                        toast({
+                            variant: "danger",
+                            title: `Couldn't remove ${name}`,
+                        });
+                    }
+                }}
+                onCancel={() => magicModal.hide()}
+            />
+        ));
+    };
+
+    // ── view: add model / add provider (inline catalog) ───────────────────────
+    if (view.mode === "add") {
         return (
-            <p className="text-text-tertiary text-sm">No model connected yet</p>
+            <CuratedCatalog
+                slot="main"
+                existingKeyByProvider={connectedKeyByProvider}
+                onSave={saveAdd}
+                onCancel={() => setView({ mode: "list" })}
+            />
         );
     }
 
+    // ── view: rotate a provider credential key ────────────────────────────────
+    if (view.mode === "rotate") {
+        const firstModel = (config?.models ?? []).find(
+            (m) => m.credentialId === view.credential.id,
+        );
+        return (
+            <RotatePanel
+                credential={view.credential}
+                probeModelId={firstModel?.model}
+                onCancel={() => setView({ mode: "list" })}
+                onSave={async (apiKey, settings) => {
+                    const blob = buildV2Blob(config, {
+                        kind: "rotate",
+                        credentialId: view.credential.id,
+                        apiKey,
+                        settings,
+                    });
+                    await persist(blob, "Key updated");
+                }}
+            />
+        );
+    }
+
+    // ── view: per-model edit ──────────────────────────────────────────────────
+    if (view.mode === "edit") {
+        const curated = (curatedCatalog.models as CuratedModel[]).find(
+            (m) => m.id === view.model.model,
+        )!;
+        const settings = (view.credential.settings ?? {}) as Record<
+            string,
+            unknown
+        >;
+        const existingConfig: BYOKConfig = {
+            provider: view.credential.provider,
+            model: view.model.model,
+            apiKey: view.credential.apiKey ?? "",
+            baseURL:
+                typeof settings.baseURL === "string"
+                    ? settings.baseURL
+                    : undefined,
+            temperature: view.model.temperature,
+            maxInputTokens: view.model.maxInputTokens,
+            maxOutputTokens: view.model.maxOutputTokens,
+            maxConcurrentRequests: view.model.maxConcurrentRequests,
+            reasoningEffort: view.model.reasoningEffort,
+            reasoningConfigOverride: view.model.reasoningConfigOverride,
+        };
+        return (
+            <CuratedConnectPanel
+                model={curated}
+                existingConfig={existingConfig}
+                existingKey={view.credential.apiKey ?? "••••"}
+                onBack={() => setView({ mode: "list" })}
+                onSave={(cfg) => saveEdit(view.model, cfg)}
+            />
+        );
+    }
+
+    // ── view: first-run ───────────────────────────────────────────────────────
+    if (firstRun) {
+        return <FirstRunCard existing={config} />;
+    }
+
+    // ── view: steady-state provider-grouped pool ──────────────────────────────
     return (
         <div className="flex flex-col gap-4">
-            {groups.map(({ credential, models }) => {
-                const providerLabel =
-                    PROVIDER_LABELS[credential.provider] ?? credential.provider;
+            {groups.map(({ credential, models }) => (
+                <ProviderGroupHeader
+                    key={credential.id}
+                    credential={credential}
+                    modelCount={models.length}
+                    defaultOpen={groups.length <= 1 || models.length <= 3}
+                    onRotate={() => setView({ mode: "rotate", credential })}>
+                    <div className="flex flex-col gap-3 pt-1">
+                        {models.map((model) => (
+                            <ModelRow
+                                key={model.id}
+                                model={model}
+                                cost={costByModelId?.[model.id]}
+                                periodLabel={periodLabel}
+                                costRangeQuery={costRangeQuery}
+                                onEdit={() => openEdit(model, credential)}
+                                onDelete={() => handleDelete(model)}
+                            />
+                        ))}
+                        <div className="flex justify-end">
+                            <Button
+                                size="xs"
+                                variant="helper"
+                                leftIcon={<PlusIcon />}
+                                onClick={() => setView({ mode: "add" })}>
+                                Add model
+                            </Button>
+                        </div>
+                    </div>
+                </ProviderGroupHeader>
+            ))}
 
-                return (
-                    <Card color="lv1" key={credential.id}>
-                        <CardHeader className="flex-row items-center justify-between gap-3">
-                            <span className="text-text-primary text-sm font-semibold text-balance">
-                                {providerLabel}
-                            </span>
-                            <span className="text-text-tertiary flex items-center gap-1.5 font-mono text-xs">
-                                <KeyRoundIcon size={12} />
-                                {maskKey(credential.apiKey)}
-                            </span>
-                        </CardHeader>
-                        <CardContent>
-                            <ul className="flex flex-col gap-1.5">
-                                {models.map((model) => (
-                                    <li
-                                        key={model.id}
-                                        className="text-text-secondary text-sm">
-                                        {modelDisplayName(model.model)}
-                                    </li>
-                                ))}
-                            </ul>
-                        </CardContent>
-                    </Card>
-                );
-            })}
+            <div className="border-card-lv2 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+                <Button
+                    size="sm"
+                    variant="primary"
+                    leftIcon={<PlusIcon />}
+                    onClick={() => setView({ mode: "add" })}>
+                    Add another provider
+                </Button>
+                <Button
+                    size="sm"
+                    variant="helper"
+                    leftIcon={<SettingsIcon />}
+                    onClick={() => router.push("/organization/byok/manual")}>
+                    Configure manually
+                </Button>
+            </div>
         </div>
     );
 };
+
+/**
+ * Minimal credential-rotate panel — scoped to apiKey (+ optional baseURL) only,
+ * per the SLICE 2 spec. Leaving the key blank keeps the stored ciphertext (the
+ * blank-key keep rule); a pasted key is probed with the existing testBYOK before
+ * save. The `••••` mask is NEVER seeded into the editable field.
+ */
+function RotatePanel({
+    credential,
+    probeModelId,
+    onSave,
+    onCancel,
+}: {
+    credential: BYOKCredential;
+    probeModelId?: string;
+    onSave: (
+        apiKey: string,
+        settings?: Record<string, unknown>,
+    ) => Promise<void>;
+    onCancel: () => void;
+}) {
+    const settings = (credential.settings ?? {}) as Record<string, unknown>;
+    const providerLabel =
+        PROVIDER_LABELS[credential.provider] ?? credential.provider;
+
+    const [apiKey, setApiKey] = useState("");
+    const [baseURL, setBaseURL] = useState(
+        typeof settings.baseURL === "string" ? settings.baseURL : "",
+    );
+    const [isSaving, setIsSaving] = useState(false);
+    const [testState, setTestState] = useState<
+        { status: "idle" } | { status: "error"; result: TestBYOKResult }
+    >({ status: "idle" });
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            // Only probe when the user typed a new key (reuse the built probe).
+            if (apiKey.trim() && probeModelId) {
+                const result = await testBYOK({
+                    provider: credential.provider,
+                    apiKey: apiKey.trim(),
+                    baseURL: baseURL.trim() || undefined,
+                    model: probeModelId,
+                });
+                if (!result.ok) {
+                    setTestState({ status: "error", result });
+                    return;
+                }
+            }
+            const nextSettings: Record<string, unknown> | undefined =
+                baseURL.trim()
+                    ? { ...settings, baseURL: baseURL.trim() }
+                    : Object.keys(settings).length > 0
+                      ? settings
+                      : undefined;
+            await onSave(apiKey, nextSettings);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-col gap-4">
+            <Alert variant="info">
+                <AlertDescription className="text-pretty">
+                    A key for <strong>{providerLabel}</strong> is stored (
+                    <span className="font-mono">
+                        {maskKey(credential.apiKey)}
+                    </span>
+                    ). Paste a new one to replace it — or leave blank to keep the
+                    current key while you change the endpoint.
+                </AlertDescription>
+            </Alert>
+
+            <FormControl.Root>
+                <FormControl.Label htmlFor="rotate-key">
+                    New {providerLabel} API key
+                </FormControl.Label>
+                <FormControl.Input>
+                    <Textarea
+                        id="rotate-key"
+                        value={apiKey}
+                        onChange={(e) => {
+                            setApiKey(e.target.value);
+                            if (testState.status !== "idle")
+                                setTestState({ status: "idle" });
+                        }}
+                        className="max-h-40 min-h-24"
+                        placeholder={`Paste a new ${providerLabel} API key (or leave blank to keep)`}
+                    />
+                </FormControl.Input>
+            </FormControl.Root>
+
+            <FormControl.Root>
+                <FormControl.Label htmlFor="rotate-baseurl">
+                    Base URL (optional)
+                </FormControl.Label>
+                <FormControl.Input>
+                    <Input
+                        id="rotate-baseurl"
+                        value={baseURL}
+                        onChange={(e) => setBaseURL(e.target.value)}
+                        placeholder="https://..."
+                    />
+                </FormControl.Input>
+            </FormControl.Root>
+
+            {testState.status === "error" && (
+                <Alert variant="danger">
+                    <AlertDescription className="text-pretty">
+                        {testState.result.message ??
+                            "The new key failed to connect. Check it and try again."}
+                    </AlertDescription>
+                </Alert>
+            )}
+
+            <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button
+                    type="button"
+                    size="md"
+                    variant="cancel"
+                    onClick={onCancel}>
+                    Cancel
+                </Button>
+                <Button
+                    type="button"
+                    size="md"
+                    variant="primary"
+                    leftIcon={<PlugIcon />}
+                    loading={isSaving}
+                    onClick={() => void handleSave()}>
+                    Save key
+                </Button>
+            </div>
+        </div>
+    );
+}

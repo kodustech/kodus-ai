@@ -160,8 +160,25 @@ export const clearModelOverrides = async (
 
 export type LLMConfigSource = "byok" | "env" | "none";
 
+/**
+ * One enumerated v2 model in the per-org status. Web mirror of the backend
+ * LLMModelStatus (get-llm-config-status.use-case.ts) — METADATA ONLY, every
+ * secret masked. `capabilities` is a static descriptor (04-10) used by the
+ * Routing tab's LIVE capability gate; absent for an unknown provider.
+ */
+export type LLMModelStatus = {
+    modelId: string;
+    model?: string;
+    providerId?: string;
+    baseUrl?: string;
+    resolvable: boolean;
+    capabilities?: { structuredOutput?: string; toolCalling?: string };
+};
+
 export type LLMConfigStatus = {
     source: LLMConfigSource;
+    /** Per-org enumeration of the configured v2 models[] (empty for non-v2). */
+    models: LLMModelStatus[];
     byok: {
         configured: boolean;
         model?: string;

@@ -9,8 +9,6 @@ import {
     CheckCircle2Icon,
     CoinsIcon,
     ArrowUpRightIcon,
-    KeyRoundIcon,
-    LinkIcon,
     PencilIcon,
     ThermometerIcon,
     TrashIcon,
@@ -23,7 +21,6 @@ import { formatUsd } from "@services/usage/format";
 import curatedCatalog from "../_data/curated-models.json";
 import type { CuratedModel } from "../_data/curated-models.types";
 import type { BYOKConfig } from "../_types";
-import { maskKey } from "../_utils";
 import { PROVIDER_LABELS } from "./catalog/model-card";
 
 function formatTokens(n: number): string {
@@ -123,25 +120,10 @@ export function ConfiguredSummary({
             <CardContent>
                 <Separator className="bg-card-lv2 mb-3" />
 
+                {/* Key + Base URL rows were removed in SLICE 2 — the credential
+                    now lives on the provider group header, not the per-model
+                    summary. This card keeps only per-model config + cost. */}
                 <dl className="text-text-secondary grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
-                    <dt className="flex items-center gap-1.5">
-                        <KeyRoundIcon size={12} /> Key
-                    </dt>
-                    <dd className="font-mono text-xs">
-                        {maskKey(config.apiKey)}
-                    </dd>
-
-                    {config.baseURL && (
-                        <>
-                            <dt className="flex items-center gap-1.5">
-                                <LinkIcon size={12} /> Base URL
-                            </dt>
-                            <dd className="font-mono text-xs break-all">
-                                {config.baseURL}
-                            </dd>
-                        </>
-                    )}
-
                     {reasoningLabel && (
                         <>
                             <dt className="flex items-center gap-1.5">

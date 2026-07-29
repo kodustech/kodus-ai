@@ -1,9 +1,19 @@
 /** @jest-environment jsdom */
 import "@testing-library/jest-dom";
+import { TooltipProvider } from "@components/ui/tooltip";
 import { render, screen } from "@testing-library/react";
 
 import type { BYOKConfigV2 } from "../_types";
 import { ByokPageClient } from "./page.client";
+
+/**
+ * Render ByokPageClient under a TooltipProvider — production supplies one at the
+ * app root (app/layout.tsx), so the tooltip-using cards (CuratedModelCard in the
+ * first-run card, model-card metric tags) have an ambient provider. This wrapper
+ * reproduces that layout-level context for the isolated render.
+ */
+const renderPage = (ui: React.ReactElement) =>
+    render(<TooltipProvider>{ui}</TooltipProvider>);
 
 // ModelOverridesBanner (rendered by ByokPageClient) fetches overrides in a
 // useEffect; stub the service so the spec never hits the network. Passing no
@@ -20,6 +30,31 @@ jest.mock("@services/organizationParameters/fetch", () => ({
 // tab is out of scope for this v2-read tracer spec.
 jest.mock("./spend-limit-section", () => ({
     SpendLimitSection: () => <div data-testid="spend-limit-section" />,
+}));
+
+// The interactive Models tab (04-08) writes via revalidateServerSidePath, which
+// imports next/cache → next's server request code that references the `Request`
+// web global (absent in jsdom). Stub the server-only util to keep this render
+// spec hermetic — revalidation is not exercised by a pure render assertion.
+jest.mock("src/core/utils/revalidate-server-side", () => ({
+    revalidateServerSidePath: jest.fn(),
+    revalidateServerSideTag: jest.fn(),
+}));
+
+// The Models tab + first-run card call useRouter, and magicModal reads
+// usePathname. next/navigation has no app-router context under jsdom, so provide
+// inert hooks.
+jest.mock("next/navigation", () => ({
+    useRouter: () => ({
+        push: jest.fn(),
+        replace: jest.fn(),
+        refresh: jest.fn(),
+        back: jest.fn(),
+        prefetch: jest.fn(),
+    }),
+    usePathname: () => "/organization/byok",
+    useSearchParams: () => new URLSearchParams(),
+    useParams: () => ({}),
 }));
 
 const llmConfigStatus = {
@@ -47,7 +82,7 @@ describe("ByokPageClient — v2 read path", () => {
             ],
         };
 
-        render(
+        renderPage(
             <ByokPageClient config={config} llmConfigStatus={llmConfigStatus} />,
         );
 
@@ -76,12 +111,17 @@ describe("ByokPageClient — v2 read path", () => {
         ).not.toBeDisabled();
     });
 
-    it("disables Routing + Budget on first run (no connected model)", () => {
-        render(
+    it("disables Routing + Budget on first run and shows the single-decision card", () => {
+        renderPage(
             <ByokPageClient config={null} llmConfigStatus={llmConfigStatus} />,
         );
 
-        expect(screen.getByText("No model connected yet")).toBeInTheDocument();
+        // 04-08: first-run now renders the D-UI-FIRSTRUN single-decision card
+        // (recommended model + key + Connect), replacing the read-only tracer's
+        // "No model connected yet" placeholder.
+        expect(
+            screen.getByText("Recommended for code review"),
+        ).toBeInTheDocument();
         expect(screen.getByRole("tab", { name: /Routing/ })).toBeDisabled();
         expect(screen.getByRole("tab", { name: /Budget/ })).toBeDisabled();
     });

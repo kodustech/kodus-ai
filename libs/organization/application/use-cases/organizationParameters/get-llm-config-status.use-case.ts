@@ -11,6 +11,9 @@ import {
     type BYOKCredential,
 } from '@libs/llm/byok-config';
 import { normalizeByokConfig } from '@libs/llm/normalize-byok-config';
+// Barrel import (side-effect self-registers every provider module), so
+// REGISTRY.get(providerId).capabilities(model) resolves for all BYOKProvider ids.
+import { REGISTRY } from '@libs/llm/providers';
 import {
     IOrganizationParametersService,
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
@@ -37,6 +40,14 @@ export interface LLMModelStatus {
     providerId?: string;
     baseUrl?: string;
     resolvable: boolean;
+    /**
+     * Static per-model capability descriptor (04-10) derived from
+     * REGISTRY.get(providerId).capabilities(model). METADATA ONLY (never a
+     * secret) — surfaced so the Routing tab can render a LIVE pre-save
+     * capability warning. Absent (undefined) for an unknown/unregistered
+     * provider; the backend StaticTaskStrategy stays the authoritative gate.
+     */
+    capabilities?: { structuredOutput?: string; toolCalling?: string };
 }
 
 export interface LLMConfigStatus {
@@ -177,7 +188,36 @@ export class GetLLMConfigStatusUseCase implements IUseCase {
                         credential,
                         envReachable,
                     ),
+                    capabilities: this.modelCapabilities(
+                        credential?.provider,
+                        model.model,
+                    ),
                 };
             });
+    }
+
+    /**
+     * Static per-model capability descriptor from the provider registry.
+     * Returns the two gate-relevant fields (structuredOutput / toolCalling) —
+     * a plain descriptor with NO secret. Degrades to `undefined` (never throws)
+     * for a missing/unknown/unregistered provider or a failing capabilities()
+     * lookup, mirroring StaticTaskStrategy.evaluate's try/catch degrade.
+     */
+    private modelCapabilities(
+        providerId?: string,
+        model?: string,
+    ): { structuredOutput?: string; toolCalling?: string } | undefined {
+        if (!providerId || !model || !REGISTRY.has(providerId)) {
+            return undefined;
+        }
+        try {
+            const caps = REGISTRY.get(providerId).capabilities(model);
+            return {
+                structuredOutput: caps.structuredOutput,
+                toolCalling: caps.toolCalling,
+            };
+        } catch {
+            return undefined;
+        }
     }
 }
