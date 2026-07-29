@@ -102,8 +102,9 @@ export const BYOKModelSelectorSection = () => {
     const models = byokModels;
 
     // The value inherited from the parent scope (repository / BYOK settings),
-    // computed the same way the override indicator does.
-    const leaf = config?.byokModel;
+    // computed the same way the override indicator does. Prefer the id-based
+    // override; fall back to the legacy name leaf during the compat read window.
+    const leaf = config?.byokModelId ?? config?.byokModel;
     const isExistingOverride = leaf?.level === currentLevel;
     const parentValue =
         (isExistingOverride ? leaf?.overriddenValue : leaf?.value) ?? "";
@@ -120,9 +121,11 @@ export const BYOKModelSelectorSection = () => {
 
     return (
         <Controller
-            name="byokModel.value"
+            name="byokModelId.value"
             control={form.control}
-            defaultValue={config?.byokModel?.value ?? ""}
+            defaultValue={
+                config?.byokModelId?.value ?? config?.byokModel?.value ?? ""
+            }
             render={({ field }) => {
                 const currentValue = field.value ?? "";
                 const isInherited = currentValue === parentValue;
@@ -151,7 +154,7 @@ export const BYOKModelSelectorSection = () => {
                                     Code review model
                                 </Heading>
 
-                                <OverrideIndicatorForm fieldName="byokModel" />
+                                <OverrideIndicatorForm fieldName="byokModelId" />
                             </div>
 
                             <p className="text-text-secondary text-sm">
