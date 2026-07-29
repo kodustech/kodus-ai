@@ -36,6 +36,11 @@ import {
     processExpression,
     shouldReviewBranches,
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
+import { isV2Config } from '@libs/llm/byok-config';
+import { resolveModelSlotFromV2 } from '@libs/llm/normalize-byok-config';
+import { StaticTaskStrategy } from '@libs/llm/static-task-strategy';
+import type { RoutingStrategy } from '@libs/llm/routing-strategy';
+import type { BYOKConfig } from '@kodus/kodus-common/llm';
 
 @Injectable()
 export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -44,6 +49,10 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
     readonly visibility = StageVisibility.PRIMARY;
 
     private readonly logger = createLogger(ValidateConfigStage.name);
+
+    // Manual routing policy (Phase 4, plan 04-01). Stateless + dependency-free,
+    // so it is instantiated directly rather than DI-wired.
+    private readonly routingStrategy: RoutingStrategy = new StaticTaskStrategy();
 
     constructor(
         @Inject(AUTOMATION_EXECUTION_SERVICE_TOKEN)
@@ -84,15 +93,80 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     context.organizationAndTeamData,
                 );
 
+            const resolved = byokConfig?.configValue;
+            const overrideModel = context.codeReviewConfig.byokModel?.trim();
+
+            // For a v2 blob, route the codeReview task through the resolver
+            // (compute + log the verdict OUTSIDE the Immer producer so the
+            // producer stays side-effect free). A legacy blob keeps the exact
+            // current byokModel-onto-main behavior below.
+            let v2Verdict = undefined as
+                | ReturnType<RoutingStrategy['resolve']>
+                | undefined;
+            if (isV2Config(resolved)) {
+                v2Verdict = this.routingStrategy.resolve(
+                    'codeReview',
+                    // The legacy byokModel name (a repo/folder override) still
+                    // wins during the read window; the strategy handles the
+                    // id-THEN-name match (REQ-COMPAT-01).
+                    overrideModel ? { override: { modelId: overrideModel } } : {},
+                    resolved,
+                );
+                if (!v2Verdict.modelId) {
+                    this.logger.warn({
+                        message: `BYOK routing BLOCKED for codeReview — falling back to env/managed default: ${v2Verdict.reason}`,
+                        context: this.stageName,
+                        metadata: {
+                            prNumber: context?.pullRequest?.number,
+                            repositoryName: context?.repository?.name,
+                            organizationAndTeamData:
+                                context?.organizationAndTeamData,
+                        },
+                    });
+                }
+            }
+
             context = this.updateContext(context, (draft) => {
-                const resolved = byokConfig?.configValue;
                 draft.codeReviewConfig.byokConfig = resolved;
 
+                if (isV2Config(resolved)) {
+                    // v2: materialize the routed model into the normalized
+                    // {main,fallback} the downstream byokToVercelModel builds.
+                    // Ciphertext is carried verbatim (resolveModelSlotFromV2 never
+                    // decrypts — T-04-01-01).
+                    if (v2Verdict?.modelId) {
+                        const routedMain = resolveModelSlotFromV2(
+                            resolved,
+                            v2Verdict.modelId,
+                        );
+                        const main =
+                            routedMain && v2Verdict.modelName
+                                ? { ...routedMain, model: v2Verdict.modelName }
+                                : routedMain;
+                        if (main) {
+                            const fallback = resolveModelSlotFromV2(
+                                resolved,
+                                resolved.routing?.fallbackModelId,
+                            );
+                            draft.codeReviewConfig.byokConfig = {
+                                main,
+                                ...(fallback ? { fallback } : {}),
+                            } as BYOKConfig;
+                            return;
+                        }
+                    }
+                    // BLOCKED (or unresolvable slot): leave main absent so the
+                    // env/managed default resolves downstream, matching a missing
+                    // config today.
+                    draft.codeReviewConfig.byokConfig = undefined;
+                    return;
+                }
+
+                // Legacy {main,fallback}: exact current behavior, byte-for-byte.
                 // The merged code review config can override which BYOK *main*
                 // model runs the review (directory -> repository -> BYOK
                 // settings). An empty/absent value means "inherit", so the
                 // BYOK-settings main model is left in place.
-                const overrideModel = draft.codeReviewConfig.byokModel?.trim();
                 if (resolved?.main && overrideModel) {
                     draft.codeReviewConfig.byokConfig = {
                         ...resolved,

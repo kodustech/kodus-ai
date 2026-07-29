@@ -32,8 +32,10 @@ const NUM = (v: unknown): number | undefined =>
     typeof v === 'number' ? v : undefined;
 
 /** Build a NormalizedModel from a v2 model + its resolved credential, or null to
- *  skip (managed, missing credential, or no provider — all degrade to absent). */
-function slotFromV2(
+ *  skip (managed, missing credential, or no provider — all degrade to absent).
+ *  Exported so an apply site (the routing resolver) can materialize the chosen
+ *  model's full ciphertext-bearing slot via `resolveModelSlotFromV2`. */
+export function slotFromV2(
     model: BYOKModelConfig,
     creds: Map<string, BYOKCredential>,
 ): NormalizedModel | null {
@@ -115,6 +117,25 @@ function normalizeV2(cfg: BYOKConfigV2): NormalizedByokConfig {
         ...(main ? { main } : {}),
         ...(fallback ? { fallback } : {}),
     };
+}
+
+/**
+ * Materialize ONE v2 model's normalized slot by its `models[]` id (routing apply
+ * site). Reuses `slotFromV2` field-mapping so the slot carries CIPHERTEXT
+ * verbatim — never decrypts (T-04-01-01); byok-to-vercel decrypts downstream.
+ * Returns null when the id is absent/unknown or the model is managed/incomplete.
+ */
+export function resolveModelSlotFromV2(
+    config: BYOKConfigV2,
+    modelId: string | null | undefined,
+): NormalizedModel | null {
+    if (!modelId) return null;
+    const creds = new Map<string, BYOKCredential>(
+        (config.credentials ?? []).filter((c) => c && c.id).map((c) => [c.id, c]),
+    );
+    const model = (config.models ?? []).find((m) => m && m.id === modelId);
+    if (!model) return null;
+    return slotFromV2(model, creds);
 }
 
 /**

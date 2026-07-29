@@ -1,5 +1,6 @@
 import { BYOKConfig } from '@kodus/kodus-common/llm';
 import { normalizeByokConfig } from '@libs/llm/normalize-byok-config';
+import { isV2Config, type BYOKConfigV2 } from '@libs/llm/byok-config';
 import { Injectable, Inject } from '@nestjs/common';
 
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
@@ -751,6 +752,35 @@ export class PermissionValidationService {
         return normalized.main
             ? { main: normalized.main, fallback: normalized.fallback }
             : null;
+    }
+
+    /**
+     * Parallel v2-shape accessor for the routing resolver (Phase 4, plan 04-01).
+     *
+     * `getBYOKConfig` (above) collapses the stored blob to `{main,fallback}` for
+     * its 25 legacy callers — which discards the `models[]`/`routing` the
+     * StaticTaskStrategy needs to route PER TASK. This accessor returns the FULL
+     * v2 blob instead, and `null` for a legacy / absent / non-v2 blob (the caller
+     * then keeps its legacy path). Additive: `getBYOKConfig` and its callers are
+     * untouched. Non-UUID org ids (CLI trial) resolve to `null`, mirroring
+     * `getBYOKConfig`.
+     */
+    async getBYOKConfigV2Raw(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<BYOKConfigV2 | null> {
+        const UUID_RE =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!UUID_RE.test(organizationAndTeamData?.organizationId || '')) {
+            return null;
+        }
+
+        const byokConfig = await this.organizationParametersService.findByKey(
+            OrganizationParametersKey.BYOK_CONFIG,
+            organizationAndTeamData,
+        );
+
+        const raw = byokConfig?.configValue;
+        return isV2Config(raw) ? raw : null;
     }
 
     /**

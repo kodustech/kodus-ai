@@ -57,10 +57,15 @@ export type LlmTask = 'codeReview' | 'prSummary' | 'conversation';
  */
 export interface BYOKRouting {
     mode?: 'manual' | 'auto';
-    /** Model id per task (Manual policy). */
-    byTask?: Partial<Record<LlmTask, string>>;
-    /** Fallback model id when a task has no explicit assignment. */
+    /** Model id per task (Manual policy). Renamed from `byTask` to match the
+     *  RFC §4.2 precedence vocabulary the resolver reads (Phase 4, plan 04-01);
+     *  the type had zero readers so the rename is free. */
+    taskOverrides?: Partial<Record<LlmTask, string>>;
+    /** Default model id when a task has no explicit override. */
     defaultModelId?: string;
+    /** Single fallback model id used when the resolved tier fails the capability
+     *  gate and no higher-precedence capable model exists (REQ-ROUTE-01). */
+    fallbackModelId?: string;
 }
 
 export interface BYOKConfigV2 {
