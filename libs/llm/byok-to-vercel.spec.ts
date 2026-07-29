@@ -56,6 +56,7 @@ import {
     buildModelFromSlot,
     getModelName,
     runWithBYOKLimiter,
+    getLimiterForSlot,
 } from './byok-to-vercel';
 
 const createVertexMock = createVertex as unknown as jest.Mock;
@@ -489,6 +490,160 @@ describe('runWithBYOKLimiter — rpm min-interval gate (fake timers)', () => {
         const slot = rateSlot(secret, { rpm: 60 });
         try {
             void runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
+            void runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
+            await flushMicrotasks();
+            jest.advanceTimersByTime(1000);
+            await flushMicrotasks();
+
+            for (const spy of spies) {
+                for (const call of spy.mock.calls) {
+                    expect(JSON.stringify(call)).not.toContain(secret);
+                }
+            }
+        } finally {
+            spies.forEach((s) => s.mockRestore());
+        }
+    });
+});
+
+// ─── cooldown gate (429-armed) through the PUBLIC seam ───────────────────────
+// A slot carrying `cooldownMs` enters the limiter path so a limiter is cached
+// and reachable via getLimiterForSlot. armCooldown() DELAYS new admissions
+// until the window passes; isInCooldown() is the predicate the retry owner
+// (structured-review-call) consults. Arming is a DELAY, never a retry.
+
+function cooldownSlot(
+    apiKey: string,
+    opts: { cooldownMs?: number; rpm?: number; tpm?: number } = {},
+): NormalizedModel {
+    return {
+        provider: BYOKProvider.OPENAI,
+        apiKey,
+        model: 'gpt-4o',
+        ...opts,
+    } as NormalizedModel;
+}
+
+describe('runWithBYOKLimiter — cooldown gate (fake timers)', () => {
+    beforeEach(() => {
+        jest.useFakeTimers({ now: 0 });
+    });
+    afterEach(() => {
+        jest.clearAllTimers();
+        jest.useRealTimers();
+    });
+
+    it('a cooldownMs-only slot enters the limiter path (limiter created & cached)', async () => {
+        const slot = cooldownSlot('cipher-cd-only', { cooldownMs: 1000 });
+        // No limiter before the first admission.
+        expect(getLimiterForSlot({ slot })).toBeNull();
+
+        void runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
+        await flushMicrotasks();
+
+        // A cooldown-capable slot must NOT fast-path — the limiter now exists so
+        // the wrapper catch can arm it and the retry owner can query it.
+        expect(getLimiterForSlot({ slot })).not.toBeNull();
+    });
+
+    it('armCooldown HOLDS new admissions until the window expires, then drains', async () => {
+        const slot = cooldownSlot('cipher-cd-hold', { cooldownMs: 5000 });
+        const starts: number[] = [];
+        const fn = () => {
+            starts.push(Date.now());
+            return Promise.resolve('ok');
+        };
+
+        // First call primes/caches the limiter and starts immediately (not armed).
+        void runWithBYOKLimiter({ slot }, fn);
+        await flushMicrotasks();
+        expect(starts.length).toBe(1);
+
+        // Arm the slot's cooldown (as the wrapper catch would on a 429).
+        getLimiterForSlot({ slot })!.armCooldown(5000);
+
+        // A task queued during cooldown is HELD (never fired immediately).
+        void runWithBYOKLimiter({ slot }, fn);
+        await flushMicrotasks();
+        expect(starts.length).toBe(1);
+
+        // Not yet — window still open.
+        jest.advanceTimersByTime(4999);
+        await flushMicrotasks();
+        expect(starts.length).toBe(1);
+
+        // Window passes → the held task drains.
+        jest.advanceTimersByTime(1);
+        await flushMicrotasks();
+        expect(starts.length).toBe(2);
+    });
+
+    it('isInCooldown() reflects arm → in-window → expiry', async () => {
+        const slot = cooldownSlot('cipher-cd-pred', { cooldownMs: 3000 });
+        void runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
+        await flushMicrotasks();
+
+        const limiter = getLimiterForSlot({ slot })!;
+        expect(limiter.isInCooldown()).toBe(false);
+
+        limiter.armCooldown(3000);
+        expect(limiter.isInCooldown()).toBe(true);
+
+        jest.advanceTimersByTime(2999);
+        expect(limiter.isInCooldown()).toBe(true);
+
+        jest.advanceTimersByTime(1);
+        expect(limiter.isInCooldown()).toBe(false);
+    });
+
+    it('coexists with rpm — arming cooldown does NOT reset the rpm window (Pitfall 4)', async () => {
+        // rpm:60 → 1000ms min-interval; cooldown 500ms is SHORTER than the rpm window.
+        const slot = cooldownSlot('cipher-cd-rpm', { rpm: 60, cooldownMs: 500 });
+        const starts: number[] = [];
+        const fn = () => {
+            starts.push(Date.now());
+            return Promise.resolve('ok');
+        };
+
+        void runWithBYOKLimiter({ slot }, fn);
+        await flushMicrotasks();
+        expect(starts).toEqual([0]); // fired at t=0; rpm window now open until 1000
+
+        // Arm a 500ms cooldown, then queue a 2nd task.
+        getLimiterForSlot({ slot })!.armCooldown(500);
+        void runWithBYOKLimiter({ slot }, fn);
+        await flushMicrotasks();
+        expect(starts.length).toBe(1);
+
+        // Cooldown expires at 500, but the rpm min-interval (1000) STILL holds —
+        // arming did not reset lastStartAt, so the 2nd start waits for the rpm window.
+        jest.advanceTimersByTime(500);
+        await flushMicrotasks();
+        expect(starts.length).toBe(1);
+
+        jest.advanceTimersByTime(500);
+        await flushMicrotasks();
+        expect(starts).toEqual([0, 1000]);
+    });
+
+    it('a slot with no cooldownMs never arms (isInCooldown stays false — behaves as 05-02)', async () => {
+        const slot = cooldownSlot('cipher-cd-none', { rpm: 60 });
+        void runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
+        await flushMicrotasks();
+        expect(getLimiterForSlot({ slot })!.isInCooldown()).toBe(false);
+    });
+
+    it('cooldown path emits no key material to any console sink', async () => {
+        const sinks = ['log', 'warn', 'error', 'info', 'debug'] as const;
+        const spies = sinks.map((s) =>
+            jest.spyOn(console, s).mockImplementation(() => undefined),
+        );
+        const secret = 'cipher-cd-secret-must-not-log';
+        const slot = cooldownSlot(secret, { cooldownMs: 1000 });
+        try {
+            void runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
+            await flushMicrotasks();
+            getLimiterForSlot({ slot })!.armCooldown(1000);
             void runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
             await flushMicrotasks();
             jest.advanceTimersByTime(1000);

@@ -411,7 +411,7 @@ type QueuedTask<T> = {
 
 const DEFAULT_LIMITER_QUEUE_TIMEOUT_MS = 0;
 
-class BYOKConcurrencyLimiter {
+export class BYOKConcurrencyLimiter {
     private readonly queue: Array<QueuedTask<unknown>> = [];
     private activeCount = 0;
     private nextTaskId = 1;
@@ -437,6 +437,15 @@ class BYOKConcurrencyLimiter {
     private reservoirRefillAt = 0;
     private tpmTimer?: ReturnType<typeof setTimeout>;
 
+    // cooldown gate (429-armed): absolute timestamp until which NO new task may
+    // start. 0 ⇒ never armed. `armCooldown(ms)` (called by the wrapper catch on a
+    // classified RATE_LIMIT) pushes it to `Date.now() + ms`; drain() DELAYS every
+    // admission while `Date.now() < cooldownUntil` (never a retry — a delay).
+    // `cooldownTimer` holds the single pending re-drain scheduled at expiry so a
+    // cooldown-only slot (Infinity concurrency, no rpm/tpm) still resumes.
+    private cooldownUntil = 0;
+    private cooldownTimer?: ReturnType<typeof setTimeout>;
+
     constructor(concurrency: number, rpm?: number, tpm?: number) {
         this.concurrency = concurrency;
         this.setRpm(rpm);
@@ -446,6 +455,33 @@ class BYOKConcurrencyLimiter {
     /** Current concurrency ceiling (read by runWithBYOKLimiter for cache reuse). */
     getConcurrency(): number {
         return this.concurrency;
+    }
+
+    /**
+     * Arm the cooldown gate for `ms` from now (called by the wrapper catch on a
+     * classified RATE_LIMIT). Extends — never shortens — an active window, so
+     * overlapping 429s don't cut a cooldown short. Non-finite/≤0 is ignored
+     * (cooldownMs disabled ⇒ never arms). Schedules ONE re-drain at expiry so a
+     * cooldown-only slot resumes without an external tick. Arming is a DELAY, not
+     * a retry: it holds admissions; it never re-invokes any task.
+     */
+    armCooldown(ms: number): void {
+        if (typeof ms !== 'number' || !Number.isFinite(ms) || ms <= 0) return;
+        const until = Date.now() + ms;
+        if (until <= this.cooldownUntil) return; // never shorten an active window
+        this.cooldownUntil = until;
+        if (this.cooldownTimer) clearTimeout(this.cooldownTimer);
+        this.cooldownTimer = setTimeout(() => {
+            this.cooldownTimer = undefined;
+            this.drain();
+        }, this.cooldownUntil - Date.now());
+    }
+
+    /** True while the cooldown window is still in the future. The retry owner
+     *  (structured-review-call) consults this to skip re-issuing into a cooling
+     *  slot. Reads no key material. */
+    isInCooldown(): boolean {
+        return this.cooldownUntil > Date.now();
     }
 
     /**
@@ -654,6 +690,22 @@ class BYOKConcurrencyLimiter {
                 continue;
             }
 
+            // cooldown gate (429-armed): after a classified RATE_LIMIT the slot
+            // is HELD until `cooldownUntil`. DELAY (never retry) — schedule ONE
+            // re-drain at expiry and stop starting. Checked FIRST (before rpm/tpm)
+            // because a rate-limited provider must not be touched at all; it
+            // coexists with rpm/tpm on the same instance (arming doesn't reset
+            // the rpm window or the tpm reservoir — Pitfall 4).
+            if (this.cooldownUntil > Date.now()) {
+                if (!this.cooldownTimer) {
+                    this.cooldownTimer = setTimeout(() => {
+                        this.cooldownTimer = undefined;
+                        this.drain();
+                    }, this.cooldownUntil - Date.now());
+                }
+                return;
+            }
+
             // rpm rate gate: DELAY (never retry) the next START if the min-interval
             // since the last actual start hasn't elapsed. Schedule a single
             // re-drain for the remaining time and stop starting early.
@@ -754,6 +806,23 @@ function buildLimiterCacheKey(params: {
 }
 
 /**
+ * Reach the cached per-slot limiter for a slot (same identity key
+ * `runWithBYOKLimiter` uses), or null when none exists yet. The wrapper catch
+ * uses it to `armCooldown` on a classified RATE_LIMIT; the retry owner
+ * (structured-review-call) uses it to `isInCooldown()` before re-issuing. Never
+ * constructs a limiter — a slot that never ran has no cached limiter (null).
+ * Reads/returns no key material beyond the opaque ciphertext already in the slot.
+ */
+export function getLimiterForSlot(params: {
+    slot?: NormalizedModel;
+    organizationId?: string;
+}): BYOKConcurrencyLimiter | null {
+    const cacheKey = buildLimiterCacheKey(params);
+    if (!cacheKey) return null;
+    return limiterCache.get(cacheKey) ?? null;
+}
+
+/**
  * Runs a task through a BYOK concurrency limiter scoped by organization + provider account.
  *
  * The limiter keys off the ONE resolved slot passed in — no `.main`/`.fallback`
@@ -781,13 +850,18 @@ export function runWithBYOKLimiter<T>(
     const maxConcurrent = params.slot?.maxConcurrentRequests;
     const rpm = params.slot?.rpm;
     const tpm = params.slot?.tpm;
+    const cooldownMs = params.slot?.cooldownMs;
 
     const hasConcurrency = !!maxConcurrent && maxConcurrent > 0;
     const hasRpm = !!rpm && rpm > 0;
     const hasTpm = !!tpm && tpm > 0;
+    // A cooldown-capable slot must NOT fast-path even before any 429: it needs a
+    // cached limiter so the wrapper catch can arm it and the retry owner can
+    // query it. The gate stays inert (cooldownUntil=0) until actually armed.
+    const hasCooldown = !!cooldownMs && cooldownMs > 0;
 
     // Fast path ONLY when ALL gates are unset — identical to pre-rpm behavior.
-    if (!hasConcurrency && !hasRpm && !hasTpm) {
+    if (!hasConcurrency && !hasRpm && !hasTpm && !hasCooldown) {
         return fn();
     }
 

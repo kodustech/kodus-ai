@@ -11,11 +11,15 @@ import { wrapLanguageModel, type LanguageModel } from 'ai';
 import { BYOKConfig } from '@kodus/kodus-common/llm';
 
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { runWithBYOKLimiter } from '@libs/llm/byok-to-vercel';
+import {
+    runWithBYOKLimiter,
+    getLimiterForSlot,
+} from '@libs/llm/byok-to-vercel';
 import { estimateTextTokens } from '@libs/llm/token-estimate';
 import {
     attachClassification,
     classifyLLMError,
+    LlmErrorCategory,
 } from '@libs/llm/error-classifier';
 
 /**
@@ -91,10 +95,35 @@ export function wrapByokModel(
                         // Classify (so downstream can read the canonical category)
                         // and report — never let the reporter mask the LLM error.
                         if (err && typeof err === 'object') {
-                            attachClassification(
+                            const classified = classifyLLMError(
                                 err,
-                                classifyLLMError(err, opts.provider),
+                                opts.provider,
                             );
+                            attachClassification(err, classified);
+
+                            // Arm the slot's cooldown ONLY on a classified
+                            // RATE_LIMIT (429-rate) when the slot opted in via
+                            // cooldownMs. A QUOTA_EXCEEDED (429-billing) and a
+                            // TRANSIENT (5xx/network) NEVER arm. Arming is a
+                            // DELAY, not a retry: the limiter holds the next
+                            // admission; the reporter and rethrow below are
+                            // untouched. Reuses the classify already computed in
+                            // this catch — no re-classification.
+                            const cooldownSlot = opts.byokConfig?.main as
+                                | NormalizedModel
+                                | undefined;
+                            const cooldownMs = cooldownSlot?.cooldownMs;
+                            if (
+                                classified.category ===
+                                    LlmErrorCategory.RATE_LIMIT &&
+                                !!cooldownMs &&
+                                cooldownMs > 0
+                            ) {
+                                getLimiterForSlot({
+                                    slot: cooldownSlot,
+                                    organizationId: opts.organizationId,
+                                })?.armCooldown(cooldownMs);
+                            }
                         }
                         try {
                             opts.reporter?.({

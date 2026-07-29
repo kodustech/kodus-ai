@@ -60,6 +60,7 @@ export function slotFromV2(
         maxConcurrentRequests: model.maxConcurrentRequests,
         rpm: model.rpm,
         tpm: model.tpm,
+        cooldownMs: model.cooldownMs,
     };
 }
 

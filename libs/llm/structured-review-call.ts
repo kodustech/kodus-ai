@@ -15,7 +15,11 @@
 import { Output, type LanguageModel, type Schema } from 'ai';
 import type { BYOKConfig } from '@kodus/kodus-common/llm';
 import { z } from 'zod';
-import { buildModelFromSlot, getModelName } from '@libs/llm/byok-to-vercel';
+import {
+    buildModelFromSlot,
+    getModelName,
+    getLimiterForSlot,
+} from '@libs/llm/byok-to-vercel';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
 import {
     tracedGenerateText,
@@ -136,6 +140,14 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
                         system,
                         prompt: user,
                         output: Output.object({ schema: wireSchema as any }),
+                        // Pin the AI SDK's OWN retry to 0 (default is 2 in
+                        // ai@7 — verified against node_modules/ai). Without this
+                        // the SDK silently retries UNDER the app-level D-00c
+                        // re-issue AND the wrapper catch — three retry layers
+                        // stacking (RESEARCH Pitfall 1) that can multiply the
+                        // 10-min timeout budget. Collapsing them to the single
+                        // cooldown-aware D-00c owner below is the whole point.
+                        maxRetries: 0,
                         // Cap hung provider calls at LLM_CALL_TIMEOUT_MS (10min)
                         // instead of the 30min agent-level fallback — these run
                         // in parallel shards, so a stuck call must not hold a
@@ -157,19 +169,36 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
     try {
         return await call(mainModel, mainModelName);
     } catch (err) {
-        // D-00c minimal latency guard: exactly ONE same-model re-issue on a
-        // transient (5xx / network) failure. The gate skips AbortError /
-        // [HARD-TIMEOUT] because classifyLLMError lumps them into TRANSIENT, yet
-        // re-issuing a slow/timed-out call just times out again (Phase 0 Pitfall
-        // 3). No new AbortController / timeout / retry loop — the re-issue reuses
-        // the same call() closure and its existing
-        // timeoutSignal(LLM_CALL_TIMEOUT_MS)/hardTimeout chain. This is NOT the
-        // removed model fallback: it re-runs the SAME model, once. If the
-        // re-issue also fails, the error propagates (no 2nd model).
-        if (
-            classifyLLMError(err).category === LlmErrorCategory.TRANSIENT &&
-            !isAbortOrHardTimeout(err)
-        ) {
+        // D-00c latency guard — the SINGLE app-level retry owner (the AI SDK's
+        // own retry is pinned to 0 above; the wrapper catch only classifies +
+        // arms cooldown, it never retries). Exactly ONE same-model re-issue,
+        // bounded and cooldown-aware. This is NOT the removed model fallback: it
+        // re-runs the SAME resolved model, once; a re-issue failure propagates
+        // (no 2nd model — attrs.fallback stays false).
+        const category = classifyLLMError(err).category;
+
+        // Preserved verbatim (Phase 0 Pitfall 3): a genuinely aborted /
+        // hard-timed-out call is NEVER re-issued — classifyLLMError lumps
+        // AbortError / [HARD-TIMEOUT] into TRANSIENT, yet re-running a slow /
+        // already-timed-out call just burns the whole 10-min budget again. The
+        // re-issue reuses the same call() closure and its existing
+        // timeoutSignal(LLM_CALL_TIMEOUT_MS)/hardTimeout chain — no fresh budget.
+        if (isAbortOrHardTimeout(err)) {
+            throw err;
+        }
+
+        // Cooldown-aware: after a classified RATE_LIMIT the wrapper armed the
+        // slot's limiter with cooldownMs. Never re-issue into a cooling slot
+        // (arm-then-honor) — an immediate re-fire would just hammer the
+        // rate-limited provider. The caller backs off instead.
+        if (getLimiterForSlot({ slot: mainSlot, organizationId })?.isInCooldown()) {
+            throw err;
+        }
+
+        // The ONE bounded same-model re-issue: a transient (5xx / network) blip.
+        // A RATE_LIMIT (429) is NOT re-fired immediately — it backs off via the
+        // limiter cooldown rather than an instant same-model retry.
+        if (category === LlmErrorCategory.TRANSIENT) {
             return await call(mainModel, mainModelName);
         }
         throw err;

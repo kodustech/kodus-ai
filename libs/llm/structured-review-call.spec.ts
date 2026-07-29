@@ -8,6 +8,9 @@ import { z } from 'zod';
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     buildModelFromSlot: jest.fn(() => ({ __model: 'main' })),
     getModelName: jest.fn(() => 'test-model'),
+    // Default: no limiter cached (slot not in cooldown). Cooldown tests override
+    // this to return a stub limiter reporting isInCooldown()=true.
+    getLimiterForSlot: jest.fn(() => null),
 }));
 jest.mock('@libs/llm/byok-model-wrapper', () => ({
     wrapByokModel: jest.fn((model: any) => model),
@@ -26,10 +29,14 @@ jest.mock('@libs/core/log/langfuse', () => ({
 
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { tracedGenerateText } from '@libs/llm/llm-call';
-import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';
+import {
+    buildModelFromSlot,
+    getLimiterForSlot,
+} from '@libs/llm/byok-to-vercel';
 
 const mockGenerate = tracedGenerateText as unknown as jest.Mock;
 const mockBuild = buildModelFromSlot as unknown as jest.Mock;
+const mockGetLimiter = getLimiterForSlot as unknown as jest.Mock;
 
 // runAiSdkLLMInSpan just runs the exec and returns its result.
 const observabilityService = {
@@ -64,6 +71,8 @@ const assertNoSecondModelBuilt = () => {
 beforeEach(() => {
     mockGenerate.mockReset();
     mockBuild.mockClear();
+    mockGetLimiter.mockReset();
+    mockGetLimiter.mockReturnValue(null); // default: slot not in cooldown
     observabilityService.runAiSdkLLMInSpan.mockClear();
 });
 
@@ -179,6 +188,101 @@ describe('runStructuredReviewCall — retained latency guard (D-00c: one gated S
         );
 
         expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+});
+
+describe('runStructuredReviewCall — single retry owner (maxRetries:0 + cooldown-aware)', () => {
+    it('pins maxRetries:0 on the SDK call so it is the ONLY retry layer', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ violations: [] }));
+
+        await runStructuredReviewCall({ ...base });
+
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        expect(mockGenerate).toHaveBeenCalledWith(
+            expect.objectContaining({ maxRetries: 0 }),
+        );
+    });
+
+    it('maxRetries:0 is passed on BOTH the first attempt AND the D-00c re-issue', async () => {
+        mockGenerate
+            .mockRejectedValueOnce(new Error('fetch failed'))
+            .mockResolvedValueOnce(ok({ violations: ['reissued'] }));
+
+        await runStructuredReviewCall({ ...base });
+
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        for (const call of mockGenerate.mock.calls) {
+            expect(call[0]).toEqual(
+                expect.objectContaining({ maxRetries: 0 }),
+            );
+        }
+    });
+
+    it('transient failure while the slot is IN COOLDOWN → NO re-issue, THROWS', async () => {
+        // The wrapper armed the slot cooldown on the prior 429; the retry owner
+        // must honor it — never re-fire into a cooling slot.
+        mockGetLimiter.mockReturnValue({ isInCooldown: () => true });
+        mockGenerate.mockRejectedValueOnce(new Error('fetch failed'));
+
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                byokConfig: { main: { provider: 'openai' } } as any,
+            }),
+        ).rejects.toThrow('fetch failed');
+
+        // Exactly one attempt — the cooldown gate skipped the re-issue.
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('RATE_LIMIT (429) failure → NO immediate re-fire, THROWS (backs off via cooldown)', async () => {
+        // Slot in cooldown (arm-then-honor): a 429 never immediately re-issues.
+        mockGetLimiter.mockReturnValue({ isInCooldown: () => true });
+        const rateErr: any = new Error('rate limit exceeded');
+        rateErr.status = 429;
+        mockGenerate.mockRejectedValueOnce(rateErr);
+
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                byokConfig: { main: { provider: 'openai' } } as any,
+            }),
+        ).rejects.toThrow('rate limit');
+
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('RATE_LIMIT (429) with NO cooldown armed → still NO immediate re-fire, THROWS', async () => {
+        // Even without a cooldown, a 429 is not hammered with an instant retry.
+        mockGetLimiter.mockReturnValue(null);
+        const rateErr: any = new Error('too many requests');
+        rateErr.status = 429;
+        mockGenerate.mockRejectedValueOnce(rateErr);
+
+        await expect(runStructuredReviewCall({ ...base })).rejects.toThrow(
+            'too many requests',
+        );
+
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('transient failure NOT in cooldown → still exactly ONE same-model re-issue', async () => {
+        mockGetLimiter.mockReturnValue({ isInCooldown: () => false });
+        mockGenerate
+            .mockRejectedValueOnce(new Error('socket hang up'))
+            .mockResolvedValueOnce(ok({ violations: ['reissued'] }));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            byokConfig: { main: { provider: 'openai' } } as any,
+        });
+
+        expect(out).toEqual({ violations: ['reissued'] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
         assertNoSecondModelBuilt();
     });
 });

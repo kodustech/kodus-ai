@@ -54,6 +54,12 @@ export interface BYOKModelConfig {
      *  linearly per minute) debited by the pre-call tiktoken estimate and
      *  reconciled with real usage in the wrapper — v2-only, sibling to rpm. */
     tpm?: number;
+    /** Cooldown window (ms) armed on a classified RATE_LIMIT (429-rate). After a
+     *  rate-limit the per-slot limiter HOLDS new admissions for this long
+     *  (DELAY, never retry). Absent/≤0 ⇒ disabled (never arms). Only a 429-rate
+     *  arms it — a 429-quota (billing) and a 5xx transient never do — v2-only,
+     *  sibling to rpm/tpm. */
+    cooldownMs?: number;
 }
 
 /** LLM task taxonomy for routing (execution is Phase 4; the shape persists now). */
@@ -114,6 +120,11 @@ export interface NormalizedModel {
      *  tpm, refilled linearly per minute). Absent/≤0 ⇒ disabled. Sibling to rpm;
      *  the limiter composes concurrency + rpm + tpm on one instance. */
     tpm?: number;
+    /** Cooldown window (ms) armed on a classified RATE_LIMIT (429-rate). The
+     *  per-slot limiter holds new admissions for this long after a rate-limit.
+     *  Absent/≤0 ⇒ disabled (never arms). Sibling to rpm/tpm on the one
+     *  instance; the limiter composes concurrency + rpm + tpm + cooldown. */
+    cooldownMs?: number;
     maxOutputTokens?: number;
     vertexLocation?: string;
     awsBearerToken?: string;

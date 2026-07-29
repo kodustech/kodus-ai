@@ -12,6 +12,7 @@ jest.mock('@libs/llm/token-estimate', () => ({
 
 import { estimateTextTokens } from '@libs/llm/token-estimate';
 import { wrapByokModel } from './byok-model-wrapper';
+import { getLimiterForSlot } from './byok-to-vercel';
 
 const estimateMock = estimateTextTokens as unknown as jest.Mock;
 
@@ -273,6 +274,121 @@ describe('wrapByokModel — no-tpm path unchanged (behaves as 05-01)', () => {
         const result: any = await wrapped.doGenerate({ prompt: PROMPT });
         expect(result.usage.totalTokens).toBe(42);
         expect(estimateMock).not.toHaveBeenCalled();
+    });
+});
+
+// ─── cooldown arming (429-armed) through the PUBLIC seam ─────────────────────
+// The wrapper catch classifies the provider error and — ONLY on a RATE_LIMIT
+// (429-rate) and when the slot carries cooldownMs — arms the slot's limiter
+// cooldown before rethrowing. A QUOTA_EXCEEDED (429-billing) or TRANSIENT
+// (5xx/network) NEVER arms. Arming is a DELAY, never a retry: the reporter and
+// the rethrow are untouched.
+
+function makeFailingModel(err: unknown) {
+    return {
+        specificationVersion: 'v4',
+        provider: 'test-provider',
+        modelId: 'test-model',
+        supportedUrls: {},
+        doGenerate: jest.fn(async () => {
+            throw err;
+        }),
+        doStream: jest.fn(async () => ({ stream: undefined })),
+    } as any;
+}
+
+function cooldownSlot(apiKey: string, cooldownMs?: number): NormalizedModel {
+    return {
+        provider: BYOKProvider.OPENAI,
+        apiKey,
+        model: 'gpt-4o',
+        ...(cooldownMs ? { cooldownMs } : {}),
+    } as NormalizedModel;
+}
+
+describe('wrapByokModel — cooldown armed on classified RATE_LIMIT only', () => {
+    beforeEach(() => estimateMock.mockReset());
+
+    it('arms the slot cooldown on a 429 RATE_LIMIT (rate, not quota)', async () => {
+        const slot = cooldownSlot('cipher-arm-rate', 60_000);
+        const err: any = new Error('rate limit exceeded, too many requests');
+        err.status = 429;
+        const wrapped = wrap(makeFailingModel(err), slot);
+
+        await expect(
+            wrapped.doGenerate({ prompt: PROMPT }),
+        ).rejects.toThrow('rate limit exceeded');
+
+        expect(getLimiterForSlot({ slot, organizationId: 'org-1' })!.isInCooldown()).toBe(true);
+    });
+
+    it('does NOT arm on a 429 QUOTA_EXCEEDED (billing)', async () => {
+        const slot = cooldownSlot('cipher-arm-quota', 60_000);
+        const err: any = new Error('You exceeded your current quota, billing');
+        err.status = 429;
+        const wrapped = wrap(makeFailingModel(err), slot);
+
+        await expect(
+            wrapped.doGenerate({ prompt: PROMPT }),
+        ).rejects.toThrow('quota');
+
+        expect(getLimiterForSlot({ slot, organizationId: 'org-1' })!.isInCooldown()).toBe(false);
+    });
+
+    it('does NOT arm on a TRANSIENT (5xx) failure', async () => {
+        const slot = cooldownSlot('cipher-arm-transient', 60_000);
+        const err: any = new Error('service unavailable');
+        err.status = 503;
+        const wrapped = wrap(makeFailingModel(err), slot);
+
+        await expect(
+            wrapped.doGenerate({ prompt: PROMPT }),
+        ).rejects.toThrow('service unavailable');
+
+        expect(getLimiterForSlot({ slot, organizationId: 'org-1' })!.isInCooldown()).toBe(false);
+    });
+
+    it('a RATE_LIMIT on a slot WITHOUT cooldownMs never arms (opt-in)', async () => {
+        // No cooldownMs, but keep a limiter reachable via a concurrency gate.
+        const slot = {
+            provider: BYOKProvider.OPENAI,
+            apiKey: 'cipher-arm-nocd',
+            model: 'gpt-4o',
+            maxConcurrentRequests: 1,
+        } as NormalizedModel;
+        const err: any = new Error('rate limit exceeded');
+        err.status = 429;
+        const wrapped = wrap(makeFailingModel(err), slot);
+
+        await expect(
+            wrapped.doGenerate({ prompt: PROMPT }),
+        ).rejects.toThrow('rate limit');
+
+        expect(getLimiterForSlot({ slot, organizationId: 'org-1' })!.isInCooldown()).toBe(false);
+    });
+
+    it('arming emits no key material to any console sink', async () => {
+        const sinks = ['log', 'warn', 'error', 'info', 'debug'] as const;
+        const spies = sinks.map((s) =>
+            jest.spyOn(console, s).mockImplementation(() => undefined),
+        );
+        const secret = 'cipher-arm-secret-must-not-log';
+        const slot = cooldownSlot(secret, 60_000);
+        const err: any = new Error('rate limit exceeded');
+        err.status = 429;
+        const wrapped = wrap(makeFailingModel(err), slot);
+        try {
+            await expect(
+                wrapped.doGenerate({ prompt: PROMPT }),
+            ).rejects.toThrow('rate limit');
+            for (const spy of spies) {
+                for (const call of spy.mock.calls) {
+                    expect(JSON.stringify(call)).not.toContain(secret);
+                }
+            }
+        } finally {
+            spies.forEach((s) => s.mockRestore());
+        }
     });
 });
 
