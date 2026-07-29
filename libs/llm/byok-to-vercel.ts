@@ -409,7 +409,49 @@ class BYOKConcurrencyLimiter {
     private activeCount = 0;
     private nextTaskId = 1;
 
-    constructor(readonly concurrency: number) {}
+    // rpm rate gate: min-interval (ms) between two actual task STARTS. 0 ⇒
+    // disabled (concurrency-only, today's behavior). `lastStartAt` seeds to
+    // -Infinity so the very first task starts immediately. `rateTimer` holds the
+    // single pending re-drain scheduled while the rate window is closed.
+    private concurrency: number;
+    private minInterval = 0;
+    private lastStartAt = Number.NEGATIVE_INFINITY;
+    private rateTimer?: ReturnType<typeof setTimeout>;
+
+    constructor(concurrency: number, rpm?: number) {
+        this.concurrency = concurrency;
+        this.setRpm(rpm);
+    }
+
+    /** Current concurrency ceiling (read by runWithBYOKLimiter for cache reuse). */
+    getConcurrency(): number {
+        return this.concurrency;
+    }
+
+    /**
+     * Re-tune a LIVE limiter without discarding its queue or in-flight rate
+     * state (Pitfall 4). An unrelated config edit keyed on the same identity
+     * fields updates the ceiling/interval on the cached instance rather than
+     * constructing a new one that would reset `lastStartAt`.
+     */
+    configure(opts: { concurrency?: number; rpm?: number }): void {
+        if (typeof opts.concurrency === 'number') {
+            this.concurrency = opts.concurrency;
+        }
+        if ('rpm' in opts) {
+            this.setRpm(opts.rpm);
+        }
+        // A widened ceiling / disabled rate gate may unblock queued tasks.
+        this.drain();
+    }
+
+    /** Compute the min-interval from rpm; guards against non-finite/≤0 → disabled. */
+    private setRpm(rpm?: number): void {
+        this.minInterval =
+            typeof rpm === 'number' && Number.isFinite(rpm) && rpm > 0
+                ? 60_000 / rpm
+                : 0;
+    }
 
     /**
      * @param queueTimeoutMs Per-task queue wait timeout. When > 0, the task
@@ -493,12 +535,31 @@ class BYOKConcurrencyLimiter {
 
     private drain() {
         while (this.activeCount < this.concurrency && this.queue.length > 0) {
+            // rpm rate gate: DELAY (never retry) the next START if the min-interval
+            // since the last actual start hasn't elapsed. Schedule a single
+            // re-drain for the remaining time and stop starting early.
+            if (this.minInterval > 0) {
+                const elapsed = Date.now() - this.lastStartAt;
+                if (elapsed < this.minInterval) {
+                    if (!this.rateTimer) {
+                        this.rateTimer = setTimeout(() => {
+                            this.rateTimer = undefined;
+                            this.drain();
+                        }, this.minInterval - elapsed);
+                    }
+                    return;
+                }
+            }
+
             const task = this.queue.shift();
             if (!task || task.cancelled) continue;
 
             task.started = true;
             if (task.timer) clearTimeout(task.timer);
             task.cleanup?.();
+            // Stamp the start only when a task ACTUALLY starts (cancelled tasks
+            // above `continue` without consuming a rate slot).
+            this.lastStartAt = Date.now();
             this.activeCount++;
 
             Promise.resolve()
@@ -552,8 +613,13 @@ export function runWithBYOKLimiter<T>(
     label = 'llm-call',
 ): Promise<T> {
     const maxConcurrent = params.slot?.maxConcurrentRequests;
+    const rpm = params.slot?.rpm;
 
-    if (!maxConcurrent || maxConcurrent <= 0) {
+    const hasConcurrency = !!maxConcurrent && maxConcurrent > 0;
+    const hasRpm = !!rpm && rpm > 0;
+
+    // Fast path ONLY when BOTH gates are unset — identical to pre-rpm behavior.
+    if (!hasConcurrency && !hasRpm) {
         return fn();
     }
 
@@ -562,12 +628,24 @@ export function runWithBYOKLimiter<T>(
         return fn();
     }
 
+    // An rpm-only slot has no concurrency cap: the drain gate is
+    // `activeCount < concurrency`, so `concurrency` MUST be Infinity (unbounded)
+    // when maxConcurrentRequests is unset/≤0 — otherwise `0 < undefined` is
+    // false and the queue never starts (deadlock). With Infinity the concurrency
+    // gate is a no-op and only the rpm min-interval throttles.
+    const concurrency = hasConcurrency ? (maxConcurrent as number) : Infinity;
+
     const queueTimeoutMs =
         params.queueTimeoutMs ?? DEFAULT_LIMITER_QUEUE_TIMEOUT_MS;
     let limiter = limiterCache.get(cacheKey);
-    if (!limiter || limiter.concurrency !== maxConcurrent) {
-        limiter = new BYOKConcurrencyLimiter(maxConcurrent);
+    if (!limiter) {
+        limiter = new BYOKConcurrencyLimiter(concurrency, rpm);
         limiterCache.set(cacheKey, limiter);
+    } else {
+        // Re-tune the cached limiter (identity fields unchanged) instead of
+        // constructing a new one that would discard in-flight queue/rate state
+        // (Pitfall 4). A config edit re-tunes; it never resets the throttle.
+        limiter.configure({ concurrency, rpm });
     }
 
     return limiter.run(label, fn, params.abortSignal, queueTimeoutMs);

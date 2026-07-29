@@ -45,6 +45,10 @@ export interface BYOKModelConfig {
     maxInputTokens?: number;
     maxOutputTokens?: number;
     maxConcurrentRequests?: number;
+    /** Requests-per-minute cap for this slot. Absent/≤0 ⇒ disabled (no rate
+     *  gate). Enforced as a min-interval (`60000/rpm` ms) by the per-slot
+     *  BYOKConcurrencyLimiter — v2-only, sibling to maxConcurrentRequests. */
+    rpm?: number;
 }
 
 /** LLM task taxonomy for routing (execution is Phase 4; the shape persists now). */
@@ -97,6 +101,10 @@ export interface NormalizedModel {
     temperature?: number;
     maxInputTokens?: number;
     maxConcurrentRequests?: number;
+    /** Requests-per-minute cap for this slot (min-interval `60000/rpm` ms).
+     *  Absent/≤0 ⇒ disabled. Sibling to maxConcurrentRequests; the limiter
+     *  composes both gates on one instance. */
+    rpm?: number;
     maxOutputTokens?: number;
     vertexLocation?: string;
     awsBearerToken?: string;

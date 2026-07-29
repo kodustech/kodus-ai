@@ -52,7 +52,11 @@ import { createVertex } from '@ai-sdk/google-vertex';
 import { createVertexAnthropic } from '@ai-sdk/google-vertex/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { buildModelFromSlot, getModelName } from './byok-to-vercel';
+import {
+    buildModelFromSlot,
+    getModelName,
+    runWithBYOKLimiter,
+} from './byok-to-vercel';
 
 const createVertexMock = createVertex as unknown as jest.Mock;
 const createVertexAnthropicMock = createVertexAnthropic as unknown as jest.Mock;
@@ -278,6 +282,243 @@ describe('getModelName — resolved slot vs env default', () => {
         expect(getModelName(undefined, 'gemini-2.5-flash')).toBe(
             'gemini-2.5-flash',
         );
+    });
+});
+
+// ─── rpm min-interval gate through the PUBLIC runWithBYOKLimiter seam ─────────
+// These drive the exact entry point `wrapByokModel` calls
+// (byok-model-wrapper.ts:76-85) — never the private limiter class — with jest
+// fake timers to assert call SPACING. rpm is a v2 config field (sibling to
+// maxConcurrentRequests) carried config → NormalizedModel slot → limiter.
+
+function flushMicrotasks(): Promise<void> {
+    return (async () => {
+        // Several microtask hops per task: Promise.resolve → run → then → finally.
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+    })();
+}
+
+function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+    return { promise, resolve, reject };
+}
+
+// Unique apiKey per slot → unique limiter cache key (the module limiterCache is
+// keyed on slot identity), so distinct tests never share limiter state. `rpm`
+// and `maxConcurrentRequests` are plain numbers; apiKey stays ciphertext.
+function rateSlot(
+    apiKey: string,
+    opts: {
+        rpm?: number;
+        maxConcurrentRequests?: number;
+        maxOutputTokens?: number;
+    } = {},
+): NormalizedModel {
+    return {
+        provider: BYOKProvider.OPENAI,
+        apiKey,
+        model: 'gpt-4o',
+        ...opts,
+    } as NormalizedModel;
+}
+
+describe('runWithBYOKLimiter — rpm min-interval gate (fake timers)', () => {
+    beforeEach(() => {
+        jest.useFakeTimers({ now: 0 });
+    });
+    afterEach(() => {
+        jest.clearAllTimers();
+        jest.useRealTimers();
+    });
+
+    it('spaces 3 rpm:60 calls at ~0/1000/2000ms — an rpm-only slot STARTS (never hangs)', async () => {
+        // 60000 / 60 = 1000ms min-interval; NO concurrency cap on this slot.
+        const slot = rateSlot('cipher-rpm-only', { rpm: 60 });
+        const starts: number[] = [];
+        const fn = () => {
+            starts.push(Date.now());
+            return Promise.resolve('ok');
+        };
+
+        void runWithBYOKLimiter({ slot }, fn);
+        void runWithBYOKLimiter({ slot }, fn);
+        void runWithBYOKLimiter({ slot }, fn);
+
+        await flushMicrotasks();
+        // Infinity-concurrency fix: with no concurrency cap the drain gate must
+        // treat concurrency as unbounded, so the FIRST rpm-only call starts.
+        // (A `0 < undefined` gate would hang all three to the queue timeout.)
+        expect(starts.length).toBe(1);
+
+        jest.advanceTimersByTime(1000);
+        await flushMicrotasks();
+        expect(starts.length).toBe(2);
+
+        jest.advanceTimersByTime(1000);
+        await flushMicrotasks();
+        expect(starts.length).toBe(3);
+
+        // Spacing is exactly the min-interval, not simultaneous at t=0.
+        expect(starts).toEqual([0, 1000, 2000]);
+    });
+
+    it('composes rpm with maxConcurrentRequests on ONE limiter (both gates active)', async () => {
+        const slot = rateSlot('cipher-compose', {
+            rpm: 60,
+            maxConcurrentRequests: 2,
+        });
+        const starts: number[] = [];
+        const gates = [
+            deferred<string>(),
+            deferred<string>(),
+            deferred<string>(),
+        ];
+        let i = 0;
+        const fn = () => {
+            const g = gates[i++];
+            starts.push(Date.now());
+            return g.promise; // blocks until explicitly resolved
+        };
+
+        const ps = [
+            runWithBYOKLimiter({ slot }, fn),
+            runWithBYOKLimiter({ slot }, fn),
+            runWithBYOKLimiter({ slot }, fn),
+        ];
+        ps.forEach((p) => p.catch(() => undefined));
+
+        await flushMicrotasks();
+        // rpm gate blocks the 2nd start even though concurrency has room for 2.
+        expect(starts.length).toBe(1);
+
+        jest.advanceTimersByTime(1000);
+        await flushMicrotasks();
+        // Rate window opened → 2nd starts (concurrency 2 admits it while #1 blocks).
+        expect(starts.length).toBe(2);
+
+        jest.advanceTimersByTime(1000);
+        await flushMicrotasks();
+        // Concurrency gate now blocks the 3rd: #1 and #2 are both still in flight.
+        expect(starts.length).toBe(2);
+
+        // Freeing a slot lets the 3rd through (rate window is already open).
+        gates[0].resolve('done');
+        await flushMicrotasks();
+        expect(starts.length).toBe(3);
+        expect(starts).toEqual([0, 1000, 2000]);
+
+        gates[1].resolve('done');
+        gates[2].resolve('done');
+        await flushMicrotasks();
+    });
+
+    it('an unrelated config edit re-tunes the cached limiter (rate state survives — Pitfall 4)', async () => {
+        // Identity-equal slots (same provider/apiKey/baseURL/model); only the
+        // NON-identity maxOutputTokens differs → same cache key, same limiter.
+        const first = rateSlot('cipher-retune', {
+            rpm: 60,
+            maxOutputTokens: 100,
+        });
+        const second = rateSlot('cipher-retune', {
+            rpm: 60,
+            maxOutputTokens: 200,
+        });
+        const starts: number[] = [];
+        const fn = () => {
+            starts.push(Date.now());
+            return Promise.resolve('ok');
+        };
+
+        void runWithBYOKLimiter({ slot: first }, fn);
+        await flushMicrotasks();
+        expect(starts.length).toBe(1); // first fired at t=0, rate window now open
+
+        // A config edit on an UNRELATED field must NOT reset the in-flight rate
+        // window by constructing a fresh limiter — it re-tunes the cached one.
+        void runWithBYOKLimiter({ slot: second }, fn);
+        await flushMicrotasks();
+        expect(starts.length).toBe(1); // still gated by the SAME limiter's window
+
+        jest.advanceTimersByTime(1000);
+        await flushMicrotasks();
+        expect(starts.length).toBe(2);
+    });
+
+    it('isolates limiters per slot — different identity does NOT cross-throttle', async () => {
+        const slotA = rateSlot('cipher-iso-a', { rpm: 60 });
+        const slotB = rateSlot('cipher-iso-b', { rpm: 60 });
+        const a: number[] = [];
+        const b: number[] = [];
+        const fnA = () => {
+            a.push(Date.now());
+            return Promise.resolve('a');
+        };
+        const fnB = () => {
+            b.push(Date.now());
+            return Promise.resolve('b');
+        };
+
+        void runWithBYOKLimiter({ slot: slotA }, fnA);
+        void runWithBYOKLimiter({ slot: slotA }, fnA);
+        void runWithBYOKLimiter({ slot: slotB }, fnB);
+        void runWithBYOKLimiter({ slot: slotB }, fnB);
+
+        await flushMicrotasks();
+        // Each slot's first call starts immediately — A never throttles B.
+        expect(a.length).toBe(1);
+        expect(b.length).toBe(1);
+
+        jest.advanceTimersByTime(1000);
+        await flushMicrotasks();
+        // Two calls for the SAME slot share ONE limiter and release after 1000ms.
+        expect(a.length).toBe(2);
+        expect(b.length).toBe(2);
+    });
+
+    it('rpm path emits no key material to any console sink', async () => {
+        const sinks = ['log', 'warn', 'error', 'info', 'debug'] as const;
+        const spies = sinks.map((s) =>
+            jest.spyOn(console, s).mockImplementation(() => undefined),
+        );
+        const secret = 'cipher-secret-must-not-log';
+        const slot = rateSlot(secret, { rpm: 60 });
+        try {
+            void runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
+            void runWithBYOKLimiter({ slot }, () => Promise.resolve('ok'));
+            await flushMicrotasks();
+            jest.advanceTimersByTime(1000);
+            await flushMicrotasks();
+
+            for (const spy of spies) {
+                for (const call of spy.mock.calls) {
+                    expect(JSON.stringify(call)).not.toContain(secret);
+                }
+            }
+        } finally {
+            spies.forEach((s) => s.mockRestore());
+        }
+    });
+});
+
+describe('runWithBYOKLimiter — fast path (no rpm + no concurrency)', () => {
+    it('returns fn() directly and invokes it synchronously (no limiter, no queue)', async () => {
+        const slot = rateSlot('cipher-fastpath'); // neither rpm nor concurrency
+        let calledSync = false;
+        const fn = () => {
+            calledSync = true;
+            return Promise.resolve('R');
+        };
+
+        const p = runWithBYOKLimiter({ slot }, fn);
+        // Fast path invokes fn synchronously; the limiter path defers to a
+        // microtask, so synchronous invocation proves NO limiter was entered.
+        expect(calledSync).toBe(true);
+        await expect(p).resolves.toBe('R');
     });
 });
 
