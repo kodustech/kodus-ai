@@ -3,8 +3,7 @@
  *
  * Phase 3 collapsed usage-span emission onto ONE projection —
  * `buildUsageSpanAttributes` (observability.service.ts:124) — reached through the
- * public entry points `runAiSdkLLMInSpan` (:421), `recordAgentRunUsage` (:509) and
- * the LangChain `runLLMInSpan`/`createLLMTracking.finalize` path (:663/:572). This
+ * public entry points `runAiSdkLLMInSpan` and `recordAgentRunUsage`. This
  * spec LOCKS two invariants that were previously "confirmed by reading":
  *
  *  1. No key material reaches an emitted span (REQ-SEC-01, SC4). The projection is a
@@ -140,29 +139,6 @@ describe('no key material reaches an emitted span (REQ-SEC-01, SC4)', () => {
 
         expect(obs.captured.length).toBeGreaterThan(0);
         expect(usageAttrs(obs)['gen_ai.usage.total_tokens']).toBe(280);
-        expect(serializeCaptured(obs)).not.toContain(SENTINEL);
-    });
-
-    it('runLLMInSpan: a resolved slot carrying an apiKey is stripped to provider:model (toResolvedModelViews)', async () => {
-        const { service, obs } = buildCapturingService();
-
-        await service.runLLMInSpan({
-            spanName: 'code-review::analyze',
-            runName: 'analyzeCodeWithAI',
-            attrs: { type: 'byok', organizationId: 'org-1' },
-            // The documented secret-exclusion mechanism: only provider+model cross
-            // into the observability layer; apiKey is dropped by toResolvedModelViews.
-            resolvedModels: [
-                {
-                    provider: 'anthropic',
-                    model: 'claude-sonnet-4-5',
-                    apiKey: SENTINEL,
-                },
-            ] as any,
-            exec: async () => 'ok',
-        });
-
-        expect(obs.captured.length).toBeGreaterThan(0);
         expect(serializeCaptured(obs)).not.toContain(SENTINEL);
     });
 
