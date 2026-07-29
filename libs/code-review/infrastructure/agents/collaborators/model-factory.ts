@@ -10,7 +10,6 @@
  */
 import type { LanguageModel } from 'ai';
 
-import { buildModelFromSlot, getModelName } from '@libs/llm/byok-to-vercel';
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 import type { BYOKConfig } from '@kodus/kodus-common/llm';
 import type { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
@@ -49,41 +48,20 @@ export interface ResolvedAgentModel {
     main: AgentModelParams;
 }
 
-function buildRoleParams(
-    byokConfig: BYOKConfig | undefined,
-    defaultModelOverride?: string,
-): AgentModelParams {
-    // Read the carrier's resolved main slot at THIS consumer boundary and build
-    // from the single slot; the builder never reads `.main`/`.fallback`.
-    const cfg = byokConfig?.main; // removed in 04b-06 (legacy {main,fallback} branch)
-    const model = buildModelFromSlot(cfg, {}, defaultModelOverride);
-
-    return {
-        role: 'main',
-        model,
-        modelName: getModelName(cfg, defaultModelOverride),
-        maxInputTokens: cfg?.maxInputTokens,
-        reasoningEffort: cfg?.reasoningEffort,
-        reasoningConfigOverride: cfg?.reasoningConfigOverride,
-        byokProvider: cfg?.provider,
-        openrouterProviderOrder: (cfg as any)?.openrouterProviderOrder,
-        openrouterAllowFallbacks: (cfg as any)?.openrouterAllowFallbacks,
-    };
-}
-
 /**
- * Resolve the run's ONE model (no runtime fallback — dropped in 04b-05):
- *  1. org-level BYOK config (scoped locally — no cross-review race)
- *  2. a v2 blob is routed through `StaticTaskStrategy` for the `codeReview`
- *     task (byokModelId id-override first, then the legacy byokModel NAME
- *     during the window); a legacy `{main,fallback}` blob keeps the exact
- *     `byokModel`-onto-`main` behavior.
- *  3. build the Vercel model for `main`; `defaultModelOverride` only kicks in
- *     when there is no BYOK config (trial/public-demo).
+ * Resolve the run's ONE model (no runtime fallback — dropped in 04b-05),
+ * v2-native (04b-06 — the legacy `{main,fallback}` branch is GONE):
+ *  1. source the FULL v2 config via `getBYOKConfigV2Raw` (null for a non-v2 /
+ *     absent blob — no BYOK).
+ *  2. route it through `StaticTaskStrategy` for the `codeReview` task via the
+ *     single task→model entry point `resolveTaskModel` (byokModelId id-override
+ *     first, then the legacy byokModel NAME during the window). A null/non-v2
+ *     config degrades to a null slot → env/managed default.
+ *  3. `defaultModelOverride` only kicks in when there is no BYOK config
+ *     (trial/public-demo).
  *
- * The v2 branch sources the FULL config via `getBYOKConfigV2Raw` (not the
- * collapsed `getBYOKConfig`, which always yields `main`) so routing is by
- * task, not always main (RESEARCH Pitfall 1).
+ * Sourcing the FULL config (not a collapsed carrier) keeps routing by task, not
+ * always main (RESEARCH Pitfall 1).
  */
 export async function resolveAgentModel(
     input: ModelInput,
@@ -93,64 +71,35 @@ export async function resolveAgentModel(
         input.organizationAndTeamData,
     );
 
-    if (rawV2) {
-        // v2: resolve the codeReview MAIN model through the single task→model
-        // entry point (slice 04b). byokModelId (id) wins over the legacy
-        // byokModel NAME; resolveTaskModel handles the id-THEN-name match, the
-        // capability gate, and the null-slot → env/managed default degrade.
-        const overrideRef =
-            input.byokModelId?.trim() || input.byokModel?.trim();
-        const resolved = resolveTaskModel(rawV2, 'codeReview', {
-            ctx: overrideRef ? { override: { modelId: overrideRef } } : {},
-            defaultModelOverride: input.defaultModelOverride,
-        });
+    // Resolve the codeReview MAIN model through the single task→model entry point
+    // (slice 04b). byokModelId (id) wins over the legacy byokModel NAME;
+    // resolveTaskModel handles the id-THEN-name match, the capability gate, and
+    // the null-slot → env/managed default degrade (rawV2 null / no BYOK too).
+    const overrideRef = input.byokModelId?.trim() || input.byokModel?.trim();
+    const resolved = resolveTaskModel(rawV2, 'codeReview', {
+        ctx: overrideRef ? { override: { modelId: overrideRef } } : {},
+        defaultModelOverride: input.defaultModelOverride,
+    });
 
-        // Build the MAIN bundle straight from the resolver's return — the same
-        // limit/telemetry fields, now sourced from the routed slot (null on a
-        // BLOCKED/managed verdict → env-default model).
-        const slot = resolved.slot;
-        const main: AgentModelParams = {
-            role: 'main',
-            model: resolved.model,
-            modelName: resolved.modelName,
-            maxInputTokens: slot?.maxInputTokens,
-            reasoningEffort: slot?.reasoningEffort,
-            reasoningConfigOverride: slot?.reasoningConfigOverride,
-            byokProvider: slot?.provider,
-            openrouterProviderOrder: (slot as any)?.openrouterProviderOrder,
-            openrouterAllowFallbacks: (slot as any)?.openrouterAllowFallbacks,
-        };
-
-        // 1 model per task: no fallback slot is resolved or returned.
-        const byokConfig = (
-            slot ? { main: slot } : undefined
-        ) as BYOKConfig | undefined;
-
-        return {
-            byokConfig,
-            main,
-        };
-    }
-
-    // Legacy {main,fallback}: exact prior behavior, byte-for-byte (else-branch
-    // removed in 04b-06).
-    let byokConfig = await permissionService.getBYOKConfig(
-        input.organizationAndTeamData,
-    );
-
-    const overrideModel = input.byokModel?.trim();
-    if (overrideModel && byokConfig?.main) { // removed in 04b-06 (legacy branch)
-        byokConfig = {
-            ...byokConfig,
-            main: { ...byokConfig.main, model: overrideModel }, // removed in 04b-06
-        };
-    }
-
-    return {
-        byokConfig: byokConfig ?? undefined,
-        main: buildRoleParams(
-            byokConfig ?? undefined,
-            input.defaultModelOverride,
-        ),
+    // Build the MAIN bundle straight from the resolver's return — sourced from the
+    // routed slot (null on a BLOCKED/managed verdict or no BYOK → env-default model).
+    const slot = resolved.slot;
+    const main: AgentModelParams = {
+        role: 'main',
+        model: resolved.model,
+        modelName: resolved.modelName,
+        maxInputTokens: slot?.maxInputTokens,
+        reasoningEffort: slot?.reasoningEffort,
+        reasoningConfigOverride: slot?.reasoningConfigOverride,
+        byokProvider: slot?.provider,
+        openrouterProviderOrder: (slot as any)?.openrouterProviderOrder,
+        openrouterAllowFallbacks: (slot as any)?.openrouterAllowFallbacks,
     };
+
+    // 1 model per task: no fallback slot is resolved or returned.
+    const byokConfig = (slot ? { main: slot } : undefined) as
+        | BYOKConfig
+        | undefined;
+
+    return { byokConfig, main };
 }

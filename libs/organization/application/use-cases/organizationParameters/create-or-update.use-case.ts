@@ -1,4 +1,4 @@
-import { BYOKConfig, BYOKProvider } from '@kodus/kodus-common/llm';
+import { BYOKConfig } from '@kodus/kodus-common/llm';
 import { encrypt } from '@libs/common/utils/crypto';
 import {
     isV2Config,
@@ -162,16 +162,9 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         );
 
         // The front-end fully drives the untyped v2 blob, so a v2 write is the
-        // complete intended config — use it verbatim (a stale legacy {main,
-        // fallback} from a pre-migration existing config must NOT leak through
-        // the spread). Legacy partial saves ({main} / {fallback}) still merge
-        // over the existing config exactly as before.
-        const mergedConfigValue = isV2Config(processedConfigValue)
-            ? processedConfigValue
-            : {
-                  ...existingConfig,
-                  ...processedConfigValue,
-              };
+        // complete intended config — use it verbatim (04b-06: encrypt now rejects
+        // any non-v2 shape, so there is no legacy partial-save merge to preserve).
+        const mergedConfigValue = processedConfigValue;
 
         const result =
             await this.organizationParametersService.createOrUpdateConfig(
@@ -209,53 +202,24 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
     private encryptByokConfigApiKey(
         configValue: any,
         existingConfig?: BYOKConfig | BYOKConfigV2,
-    ): BYOKConfig | BYOKConfigV2 {
+    ): BYOKConfigV2 {
         if (!configValue || typeof configValue !== 'object') {
             throw new Error('Invalid BYOK config value');
         }
 
-        // v2 shape: secrets live per-credential (credentials[].apiKey + aws* in
-        // settings), NOT in top-level main/fallback. Resolve the prior ciphertext
-        // to keep from the matching credentials[] entry (by id, else provider) so
-        // a migrated org does not lose its key on a blank/masked resubmit, and do
-        // NOT throw on the absence of main/fallback (absorbed 02-05 / D-07).
-        if (isV2Config(configValue)) {
-            return this.encryptV2ByokConfig(
-                configValue,
-                isV2Config(existingConfig) ? existingConfig : undefined,
-            );
+        // v2-only (04b-06 — the legacy {main,fallback} encrypt path is GONE).
+        // Secrets live per-credential (credentials[].apiKey + aws* in settings),
+        // NOT in top-level main/fallback. Resolve the prior ciphertext to keep
+        // from the matching credentials[] entry (by id, else provider) so a
+        // migrated org does not lose its key on a blank/masked resubmit. A non-v2
+        // blob is rejected: v2 is the only accepted stored shape.
+        if (!isV2Config(configValue)) {
+            throw new Error('Invalid BYOK config value: expected v2 shape');
         }
-
-        // ── Legacy {main,fallback} path — byte-identical to pre-v2 behavior. ──
-        const byokConfig = configValue as BYOKConfig;
-
-        if (!byokConfig.main && !byokConfig.fallback) {
-            throw new Error('At least main or fallback config is required');
-        }
-
-        // A v2 existing config has no legacy main/fallback ciphertext to keep;
-        // fall back to `undefined` (matching the pre-change `existingConfig?.main`
-        // read, which was already undefined for a v2 blob).
-        const legacyExisting = isV2Config(existingConfig)
-            ? undefined
-            : (existingConfig as BYOKConfig | undefined);
-
-        const encryptedMain = byokConfig.main
-            ? this.encryptSlot('main', byokConfig.main, legacyExisting?.main)
-            : null;
-
-        const encryptedFallback = byokConfig.fallback
-            ? this.encryptSlot(
-                  'fallback',
-                  byokConfig.fallback,
-                  legacyExisting?.fallback,
-              )
-            : null;
-
-        return {
-            ...(encryptedMain && { main: encryptedMain }),
-            ...(encryptedFallback && { fallback: encryptedFallback }),
-        };
+        return this.encryptV2ByokConfig(
+            configValue,
+            isV2Config(existingConfig) ? existingConfig : undefined,
+        );
     }
 
     /**
@@ -349,9 +313,10 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
     ] as const;
 
     /**
-     * Provider + slot for the byok_configured telemetry event, shape-aware. For
-     * v2 the "main" is the routing default model's credential (else the first
-     * model's); legacy reads main/fallback directly.
+     * Provider + slot for the byok_configured telemetry event. v2-only (04b-06 —
+     * the legacy main/fallback read is GONE): the "main" is the routing default
+     * model's credential (else the first model's). A non-v2 blob reports no
+     * provider (it is rejected upstream at encrypt time).
      */
     private describeByokForTelemetry(config: BYOKConfig | BYOKConfigV2): {
         provider?: string;
@@ -375,75 +340,7 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
                 : undefined;
             return { provider, slot: 'main' };
         }
-        const legacy = config as BYOKConfig;
-        return {
-            provider: legacy.main?.provider ?? legacy.fallback?.provider,
-            slot: legacy.main ? 'main' : 'fallback',
-        };
-    }
-
-    /**
-     * Encrypt the sensitive credential fields for a single BYOK slot
-     * (main or fallback). Bedrock uses AWS auth fields instead of a
-     * single apiKey; everything else uses apiKey. In both cases, an
-     * empty incoming field falls back to whatever is already persisted
-     * — so partial edits (e.g. changing only the model) don't require
-     * the user to re-enter their credentials.
-     */
-    private encryptSlot(
-        slot: 'main' | 'fallback',
-        next: BYOKConfig['main'],
-        existing?: BYOKConfig['main'],
-    ): BYOKConfig['main'] {
-        if (next.provider === BYOKProvider.AMAZON_BEDROCK) {
-            // Bedrock has two auth paths and the user only needs to
-            // satisfy one: bearer token (recommended) OR static IAM
-            // credentials (awsAccessKeyId + awsSecretAccessKey, with
-            // optional awsSessionToken). On edit we accept either path
-            // being satisfied by previously-persisted values.
-            const hasBearer =
-                !!next.awsBearerToken?.trim() || !!existing?.awsBearerToken;
-            const hasIam =
-                (!!next.awsAccessKeyId?.trim() ||
-                    !!existing?.awsAccessKeyId) &&
-                (!!next.awsSecretAccessKey?.trim() ||
-                    !!existing?.awsSecretAccessKey);
-
-            if (!hasBearer && !hasIam) {
-                throw new Error(
-                    `Bedrock ${slot} BYOK config requires either awsBearerToken or awsAccessKeyId + awsSecretAccessKey`,
-                );
-            }
-
-            return {
-                ...next,
-                awsBearerToken: this.encryptOrKeep(
-                    next.awsBearerToken,
-                    existing?.awsBearerToken,
-                ),
-                awsAccessKeyId: this.encryptOrKeep(
-                    next.awsAccessKeyId,
-                    existing?.awsAccessKeyId,
-                ),
-                awsSecretAccessKey: this.encryptOrKeep(
-                    next.awsSecretAccessKey,
-                    existing?.awsSecretAccessKey,
-                ),
-                awsSessionToken: this.encryptOrKeep(
-                    next.awsSessionToken,
-                    existing?.awsSessionToken,
-                ),
-            };
-        }
-
-        if (!next.apiKey && !existing?.apiKey) {
-            throw new Error(`apiKey is required for ${slot} BYOK config`);
-        }
-
-        return {
-            ...next,
-            apiKey: next.apiKey ? encrypt(next.apiKey) : existing!.apiKey,
-        };
+        return { provider: undefined, slot: 'main' };
     }
 
     private encryptOrKeep(

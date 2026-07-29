@@ -59,19 +59,21 @@ function buildUseCase(opts: {
     return { useCase, deleteByokModel, deleteByokConfig, organizationParametersService };
 }
 
-describe('DeleteByokConfigUseCase — legacy path (unchanged)', () => {
-    it('delegates a main/fallback delete straight to deleteByokConfig and never touches the v2 path', async () => {
-        const { useCase, deleteByokConfig, deleteByokModel, organizationParametersService } =
-            buildUseCase({ byokConfig: v2Config() });
+describe('DeleteByokConfigUseCase — legacy slot delete dropped (04b-06)', () => {
+    it('rejects a legacy main/fallback string target (v2-only: delete by modelId)', async () => {
+        const { useCase, deleteByokConfig, deleteByokModel } = buildUseCase({
+            byokConfig: v2Config(),
+        });
 
-        await expect(useCase.execute(ORG, 'main')).resolves.toBe(true);
-        await expect(useCase.execute(ORG, 'fallback')).resolves.toBe(true);
-
-        expect(deleteByokConfig).toHaveBeenNthCalledWith(1, ORG, 'main');
-        expect(deleteByokConfig).toHaveBeenNthCalledWith(2, ORG, 'fallback');
-        // Legacy path must not read the config, scan overrides, or call the v2 method.
+        await expect(useCase.execute(ORG, 'main')).rejects.toThrow(
+            BadRequestException,
+        );
+        await expect(useCase.execute(ORG, 'fallback')).rejects.toThrow(
+            /modelId is required/,
+        );
+        // The legacy slot-delete delegation is gone; neither path runs.
+        expect(deleteByokConfig).not.toHaveBeenCalled();
         expect(deleteByokModel).not.toHaveBeenCalled();
-        expect(organizationParametersService.findByKey).not.toHaveBeenCalled();
     });
 });
 

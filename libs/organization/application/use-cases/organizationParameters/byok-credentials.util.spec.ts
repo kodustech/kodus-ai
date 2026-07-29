@@ -112,8 +112,8 @@ describe('resolveByokSlot', () => {
         });
     });
 
-    describe('legacy {main,fallback} shape (unchanged)', () => {
-        it('resolves + decrypts from the main slot', async () => {
+    describe('legacy {main,fallback} slot lookup dropped (04b-06 — v2-only)', () => {
+        it('returns null for a legacy main-slot blob (no longer read)', async () => {
             const service = buildService({
                 main: {
                     provider: 'openai',
@@ -125,12 +125,10 @@ describe('resolveByokSlot', () => {
 
             const slot = await resolveByokSlot(service, 'openai', org);
 
-            expect(slot?.apiKey).toBe('dec:ENC_MAIN');
-            expect(slot?.baseURL).toBe('https://api.openai.com/v1');
-            expect(slot?.model).toBe('gpt-4o');
+            expect(slot).toBeNull();
         });
 
-        it('resolves from the fallback slot when main is a different provider', async () => {
+        it('returns null for a legacy fallback-slot blob (no longer read)', async () => {
             const service = buildService({
                 main: { provider: 'openai', apiKey: 'ENC_MAIN' },
                 fallback: { provider: 'anthropic', apiKey: 'ENC_FB' },
@@ -138,7 +136,7 @@ describe('resolveByokSlot', () => {
 
             const slot = await resolveByokSlot(service, 'anthropic', org);
 
-            expect(slot?.apiKey).toBe('dec:ENC_FB');
+            expect(slot).toBeNull();
         });
     });
 

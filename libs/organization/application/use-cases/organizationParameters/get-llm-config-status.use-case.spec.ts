@@ -24,75 +24,10 @@ describe('GetLLMConfigStatusUseCase', () => {
         );
     };
 
-    describe('Amazon Bedrock BYOK', () => {
-        it('reports byok configured when the bearer token is set (no apiKey)', async () => {
-            const useCase = buildUseCase({
-                main: {
-                    provider: BYOKProvider.AMAZON_BEDROCK,
-                    model: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
-                    awsBearerToken: 'enc(ABSK-token)',
-                    awsRegion: 'us-east-1',
-                },
-            });
-
-            const result = await useCase.execute(orgAndTeam as any);
-
-            expect(result.byok.configured).toBe(true);
-            expect(result.byok.providerId).toBe(BYOKProvider.AMAZON_BEDROCK);
-            expect(result.byok.model).toBe(
-                'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
-            );
-            expect(result.source).toBe('byok');
-        });
-
-        it('reports byok configured when IAM credentials are set (no apiKey)', async () => {
-            const useCase = buildUseCase({
-                main: {
-                    provider: BYOKProvider.AMAZON_BEDROCK,
-                    model: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
-                    awsAccessKeyId: 'enc(AKIA-id)',
-                    awsSecretAccessKey: 'enc(secret)',
-                    awsRegion: 'us-east-1',
-                },
-            });
-
-            const result = await useCase.execute(orgAndTeam as any);
-
-            expect(result.byok.configured).toBe(true);
-            expect(result.source).toBe('byok');
-        });
-
-        it('reports byok NOT configured when no AWS credentials are present', async () => {
-            const useCase = buildUseCase({
-                main: {
-                    provider: BYOKProvider.AMAZON_BEDROCK,
-                    model: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
-                    awsRegion: 'us-east-1',
-                },
-            });
-
-            const result = await useCase.execute(orgAndTeam as any);
-
-            expect(result.byok.configured).toBe(false);
-            expect(result.source).toBe('none');
-        });
-
-        it('reports byok NOT configured when only the access key id is present (missing secret)', async () => {
-            const useCase = buildUseCase({
-                main: {
-                    provider: BYOKProvider.AMAZON_BEDROCK,
-                    model: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
-                    awsAccessKeyId: 'enc(AKIA-id)',
-                    awsRegion: 'us-east-1',
-                },
-            });
-
-            const result = await useCase.execute(orgAndTeam as any);
-
-            expect(result.byok.configured).toBe(false);
-        });
-    });
-
+    // 04b-06: the legacy top-level {main,fallback} read is GONE. Status now derives
+    // solely from the v2 shape via normalizeByokConfig (routing → model →
+    // credential). The former legacy-shape Bedrock cases exercised the raw
+    // `.main` read that no longer exists and were deleted.
     describe('v2 shape (credentials + models + routing)', () => {
         it('derives status from routing.defaultModelId → model → credential', async () => {
             const useCase = buildUseCase({
@@ -165,8 +100,17 @@ describe('GetLLMConfigStatusUseCase', () => {
         });
     });
 
-    describe('non-Bedrock providers (regression)', () => {
-        it('reports byok configured when apiKey is set', async () => {
+    describe('env/managed/self-host default (regression)', () => {
+        it('reports byok NOT configured when no BYOK parameter exists', async () => {
+            const useCase = buildUseCase(undefined);
+
+            const result = await useCase.execute(orgAndTeam as any);
+
+            expect(result.byok.configured).toBe(false);
+            expect(result.source).toBe('none');
+        });
+
+        it('reports byok NOT configured for a legacy (non-v2) blob (not read → env/none)', async () => {
             const useCase = buildUseCase({
                 main: {
                     provider: BYOKProvider.ANTHROPIC,
@@ -174,16 +118,6 @@ describe('GetLLMConfigStatusUseCase', () => {
                     apiKey: 'enc(sk-ant)',
                 },
             });
-
-            const result = await useCase.execute(orgAndTeam as any);
-
-            expect(result.byok.configured).toBe(true);
-            expect(result.byok.providerId).toBe(BYOKProvider.ANTHROPIC);
-            expect(result.source).toBe('byok');
-        });
-
-        it('reports byok NOT configured when no BYOK parameter exists', async () => {
-            const useCase = buildUseCase(undefined);
 
             const result = await useCase.execute(orgAndTeam as any);
 

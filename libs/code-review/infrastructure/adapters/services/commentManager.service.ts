@@ -37,6 +37,7 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
+import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
 import {
     attachClassification,
     classifyLLMError,
@@ -202,10 +203,12 @@ export class CommentManagerService implements ICommentManagerService {
                 return null;
             }
 
-            byokConfigValue =
-                await this.permissionValidationService.getBYOKConfig(
+            const rawV2 =
+                await this.permissionValidationService.getBYOKConfigV2Raw(
                     organizationAndTeamData,
                 );
+            byokConfigValue =
+                resolveTaskByokConfig(rawV2, 'prSummary') ?? null;
         }
 
         // Resolve the org's BYOK when the caller didn't pass one (the review
@@ -216,10 +219,12 @@ export class CommentManagerService implements ICommentManagerService {
         // resolve BYOK themselves, keep working. Fetch the same BYOK they use.
         if (!byokConfigValue) {
             try {
-                byokConfigValue =
-                    (await this.permissionValidationService.getBYOKConfig(
+                const rawV2 =
+                    await this.permissionValidationService.getBYOKConfigV2Raw(
                         organizationAndTeamData,
-                    )) ?? null;
+                    );
+                byokConfigValue =
+                    resolveTaskByokConfig(rawV2, 'prSummary') ?? null;
             } catch {
                 byokConfigValue = null;
             }

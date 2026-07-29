@@ -208,10 +208,10 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
     });
 
     // ─────────────────────────────────────────────────────────────────────
-    // Task 1: legacy path unchanged (byte-identical)
+    // Task 1: legacy {main,fallback} write path dropped (04b-06 — v2-only)
     // ─────────────────────────────────────────────────────────────────────
-    describe('legacy {main,fallback} path is byte-identical', () => {
-        it('encrypts a new main.apiKey (decrypts back to the submitted key)', async () => {
+    describe('legacy {main,fallback} write is rejected (v2-only)', () => {
+        it('rejects a legacy {main} blob — encrypt expects the v2 shape', async () => {
             const incoming = {
                 main: {
                     provider: BYOKProvider.OPENAI,
@@ -219,38 +219,13 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
                     model: 'gpt-5',
                 },
             };
-            const { useCase, persisted } = buildUseCase(undefined);
-            await saveByok(useCase, incoming);
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
 
-            expect(decrypt(persisted.value.main.apiKey)).toBe('sk-legacy-new');
-            expect(persisted.value.main.provider).toBe(BYOKProvider.OPENAI);
-            expect(persisted.value.main.model).toBe('gpt-5');
+            await expect(saveByok(useCase, incoming)).rejects.toThrow();
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
         });
 
-        it('keeps existing main ciphertext on a blank apiKey, updates the model', async () => {
-            const priorCipher = encrypt('sk-legacy-old');
-            const existing = {
-                main: {
-                    provider: BYOKProvider.OPENAI,
-                    apiKey: priorCipher,
-                    model: 'gpt-4',
-                },
-            };
-            const incoming = {
-                main: {
-                    provider: BYOKProvider.OPENAI,
-                    apiKey: '',
-                    model: 'gpt-5',
-                },
-            };
-            const { useCase, persisted } = buildUseCase(existing);
-            await saveByok(useCase, incoming);
-
-            expect(persisted.value.main.apiKey).toBe(priorCipher); // verbatim keep
-            expect(persisted.value.main.model).toBe('gpt-5');
-        });
-
-        it('still throws when neither main nor fallback is present', async () => {
+        it('still throws on an empty {} blob', async () => {
             const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
             await expect(saveByok(useCase, {})).rejects.toThrow();
             expect(createOrUpdateConfig).not.toHaveBeenCalled();
@@ -306,7 +281,7 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
             expect(createOrUpdateConfig).toHaveBeenCalled();
         });
 
-        it('does NOT gate a legacy write (validator is a no-op for non-v2)', async () => {
+        it('rejects a legacy (non-v2) write outright (04b-06 — v2 is the only shape)', async () => {
             const incoming = {
                 main: {
                     provider: BYOKProvider.OPENAI,
@@ -316,8 +291,8 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
             };
             const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
 
-            await expect(saveByok(useCase, incoming)).resolves.toBe(true);
-            expect(createOrUpdateConfig).toHaveBeenCalled();
+            await expect(saveByok(useCase, incoming)).rejects.toThrow();
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
         });
     });
 });

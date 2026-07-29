@@ -13,9 +13,11 @@ import { findModelReferences } from '@libs/llm/validate-byok-config-refs';
 import { BadRequestException, Injectable, Inject } from '@nestjs/common';
 
 /**
- * Delete target: the retained legacy slot delete (`'main'` | `'fallback'`) OR a
- * v2 delete-by-model-id (`{ modelId }`). The legacy path is unchanged; the v2
- * path runs the referential-integrity guard (REQ-DELETE-01).
+ * Delete target: a v2 delete-by-model-id (`{ modelId }`), which runs the
+ * referential-integrity guard (REQ-DELETE-01). The legacy `'main'`/`'fallback'`
+ * slot delete is GONE (04b-06 — a v2 config has no top-level slots); those string
+ * variants remain in the union only for the (out-of-scope) legacy controller
+ * signature and are REJECTED at runtime.
  */
 export type DeleteByokTarget = 'main' | 'fallback' | { modelId: string };
 
@@ -122,16 +124,11 @@ export class DeleteByokConfigUseCase {
         organizationId: string,
         target: DeleteByokTarget,
     ): Promise<boolean> {
-        // ── Legacy path (configType slot delete) — unchanged. ──────────────
-        if (target === 'main' || target === 'fallback') {
-            return await this.organizationParametersService.deleteByokConfig(
-                organizationId,
-                target,
-            );
-        }
-
-        // ── v2 delete-by-model-id path (REQ-DELETE-01). ────────────────────
-        const modelId = target?.modelId;
+        // ── v2 delete-by-model-id path (REQ-DELETE-01) — the SOLE path. ─────
+        // 04b-06: the legacy 'main'/'fallback' slot delete is GONE. A legacy
+        // string target is rejected (a v2 config has no top-level slots to drop).
+        const modelId =
+            typeof target === 'object' && target ? target.modelId : undefined;
         if (!modelId) {
             throw new BadRequestException(
                 'modelId is required to delete a v2 BYOK model',

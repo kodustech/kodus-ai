@@ -1,5 +1,5 @@
 import { BYOKConfig } from '@kodus/kodus-common/llm';
-import { normalizeByokConfig } from '@libs/llm/normalize-byok-config';
+import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
 import { isV2Config, type BYOKConfigV2 } from '@libs/llm/byok-config';
 import { Injectable, Inject } from '@nestjs/common';
 
@@ -183,7 +183,7 @@ export class PermissionValidationService {
                 let byokLookupFailed = false;
 
                 try {
-                    trialByokConfig = await this.getBYOKConfig(
+                    trialByokConfig = await this.resolveByokCarrier(
                         organizationAndTeamData,
                     );
                 } catch (error) {
@@ -312,7 +312,7 @@ export class PermissionValidationService {
                 validation.planType,
             );
 
-            const byokConfig = await this.getBYOKConfig(
+            const byokConfig = await this.resolveByokCarrier(
                 organizationAndTeamData,
             );
 
@@ -600,7 +600,7 @@ export class PermissionValidationService {
             // }
 
             // Free ou BYOK plans precisam de BYOK config
-            const byokConfig = await this.getBYOKConfig(
+            const byokConfig = await this.resolveByokCarrier(
                 organizationAndTeamData,
             );
 
@@ -722,36 +722,22 @@ export class PermissionValidationService {
     }
 
     /**
-     * Retorna a configuração BYOK da organização (se existir).
-     *
-     * CLI trial requests carry organizationId='trial' (not a UUID) so the
-     * organization_parameters lookup would fail with Postgres' UUID syntax
-     * check. Treat non-UUID org identifiers as "no BYOK config" instead of
-     * letting the query error propagate.
+     * Resolve the org's BYOK `{main,fallback}` carrier for the `codeReview` task,
+     * v2-native (04b-06 — the legacy stored-shape read is GONE). Sources the FULL
+     * v2 blob via `getBYOKConfigV2Raw` and routes it through `resolveTaskByokConfig`
+     * (StaticTaskStrategy → routed slot + the org's routed fallback), so the
+     * credential/model comes from the v2 `models[]`/routing rather than a collapsed
+     * legacy `main`. Returns `null` for a non-v2 / absent config or a
+     * BLOCKED/unresolvable verdict — the caller then falls to the managed/env
+     * default, exactly as with a missing config. Secret hygiene: the returned slot
+     * carries ENCRYPTED apiKey ciphertext; this method never decrypts. Non-UUID org
+     * ids (CLI trial) resolve to `null` via `getBYOKConfigV2Raw`.
      */
-    async getBYOKConfig(
+    private async resolveByokCarrier(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<BYOKConfig | null> {
-        const UUID_RE =
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (!UUID_RE.test(organizationAndTeamData?.organizationId || '')) {
-            return null;
-        }
-
-        const byokConfig = await this.organizationParametersService.findByKey(
-            OrganizationParametersKey.BYOK_CONFIG,
-            organizationAndTeamData,
-        );
-
-        // Normalize at the load boundary (Phase 2): a v2 blob is resolved to the
-        // internal {main,fallback} shape HERE, so every caller (byokToVercelModel,
-        // the LangChain PromptRunner, agents, …) reads .main/.fallback identically
-        // regardless of the stored shape. Managed/empty → null so callers fall back
-        // to the default, exactly as with a missing config today.
-        const normalized = normalizeByokConfig(byokConfig?.configValue);
-        return normalized.main
-            ? { main: normalized.main, fallback: normalized.fallback }
-            : null;
+        const rawV2 = await this.getBYOKConfigV2Raw(organizationAndTeamData);
+        return resolveTaskByokConfig(rawV2, 'codeReview') ?? null;
     }
 
     /**

@@ -125,19 +125,21 @@ describe('FindByKeyOrganizationParametersUseCase — BYOK masking', () => {
         });
     });
 
-    describe('legacy {main,fallback} shape (regression — unchanged)', () => {
-        it('masks main/fallback apiKey exactly as before', async () => {
+    describe('legacy {main,fallback} mask dropped (04b-06 — v2-only)', () => {
+        it('a legacy blob passes through unmasked (ciphertext, never plaintext)', async () => {
             const mainPlain = 'sk-legacy-main-key-1';
             const fbPlain = 'sk-legacy-fallback-2';
+            const mainCipher = encrypt(mainPlain);
+            const fbCipher = encrypt(fbPlain);
             const useCase = buildUseCase({
                 main: {
                     provider: 'openai',
-                    apiKey: encrypt(mainPlain),
+                    apiKey: mainCipher,
                     model: 'gpt-4o',
                 },
                 fallback: {
                     provider: 'anthropic',
-                    apiKey: encrypt(fbPlain),
+                    apiKey: fbCipher,
                     model: 'claude-sonnet-4-5',
                 },
             });
@@ -147,12 +149,14 @@ describe('FindByKeyOrganizationParametersUseCase — BYOK masking', () => {
                 orgAndTeam,
             );
 
+            // The legacy mask branch is gone: the blob is returned verbatim as
+            // stored — ciphertext, NOT masked, and crucially NEVER plaintext.
             const cfg = result?.configValue as any;
-            expect(cfg.main.apiKey).toBe(masked(mainPlain));
-            expect(cfg.fallback.apiKey).toBe(masked(fbPlain));
-            // Non-secret fields stay plaintext.
-            expect(cfg.main.model).toBe('gpt-4o');
-            expect(cfg.fallback.provider).toBe('anthropic');
+            expect(cfg.main.apiKey).toBe(mainCipher);
+            expect(cfg.fallback.apiKey).toBe(fbCipher);
+            const serialized = JSON.stringify(cfg);
+            expect(serialized).not.toContain(mainPlain);
+            expect(serialized).not.toContain(fbPlain);
         });
 
         it('passes a non-BYOK key through untouched', async () => {

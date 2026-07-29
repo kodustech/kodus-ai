@@ -35,12 +35,16 @@ describe('GetModelsByProviderUseCase — BYOK-aware model listing', () => {
 
     it('lists openai_compatible against the org\'s OWN baseURL + decrypted key', async () => {
         const useCase = buildUseCase({
-            main: {
-                provider: 'openai_compatible',
-                apiKey: 'enc-key',
-                baseURL: 'https://api.moonshot.ai/v1',
-                model: 'kimi-k2.7-code',
-            },
+            version: 2,
+            credentials: [
+                {
+                    id: 'c1',
+                    provider: 'openai_compatible',
+                    apiKey: 'enc-key',
+                    settings: { baseURL: 'https://api.moonshot.ai/v1' },
+                },
+            ],
+            models: [{ id: 'm1', credentialId: 'c1', model: 'kimi-k2.7-code' }],
         });
 
         const res = await useCase.execute('openai_compatible', {
@@ -54,14 +58,19 @@ describe('GetModelsByProviderUseCase — BYOK-aware model listing', () => {
         expect(cfg?.headers?.Authorization).toBe('Bearer decrypted:enc-key');
     });
 
-    it('matches the fallback slot when the requested provider is the fallback', async () => {
+    it('matches the v2 credential for the requested provider', async () => {
         const useCase = buildUseCase({
-            main: { provider: 'openai_compatible', apiKey: 'm', baseURL: 'https://a' },
-            fallback: {
-                provider: 'google_gemini',
-                apiKey: 'enc-gem',
-                model: 'gemini-x',
-            },
+            version: 2,
+            credentials: [
+                {
+                    id: 'c1',
+                    provider: 'openai_compatible',
+                    apiKey: 'm',
+                    settings: { baseURL: 'https://a' },
+                },
+                { id: 'c2', provider: 'google_gemini', apiKey: 'enc-gem' },
+            ],
+            models: [{ id: 'm1', credentialId: 'c2', model: 'gemini-x' }],
         });
 
         mockedAxios.get.mockResolvedValue({

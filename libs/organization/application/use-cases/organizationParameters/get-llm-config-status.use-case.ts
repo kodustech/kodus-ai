@@ -1,7 +1,6 @@
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { isV2Config } from '@libs/llm/byok-config';
 import {
     describeEnvLLMConfig,
     type EnvLLMProviderId,
@@ -55,15 +54,13 @@ export class GetLLMConfigStatusUseCase implements IUseCase {
 
         const configValue = parameter?.configValue;
 
-        // v2 shape: derive the effective "main" slot via normalizeByokConfig,
-        // which resolves routing.defaultModelId → model → credential (and yields
-        // absent `main` for a managed/empty config, so it falls to env/none).
-        // A legacy {main,fallback} config reads its top-level `main` unchanged.
-        const byokMain: Partial<BYOKSlot> | undefined = isV2Config(configValue)
-            ? (normalizeByokConfig(configValue).main as
-                  | Partial<BYOKSlot>
-                  | undefined)
-            : (configValue as { main?: Partial<BYOKSlot> } | undefined)?.main;
+        // v2-only (04b-06 — the legacy {main,fallback} read is GONE): derive the
+        // effective "main" slot via normalizeByokConfig, which resolves
+        // routing.defaultModelId → model → credential and yields absent `main` for
+        // a managed / non-v2 / empty config (so it falls to env/none).
+        const byokMain: Partial<BYOKSlot> | undefined = normalizeByokConfig(
+            configValue,
+        ).main as Partial<BYOKSlot> | undefined;
 
         // Provider-aware: most providers gate on `apiKey`, but Amazon
         // Bedrock authenticates with `awsBearerToken` / IAM credentials

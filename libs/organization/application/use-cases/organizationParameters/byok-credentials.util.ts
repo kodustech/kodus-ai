@@ -4,8 +4,6 @@ import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { IOrganizationParametersService } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 
-import { type BYOKSlot } from './byok-config.util';
-
 /**
  * A BYOK credential slot with its sensitive fields decrypted, ready to hand to
  * a server-side provider probe (model listing / connection test). NEVER return
@@ -38,13 +36,12 @@ function safeDecrypt(value?: string): string | undefined {
 
 /**
  * Resolve the org's OWN stored credentials for `provider`, decrypting the
- * sensitive fields. Handles BOTH shapes:
- *  - v2: the matching NON-managed `credentials[]` entry (apiKey top-level,
- *    aws* under `settings`);
- *  - legacy: the `main`/`fallback` slot that uses that provider.
- * Returns null when there's no org context, no slot/credential uses that
- * provider, or only a managed credential matches — callers then fall back to
- * Kodus env keys (the setup wizard, before anything is saved).
+ * sensitive fields. v2-only (04b-06 — the legacy `{main,fallback}` slot lookup
+ * was dropped): reads the matching NON-managed `credentials[]` entry (apiKey
+ * top-level, aws* under `settings`). Returns null when there's no org context,
+ * no credential uses that provider, only a managed credential matches, or the
+ * blob is non-v2 — callers then fall back to Kodus env keys (the setup wizard,
+ * before anything is saved).
  *
  * Only `apiKey` and the Bedrock auth fields (bearer token, access key id,
  * secret access key, session token) are stored encrypted (see `encryptSlot` /
@@ -102,28 +99,7 @@ export async function resolveByokSlot(
         };
     }
 
-    // ── Legacy {main,fallback} branch — unchanged from pre-v2 behavior. ──
-    const legacyConfig = config as
-        | { main?: BYOKSlot; fallback?: BYOKSlot }
-        | undefined;
-
-    const slot = [legacyConfig?.main, legacyConfig?.fallback].find(
-        (s) => s?.provider === provider,
-    );
-    if (!slot) {
-        return null;
-    }
-
-    return {
-        provider: slot.provider,
-        apiKey: safeDecrypt(slot.apiKey),
-        baseURL: slot.baseURL,
-        model: slot.model,
-        vertexLocation: slot.vertexLocation,
-        awsBearerToken: safeDecrypt(slot.awsBearerToken),
-        awsAccessKeyId: safeDecrypt(slot.awsAccessKeyId),
-        awsSecretAccessKey: safeDecrypt(slot.awsSecretAccessKey),
-        awsRegion: slot.awsRegion,
-        awsSessionToken: safeDecrypt(slot.awsSessionToken),
-    };
+    // Non-v2 / absent blob: no stored credential to probe (04b-06 — the legacy
+    // {main,fallback} slot lookup was dropped). Callers fall back to Kodus env keys.
+    return null;
 }

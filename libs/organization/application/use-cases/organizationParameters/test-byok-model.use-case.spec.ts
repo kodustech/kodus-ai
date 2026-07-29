@@ -32,7 +32,16 @@ function build(opts: {
 
 const org = { organizationId: 'org-1' };
 const moonshot = {
-    main: { provider: 'openai_compatible', apiKey: 'enc', baseURL: 'https://api.moonshot.ai/v1' },
+    version: 2,
+    credentials: [
+        {
+            id: 'c1',
+            provider: 'openai_compatible',
+            apiKey: 'enc',
+            settings: { baseURL: 'https://api.moonshot.ai/v1' },
+        },
+    ],
+    models: [],
 };
 
 describe('TestByokModelUseCase', () => {
@@ -67,10 +76,15 @@ describe('TestByokModelUseCase', () => {
     it('falls through to a real probe on a CURATED-catalog miss (Bedrock/Vertex)', async () => {
         const { useCase, connectionUseCase } = build({
             configValue: {
-                main: {
-                    provider: 'amazon_bedrock',
-                    awsBearerToken: 'enc',
-                },
+                version: 2,
+                credentials: [
+                    {
+                        id: 'c1',
+                        provider: 'amazon_bedrock',
+                        settings: { awsBearerToken: 'enc' },
+                    },
+                ],
+                models: [],
             },
             catalog: [{ id: 'us.anthropic.claude-opus-4-8', name: 'Opus' }],
         });
@@ -87,7 +101,16 @@ describe('TestByokModelUseCase', () => {
     it('falls back to a real provider probe when there is no catalog', async () => {
         const { useCase, connectionUseCase } = build({
             configValue: {
-                main: { provider: 'anthropic_compatible', apiKey: 'enc', baseURL: 'https://x' },
+                version: 2,
+                credentials: [
+                    {
+                        id: 'c1',
+                        provider: 'anthropic_compatible',
+                        apiKey: 'enc',
+                        settings: { baseURL: 'https://x' },
+                    },
+                ],
+                models: [],
             },
             catalog: new Error('listing unavailable'),
         });

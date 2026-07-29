@@ -1,8 +1,9 @@
 /**
- * The ONE dual-read adapter (Phase 2, plan 02-01).
+ * The v2-only normalize adapter (Phase 2, plan 02-01; dual-read dropped 04b-06).
  *
- * Maps BOTH the legacy `{main,fallback}` shape AND the v2 shape to the internal
- * `NormalizedByokConfig` the resolver family (byok-to-vercel.ts) consumes.
+ * Maps the v2 shape to the internal `NormalizedByokConfig` the resolver family
+ * (byok-to-vercel.ts) consumes. The legacy `{main,fallback}` stored shape is NO
+ * LONGER read — a legacy blob normalizes to `{}` (env/managed default).
  *
  * Invariants:
  *  - NEVER decrypts — the internal shape carries ENCRYPTED apiKey ciphertext;
@@ -22,14 +23,8 @@ import {
     type NormalizedModel,
 } from './byok-config';
 
-/** Legacy `{main,fallback}` slot — a loose record parsed from the stored blob. */
-type LegacySlot = Record<string, unknown>;
-type LegacyConfig = { main?: unknown; fallback?: unknown };
-
 const STR = (v: unknown): string | undefined =>
     typeof v === 'string' && v.length > 0 ? v : undefined;
-const NUM = (v: unknown): number | undefined =>
-    typeof v === 'number' ? v : undefined;
 
 /** Build a NormalizedModel from a v2 model + its resolved credential, or null to
  *  skip (managed, missing credential, or no provider — all degrade to absent).
@@ -63,38 +58,6 @@ export function slotFromV2(
         maxInputTokens: model.maxInputTokens,
         maxOutputTokens: model.maxOutputTokens,
         maxConcurrentRequests: model.maxConcurrentRequests,
-    };
-}
-
-/** Carry a legacy slot through (already ciphertext); pick the known fields. */
-function slotFromLegacy(raw: unknown): NormalizedModel | null {
-    if (!raw || typeof raw !== 'object') return null;
-    const slot = raw as LegacySlot;
-    const provider = STR(slot.provider);
-    const apiKey = STR(slot.apiKey);
-    const model = STR(slot.model);
-    if (!provider || !apiKey || !model) return null;
-    return {
-        provider: provider as BYOKProvider,
-        apiKey, // ciphertext — NOT decrypted here
-        model,
-        baseURL: STR(slot.baseURL),
-        disableReasoning:
-            typeof slot.disableReasoning === 'boolean'
-                ? slot.disableReasoning
-                : undefined,
-        reasoningEffort: slot.reasoningEffort as NormalizedModel['reasoningEffort'],
-        reasoningConfigOverride: STR(slot.reasoningConfigOverride),
-        temperature: NUM(slot.temperature),
-        maxInputTokens: NUM(slot.maxInputTokens),
-        maxConcurrentRequests: NUM(slot.maxConcurrentRequests),
-        maxOutputTokens: NUM(slot.maxOutputTokens),
-        vertexLocation: STR(slot.vertexLocation),
-        awsBearerToken: STR(slot.awsBearerToken),
-        awsAccessKeyId: STR(slot.awsAccessKeyId),
-        awsSecretAccessKey: STR(slot.awsSecretAccessKey),
-        awsRegion: STR(slot.awsRegion),
-        awsSessionToken: STR(slot.awsSessionToken),
     };
 }
 
@@ -139,23 +102,16 @@ export function resolveModelSlotFromV2(
 }
 
 /**
- * Normalize any BYOK config blob (v2, legacy, undefined, or malformed) to the
- * internal shape. Returns `{}` (absent main → env/managed default) for anything
- * unusable — never throws.
+ * Normalize a stored BYOK config blob to the internal shape. The dual-read is
+ * GONE (04b-06): ONLY the v2 shape is read. A legacy `{main,fallback}` blob, an
+ * undefined/primitive, or anything malformed all yield `{}` (absent main →
+ * env/managed default downstream) — a legacy blob is NEVER read as a stored
+ * shape. Never throws.
  */
 export function normalizeByokConfig(raw: unknown): NormalizedByokConfig {
     try {
         if (isV2Config(raw)) return normalizeV2(raw);
-        if (raw && typeof raw === 'object') {
-            const legacy = raw as LegacyConfig;
-            const main = slotFromLegacy(legacy.main);
-            const fallback = slotFromLegacy(legacy.fallback);
-            return {
-                ...(main ? { main } : {}),
-                ...(fallback ? { fallback } : {}),
-            };
-        }
-        return {}; // undefined / primitive → managed default
+        return {}; // non-v2 / legacy / undefined / malformed → env/managed default
     } catch {
         return {}; // any unexpected shape degrades to the managed default
     }

@@ -52,11 +52,12 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
             ) {
                 const configValue = parameter.configValue;
 
-                // v2 shape: secrets live per-credential (credentials[].apiKey +
-                // aws* under settings), NOT in top-level main/fallback. Mask them
-                // before the blob leaves the server (T-04-04-01), leaving
-                // models[]/routing plaintext. The legacy main/fallback branch
-                // below stays byte-identical.
+                // v2-only (04b-06 — the legacy main/fallback mask is GONE):
+                // secrets live per-credential (credentials[].apiKey + aws* under
+                // settings). Mask them before the blob leaves the server
+                // (T-04b-06-01), leaving models[]/routing plaintext. A non-v2 blob
+                // carries only ciphertext (never plaintext) and passes through
+                // unmasked — it is on its way out via the 04b-07 migration.
                 if (isV2Config(configValue)) {
                     try {
                         const processedConfig =
@@ -71,49 +72,6 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
                     } catch (error) {
                         this.logger.error({
                             message: 'Error masking v2 BYOK credentials',
-                            context:
-                                FindByKeyOrganizationParametersUseCase.name,
-                            error: error,
-                        });
-                        // Return original value in case of decryption error
-                        return this.getUpdatedParameters(parameter);
-                    }
-                }
-
-                if (
-                    configValue &&
-                    typeof configValue === 'object' &&
-                    (this.slotHasSecrets(configValue.main) ||
-                        this.slotHasSecrets(configValue.fallback))
-                ) {
-                    try {
-                        const processedConfig = { ...configValue };
-
-                        if (configValue.main) {
-                            processedConfig.main = this.maskSlotSecrets(
-                                configValue.main,
-                            );
-                        } else {
-                            processedConfig.main = null;
-                        }
-
-                        if (configValue.fallback) {
-                            processedConfig.fallback = this.maskSlotSecrets(
-                                configValue.fallback,
-                            );
-                        } else {
-                            processedConfig.fallback = null;
-                        }
-
-                        return {
-                            uuid: parameter.uuid,
-                            configKey: parameter.configKey,
-                            configValue: processedConfig,
-                            organization: parameter.organization,
-                        };
-                    } catch (error) {
-                        this.logger.error({
-                            message: 'Error decrypting BYOK credentials',
                             context:
                                 FindByKeyOrganizationParametersUseCase.name,
                             error: error,
@@ -158,37 +116,6 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
         const firstTwo = apiKey.substring(0, 2);
         const lastThree = apiKey.substring(apiKey.length - 3);
         return `${firstTwo}...${lastThree}`;
-    }
-
-    /**
-     * Names of the encrypted credential fields on a BYOK slot. apiKey
-     * covers OpenAI/Anthropic/Gemini/OpenRouter/Novita/Vertex (SA JSON);
-     * the aws* fields cover Amazon Bedrock's two auth paths.
-     */
-    private static readonly SECRET_FIELDS = [
-        'apiKey',
-        'awsBearerToken',
-        'awsAccessKeyId',
-        'awsSecretAccessKey',
-        'awsSessionToken',
-    ] as const;
-
-    private slotHasSecrets(slot: any): boolean {
-        if (!slot || typeof slot !== 'object') return false;
-        return FindByKeyOrganizationParametersUseCase.SECRET_FIELDS.some(
-            (field) => typeof slot[field] === 'string' && slot[field],
-        );
-    }
-
-    private maskSlotSecrets(slot: any): any {
-        const masked: Record<string, any> = { ...slot };
-        for (const field of FindByKeyOrganizationParametersUseCase.SECRET_FIELDS) {
-            const value = slot[field];
-            if (typeof value === 'string' && value) {
-                masked[field] = this.maskApiKey(decrypt(value));
-            }
-        }
-        return masked;
     }
 
     /**

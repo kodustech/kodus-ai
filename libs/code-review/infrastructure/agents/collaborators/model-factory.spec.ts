@@ -1,6 +1,7 @@
-// Legacy {main} path builds via buildModelFromSlot/getModelName off the single
-// resolved slot. The runtime fallback was removed in 04b-05 — resolveAgentModel
-// resolves ONE model.
+// 04b-06: the legacy {main,fallback} branch is GONE — resolveAgentModel is
+// v2-native and always routes through resolveTaskModel (the runtime fallback was
+// removed in 04b-05, so it resolves ONE model). This byok-to-vercel mock is kept
+// only so the fallback-not-built assertion can inspect the (now-unused) seam.
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     buildModelFromSlot: jest.fn(
         (slot: any) => ({ tag: slot ? 'model:main' : 'model:default' }) as any,
@@ -21,8 +22,9 @@ import { resolveAgentModel } from './model-factory';
 
 const orgTeam = { organizationId: 'org-1', teamId: 'team-1' } as any;
 
-// Legacy accessor returns {main,fallback}; the v2 raw accessor returns null so
-// resolveAgentModel takes the legacy branch.
+// The v2 raw accessor returns null (no BYOK) → resolveTaskModel(null) yields the
+// env/managed default. getBYOKConfig is retained only to assert it is NEVER
+// consulted (the collapsed accessor was removed in 04b-06).
 function permissionServiceReturning(byokConfig: any) {
     return {
         getBYOKConfig: jest.fn().mockResolvedValue(byokConfig),
@@ -107,54 +109,43 @@ describe('resolveAgentModel', () => {
         jest.clearAllMocks();
     });
 
-    describe('legacy {main} configs (single model — no runtime fallback)', () => {
-        it('builds a main bundle and carries NO fallback field', async () => {
-            const svc = permissionServiceReturning({
-                main: {
-                    provider: 'openai',
-                    model: 'gpt-main',
-                    reasoningEffort: 'high',
-                },
+    describe('no BYOK config (null v2 raw) → env/managed default', () => {
+        it('routes through resolveTaskModel(null) and carries no byokConfig', async () => {
+            resolveTaskModelMock.mockReturnValue({
+                model: { tag: 'env-default' },
+                modelName: 'default:model',
+                slot: null,
+                verdict: null,
             });
+            const svc = permissionServiceReturning(null);
 
             const resolved = await resolveAgentModel(
                 { organizationAndTeamData: orgTeam },
                 svc,
             );
 
+            // resolveTaskModel is the SOLE path now — even with no BYOK it is
+            // called with the null config and returns the env/managed default.
+            expect(resolveTaskModelMock).toHaveBeenCalledTimes(1);
+            expect(resolveTaskModelMock.mock.calls[0][0]).toBeNull();
+            expect(resolveTaskModelMock.mock.calls[0][1]).toBe('codeReview');
             expect(resolved.main.role).toBe('main');
-            expect(resolved.main.model).toEqual({ tag: 'model:main' });
-            expect(resolved.main.reasoningEffort).toBe('high');
-            expect(resolved.main.byokProvider).toBe('openai');
-            // The runtime fallback is gone: no fallback field, no 2nd model.
+            expect(resolved.main.model).toEqual({ tag: 'env-default' });
+            expect(resolved.main.byokProvider).toBeUndefined();
+            expect(resolved.byokConfig).toBeUndefined();
             expect(resolved).not.toHaveProperty('fallback');
-            assertNoFallbackModelBuilt();
-            // The v2 seam is never touched on the legacy branch.
-            expect(resolveTaskModelMock).not.toHaveBeenCalled();
+            // The removed collapsed accessor is NEVER consulted.
+            expect(svc.getBYOKConfig).not.toHaveBeenCalled();
         });
 
-        it('ignores a configured fallback provider — resolves main only', async () => {
-            const svc = permissionServiceReturning({
-                main: { provider: 'openai', model: 'gpt-main' },
-                // A legacy blob may still carry a `fallback`; it is NOT resolved.
-                fallback: { provider: 'anthropic', model: 'claude-fb' },
+        it('passes a per-repo byokModel NAME override into resolveTaskModel ctx', async () => {
+            resolveTaskModelMock.mockReturnValue({
+                model: { tag: 'env-default' },
+                modelName: 'default:model',
+                slot: null,
+                verdict: null,
             });
-
-            const resolved = await resolveAgentModel(
-                { organizationAndTeamData: orgTeam },
-                svc,
-            );
-
-            expect(resolved.main.role).toBe('main');
-            expect(resolved).not.toHaveProperty('fallback');
-            assertNoFallbackModelBuilt();
-        });
-
-        it('applies the per-repo byokModel override to main (no fallback build)', async () => {
-            const svc = permissionServiceReturning({
-                main: { provider: 'openai', model: 'gpt-main' },
-                fallback: { provider: 'anthropic', model: 'claude-fb' },
-            });
+            const svc = permissionServiceReturning(null);
 
             await resolveAgentModel(
                 {
@@ -164,8 +155,9 @@ describe('resolveAgentModel', () => {
                 svc,
             );
 
-            expect(mainSlotPassedToBuild()?.model).toBe('gpt-override');
-            assertNoFallbackModelBuilt();
+            expect(resolveTaskModelMock.mock.calls[0][2].ctx).toEqual({
+                override: { modelId: 'gpt-override' },
+            });
         });
     });
 
