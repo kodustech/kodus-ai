@@ -1,4 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
+import { resolveTaskModel } from '@libs/llm/resolve-task-model';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
     AutomationMessage,
     AutomationStatus,
@@ -289,8 +291,14 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                     if (!draft.codeReviewConfig) {
                         draft.codeReviewConfig = {} as any;
                     }
-                    draft.codeReviewConfig.byokConfig =
-                        validationResult.byokConfig;
+                    const healedByok = validationResult.byokConfig;
+                    draft.codeReviewConfig.byokConfig = healedByok;
+                    // Thread the resolved slot the downstream stages read their
+                    // limit/telemetry metadata off. Sourced here from the
+                    // permission service's collapsed main slot; the collapse is
+                    // removed with the {main,fallback} intermediate in 04b-06.
+                    draft.codeReviewConfig.resolvedModelSlot = (healedByok?.main ??
+                        undefined) as unknown as NormalizedModel | undefined;
                 }
                 if (validationResult.subscriptionStatus) {
                     if (!draft.pipelineMetadata) {
@@ -543,14 +551,19 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 return false;
             }
 
-            const byokConfig =
-                await this.permissionValidationService.getBYOKConfig(
+            // "Is BYOK configured?" = did the run resolve a non-managed slot for
+            // the codeReview task (v2 resolver), rather than a legacy main-slot
+            // presence check. A null slot means the env/managed default — no
+            // client BYOK — so the trial is provisioned without one.
+            const rawV2 =
+                await this.permissionValidationService.getBYOKConfigV2Raw(
                     organizationAndTeamData,
                 );
+            const resolvedSlot = resolveTaskModel(rawV2, 'codeReview', {}).slot;
 
             const provisioned = await this.licenseService.startTrial(
                 organizationAndTeamData,
-                Boolean(byokConfig?.main),
+                Boolean(resolvedSlot),
             );
 
             if (provisioned) {

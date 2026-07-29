@@ -37,6 +37,7 @@ import {
     shouldReviewBranches,
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
 import { isV2Config } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { resolveModelSlotFromV2 } from '@libs/llm/normalize-byok-config';
 import { StaticTaskStrategy } from '@libs/llm/static-task-strategy';
 import type { RoutingStrategy } from '@libs/llm/routing-strategy';
@@ -136,12 +137,20 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
 
             context = this.updateContext(context, (draft) => {
                 draft.codeReviewConfig.byokConfig = resolved;
+                // The single model slot this run resolved for `codeReview` — the
+                // v2-native handle downstream stages read their limit/telemetry
+                // metadata off (see codeReviewConfig.resolvedModelSlot). Kept in
+                // lockstep with byokConfig below during the migration window;
+                // byokConfig (the {main,fallback} intermediate) is removed once
+                // every consumer reads the resolved slot (04b-06).
+                draft.codeReviewConfig.resolvedModelSlot = undefined;
 
                 if (isV2Config(resolved)) {
-                    // v2: materialize the routed model into the normalized
-                    // {main,fallback} the downstream byokToVercelModel builds.
-                    // Ciphertext is carried verbatim (resolveModelSlotFromV2 never
-                    // decrypts — T-04-01-01).
+                    // v2: materialize the routed model into the resolved slot the
+                    // pipeline threads downstream (and, during the window, the
+                    // normalized {main,fallback} the legacy byokToVercelModel
+                    // builds). Ciphertext is carried verbatim
+                    // (resolveModelSlotFromV2 never decrypts — T-04-01-01).
                     if (v2Verdict?.modelId) {
                         const routedMain = resolveModelSlotFromV2(
                             resolved,
@@ -156,6 +165,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                                 resolved,
                                 resolved.routing?.fallbackModelId,
                             );
+                            draft.codeReviewConfig.resolvedModelSlot = main;
                             draft.codeReviewConfig.byokConfig = {
                                 main,
                                 ...(fallback ? { fallback } : {}),
@@ -163,9 +173,9 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                             return;
                         }
                     }
-                    // BLOCKED (or unresolvable slot): leave main absent so the
-                    // env/managed default resolves downstream, matching a missing
-                    // config today.
+                    // BLOCKED (or unresolvable slot): leave the resolved slot
+                    // absent so the env/managed default resolves downstream,
+                    // matching a missing config today.
                     draft.codeReviewConfig.byokConfig = undefined;
                     return;
                 }
@@ -176,10 +186,19 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 // settings). An empty/absent value means "inherit", so the
                 // BYOK-settings main model is left in place.
                 if (resolved?.main && overrideModel) {
+                    const overriddenMain = {
+                        ...resolved.main,
+                        model: overrideModel,
+                    };
+                    draft.codeReviewConfig.resolvedModelSlot =
+                        overriddenMain as unknown as NormalizedModel;
                     draft.codeReviewConfig.byokConfig = {
                         ...resolved,
-                        main: { ...resolved.main, model: overrideModel },
+                        main: overriddenMain,
                     };
+                } else {
+                    draft.codeReviewConfig.resolvedModelSlot = (resolved?.main ??
+                        undefined) as unknown as NormalizedModel | undefined;
                 }
             });
 

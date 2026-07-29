@@ -63,7 +63,7 @@ function buildRoleParams(
     const model = byokToVercelModel(byokConfig, role, {}, defaultModelOverride);
 
     if (role === 'fallback') {
-        const cfg = byokConfig?.fallback;
+        const cfg = byokConfig?.fallback; // removed in 04b-05 (runtime fallback)
         return {
             role,
             model,
@@ -75,7 +75,7 @@ function buildRoleParams(
         };
     }
 
-    const cfg = byokConfig?.main;
+    const cfg = byokConfig?.main; // removed in 04b-06 (legacy {main,fallback} branch)
     return {
         role,
         model,
@@ -124,9 +124,9 @@ export async function resolveAgentModel(
             defaultModelOverride: input.defaultModelOverride,
         });
 
-        // Build the MAIN bundle straight from the resolver's return — same
-        // fields buildRoleParams reads off `byokConfig?.main`, sourced from the
-        // routed slot (null on a BLOCKED/managed verdict → env-default model).
+        // Build the MAIN bundle straight from the resolver's return — the same
+        // limit/telemetry fields, now sourced from the routed slot (null on a
+        // BLOCKED/managed verdict → env-default model).
         const slot = resolved.slot;
         const main: AgentModelParams = {
             role: 'main',
@@ -159,7 +159,7 @@ export async function resolveAgentModel(
         return {
             byokConfig,
             main,
-            fallback: byokConfig?.fallback
+            fallback: byokConfig?.fallback // removed in 04b-05 (runtime fallback)
                 ? buildRoleParams(
                       byokConfig,
                       'fallback',
@@ -176,10 +176,10 @@ export async function resolveAgentModel(
     );
 
     const overrideModel = input.byokModel?.trim();
-    if (overrideModel && byokConfig?.main) {
+    if (overrideModel && byokConfig?.main) { // removed in 04b-06 (legacy branch)
         byokConfig = {
             ...byokConfig,
-            main: { ...byokConfig.main, model: overrideModel },
+            main: { ...byokConfig.main, model: overrideModel }, // removed in 04b-06
         };
     }
 
@@ -190,7 +190,7 @@ export async function resolveAgentModel(
             'main',
             input.defaultModelOverride,
         ),
-        fallback: byokConfig?.fallback
+        fallback: byokConfig?.fallback // removed in 04b-06 (legacy branch)
             ? buildRoleParams(
                   byokConfig ?? undefined,
                   'fallback',

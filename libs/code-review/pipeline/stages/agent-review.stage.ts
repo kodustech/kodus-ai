@@ -21,6 +21,7 @@ import {
     NoStructuredFallbackModelError,
     getModelName,
 } from '@libs/llm/byok-to-vercel';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
 import {
     buildLangfuseTelemetry,
@@ -395,33 +396,34 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // Per-repo/directory model override (byokModel) takes priority over
         // the org-level main.model when present — same resolution the agent
         // uses internally (`base-code-review-agent.provider.ts:541-551`).
-        const mainByok = context.codeReviewConfig?.byokConfig?.main;
+        const resolvedSlot = context.codeReviewConfig?.resolvedModelSlot;
         // byokModelId (id) wins over the legacy byokModel NAME (D-05). When a
         // byokModelId is set, ValidateConfigStage has already routed the
-        // codeReview task to that id-addressed model into byokConfig.main
+        // codeReview task to that id-addressed model into the resolved slot
         // (same routing the model factory runs), so the legacy NAME re-apply
         // is skipped here — the id-routed model stands. Only when no id is set
-        // does the legacy NAME window still apply the override onto main.
+        // does the legacy NAME window still apply the override onto the slot.
         const overrideModel = context.codeReviewConfig?.byokModelId?.trim()
             ? undefined
             : context.codeReviewConfig?.byokModel?.trim();
-        const byokWithOverride =
-            overrideModel && mainByok
-                ? {
-                      ...context.codeReviewConfig?.byokConfig,
-                      main: { ...mainByok, model: overrideModel },
-                  }
-                : context.codeReviewConfig?.byokConfig;
+        const effectiveSlot =
+            overrideModel && resolvedSlot
+                ? { ...resolvedSlot, model: overrideModel }
+                : resolvedSlot;
         // Use the same model-name formatter the agent uses (provider:model)
         // so stage-emitted warnings and agent-emitted warnings share a
         // dedup key. Otherwise dedupReviewWarnings sees them as distinct
         // and the user sees duplicate bullets (PROMPT_COMPACTED listed
         // twice — once with "gemini-2.5-flash" and once with
-        // "google_gemini:gemini-2.5-flash").
-        const effectiveModelName = getModelName(byokWithOverride);
+        // "google_gemini:gemini-2.5-flash"). getModelName still consumes the
+        // legacy {main} shape, so wrap the resolved slot for it (shim removed
+        // when getModelName goes v2-native).
+        const effectiveModelName = getModelName(
+            effectiveSlot ? ({ main: effectiveSlot } as any) : undefined,
+        );
         const effectiveContextWindow = resolveContextWindow({
-            byokMaxInputTokens: mainByok?.maxInputTokens,
-            modelName: overrideModel || mainByok?.model || '',
+            byokMaxInputTokens: resolvedSlot?.maxInputTokens,
+            modelName: overrideModel || resolvedSlot?.model || '',
         });
         const adaptiveProfile = resolveAdaptiveProfile(effectiveContextWindow);
         const stageWarnings: ReviewWarning[] = [];
@@ -731,9 +733,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
             if (failures.length > 0) {
                 const reviewProvider =
-                    typeof context.codeReviewConfig?.byokConfig?.main
+                    typeof context.codeReviewConfig?.resolvedModelSlot
                         ?.provider === 'string'
-                        ? (context.codeReviewConfig.byokConfig.main
+                        ? (context.codeReviewConfig.resolvedModelSlot
                               .provider as string)
                         : undefined;
                 const classifyFailure = (f: (typeof failures)[number]) =>
@@ -968,7 +970,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 const dedupResult = await this.deduplicateSuggestions(
                     nonKodyRulesForDedup,
                     prNumber,
-                    context.codeReviewConfig?.byokConfig,
+                    context.codeReviewConfig?.resolvedModelSlot,
                     telemetryMeta,
                 );
                 dedupedNonRules = dedupResult.suggestions;
@@ -1359,9 +1361,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 getClassification(stageError) ??
                 classifyLLMError(
                     stageError,
-                    typeof context.codeReviewConfig?.byokConfig?.main
+                    typeof context.codeReviewConfig?.resolvedModelSlot
                         ?.provider === 'string'
-                        ? context.codeReviewConfig.byokConfig.main.provider
+                        ? context.codeReviewConfig.resolvedModelSlot.provider
                         : undefined,
                 );
 
@@ -1504,12 +1506,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     private async deduplicateSuggestions(
         suggestions: Partial<CodeSuggestion>[],
         prNumber: number,
-        byokConfig?: any,
+        resolvedSlot?: NormalizedModel,
         telemetryMeta?: LangfuseTelemetryMetadata,
     ): Promise<{
         suggestions: Partial<CodeSuggestion>[];
         trace: DedupTraceSummary;
     }> {
+        // The secondary-pass helpers (isSecondaryByok / resolveSecondaryPassModel
+        // / withStructuredOutputFallback) still consume the single-slot {main}
+        // shape; wrap the resolved slot for them. That wrapping (and these
+        // helpers) go v2-native in 04b-05.
+        const dedupByokConfig = resolvedSlot ? { main: resolvedSlot } : undefined;
         if (suggestions.length <= 1) {
             return {
                 suggestions,
@@ -1533,7 +1540,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // Model resolution (same policy as severity/format):
         //   BYOK main → withStructuredOutputFallback (client key + schema retry)
         //   else platform gpt-5.4-mini / getInternalModel (trial / no BYOK)
-        const secondaryByok = isSecondaryByok(byokConfig);
+        const secondaryByok = isSecondaryByok(dedupByokConfig);
 
         try {
             const runDedup = (model: any) =>
@@ -1555,14 +1562,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
             let dedupResult: any;
             if (secondaryByok) {
-                // Prefer main for secondary (getInternalModel would pick
-                // fallback first when both are set — not what we want here).
-                const structuredByok = byokConfig?.main
-                    ? { main: byokConfig.main }
-                    : byokConfig;
+                // The resolved codeReview slot is the secondary model — already
+                // wrapped as { main: resolvedSlot }, so no re-wrap needed.
                 dedupResult = await withStructuredOutputFallback(
                     {
-                        byokConfig: structuredByok,
+                        byokConfig: dedupByokConfig,
                         organizationId: telemetryMeta?.organizationId,
                         label: 'dedup-suggestions',
                     },
@@ -1575,7 +1579,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 // with json_object instead of failing open into keep-all
                 // after a thrown error further up — or worse, partial
                 // structured output that leaves true dups on the PR.
-                if (!resolveSecondaryPassModel(byokConfig)) {
+                if (!resolveSecondaryPassModel(dedupByokConfig)) {
                     this.logger.warn({
                         message: `[DEDUP] PR#${prNumber}: no secondary model available, keeping all suggestions`,
                         context: this.stageName,
@@ -1600,7 +1604,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
                 dedupResult = await withStructuredOutputFallback(
                     {
-                        byokConfig,
+                        byokConfig: dedupByokConfig,
                         organizationId: telemetryMeta?.organizationId,
                         label: 'dedup-suggestions',
                     },
@@ -1619,9 +1623,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     spanName: 'dedup-suggestions',
                     runName: 'code-review-dedup',
                     model: secondaryByok
-                        ? (byokConfig?.main?.model ??
-                          byokConfig?.fallback?.model ??
-                          'byok-dedup')
+                        ? (resolvedSlot?.model ?? 'byok-dedup')
                         : SECONDARY_PASS_MODEL_ID,
                     isByok: secondaryByok,
                     usage: {

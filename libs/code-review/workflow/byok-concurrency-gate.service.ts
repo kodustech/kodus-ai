@@ -1,7 +1,11 @@
 import { createLogger } from '@libs/core/log/logger';
-import { BYOKConfig } from '@kodus/kodus-common/llm';
 import { Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
+
+import { isV2Config } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+import { resolveModelSlotFromV2 } from '@libs/llm/normalize-byok-config';
+import { StaticTaskStrategy } from '@libs/llm/static-task-strategy';
 
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import {
@@ -25,7 +29,11 @@ import {
 } from '@libs/core/domain/contracts/message-broker.service.contracts';
 import type { DistributedLock } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 
-type MainByokSlotConfig = NonNullable<BYOKConfig['main']>;
+type MainByokSlotConfig = NormalizedModel;
+
+// Manual routing policy (Phase 4) — stateless + dependency-free, so a single
+// module-level instance resolves the codeReview slot for every gate check.
+const routingStrategy = new StaticTaskStrategy();
 
 @Injectable()
 export class ByokConcurrencyGateService {
@@ -211,10 +219,19 @@ export class ByokConcurrencyGateService {
                     organizationAndTeamData,
                 );
 
-            const byokConfig = byokParameter?.configValue as
-                | BYOKConfig
-                | undefined;
-            const mainConfig = byokConfig?.main;
+            // Resolve the SINGLE slot the run uses for the codeReview task off
+            // the raw v2 config (StaticTaskStrategy → resolveModelSlotFromV2).
+            // The slot carries CIPHERTEXT apiKey and is used only for the scope
+            // key hash + the concurrency limit — the gate NEVER decrypts, so we
+            // route to the slot WITHOUT building a model (no buildModelFromSlot).
+            const rawConfig = byokParameter?.configValue;
+            if (!isV2Config(rawConfig)) {
+                return null;
+            }
+            const verdict = routingStrategy.resolve('codeReview', {}, rawConfig);
+            const mainConfig = verdict.modelId
+                ? resolveModelSlotFromV2(rawConfig, verdict.modelId)
+                : null;
 
             if (
                 !mainConfig?.provider ||

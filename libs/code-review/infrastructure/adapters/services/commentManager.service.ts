@@ -35,7 +35,8 @@ import {
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
-import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
     attachClassification,
     classifyLLMError,
@@ -108,7 +109,7 @@ export class CommentManagerService implements ICommentManagerService {
      * when no BYOK is configured (cloud/trial default).
      */
     private async runSummaryPromptV5(params: {
-        byokConfig: BYOKConfig | null;
+        slot: NormalizedModel | null;
         systemPrompt: string;
         userPrompt: string;
         runName: string;
@@ -121,7 +122,7 @@ export class CommentManagerService implements ICommentManagerService {
         };
     }): Promise<string> {
         const {
-            byokConfig,
+            slot,
             systemPrompt,
             userPrompt,
             runName,
@@ -137,12 +138,14 @@ export class CommentManagerService implements ICommentManagerService {
         const result = await this.observabilityService.runAiSdkLLMInSpan<any>({
             spanName,
             runName,
-            model: byokConfig?.main?.model ?? 'kimi-k2.7-code',
+            model: slot?.model ?? 'kimi-k2.7-code',
             attrs,
             exec: async () => {
-                const model = byokToVercelModel(
-                    byokConfig ?? undefined,
-                    'main',
+                // Build the single resolved slot (v2-native). Off-BYOK →
+                // kimi-k2.7-code default (cloud/trial). buildModelFromSlot
+                // decrypts the ciphertext key only in this local scope.
+                const model = buildModelFromSlot(
+                    slot ?? undefined,
                     {},
                     'kimi-k2.7-code',
                 );
@@ -152,7 +155,7 @@ export class CommentManagerService implements ICommentManagerService {
                 // silently failed for kimi users while reviews kept working. The
                 // finder omits temperature for the same reason (finder.agent.ts),
                 // letting the provider default apply.
-                const configuredTemperature = byokConfig?.main?.temperature;
+                const configuredTemperature = slot?.temperature;
                 return await tracedGenerateText({
                     model: model as any,
                     system: systemPrompt,
@@ -373,7 +376,7 @@ export class CommentManagerService implements ICommentManagerService {
                         `<changedFilesContext>${JSON.stringify(fileChunks[0]) || 'No files changed'}</changedFilesContext>`;
 
                     result = await this.runSummaryPromptV5({
-                        byokConfig: byokConfigValue,
+                        slot: byokConfigValue?.main ?? null,
                         systemPrompt: promptBase,
                         userPrompt,
                         runName,
@@ -411,7 +414,7 @@ export class CommentManagerService implements ICommentManagerService {
                             const chunkSpanName = `${CommentManagerService.name}::${chunkRunName}`;
 
                             return this.runSummaryPromptV5({
-                                byokConfig: byokConfigValue,
+                                slot: byokConfigValue?.main ?? null,
                                 systemPrompt:
                                     promptBase +
                                     `\n\n**Note**: This is chunk ${i + 1} of ${fileChunks.length}. Generate a summary for these files only.`,
@@ -474,7 +477,7 @@ You must always respond in ${languageResultPrompt}.`;
                         .join('\n\n');
 
                     result = await this.runSummaryPromptV5({
-                        byokConfig: byokConfigValue,
+                        slot: byokConfigValue?.main ?? null,
                         systemPrompt: consolidationPrompt,
                         userPrompt: consolidationUserPrompt,
                         runName: consolidationRunName,
@@ -1871,9 +1874,13 @@ ${reviewOptions}
                     metadata: {
                         organizationAndTeamData,
                         prNumber,
-                        provider: byokConfig?.main?.provider || provider,
+                        // This method delegates its model build to the
+                        // out-of-scope runStructuredReviewCall({main,fallback})
+                        // helper; its telemetry reads go v2-native when that
+                        // helper does (04b-05).
+                        provider: byokConfig?.main?.provider || provider, // removed in 04b-05
                         fallbackProvider:
-                            byokConfig?.fallback?.provider || fallbackProvider,
+                            byokConfig?.fallback?.provider || fallbackProvider, // removed in 04b-05
                     },
                 });
                 throw new Error(message);

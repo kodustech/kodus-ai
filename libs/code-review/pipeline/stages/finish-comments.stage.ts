@@ -212,9 +212,9 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     getClassification(summaryError) ??
                     classifyLLMError(
                         summaryError,
-                        typeof codeReviewConfig?.byokConfig?.main?.provider ===
+                        typeof codeReviewConfig?.resolvedModelSlot?.provider ===
                             'string'
-                            ? codeReviewConfig.byokConfig.main.provider
+                            ? codeReviewConfig.resolvedModelSlot.provider
                             : undefined,
                     );
 
