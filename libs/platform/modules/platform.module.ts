@@ -16,6 +16,7 @@ import { PermissionsModule } from '@libs/identity/modules/permissions.module';
 import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
 import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { TeamModule } from '@libs/organization/modules/team.module';
+import { OrganizationModule } from '@libs/organization/modules/organization.module';
 import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import CodeManagementUseCases from '../application/use-cases/codeManagement';
 import { AzureReposPullRequestHandler } from '../infrastructure/webhooks/azure/azureReposPullRequest.handler';
@@ -53,6 +54,7 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         forwardRef(() => AgentsModule),
         forwardRef(() => OrganizationParametersModule),
         forwardRef(() => TeamModule),
+        forwardRef(() => OrganizationModule),
         forwardRef(() => ParametersModule),
         forwardRef(() => PlatformDataModule),
         PermissionsModule,

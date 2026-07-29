@@ -31,6 +31,21 @@ export class OrganizationModel extends CoreModel {
     @Column({ default: true })
     public status: boolean;
 
+    /**
+     * Most recent member count obtained from the organization's connected
+     * code-host organization (GitHub for GitHub integrations).
+     */
+    @Column({ name: 'code_host_member_count', type: 'integer', nullable: true })
+    codeHostMemberCount?: number;
+
+    /** Timestamp of the snapshot in `codeHostMemberCount`. */
+    @Column({
+        name: 'code_host_member_count_updated_at',
+        type: 'timestamptz',
+        nullable: true,
+    })
+    codeHostMemberCountUpdatedAt?: Date;
+
     @Column({
         name: 'release_track',
         type: 'enum',

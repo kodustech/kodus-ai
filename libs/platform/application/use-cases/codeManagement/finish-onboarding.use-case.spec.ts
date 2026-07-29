@@ -13,7 +13,7 @@ jest.mock('@libs/ee/configs/environment', () => {
 });
 
 describe('FinishOnboardingUseCase', () => {
-    const buildUseCase = () => {
+    const buildUseCase = (user: { uuid?: string; email?: string } = {}) => {
         const parametersService = {
             findByKey: jest
                 .fn()
@@ -28,8 +28,18 @@ describe('FinishOnboardingUseCase', () => {
         const generateKodyRulesUseCase = {
             execute: jest.fn().mockResolvedValue([]),
         };
-        // No `uuid` on the user → the telemetry block is skipped.
-        const request = { user: { organization: { uuid: 'org-1' } } };
+        const request = {
+            user: { organization: { uuid: 'org-1' }, ...user },
+        };
+        const teamService = {
+            findById: jest.fn().mockResolvedValue({
+                name: 'Platform',
+                organization: { name: 'Acme' },
+            }),
+        };
+        const codeManagement = {
+            getListMembers: jest.fn().mockResolvedValue([]),
+        };
 
         const licenseService = {
             startTrial: jest.fn().mockResolvedValue(true),
@@ -37,16 +47,25 @@ describe('FinishOnboardingUseCase', () => {
         const permissionValidationService = {
             getBYOKConfig: jest.fn().mockResolvedValue(null),
         };
+        const organizationService = {
+            update: jest.fn().mockResolvedValue(undefined),
+        };
+        const telemetry = {
+            onboardingCompleted: jest.fn(),
+            onboardingReviewTriggered: jest.fn(),
+            onboardingReviewSkipped: jest.fn(),
+        };
 
         const useCase = new FinishOnboardingUseCase(
             parametersService as any,
-            {} as any, // teamService
+            teamService as any,
+            organizationService as any,
             {} as any, // reviewPRUseCase
             request as any,
             syncSelectedReposKodyRulesUseCase as any,
             createOrUpdateParametersUseCase as any,
-            {} as any, // telemetry
-            {} as any, // codeManagement
+            telemetry as any,
+            codeManagement as any,
             generateKodyRulesUseCase as any,
             licenseService as any,
             permissionValidationService as any,
@@ -59,6 +78,8 @@ describe('FinishOnboardingUseCase', () => {
             generateKodyRulesUseCase,
             licenseService,
             permissionValidationService,
+            organizationService,
+            codeManagement,
         };
     };
 
@@ -121,5 +142,26 @@ describe('FinishOnboardingUseCase', () => {
         expect(
             syncSelectedReposKodyRulesUseCase.execute,
         ).toHaveBeenCalledWith({ teamId: 'team-1', organizationId: 'org-1' });
+    });
+
+    it('persists the connected GitHub organization member-count snapshot', async () => {
+        const { useCase, codeManagement, organizationService } = buildUseCase({
+            uuid: 'user-1',
+        });
+        codeManagement.getListMembers.mockResolvedValue([
+            { id: 1 },
+            { id: 2 },
+            { id: 3 },
+        ]);
+
+        await useCase.execute({ teamId: 'team-1', reviewPR: false } as any);
+
+        expect(organizationService.update).toHaveBeenCalledWith(
+            { uuid: 'org-1' },
+            expect.objectContaining({
+                codeHostMemberCount: 3,
+                codeHostMemberCountUpdatedAt: expect.any(Date),
+            }),
+        );
     });
 });

@@ -2,7 +2,10 @@ import { createLogger } from '@libs/core/log/logger';
 
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
-import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
+import {
+    is429Error,
+    isTransientFetchError,
+} from '@libs/core/infrastructure/http/rate-limit-retry';
 import {
     parkRateGate,
     rateGateKey,
@@ -2513,13 +2516,16 @@ export class BitbucketCloudService implements Omit<
                     params,
                 },
             });
-            // A 429 means "we couldn't fetch the commits", NOT "the PR has no
-            // commits". Swallowing it as null lets it collapse to [] upstream,
-            // where ValidateNewCommitsStage misreads it as "PR has 0 commits"
-            // and silently SKIPs the review. Re-throw so callers can tell a
-            // genuine empty list apart from a throttled fetch. Non-429 errors
-            // keep the historical null contract.
-            if (is429Error(error)) {
+            // A 429 or a transport failure (undici `fetch failed`, resets,
+            // timeouts) means "we couldn't fetch the commits", NOT "the PR
+            // has no commits". Swallowing them as null lets it collapse to []
+            // upstream, where createLineComments reads it as "nothing to
+            // anchor" and posts ZERO inline comments while the stage reports
+            // success — the review ships with sent=0 and the error never
+            // surfaces (observed 2026-07-29, cloud bitbucket cell). Re-throw
+            // so callers can tell a genuine empty list apart from a failed
+            // fetch. Other errors keep the historical null contract.
+            if (is429Error(error) || isTransientFetchError(error)) {
                 throw error;
             }
             return null;
