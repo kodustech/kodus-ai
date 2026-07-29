@@ -1,0 +1,68 @@
+/**
+ * Shared token estimator — the SINGLE tiktoken-backed home (Phase 5, plan 05-02).
+ *
+ * `estimateTextTokens` used to live in
+ * `libs/agent-harness/infrastructure/compression/token-estimator.ts`. It was
+ * lifted here so BOTH callers — the agent-harness compression path AND the new
+ * BYOK tpm (tokens-per-minute) reservoir gate in libs/llm — share ONE tokenizer
+ * (Don't-Hand-Roll). The agent-harness module now re-exports these symbols, so
+ * every existing caller resolves unchanged. There is no second tokenizer.
+ *
+ * We count with tiktoken's `o200k_base` encoding (the GPT-4o family vocabulary).
+ * It is NOT the exact tokenizer of every BYOK model, but it is a far tighter
+ * bound than chars/4 across the code + JSON we send, and being model-agnostic
+ * keeps this util free of per-provider coupling. `encode_ordinary` is used so
+ * special-token-like sequences in diffs (e.g. `<|endoftext|>`) count as plain
+ * text instead of throwing. On any failure (WASM load, encode throw) we fall
+ * back to a conservative chars/token ratio so token counting never crashes.
+ *
+ * Why libs/llm and not libs/agent-harness: the tpm gate is enforced in
+ * `byok-model-wrapper.ts` (libs/llm) and libs/llm must NOT depend on
+ * libs/agent-harness. libs/agent-harness already depends on libs/llm elsewhere,
+ * so re-exporting from agent-harness → libs/llm keeps the dependency arrow
+ * one-directional (no import cycle).
+ */
+import { get_encoding, type Tiktoken } from 'tiktoken';
+
+/**
+ * Conservative fallback ratio when the tokenizer is unavailable. Dense code is
+ * closer to ~3 chars/token than 4, so the fallback still doesn't systematically
+ * under-count the way the old flat-4 estimate did.
+ */
+export const FALLBACK_CHARS_PER_TOKEN = 3;
+
+let encoder: Tiktoken | null = null;
+let encoderFailed = false;
+
+function getEncoder(): Tiktoken | null {
+    if (encoder) {
+        return encoder;
+    }
+    if (encoderFailed) {
+        return null;
+    }
+    try {
+        encoder = get_encoding('o200k_base');
+        return encoder;
+    } catch {
+        // WASM unavailable / load failure — never retry, use the char fallback.
+        encoderFailed = true;
+        return null;
+    }
+}
+
+/** Token count of a single string, tokenizer-backed with a safe fallback. */
+export function estimateTextTokens(text: string): number {
+    if (!text) {
+        return 0;
+    }
+    const enc = getEncoder();
+    if (enc) {
+        try {
+            return enc.encode_ordinary(text).length;
+        } catch {
+            // fall through to the char estimate
+        }
+    }
+    return Math.ceil(text.length / FALLBACK_CHARS_PER_TOKEN);
+}

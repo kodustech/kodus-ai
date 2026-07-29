@@ -8,59 +8,20 @@
  * it was under budget while the provider already saw the request over the
  * window (`requested: 421869` against a `262144` window ≈ 1.6×).
  *
- * We count with tiktoken's `o200k_base` encoding (the GPT-4o family
- * vocabulary). It is NOT the exact tokenizer of every BYOK model, but it is a
- * far tighter bound than chars/4 across the code + JSON we send, and being
- * model-agnostic keeps this harness free of per-provider coupling. `encode_
- * ordinary` is used so special-token-like sequences in diffs (e.g.
- * `<|endoftext|>`) count as plain text instead of throwing. On any failure
- * (WASM load, encode throw) we fall back to a conservative chars/token ratio so
- * token counting never crashes the agent loop.
+ * `estimateTextTokens` (+ its tiktoken encoder + `FALLBACK_CHARS_PER_TOKEN`)
+ * was LIFTED to `@libs/llm/token-estimate` (Phase 5, plan 05-02) so the BYOK
+ * tpm reservoir gate shares the SAME tokenizer — one source of truth, no second
+ * tiktoken encoder. This module re-exports it so every existing caller resolves
+ * unchanged, and keeps the message/value/overhead helpers that build on it.
  */
-import { get_encoding, type Tiktoken } from 'tiktoken';
+import {
+    estimateTextTokens,
+    FALLBACK_CHARS_PER_TOKEN,
+} from '@libs/llm/token-estimate';
 
-/**
- * Conservative fallback ratio when the tokenizer is unavailable. Dense code is
- * closer to ~3 chars/token than 4, so the fallback still doesn't systematically
- * under-count the way the old flat-4 estimate did.
- */
-export const FALLBACK_CHARS_PER_TOKEN = 3;
-
-let encoder: Tiktoken | null = null;
-let encoderFailed = false;
-
-function getEncoder(): Tiktoken | null {
-    if (encoder) {
-        return encoder;
-    }
-    if (encoderFailed) {
-        return null;
-    }
-    try {
-        encoder = get_encoding('o200k_base');
-        return encoder;
-    } catch {
-        // WASM unavailable / load failure — never retry, use the char fallback.
-        encoderFailed = true;
-        return null;
-    }
-}
-
-/** Token count of a single string, tokenizer-backed with a safe fallback. */
-export function estimateTextTokens(text: string): number {
-    if (!text) {
-        return 0;
-    }
-    const enc = getEncoder();
-    if (enc) {
-        try {
-            return enc.encode_ordinary(text).length;
-        } catch {
-            // fall through to the char estimate
-        }
-    }
-    return Math.ceil(text.length / FALLBACK_CHARS_PER_TOKEN);
-}
+// Re-export the lifted primitives so existing agent-harness callers (and the
+// spec) keep importing them from this module.
+export { estimateTextTokens, FALLBACK_CHARS_PER_TOKEN };
 
 /**
  * Token count of a message-like value. Objects are JSON-serialized first so the

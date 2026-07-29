@@ -10,11 +10,53 @@ import { wrapLanguageModel, type LanguageModel } from 'ai';
 
 import { BYOKConfig } from '@kodus/kodus-common/llm';
 
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { runWithBYOKLimiter } from '@libs/llm/byok-to-vercel';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 import {
     attachClassification,
     classifyLLMError,
 } from '@libs/llm/error-classifier';
+
+/**
+ * PRE-call token estimate for the tpm reservoir. Serializes the wire prompt the
+ * same way the provider sees it, then counts with the SHARED tiktoken estimator
+ * (`estimateTextTokens`) — NOT a char/4 heuristic (flat-4 under-counts dense
+ * code ~1.6×). This is the ONE seam with `params.prompt`.
+ */
+function estimatePromptTokens(prompt: unknown): number {
+    if (prompt == null) return 0;
+    const text =
+        typeof prompt === 'string' ? prompt : safeSerialize(prompt);
+    return estimateTextTokens(text);
+}
+
+function safeSerialize(value: unknown): string {
+    try {
+        return JSON.stringify(value) ?? '';
+    } catch {
+        return String(value);
+    }
+}
+
+/**
+ * POST-call real token total for reconcile. Reads `doGenerate().usage` — the
+ * only seam with the actual usage — preferring `totalTokens`, falling back to
+ * `inputTokens + outputTokens`. Returns undefined when usage is absent so the
+ * reservoir leaves the pre-call estimate standing as the net debit.
+ */
+function extractUsageTotal(result: unknown): number | undefined {
+    const usage = (result as { usage?: Record<string, unknown> } | null)
+        ?.usage;
+    if (!usage) return undefined;
+    if (typeof usage.totalTokens === 'number') return usage.totalTokens;
+    const input =
+        typeof usage.inputTokens === 'number' ? usage.inputTokens : 0;
+    const output =
+        typeof usage.outputTokens === 'number' ? usage.outputTokens : 0;
+    const sum = input + output;
+    return sum > 0 ? sum : undefined;
+}
 
 export interface WrapByokModelOptions {
     byokConfig?: BYOKConfig;
@@ -73,12 +115,29 @@ export function wrapByokModel(
                 // The limiter keys off the ONE resolved slot the org configured
                 // for this task — the carrier `.main` read happens here at the
                 // wrapper boundary, not inside the limiter core.
+                const slot = opts.byokConfig?.main as
+                    | NormalizedModel
+                    | undefined;
+
+                // tpm reservoir (hybrid): this wrapper is the ONE seam with BOTH
+                // the pre-call prompt AND the post-call usage. Estimate the
+                // prompt tokens to DEBIT the reservoir at admission, and hand the
+                // usage extractor so the limiter RECONCILES estimate vs actual
+                // after the call. Only when the slot carries tpm — otherwise zero
+                // estimation overhead and the exact 05-01 path (rpm/concurrency).
+                const hasTpm = !!slot?.tpm && slot.tpm > 0;
+                const estimatedTokens = hasTpm
+                    ? estimatePromptTokens(params?.prompt)
+                    : undefined;
+
                 return runWithBYOKLimiter(
                     {
-                        slot: opts.byokConfig?.main,
+                        slot,
                         organizationId: opts.organizationId,
                         abortSignal: params?.abortSignal,
                         queueTimeoutMs: opts.queueTimeoutMs,
+                        estimatedTokens,
+                        getUsageTokens: hasTpm ? extractUsageTotal : undefined,
                     },
                     run,
                     'llm-call',

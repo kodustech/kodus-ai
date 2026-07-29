@@ -49,6 +49,11 @@ export interface BYOKModelConfig {
      *  gate). Enforced as a min-interval (`60000/rpm` ms) by the per-slot
      *  BYOKConcurrencyLimiter — v2-only, sibling to maxConcurrentRequests. */
     rpm?: number;
+    /** Tokens-per-minute cap for this slot. Absent/≤0 ⇒ disabled (no token
+     *  gate). Enforced as a per-slot token reservoir (capacity = tpm, refilled
+     *  linearly per minute) debited by the pre-call tiktoken estimate and
+     *  reconciled with real usage in the wrapper — v2-only, sibling to rpm. */
+    tpm?: number;
 }
 
 /** LLM task taxonomy for routing (execution is Phase 4; the shape persists now). */
@@ -105,6 +110,10 @@ export interface NormalizedModel {
      *  Absent/≤0 ⇒ disabled. Sibling to maxConcurrentRequests; the limiter
      *  composes both gates on one instance. */
     rpm?: number;
+    /** Tokens-per-minute cap for this slot (per-slot token reservoir, capacity =
+     *  tpm, refilled linearly per minute). Absent/≤0 ⇒ disabled. Sibling to rpm;
+     *  the limiter composes concurrency + rpm + tpm on one instance. */
+    tpm?: number;
     maxOutputTokens?: number;
     vertexLocation?: string;
     awsBearerToken?: string;

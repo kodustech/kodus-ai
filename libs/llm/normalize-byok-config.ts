@@ -59,6 +59,7 @@ export function slotFromV2(
         maxOutputTokens: model.maxOutputTokens,
         maxConcurrentRequests: model.maxConcurrentRequests,
         rpm: model.rpm,
+        tpm: model.tpm,
     };
 }
 

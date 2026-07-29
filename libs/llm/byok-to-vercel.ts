@@ -400,6 +400,13 @@ type QueuedTask<T> = {
     cancelled: boolean;
     timer?: ReturnType<typeof setTimeout>;
     cleanup?: () => void;
+    // tpm reservoir accounting (both undefined ⇒ no token gate for this task).
+    // `estimatedTokens` is the PRE-call tiktoken estimate that debits the
+    // reservoir at admission; `getUsageTokens` extracts the POST-call real total
+    // from the task result so the reservoir reconciles the estimate against
+    // actual usage after the call resolves.
+    estimatedTokens?: number;
+    getUsageTokens?: (result: T) => number | undefined;
 };
 
 const DEFAULT_LIMITER_QUEUE_TIMEOUT_MS = 0;
@@ -418,9 +425,22 @@ class BYOKConcurrencyLimiter {
     private lastStartAt = Number.NEGATIVE_INFINITY;
     private rateTimer?: ReturnType<typeof setTimeout>;
 
-    constructor(concurrency: number, rpm?: number) {
+    // tpm token reservoir: `tpmCapacity` (tokens/min) is the bucket size and the
+    // per-minute refill rate; 0 ⇒ disabled (concurrency/rpm only). `reservoir`
+    // holds the current available tokens (may go NEGATIVE when a single request's
+    // real usage overshoots its estimate — reconcile debits the overshoot).
+    // `reservoirRefillAt` timestamps the last linear refill. `tpmTimer` holds the
+    // single pending re-drain scheduled while the reservoir is too low to admit
+    // the head task (DELAY, never retry — mirrors the rpm rateTimer).
+    private tpmCapacity = 0;
+    private reservoir = 0;
+    private reservoirRefillAt = 0;
+    private tpmTimer?: ReturnType<typeof setTimeout>;
+
+    constructor(concurrency: number, rpm?: number, tpm?: number) {
         this.concurrency = concurrency;
         this.setRpm(rpm);
+        this.setTpm(tpm);
     }
 
     /** Current concurrency ceiling (read by runWithBYOKLimiter for cache reuse). */
@@ -434,12 +454,19 @@ class BYOKConcurrencyLimiter {
      * fields updates the ceiling/interval on the cached instance rather than
      * constructing a new one that would reset `lastStartAt`.
      */
-    configure(opts: { concurrency?: number; rpm?: number }): void {
+    configure(opts: {
+        concurrency?: number;
+        rpm?: number;
+        tpm?: number;
+    }): void {
         if (typeof opts.concurrency === 'number') {
             this.concurrency = opts.concurrency;
         }
         if ('rpm' in opts) {
             this.setRpm(opts.rpm);
+        }
+        if ('tpm' in opts) {
+            this.setTpm(opts.tpm);
         }
         // A widened ceiling / disabled rate gate may unblock queued tasks.
         this.drain();
@@ -454,6 +481,88 @@ class BYOKConcurrencyLimiter {
     }
 
     /**
+     * Set/re-tune the token reservoir capacity. Guards non-finite/≤0 → disabled.
+     * FIRST enable seeds the reservoir FULL (so an idle slot admits immediately).
+     * A re-tune (config edit on a LIVE limiter) keeps the current balance —
+     * capped at the new capacity — so an unrelated edit never refills a
+     * mid-throttle reservoir (Pitfall 4). tpm is NOT a limiter identity field;
+     * `buildLimiterCacheKey` is unchanged, so this re-tunes the cached instance.
+     */
+    private setTpm(tpm?: number): void {
+        const capacity =
+            typeof tpm === 'number' && Number.isFinite(tpm) && tpm > 0 ? tpm : 0;
+        if (capacity === 0) {
+            this.tpmCapacity = 0;
+            return;
+        }
+        const wasDisabled = this.tpmCapacity === 0;
+        this.tpmCapacity = capacity;
+        if (wasDisabled) {
+            // Seed FULL on first enable so an idle slot is not throttled.
+            this.reservoir = capacity;
+            this.reservoirRefillAt = Date.now();
+        } else {
+            // Re-tune: preserve the in-flight balance, capped at new capacity.
+            this.reservoir = Math.min(this.reservoir, capacity);
+        }
+    }
+
+    /** Linearly refill the reservoir (tokens += capacity * elapsedMs / 60000),
+     *  capped at capacity. No-op when tpm is disabled. */
+    private refillReservoir(): void {
+        if (this.tpmCapacity <= 0) return;
+        const now = Date.now();
+        const elapsed = now - this.reservoirRefillAt;
+        if (elapsed <= 0) return;
+        this.reservoir = Math.min(
+            this.tpmCapacity,
+            this.reservoir + (this.tpmCapacity * elapsed) / 60_000,
+        );
+        this.reservoirRefillAt = now;
+    }
+
+    /**
+     * Admission gate: refill, then DEBIT `estimate` if the reservoir holds enough.
+     * `required` is clamped to capacity so a single request larger than the whole
+     * bucket still admits once the reservoir is full (never a deadlock) — its
+     * overshoot simply drives the balance negative, throttling the next request.
+     * Returns true when admitted (and debited), false when the caller must wait.
+     */
+    private tryDebitReservoir(estimate: number): boolean {
+        if (this.tpmCapacity <= 0 || estimate <= 0) return true;
+        this.refillReservoir();
+        const required = Math.min(estimate, this.tpmCapacity);
+        if (this.reservoir >= required) {
+            this.reservoir -= estimate;
+            return true;
+        }
+        return false;
+    }
+
+    /** Milliseconds until the reservoir refills enough to admit `estimate`. */
+    private reservoirDelayMs(estimate: number): number {
+        const required = Math.min(estimate, this.tpmCapacity);
+        const deficit = required - this.reservoir;
+        if (deficit <= 0) return 0;
+        return Math.ceil((deficit * 60_000) / this.tpmCapacity);
+    }
+
+    /**
+     * POST-call correction: the admission step debited the pre-call `estimate`;
+     * adjust by (estimate − actual) so the NET debit equals the real usage. An
+     * over-estimate credits tokens back (capped at capacity — never bank beyond
+     * the bucket); an under-estimate debits the shortfall (may go negative).
+     */
+    private reconcileReservoir(estimate: number, actual: number): void {
+        if (this.tpmCapacity <= 0 || estimate <= 0) return;
+        this.refillReservoir();
+        this.reservoir = Math.min(
+            this.tpmCapacity,
+            this.reservoir + (estimate - actual),
+        );
+    }
+
+    /**
      * @param queueTimeoutMs Per-task queue wait timeout. When > 0, the task
      *   is rejected with [BYOK-QUEUE-TIMEOUT] if it cannot acquire a slot within
      *   this duration. Pass 0 (or omit) for infinite wait (review callers).
@@ -464,6 +573,8 @@ class BYOKConcurrencyLimiter {
         fn: () => Promise<T>,
         abortSignal?: AbortSignal,
         queueTimeoutMs = DEFAULT_LIMITER_QUEUE_TIMEOUT_MS,
+        estimatedTokens?: number,
+        getUsageTokens?: (result: T) => number | undefined,
     ): Promise<T> {
         return new Promise<T>((resolve, reject) => {
             const task: QueuedTask<T> = {
@@ -474,6 +585,8 @@ class BYOKConcurrencyLimiter {
                 reject,
                 started: false,
                 cancelled: false,
+                estimatedTokens,
+                getUsageTokens,
             };
 
             const abortQueuedTask = () => {
@@ -535,6 +648,12 @@ class BYOKConcurrencyLimiter {
 
     private drain() {
         while (this.activeCount < this.concurrency && this.queue.length > 0) {
+            // Drop a cancelled head WITHOUT consuming a rate/token slot.
+            if (this.queue[0].cancelled) {
+                this.queue.shift();
+                continue;
+            }
+
             // rpm rate gate: DELAY (never retry) the next START if the min-interval
             // since the last actual start hasn't elapsed. Schedule a single
             // re-drain for the remaining time and stop starting early.
@@ -551,21 +670,60 @@ class BYOKConcurrencyLimiter {
                 }
             }
 
-            const task = this.queue.shift();
-            if (!task || task.cancelled) continue;
+            // tpm token gate: DEBIT the head task's pre-call estimate from the
+            // reservoir. If the reservoir can't cover it yet, schedule ONE
+            // re-drain for the refill delay and stop (DELAY, never retry) —
+            // exactly like the rpm gate. Composes with rpm + concurrency: all
+            // three gates guard the SAME per-slot limiter.
+            const head = this.queue[0];
+            const estimate = head.estimatedTokens ?? 0;
+            if (
+                this.tpmCapacity > 0 &&
+                estimate > 0 &&
+                !this.tryDebitReservoir(estimate)
+            ) {
+                if (!this.tpmTimer) {
+                    this.tpmTimer = setTimeout(() => {
+                        this.tpmTimer = undefined;
+                        this.drain();
+                    }, this.reservoirDelayMs(estimate));
+                }
+                return;
+            }
+
+            const task = this.queue.shift()!;
 
             task.started = true;
             if (task.timer) clearTimeout(task.timer);
             task.cleanup?.();
-            // Stamp the start only when a task ACTUALLY starts (cancelled tasks
-            // above `continue` without consuming a rate slot).
+            // Stamp the start only when a task ACTUALLY starts (cancelled heads
+            // are dropped above without consuming a rate/token slot).
             this.lastStartAt = Date.now();
             this.activeCount++;
 
             Promise.resolve()
                 .then(() => task.run())
                 .then(
-                    (value) => task.resolve(value),
+                    (value) => {
+                        // POST-call reconcile: correct the reservoir by
+                        // (estimate − actual) from the real usage total BEFORE
+                        // the finally re-drain, so the corrected balance gates
+                        // the next task. Skip when usage is unavailable — the
+                        // pre-call estimate then stands as the net debit.
+                        if (
+                            this.tpmCapacity > 0 &&
+                            (task.estimatedTokens ?? 0) > 0
+                        ) {
+                            const actual = task.getUsageTokens?.(value);
+                            if (typeof actual === 'number' && actual >= 0) {
+                                this.reconcileReservoir(
+                                    task.estimatedTokens as number,
+                                    actual,
+                                );
+                            }
+                        }
+                        task.resolve(value);
+                    },
                     (error) => task.reject(error),
                 )
                 .finally(() => {
@@ -608,18 +766,28 @@ export function runWithBYOKLimiter<T>(
         organizationId?: string;
         queueTimeoutMs?: number;
         abortSignal?: AbortSignal;
+        /** PRE-call tiktoken estimate of the request's prompt tokens. Debits the
+         *  tpm reservoir at admission. Supplied by the wrapper (the only seam
+         *  with params.prompt); omit for a non-tpm call (zero overhead). */
+        estimatedTokens?: number;
+        /** Extracts the POST-call real token total from the task result so the
+         *  reservoir reconciles estimate vs actual. Supplied by the wrapper (the
+         *  only seam with doGenerate().usage). */
+        getUsageTokens?: (result: T) => number | undefined;
     },
     fn: () => Promise<T>,
     label = 'llm-call',
 ): Promise<T> {
     const maxConcurrent = params.slot?.maxConcurrentRequests;
     const rpm = params.slot?.rpm;
+    const tpm = params.slot?.tpm;
 
     const hasConcurrency = !!maxConcurrent && maxConcurrent > 0;
     const hasRpm = !!rpm && rpm > 0;
+    const hasTpm = !!tpm && tpm > 0;
 
-    // Fast path ONLY when BOTH gates are unset — identical to pre-rpm behavior.
-    if (!hasConcurrency && !hasRpm) {
+    // Fast path ONLY when ALL gates are unset — identical to pre-rpm behavior.
+    if (!hasConcurrency && !hasRpm && !hasTpm) {
         return fn();
     }
 
@@ -628,27 +796,35 @@ export function runWithBYOKLimiter<T>(
         return fn();
     }
 
-    // An rpm-only slot has no concurrency cap: the drain gate is
+    // An rpm-only OR tpm-only slot has no concurrency cap: the drain gate is
     // `activeCount < concurrency`, so `concurrency` MUST be Infinity (unbounded)
     // when maxConcurrentRequests is unset/≤0 — otherwise `0 < undefined` is
     // false and the queue never starts (deadlock). With Infinity the concurrency
-    // gate is a no-op and only the rpm min-interval throttles.
+    // gate is a no-op and only the rpm min-interval / tpm reservoir throttles.
     const concurrency = hasConcurrency ? (maxConcurrent as number) : Infinity;
 
     const queueTimeoutMs =
         params.queueTimeoutMs ?? DEFAULT_LIMITER_QUEUE_TIMEOUT_MS;
     let limiter = limiterCache.get(cacheKey);
     if (!limiter) {
-        limiter = new BYOKConcurrencyLimiter(concurrency, rpm);
+        limiter = new BYOKConcurrencyLimiter(concurrency, rpm, tpm);
         limiterCache.set(cacheKey, limiter);
     } else {
         // Re-tune the cached limiter (identity fields unchanged) instead of
-        // constructing a new one that would discard in-flight queue/rate state
-        // (Pitfall 4). A config edit re-tunes; it never resets the throttle.
-        limiter.configure({ concurrency, rpm });
+        // constructing a new one that would discard in-flight queue/rate/token
+        // state (Pitfall 4). A config edit re-tunes; it never resets the throttle
+        // or reseeds the reservoir. tpm is NOT an identity field.
+        limiter.configure({ concurrency, rpm, tpm });
     }
 
-    return limiter.run(label, fn, params.abortSignal, queueTimeoutMs);
+    return limiter.run(
+        label,
+        fn,
+        params.abortSignal,
+        queueTimeoutMs,
+        params.estimatedTokens,
+        params.getUsageTokens,
+    );
 }
 
 // ─── Structured-output retry-on-error ────────────────────────────────
