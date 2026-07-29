@@ -1,3 +1,7 @@
+import {
+    is429Error,
+    isTransientFetchError,
+} from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createTwoFilesPatch } from 'diff';
@@ -1848,6 +1852,15 @@ export class AzureReposService implements Omit<
                 error,
                 metadata: { params },
             });
+            // A 429 or a transport failure means "we couldn't fetch the
+            // commits", NOT "the PR has no commits" — swallowing it as null
+            // makes createLineComments anchor nothing and the review ships
+            // with zero inline comments while reporting success (same class
+            // observed live on the bitbucket path, 2026-07-29). Re-throw so
+            // callers can tell an empty list apart from a failed fetch.
+            if (is429Error(error) || isTransientFetchError(error)) {
+                throw error;
+            }
             return null;
         }
     }
