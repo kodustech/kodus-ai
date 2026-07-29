@@ -5,39 +5,12 @@ import {
     SummaryConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
-// Mock BYOKPromptRunnerService at module level so we can capture the
-// SYSTEM prompt the LLM receives (Bug E) and short-circuit the LLM
-// call to a deterministic summary (Bug A).
+// generateSummaryPR runs through the v5 path (byok-to-vercel + tracedGenerateText);
+// capturedPrompts collects the prompts the LLM receives (Bug E) and NEW_SUMMARY_TEXT
+// is the deterministic summary returned (Bug A). The legacy BYOKPromptRunnerService
+// (LangChain wrapper) was deleted in plan 03-13, so its module-level mock is gone.
 const capturedPrompts: Array<{ prompt: string; role: string }> = [];
 const NEW_SUMMARY_TEXT = 'NEW_SUMMARY_CONTENT';
-
-jest.mock(
-    '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service',
-    () => ({
-        BYOKPromptRunnerService: jest
-            .fn()
-            .mockImplementation(() => ({
-                executeMode: 'mock',
-                builder: () => {
-                    const chain: any = {
-                        setParser: () => chain,
-                        setLLMJsonMode: () => chain,
-                        setPayload: () => chain,
-                        addPrompt: (p: { prompt: string; role: string }) => {
-                            capturedPrompts.push(p);
-                            return chain;
-                        },
-                        addMetadata: () => chain,
-                        addCallbacks: () => chain,
-                        setRunName: () => chain,
-                        setTemperature: () => chain,
-                        execute: async () => NEW_SUMMARY_TEXT,
-                    };
-                    return chain;
-                },
-            })),
-    }),
-);
 
 // generateSummaryPR now runs through the v5 path (byok-to-vercel +
 // tracedGenerateText) instead of the v2 BYOKPromptRunnerService builder, so

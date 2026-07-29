@@ -20,6 +20,17 @@ import { vertexModule } from './vertex.module';
 import { openRouterModule } from './openrouter.module';
 import { bedrockModule } from './bedrock.module';
 import { novitaModule } from './novita.module';
+// D-05 registry-wide sweep (03-13): drive each module's real normalize boundary
+// through the 03-01 conformance harness against its committed fixture.
+import { runConformance, type ProviderFixture } from './conformance';
+import { encrypt } from '@libs/common/utils/crypto';
+import openaiReasoningFixture from './__fixtures__/openai/reasoning.json';
+import anthropicReasoningFixture from './__fixtures__/anthropic/reasoning.json';
+import googlePlainFixture from './__fixtures__/google/plain.json';
+import vertexPlainFixture from './__fixtures__/vertex/plain.json';
+import openRouterReasoningFixture from './__fixtures__/openrouter/reasoning.json';
+import bedrockPlainFixture from './__fixtures__/bedrock/plain.json';
+import novitaPlainFixture from './__fixtures__/novita/plain.json';
 
 /** The nine BYOKProvider ids the registry must fully cover after 01-02. */
 const ALL_IDS = [
@@ -196,4 +207,121 @@ describe('registry covers all nine BYOKProvider ids (01-02 done)', () => {
         expect(REGISTRY.all().length).toBe(7);
         expect(new Set(REGISTRY.ids())).toEqual(new Set(ALL_IDS));
     });
+});
+
+/**
+ * Registry-wide conformance sweep (Phase 3, plan 03-13 — the FINAL D-05 gate).
+ *
+ * Iterates EVERY module registered in REGISTRY and drives its REAL normalize
+ * boundary (build → SDK MockLanguageModelV4 → normalize/normalizeUsage) against a
+ * committed fixture. This is the phase-wide guarantee that no module ever regresses
+ * to the Phase 1 zero stub ({ input: 0, output: 0, reasoning: 0 }) and that reasoning
+ * is a number that is a detail-OF output (never summed into, never subtracted from it).
+ *
+ * A representative fixture + build config per module id. A newly-registered module
+ * with no entry here fails the coverage guard below — so add-a-provider forces
+ * add-a-conformance-sample, keeping the sweep exhaustive.
+ */
+const CONFORMANCE_SAMPLES: Record<
+    string,
+    { cfg: ProviderBuildConfig; fixture: ProviderFixture }
+> = {
+    openai: {
+        // openai_compatible Kimi/Moonshot reasoning call (reasoning split fixture).
+        cfg: sampleConfig(
+            'openai_compatible',
+            'kimi-k2.7-code',
+            'https://api.moonshot.ai/v1',
+        ),
+        fixture: openaiReasoningFixture as ProviderFixture,
+    },
+    anthropic: {
+        cfg: sampleConfig('anthropic', 'claude-sonnet-4-5-20250929'),
+        fixture: anthropicReasoningFixture as ProviderFixture,
+    },
+    google_gemini: {
+        cfg: sampleConfig('google_gemini', 'gemini-2.5-flash'),
+        fixture: googlePlainFixture as ProviderFixture,
+    },
+    google_vertex: {
+        // vertexModelFromSaJson tolerates a bogus (non-SA-JSON) apiKey offline.
+        cfg: {
+            ...sampleConfig('google_vertex', 'gemini-2.5-flash'),
+            apiKey: 'not-a-service-account-json',
+            vertexLocation: 'global',
+        } as ProviderBuildConfig,
+        fixture: vertexPlainFixture as ProviderFixture,
+    },
+    open_router: {
+        cfg: sampleConfig('open_router', 'moonshotai/kimi-k2-thinking'),
+        fixture: openRouterReasoningFixture as ProviderFixture,
+    },
+    amazon_bedrock: {
+        // bedrock build() DECRYPTS awsBearerToken, so feed it an encrypted token.
+        cfg: {
+            provider: 'amazon_bedrock',
+            model: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+            awsRegion: 'us-east-1',
+            awsBearerToken: encrypt('offline-conformance-bearer'),
+        } as unknown as ProviderBuildConfig,
+        fixture: bedrockPlainFixture as ProviderFixture,
+    },
+    novita: {
+        cfg: sampleConfig('novita', 'meta-llama/llama-3.1-70b-instruct'),
+        fixture: novitaPlainFixture as ProviderFixture,
+    },
+};
+
+describe('registry-wide conformance sweep (D-05): no module regresses to the zero stub', () => {
+    const modules = REGISTRY.all();
+
+    it('every registered module has a conformance sample (add-a-provider ⇒ add-a-sample)', () => {
+        for (const module of modules) {
+            expect(CONFORMANCE_SAMPLES[module.id]).toBeDefined();
+        }
+    });
+
+    it('covers all 7 distinct registered modules', () => {
+        expect(modules.length).toBe(7);
+    });
+
+    for (const module of modules) {
+        const sample = CONFORMANCE_SAMPLES[module.id];
+        if (!sample) continue; // absence is asserted by the coverage guard above
+        const { cfg, fixture } = sample;
+        const expectedReasoning =
+            fixture.usage.outputTokenDetails?.reasoningTokens ??
+            fixture.usage.reasoningTokens ??
+            0;
+
+        describe(`${module.id}`, () => {
+            it('normalize/normalizeUsage return non-stub values through the real SDK boundary', async () => {
+                const run = await runConformance(module, cfg, fixture);
+
+                // Not the Phase 1 zero stub: the fixture carries non-zero counts,
+                // so a real normalizeUsage must surface them.
+                expect(run.usage.input).toBe(fixture.usage.inputTokens);
+                expect(run.usage.output).toBe(fixture.usage.outputTokens);
+                expect(run.usage.input).toBeGreaterThan(0);
+                expect(run.usage.output).toBeGreaterThan(0);
+
+                // reasoning is always a number, never null/undefined.
+                expect(typeof run.usage.reasoning).toBe('number');
+                expect(run.usage.reasoning).toBe(expectedReasoning);
+
+                // Q4 double-count trap: reasoning is a detail-OF output — output
+                // stays the FULL completion count, never summed-in nor subtracted.
+                if (expectedReasoning > 0) {
+                    expect(run.usage.reasoning).toBeGreaterThan(0);
+                    expect(run.usage.output).not.toBe(
+                        fixture.usage.outputTokens! - expectedReasoning,
+                    );
+                }
+
+                // normalize(raw) mirrors normalizeUsage exactly and preserves raw.
+                expect(run.result.usage).toEqual(run.usage);
+                expect(run.result.raw).toBe(run.raw);
+            });
+        });
+    }
 });
