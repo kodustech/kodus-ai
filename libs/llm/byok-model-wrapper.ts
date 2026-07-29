@@ -10,10 +10,7 @@ import { wrapLanguageModel, type LanguageModel } from 'ai';
 
 import { BYOKConfig } from '@kodus/kodus-common/llm';
 
-import {
-    runWithBYOKLimiter,
-    type BYOKLimiterRole,
-} from '@libs/llm/byok-to-vercel';
+import { runWithBYOKLimiter } from '@libs/llm/byok-to-vercel';
 import {
     attachClassification,
     classifyLLMError,
@@ -23,7 +20,11 @@ export interface WrapByokModelOptions {
     byokConfig?: BYOKConfig;
     organizationId?: string;
     provider?: string;
-    role?: BYOKLimiterRole;
+    /** @deprecated No-op since 04b-02 — the limiter keys off the single resolved
+     *  slot (`byokConfig.main`), not a `main`/`fallback`/`internal` role. Kept on
+     *  the type so existing callers passing `role: 'main'` still compile; remove
+     *  in a later cleanup wave. */
+    role?: 'main' | 'fallback' | 'internal';
     queueTimeoutMs?: number;
     reporter?: (input: {
         organizationId?: string;
@@ -69,16 +70,18 @@ export function wrapByokModel(
                     }
                 };
 
+                // The limiter keys off the ONE resolved slot the org configured
+                // for this task — the carrier `.main` read happens here at the
+                // wrapper boundary, not inside the limiter core.
                 return runWithBYOKLimiter(
                     {
-                        byokConfig: opts.byokConfig,
+                        slot: opts.byokConfig?.main,
                         organizationId: opts.organizationId,
-                        role: opts.role ?? 'main',
                         abortSignal: params?.abortSignal,
                         queueTimeoutMs: opts.queueTimeoutMs,
                     },
                     run,
-                    opts.role ?? 'main',
+                    'llm-call',
                 );
             },
         },

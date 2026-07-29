@@ -49,7 +49,7 @@ const MODEL_SUGGESTIONS = {
 
 // Model builders return sentinels — no real model/network is touched.
 jest.mock('@libs/llm/byok-to-vercel', () => ({
-    byokToVercelModel: jest.fn(() => ({ __model: 'byok-main' })),
+    buildModelFromSlot: jest.fn(() => ({ __model: 'byok-main' })),
     getModelName: jest.fn(() => 'byok-main'),
 }));
 jest.mock('@libs/llm/byok-model-wrapper', () => ({

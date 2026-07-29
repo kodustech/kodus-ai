@@ -415,12 +415,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // dedup key. Otherwise dedupReviewWarnings sees them as distinct
         // and the user sees duplicate bullets (PROMPT_COMPACTED listed
         // twice — once with "gemini-2.5-flash" and once with
-        // "google_gemini:gemini-2.5-flash"). getModelName still consumes the
-        // legacy {main} shape, so wrap the resolved slot for it (shim removed
-        // when getModelName goes v2-native).
-        const effectiveModelName = getModelName(
-            effectiveSlot ? ({ main: effectiveSlot } as any) : undefined,
-        );
+        // "google_gemini:gemini-2.5-flash"). getModelName is v2-native: it
+        // takes the resolved slot directly (no `{main}` wrapping).
+        const effectiveModelName = getModelName(effectiveSlot ?? undefined);
         const effectiveContextWindow = resolveContextWindow({
             byokMaxInputTokens: resolvedSlot?.maxInputTokens,
             modelName: overrideModel || resolvedSlot?.model || '',
@@ -1512,10 +1509,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         suggestions: Partial<CodeSuggestion>[];
         trace: DedupTraceSummary;
     }> {
-        // The secondary-pass helpers (isSecondaryByok / resolveSecondaryPassModel
-        // / withStructuredOutputFallback) still consume the single-slot {main}
-        // shape; wrap the resolved slot for them. That wrapping (and these
-        // helpers) go v2-native in 04b-05.
+        // The secondary-pass gate helpers (isSecondaryByok /
+        // resolveSecondaryPassModel) still consume the single-slot {main} carrier;
+        // wrap the resolved slot for them. withStructuredOutputFallback is already
+        // v2-native (takes the resolved slot directly). Those gate helpers go
+        // v2-native in 04b-05.
         const dedupByokConfig = resolvedSlot ? { main: resolvedSlot } : undefined;
         if (suggestions.length <= 1) {
             return {
@@ -1566,7 +1564,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 // wrapped as { main: resolvedSlot }, so no re-wrap needed.
                 dedupResult = await withStructuredOutputFallback(
                     {
-                        byokConfig: dedupByokConfig,
+                        slot: resolvedSlot,
                         organizationId: telemetryMeta?.organizationId,
                         label: 'dedup-suggestions',
                     },
@@ -1604,7 +1602,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
                 dedupResult = await withStructuredOutputFallback(
                     {
-                        byokConfig: dedupByokConfig,
+                        slot: resolvedSlot,
                         organizationId: telemetryMeta?.organizationId,
                         label: 'dedup-suggestions',
                     },

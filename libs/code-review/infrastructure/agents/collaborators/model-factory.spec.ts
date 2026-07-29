@@ -1,8 +1,9 @@
-// Legacy {main} path still builds via byokToVercelModel/getModelName. The
-// runtime fallback was removed in 04b-05 — resolveAgentModel resolves ONE model.
+// Legacy {main} path builds via buildModelFromSlot/getModelName off the single
+// resolved slot. The runtime fallback was removed in 04b-05 — resolveAgentModel
+// resolves ONE model.
 jest.mock('@libs/llm/byok-to-vercel', () => ({
-    byokToVercelModel: jest.fn(
-        (_cfg: any, role: string) => ({ tag: `model:${role}` }) as any,
+    buildModelFromSlot: jest.fn(
+        (slot: any) => ({ tag: slot ? 'model:main' : 'model:default' }) as any,
     ),
     getModelName: jest.fn(() => 'default:model'),
 }));
@@ -55,20 +56,29 @@ const v2 = (routing: any, models?: any[], credentials?: any[]) => ({
     routing,
 });
 
-function mainConfigPassedToBuild() {
+// The legacy branch hands `buildModelFromSlot` the resolved `main` slot as its
+// first arg. Return that slot so the override test can assert `.model`.
+function mainSlotPassedToBuild() {
     const {
-        byokToVercelModel,
-    } = require('@libs/llm/byok-to-vercel') as { byokToVercelModel: jest.Mock };
-    return byokToVercelModel.mock.calls.find((c: any[]) => c[1] === 'main')?.[0];
+        buildModelFromSlot,
+    } = require('@libs/llm/byok-to-vercel') as {
+        buildModelFromSlot: jest.Mock;
+    };
+    return buildModelFromSlot.mock.calls[0]?.[0];
 }
 
-/** No 2nd model is ever built — byokToVercelModel is never called for 'fallback'. */
+/** No 2nd model is ever built — buildModelFromSlot is never handed a fallback
+ *  slot (the legacy fallback carries `provider: 'anthropic'` in these tests). */
 function assertNoFallbackModelBuilt() {
     const {
-        byokToVercelModel,
-    } = require('@libs/llm/byok-to-vercel') as { byokToVercelModel: jest.Mock };
+        buildModelFromSlot,
+    } = require('@libs/llm/byok-to-vercel') as {
+        buildModelFromSlot: jest.Mock;
+    };
     expect(
-        byokToVercelModel.mock.calls.some((c: any[]) => c[1] === 'fallback'),
+        buildModelFromSlot.mock.calls.some(
+            (c: any[]) => c[0]?.provider === 'anthropic',
+        ),
     ).toBe(false);
 }
 
@@ -154,7 +164,7 @@ describe('resolveAgentModel', () => {
                 svc,
             );
 
-            expect(mainConfigPassedToBuild()?.main.model).toBe('gpt-override');
+            expect(mainSlotPassedToBuild()?.model).toBe('gpt-override');
             assertNoFallbackModelBuilt();
         });
     });

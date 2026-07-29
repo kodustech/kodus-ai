@@ -11,7 +11,7 @@
 
 // --- runStructuredReviewCall seam mocks (mirror structured-review-call.spec.ts) ---
 jest.mock('@libs/llm/byok-to-vercel', () => ({
-    byokToVercelModel: jest.fn(() => ({ __model: true })),
+    buildModelFromSlot: jest.fn(() => ({ __model: true })),
     getModelName: jest.fn(() => 'test-model'),
 }));
 jest.mock('@libs/llm/byok-model-wrapper', () => ({

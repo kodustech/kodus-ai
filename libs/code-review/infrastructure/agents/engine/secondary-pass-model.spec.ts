@@ -11,9 +11,8 @@ jest.mock('@ai-sdk/openai', () => ({
 }));
 
 jest.mock('@libs/llm/byok-to-vercel', () => ({
-    byokToVercelModel: jest.fn(
-        (cfg: any, role: string) =>
-            ({ __byok: true, role, model: cfg?.[role]?.model }) as any,
+    buildModelFromSlot: jest.fn(
+        (slot: any) => ({ __byok: true, model: slot?.model }) as any,
     ),
     getInternalModel: jest.fn(() => ({ __internal: true })),
 }));
@@ -23,7 +22,7 @@ import {
     resolveSecondaryPassModel,
     SECONDARY_PASS_MODEL_ID,
 } from './secondary-pass-model';
-import { byokToVercelModel, getInternalModel } from '@libs/llm/byok-to-vercel';
+import { buildModelFromSlot, getInternalModel } from '@libs/llm/byok-to-vercel';
 
 const byok = {
     main: {
@@ -57,9 +56,9 @@ describe('resolveSecondaryPassModel — BYOK default', () => {
 
     it('prefers BYOK main even when platform OpenAI key is set', () => {
         const model = resolveSecondaryPassModel(byok as any);
-        expect(byokToVercelModel).toHaveBeenCalledWith(byok, 'main');
+        expect(buildModelFromSlot).toHaveBeenCalledWith(byok.main);
         expect(model).toEqual(
-            expect.objectContaining({ __byok: true, role: 'main' }),
+            expect.objectContaining({ __byok: true, model: 'gpt-client' }),
         );
         expect(createOpenAIMock).not.toHaveBeenCalled();
         expect(isSecondaryByok(byok as any)).toBe(true);
@@ -71,7 +70,7 @@ describe('resolveSecondaryPassModel — BYOK default', () => {
         const onlyFallback = { fallback: byok.fallback };
         const model = resolveSecondaryPassModel(onlyFallback as any);
         expect(isSecondaryByok(onlyFallback as any)).toBe(false);
-        expect(byokToVercelModel).not.toHaveBeenCalled();
+        expect(buildModelFromSlot).not.toHaveBeenCalled();
         expect(model).toEqual({ __platform: SECONDARY_PASS_MODEL_ID });
     });
 

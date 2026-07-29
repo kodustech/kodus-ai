@@ -2351,8 +2351,9 @@ export class KodyRulesSyncService {
                 // main model as the structured call above, plain-text output so a
                 // schema mismatch that broke Output.object still yields something
                 // extractJsonArray can salvage.
+                const mainSlot = byokConfigValue?.main;
                 const rawModel = wrapByokModel(
-                    buildModelFromSlot(byokConfigValue?.main, {}),
+                    buildModelFromSlot(mainSlot, {}),
                     {
                         byokConfig: byokConfigValue ?? undefined,
                         organizationId:
@@ -2365,7 +2366,7 @@ export class KodyRulesSyncService {
                     await this.observabilityService.runAiSdkLLMInSpan<any>({
                         spanName: `${KodyRulesSyncService.name}::${fbRun}`,
                         runName: fbRun,
-                        model: getModelName(byokConfigValue ?? undefined),
+                        model: getModelName(mainSlot),
                         attrs: {
                             repositoryId: params.repositoryId,
                             filePath: params.filePath,
@@ -2486,8 +2487,9 @@ export class KodyRulesSyncService {
         } catch {
             const fbRun = `${mainRun}Raw`;
             try {
+                const mainSlot = byokConfigValue?.main;
                 const rawModel = wrapByokModel(
-                    buildModelFromSlot(byokConfigValue?.main, {}),
+                    buildModelFromSlot(mainSlot, {}),
                     {
                         byokConfig: byokConfigValue ?? undefined,
                         organizationId:
@@ -2500,7 +2502,7 @@ export class KodyRulesSyncService {
                     await this.observabilityService.runAiSdkLLMInSpan<any>({
                         spanName: `${KodyRulesSyncService.name}::${fbRun}`,
                         runName: fbRun,
-                        model: getModelName(byokConfigValue ?? undefined),
+                        model: getModelName(mainSlot),
                         attrs: {
                             repositoryId: params.repositoryId,
                             filesCount: params.files.length,
@@ -2609,8 +2611,9 @@ export class KodyRulesSyncService {
         } catch {
             const fbRun = `${mainRun}Raw`;
             try {
+                const mainSlot = byokConfigValue?.main;
                 const rawModel = wrapByokModel(
-                    buildModelFromSlot(byokConfigValue?.main, {}),
+                    buildModelFromSlot(mainSlot, {}),
                     {
                         byokConfig: byokConfigValue ?? undefined,
                         organizationId:
@@ -2623,7 +2626,7 @@ export class KodyRulesSyncService {
                     await this.observabilityService.runAiSdkLLMInSpan<any>({
                         spanName: `${KodyRulesSyncService.name}::${fbRun}`,
                         runName: fbRun,
-                        model: getModelName(byokConfigValue ?? undefined),
+                        model: getModelName(mainSlot),
                         attrs: {
                             repositoryId: params.repositoryId,
                             filesCount: params.files.length,

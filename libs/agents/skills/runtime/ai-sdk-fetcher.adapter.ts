@@ -135,7 +135,7 @@ export async function runMcpFetcherAgent(params: {
 }): Promise<FetcherRunResult> {
     // Standard model setup (same helper as every agent): BYOK resolve +
     // concurrency limiter + failure reporter.
-    const model: LanguageModel = resolveAgentModel(params.byokConfig, {
+    const model: LanguageModel = resolveAgentModel(params.byokConfig?.main, {
         organizationId: params.telemetry?.organizationId,
         provider: params.byokConfig?.main?.provider ?? params.telemetry?.provider,
         reporter: params.reporter,

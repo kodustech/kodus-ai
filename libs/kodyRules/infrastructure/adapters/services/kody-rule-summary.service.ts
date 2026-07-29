@@ -3,7 +3,7 @@ import { createHash } from 'crypto';
 import { createLogger } from '@libs/core/log/logger';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
-import { byokToVercelModel, getModelName } from '@libs/llm/byok-to-vercel';
+import { buildModelFromSlot, getModelName } from '@libs/llm/byok-to-vercel';
 import {
     tracedGenerateText,
     timeoutSignal,
@@ -248,8 +248,11 @@ export class KodyRuleSummaryService {
                 return null;
             }
 
-            const model = byokToVercelModel(byokConfig ?? undefined, 'main', {});
-            const modelName = getModelName(byokConfig ?? undefined);
+            // Read the carrier's resolved main slot at THIS consumer boundary;
+            // the builder never reads `.main`/`.fallback`.
+            const mainSlot = byokConfig?.main;
+            const model = buildModelFromSlot(mainSlot, {});
+            const modelName = getModelName(mainSlot);
             const runName = 'kody-rules.summary-generation';
             // Usage span + Langfuse telemetry: generation may run on the
             // customer's BYOK key, so tokens must reach the user-facing
@@ -457,6 +460,8 @@ export class KodyRuleSummaryService {
                 ),
             ]);
             const hasByok = !!byokConfig?.main;
+            // The carrier's resolved main slot, read at this consumer boundary.
+            const mainSlot = byokConfig?.main;
             if (
                 !hasByok &&
                 POST_TRIAL_REQUIRES_BYOK.includes(
@@ -560,7 +565,7 @@ export class KodyRuleSummaryService {
                 items,
                 sourceHash: this.atomsHashOf(rule),
                 generatedAt: new Date(),
-                model: getModelName(byokConfig ?? undefined),
+                model: getModelName(mainSlot),
             };
         } catch (error) {
             this.logger.warn({

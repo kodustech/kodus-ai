@@ -14,9 +14,7 @@ import { z } from 'zod';
 // tracedGenerateText instead of a real provider. Sentinels tag the role so we can
 // assert a BYOK org runs on its own `main` model unchanged.
 jest.mock('@libs/llm/byok-to-vercel', () => ({
-    byokToVercelModel: jest.fn((_byokConfig: any, role: string) => ({
-        __model: role,
-    })),
+    buildModelFromSlot: jest.fn(() => ({ __model: 'main' })),
     getModelName: jest.fn(() => 'test-model'),
 }));
 jest.mock('@libs/llm/byok-model-wrapper', () => ({

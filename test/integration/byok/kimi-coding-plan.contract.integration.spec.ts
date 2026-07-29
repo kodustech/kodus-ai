@@ -26,14 +26,14 @@
  */
 import { getAdapter, BYOKProvider } from '@kodus/kodus-common/llm';
 
-// Identity crypto so byokToVercelModel can "decrypt" a raw key without needing
+// Identity crypto so buildModelFromSlot can "decrypt" a raw key without needing
 // API_CRYPTO_KEY — this test exercises the HTTP contract, not encryption.
 jest.mock('@libs/common/utils/crypto', () => ({
     encrypt: (v: string) => v,
     decrypt: (v: string) => v,
 }));
 
-import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';
 import { TestByokConnectionUseCase } from '@libs/organization/application/use-cases/organizationParameters/test-byok-connection.use-case';
 import { generateText, tool } from 'ai';
 import { z } from 'zod';
@@ -75,13 +75,11 @@ describeLive(
         it(
             'Vercel path reaches the endpoint with the root baseURL shape',
             async () => {
-                const model = byokToVercelModel({
-                    main: {
-                        provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
-                        apiKey: KEY!,
-                        model: MODEL,
-                        baseURL: CODING_BASE, // root form, no /v1
-                    },
+                const model = buildModelFromSlot({
+                    provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
+                    apiKey: KEY!,
+                    model: MODEL,
+                    baseURL: CODING_BASE, // root form, no /v1
                 } as any);
 
                 const res = await generateText({
@@ -97,13 +95,11 @@ describeLive(
         it(
             'supports tool calling through the Vercel path',
             async () => {
-                const model = byokToVercelModel({
-                    main: {
-                        provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
-                        apiKey: KEY!,
-                        model: MODEL,
-                        baseURL: CODING_BASE,
-                    },
+                const model = buildModelFromSlot({
+                    provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
+                    apiKey: KEY!,
+                    model: MODEL,
+                    baseURL: CODING_BASE,
                 } as any);
 
                 const res = await generateText({
@@ -127,13 +123,11 @@ describeLive(
         it(
             'reports prompt-cache read tokens on a repeated prefix',
             async () => {
-                const model = byokToVercelModel({
-                    main: {
-                        provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
-                        apiKey: KEY!,
-                        model: MODEL,
-                        baseURL: CODING_BASE,
-                    },
+                const model = buildModelFromSlot({
+                    provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
+                    apiKey: KEY!,
+                    model: MODEL,
+                    baseURL: CODING_BASE,
                 } as any);
 
                 // Prefix large enough for Kimi's automatic server-side cache to

@@ -57,13 +57,13 @@ export async function resolveKodyRulesModelPolicy(
     }
 
     // Self-hosted deployments bring their own model via env (customer keys),
-    // not a Kodus-funded model. byokToVercelModel(undefined) resolves it.
+    // not a Kodus-funded model. buildModelFromSlot(undefined) resolves it.
     if (!environment.API_CLOUD_MODE) {
         return { generate: true };
     }
 
     // Cloud. When Kodus foots the bill (local dev, or an active trial) the model
-    // is Kimi — explicitly overridden so byokToVercelModel never falls back to
+    // is Kimi — explicitly overridden so buildModelFromSlot never falls back to
     // its dead Gemini default.
     const subscriptionStatus =
         await permissionValidationService.getSubscriptionStatus(

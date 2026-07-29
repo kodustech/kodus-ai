@@ -1,6 +1,6 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import {
-    byokToVercelModel,
+    buildModelFromSlot,
     getInternalModel,
 } from '@libs/llm/byok-to-vercel';
 import type { BYOKConfig } from '@kodus/kodus-common/llm';
@@ -42,12 +42,13 @@ function platformSecondaryModel(): any | null {
  */
 export function resolveSecondaryPassModel(byokConfig?: BYOKConfig): any {
     if (isSecondaryByok(byokConfig)) {
-        // Secondary matches the model the client configured for review.
-        return byokToVercelModel(byokConfig, 'main');
+        // Secondary matches the model the client configured for review — build
+        // from the carrier's resolved main slot (read at this boundary).
+        return buildModelFromSlot(byokConfig?.main);
     }
 
     const platform = platformSecondaryModel();
     if (platform) return platform;
 
-    return getInternalModel(byokConfig ?? undefined);
+    return getInternalModel(byokConfig?.main);
 }

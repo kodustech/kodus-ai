@@ -1,12 +1,12 @@
 import { z } from 'zod';
 
-// Mock the model builders so no real model/network is touched. `byokToVercelModel`
-// returns a sentinel tagged with the role so tests can assert WHICH model an
-// attempt used — and, crucially, that a 2nd ('fallback') model is NEVER built.
+// Mock the model builders so no real model/network is touched. v2-only:
+// `buildModelFromSlot` takes ONE resolved slot. The production call reads the
+// carrier's `.main` slot at its boundary, so the fallback slot is never handed
+// to the builder — tests assert the single `main` model is used everywhere and
+// that a 2nd (fallback) slot is NEVER built.
 jest.mock('@libs/llm/byok-to-vercel', () => ({
-    byokToVercelModel: jest.fn((_byokConfig: any, role: string) => ({
-        __model: role,
-    })),
+    buildModelFromSlot: jest.fn(() => ({ __model: 'main' })),
     getModelName: jest.fn(() => 'test-model'),
 }));
 jest.mock('@libs/llm/byok-model-wrapper', () => ({
@@ -26,10 +26,10 @@ jest.mock('@libs/core/log/langfuse', () => ({
 
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { tracedGenerateText } from '@libs/llm/llm-call';
-import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';
 
 const mockGenerate = tracedGenerateText as unknown as jest.Mock;
-const mockByokToVercel = byokToVercelModel as unknown as jest.Mock;
+const mockBuild = buildModelFromSlot as unknown as jest.Mock;
 
 // runAiSdkLLMInSpan just runs the exec and returns its result.
 const observabilityService = {
@@ -48,11 +48,11 @@ const base = {
 
 const modelsUsed = () => mockGenerate.mock.calls.map((c) => c[0].model);
 
-/** No 2nd ('fallback') model is ever built — the run resolves ONE model. */
+/** No 2nd (fallback) model is ever built — the run resolves ONE model. The
+ *  builder is only ever handed the resolved `main` slot, never a fallback slot. */
 const assertNoSecondModelBuilt = () => {
-    expect(mockByokToVercel).not.toHaveBeenCalledWith(
-        expect.anything(),
-        'fallback',
+    expect(mockBuild).not.toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'anthropic' }),
         expect.anything(),
     );
     // Every generateText attempt ran the SAME (main) model — never a 2nd model.
@@ -63,7 +63,7 @@ const assertNoSecondModelBuilt = () => {
 
 beforeEach(() => {
     mockGenerate.mockReset();
-    mockByokToVercel.mockClear();
+    mockBuild.mockClear();
     observabilityService.runAiSdkLLMInSpan.mockClear();
 });
 

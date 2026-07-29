@@ -15,7 +15,7 @@
 import { Output, type LanguageModel, type Schema } from 'ai';
 import type { BYOKConfig } from '@kodus/kodus-common/llm';
 import { z } from 'zod';
-import { byokToVercelModel, getModelName } from '@libs/llm/byok-to-vercel';
+import { buildModelFromSlot, getModelName } from '@libs/llm/byok-to-vercel';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
 import {
     tracedGenerateText,
@@ -111,10 +111,16 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
         }
     }
 
+    // The carrier's resolved main slot is read ONCE at THIS consumer boundary;
+    // the builder (`buildModelFromSlot`) and `getModelName` take that single slot
+    // and never read `.main`/`.fallback`. The `{main}` carrier itself is
+    // dismantled in a later cleanup wave (Pass B).
+    const mainSlot = byokConfig?.main;
     const mainModel = wrapByokModel(
-        byokToVercelModel(byokConfig, 'main', { structuredOutputs: true }),
+        buildModelFromSlot(mainSlot, { structuredOutputs: true }),
         { byokConfig, organizationId, role: 'main' },
     );
+    const mainModelName = getModelName(mainSlot);
 
     const call = (model: LanguageModel, modelName: string): Promise<any> =>
         observabilityService
@@ -149,7 +155,7 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
             );
 
     try {
-        return await call(mainModel, getModelName(byokConfig));
+        return await call(mainModel, mainModelName);
     } catch (err) {
         // D-00c minimal latency guard: exactly ONE same-model re-issue on a
         // transient (5xx / network) failure. The gate skips AbortError /
@@ -164,7 +170,7 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
             classifyLLMError(err).category === LlmErrorCategory.TRANSIENT &&
             !isAbortOrHardTimeout(err)
         ) {
-            return await call(mainModel, getModelName(byokConfig));
+            return await call(mainModel, mainModelName);
         }
         throw err;
     }

@@ -134,7 +134,7 @@ export class ConversationAgentProvider {
         const slot = resolvedByok?.main;
         // Standard model setup (same as every agent): BYOK resolve + concurrency
         // limiter + failure reporter.
-        const model = resolveAgentModel(resolvedByok, {
+        const model = resolveAgentModel(slot, {
             organizationId: organizationAndTeamData.organizationId?.toString(),
             provider: slot?.provider,
             reporter: this.byokErrorCounter

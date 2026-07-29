@@ -127,10 +127,7 @@ export class ReferenceDetectorService {
 
         const model = buildModelFromSlot(byokSlot, {}, defaultModelOverride);
 
-        const resolvedModelName = getModelName(
-            byokCarrier,
-            defaultModelOverride,
-        );
+        const resolvedModelName = getModelName(byokSlot, defaultModelOverride);
         this.logger.log({
             message: `[REF-DETECTOR-DEBUG] Resolved model: ${resolvedModelName}`,
             context: ReferenceDetectorService.name,

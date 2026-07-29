@@ -18,7 +18,7 @@
 
 // Model builders return sentinels — no real model/network is touched.
 jest.mock('@libs/llm/byok-to-vercel', () => ({
-    byokToVercelModel: jest.fn(() => ({ __model: 'managed-default' })),
+    buildModelFromSlot: jest.fn(() => ({ __model: 'managed-default' })),
     getModelName: jest.fn(() => 'managed-default'),
 }));
 jest.mock('@libs/llm/byok-model-wrapper', () => ({

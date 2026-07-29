@@ -5,13 +5,13 @@ import {
 } from '@kodus/kodus-common/llm';
 
 // Encryption is irrelevant here — deterministic reversible stand-in so
-// byokToVercelModel can decrypt the stored key without a real crypto env.
+// buildModelFromSlot can decrypt the stored key without a real crypto env.
 jest.mock('@libs/common/utils/crypto', () => ({
     encrypt: (value: string) => `enc(${value})`,
     decrypt: (value: string) => value.replace(/^enc\(|\)$/g, ''),
 }));
 
-import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';
 import {
     buildReasoningProviderOptions,
     EFFORT_TO_BUDGET,
@@ -90,13 +90,11 @@ describe('anthropic_compatible BYOK provider', () => {
 
     describe('Vercel AI SDK routing', () => {
         it('maps anthropic_compatible to an anthropic model with a /v1-suffixed base', () => {
-            const model = byokToVercelModel({
-                main: {
-                    provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
-                    apiKey: 'enc(sk-kimi-test)',
-                    model: 'kimi-for-coding',
-                    baseURL: 'https://api.kimi.com/coding',
-                },
+            const model = buildModelFromSlot({
+                provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
+                apiKey: 'enc(sk-kimi-test)',
+                model: 'kimi-for-coding',
+                baseURL: 'https://api.kimi.com/coding',
             } as any);
 
             expect((model as any).modelId).toBe('kimi-for-coding');

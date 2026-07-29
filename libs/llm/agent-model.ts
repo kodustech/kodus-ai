@@ -10,7 +10,8 @@
 import type { BYOKConfig } from '@kodus/kodus-common/llm';
 import type { LanguageModel } from 'ai';
 
-import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
 
 export interface ResolveAgentModelOptions {
@@ -27,13 +28,16 @@ export interface ResolveAgentModelOptions {
 }
 
 export function resolveAgentModel(
-    byokConfig: BYOKConfig | undefined,
+    slot: NormalizedModel | undefined,
     opts: ResolveAgentModelOptions = {},
 ): LanguageModel {
-    return wrapByokModel(byokToVercelModel(byokConfig), {
-        byokConfig,
+    // Build the model from the ONE resolved slot. The limiter still keys off a
+    // `{main}` carrier, so reconstruct it here at the wrapper boundary — the
+    // builder itself never reads `.main`/`.fallback`.
+    return wrapByokModel(buildModelFromSlot(slot), {
+        byokConfig: slot ? ({ main: slot } as BYOKConfig) : undefined,
         organizationId: opts.organizationId,
-        provider: opts.provider ?? byokConfig?.main?.provider,
+        provider: opts.provider ?? slot?.provider,
         ...(opts.queueTimeoutMs != null
             ? { queueTimeoutMs: opts.queueTimeoutMs }
             : {}),

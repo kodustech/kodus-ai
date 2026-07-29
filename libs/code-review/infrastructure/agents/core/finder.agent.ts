@@ -342,7 +342,9 @@ export async function recoverFindingsFromProse(
     try {
         const suggestions = await withStructuredOutputFallback(
             {
-                byokConfig,
+                // Read the carrier's resolved main slot at this boundary; the
+                // helper is v2-native and never reads `.main`/`.fallback`.
+                slot: byokConfig?.main,
                 organizationId,
                 label: 'finder-prose-recovery',
             },

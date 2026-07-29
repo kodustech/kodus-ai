@@ -9,7 +9,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { BYOKConfig, BYOKProvider } from '@kodus/kodus-common/llm';
+import { BYOKProvider } from '@kodus/kodus-common/llm';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { decrypt } from '@libs/common/utils/crypto';
 import { vertexModelFromSaJson } from '@libs/llm/model-builders';
@@ -88,36 +88,6 @@ const DEFAULT_MODEL = {
 export type ByokModelOptions = {
     structuredOutputs?: boolean;
 };
-
-/**
- * Thin delegating shim over `buildModelFromSlot` (slice 04b, plan 04b-01).
- *
- * Picks the `main`/`fallback` slot from the legacy `{main,fallback}` shape and
- * hands it to the single-slot builder, so every existing caller compiles
- * unchanged during the v2-native migration. The `role` param and this shim are
- * removed in 04b-02 / 04b-05 once all consumers migrate to `resolveTaskModel` /
- * `buildModelFromSlot` directly.
- */
-export function byokToVercelModel(
-    byokConfig?: BYOKConfig,
-    role: 'main' | 'fallback' = 'main',
-    options: ByokModelOptions = {},
-    /**
-     * Override the hardcoded `DEFAULT_MODEL.model` when there's no BYOK
-     * config. Used by the public-demo / trial flow to force a cheaper
-     * model (gemini-2.5-flash) for anonymous reviews — the production
-     * default of gemini-3.1-pro-preview is ~5–10× slower and overkill
-     * for a free demo.
-     */
-    defaultModelOverride?: string,
-): LanguageModel {
-    const slot = role === 'fallback' ? byokConfig?.fallback : byokConfig?.main;
-    return buildModelFromSlot(
-        slot as NormalizedModel | undefined,
-        options,
-        defaultModelOverride,
-    );
-}
 
 /**
  * Build a Vercel AI SDK LanguageModel from ONE resolved model slot (slice 04b).
@@ -281,16 +251,18 @@ export function buildModelFromSlot(
 }
 
 /**
- * Extract a human-readable model name from BYOK config.
- * Mirrors the fallback logic in `byokToVercelModel` so telemetry/logs
- * reflect the model that will actually be used.
+ * Extract a human-readable model name from ONE resolved model slot.
+ * Mirrors the env/default logic in `buildModelFromSlot` so telemetry/logs
+ * reflect the model that will actually be used. A `undefined` slot resolves
+ * the env/managed default name (the no-BYOK path), never a `.main`/`.fallback`
+ * read.
  */
 export function getModelName(
-    byokConfig?: BYOKConfig,
+    slot?: NormalizedModel,
     defaultModelOverride?: string,
 ): string {
-    if (byokConfig?.main) {
-        return `${byokConfig.main.provider}:${byokConfig.main.model}`;
+    if (slot) {
+        return `${slot.provider}:${slot.model}`;
     }
 
     const envMode = process.env.API_LLM_PROVIDER_MODEL ?? 'auto';
@@ -325,28 +297,27 @@ export function getModelName(
 }
 
 /**
- * Get a cheap/fast model for internal operations (fallback structuring, dedup).
+ * Get a cheap/fast model for internal operations (structuring, dedup).
  *
  * Priority order:
- * 1. BYOK fallback/main model (client is paying)
+ * 1. The resolved BYOK slot the caller passes (client is paying) — the caller
+ *    owns which task-resolved slot an internal helper inherits; this builder
+ *    never reads `.main`/`.fallback`.
  * 2. Self-hosted configured provider
- * 3. Cloud: OpenAI GPT-4.1-mini (best at structured output) → Gemini 2.5 Flash (fallback)
+ * 3. Cloud: OpenAI GPT-5-mini (best at structured output) → Gemini 2.5 Flash
  */
 export function getInternalModel(
-    byokConfig?: BYOKConfig,
+    slot?: NormalizedModel,
     options: ByokModelOptions = {},
 ): LanguageModel | null {
     const envMode = process.env.API_LLM_PROVIDER_MODEL ?? 'auto';
 
-    // If BYOK is configured, use the client's fallback or main model
-    if (byokConfig?.fallback) {
-        return byokToVercelModel(byokConfig, 'fallback', options);
-    }
-    if (byokConfig?.main) {
-        return byokToVercelModel(byokConfig, 'main', options);
+    // If a resolved BYOK slot is passed, build it directly (client is paying).
+    if (slot) {
+        return buildModelFromSlot(slot, options);
     }
 
-    // Self-hosted mode: match byokToVercelModel's provider selection so
+    // Self-hosted mode: match buildModelFromSlot's provider selection so
     // main and internal calls route through the same SDK.
     if (envMode !== 'auto') {
         const isGemini = GEMINI_MODEL_PATTERN.test(envMode);
@@ -418,10 +389,6 @@ export function getInternalModel(
 
     return createGoogleGenerativeAI({ apiKey: googleKey })('gemini-2.5-flash');
 }
-
-export type BYOKLimiterRole = 'main' | 'fallback' | 'internal';
-
-type BYOKProviderSlotConfig = NonNullable<BYOKConfig['main']>;
 
 type QueuedTask<T> = {
     id: number;
@@ -550,30 +517,11 @@ class BYOKConcurrencyLimiter {
 
 const limiterCache = new Map<string, BYOKConcurrencyLimiter>();
 
-function getLimiterConfig(
-    byokConfig?: BYOKConfig,
-    role: BYOKLimiterRole = 'main',
-): BYOKProviderSlotConfig | undefined {
-    if (!byokConfig) return undefined;
-
-    switch (role) {
-        case 'fallback':
-            return byokConfig.fallback;
-        case 'internal':
-            return byokConfig.fallback ?? byokConfig.main;
-        case 'main':
-        default:
-            return byokConfig.main;
-    }
-}
-
 function buildLimiterCacheKey(params: {
-    byokConfig?: BYOKConfig;
+    slot?: NormalizedModel;
     organizationId?: string;
-    role?: BYOKLimiterRole;
 }): string | null {
-    const role = params.role ?? 'main';
-    const config = getLimiterConfig(params.byokConfig, role);
+    const config = params.slot;
     if (!config) return null;
 
     const organizationScope = params.organizationId || 'global';
@@ -589,24 +537,21 @@ function buildLimiterCacheKey(params: {
 /**
  * Runs a task through a BYOK concurrency limiter scoped by organization + provider account.
  *
- * The limiter is shared across main/internal/fallback calls when they hit the same
- * provider account, because upstream concurrency limits are account-wide rather than
- * call-type-specific.
+ * The limiter keys off the ONE resolved slot passed in — no `.main`/`.fallback`
+ * role switch. Calls hitting the same provider account share a limiter because
+ * upstream concurrency limits are account-wide rather than call-type-specific.
  */
 export function runWithBYOKLimiter<T>(
     params: {
-        byokConfig?: BYOKConfig;
+        slot?: NormalizedModel;
         organizationId?: string;
-        role?: BYOKLimiterRole;
         queueTimeoutMs?: number;
         abortSignal?: AbortSignal;
     },
     fn: () => Promise<T>,
     label = 'llm-call',
 ): Promise<T> {
-    const role = params.role ?? 'main';
-    const config = getLimiterConfig(params.byokConfig, role);
-    const maxConcurrent = config?.maxConcurrentRequests;
+    const maxConcurrent = params.slot?.maxConcurrentRequests;
 
     if (!maxConcurrent || maxConcurrent <= 0) {
         return fn();
@@ -640,14 +585,9 @@ export function runWithBYOKLimiter<T>(
 
 const noJsonSchemaCache = new Set<string>();
 
-function structuredFallbackCacheKey(byokConfig?: BYOKConfig): string {
-    if (byokConfig?.fallback) {
-        const f = byokConfig.fallback;
-        return `${f.provider}:${f.model}:${f.baseURL ?? ''}`;
-    }
-    if (byokConfig?.main) {
-        const m = byokConfig.main;
-        return `${m.provider}:${m.model}:${m.baseURL ?? ''}`;
+function structuredFallbackCacheKey(slot?: NormalizedModel): string {
+    if (slot) {
+        return `${slot.provider}:${slot.model}:${slot.baseURL ?? ''}`;
     }
     // Self-hosted env mode — cache by the configured model id; the
     // base URL is process-wide so we can elide it from the key.
@@ -689,7 +629,11 @@ function isJsonSchemaUnsupportedError(err: unknown): boolean {
 }
 
 export interface StructuredFallbackParams {
-    byokConfig?: BYOKConfig;
+    /** The ONE resolved model slot (ciphertext apiKey). The carrier read
+     *  (`.main`) happens at the CONSUMER boundary — this helper never reads
+     *  `.main`/`.fallback`. The withStructuredOutputFallback flow itself is
+     *  revisited in 04b-05 alongside the fallback removal. */
+    slot?: NormalizedModel;
     /** Optional label for logs when the retry actually fires. */
     label?: string;
     /**
@@ -722,10 +666,10 @@ export async function withStructuredOutputFallback<T>(
     params: StructuredFallbackParams,
     exec: (model: LanguageModel) => Promise<T>,
 ): Promise<T> {
-    const cacheKey = structuredFallbackCacheKey(params.byokConfig);
+    const cacheKey = structuredFallbackCacheKey(params.slot);
     const tryStructured = !noJsonSchemaCache.has(cacheKey);
 
-    const firstModel = getInternalModel(params.byokConfig, {
+    const firstModel = getInternalModel(params.slot, {
         structuredOutputs: tryStructured,
     });
     if (!firstModel) {
@@ -756,7 +700,7 @@ export async function withStructuredOutputFallback<T>(
         console.warn(
             `[STRUCTURED-OUTPUT-FALLBACK] Upstream rejected json_schema${label} (cacheKey=${cacheKey}). Retrying with response_format=json_object. Reason: ${(err as Error).message}`,
         );
-        const retryModel = getInternalModel(params.byokConfig, {
+        const retryModel = getInternalModel(params.slot, {
             structuredOutputs: false,
         });
         if (!retryModel) {

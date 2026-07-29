@@ -358,7 +358,7 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
             ctx.organizationAndTeamData?.organizationId?.toString();
         const teamId = ctx.organizationAndTeamData?.teamId?.toString();
         try {
-            const model = resolveAgentModel(this.byokConfig, {
+            const model = resolveAgentModel(this.byokConfig?.main, {
                 organizationId: orgId,
                 provider: this.byokConfig?.main?.provider,
                 reporter: this.byokErrorCounter
@@ -596,7 +596,7 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
     ): Promise<AnalyzerCallResult> {
         // Standard model setup (same as every agent): BYOK resolve + concurrency
         // limiter + failure reporter.
-        const model = resolveAgentModel(this.byokConfig, {
+        const model = resolveAgentModel(this.byokConfig?.main, {
             organizationId: metadata?.organizationId,
             provider: this.byokConfig?.main?.provider,
             reporter: this.byokErrorCounter

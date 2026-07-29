@@ -10,9 +10,7 @@
  * output onto the same downstream shapes the STRING parser produced.
  */
 jest.mock('@libs/llm/byok-to-vercel', () => ({
-    byokToVercelModel: jest.fn((_byokConfig: any, role: string) => ({
-        __model: role,
-    })),
+    buildModelFromSlot: jest.fn(() => ({ __model: 'main' })),
     getModelName: jest.fn(() => 'test-model'),
 }));
 jest.mock('@libs/llm/byok-model-wrapper', () => ({

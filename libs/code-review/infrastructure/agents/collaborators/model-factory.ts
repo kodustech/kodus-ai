@@ -10,7 +10,7 @@
  */
 import type { LanguageModel } from 'ai';
 
-import { byokToVercelModel, getModelName } from '@libs/llm/byok-to-vercel';
+import { buildModelFromSlot, getModelName } from '@libs/llm/byok-to-vercel';
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 import type { BYOKConfig } from '@kodus/kodus-common/llm';
 import type { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
@@ -53,13 +53,15 @@ function buildRoleParams(
     byokConfig: BYOKConfig | undefined,
     defaultModelOverride?: string,
 ): AgentModelParams {
-    const model = byokToVercelModel(byokConfig, 'main', {}, defaultModelOverride);
-
+    // Read the carrier's resolved main slot at THIS consumer boundary and build
+    // from the single slot; the builder never reads `.main`/`.fallback`.
     const cfg = byokConfig?.main; // removed in 04b-06 (legacy {main,fallback} branch)
+    const model = buildModelFromSlot(cfg, {}, defaultModelOverride);
+
     return {
         role: 'main',
         model,
-        modelName: getModelName(byokConfig, defaultModelOverride),
+        modelName: getModelName(cfg, defaultModelOverride),
         maxInputTokens: cfg?.maxInputTokens,
         reasoningEffort: cfg?.reasoningEffort,
         reasoningConfigOverride: cfg?.reasoningConfigOverride,
