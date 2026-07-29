@@ -5,6 +5,11 @@ import {
     describeEnvLLMConfig,
     type EnvLLMProviderId,
 } from '@libs/llm/env-llm-config';
+import {
+    isV2Config,
+    type BYOKConfigV2,
+    type BYOKCredential,
+} from '@libs/llm/byok-config';
 import { normalizeByokConfig } from '@libs/llm/normalize-byok-config';
 import {
     IOrganizationParametersService,
@@ -12,12 +17,37 @@ import {
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { Inject, Injectable } from '@nestjs/common';
 
-import { isByokSlotConfigured, type BYOKSlot } from './byok-config.util';
+import {
+    isByokSlotConfigured,
+    isV2ModelResolvable,
+    type BYOKSlot,
+} from './byok-config.util';
 
 export type LLMConfigSource = 'byok' | 'env' | 'none';
 
+/**
+ * One enumerated v2 model in the per-org status. Carries provider/model/baseUrl
+ * METADATA ONLY — never any secret (apiKey / aws*). `resolvable` reports whether
+ * the pipeline could actually run this model (credential present + provider set
+ * + usable material, or env-default reachability for a managed model).
+ */
+export interface LLMModelStatus {
+    modelId: string;
+    model?: string;
+    providerId?: string;
+    baseUrl?: string;
+    resolvable: boolean;
+}
+
 export interface LLMConfigStatus {
     source: LLMConfigSource;
+    /**
+     * Per-org enumeration of the configured v2 `models[]` with per-model
+     * resolvability, secrets masked. Empty for a managed / non-v2 / empty
+     * config (the single-slot `byok`/`env` fields still describe the effective
+     * resolved slot for back-compat).
+     */
+    models: LLMModelStatus[];
     byok: {
         configured: boolean;
         model?: string;
@@ -96,6 +126,58 @@ export class GetLLMConfigStatusUseCase implements IUseCase {
               ? 'env'
               : 'none';
 
-        return { source, byok, env };
+        // Multi-model view (05-07): enumerate every configured v2 model with
+        // per-model resolvability, masking every secret. A managed / non-v2 /
+        // empty config yields [] (the single-slot fields above still describe
+        // the effective resolved slot). Uses the env descriptor's reachability
+        // for managed models — no cloud call.
+        const models = isV2Config(configValue)
+            ? this.enumerateModels(configValue, envDescriptor.configured)
+            : [];
+
+        return { source, models, byok, env };
+    }
+
+    /**
+     * Project each configured v2 model to a masked status entry. Only
+     * model/provider/baseUrl METADATA is copied onto the result — the
+     * credential's secret fields (apiKey / aws*) are read solely by
+     * `isV2ModelResolvable` to compute the boolean and never leave this method.
+     */
+    private enumerateModels(
+        config: BYOKConfigV2,
+        envReachable: boolean,
+    ): LLMModelStatus[] {
+        const credentialsById = new Map<string, BYOKCredential>(
+            (config.credentials ?? [])
+                .filter((c) => c && c.id)
+                .map((c) => [c.id, c]),
+        );
+
+        return (config.models ?? [])
+            .filter((model) => model && model.id)
+            .map((model) => {
+                const credential = credentialsById.get(model.credentialId);
+                const settings = (credential?.settings ?? {}) as Record<
+                    string,
+                    unknown
+                >;
+                const baseUrl =
+                    typeof settings.baseURL === 'string'
+                        ? settings.baseURL
+                        : undefined;
+
+                return {
+                    modelId: model.id,
+                    model: model.model,
+                    providerId: credential?.provider,
+                    baseUrl,
+                    resolvable: isV2ModelResolvable(
+                        model,
+                        credential,
+                        envReachable,
+                    ),
+                };
+            });
     }
 }
