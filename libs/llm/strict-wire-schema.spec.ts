@@ -9,6 +9,50 @@ import { compilerOutputSchema } from '@libs/code-review/infrastructure/agents/co
 import { decomposeOutputSchema } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
 import { shardViolationsWireSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
 
+// Phase 3 consumer-migration call sites — schemas defined INLINE in the
+// consumer files (now exported so this governance suite can prove them
+// strict-wire-safe before they 400 a BYOK-OpenAI customer).
+import { LLMDecisionExtractionSchema as llmDecisionExtractionSchemaCapture } from '@libs/cli-review/application/use-cases/classify-cli-session-capture.use-case';
+import { LLMDecisionExtractionSchema as llmDecisionExtractionSchemaSession } from '@libs/cli-review/application/use-cases/classify-session.use-case';
+import { repeatedClusteringSchema } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
+import {
+    codeReviewAnalysisSchema,
+    severityAnalysisSchema,
+    validateImplementedSchema,
+} from '@libs/code-review/infrastructure/adapters/services/llmAnalysis.service';
+import { documentationSearchExaFormatSchema } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
+import {
+    safeguardFeatureExtractionSchema,
+    safeguardVerificationSchema,
+    agentTurnSchema,
+} from '@libs/code-review/infrastructure/adapters/services/safeguardPipeline.service';
+import {
+    kodyIssuesMergeSchema,
+    kodyIssuesResolveSchema,
+} from '@libs/ee/codeBase/kodyIssuesAnalysis.service';
+import {
+    kodyRulesExtractIdSchema,
+    kodyRulesUpdateSchema,
+} from '@libs/ee/codeBase/kodyRulesAnalysis.service';
+import {
+    prLevelAnalyzerSchema,
+    prLevelGroupSchema,
+} from '@libs/ee/codeBase/kodyRulesPrLevelAnalysis.service';
+
+// Phase 3 call sites that reuse schemas already exported from prompt files —
+// they still flow through the strict-wire path, so assert them here too.
+import { CrossFileContextPlannerSchema } from '@libs/common/utils/langchainCommon/prompts/codeReviewCrossFileContextPlanner';
+import { CrossFileContextSufficiencySchema } from '@libs/common/utils/langchainCommon/prompts/codeReviewCrossFileContextSufficiency';
+import { CrossFileAnalysisSchema } from '@libs/common/utils/langchainCommon/prompts/codeReviewCrossFileAnalysis';
+import { DocumentationPlannerSchema } from '@libs/common/utils/langchainCommon/prompts/codeReviewDocumentationPlanner';
+import { validateCodeSemanticsSchema } from '@libs/common/utils/langchainCommon/prompts/validateCodeSemantics';
+import { checkSuggestionSimplicitySchema } from '@libs/common/utils/langchainCommon/prompts/checkSuggestionSimplicity';
+import { classificationBatchSchema } from '@libs/ee/analytics-warehouse/classification/classification.prompts';
+import {
+    kodyRulesClassifierSchema,
+    kodyRulesGeneratorSchema,
+} from '@libs/common/utils/langchainCommon/prompts/kodyRules';
+
 // OpenAI strict structured outputs impose TWO rules on every object node, and
 // 400 the request if either is violated:
 //   1. `required` must list EVERY key in `properties` ("'required' is required
@@ -51,6 +95,33 @@ describe('zodToStrictWireSchema', () => {
         ['compilerOutputSchema (detector compiler)', compilerOutputSchema],
         ['kodyRulesRecommendationSchema (rule recommendation)', kodyRulesRecommendationSchema],
         ['decomposeOutputSchema (atom decomposition)', decomposeOutputSchema],
+        // Phase 3 consumer-migration schemas (inline → exported).
+        ['LLMDecisionExtractionSchema (cli capture classifier)', llmDecisionExtractionSchemaCapture],
+        ['LLMDecisionExtractionSchema (cli session classifier)', llmDecisionExtractionSchemaSession],
+        ['repeatedClusteringSchema (comment clustering)', repeatedClusteringSchema],
+        ['codeReviewAnalysisSchema (llmAnalysis)', codeReviewAnalysisSchema],
+        ['severityAnalysisSchema (llmAnalysis)', severityAnalysisSchema],
+        ['validateImplementedSchema (llmAnalysis)', validateImplementedSchema],
+        ['documentationSearchExaFormatSchema (exa formatter)', documentationSearchExaFormatSchema],
+        ['safeguardFeatureExtractionSchema (safeguard features)', safeguardFeatureExtractionSchema],
+        ['safeguardVerificationSchema (safeguard verdict)', safeguardVerificationSchema],
+        ['agentTurnSchema (safeguard agent turn)', agentTurnSchema],
+        ['kodyIssuesMergeSchema (kody issues merge)', kodyIssuesMergeSchema],
+        ['kodyIssuesResolveSchema (kody issues resolve)', kodyIssuesResolveSchema],
+        ['kodyRulesExtractIdSchema (rule id extraction)', kodyRulesExtractIdSchema],
+        ['kodyRulesUpdateSchema (update std suggestions)', kodyRulesUpdateSchema],
+        ['prLevelAnalyzerSchema (pr-level analyzer)', prLevelAnalyzerSchema],
+        ['prLevelGroupSchema (pr-level grouping)', prLevelGroupSchema],
+        // Phase 3 call sites reusing prompt-file schemas.
+        ['CrossFileContextPlannerSchema (cross-file planner)', CrossFileContextPlannerSchema],
+        ['CrossFileContextSufficiencySchema (cross-file sufficiency)', CrossFileContextSufficiencySchema],
+        ['CrossFileAnalysisSchema (cross-file analysis)', CrossFileAnalysisSchema],
+        ['DocumentationPlannerSchema (documentation planner)', DocumentationPlannerSchema],
+        ['validateCodeSemanticsSchema (semantic validator)', validateCodeSemanticsSchema],
+        ['checkSuggestionSimplicitySchema (simplicity check)', checkSuggestionSimplicitySchema],
+        ['classificationBatchSchema (pr classifier)', classificationBatchSchema],
+        ['kodyRulesClassifierSchema (rules classifier)', kodyRulesClassifierSchema],
+        ['kodyRulesGeneratorSchema (rules generator)', kodyRulesGeneratorSchema],
     ];
 
     it.each(realSchemas)(
@@ -159,6 +230,21 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts', // shardViolationsWireSchema
         'libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.service.ts', // kodyRulesIDEGeneratorSchema
         'libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service.ts', // decomposeOutputSchema (+ compilerOutputSchema, already covered)
+        // Phase 3 consumer migrations.
+        'libs/cli-review/application/use-cases/classify-cli-session-capture.use-case.ts', // LLMDecisionExtractionSchema
+        'libs/cli-review/application/use-cases/classify-session.use-case.ts', // LLMDecisionExtractionSchema
+        'libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service.ts', // CrossFileContextPlannerSchema, CrossFileContextSufficiencySchema
+        'libs/code-review/infrastructure/adapters/services/commentManager.service.ts', // repeatedClusteringSchema
+        'libs/code-review/infrastructure/adapters/services/crossFileAnalysis.service.ts', // CrossFileAnalysisSchema
+        'libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service.ts', // DocumentationPlannerSchema
+        'libs/code-review/infrastructure/adapters/services/documentation-search-exa.service.ts', // documentationSearchExaFormatSchema
+        'libs/code-review/infrastructure/adapters/services/llmAnalysis.service.ts', // codeReviewAnalysisSchema, severityAnalysisSchema, validateImplementedSchema
+        'libs/code-review/infrastructure/adapters/services/safeguardPipeline.service.ts', // safeguardFeatureExtractionSchema, safeguardVerificationSchema, agentTurnSchema
+        'libs/code-review/infrastructure/adapters/services/suggestionLLMValidator.service.ts', // validateCodeSemanticsSchema, checkSuggestionSimplicitySchema
+        'libs/ee/analytics-warehouse/classification/pull-request-classifier.service.ts', // classificationBatchSchema
+        'libs/ee/codeBase/kodyIssuesAnalysis.service.ts', // kodyIssuesMergeSchema, kodyIssuesResolveSchema
+        'libs/ee/codeBase/kodyRulesAnalysis.service.ts', // kodyRulesExtractIdSchema, kodyRulesUpdateSchema, kodyRulesClassifierSchema, kodyRulesGeneratorSchema
+        'libs/ee/codeBase/kodyRulesPrLevelAnalysis.service.ts', // prLevelAnalyzerSchema, prLevelGroupSchema
     ]);
 
     it('every runStructuredReviewCall call site is registered (schema is under test)', () => {

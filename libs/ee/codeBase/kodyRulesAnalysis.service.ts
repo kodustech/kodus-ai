@@ -90,7 +90,7 @@ export const KODY_RULES_ANALYSIS_SERVICE_TOKEN = Symbol(
  * JSON was hand-parsed into `{ ids }`). `runStructuredReviewCall` always runs
  * `Output.object`, so the shape is declared explicitly and consumed directly.
  */
-const kodyRulesExtractIdSchema = z.object({
+export const kodyRulesExtractIdSchema = z.object({
     ids: z.array(z.string()),
 });
 
@@ -101,7 +101,7 @@ const kodyRulesExtractIdSchema = z.object({
  * `zodToStrictWireSchema` turns the optionals into nullable-required on the
  * wire, so a strict provider (OpenAI) still accepts it.
  */
-const kodyRulesUpdateSchema = z.object({
+export const kodyRulesUpdateSchema = z.object({
     codeSuggestions: z
         .array(
             z.object({

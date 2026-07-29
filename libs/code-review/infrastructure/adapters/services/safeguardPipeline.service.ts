@@ -62,6 +62,55 @@ interface SafeguardPipelineParams {
 
 const MAX_AGENT_TURNS = 6;
 
+// Boolean feature matrix extracted per suggestion in `extractFeatures`. Hoisted
+// to module scope so the strict-wire governance suite can assert it stays
+// OpenAI-strict compatible.
+export const safeguardFeatureExtractionSchema = z.object({
+    codeSuggestions: z.array(
+        z.object({
+            id: z.string(),
+            features: z.object({
+                has_resource_leak: z.boolean(),
+                has_inconsistent_contract: z.boolean(),
+                has_wrong_algorithm: z.boolean(),
+                has_data_exposure: z.boolean(),
+                has_missing_error_handling: z.boolean(),
+                has_redundant_work_in_loop: z.boolean(),
+                has_unsafe_data_flow: z.boolean(),
+                requires_assumed_input: z.boolean(),
+                requires_assumed_workload: z.boolean(),
+                is_quality_opinion: z.boolean(),
+                is_anti_pattern_only: z.boolean(),
+                targets_unchanged_code: z.boolean(),
+                improvedCode_is_correct: z.boolean(),
+            }),
+        }),
+    ),
+});
+
+// Prompt-only refute-to-drop verdict for an ambiguous suggestion. Hoisted to
+// module scope for the same strict-wire coverage reason.
+export const safeguardVerificationSchema = z.object({
+    verdict: z.boolean(),
+    evidence: z.string(),
+});
+
+// Each agent turn emits EITHER a tool call or a final verdict. All fields
+// are optional (the strict-wire converter makes absent ones nullable and
+// strips the nulls back to absent on parse), so the parsed object carries
+// ONLY the keys the model actually filled — `'verdict' in parsed` keeps
+// discriminating tool-calls from verdicts exactly as the STRING path did.
+export const agentTurnSchema = z.object({
+    tool: z.string().optional(),
+    pattern: z.string().optional(),
+    path: z.string().optional(),
+    packageName: z.string().optional(),
+    query: z.string().optional(),
+    verdict: z.boolean().optional(),
+    action: z.string().optional(),
+    evidence: z.string().optional(),
+});
+
 @Injectable()
 export class SafeguardPipelineService {
     private readonly logger = createLogger(SafeguardPipelineService.name);
@@ -472,28 +521,7 @@ export class SafeguardPipelineService {
 
         const runName = 'safeguardFeatureExtraction';
 
-        const schema = z.object({
-            codeSuggestions: z.array(
-                z.object({
-                    id: z.string(),
-                    features: z.object({
-                        has_resource_leak: z.boolean(),
-                        has_inconsistent_contract: z.boolean(),
-                        has_wrong_algorithm: z.boolean(),
-                        has_data_exposure: z.boolean(),
-                        has_missing_error_handling: z.boolean(),
-                        has_redundant_work_in_loop: z.boolean(),
-                        has_unsafe_data_flow: z.boolean(),
-                        requires_assumed_input: z.boolean(),
-                        requires_assumed_workload: z.boolean(),
-                        is_quality_opinion: z.boolean(),
-                        is_anti_pattern_only: z.boolean(),
-                        targets_unchanged_code: z.boolean(),
-                        improvedCode_is_correct: z.boolean(),
-                    }),
-                }),
-            ),
-        });
+        const schema = safeguardFeatureExtractionSchema;
 
         const systemPrompt = prompt_codeReviewSafeguard_featureExtraction({
             languageResultPrompt,
@@ -558,10 +586,7 @@ export class SafeguardPipelineService {
             (f) => features[f],
         ).join(', ');
 
-        const schema = z.object({
-            verdict: z.boolean(),
-            evidence: z.string(),
-        });
+        const schema = safeguardVerificationSchema;
 
         const systemPrompt = `You are a code review verification assistant. A suggestion was flagged as ambiguous by triage and needs a final decision.
 
@@ -691,22 +716,8 @@ Evidence field in ${params.languageResultPrompt}.`;
 
         const runName = 'safeguardAgentVerification';
 
-        // Each agent turn emits EITHER a tool call or a final verdict. All fields
-        // are optional (the strict-wire converter makes absent ones nullable and
-        // strips the nulls back to absent on parse), so the parsed object carries
-        // ONLY the keys the model actually filled — `'verdict' in parsed` keeps
-        // discriminating tool-calls from verdicts exactly as the STRING path did.
-        const agentTurnSchema = z.object({
-            tool: z.string().optional(),
-            pattern: z.string().optional(),
-            path: z.string().optional(),
-            packageName: z.string().optional(),
-            query: z.string().optional(),
-            verdict: z.boolean().optional(),
-            action: z.string().optional(),
-            evidence: z.string().optional(),
-        });
-
+        // agentTurnSchema is defined at module scope (see the comment there);
+        // each turn emits EITHER a tool call or a final verdict.
         for (let turn = 0; turn < MAX_AGENT_TURNS; turn++) {
             // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
             // path (REQ-NOLC-01); the outer runLLMInSpan wrapper is dropped (Q4).

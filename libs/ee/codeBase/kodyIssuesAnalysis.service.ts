@@ -22,7 +22,7 @@ export const KODY_ISSUES_ANALYSIS_SERVICE_TOKEN = Symbol(
 // strict-wire-schema `.nullable()`→absent invariant) so the migration preserves
 // the previous lenient STRING-parser behavior: downstream consumers already
 // guard on `?.matches` / `?.issueVerificationResults` and per-field presence.
-const kodyIssuesMergeSchema = z.object({
+export const kodyIssuesMergeSchema = z.object({
     matches: z.array(
         z.object({
             suggestionId: z.string(),
@@ -33,7 +33,7 @@ const kodyIssuesMergeSchema = z.object({
     ),
 });
 
-const kodyIssuesResolveSchema = z.object({
+export const kodyIssuesResolveSchema = z.object({
     issueVerificationResults: z.array(
         z.object({
             issueId: z.string(),

@@ -61,7 +61,7 @@ const prLevelViolationSchema = z.object({
 // Analyzer output — the prompt returns `{ "rules": [ { ruleId, violations } ] }`
 // (wrapped in an object for OpenAI-strict structured-output compatibility,
 // mirroring kodyRulesSync.service.ts:2225).
-const prLevelAnalyzerSchema = z.object({
+export const prLevelAnalyzerSchema = z.object({
     rules: z.array(
         z.object({
             ruleId: z.string().optional(),
@@ -71,7 +71,7 @@ const prLevelAnalyzerSchema = z.object({
 });
 
 // Grouping output — the prompt returns a single object `{ ruleId, violations }`.
-const prLevelGroupSchema = z.object({
+export const prLevelGroupSchema = z.object({
     ruleId: z.string().optional(),
     violations: z.array(prLevelViolationSchema).optional(),
 });

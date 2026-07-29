@@ -53,6 +53,13 @@ type ResultLike = {
 const EXA_CONCURRENCY = 5;
 const exaCallLimiter = pLimit(EXA_CONCURRENCY);
 
+// Minimal `{ markdown }` envelope for the Exa formatter's single-document
+// structured output. Hoisted to module scope so the strict-wire governance
+// suite can assert it stays OpenAI-strict compatible.
+export const documentationSearchExaFormatSchema = z.object({
+    markdown: z.string(),
+});
+
 @Injectable()
 export class DocumentationSearchExaService {
     private readonly logger = createLogger(DocumentationSearchExaService.name);
@@ -428,7 +435,7 @@ export class DocumentationSearchExaService {
             // is emitted once inside runStructuredReviewCall (Q4).
             const response = await runStructuredReviewCall({
                 byokConfig: params.byokConfig,
-                schema: z.object({ markdown: z.string() }),
+                schema: documentationSearchExaFormatSchema,
                 organizationId:
                     params.organizationAndTeamData?.organizationId,
                 runName: `${DocumentationSearchExaService.name}::${runName}`,

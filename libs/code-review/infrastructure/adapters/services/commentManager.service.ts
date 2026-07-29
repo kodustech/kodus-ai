@@ -72,7 +72,7 @@ interface ClusteredSuggestion {
  * `LLMResponseProcessor.processResponse` exactly as the STRING path did, keeping
  * the downstream clustering/enrichment mapping byte-for-byte identical.
  */
-const repeatedClusteringSchema = z.object({
+export const repeatedClusteringSchema = z.object({
     codeSuggestions: z.array(
         z.object({
             id: z.string(),

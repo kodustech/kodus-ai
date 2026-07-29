@@ -27,7 +27,7 @@ const LLMDecisionSchema = z.object({
     evidence: z.array(z.string().max(300)).max(5).optional(),
 });
 
-const LLMDecisionExtractionSchema = z.object({
+export const LLMDecisionExtractionSchema = z.object({
     decisions: z.array(LLMDecisionSchema).max(12),
 });
 

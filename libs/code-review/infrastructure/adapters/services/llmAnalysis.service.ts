@@ -49,7 +49,7 @@ export const LLM_ANALYSIS_SERVICE_TOKEN = Symbol.for('LLMAnalysisService');
  * the model to fabricate fields. Optional fields match the prompt's optional
  * output (id/severity/rankScore/oneSentenceSummary/lines/llmPrompt).
  */
-const codeReviewAnalysisSchema = z.object({
+export const codeReviewAnalysisSchema = z.object({
     codeSuggestions: z.array(
         z.object({
             id: z.string().optional(),
@@ -75,7 +75,7 @@ const codeReviewAnalysisSchema = z.object({
  * The result is re-serialized and fed through `LLMResponseProcessor` unchanged,
  * preserving the exact downstream mapping.
  */
-const severityAnalysisSchema = z.object({
+export const severityAnalysisSchema = z.object({
     codeSuggestions: z.array(
         z.object({
             id: z.string(),
@@ -88,7 +88,7 @@ const severityAnalysisSchema = z.object({
  * Validate-implemented output — `prompt_validateImplementedSuggestions` returns
  * `{ id, relevantFile, implementationStatus }` per suggestion.
  */
-const validateImplementedSchema = z.object({
+export const validateImplementedSchema = z.object({
     codeSuggestions: z.array(
         z.object({
             id: z.string(),
