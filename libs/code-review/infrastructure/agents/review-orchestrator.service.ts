@@ -98,9 +98,6 @@ export class ReviewOrchestratorService {
             reviewOptions.performance ? 'performance' : null,
             reviewOptions.duplicate_logic ? 'duplicate_logic' : null,
         ].filter(Boolean) as Array<'bug' | 'security' | 'performance' | 'duplicate_logic'>;
-console.log({enabledCategories});
-
-        agentInput.reviewMode = 'deep';
 
         if (agentInput.reviewMode === 'deep') {
             if (enabledCategories.includes('bug')) {
