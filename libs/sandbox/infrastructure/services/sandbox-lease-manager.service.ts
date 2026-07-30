@@ -18,7 +18,6 @@ import { randomUUID } from 'crypto';
 
 import { calculateBackoffInterval } from '@libs/common/utils/polling';
 import { existsSync } from 'fs';
-import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
 import { SANDBOX_LEASE_CLEANUP_STATUS } from '../repositories/schemas/sandbox-lease.model';
 import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';

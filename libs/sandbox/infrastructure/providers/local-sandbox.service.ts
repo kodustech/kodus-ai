@@ -16,7 +16,7 @@ import {
 import type { FileHandle } from 'fs/promises';
 import { constants as fsConstants } from 'fs';
 import { tmpdir } from 'os';
-import { isAbsolute, basename, isAbsolute, join, sep, relative, sep } from 'path';
+import { basename, isAbsolute, join, sep, relative } from 'path';
 import { existsSync } from 'fs';
 import { promisify } from 'util';
 

@@ -7,8 +7,8 @@ import { ByokErrorCounter } from '@libs/notifications/application/byok-error-cou
 import {
     BaseCodeReviewAgentProvider,
     ReviewAgentIdentity,
-} from './base-code-review-agent.provider';
-import { buildCategoryReviewPrompt } from './review-prompt-blocks';
+} from './providers/base-code-review-agent.provider';
+import { buildCategoryReviewPrompt } from './prompts/review-prompt-blocks';
 
 @Injectable()
 export class DuplicateLogicAgentProvider extends BaseCodeReviewAgentProvider {
