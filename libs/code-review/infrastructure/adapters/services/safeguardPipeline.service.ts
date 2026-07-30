@@ -541,7 +541,7 @@ export class SafeguardPipelineService {
             externalReferenceErrors: params.externalReferenceErrors,
         });
 
-        // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
+        // Migrated off the legacy LangChain PromptRunner onto the AI SDK
         // path (REQ-NOLC-01). Single span via runStructuredReviewCall — the outer
         // runLLMInSpan wrapper is dropped (Q4). The BYOK org keeps its own model.
         // runStructuredReviewCall validates against `schema` internally, so the
@@ -626,7 +626,7 @@ Evidence field in ${params.languageResultPrompt}.`;
 
         const runName = 'safeguardPromptOnlyVerification';
 
-        // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
+        // Migrated off the legacy LangChain PromptRunner onto the AI SDK
         // path (REQ-NOLC-01). Single span via runStructuredReviewCall — the outer
         // runLLMInSpan wrapper is dropped (Q4). The BYOK org keeps its own model.
         // runStructuredReviewCall validates against `schema` internally; a parse
@@ -721,7 +721,7 @@ Evidence field in ${params.languageResultPrompt}.`;
         // agentTurnSchema is defined at module scope (see the comment there);
         // each turn emits EITHER a tool call or a final verdict.
         for (let turn = 0; turn < MAX_AGENT_TURNS; turn++) {
-            // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
+            // Migrated off the legacy LangChain PromptRunner onto the AI SDK
             // path (REQ-NOLC-01); the outer runLLMInSpan wrapper is dropped (Q4).
             // runStructuredReviewCall is single-shot (system + user only), so the
             // multi-turn conversation is flattened: the SYSTEM prompt stays

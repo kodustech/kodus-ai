@@ -173,7 +173,7 @@ export class ClassifyCliSessionCaptureUseCase {
             toolUses: capture.signals?.toolUses || [],
         };
 
-        // Migrated off the kodus-common LangChain BYOKPromptRunner path onto the
+        // Migrated off the legacy LangChain BYOKPromptRunner path onto the
         // AI SDK path (REQ-NOLC-01), mirroring the tracer (03-01). byokConfig is
         // undefined here → runStructuredReviewCall resolves the managed review
         // default; the previous CEREBRAS_GLM_47/GEMINI_3_FLASH_PREVIEW pin is

@@ -36,7 +36,7 @@ export class SuggestionLLMValidator {
         const runName = `${SuggestionLLMValidator.name}::validateWithLLM`;
 
         try {
-            // Migrated off the kodus-common LangChain PromptRunner path onto the
+            // Migrated off the legacy LangChain PromptRunner path onto the
             // AI SDK path (REQ-NOLC-01). byokConfig is undefined here →
             // runStructuredReviewCall resolves the managed review default; the
             // previous GROQ_GPT_OSS_120B/OPENAI_GPT_4O_MINI provider pin is
@@ -83,7 +83,7 @@ export class SuggestionLLMValidator {
         const runName = `${SuggestionLLMValidator.name}::checkSuggestionSimplicity`;
 
         try {
-            // Migrated off the kodus-common LangChain PromptRunner path onto the
+            // Migrated off the legacy LangChain PromptRunner path onto the
             // AI SDK path (REQ-NOLC-01). byokConfig undefined → managed default;
             // the previous GEMINI_2_5_FLASH/OPENAI_GPT_4O_MINI provider pin
             // is intentionally dropped (RESEARCH Pattern 1 — consolidation; routing

@@ -1,7 +1,7 @@
 /**
  * ClassifySessionUseCase — comprehensive spec (single source of truth).
  *
- * Phase 3 (plan 03-01) migrated extractWithLLM off the kodus-common
+ * Phase 3 (plan 03-01) migrated extractWithLLM off the legacy
  * BYOKPromptRunner LangChain path onto the AI SDK path (runStructuredReviewCall).
  * The LLM response is therefore stubbed at the `tracedGenerateText` seam (the same
  * seam structured-review-call.spec.ts and the former parity spec used) — NOT via a

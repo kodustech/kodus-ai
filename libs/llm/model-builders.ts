@@ -6,7 +6,7 @@
  * fork, no circular import (a module importing these from byok-to-vercel would
  * cycle once byok-to-vercel imports every module in 01-03).
  *
- * No runtime dependency on kodus-common (REQ-NOLC-01): the bedrock config is
+ * No LangChain runtime dependency: the bedrock config is
  * typed structurally, not via BYOKConfig.
  */
 import type { LanguageModel } from 'ai';
@@ -22,7 +22,7 @@ const CLAUDE_MODEL_PATTERN = /^claude[-_]/i;
  * Normalize an Anthropic-compatible base URL to its root form (no trailing
  * slash, no `/v1` suffix). `@ai-sdk/anthropic` appends `/messages` to a
  * `/v1`-suffixed base, so callers append `/v1` themselves. (Mirrors the
- * kodus-common helper; kept here so the module layer needs no runtime import.)
+ * external helper; kept here so the module layer needs no runtime import.)
  */
 export function anthropicCompatibleRootURL(baseURL: string): string {
     let trimmed = baseURL.trim();

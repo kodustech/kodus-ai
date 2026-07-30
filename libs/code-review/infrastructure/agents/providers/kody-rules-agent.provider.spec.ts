@@ -7,7 +7,7 @@ import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 
 // The sharded judge now runs on the LOCAL (Vercel) stack via
 // runStructuredReviewCall; mock it at that boundary (one canned response per
-// shard call) instead of the old kodus-common builder.
+// shard call) instead of the old LangChain builder.
 jest.mock('@libs/llm/structured-review-call', () => ({
     runStructuredReviewCall: jest.fn(),
 }));

@@ -83,7 +83,7 @@ export function buildCompilerUserPrompt(rule: Partial<IKodyRule>): string {
 /**
  * Adapt a raw LLM call (returning the compiler JSON) into the `RunCompiler`
  * the gate consumes. The engine passes a closure backed by
- * PromptRunner service.builder().setParser(ParserType.ZOD, compilerOutputSchema);
+ * PromptRunnerService.builder().setParser(ParserType.ZOD, compilerOutputSchema);
  * tests pass a stub.
  */
 export function makeLLMRunCompiler(

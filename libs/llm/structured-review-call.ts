@@ -1,6 +1,6 @@
 /**
  * Structured single-shot LLM call for the review pipeline, on the LOCAL
- * (Vercel AI SDK) stack — no kodus-common PromptRunner service.
+ * (Vercel AI SDK) stack — no legacy PromptRunnerService.
  *
  * Model policy (1 model per task — no runtime error-recovery fallback):
  *   - the run resolves ONE model: the org's BYOK model, or our managed default

@@ -2,7 +2,7 @@
  * SuggestionLLMValidator — migration parity spec (Phase 3, plan 03-09).
  *
  * Proves the primary validation verdict is unchanged after migrating both call
- * sites off the kodus-common LangChain PromptRunner path (GROQ_GPT_OSS_120B /
+ * sites off the legacy LangChain PromptRunner path (GROQ_GPT_OSS_120B /
  * GEMINI_2_5_FLASH pins via `.setProviders` inside runLLMInSpan) onto the AI SDK
  * path (runStructuredReviewCall, byokConfig: undefined → managed default). The
  * model CONSOLIDATION is deliberate (RESEARCH Pattern 1); the parsed verdict is

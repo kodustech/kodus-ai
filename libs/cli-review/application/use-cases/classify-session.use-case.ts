@@ -341,7 +341,7 @@ export class ClassifySessionUseCase {
             subagents: aggregated.subagents.slice(0, 10),
         };
 
-        // Migrated off the kodus-common LangChain PromptRunner path onto the AI
+        // Migrated off the legacy LangChain PromptRunner path onto the AI
         // SDK path (REQ-NOLC-01). byokConfig is undefined here → runStructuredReviewCall
         // resolves the managed review default (Kimi via Moonshot); the previous
         // CEREBRAS_GLM_47/GEMINI_3_FLASH_PREVIEW pin is intentionally dropped

@@ -105,7 +105,7 @@ export class CommentManagerService implements ICommentManagerService {
     /**
      * Run a one-shot text prompt for the PR summary through the v5 (Vercel AI
      * SDK) path so the user's BYOK model — including Claude-on-Vertex — is
-     * honored. The legacy v2 langchain path (PromptRunner service) only spoke
+     * honored. The legacy v2 langchain path (PromptRunnerService) only spoke
      * Gemini on Vertex, so a Claude-on-Vertex BYOK crashed the summary step
      * before suggestions could be posted. Defaults to kimi-k2.7-code (Moonshot)
      * when no BYOK is configured (cloud/trial default).
@@ -1845,7 +1845,7 @@ ${reviewOptions}
 
             const runName = 'repeatedCodeReviewSuggestionClustering';
 
-            // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
+            // Migrated off the legacy LangChain PromptRunner onto the AI SDK
             // path (REQ-NOLC-01). Single span via runStructuredReviewCall — the
             // outer runLLMInSpan wrapper is dropped (Q4). The BYOK org keeps its
             // own model. The structured result is re-serialized and fed through

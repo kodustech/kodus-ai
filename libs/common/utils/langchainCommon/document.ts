@@ -91,9 +91,14 @@ const getOpenAIEmbedding = async (
 
     const embeddingModel = getEmbeddingModel(config);
 
+    // Match the previous LangChain `OpenAIEmbeddings` default (`stripNewLines:
+    // true`): collapse newlines to spaces before embedding so vectors stay
+    // consistent with any already-persisted embedding index.
+    const value = input.replace(/\n/g, ' ');
+
     const { embedding } = await embed({
         model: embeddingModel,
-        value: input,
+        value,
     });
 
     return {

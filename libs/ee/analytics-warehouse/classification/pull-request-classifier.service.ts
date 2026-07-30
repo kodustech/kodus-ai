@@ -205,7 +205,7 @@ export class PullRequestClassifierService {
             title: row.title,
         }));
 
-        // Migrated off the kodus-common LangChain PromptRunner path onto the AI
+        // Migrated off the legacy LangChain PromptRunner path onto the AI
         // SDK path (REQ-NOLC-01). byokConfig is undefined here →
         // runStructuredReviewCall resolves the managed review default; the previous
         // GEMINI_3_1_FLASH_LITE_PREVIEW/NOVITA_DEEPSEEK_V3_0324 provider pin

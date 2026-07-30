@@ -18,7 +18,7 @@ import type {
 } from './types';
 
 /** Effort → thinking budget (mirrors reasoning-options.ts EFFORT_TO_BUDGET;
- *  local copy keeps this module free of a runtime kodus-common import). */
+ *  local copy keeps this module free of a runtime LangChain import). */
 const EFFORT_TO_BUDGET: Record<ReasoningEffort, number> = {
     none: 0,
     low: 5_000,

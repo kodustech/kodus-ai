@@ -2,7 +2,7 @@
  * Focused parity spec for the SafeguardPipelineService migration onto
  * runStructuredReviewCall (REQ-NOLC-01). Both structured call-sites (feature
  * extraction, prompt-only verification) and the multi-turn agent loop were moved
- * off the kodus-common LangChain PromptRunner onto the AI SDK path. These tests
+ * off the legacy LangChain PromptRunner onto the AI SDK path. These tests
  * pin that the safeguard VERDICT — which suggestions survive triage +
  * verification, and how improvedCode is nulled — is unchanged for representative
  * inputs. They mock the tracedGenerateText seam (like structured-review-call.spec.ts),

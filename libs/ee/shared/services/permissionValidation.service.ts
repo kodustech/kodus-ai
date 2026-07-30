@@ -741,15 +741,13 @@ export class PermissionValidationService {
     }
 
     /**
-     * Parallel v2-shape accessor for the routing resolver (Phase 4, plan 04-01).
+     * Full v2-shape accessor for the routing resolver.
      *
-     * `getBYOKConfig` (above) collapses the stored blob to `{main,fallback}` for
-     * its 25 legacy callers — which discards the `models[]`/`routing` the
-     * StaticTaskStrategy needs to route PER TASK. This accessor returns the FULL
-     * v2 blob instead, and `null` for a legacy / absent / non-v2 blob (the caller
-     * then keeps its legacy path). Additive: `getBYOKConfig` and its callers are
-     * untouched. Non-UUID org ids (CLI trial) resolve to `null`, mirroring
-     * `getBYOKConfig`.
+     * `resolveByokCarrier` (above) collapses the stored blob to the routed
+     * `{main,fallback}` carrier; this accessor returns the FULL v2 blob instead —
+     * the `models[]`/`routing` the StaticTaskStrategy needs to route PER TASK.
+     * Returns `null` for an absent / non-v2 blob and for a non-UUID org id (CLI
+     * trial).
      */
     async getBYOKConfigV2Raw(
         organizationAndTeamData: OrganizationAndTeamData,

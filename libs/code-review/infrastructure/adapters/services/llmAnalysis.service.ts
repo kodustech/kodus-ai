@@ -132,7 +132,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         const byokConfigRef = context?.codeReviewConfig?.byokConfig;
 
         try {
-            // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
+            // Migrated off the legacy LangChain PromptRunner onto the AI SDK
             // path (REQ-NOLC-01). Single span via runStructuredReviewCall — the
             // outer runLLMInSpan wrapper is dropped (Q4). The BYOK org keeps its
             // own model. The structured result is re-serialized and fed through
@@ -213,7 +213,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         );
 
         try {
-            // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
+            // Migrated off the legacy LangChain PromptRunner onto the AI SDK
             // path (REQ-NOLC-01). Single span via runStructuredReviewCall — the
             // outer runLLMInSpan wrapper is dropped (Q4). The BYOK org keeps its
             // own model; the structured `codeSuggestions` map through unchanged.
@@ -333,7 +333,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         const runName = 'generateCodeSuggestions';
 
         try {
-            // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
+            // Migrated off the legacy LangChain PromptRunner onto the AI SDK
             // path (REQ-NOLC-01), single span (Q4). This is a system-provider path
             // (no BYOK): per the phase's tracer decision the previous
             // GEMINI_2_5_PRO/OPENAI_GPT_4O pin is dropped in favour of the managed
@@ -394,7 +394,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         const runName = 'severityAnalysis';
 
         try {
-            // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
+            // Migrated off the legacy LangChain PromptRunner onto the AI SDK
             // path (REQ-NOLC-01), single span (Q4). BYOK org keeps its own model.
             // The severity prompt returns `{ id, severity }` per suggestion; the
             // structured result is re-serialized and fed through LLMResponseProcessor
@@ -534,7 +534,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         const payload = { codePatch, codeSuggestions };
 
         try {
-            // Migrated off the kodus-common LangChain PromptRunner onto the AI SDK
+            // Migrated off the legacy LangChain PromptRunner onto the AI SDK
             // path (REQ-NOLC-01), single span (Q4). System-provider path (no BYOK):
             // per the phase's tracer decision the previous provider/fallback pin is
             // dropped in favour of the managed review default; per-task model routing

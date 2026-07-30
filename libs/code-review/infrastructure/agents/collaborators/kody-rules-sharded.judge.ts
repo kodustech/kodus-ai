@@ -157,7 +157,7 @@ export interface ShardViolation {
 
 /**
  * The injected single-shot LLM call. The provider supplies a closure backed by
- * BYOKPromptRunner service.builder() (so it runs on the customer's model); tests
+ * BYOKPromptRunner.builder() (so it runs on the customer's model); tests
  * supply a replay. Returns the parsed violations for this shard, or [] on a
  * parse/LLM miss (the caller counts errors separately).
  */

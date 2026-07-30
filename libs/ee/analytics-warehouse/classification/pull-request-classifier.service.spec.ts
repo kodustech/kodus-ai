@@ -2,7 +2,7 @@
  * PullRequestClassifierService.classifyBatch — migration parity spec (Phase 3, plan 03-09).
  *
  * Proves the batch classifier's parsed OUTPUT SHAPE is unchanged after migrating
- * off the kodus-common LangChain PromptRunner path (GEMINI_3_1_FLASH_LITE_PREVIEW
+ * off the legacy LangChain PromptRunner path (GEMINI_3_1_FLASH_LITE_PREVIEW
  * pin via `.setProviders`) onto the AI SDK path (runStructuredReviewCall, byokConfig:
  * undefined → managed default). The model CONSOLIDATION is deliberate (RESEARCH
  * Pattern 1) and does not touch the parsed contract: a fixed { classifications: [...] }

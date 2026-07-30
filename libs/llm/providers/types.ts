@@ -12,17 +12,14 @@
  */
 import type { LanguageModel } from 'ai';
 import type { z } from 'zod';
-// Type-only imports (erased at runtime — no runtime dependency on kodus-common,
-// per REQ-NOLC-01). 01-05 relocates these type homes into libs/llm.
+// Type-only imports (erased at runtime).
 import type { ModelCapabilities as BaseModelCapabilities } from '@libs/llm/providers/model-types';
 import type { BYOKConfig } from '@libs/llm/byok-config';
 
 /**
- * Provider capability descriptor. Extends kodus-common's reasoning-only
- * `ModelCapabilities` with execution fields (Phase 1, plan 01-04). Defined here
- * in libs/llm — NOT in kodus-common — so the extension needs no package rebuild
- * and has no runtime kodus-common dependency; 01-05 relocates the base too.
- * All new fields are optional so existing base callers are unaffected.
+ * Provider capability descriptor. Extends the reasoning-only base
+ * `ModelCapabilities` (providers/model-types) with execution fields. All new
+ * fields are optional so existing base callers are unaffected.
  */
 export interface ModelCapabilities extends BaseModelCapabilities {
     /** Max input/context window in tokens, when known. */

@@ -7,7 +7,7 @@
  * gate — no fork, no circular import between a module and byok-to-vercel.
  *
  * Provider ids are plain strings here (matching `BYOKProvider` values) so this
- * leaf has no runtime dependency on kodus-common (REQ-NOLC-01).
+ * leaf has no LangChain runtime dependency.
  */
 
 /** OpenRouter model prefixes known to honor strict `response_format: json_schema`. */

@@ -7,13 +7,13 @@ import {
 
 // generateSummaryPR runs through the v5 path (byok-to-vercel + tracedGenerateText);
 // capturedPrompts collects the prompts the LLM receives (Bug E) and NEW_SUMMARY_TEXT
-// is the deterministic summary returned (Bug A). The legacy BYOKPromptRunner service
+// is the deterministic summary returned (Bug A). The legacy BYOKPromptRunner
 // (LangChain wrapper) was deleted in plan 03-13, so its module-level mock is gone.
 const capturedPrompts: Array<{ prompt: string; role: string }> = [];
 const NEW_SUMMARY_TEXT = 'NEW_SUMMARY_CONTENT';
 
 // generateSummaryPR now runs through the v5 path (byok-to-vercel +
-// tracedGenerateText) instead of the v2 BYOKPromptRunner service builder, so
+// tracedGenerateText) instead of the v2 BYOKPromptRunner builder, so
 // Claude-on-Vertex works. Mock that path: capture the system/user prompts
 // (Bug E) and return a deterministic summary (Bug A).
 jest.mock('@libs/llm/byok-to-vercel', () => ({
@@ -97,7 +97,7 @@ describe('CommentManagerService.generateSummaryPR', () => {
 
         observabilityService = {
             runLLMInSpan: jest.fn(async ({ exec }) => {
-                // Run the exec callback so the mocked BYOKPromptRunner service
+                // Run the exec callback so the mocked BYOKPromptRunner
                 // (above) actually receives the prompts via addPrompt(...).
                 const result = await exec(() => {});
                 return { result };
@@ -446,7 +446,7 @@ describe('CommentManagerService.generateSummaryPR', () => {
     });
 });
 
-// repeatedCodeReviewSuggestionClustering was migrated from the kodus-common
+// repeatedCodeReviewSuggestionClustering was migrated from the legacy
 // STRING/JSON PromptRunner onto runStructuredReviewCall (REQ-NOLC-01). The
 // structured result is JSON.stringify'd and fed through LLMResponseProcessor
 // exactly as the STRING path did — this suite pins that the downstream

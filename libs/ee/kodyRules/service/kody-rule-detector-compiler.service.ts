@@ -68,7 +68,7 @@ export class KodyRuleDetectorCompilerService
 
             // Local (Vercel) stack via runStructuredReviewCall — the org's
             // resolved BYOK model or our managed default (kimi-k2.7-code via
-            // Moonshot). No kodus-common.
+            // Moonshot). No LangChain.
             const runCompiler = makeLLMRunCompiler(async ({ system, user }) => {
                 const parsed = await runStructuredReviewCall({
                     byokConfig: taskByok ?? undefined,

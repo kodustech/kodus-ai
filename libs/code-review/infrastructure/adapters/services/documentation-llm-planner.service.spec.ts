@@ -1,7 +1,7 @@
 /**
  * Parity spec for the documentation planner migration (03-08).
  *
- * The planner used to run through the LangChain BYOKPromptRunner service; it now
+ * The planner used to run through the LangChain BYOKPromptRunner; it now
  * runs on runStructuredReviewCall (Vercel AI SDK path). This spec drives the real
  * runStructuredReviewCall and mocks only the `tracedGenerateText` seam — the model
  * builders are stubbed so no network/model is touched. We deliberately do NOT drive

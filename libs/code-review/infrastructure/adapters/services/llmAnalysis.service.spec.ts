@@ -4,7 +4,7 @@
  * llmAnalysis is the core code-review analyzer and sits on the customer review
  * hot path, so this parity spec is mandatory (not a grep-only gate). It proves
  * the "no behavior change on the happy path" contract after migrating the
- * structured call-sites off the kodus-common BYOKPromptRunner LangChain path
+ * structured call-sites off the legacy BYOKPromptRunner LangChain path
  * onto the AI SDK path (runStructuredReviewCall).
  *
  * The primary analysis call is `analyzeCodeWithAI_v2` (the standard review path
