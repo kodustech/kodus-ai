@@ -1,4 +1,4 @@
-import { BYOKProvider } from '@kodus/kodus-common/llm';
+import { BYOKProvider } from '@libs/llm/model-providers';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';

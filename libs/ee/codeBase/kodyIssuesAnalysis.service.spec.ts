@@ -54,10 +54,7 @@ describe('KodyIssuesAnalysisService — runStructuredReviewCall parity', () => {
         mockGenerate.mockReset();
         observabilityService.runAiSdkLLMInSpan.mockClear();
 
-        service = new KodyIssuesAnalysisService(
-            {} as any, // promptRunnerService (DI-only, unused after migration)
-            observabilityService,
-        );
+        service = new KodyIssuesAnalysisService(observabilityService);
     });
 
     it('mergeSuggestionsIntoIssues returns the parsed matches object', async () => {

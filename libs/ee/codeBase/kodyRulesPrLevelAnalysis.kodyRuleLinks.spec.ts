@@ -23,7 +23,6 @@ describe('KodyRulesPrLevelAnalysisService — Kody Rule link generation', () => 
         service = new KodyRulesPrLevelAnalysisService(
             kodyRulesService as any,
             {} as any, // tokenChunkingService
-            {} as any, // promptRunnerService
             {} as any, // observabilityService
             {} as any, // externalReferenceLoaderService
         );

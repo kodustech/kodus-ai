@@ -5,7 +5,7 @@ import {
 } from '@libs/mcp-server/mcp-adapter';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 
 import type { ToolRegistry } from '@libs/agent-harness/domain/contracts';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';

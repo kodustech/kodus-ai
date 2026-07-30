@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { TokenChunkingService } from '@libs/core/infrastructure/services/tokenChunking/tokenChunking.service';
 import {
@@ -85,10 +84,6 @@ describe('CollectCrossFileContextsService', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CollectCrossFileContextsService,
-                {
-                    provide: PromptRunnerService,
-                    useValue: mockPromptRunnerService,
-                },
                 {
                     provide: ObservabilityService,
                     useValue: mockObservabilityService,

@@ -1,4 +1,4 @@
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { Injectable, Inject } from '@nestjs/common';
 
 import { IKodyIssuesManagementService } from '@libs/code-review/domain/contracts/KodyIssuesManagement.contract';

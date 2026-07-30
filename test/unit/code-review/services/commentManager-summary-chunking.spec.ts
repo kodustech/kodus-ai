@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CommentManagerService } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
 import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { MessageTemplateProcessor } from '@libs/code-review/infrastructure/adapters/services/messageTemplateProcessor.service';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
@@ -58,7 +57,6 @@ describe('CommentManagerService – chunkChangedFilesForSummary', () => {
                 CommentManagerService,
                 { provide: PARAMETERS_SERVICE_TOKEN, useValue: {} },
                 { provide: MessageTemplateProcessor, useValue: {} },
-                { provide: PromptRunnerService, useValue: {} },
                 { provide: ObservabilityService, useValue: {} },
                 { provide: PermissionValidationService, useValue: {} },
                 { provide: CodeManagementService, useValue: {} },
@@ -427,7 +425,6 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                 CommentManagerService,
                 { provide: PARAMETERS_SERVICE_TOKEN, useValue: {} },
                 { provide: MessageTemplateProcessor, useValue: {} },
-                { provide: PromptRunnerService, useValue: {} },
                 {
                     provide: ObservabilityService,
                     useValue: mockObservabilityService,

@@ -1,4 +1,3 @@
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { DocumentationSearchCacheService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-cache.service';
 import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
@@ -33,39 +32,15 @@ describe('DocumentationSearchExaService', () => {
         jest.clearAllMocks();
     });
 
-    function buildPromptRunnerServiceMock(params?: {
-        formattedResult?: string;
-    }) {
-        const builder = {
-            setProviders: jest.fn().mockReturnThis(),
-            setParser: jest.fn().mockReturnThis(),
-            setPayload: jest.fn().mockReturnThis(),
-            addPrompt: jest.fn().mockReturnThis(),
-            setTemperature: jest.fn().mockReturnThis(),
-            setRunName: jest.fn().mockReturnThis(),
-            execute: jest.fn().mockResolvedValue({
-                result:
-                    params?.formattedResult ||
-                    '## Summary\n- formatted doc snippet',
-            }),
-        };
-
-        return {
-            builder: jest.fn().mockReturnValue(builder),
-        } as unknown as PromptRunnerService;
-    }
-
     it('should skip search when API key is missing', async () => {
         const configService = {
             get: jest.fn().mockReturnValue(undefined),
         } as unknown as ConfigService;
 
         const cacheService = buildCacheServiceMock();
-        const promptRunnerService = buildPromptRunnerServiceMock();
         const service = new DocumentationSearchExaService(
             configService,
             cacheService as unknown as DocumentationSearchCacheService,
-            promptRunnerService,
             buildObservabilityMock(),
         );
 
@@ -103,14 +78,9 @@ describe('DocumentationSearchExaService', () => {
         });
 
         const cacheService = buildCacheServiceMock();
-        const promptRunnerService = buildPromptRunnerServiceMock({
-            formattedResult:
-                '## Summary\n- Use @Controller decorators correctly.',
-        });
         const service = new DocumentationSearchExaService(
             configService,
             cacheService as unknown as DocumentationSearchCacheService,
-            promptRunnerService,
             buildObservabilityMock(),
         );
 
@@ -158,12 +128,9 @@ describe('DocumentationSearchExaService', () => {
             },
         });
 
-        const promptRunnerService = buildPromptRunnerServiceMock();
-
         const service = new DocumentationSearchExaService(
             configService,
             cacheService as unknown as DocumentationSearchCacheService,
-            promptRunnerService,
             buildObservabilityMock(),
         );
 
@@ -202,11 +169,9 @@ describe('DocumentationSearchExaService', () => {
         });
 
         const cacheService = buildCacheServiceMock();
-        const promptRunnerService = buildPromptRunnerServiceMock();
         const service = new DocumentationSearchExaService(
             configService,
             cacheService as unknown as DocumentationSearchCacheService,
-            promptRunnerService,
             buildObservabilityMock(),
         );
 

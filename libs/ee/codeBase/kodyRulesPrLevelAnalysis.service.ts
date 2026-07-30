@@ -1,10 +1,7 @@
 import { createLogger } from '@libs/core/log/logger';
-import {
-    BYOKConfig,
-    LLMModelProvider,
-    PromptRunnerService,
-    TokenUsage,
-} from '@kodus/kodus-common/llm';
+import { LLMModelProvider } from '@libs/llm/model-providers';
+import type { TokenUsage } from '@libs/llm/token-usage';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
@@ -146,7 +143,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         @Inject(KODY_RULES_SERVICE_TOKEN)
         private readonly kodyRulesService: IKodyRulesService,
         private readonly tokenChunkingService: TokenChunkingService,
-        private readonly promptRunnerService: PromptRunnerService,
         private readonly observabilityService: ObservabilityService,
         private readonly externalReferenceLoaderService: ExternalReferenceLoaderService,
     ) {}

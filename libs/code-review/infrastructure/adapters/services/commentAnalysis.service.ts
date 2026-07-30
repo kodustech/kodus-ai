@@ -1,5 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { Output } from 'ai';
 import z from 'zod';
 import filteredLibraryKodyRules from '@libs/code-review/infrastructure/data/filtered-rules.json';

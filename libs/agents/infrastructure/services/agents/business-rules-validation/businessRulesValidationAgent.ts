@@ -1,4 +1,4 @@
-import { LLMModelProvider, PromptRunnerService } from '@kodus/kodus-common/llm';
+import { LLMModelProvider } from '@libs/llm/model-providers';
 import { Injectable, Inject, Optional } from '@nestjs/common';
 
 import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
@@ -112,7 +112,6 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
     };
 
     constructor(
-        promptRunnerService: PromptRunnerService,
         permissionValidationService: PermissionValidationService,
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
@@ -125,7 +124,6 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
         @Optional() private readonly byokErrorCounter?: ByokErrorCounter,
     ) {
         super(
-            promptRunnerService,
             permissionValidationService,
             observabilityService,
             genericSkillRunner,

@@ -1,6 +1,6 @@
 /**
  * Structured single-shot LLM call for the review pipeline, on the LOCAL
- * (Vercel AI SDK) stack — no kodus-common PromptRunnerService.
+ * (Vercel AI SDK) stack — no kodus-common PromptRunner service.
  *
  * Model policy (1 model per task — no runtime error-recovery fallback):
  *   - the run resolves ONE model: the org's BYOK model, or our managed default
@@ -13,7 +13,7 @@
  * (Reliability caveat accepted 2026-07-29; resilience is re-addressed in Phase 5.)
  */
 import { Output, type LanguageModel, type Schema } from 'ai';
-import type { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { z } from 'zod';
 import {
     buildModelFromSlot,

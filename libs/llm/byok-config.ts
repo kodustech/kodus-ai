@@ -11,7 +11,7 @@
  * Types live in libs/llm (not kodus-common) — no runtime kodus-common dependency
  * (REQ-NOLC-01). Provider ids are plain strings matching BYOKProvider values.
  */
-import type { BYOKProvider } from '@kodus/kodus-common/llm';
+import { BYOKProvider } from '@libs/llm/model-providers';
 import type { ReasoningEffort } from './providers/types';
 
 // ─── v2 persisted shape ──────────────────────────────────────────────────────
@@ -143,6 +143,15 @@ export interface NormalizedByokConfig {
     main?: NormalizedModel;
     fallback?: NormalizedModel;
 }
+
+/**
+ * Canonical BYOK carrier type. This is the v2-native replacement for the legacy
+ * `BYOKConfig` that used to be imported from the former shared kodus-common `llm` package: it is the
+ * SAME `{main,fallback}` shape the resolver family passes around, but built from
+ * our own `NormalizedModel` and owned here, so nothing outside this repo defines
+ * the carrier anymore. Consumers import `BYOKConfig` from `@libs/llm/byok-config`.
+ */
+export type BYOKConfig = NormalizedByokConfig;
 
 /** Narrow an unknown blob to v2 by its discriminant. */
 export function isV2Config(raw: unknown): raw is BYOKConfigV2 {

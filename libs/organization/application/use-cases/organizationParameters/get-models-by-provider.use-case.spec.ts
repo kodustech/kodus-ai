@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { BYOKProvider } from '@kodus/kodus-common/llm';
+import { BYOKProvider } from '@libs/llm/model-providers';
 
 import { GetModelsByProviderUseCase } from './get-models-by-provider.use-case';
 

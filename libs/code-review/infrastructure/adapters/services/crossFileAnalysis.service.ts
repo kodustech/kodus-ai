@@ -1,5 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
-import { LLMModelProvider, type TokenUsage } from '@kodus/kodus-common/llm';
+import { LLMModelProvider } from '@libs/llm/model-providers';
+import type { TokenUsage } from '@libs/llm/token-usage';
 import { Injectable } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 

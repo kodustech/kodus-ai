@@ -81,6 +81,18 @@ export type CentralizedConfigParameter = {
         id: string;
     } | null;
     activePullRequest?: CentralizedConfigActivePullRequest | null;
+
+    /**
+     * Repositories whose config the centralized repo actually owns, as recorded
+     * by the last successful sync. Stale cleanup needs this to tell "this repo
+     * never had a `kodus-config.yml`, it just inherits the global one" from
+     * "its `kodus-config.yml` was deleted". `undefined` means no sync has
+     * recorded a baseline yet — absence proves nothing, so nothing is removed.
+     */
+    managedRepositoryIds?: string[];
+
+    /** Same idea for the global `kodus-config.yml`. */
+    managedGlobalConfig?: boolean;
 };
 
 interface KnownConfigs {

@@ -8,7 +8,7 @@
  * MCP runs on the local MCP adapter (`createMCPAdapter`) — this only wraps the
  * adapter's tools as harness `AgentTool`s and runs the loop on the AI SDK.
  */
-import { type BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { type MCPAdapter } from '@libs/mcp-server/mcp-adapter';
 import { type LanguageModel } from 'ai';
 

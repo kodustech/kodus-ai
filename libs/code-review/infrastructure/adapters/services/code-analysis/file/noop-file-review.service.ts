@@ -6,7 +6,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { BaseFileReviewContextPreparation } from './base-file-review.abstract';
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { ReviewModeOptions } from '@libs/core/domain/interfaces/file-review-context-preparation.interface';
 import {
     FileChange,

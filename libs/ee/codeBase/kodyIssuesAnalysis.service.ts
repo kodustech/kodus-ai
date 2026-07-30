@@ -1,5 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import { BYOKConfig, PromptRunnerService } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
@@ -55,7 +55,6 @@ export class KodyIssuesAnalysisService {
     public readonly isDevelopment: boolean;
 
     constructor(
-        private readonly promptRunnerService: PromptRunnerService,
         private readonly observabilityService: ObservabilityService,
     ) {
         this.isCloud = environment.API_CLOUD_MODE;

@@ -7,7 +7,7 @@ import type {
     ContextRequirement,
 } from './context-pack';
 import { createLogger } from '@libs/core/log/logger';
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 import {
     IPromptReferenceSyncError,

@@ -14,10 +14,8 @@ import type { LanguageModel } from 'ai';
 import type { z } from 'zod';
 // Type-only imports (erased at runtime — no runtime dependency on kodus-common,
 // per REQ-NOLC-01). 01-05 relocates these type homes into libs/llm.
-import type {
-    BYOKConfig,
-    ModelCapabilities as BaseModelCapabilities,
-} from '@kodus/kodus-common/llm';
+import type { ModelCapabilities as BaseModelCapabilities } from '@libs/llm/providers/model-types';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 
 /**
  * Provider capability descriptor. Extends kodus-common's reasoning-only

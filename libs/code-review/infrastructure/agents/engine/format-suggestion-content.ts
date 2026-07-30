@@ -1,5 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
 import {
     buildLangfuseTelemetry,

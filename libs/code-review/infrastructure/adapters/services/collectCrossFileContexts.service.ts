@@ -1,5 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
-import { type BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
+import { LLMModelProvider } from '@libs/llm/model-providers';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 

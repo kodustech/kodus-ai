@@ -1,4 +1,3 @@
-import { LLMModule } from '@kodus/kodus-common/llm';
 import { AgentsModule } from '@libs/agents/modules/agents.module';
 import { AIEngineModule } from '@libs/ai-engine/modules/ai-engine.module';
 import { AnalyticsModule } from '@libs/analytics/modules/analytics.module';
@@ -106,9 +105,6 @@ import { NotificationController } from './controllers/notification.controller';
         SharedPostgresModule.forRoot({ poolSize: 25 }),
         SharedMongoModule.forRoot(),
         RabbitMQWrapperModule.register({ enableConsumers: false }),
-        LLMModule.forRoot({
-            logger: LoggerWrapperService,
-        }),
         AuthModule,
         UserModule,
         PermissionsModule,

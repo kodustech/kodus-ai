@@ -4,7 +4,6 @@ import {
     classifyLLMError,
     getClassification,
 } from '@libs/llm/error-classifier';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { Injectable, Optional } from '@nestjs/common';
 import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
@@ -82,7 +81,6 @@ export abstract class BaseCodeReviewAgentProvider {
     private readonly agentLogger = createLogger('CodeReviewAgent');
 
     constructor(
-        protected readonly promptRunnerService: PromptRunnerService,
         protected readonly permissionValidationService: PermissionValidationService,
         protected readonly observabilityService: ObservabilityService,
         /** Optional: when injected, enables the `searchDocs` tool on the

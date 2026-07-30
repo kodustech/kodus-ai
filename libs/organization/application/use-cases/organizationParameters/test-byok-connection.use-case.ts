@@ -1,7 +1,5 @@
-import {
-    anthropicCompatibleRootURL,
-    BYOKProvider,
-} from '@kodus/kodus-common/llm';
+import { anthropicCompatibleRootURL } from '@libs/llm/model-builders';
+import { BYOKProvider } from '@libs/llm/model-providers';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import { createLogger } from '@libs/core/log/logger';
 import { BadRequestException, Injectable } from '@nestjs/common';

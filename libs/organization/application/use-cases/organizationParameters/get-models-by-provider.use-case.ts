@@ -1,8 +1,6 @@
-import {
-    BYOKProvider,
-    getModelCapabilities,
-    ReasoningConfig,
-} from '@kodus/kodus-common/llm';
+import { BYOKProvider } from '@libs/llm/model-providers';
+import { getModelCapabilities } from '@libs/llm/providers/capabilities';
+import type { ReasoningConfig } from '@libs/llm/providers/model-types';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import { createLogger } from '@libs/core/log/logger';

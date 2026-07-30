@@ -4,7 +4,6 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Logger, Module } from '@nestjs/common';
 
-import { LLMModule } from '@kodus/kodus-common/llm';
 
 import {
     AnalyticsWarehouseModule,
@@ -45,7 +44,6 @@ import { SharedMongoModule } from '@libs/shared/database/shared-mongo.module';
         // AnalyticsWarehouseModule; the backfill orchestrator itself
         // doesn't call any model. Required here so Nest can resolve the
         // classifier's `PromptRunnerService` dep at bootstrap.
-        LLMModule.forRoot({ logger: LoggerWrapperService }),
         AnalyticsWarehouseModule.forRoot(),
     ],
 })

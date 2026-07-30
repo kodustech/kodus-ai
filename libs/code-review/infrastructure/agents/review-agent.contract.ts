@@ -23,7 +23,8 @@ import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/servic
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 import type { LanguageModel } from 'ai';
-import { BYOKProvider, BYOKConfig } from '@kodus/kodus-common/llm';
+import { BYOKProvider } from '@libs/llm/model-providers';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 

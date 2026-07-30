@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CommentManagerService } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
 import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { MessageTemplateProcessor } from '@libs/code-review/infrastructure/adapters/services/messageTemplateProcessor.service';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
@@ -72,10 +71,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 },
                 {
                     provide: MessageTemplateProcessor,
-                    useValue: {},
-                },
-                {
-                    provide: PromptRunnerService,
                     useValue: {},
                 },
                 {
@@ -507,10 +502,6 @@ describe('CommentManagerService - fallback suggestion logic', () => {
                 },
                 {
                     provide: MessageTemplateProcessor,
-                    useValue: {},
-                },
-                {
-                    provide: PromptRunnerService,
                     useValue: {},
                 },
                 {
@@ -947,7 +938,6 @@ describe('CommentManagerService - agent prompt wiring', () => {
                 { provide: PARAMETERS_SERVICE_TOKEN, useValue: {} },
                 // Real processor so the @agentPrompt handler actually runs.
                 MessageTemplateProcessor,
-                { provide: PromptRunnerService, useValue: {} },
                 { provide: ObservabilityService, useValue: {} },
                 { provide: PermissionValidationService, useValue: {} },
                 { provide: CodeManagementService, useValue: {} },

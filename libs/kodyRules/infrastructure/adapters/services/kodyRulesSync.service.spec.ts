@@ -127,7 +127,7 @@ describe('KodyRulesSyncService.convertFileToKodyRules — post-trial BYOK gate',
 
 /**
  * Parity gate for the FastBatch conversions migrated OFF the LangChain
- * (BYOKPromptRunnerService.builder().execute()) path ONTO the AI SDK
+ * (BYOKPromptRunner service.builder().execute()) path ONTO the AI SDK
  * runStructuredReviewCall path. The prior implementation returned each parsed
  * rule spread with `{ repositoryId, status: PENDING }` and capped at 3; the
  * migrated call must produce the SAME normalized DTOs from the same parsed

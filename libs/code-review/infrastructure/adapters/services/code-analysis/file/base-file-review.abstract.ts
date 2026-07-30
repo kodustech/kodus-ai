@@ -4,7 +4,7 @@ import { createLogger } from '@libs/core/log/logger';
  * © Kodus Tech. All rights reserved.
  */
 
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 
 import {

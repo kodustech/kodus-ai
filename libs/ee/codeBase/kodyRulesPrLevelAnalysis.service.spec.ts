@@ -62,7 +62,6 @@ describe('KodyRulesPrLevelAnalysisService — runStructuredReviewCall parity', (
         service = new KodyRulesPrLevelAnalysisService(
             {} as any, // kodyRulesService
             {} as any, // tokenChunkingService
-            {} as any, // promptRunnerService (DI-only, unused after migration)
             observabilityService,
             {} as any, // externalReferenceLoaderService
         );

@@ -17,7 +17,6 @@ import {
     buildKodyRuleCentralizedFilePath,
     buildKodyRuleCentralizedMutationRequest,
 } from '@libs/centralized-config/utils/kody-rules-centralized-pr.builder';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
     ICodeBaseConfigService,
@@ -120,8 +119,6 @@ export class KodyRulesService implements IKodyRulesService {
         private readonly kodyRulesValidationService: KodyRulesValidationService,
 
         private readonly mcpManagerService: MCPManagerService,
-
-        private readonly promptRunnerService: PromptRunnerService,
 
         private readonly observabilityService: ObservabilityService,
 

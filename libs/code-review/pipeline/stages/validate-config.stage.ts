@@ -41,7 +41,7 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import { resolveModelSlotFromV2 } from '@libs/llm/normalize-byok-config';
 import { StaticTaskStrategy } from '@libs/llm/static-task-strategy';
 import type { RoutingStrategy } from '@libs/llm/routing-strategy';
-import type { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 
 @Injectable()
 export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineContext> {

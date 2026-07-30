@@ -1,4 +1,3 @@
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { DocumentationLLMPlannerService } from '@libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service';
 import { RepositoryPackageReference } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -14,44 +13,9 @@ function buildObservabilityMock(): ObservabilityService {
 }
 
 describe('DocumentationLLMPlannerService', () => {
-    function buildPromptRunnerMock(payloads: any[]): PromptRunnerService {
-        const service = {
-            builder: jest.fn(() => {
-                const state: { payload?: any } = {};
-
-                return {
-                    setProviders: jest.fn().mockReturnThis(),
-                    setBYOKConfig: jest.fn().mockReturnThis(),
-                    setBYOKFallbackConfig: jest.fn().mockReturnThis(),
-                    setParser: jest.fn().mockReturnThis(),
-                    setLLMJsonMode: jest.fn().mockReturnThis(),
-                    setPayload: jest.fn(function (payload: any) {
-                        state.payload = payload;
-                        payloads.push(payload);
-                        return this;
-                    }),
-                    addPrompt: jest.fn().mockReturnThis(),
-                    setTemperature: jest.fn().mockReturnThis(),
-                    setRunName: jest.fn().mockReturnThis(),
-                    execute: jest.fn(async () => ({
-                        queryTasks: (state.payload?.packages || []).map(
-                            (pkg: { name: string }) => ({
-                                packageName: pkg.name,
-                                query: 'official documentation',
-                            }),
-                        ),
-                    })),
-                };
-            }),
-        };
-
-        return service as unknown as PromptRunnerService;
-    }
-
     it('should only send ecosystem-compatible packages for each code file', async () => {
         const payloads: any[] = [];
         const service = new DocumentationLLMPlannerService(
-            buildPromptRunnerMock(payloads),
             buildObservabilityMock(),
         );
 
@@ -120,31 +84,7 @@ describe('DocumentationLLMPlannerService', () => {
     });
 
     it('should keep empty queryTasks when planner succeeds with no documentation need', async () => {
-        const promptRunner = {
-            builder: jest.fn(() => {
-                const state: { payload?: any } = {};
-
-                return {
-                    setProviders: jest.fn().mockReturnThis(),
-                    setBYOKConfig: jest.fn().mockReturnThis(),
-                    setBYOKFallbackConfig: jest.fn().mockReturnThis(),
-                    setParser: jest.fn().mockReturnThis(),
-                    setLLMJsonMode: jest.fn().mockReturnThis(),
-                    setPayload: jest.fn(function (payload: any) {
-                        state.payload = payload;
-                        return this;
-                    }),
-                    addPrompt: jest.fn().mockReturnThis(),
-                    setTemperature: jest.fn().mockReturnThis(),
-                    setRunName: jest.fn().mockReturnThis(),
-                    execute: jest.fn(async () => ({
-                        queryTasks: [],
-                    })),
-                };
-            }),
-        } as unknown as PromptRunnerService;
-
-        const service = new DocumentationLLMPlannerService(promptRunner, buildObservabilityMock());
+        const service = new DocumentationLLMPlannerService(buildObservabilityMock());
 
         const result = await service.planDocumentationByFile({
             packages: [
@@ -171,7 +111,6 @@ describe('DocumentationLLMPlannerService', () => {
     it('should scope npm packages to nearest workspace manifest in monorepos', async () => {
         const payloads: any[] = [];
         const service = new DocumentationLLMPlannerService(
-            buildPromptRunnerMock(payloads),
             buildObservabilityMock(),
         );
 
@@ -235,24 +174,7 @@ describe('DocumentationLLMPlannerService', () => {
     });
 
     it('should return empty queryTasks when planner fails', async () => {
-        const promptRunner = {
-            builder: jest.fn(() => ({
-                setProviders: jest.fn().mockReturnThis(),
-                setBYOKConfig: jest.fn().mockReturnThis(),
-                setBYOKFallbackConfig: jest.fn().mockReturnThis(),
-                setParser: jest.fn().mockReturnThis(),
-                setLLMJsonMode: jest.fn().mockReturnThis(),
-                setPayload: jest.fn().mockReturnThis(),
-                addPrompt: jest.fn().mockReturnThis(),
-                setTemperature: jest.fn().mockReturnThis(),
-                setRunName: jest.fn().mockReturnThis(),
-                execute: jest.fn(async () => {
-                    throw new Error('forced failure');
-                }),
-            })),
-        } as unknown as PromptRunnerService;
-
-        const service = new DocumentationLLMPlannerService(promptRunner, buildObservabilityMock());
+        const service = new DocumentationLLMPlannerService(buildObservabilityMock());
 
         const result = await service.planDocumentationByFile({
             packages: [
@@ -285,7 +207,6 @@ describe('DocumentationLLMPlannerService', () => {
     it('should pass entire file content and diff to planner payload without truncation', async () => {
         const payloads: any[] = [];
         const service = new DocumentationLLMPlannerService(
-            buildPromptRunnerMock(payloads),
             buildObservabilityMock(),
         );
 

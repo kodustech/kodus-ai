@@ -1,4 +1,4 @@
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { encrypt } from '@libs/common/utils/crypto';
 import {
     isV2Config,

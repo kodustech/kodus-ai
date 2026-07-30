@@ -1,5 +1,4 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { createLogger } from '@libs/core/log/logger';
@@ -45,7 +44,6 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
     private readonly shardLogger = createLogger('KodyRulesShardedAgent');
 
     constructor(
-        promptRunnerService: PromptRunnerService,
         permissionValidationService: PermissionValidationService,
         observabilityService: ObservabilityService,
         @Optional()
@@ -54,7 +52,6 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
         byokErrorCounter?: ByokErrorCounter,
     ) {
         super(
-            promptRunnerService,
             permissionValidationService,
             observabilityService,
             documentationSearchService,

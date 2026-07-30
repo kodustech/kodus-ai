@@ -1,4 +1,4 @@
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { type Tool, type LanguageModel } from 'ai';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 

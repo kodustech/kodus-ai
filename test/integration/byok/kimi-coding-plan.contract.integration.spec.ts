@@ -24,7 +24,7 @@
  * locally with:
  *   KIMI_CODING_PLAN_KEY=sk-kimi-... yarn test --testPathPatterns=kimi-coding-plan.contract
  */
-import { getAdapter, BYOKProvider } from '@kodus/kodus-common/llm';
+import { BYOKProvider } from '@libs/llm/model-providers';
 
 // Identity crypto so buildModelFromSlot can "decrypt" a raw key without needing
 // API_CRYPTO_KEY — this test exercises the HTTP contract, not encryption.
@@ -48,30 +48,6 @@ const describeLive = KEY ? describe : describe.skip;
 describeLive(
     'Kimi Code Plan — anthropic_compatible live contract (needs KIMI_CODING_PLAN_KEY)',
     () => {
-        it(
-            'LangChain adapter reaches the endpoint with a /v1-suffixed baseURL',
-            async () => {
-                // Worst-case input shape (user pastes the /v1 form). A routing
-                // regression to OpenAIAdapter would 403 here; a bad URL 404s.
-                const model = getAdapter(
-                    BYOKProvider.ANTHROPIC_COMPATIBLE,
-                ).build({
-                    model: MODEL,
-                    apiKey: KEY!,
-                    baseURL: `${CODING_BASE}/v1`,
-                    options: { maxTokens: 16, temperature: 1 },
-                });
-                expect(model.constructor.name).toBe('ChatAnthropic');
-
-                const res = await model.invoke('Reply with exactly: ok');
-                const text = Array.isArray(res.content)
-                    ? JSON.stringify(res.content)
-                    : String(res.content);
-                expect(text.toLowerCase()).toContain('ok');
-            },
-            NET_TIMEOUT,
-        );
-
         it(
             'Vercel path reaches the endpoint with the root baseURL shape',
             async () => {

@@ -7,7 +7,7 @@
  *
  * Lives in @libs/llm (infra), not the harness — the engine stays model-agnostic.
  */
-import type { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import type { LanguageModel } from 'ai';
 
 import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';

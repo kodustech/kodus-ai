@@ -7,13 +7,13 @@ import {
 
 // generateSummaryPR runs through the v5 path (byok-to-vercel + tracedGenerateText);
 // capturedPrompts collects the prompts the LLM receives (Bug E) and NEW_SUMMARY_TEXT
-// is the deterministic summary returned (Bug A). The legacy BYOKPromptRunnerService
+// is the deterministic summary returned (Bug A). The legacy BYOKPromptRunner service
 // (LangChain wrapper) was deleted in plan 03-13, so its module-level mock is gone.
 const capturedPrompts: Array<{ prompt: string; role: string }> = [];
 const NEW_SUMMARY_TEXT = 'NEW_SUMMARY_CONTENT';
 
 // generateSummaryPR now runs through the v5 path (byok-to-vercel +
-// tracedGenerateText) instead of the v2 BYOKPromptRunnerService builder, so
+// tracedGenerateText) instead of the v2 BYOKPromptRunner service builder, so
 // Claude-on-Vertex works. Mock that path: capture the system/user prompts
 // (Bug E) and return a deterministic summary (Bug A).
 jest.mock('@libs/llm/byok-to-vercel', () => ({
@@ -97,7 +97,7 @@ describe('CommentManagerService.generateSummaryPR', () => {
 
         observabilityService = {
             runLLMInSpan: jest.fn(async ({ exec }) => {
-                // Run the exec callback so the mocked BYOKPromptRunnerService
+                // Run the exec callback so the mocked BYOKPromptRunner service
                 // (above) actually receives the prompts via addPrompt(...).
                 const result = await exec(() => {});
                 return { result };

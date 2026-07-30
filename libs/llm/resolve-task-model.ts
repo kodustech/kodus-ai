@@ -18,7 +18,7 @@
  * returned field (`modelName`, `slot`, `verdict.reason`) carries key material.
  */
 import type { LanguageModel } from 'ai';
-import type { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 
 import {
     isV2Config,

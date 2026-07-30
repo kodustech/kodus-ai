@@ -1,4 +1,5 @@
-import { BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
+import { LLMModelProvider } from '@libs/llm/model-providers';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 
 import { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {

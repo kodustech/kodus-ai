@@ -4,6 +4,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
 import { buildModelFromSlot, getModelName } from '@libs/llm/byok-to-vercel';
+import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
 import {
     tracedGenerateText,
     timeoutSignal,
@@ -219,14 +220,20 @@ export class KodyRuleSummaryService {
             return null;
         }
         try {
-            const [byokConfig, subscriptionStatus] = await Promise.all([
-                this.permissionValidationService.getBYOKConfig(
+            const [rawV2, subscriptionStatus] = await Promise.all([
+                this.permissionValidationService.getBYOKConfigV2Raw(
                     organizationAndTeamData,
                 ),
                 this.permissionValidationService.getSubscriptionStatus(
                     organizationAndTeamData,
                 ),
             ]);
+            // Model policy = the review's: resolve the customer's v2 config for
+            // the codeReview task (BYOK main when configured; managed default
+            // only during trial). undefined ⇒ no BYOK ⇒ env default downstream.
+            const byokConfig = resolveTaskByokConfig(rawV2, 'codeReview', {
+                ctx: {},
+            });
 
             const hasByok = !!byokConfig?.main;
             if (
@@ -451,14 +458,20 @@ export class KodyRuleSummaryService {
             return null;
         }
         try {
-            const [byokConfig, subscriptionStatus] = await Promise.all([
-                this.permissionValidationService.getBYOKConfig(
+            const [rawV2, subscriptionStatus] = await Promise.all([
+                this.permissionValidationService.getBYOKConfigV2Raw(
                     organizationAndTeamData,
                 ),
                 this.permissionValidationService.getSubscriptionStatus(
                     organizationAndTeamData,
                 ),
             ]);
+            // Model policy = the review's: resolve the customer's v2 config for
+            // the codeReview task (BYOK main when configured; managed default
+            // only during trial). undefined ⇒ no BYOK ⇒ env default downstream.
+            const byokConfig = resolveTaskByokConfig(rawV2, 'codeReview', {
+                ctx: {},
+            });
             const hasByok = !!byokConfig?.main;
             // The carrier's resolved main slot, read at this consumer boundary.
             const mainSlot = byokConfig?.main;

@@ -1,4 +1,5 @@
-import { BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
+import { LLMModelProvider } from '@libs/llm/model-providers';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
@@ -104,7 +105,7 @@ export class CommentManagerService implements ICommentManagerService {
     /**
      * Run a one-shot text prompt for the PR summary through the v5 (Vercel AI
      * SDK) path so the user's BYOK model — including Claude-on-Vertex — is
-     * honored. The legacy v2 langchain path (PromptRunnerService) only spoke
+     * honored. The legacy v2 langchain path (PromptRunner service) only spoke
      * Gemini on Vertex, so a Claude-on-Vertex BYOK crashed the summary step
      * before suggestions could be posted. Defaults to kimi-k2.7-code (Moonshot)
      * when no BYOK is configured (cloud/trial default).

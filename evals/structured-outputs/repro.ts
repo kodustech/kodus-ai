@@ -50,7 +50,8 @@ import {
     __structuredFallbackInternals,
 } from '@libs/llm/byok-to-vercel';
 import { encrypt } from '@/common/utils/crypto';
-import { BYOKConfig, BYOKProvider } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
+import { BYOKProvider } from '@libs/llm/model-providers';
 
 type Expectation = 'json_schema' | 'json_object' | 'gemini-native';
 

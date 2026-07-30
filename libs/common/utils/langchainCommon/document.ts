@@ -1,6 +1,18 @@
-import { Document } from '@langchain/core/documents';
-import { OpenAIEmbeddings } from '@langchain/openai';
+import { createOpenAI, OpenAIProvider } from '@ai-sdk/openai';
+import { embed, EmbeddingModel } from 'ai';
 import 'dotenv/config';
+
+/**
+ * Plain document shape previously provided by the external documents package.
+ * Only `pageContent` and `metadata` are consumed downstream, so a local
+ * interface keeps the public API stable without any external dependency.
+ */
+export interface Document<
+    Metadata extends Record<string, any> = Record<string, any>,
+> {
+    pageContent: string;
+    metadata: Metadata;
+}
 
 interface OpenAIEmbeddingResponse {
     data: Array<{
@@ -16,16 +28,16 @@ interface OpenAIEmbeddingResponse {
  * Creates a new document object based on the provided formatted data.
  *
  * @param {any} formattedData - The formatted data used to create the document.
- * @return {Document} The newly created document Langchain object Type.
+ * @return {Document} The newly created plain document object.
  */
 const createDocument = (
     formattedData: any,
     metaData?: Record<string, any>,
 ): Document => {
-    return new Document({
+    return {
         pageContent: formattedData,
         metadata: { ...metaData },
-    });
+    };
 };
 
 const estimateTokenCount = (text: string) => {
@@ -36,27 +48,31 @@ const estimateTokenCount = (text: string) => {
     return Math.floor(byteCount / 4);
 };
 
-let embedder: OpenAIEmbeddings | null = null;
+const embeddingModelCache = new Map<string, EmbeddingModel>();
 
-const getEmbedder = (options?: {
+const getEmbeddingModel = (options?: {
     model?: string;
     apiKey?: string;
-}): OpenAIEmbeddings => {
-    if (!embedder) {
-        const defaultOptions = {
-            model: 'text-embedding-3-small',
-            apiKey: process.env.API_OPEN_AI_API_KEY,
-        };
+}): EmbeddingModel => {
+    const defaultOptions = {
+        model: 'text-embedding-3-small',
+        apiKey: process.env.API_OPEN_AI_API_KEY,
+    };
 
-        const config = { ...defaultOptions, ...options };
+    const config = { ...defaultOptions, ...options };
 
-        embedder = new OpenAIEmbeddings({
+    const cacheKey = `${config.apiKey ?? ''}:${config.model}`;
+
+    let embeddingModel = embeddingModelCache.get(cacheKey);
+    if (!embeddingModel) {
+        const provider: OpenAIProvider = createOpenAI({
             apiKey: config.apiKey,
-            model: config.model,
         });
+        embeddingModel = provider.embedding(config.model);
+        embeddingModelCache.set(cacheKey, embeddingModel);
     }
 
-    return embedder;
+    return embeddingModel;
 };
 
 const getOpenAIEmbedding = async (
@@ -73,14 +89,17 @@ const getOpenAIEmbedding = async (
 
     const config = { ...defaultOptions, ...options };
 
-    const embedder = getEmbedder(config);
+    const embeddingModel = getEmbeddingModel(config);
 
-    const embeddingVector = await embedder.embedQuery(input);
+    const { embedding } = await embed({
+        model: embeddingModel,
+        value: input,
+    });
 
     return {
         data: [
             {
-                embedding: embeddingVector,
+                embedding,
                 index: 0,
                 object: 'embedding',
             },

@@ -1,4 +1,5 @@
-import { LLMModelProvider, PromptRunnerService } from '@kodus/kodus-common/llm';
+import { LLMModelProvider } from '@libs/llm/model-providers';
+import { ObservabilityService } from '@libs/core/log/observability.service';
 import { ClassifyCliSessionCaptureUseCase } from '@libs/cli-review/application/use-cases/classify-cli-session-capture.use-case';
 import { CliSessionCaptureRepository } from '@libs/cli-review/infrastructure/repositories/cli-session-capture.repository';
 
@@ -89,7 +90,7 @@ describe('ClassifyCliSessionCaptureUseCase', () => {
 
         useCase = new ClassifyCliSessionCaptureUseCase(
             mockRepository as unknown as CliSessionCaptureRepository,
-            mockPromptRunnerService as unknown as PromptRunnerService,
+            mockPromptRunnerService as unknown as ObservabilityService,
         );
     });
 

@@ -3,7 +3,7 @@ import {
     ContextRequirement,
 } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { createLogger } from '@libs/core/log/logger';
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { IPromptContextEngineService } from '@libs/ai-engine/domain/prompt/contracts/promptContextEngine.contract';

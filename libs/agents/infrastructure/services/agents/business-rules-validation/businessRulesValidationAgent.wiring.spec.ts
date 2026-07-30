@@ -30,7 +30,6 @@ function build() {
     const provider = new BusinessRulesValidationAgentProvider(
         {} as any,
         {} as any,
-        {} as any,
         { recordAgentRunUsage } as any,
         {
             getExecutionPolicy: jest.fn(),

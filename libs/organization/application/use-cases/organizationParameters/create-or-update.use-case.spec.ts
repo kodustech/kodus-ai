@@ -1,4 +1,4 @@
-import { BYOKProvider } from '@kodus/kodus-common/llm';
+import { BYOKProvider } from '@libs/llm/model-providers';
 import { BadRequestException } from '@nestjs/common';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';

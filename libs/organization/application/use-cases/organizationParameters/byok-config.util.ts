@@ -1,4 +1,5 @@
-import { BYOKConfig, BYOKProvider } from '@kodus/kodus-common/llm';
+import { BYOKProvider } from '@libs/llm/model-providers';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 
 import type {
     BYOKCredential,

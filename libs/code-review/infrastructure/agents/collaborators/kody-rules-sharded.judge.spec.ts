@@ -8,7 +8,7 @@ import {
 import { KodyRulesScope } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 // The one genuinely-new runtime risk in the wired provider is the ZOD schema
-// (passed to PromptRunnerService.builder().setParser(ParserType.ZOD, ...))
+// (passed to PromptRunner service.builder().setParser(ParserType.ZOD, ...))
 // parsing the model's JSON. The builder/run chain itself is generic infra used
 // by every agent. These pin the schema contract against realistic responses.
 //

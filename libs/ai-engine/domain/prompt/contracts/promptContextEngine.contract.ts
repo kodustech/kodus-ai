@@ -1,5 +1,5 @@
 import type { ContextRequirement } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {

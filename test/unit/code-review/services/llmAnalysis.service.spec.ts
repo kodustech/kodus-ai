@@ -2,7 +2,6 @@ import { LLMAnalysisService } from '@/code-review/infrastructure/adapters/servic
 import { SafeguardPipelineService } from '@/code-review/infrastructure/adapters/services/safeguardPipeline.service';
 import { ReviewModeResponse } from '@/core/infrastructure/config/types/general/codeReview.type';
 import { ObservabilityService } from '@/core/log/observability.service';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { SANDBOX_PROVIDER_TOKEN } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { Test, TestingModule } from '@nestjs/testing';
 
@@ -55,10 +54,6 @@ describe('LLMAnalysisService', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 LLMAnalysisService,
-                {
-                    provide: PromptRunnerService,
-                    useValue: mockPromptRunnerService,
-                },
                 {
                     provide: ObservabilityService,
                     useValue: mockObservabilityService,

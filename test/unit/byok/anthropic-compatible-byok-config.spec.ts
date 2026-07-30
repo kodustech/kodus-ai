@@ -1,8 +1,5 @@
-import {
-    anthropicCompatibleRootURL,
-    BYOKProvider,
-    getAdapter,
-} from '@kodus/kodus-common/llm';
+import { anthropicCompatibleRootURL } from '@libs/llm/model-builders';
+import { BYOKProvider } from '@libs/llm/model-providers';
 
 // Encryption is irrelevant here — deterministic reversible stand-in so
 // buildModelFromSlot can decrypt the stored key without a real crypto env.
@@ -30,22 +27,6 @@ describe('anthropic_compatible BYOK provider', () => {
             [' https://api.deepseek.com/anthropic ', 'https://api.deepseek.com/anthropic'],
         ])('normalizes %s → %s', (input, expected) => {
             expect(anthropicCompatibleRootURL(input)).toBe(expected);
-        });
-    });
-
-    describe('LangChain adapter routing', () => {
-        it('routes anthropic_compatible to the Anthropic adapter with a root anthropicApiUrl', () => {
-            const adapter = getAdapter('anthropic_compatible');
-            const model = adapter.build({
-                model: 'kimi-for-coding',
-                apiKey: 'sk-kimi-test',
-                baseURL: 'https://api.kimi.com/coding/v1',
-            });
-
-            // ChatAnthropic appends /v1/messages itself — the configured
-            // URL must be the root, not the /v1-suffixed base.
-            expect(model.constructor.name).toBe('ChatAnthropic');
-            expect((model as any).apiUrl).toBe('https://api.kimi.com/coding');
         });
     });
 

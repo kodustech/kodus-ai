@@ -46,7 +46,7 @@ import { sanitizeFindingsResult } from '@libs/code-review/infrastructure/agents/
 import { withStructuredOutputFallback } from '@libs/llm/byok-to-vercel';
 import { collapseNearDuplicates } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { createLogger } from '@libs/core/log/logger';
-import type { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 

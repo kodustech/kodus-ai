@@ -24,7 +24,6 @@ describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
 
     beforeEach(() => {
         provider = new KodyRulesAgentProvider(
-            {} as any, // promptRunnerService
             {} as any, // permissionValidationService
             {} as any, // observabilityService
         );
@@ -373,7 +372,6 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
             async () => responses[i++] ?? { violations: [] },
         );
         const provider = new KodyRulesAgentProvider(
-            {} as any, // promptRunnerService (unused — local stack)
             {
                 getBYOKConfig: jest.fn(async () => null),
                 getBYOKConfigV2Raw: jest.fn(async () => null),

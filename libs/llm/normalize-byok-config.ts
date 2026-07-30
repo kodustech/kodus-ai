@@ -13,7 +13,7 @@
  *  - A `managed:true` credential → absent `main` (the env/managed default), with
  *    no call-site branch.
  */
-import type { BYOKProvider } from '@kodus/kodus-common/llm';
+import { BYOKProvider } from '@libs/llm/model-providers';
 import {
     isV2Config,
     type BYOKConfigV2,

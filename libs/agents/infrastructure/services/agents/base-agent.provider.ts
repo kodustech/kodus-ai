@@ -1,8 +1,5 @@
-import {
-    LLMModelProvider,
-    BYOKConfig,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
+import { LLMModelProvider } from '@libs/llm/model-providers';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -32,7 +29,6 @@ export abstract class BaseAgentProvider {
     ): Promise<void>;
 
     constructor(
-        protected readonly promptRunnerService: PromptRunnerService,
         protected readonly permissionValidationService: PermissionValidationService,
         protected readonly observabilityService: ObservabilityService,
     ) {}

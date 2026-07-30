@@ -1,5 +1,5 @@
 // Parity spec for the kody-rules analysis service AFTER its migration off the
-// LangChain BYOKPromptRunnerService onto `runStructuredReviewCall` (Phase 3,
+// LangChain BYOKPromptRunner service onto `runStructuredReviewCall` (Phase 3,
 // plan 03-04). The whole point is that the migrated service produces the SAME
 // analysis output it did before, on the org's BYOK model, with exactly ONE
 // span per call (the old outer `runLLMInSpan` wrapper is gone).

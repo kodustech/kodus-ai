@@ -1,6 +1,7 @@
 import { type ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { createLogger } from '@libs/core/log/logger';
-import { BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
+import { LLMModelProvider } from '@libs/llm/model-providers';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { z } from 'zod';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { Inject, Injectable } from '@nestjs/common';

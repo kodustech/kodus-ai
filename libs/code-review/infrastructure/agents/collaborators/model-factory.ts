@@ -11,7 +11,7 @@
 import type { LanguageModel } from 'ai';
 
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
-import type { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import type { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { resolveTaskModel } from '@libs/llm/resolve-task-model';
 

@@ -1,4 +1,4 @@
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
 import { isV2Config, type BYOKConfigV2 } from '@libs/llm/byok-config';
 import { Injectable, Inject } from '@nestjs/common';

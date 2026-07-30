@@ -9,7 +9,7 @@
  * Prompt + parse live in severity-prompt.ts (shared with the severity eval).
  */
 import { createLogger } from '@libs/core/log/logger';
-import type { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import type { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { resolveSecondaryPassModel } from './secondary-pass-model';
 import { tracedGenerateText as generateText } from '@libs/llm/llm-call';

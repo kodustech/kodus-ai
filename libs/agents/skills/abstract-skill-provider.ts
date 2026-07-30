@@ -1,6 +1,5 @@
 import type { AgentThread } from './runtime/skill-runtime.types';
 import { createLogger } from '@libs/core/log/logger';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
@@ -73,7 +72,6 @@ export abstract class AbstractSkillProvider<
     protected abstract readonly skillName: string;
 
     constructor(
-        promptRunnerService: PromptRunnerService,
         permissionValidationService: PermissionValidationService,
         observabilityService: ObservabilityService,
         protected readonly genericSkillRunner: GenericSkillRunnerService,
@@ -81,11 +79,7 @@ export abstract class AbstractSkillProvider<
         protected readonly capabilityStrategyService?: CapabilityStrategyService,
         protected readonly capabilityResourcePlanService?: CapabilityResourcePlanService,
     ) {
-        super(
-            promptRunnerService,
-            permissionValidationService,
-            observabilityService,
-        );
+        super(permissionValidationService, observabilityService);
     }
 
     protected abstract createBlueprint(

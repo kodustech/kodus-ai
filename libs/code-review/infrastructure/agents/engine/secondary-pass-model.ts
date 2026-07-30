@@ -3,7 +3,7 @@ import {
     buildModelFromSlot,
     getInternalModel,
 } from '@libs/llm/byok-to-vercel';
-import type { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 
 /**
  * Model for the review's SECONDARY passes (dedup, severity classification,
