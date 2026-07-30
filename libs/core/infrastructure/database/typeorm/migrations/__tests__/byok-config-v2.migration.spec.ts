@@ -8,7 +8,7 @@
  */
 import type { QueryRunner } from 'typeorm';
 import { encrypt } from '@libs/common/utils/crypto';
-import { ByokConfigV22026072918034700 } from './2026072918034700-ByokConfigV2';
+import { ByokConfigV22026072918034700 } from '../2026072918034700-ByokConfigV2';
 import { isV2Config } from '@libs/llm/byok-config';
 
 const BYOK_CONFIG_KEY = 'byok_config';
