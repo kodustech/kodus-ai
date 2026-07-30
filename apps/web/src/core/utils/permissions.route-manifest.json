@@ -232,6 +232,14 @@
     }
   },
   {
+    "route": "/settings/code-review/x/linked-repositories",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "route": "/settings/code-review/x/pr-summary",
     "expected": {
       "billing_manager": "allow",
