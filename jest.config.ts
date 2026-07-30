@@ -200,10 +200,6 @@ export default {
         '^@/core/infrastructure/adapters/services/logger/loggerWrapper\\.service$':
             '<rootDir>/libs/core/log/loggerWrapper.service',
 
-        // LLM (legacy alias)
-        '^@/llm$': '<rootDir>/packages/kodus-common/src/llm',
-        '^@/llm/(.*)$': '<rootDir>/packages/kodus-common/src/llm/$1',
-
         // Utils
         '^@/utils/json$': '<rootDir>/libs/common/utils/transforms/json',
         '^@/shared/utils/cache/(.*)$': '<rootDir>/libs/core/cache/$1',
@@ -240,8 +236,6 @@ export default {
         '^@/(.*)$': '<rootDir>/libs/$1',
         '^@libs/(.*)$': '<rootDir>/libs/$1',
         '^@apps/(.*)$': '<rootDir>/apps/$1/src',
-        '^@kodus/kodus-common/(.*)$': '<rootDir>/packages/kodus-common/src/$1',
-        '^@kodus/kodus-common$': '<rootDir>/packages/kodus-common/src',
     },
     transformIgnorePatterns: [
         // `jose` (used by apps/web's helpers.ts for JWT decoding) ships

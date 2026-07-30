@@ -39,7 +39,6 @@ x-app-service-template: &app-service-defaults
         - node_modules_cache:/usr/src/app/node_modules
         - pnpm_store:/usr/src/app/.pnpm-store
         - logs_data:/usr/src/app/logs
-        - yalc_store:/root/.yalc
     networks:
         - kodus-backend-services
         - shared-network
@@ -125,7 +124,6 @@ services:
             - node_modules_cache:/usr/src/app/node_modules:nocopy
             - pnpm_store:/usr/src/app/.pnpm-store
             - logs_data:/usr/src/app/logs
-            - yalc_store:/root/.yalc
         ports:
             # See kodus-api comment on host-side port parametrization for
             # worktree coexistence.
@@ -193,7 +191,6 @@ services:
             - node_modules_cache:/usr/src/app/node_modules:nocopy
             - pnpm_store:/usr/src/app/.pnpm-store
             - logs_data:/usr/src/app/logs
-            - yalc_store:/root/.yalc
         ports:
             # See kodus-api comment on host-side port parametrization for
             # worktree coexistence. Container side is 8001 (same as the
@@ -260,7 +257,6 @@ services:
             - node_modules_cache:/usr/src/app/node_modules:nocopy
             - pnpm_store:/usr/src/app/.pnpm-store
             - logs_data:/usr/src/app/logs
-            - yalc_store:/root/.yalc
         ports:
             # See kodus-api comment on host-side port parametrization for
             # worktree coexistence.
@@ -387,7 +383,6 @@ services:
             - ./libs:/usr/libs:delegated
             - web_node_modules_cache:/usr/src/app/node_modules
             - web_next_cache:/usr/src/app/.next
-            - yalc_store:/root/.yalc
         restart: unless-stopped
         healthcheck:
             test:
@@ -598,7 +593,6 @@ services:
         logging: *default-logging
 
 volumes:
-    yalc_store:
     node_modules_cache:
     pnpm_store:
     logs_data:
